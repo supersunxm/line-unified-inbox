@@ -1,0 +1,13 @@
+CREATE TYPE "OtpPurpose" AS ENUM ('FIRST_ADMIN_REGISTRATION', 'USER_INVITATION', 'PASSWORD_RESET');
+ALTER TABLE "User" ADD COLUMN "normalizedEmail" TEXT;
+ALTER TABLE "User" ADD COLUMN "emailVerifiedAt" TIMESTAMP(3);
+UPDATE "User" SET "normalizedEmail" = lower(trim("email"));
+ALTER TABLE "User" ALTER COLUMN "normalizedEmail" SET NOT NULL;
+CREATE UNIQUE INDEX "User_normalizedEmail_key" ON "User"("normalizedEmail");
+CREATE TABLE "AdminRegistrationOtp" ("id" TEXT NOT NULL, "email" TEXT NOT NULL, "normalizedEmail" TEXT NOT NULL, "codeHash" TEXT NOT NULL, "purpose" "OtpPurpose" NOT NULL, "expiresAt" TIMESTAMP(3) NOT NULL, "attempts" INTEGER NOT NULL DEFAULT 0, "maxAttempts" INTEGER NOT NULL DEFAULT 5, "resendAvailableAt" TIMESTAMP(3) NOT NULL, "consumedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "AdminRegistrationOtp_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "AdminRegistrationOtp_normalizedEmail_idx" ON "AdminRegistrationOtp"("normalizedEmail");
+CREATE INDEX "AdminRegistrationOtp_purpose_idx" ON "AdminRegistrationOtp"("purpose");
+CREATE INDEX "AdminRegistrationOtp_expiresAt_idx" ON "AdminRegistrationOtp"("expiresAt");
+CREATE INDEX "AdminRegistrationOtp_consumedAt_idx" ON "AdminRegistrationOtp"("consumedAt");
+CREATE TABLE "EmailDeliveryEvent" ("id" TEXT NOT NULL, "provider" TEXT NOT NULL, "success" BOOLEAN NOT NULL, "error" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "EmailDeliveryEvent_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "EmailDeliveryEvent_createdAt_idx" ON "EmailDeliveryEvent"("createdAt");

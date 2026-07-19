@@ -1,0 +1,15 @@
+CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'VIEWER');
+CREATE TYPE "PilotChecklistStatus" AS ENUM ('NOT_TESTED', 'PASSED', 'FAILED', 'NOT_APPLICABLE');
+CREATE TABLE "User" ("id" TEXT NOT NULL, "email" TEXT NOT NULL, "displayName" TEXT NOT NULL, "passwordHash" TEXT NOT NULL, "role" "UserRole" NOT NULL DEFAULT 'VIEWER', "isActive" BOOLEAN NOT NULL DEFAULT true, "lastLoginAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "User_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE TABLE "Session" ("id" TEXT NOT NULL, "tokenHash" TEXT NOT NULL, "userId" TEXT NOT NULL, "expiresAt" TIMESTAMP(3) NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Session_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
+CREATE INDEX "Session_userId_idx" ON "Session"("userId");
+CREATE INDEX "Session_expiresAt_idx" ON "Session"("expiresAt");
+ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE TABLE "OperationalError" ("id" TEXT NOT NULL, "feature" TEXT NOT NULL, "summary" TEXT NOT NULL, "resolved" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "OperationalError_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "OperationalError_resolved_createdAt_idx" ON "OperationalError"("resolved", "createdAt");
+CREATE TABLE "PilotChecklistItem" ("id" TEXT NOT NULL, "lineOfficialAccountId" TEXT NOT NULL, "itemKey" TEXT NOT NULL, "status" "PilotChecklistStatus" NOT NULL DEFAULT 'NOT_TESTED', "note" TEXT, "updatedAt" TIMESTAMP(3) NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PilotChecklistItem_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "PilotChecklistItem_lineOfficialAccountId_itemKey_key" ON "PilotChecklistItem"("lineOfficialAccountId", "itemKey");
+CREATE INDEX "PilotChecklistItem_lineOfficialAccountId_idx" ON "PilotChecklistItem"("lineOfficialAccountId");
+ALTER TABLE "PilotChecklistItem" ADD CONSTRAINT "PilotChecklistItem_lineOfficialAccountId_fkey" FOREIGN KEY ("lineOfficialAccountId") REFERENCES "LineOfficialAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;

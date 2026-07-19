@@ -1,0 +1,53 @@
+{
+  "name": "oppo-line-oa-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "build": "prisma generate && nest build",
+    "start:prod": "node dist/main.js",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "lint": "eslint \"{src,prisma}/**/*.ts\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "prisma db seed",
+    "prisma:studio": "prisma studio"
+    ,"test": "tsx --test src/**/*.spec.ts src/**/**/*.spec.ts"
+    ,"test:line-webhook": "tsx --env-file=.env scripts/send-test-line-webhook.ts"
+    ,"test:line-verify": "tsx --env-file=.env scripts/send-test-line-verify.ts"
+    ,"test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts"
+    ,"store-master:import": "tsx --env-file=.env scripts/store-master.ts import"
+    ,"store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate"
+    ,"user:create-admin": "tsx --env-file=.env scripts/create-admin.ts"
+    ,"auth:status": "tsx --env-file=.env scripts/auth-status.ts"
+    ,"security:check": "sh scripts/security-check.sh"
+    ,"db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'"
+    ,"db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "@prisma/client": "^6.19.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@nestjs/cli": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^16.0.0",
+    "prisma": "^6.19.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

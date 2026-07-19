@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: oppo_line_oa
+      POSTGRES_USER: oppo_dev
+      POSTGRES_PASSWORD: oppo_dev_password # Local development only
+    ports:
+      - "5432:5432"
+    volumes:
+      - oppo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oppo_dev -d oppo_line_oa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  oppo_postgres_data:

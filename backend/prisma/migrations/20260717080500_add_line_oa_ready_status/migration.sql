@@ -1,0 +1,1 @@
+ALTER TYPE "LineOaConnectionStatus" ADD VALUE 'READY' AFTER 'CONNECTED';

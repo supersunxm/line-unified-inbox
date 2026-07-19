@@ -1,0 +1,480 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum FollowUpStatus {
+  FOLLOW_UP
+  REMINDED
+  ACKNOWLEDGED
+  COMPLETED
+  ESCALATED
+}
+
+enum ProductRelationship {
+  INTERESTED
+  CURRENT_OWNER
+  PREVIOUS_OWNER
+  UNKNOWN
+}
+
+enum PurchaseIntent {
+  LOW
+  MEDIUM
+  HIGH
+  AFTER_SALES
+  UNKNOWN
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  STICKER
+  UNSUPPORTED
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum LineOaConnectionStatus {
+  CONNECTED
+  READY
+  NOT_CONFIGURED
+  ERROR
+  DISABLED
+}
+
+enum TopicCategory {
+  SALES
+  PRODUCT_FEATURE
+  PURCHASE_JOURNEY
+  AFTER_SALES
+  COMPLAINT
+  GENERAL
+}
+
+enum ActivityActionType {
+  STATUS_CHANGED
+  NOTE_ADDED
+  REMINDER_SENT
+  MANAGER_ACKNOWLEDGED
+  CONVERSATION_COMPLETED
+  ESCALATED
+  RETURNED_TO_FOLLOW_UP
+  MESSAGE_RECEIVED
+  CLASSIFICATION_UPDATED
+}
+
+enum ProfileFetchStatus {
+  NOT_REQUESTED
+  SUCCESS
+  FAILED
+  TOKEN_UNAVAILABLE
+  USER_UNAVAILABLE
+}
+
+enum StoreMasterDataQualityStatus {
+  COMPLETE
+  MISSING_STORE_ID
+  INVALID_MANAGER_URL
+  DUPLICATE_ACCOUNT_NAME
+  INCOMPLETE
+}
+
+enum StoreMetadataSource {
+  MASTER
+  PROVINCE_MAPPING
+  AI_SUGGESTED
+  MANUAL
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+enum PilotChecklistStatus {
+  NOT_TESTED
+  PASSED
+  FAILED
+  NOT_APPLICABLE
+}
+
+enum OtpPurpose {
+  FIRST_ADMIN_REGISTRATION
+  USER_INVITATION
+  PASSWORD_RESET
+}
+
+model User {
+  id              String    @id @default(uuid())
+  username        String?   @unique
+  email           String    @unique
+  normalizedEmail String    @unique
+  displayName     String
+  passwordHash    String
+  role            UserRole  @default(VIEWER)
+  isActive        Boolean   @default(true)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        Session[]
+}
+
+model AdminRegistrationOtp {
+  id                String     @id @default(uuid())
+  email             String
+  normalizedEmail   String
+  codeHash          String
+  purpose           OtpPurpose
+  expiresAt         DateTime
+  attempts          Int        @default(0)
+  maxAttempts       Int        @default(5)
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([normalizedEmail])
+  @@index([purpose])
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
+model EmailDeliveryEvent {
+  id                 String   @id @default(uuid())
+  provider           String
+  recipientEmailHash String
+  purpose            String
+  success            Boolean
+  sanitizedError     String?
+  createdAt          DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([purpose, createdAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OperationalError {
+  id        String   @id @default(uuid())
+  feature   String
+  summary   String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([resolved, createdAt])
+}
+
+model Store {
+  id                   String                @id @default(uuid())
+  name                 String
+  code                 String?               @unique
+  region               String?
+  area                 String?
+  isActive             Boolean               @default(true)
+  archivedAt           DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  storeMasterId        String?               @unique
+  provinceSource       StoreMetadataSource?
+  regionSource         StoreMetadataSource?
+  storeMaster          StoreMaster?          @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
+  lineOfficialAccounts LineOfficialAccount[]
+  conversations        Conversation[]
+
+  @@index([isActive])
+}
+
+model StoreMaster {
+  id                    String                       @id @default(uuid())
+  externalStoreId       String?
+  storeName             String
+  accountName           String
+  normalizedAccountName String
+  lineOaLink            String?
+  lineId                String?
+  lineManagerUrl        String?
+  province              String?
+  region                String?
+  source                String
+  sourceRowNumber       Int
+  sourceUpdatedAt       DateTime?
+  dataQualityStatus     StoreMasterDataQualityStatus
+  isActive              Boolean                      @default(true)
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  stores                Store[]
+
+  @@unique([source, sourceRowNumber])
+  @@index([normalizedAccountName])
+  @@index([externalStoreId])
+  @@index([lineId])
+  @@index([province])
+  @@index([region])
+  @@index([isActive])
+}
+
+model LineOfficialAccount {
+  id                          String                 @id @default(uuid())
+  webhookKey                  String                 @unique
+  name                        String
+  basicId                     String?                @unique
+  channelId                   String?                @unique
+  destinationId               String?                @unique
+  encryptedChannelSecret      String?
+  encryptedChannelAccessToken String?
+  connectionStatus            LineOaConnectionStatus @default(NOT_CONFIGURED)
+  lastWebhookReceivedAt       DateTime?
+  lastConnectionTestAt        DateTime?
+  lastConnectionError         String?
+  storeId                     String
+  isActive                    Boolean                @default(true)
+  archivedAt                  DateTime?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  store                       Store                  @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  conversations               Conversation[]
+  webhookEvents               WebhookEvent[]
+  pilotChecklist              PilotChecklistItem[]
+
+  @@index([storeId, isActive])
+}
+
+model PilotChecklistItem {
+  id                    String               @id @default(uuid())
+  lineOfficialAccountId String
+  itemKey               String
+  status                PilotChecklistStatus @default(NOT_TESTED)
+  note                  String?
+  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime             @default(now())
+  lineOfficialAccount   LineOfficialAccount  @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([lineOfficialAccountId, itemKey])
+  @@index([lineOfficialAccountId])
+}
+
+model Customer {
+  id                 String             @id @default(uuid())
+  lineUserId         String?            @unique
+  displayName        String
+  pictureUrl         String?
+  statusMessage      String?
+  preferredLanguage  String?
+  profileFetchedAt   DateTime?
+  profileFetchStatus ProfileFetchStatus @default(NOT_REQUESTED)
+  profileFetchError  String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  conversations      Conversation[]
+}
+
+model Conversation {
+  id                    String                @id @default(uuid())
+  customerId            String
+  storeId               String
+  lineOfficialAccountId String
+  latestMessageAt       DateTime
+  priority              Priority              @default(NORMAL)
+  prioritySource        String                @default("SYSTEM")
+  followUpStatus        FollowUpStatus        @default(FOLLOW_UP)
+  productRelationship   ProductRelationship?
+  purchaseIntent        PurchaseIntent?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  customer              Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  store                 Store                 @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount   LineOfficialAccount   @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
+  messages              Message[]
+  products              ConversationProduct[]
+  topics                ConversationTopic[]
+  notes                 InternalNote[]
+  activityHistory       ActivityHistory[]
+
+  @@index([latestMessageAt])
+  @@index([followUpStatus])
+  @@index([priority])
+  @@index([storeId])
+  @@index([customerId])
+}
+
+model Message {
+  id                String           @id @default(uuid())
+  conversationId    String
+  externalMessageId String?          @unique
+  direction         MessageDirection
+  messageType       MessageType      @default(TEXT)
+  originalText      String
+  originalLanguage  String?
+  translatedThai    String?
+  translatedEnglish String?
+  translatedChinese String?
+  rawPayload        Json?
+  fileName          String?
+  latitude          Float?
+  longitude         Float?
+  sentAt            DateTime
+  createdAt         DateTime         @default(now())
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
+}
+
+model WebhookEvent {
+  id                     String                  @id @default(uuid())
+  externalWebhookEventId String                  @unique
+  externalMessageId      String?
+  eventType              String
+  destination            String?
+  receivedAt             DateTime                @default(now())
+  processedAt            DateTime?
+  processingStatus       WebhookProcessingStatus @default(RECEIVED)
+  errorMessage           String?
+  lineOfficialAccountId  String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  lineOfficialAccount    LineOfficialAccount?    @relation(fields: [lineOfficialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([processingStatus, receivedAt])
+  @@index([externalMessageId])
+  @@index([lineOfficialAccountId])
+}
+
+model ProductSeries {
+  id        String         @id @default(uuid())
+  name      String         @unique
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  models    ProductModel[]
+
+  @@index([isActive])
+}
+
+model ProductModel {
+  id              String                @id @default(uuid())
+  name            String                @unique
+  productSeriesId String
+  isActive        Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  productSeries   ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
+  conversations   ConversationProduct[]
+  aliases         ProductAlias[]
+
+  @@index([isActive])
+  @@index([productSeriesId])
+}
+
+model ProductAlias {
+  id              String       @id @default(uuid())
+  productModelId  String
+  alias           String
+  normalizedAlias String       @unique
+  language        String?
+  isActive        Boolean      @default(true)
+  productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Cascade)
+
+  @@index([productModelId, isActive])
+}
+
+model ConversationProduct {
+  conversationId String
+  productModelId String
+  confidence     Float?
+  source         String?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  productModel   ProductModel @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+
+  @@id([conversationId, productModelId])
+  @@index([productModelId])
+}
+
+model Topic {
+  id            String              @id @default(uuid())
+  name          String              @unique
+  category      TopicCategory
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  conversations ConversationTopic[]
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model ConversationTopic {
+  conversationId String
+  topicId        String
+  confidence     Float?
+  source         String?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  topic          Topic        @relation(fields: [topicId], references: [id], onDelete: Restrict)
+
+  @@id([conversationId, topicId])
+  @@index([topicId])
+}
+
+model InternalNote {
+  id             String       @id @default(uuid())
+  conversationId String
+  content        String
+  createdByName  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model ActivityHistory {
+  id             String             @id @default(uuid())
+  conversationId String
+  actionType     ActivityActionType
+  previousStatus FollowUpStatus?
+  newStatus      FollowUpStatus?
+  description    String?
+  createdByName  String?
+  createdAt      DateTime           @default(now())
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt])
+}

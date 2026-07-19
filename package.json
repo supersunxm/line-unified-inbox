@@ -1,0 +1,17 @@
+{
+  "name": "oppo-line-oa-monitor-workspace",
+  "private": true,
+  "scripts": {
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh",
+    "dev:restart": "bash scripts/dev-restart.sh all",
+    "dev:status": "bash scripts/dev-status.sh",
+    "health": "bash scripts/health-check.sh",
+    "verify": "bash scripts/verify-all.sh",
+    "diagnostics": "bash scripts/collect-diagnostics.sh",
+    "deploy:check": "bash scripts/deploy-check.sh",
+    "review": "bash scripts/review-diff.sh",
+    "logs:backend": "bash scripts/follow-log.sh backend",
+    "logs:frontend": "bash scripts/follow-log.sh frontend"
+  }
+}

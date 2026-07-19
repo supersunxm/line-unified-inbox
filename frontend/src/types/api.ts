@@ -1,0 +1,138 @@
+export type ApiFollowUpStatus = "FOLLOW_UP" | "REMINDED" | "ACKNOWLEDGED" | "COMPLETED" | "ESCALATED";
+export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+
+export type ApiConversation = {
+  id: string;
+  latestMessageAt: string;
+  priority: ApiPriority;
+  followUpStatus: ApiFollowUpStatus;
+  productRelationship: string | null;
+  purchaseIntent: string | null;
+  customer: { id: string; lineUserId: string | null; displayName: string; pictureUrl: string | null; statusMessage: string | null; preferredLanguage: string | null; profileFetchStatus: string; profileFetchError: string | null };
+  store: { id: string; name: string };
+  lineOfficialAccount: { id: string; name: string };
+  messages: Array<{
+    id: string;
+    direction: "INBOUND" | "OUTBOUND" | "SYSTEM";
+    messageType: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "FILE" | "LOCATION" | "STICKER" | "UNSUPPORTED";
+    originalText: string;
+    originalLanguage: string | null;
+    translatedThai: string | null;
+    translatedEnglish: string | null;
+    translatedChinese: string | null;
+    sentAt: string;
+    fileName: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  }>;
+  products: Array<{ source: string | null; confidence: number | null; productModel: { id: string; name: string; productSeries: { id: string; name: string } } }>;
+  topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
+  notes: Array<{ id: string; content: string; createdAt: string }>;
+  activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; createdAt: string }>;
+};
+
+export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
+export type ApiStore = { id: string; name: string; code: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number } };
+export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
+export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };
+export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };
+export type ConversationMessagesResponse = { items: ApiConversation["messages"]; total: number; page: number; pageSize: number; hasEarlier: boolean };
+export type ProductMetadataResponse = { series: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> };
+export type ApiTopic = { id: string; name: string; category: string };
+export type DashboardSummaryResponse = {
+  totalConversations: number;
+  countByStatus: Partial<Record<ApiFollowUpStatus, number>>;
+  countByPriority: Partial<Record<ApiPriority, number>>;
+  storeMonitoring: unknown[];
+  mostDiscussedProductModels: unknown[];
+  topConversationTopics: unknown[];
+  storesRequiringAttention: unknown[];
+  recentActivity: unknown[];
+};
+
+export type LineOaConnectionStatus = "CONNECTED" | "READY" | "NOT_CONFIGURED" | "ERROR" | "DISABLED";
+export type LineOfficialAccountResponse = {
+  id: string;
+  name: string;
+  basicId: string | null;
+  channelId: string | null;
+  maskedChannelId: string | null;
+  destinationId: string | null;
+  store: { id: string; name: string; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
+  connectionStatus: LineOaConnectionStatus;
+  isActive: boolean;
+  lastWebhookReceivedAt: string | null;
+  lastConnectionTestAt: string | null;
+  lastConnectionError: string | null;
+  hasChannelSecret: boolean;
+  hasChannelAccessToken: boolean;
+  credentialsHealthy: boolean;
+  conversationCount: number;
+  messagesReceivedToday: number;
+  archivedAt: string | null;
+};
+
+export type LineOaCredentialHealth = {
+  channelSecretStored: boolean;
+  channelSecretDecryptable: boolean;
+  accessTokenStored: boolean;
+  accessTokenDecryptable: boolean;
+  webhookKeyConfigured: boolean;
+  isActive: boolean;
+};
+
+export type CreateLineOaInput = {
+  storeId?: string;
+  storeMasterId?: string;
+  newStore?: { name: string; code?: string; region?: string; area?: string };
+  name: string;
+  basicId?: string;
+  channelId?: string;
+  destinationId?: string;
+  channelSecret: string;
+  channelAccessToken: string;
+  isActive: boolean;
+};
+
+export type StoreMasterSuggestion = {
+  id: string; accountName: string; storeName: string; externalStoreId: string | null;
+  province: string | null; region: string | null; lineId: string | null; lineOaLink: string | null;
+  lineManagerUrl: string | null; matchScore: number; matchReason: "EXACT_ACCOUNT_NAME" | "NORMALIZED_ACCOUNT_NAME" | "PARTIAL_ACCOUNT_NAME" | "FUZZY_SUGGESTION";
+  dataQualityStatus: "COMPLETE" | "MISSING_STORE_ID" | "INVALID_MANAGER_URL" | "DUPLICATE_ACCOUNT_NAME" | "INCOMPLETE";
+  existingStore: { id: string; name: string } | null;
+};
+
+export type LineOaTestResult = {
+  status: LineOaConnectionStatus;
+  configurationComplete: boolean;
+  credentialsAvailable: boolean;
+  accessTokenAvailable: boolean;
+  webhookUrl: string | null;
+  webhookUrlConfigured: boolean;
+  channelIdConfigured: boolean;
+  destinationIdConfigured: boolean;
+  lastWebhookReceivedAt: string | null;
+  matchingDestinationReceived: boolean;
+  missingConfigurationFields: string[];
+  credentialDecryptionError: boolean;
+};
+
+export type LineOaWebhookInfo = {
+  webhookUrl: string | null;
+  webhookKeyConfigured: boolean;
+  routeConfigured: boolean;
+  isActive: boolean;
+  isArchived: boolean;
+  credentialsHealthy: boolean;
+  webhookUrlConfigured: boolean;
+  credentialsConfigured: boolean;
+  channelIdConfigured: boolean;
+  destinationIdConfigured: boolean;
+  credentialDecrypts: boolean;
+  lastWebhookReceivedAt: string | null;
+  connectionStatus: LineOaConnectionStatus;
+  missingConfigurationFields: string[];
+  backendPort: number;
+  webhookPath: string;
+  oa: { id: string; name: string; store: string; isActive: boolean };
+};
