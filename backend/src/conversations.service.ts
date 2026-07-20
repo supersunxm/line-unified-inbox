@@ -7,7 +7,7 @@ export const conversationInclude = {
   customer: true,
   store: true,
   lineOfficialAccount: true,
-  messages: { orderBy: { sentAt: "desc" as const } },
+  messages: { orderBy: { sentAt: "desc" as const }, include: { media: true } },
   products: { include: { productModel: { include: { productSeries: true } } } },
   topics: { include: { topic: true } },
   notes: { orderBy: { createdAt: "desc" as const } },
@@ -20,7 +20,12 @@ export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
   private safe(item: IncludedConversation) {
     const value = item.customer.lineUserId;
-    return { ...item, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null } };
+    return { ...item, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
+  }
+
+  private safeMessage<T extends { id: string; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
+    const { media, ...safe } = message;
+    return { ...safe, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
   async list(query: ConversationQueryDto) {
@@ -110,8 +115,8 @@ export class ConversationsService {
     const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
     const total = await this.prisma.message.count({ where: { conversationId: id } });
-    const items = await this.prisma.message.findMany({ where: { conversationId: id }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
-    return { items: items.reverse(), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
+    const items = await this.prisma.message.findMany({ where: { conversationId: id }, include: { media: true }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
+    return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
   async updateManualTags(id: string, productModelIds: string[], topicIds: string[]) {

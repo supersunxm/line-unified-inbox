@@ -22,10 +22,11 @@ export type ApiConversation = {
     translatedChinese: string | null;
     sentAt: string;
     fileName: string | null;
+    media: { processingStatus: "PENDING" | "READY" | "FAILED"; mimeType: string | null; fileSize: number | null; url: string | null } | null;
     latitude: number | null;
     longitude: number | null;
   }>;
-  products: Array<{ source: string | null; confidence: number | null; productModel: { id: string; name: string; productSeries: { id: string; name: string } } }>;
+  products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
   notes: Array<{ id: string; content: string; createdAt: string }>;
   activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; createdAt: string }>;
@@ -70,6 +71,8 @@ export type LineOfficialAccountResponse = {
   conversationCount: number;
   messagesReceivedToday: number;
   archivedAt: string | null;
+  webhookUrl: string | null;
+  webhookConfigured: boolean;
 };
 
 export type LineOaCredentialHealth = {

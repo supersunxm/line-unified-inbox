@@ -7,6 +7,7 @@ import { LineWebhookConfig } from "./line-webhook.config";
 import { LineMessage, LineWebhookBody, LineWebhookEvent, messagePlaceholder } from "./line-webhook.types";
 import { ClassificationService } from "../../classification/classification.service";
 import { LineProfileService } from "../../line-profile.service";
+import { LineImageService } from "../../media/line-image.service";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -24,7 +25,7 @@ export type LineCredentialResolution = {
 @Injectable()
 export class LineWebhookService {
   private readonly logger = new Logger(LineWebhookService.name);
-  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService) {}
 
   async accept(payload: LineWebhookBody, resolvedOaId: string) {
     const results: boolean[] = [];
@@ -106,14 +107,17 @@ export class LineWebhookService {
     const latitude = message.type === "location" && "latitude" in message ? message.latitude : undefined;
     const longitude = message.type === "location" && "longitude" in message ? message.longitude : undefined;
 
-    const conversation = await this.prisma.$transaction(async (tx) => {
+    const stored = await this.prisma.$transaction(async (tx) => {
       const conversation = existing
         ? await tx.conversation.update({ where: { id: existing.id }, data: { latestMessageAt: sentAt, followUpStatus: FollowUpStatus.FOLLOW_UP } })
         : await tx.conversation.create({ data: { customerId: customer.id, storeId: oa.storeId, lineOfficialAccountId: oa.id, latestMessageAt: sentAt, priority: Priority.NORMAL, followUpStatus: FollowUpStatus.FOLLOW_UP } });
-      await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: message.id, direction: MessageDirection.INBOUND, messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, originalText: messagePlaceholder(message), sentAt, rawPayload, fileName, latitude, longitude } });
+      const storedMessage = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: message.id, direction: MessageDirection.INBOUND, messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, originalText: messagePlaceholder(message), sentAt, rawPayload, fileName, latitude, longitude } });
+      const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
-      return conversation;
+      return { conversation, mediaId: media?.id };
     });
+    const conversation = stored.conversation;
+    if (message.type === "image" && stored.mediaId) await this.images.process(stored.mediaId, oa.id, message.id, sentAt);
     if (message.type === "text") {
       try { await this.classification.analyze(conversation.id); }
       catch { this.logger.error(`Automatic classification failed for conversation ${conversation.id}`); }

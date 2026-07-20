@@ -29,6 +29,18 @@ enum ProductRelationship {
   UNKNOWN
 }
 
+enum ProductGroup {
+  SMARTPHONE
+  TABLET
+  WEARABLE
+  AUDIO
+  TV
+  SMART_HOME_AIOT
+  ACCESSORIES
+  SERVICE_AFTER_SALES
+  UNKNOWN
+}
+
 enum PurchaseIntent {
   LOW
   MEDIUM
@@ -52,6 +64,12 @@ enum MessageType {
   LOCATION
   STICKER
   UNSUPPORTED
+}
+
+enum MediaProcessingStatus {
+  PENDING
+  READY
+  FAILED
 }
 
 enum WebhookProcessingStatus {
@@ -353,8 +371,27 @@ model Message {
   sentAt            DateTime
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  media             MessageMedia?
 
   @@index([conversationId, sentAt])
+}
+
+model MessageMedia {
+  id                String                @id @default(uuid())
+  messageId         String                @unique
+  providerMessageId String                @unique
+  mediaType         MessageType
+  mimeType          String?
+  objectKey         String?
+  fileSize          Int?
+  processingStatus  MediaProcessingStatus @default(PENDING)
+  errorCode         String?
+  errorMessage      String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  message           Message               @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([processingStatus, createdAt])
 }
 
 model WebhookEvent {
@@ -381,6 +418,7 @@ model ProductSeries {
   id        String         @id @default(uuid())
   name      String         @unique
   isActive  Boolean        @default(true)
+  productGroup ProductGroup @default(UNKNOWN)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   models    ProductModel[]
@@ -393,6 +431,8 @@ model ProductModel {
   name            String                @unique
   productSeriesId String
   isActive        Boolean               @default(true)
+  classificationLevel String            @default("MODEL")
+  priority        Int                   @default(0)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   productSeries   ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
@@ -410,6 +450,7 @@ model ProductAlias {
   normalizedAlias String       @unique
   language        String?
   isActive        Boolean      @default(true)
+  priority        Int          @default(0)
   productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Cascade)
 
   @@index([productModelId, isActive])
@@ -420,6 +461,9 @@ model ConversationProduct {
   productModelId String
   confidence     Float?
   source         String?
+  matchedPhrase  String?
+  detectionMethod String?
+  sourceMessageId String?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   productModel   ProductModel @relation(fields: [productModelId], references: [id], onDelete: Restrict)
 

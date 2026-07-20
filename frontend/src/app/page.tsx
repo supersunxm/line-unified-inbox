@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { ThemeControl } from "./theme";
+import { primaryNavigationState } from "./primary-navigation";
+import type { PrimarySection } from "./primary-navigation";
+import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStoreMasterData } from "./store-master-form";
+import { formatRelativeTime } from "./relative-time";
+import { MessageImage } from "./message-image";
+import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -45,6 +52,12 @@ type UiPreferences = {
   topic: string;
   lineOa: string;
 };
+
+type StoreMasterSearchState =
+  | { status: "idle" }
+  | { status: "loading"; query: string }
+  | { status: "success"; query: string; suggestions: StoreMasterSuggestion[] }
+  | { status: "error"; query: string; message: string };
 
 type ConversationState = {
   status: FollowUpStatus;
@@ -88,6 +101,7 @@ const translations = {
     followUp: "ต้องติดตาม",
     reminded: "เตือนแล้ว",
     stores: "ร้านค้า",
+    storeManagement: "จัดการร้านค้า",
     customerInsights: "ข้อมูลเชิงลึกลูกค้า",
 
     conversationsToFollow: "ข้อความที่ควรติดตาม",
@@ -146,7 +160,6 @@ const translations = {
     escalate: "ส่งต่อหัวหน้า",
 
     messageReceived: "ข้อความเข้ามาเมื่อ",
-    minutesAgo: "นาทีที่แล้ว",
 
     highPriority: "ความสำคัญสูง",
     normalPriority: "ความสำคัญปกติ",
@@ -165,6 +178,11 @@ const translations = {
     statusChangedTo: "เปลี่ยนสถานะเป็น",
     noActivity: "ยังไม่มีประวัติ",
     messageReceivedActivity: "ได้รับข้อความลูกค้าใหม่",
+    customerImage: "รูปภาพจากลูกค้า",
+    imageUnavailable: "รูปภาพไม่ได้ถูกจัดเก็บในระบบ",
+    imageLoadError: "ไม่สามารถโหลดรูปภาพได้",
+    retryImage: "ลองอีกครั้ง",
+    webhookCreationIncomplete: "สร้าง LINE OA แล้ว แต่ไม่ได้รับ Webhook URL ที่ถูกต้อง โปรดรีเฟรชและตรวจสอบรายการก่อนลองอีกครั้ง",
     toastMoved: "ย้ายบทสนทนาไปที่",
     toastReturned: "ย้ายบทสนทนากลับไปที่",
     totalIncoming: "บทสนทนาเข้าทั้งหมด",
@@ -260,6 +278,9 @@ const translations = {
     openLineManager: "เปิด LINE OA Manager",
     openLineOa: "เปิดหน้า LINE OA",
     noMatchingAccount: "ไม่พบบัญชีที่ตรงกัน",
+    syncedStoreMasterTitle: "ข้อมูลร้านค้าที่ซิงก์จาก Store Master",
+    manualFallbackHint: "ไม่พบข้อมูล Store Master คุณยังสามารถกรอกข้อมูล LINE OA ด้วยตนเองได้",
+    searchingStoreMaster: "กำลังค้นหา...",
     storeMasterSearchFailed: "ไม่สามารถค้นหาข้อมูลร้านได้ กรุณาตรวจสอบว่า Store Master API และข้อมูลนำเข้าแล้ว",
     multipleMatches: "พบหลายรายการ โปรดเลือกร้านค้าที่ถูกต้อง",
     incompleteMasterData: "ข้อมูล Master ไม่ครบถ้วน",
@@ -306,7 +327,7 @@ const translations = {
     reanalyzeConversation: "วิเคราะห์ข้อความใหม่",
     classificationUpdated: "วิเคราะห์บทสนทนาใหม่แล้ว",
     editTags: "แก้ไขแท็ก",
-    noProductDetected: "ไม่พบผลิตภัณฑ์",
+    noProductDetected: "ยังไม่พบข้อมูลผลิตภัณฑ์",
     noTopicDetected: "ไม่พบหัวข้อ",
     autoSource: "อัตโนมัติ",
     manualSource: "กำหนดเอง",
@@ -334,6 +355,7 @@ const translations = {
     followUp: "Follow-up",
     reminded: "Reminded",
     stores: "Stores",
+    storeManagement: "Store Management",
     customerInsights: "Customer Insights",
 
     conversationsToFollow: "Conversations to Follow Up",
@@ -392,7 +414,6 @@ const translations = {
     escalate: "Escalate",
 
     messageReceived: "Message received",
-    minutesAgo: "minutes ago",
 
     highPriority: "High Priority",
     normalPriority: "Normal Priority",
@@ -411,6 +432,11 @@ const translations = {
     statusChangedTo: "Status changed to",
     noActivity: "No activity yet",
     messageReceivedActivity: "New customer message received",
+    customerImage: "Image from customer",
+    imageUnavailable: "This image was not stored in the system",
+    imageLoadError: "Unable to load image",
+    retryImage: "Retry",
+    webhookCreationIncomplete: "The LINE OA was created, but no valid webhook URL was returned. Refresh and review the record before retrying.",
     toastMoved: "Conversation moved to",
     toastReturned: "Conversation returned to",
     totalIncoming: "Total Incoming Conversations",
@@ -506,6 +532,9 @@ const translations = {
     openLineManager: "Open LINE OA Manager",
     openLineOa: "Open LINE OA",
     noMatchingAccount: "No matching account found",
+    syncedStoreMasterTitle: "Store information synced from Store Master",
+    manualFallbackHint: "No Store Master record was found. You can still enter the LINE OA details manually.",
+    searchingStoreMaster: "Searching...",
     storeMasterSearchFailed: "Unable to search store data. Check that the Store Master API is running and the data has been imported.",
     multipleMatches: "Multiple matches found. Select the correct store.",
     incompleteMasterData: "Incomplete master data",
@@ -580,6 +609,7 @@ const translations = {
     followUp: "待跟进",
     reminded: "已提醒",
     stores: "门店",
+    storeManagement: "门店管理",
     customerInsights: "客户洞察",
 
     conversationsToFollow: "需要跟进的消息",
@@ -637,7 +667,6 @@ const translations = {
     escalate: "升级处理",
 
     messageReceived: "消息收到于",
-    minutesAgo: "分钟前",
 
     highPriority: "高优先级",
     normalPriority: "普通优先级",
@@ -655,6 +684,11 @@ const translations = {
     statusChangedTo: "状态已更改为",
     noActivity: "暂无操作记录",
     messageReceivedActivity: "收到新的客户消息",
+    customerImage: "客户发送的图片",
+    imageUnavailable: "该图片未存储在系统中",
+    imageLoadError: "无法加载图片",
+    retryImage: "重试",
+    webhookCreationIncomplete: "LINE OA 已创建，但未返回有效的 Webhook URL。请刷新并检查记录后再重试。",
     toastMoved: "会话已移至",
     toastReturned: "会话已返回",
     totalIncoming: "收到的会话总数",
@@ -750,6 +784,9 @@ const translations = {
     openLineManager: "打开 LINE OA Manager",
     openLineOa: "打开 LINE OA",
     noMatchingAccount: "未找到匹配账户",
+    syncedStoreMasterTitle: "从 Store Master 同步的门店信息",
+    manualFallbackHint: "未找到 Store Master 记录，您仍可手动输入 LINE OA 信息。",
+    searchingStoreMaster: "正在搜索……",
     storeMasterSearchFailed: "无法搜索门店数据，请检查 Store Master API 是否运行以及数据是否已导入。",
     multipleMatches: "找到多个匹配项，请选择正确的门店。",
     incompleteMasterData: "主数据不完整",
@@ -962,11 +999,6 @@ function mapApiConversation(item: ApiConversation): Conversation {
   const messageLanguage =
     latestMessage?.originalLanguage === "zh" ? "zh" :
     latestMessage?.originalLanguage === "en" ? "en" : "th";
-  const minutesAgo = Math.max(
-    0,
-    Math.round((Date.now() - new Date(item.latestMessageAt).getTime()) / 60_000),
-  );
-
   return {
     id: item.id,
     customer: item.customer.displayName,
@@ -974,12 +1006,12 @@ function mapApiConversation(item: ApiConversation): Conversation {
     storeId: item.store.id,
     message: latestMessage?.originalText ?? "",
     messageLanguage,
-    translations: {
+    translations: latestMessage?.messageType === "IMAGE" ? { th: "📷 รูปภาพ", en: "📷 Image", zh: "📷 图片" } : {
       th: latestMessage?.translatedThai ?? latestMessage?.originalText ?? "",
       en: latestMessage?.translatedEnglish ?? latestMessage?.originalText ?? "",
       zh: latestMessage?.translatedChinese ?? latestMessage?.originalText ?? "",
     },
-    time: String(minutesAgo),
+    time: item.latestMessageAt,
     product: product?.name ?? "—",
     series: product?.productSeries.name ?? "—",
     topic: item.topics.map(({ topic }) => topic.name).join(" · "),
@@ -1014,7 +1046,7 @@ function mapApiConversationState(item: ApiConversation): ConversationState {
   };
 }
 
-export default function Home() {
+export default function Home({ initialSection = "dashboard" }: { initialSection?: PrimarySection }) {
   const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
@@ -1044,15 +1076,13 @@ export default function Home() {
   const [showLineOaForm, setShowLineOaForm] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
   const [lineOaForm, setLineOaForm] = useState<CreateLineOaInput>({ name: "", channelSecret: "", channelAccessToken: "", isActive: true });
-  const [masterSearch, setMasterSearch] = useState("");
-  const [masterResults, setMasterResults] = useState<StoreMasterSuggestion[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [masterSearchState, setMasterSearchState] = useState<StoreMasterSearchState>({ status: "idle" });
   const [selectedMaster, setSelectedMaster] = useState<StoreMasterSuggestion | null>(null);
-  const [masterSearchLoading, setMasterSearchLoading] = useState(false);
-  const [masterSearchError, setMasterSearchError] = useState<string | null>(null);
   const [masterActiveIndex, setMasterActiveIndex] = useState(-1);
   const [masterRetryNonce, setMasterRetryNonce] = useState(0);
   const [showAdvancedLineOa, setShowAdvancedLineOa] = useState(false);
-  const [createdLineOa, setCreatedLineOa] = useState<{ account: LineOfficialAccountResponse; webhook: LineOaWebhookInfo } | null>(null);
+  const [createdLineOa, setCreatedLineOa] = useState<{ account: LineOfficialAccountResponse; webhookUrl: string } | null>(null);
   const [lineOaSubmitting, setLineOaSubmitting] = useState(false);
   const [editingLineOaId, setEditingLineOaId] = useState<string | null>(null);
   const [lineOaError, setLineOaError] = useState<string | null>(null);
@@ -1067,7 +1097,10 @@ export default function Home() {
   const [webhookInfoById, setWebhookInfoById] = useState<Record<string, LineOaWebhookInfo>>({});
   const [language, setLanguage] = useState<Language>("th");
   const [searchText, setSearchText] = useState("");
-  const [sidebarView, setSidebarView] = useState<SidebarView>("dashboard");
+  const [storeManagementSearch, setStoreManagementSearch] = useState("");
+  const [sidebarView, setSidebarView] = useState<SidebarView>(
+    initialSection === "stores" ? "lineOaManagement" : "dashboard",
+  );
   const [selectedStore, setSelectedStore] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
@@ -1093,10 +1126,12 @@ export default function Home() {
     useState<DashboardSummaryResponse | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const refreshInProgress = useRef(false);
+  const lineOaSubmissionInFlight = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const newestChatMessageRef = useRef<string | null>(null);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const text = translations[language];
+  const primaryNavigation = primaryNavigationState(initialSection);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
     [availableStores],
@@ -1123,17 +1158,50 @@ export default function Home() {
     () => lineOas.map(({ id }) => id),
     [lineOas],
   );
+  const normalizedStoreManagementSearch = storeManagementSearch.trim().toLowerCase();
+  const visibleManagedStores = useMemo(
+    () => stores.filter((store) =>
+      !normalizedStoreManagementSearch ||
+      store.name.toLowerCase().includes(normalizedStoreManagementSearch),
+    ),
+    [normalizedStoreManagementSearch, stores],
+  );
+  const visibleLineOas = useMemo(
+    () => lineOas.filter((account) =>
+      !normalizedStoreManagementSearch ||
+      [account.name, account.store.name, account.store.accountName]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(normalizedStoreManagementSearch)),
+    ),
+    [lineOas, normalizedStoreManagementSearch],
+  );
+  const synchronizedMaster = selectedMaster ? synchronizedStoreMasterData(selectedMaster) : null;
+  const masterResults = masterSearchState.status === "success" ? masterSearchState.suggestions : [];
 
   useEffect(() => {
-    const query = masterSearch.trim();
-    if (!showLineOaForm || editingLineOaId || selectedMaster || query.length < 2) return;
+    const query = searchQuery.trim();
+    if (!showLineOaForm || editingLineOaId || selectedMaster || !query) return;
     let active = true;
-    const timer = window.setTimeout(() => {
-      setMasterSearchLoading(true); setMasterSearchError(null);
-      void api.searchStoreMaster(query).then((items) => { if (active) { setMasterResults(items); setMasterActiveIndex(items.length ? 0 : -1); } }).catch(() => { if (active) setMasterSearchError(text.storeMasterSearchFailed); }).finally(() => { if (active) setMasterSearchLoading(false); });
+    const loadingTimer = window.setTimeout(() => {
+      if (active) setMasterSearchState({ status: "loading", query });
+    }, 0);
+    const searchTimer = window.setTimeout(() => {
+      void api.searchStoreMaster(query, 10)
+        .then((suggestions) => {
+          if (!active) return;
+          setMasterSearchState({ status: "success", query, suggestions });
+          setMasterActiveIndex(suggestions.length ? 0 : -1);
+        })
+        .catch(() => {
+          if (active) setMasterSearchState({ status: "error", query, message: text.storeMasterSearchFailed });
+        });
     }, 300);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [editingLineOaId, masterRetryNonce, masterSearch, selectedMaster, showLineOaForm, text.storeMasterSearchFailed]);
+    return () => {
+      active = false;
+      window.clearTimeout(loadingTimer);
+      window.clearTimeout(searchTimer);
+    };
+  }, [editingLineOaId, masterRetryNonce, searchQuery, selectedMaster, showLineOaForm, text.storeMasterSearchFailed]);
 
   const loadApplicationData = useCallback(async (silent = false) => {
     if (refreshInProgress.current) return;
@@ -1252,7 +1320,11 @@ export default function Home() {
       const saved = loadUiPreferences();
       setLanguage(saved.language);
       setSearchText(saved.searchText);
-      setSidebarView(saved.sidebarView);
+      setSidebarView(initialSection === "stores"
+        ? "lineOaManagement"
+        : saved.sidebarView === "lineOaManagement" || saved.sidebarView === "stores"
+          ? "dashboard"
+          : saved.sidebarView);
       setSelectedStore(saved.store);
       setStatusFilter(saved.status);
       setPriorityFilter(saved.priority);
@@ -1264,7 +1336,7 @@ export default function Home() {
     }, 0);
 
     return () => window.clearTimeout(loadSavedPreferences);
-  }, []);
+  }, [initialSection]);
 
   useEffect(() => {
     if (!uiPreferencesLoaded) return;
@@ -1637,7 +1709,7 @@ export default function Home() {
 
   function resetLineOaForm() {
     setLineOaForm({ name: "", channelSecret: "", channelAccessToken: "", isActive: true });
-    setMasterSearch(""); setMasterResults([]); setSelectedMaster(null); setMasterSearchError(null); setMasterActiveIndex(-1);
+    setSearchQuery(""); setMasterSearchState({ status: "idle" }); setSelectedMaster(null); setMasterActiveIndex(-1);
     setShowAdvancedLineOa(false);
     setEditingLineOaId(null);
     setLineOaError(null);
@@ -1645,8 +1717,8 @@ export default function Home() {
   }
 
   function selectMasterRecord(master: StoreMasterSuggestion) {
-    setSelectedMaster(master); setMasterSearch(master.accountName); setMasterResults([]);
-    setLineOaForm((form) => ({ ...form, storeMasterId: master.id, storeId: master.existingStore?.id, name: master.accountName, basicId: master.lineId ?? "", newStore: undefined }));
+    setSelectedMaster(master); setSearchQuery(master.accountName); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1);
+    setLineOaForm((form) => applyStoreMasterSelection(form, master));
   }
 
   function handleMasterSearchKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -1654,7 +1726,7 @@ export default function Home() {
     if (event.key === "ArrowDown") { event.preventDefault(); setMasterActiveIndex((index) => Math.min(index + 1, masterResults.length - 1)); }
     else if (event.key === "ArrowUp") { event.preventDefault(); setMasterActiveIndex((index) => Math.max(index - 1, 0)); }
     else if (event.key === "Enter" && masterActiveIndex >= 0) { event.preventDefault(); selectMasterRecord(masterResults[masterActiveIndex]); }
-    else if (event.key === "Escape") setMasterResults([]);
+    else if (event.key === "Escape") setMasterSearchState({ status: "idle" });
   }
 
   function editLineOa(account: LineOfficialAccountResponse) {
@@ -1666,8 +1738,10 @@ export default function Home() {
   }
 
   async function submitLineOa() {
+    if (lineOaSubmissionInFlight.current) return;
     const requiredValid = Boolean(lineOaForm.name.trim() && (editingLineOaId || (lineOaForm.channelSecret.trim() && lineOaForm.channelAccessToken.trim())));
     if (!requiredValid) { setLineOaError(text.requiredFields); return; }
+    lineOaSubmissionInFlight.current = true;
     setLineOaSubmitting(true); setLineOaError(null);
     try {
       const submission = !lineOaForm.storeId && lineOaForm.newStore ? { ...lineOaForm, newStore: { ...lineOaForm.newStore, name: lineOaForm.name.trim() } } : lineOaForm;
@@ -1676,13 +1750,16 @@ export default function Home() {
         setShowLineOaForm(false);
       } else {
         const account = await api.createLineOfficialAccount(submission);
-        const webhook = await api.lineOfficialAccountWebhookInfo(account.id);
-        setCreatedLineOa({ account, webhook });
+        if (!account.webhookConfigured || !isValidCanonicalWebhookUrl(account.webhookUrl)) {
+          await loadApplicationData(true);
+          throw new Error(text.webhookCreationIncomplete);
+        }
+        setCreatedLineOa({ account, webhookUrl: account.webhookUrl });
         setShowLineOaForm(false);
       }
       resetLineOaForm(); await loadApplicationData(true);
     } catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
-    finally { setLineOaSubmitting(false); }
+    finally { lineOaSubmissionInFlight.current = false; setLineOaSubmitting(false); }
   }
 
   async function toggleLineOa(account: LineOfficialAccountResponse) {
@@ -1704,8 +1781,8 @@ export default function Home() {
     finally { setLineOaSubmitting(false); }
   }
 
-  async function copyWebhookUrl(accountId: string) {
-    const url = webhookInfoById[accountId]?.webhookUrl;
+  async function copyWebhookUrl(accountId: string, returnedUrl?: string | null) {
+    const url = returnedUrl ?? webhookInfoById[accountId]?.webhookUrl;
     if (!url) { setLineOaError(text.webhookNotConfigured); return; }
     try { await navigator.clipboard.writeText(url); setToastMessage(text.copied); }
     catch { setLineOaError(text.connectionError); }
@@ -1876,19 +1953,29 @@ export default function Home() {
 
   return (
     <main className="app-shell min-h-screen">
-      <header className="app-surface flex h-16 items-center justify-between border-b px-6">
-        <div>
+      <header className="app-header app-surface flex min-h-20 items-center justify-between gap-5 border-b px-6 py-3">
+        <div className="flex min-w-0 items-center gap-6">
+          <div className="min-w-max">
           <h1 className="text-xl font-bold">{text.appName}</h1>
           <p className="text-xs text-slate-500">{text.appDescription}</p>
+          </div>
+          <nav aria-label="Primary navigation" className="app-primary-nav">
+            <Link href="/dashboard" aria-current={primaryNavigation.dashboardActive ? "page" : undefined}>
+              {text.dashboard}
+            </Link>
+            <Link href="/stores" aria-current={primaryNavigation.storesActive ? "page" : undefined}>
+              {text.storeManagement}
+            </Link>
+          </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="app-header-controls">
           <ThemeControl compact />
           {systemStatus?.pilotMode && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Pilot</span>}
           <span className="text-xs text-slate-500">{authUser.displayName} · {authUser.role}</span>
-          <button onClick={() => void api.logout().finally(() => setAuthUser(null))} className="rounded border border-slate-300 px-2 py-1 text-xs">Logout</button>
+          <button onClick={() => void api.logout().finally(() => setAuthUser(null))} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">Logout</button>
           {lastUpdatedAt && (
-            <span className="hidden text-xs text-slate-400 xl:inline">
+            <span className="app-header-metadata text-xs text-slate-400">
               {text.lastUpdated}{" "}
               {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(lastUpdatedAt)}
             </span>
@@ -1898,7 +1985,7 @@ export default function Home() {
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
             placeholder={text.searchPlaceholder}
-            className="app-input w-72 rounded-lg border px-4 py-2 text-sm outline-none focus:border-slate-500"
+            className="app-header-search app-input w-72 rounded-lg border px-4 py-2 text-sm outline-none focus:border-slate-500"
           />
 
           <select
@@ -1939,14 +2026,15 @@ export default function Home() {
         </div>
       )}
 
-      <div className="grid h-[calc(100vh-64px)] grid-cols-[220px_380px_1fr]">
+      <div className="app-workspace-grid grid min-h-[calc(100vh-80px)] grid-cols-[220px_380px_1fr]">
         <aside className="app-surface overflow-y-auto border-r p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {text.overview}
           </p>
 
           <nav className="space-y-1">
-            <button
+            {initialSection === "dashboard" ? <>
+              <button
               onClick={() => selectSidebarView("dashboard")}
               className={sidebarButtonClass("dashboard")}
             >
@@ -1984,33 +2072,27 @@ export default function Home() {
             </button>
 
             <button
-              onClick={() => selectSidebarView("stores")}
-              className={sidebarButtonClass("stores")}
-            >
-              🏪 {text.stores}
-            </button>
-
-            <button
               onClick={() => selectSidebarView("customerInsights")}
               className={sidebarButtonClass("customerInsights")}
             >
               💡 {text.customerInsights}
             </button>
 
-            {authUser.role === "ADMIN" && <button
-              onClick={() => selectSidebarView("lineOaManagement")}
-              className={sidebarButtonClass("lineOaManagement")}
-            >
-              🔗 {text.lineOaManagement}
-            </button>}
             <button onClick={() => { selectSidebarView("systemStatus"); void loadSystemStatus(); }} className={sidebarButtonClass("systemStatus")}>
               🩺 {text.systemStatus}
             </button>
             <button onClick={() => selectSidebarView("pilotChecklist")} className={sidebarButtonClass("pilotChecklist")}>
               ✅ {text.pilotChecklist}
             </button>
+            </> : authUser.role === "ADMIN" ? <button
+              onClick={() => selectSidebarView("lineOaManagement")}
+              className={sidebarButtonClass("lineOaManagement")}
+            >
+              🔗 {text.lineOaManagement}
+            </button> : <p className="app-muted px-3 py-2 text-sm">{text.lineOaManagement}</p>}
           </nav>
 
+          {initialSection === "stores" && <>
           <div className="my-5 border-t border-slate-200" />
 
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -2025,13 +2107,13 @@ export default function Home() {
               {text.allStores}
             </button>
 
-            {stores.map((store) => (
+            {visibleManagedStores.map((store) => (
               <div key={store.id} className={`app-store-row flex items-center rounded-lg ${selectedStore === store.id ? "is-selected font-medium" : ""}`}>
                 <button onClick={() => openMonitoring({ store: store.id })} className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left text-sm"><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="app-chip rounded-full px-2 py-0.5 text-xs">{store.waiting}</span>}</button>
                 <button type="button" aria-label={`${text.removeStore}: ${store.name}`} title={text.removeStore} onClick={(event) => { event.stopPropagation(); void openStoreRemoval(store.id); }} className="mr-1 rounded p-1.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700">✕</button>
               </div>
             ))}
-            {stores.length === 0 && <p className="px-3 py-4 text-center text-xs text-slate-400">{text.noStoresFound}</p>}
+            {visibleManagedStores.length === 0 && <p className="px-3 py-4 text-center text-xs text-slate-400">{text.noStoresFound}</p>}
           </div>
 
           <div className="my-5 border-t border-slate-200" />
@@ -2043,19 +2125,28 @@ export default function Home() {
           >
             ↻ {text.resetTestData}
           </button>
+          </>}
         </aside>
 
         {sidebarView === "pilotChecklist" ? (
           <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
         ) : sidebarView === "systemStatus" ? (
           <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
-        ) : sidebarView === "lineOaManagement" ? (
-          <section className="col-span-2 overflow-y-auto p-6">
+        ) : sidebarView === "lineOaManagement" && primaryNavigation.showStoreManagementAction ? (
+          <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
               <div className="flex items-start justify-between">
                 <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
-                <div className="flex items-center gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white">＋ {text.connectLineOa}</button></div>
+                <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label><button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
               </div>
+
+              <div className="app-card p-4">
+                <label className="app-muted block text-xs font-medium">{text.searchFilter}
+                  <input value={storeManagementSearch} onChange={(event) => setStoreManagementSearch(event.target.value)} placeholder={text.searchAccountName} className="app-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm" />
+                </label>
+              </div>
+
+              {showArchivedStores && <div className="app-card p-5"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="app-filter-panel flex items-center justify-between rounded-xl px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-xs">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="app-muted text-sm">{text.noStoresFound}</p>}</div></div>}
 
               {lineOaError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaError}</div>}
 
@@ -2072,23 +2163,23 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {[
-                  [text.totalLineOa, lineOas.length, "bg-slate-900 text-white"],
-                  [text.activeLineOa, lineOas.filter((item) => item.isActive).length, "bg-green-50 text-green-800"],
-                  [text.connectionIssues, lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length, "bg-red-50 text-red-800"],
-                  [text.messagesToday, lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0), "bg-blue-50 text-blue-800"],
-                ].map(([label, value, className]) => <div key={String(label)} className={`rounded-xl p-5 shadow-sm ${className}`}><p className="text-xs font-medium opacity-75">{label}</p><p className="mt-2 text-2xl font-bold">{value}</p></div>)}
+                  [text.totalLineOa, lineOas.length],
+                  [text.activeLineOa, lineOas.filter((item) => item.isActive).length],
+                  [text.connectionIssues, lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length],
+                  [text.messagesToday, lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0)],
+                ].map(([label, value]) => <div key={String(label)} className="app-card p-5"><p className="app-muted text-xs font-medium">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                {lineOas.length === 0 ? <div className="p-16 text-center text-slate-500">{text.noLineOa}</div> : (
+              <div className="app-card overflow-hidden">
+                {visibleLineOas.length === 0 ? <div className="p-16 text-center text-slate-500">{text.noLineOa}</div> : (
                   <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr>{[text.lineOaManagement, text.stores, text.connectionStatus, text.webhookUrl, text.lastWebhook, text.messagesToday, text.action].map((heading) => <th key={heading} className="px-3 py-3 font-medium">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
-                    {lineOas.map((account) => <tr key={account.id} className={!account.isActive ? "opacity-60" : ""}>
+                    {visibleLineOas.map((account) => <tr key={account.id} className={!account.isActive ? "opacity-60" : ""}>
                       <td className="px-3 py-4 font-medium">{account.name}</td><td className="px-3 py-4"><span className="block font-medium">{getStoreDisplayName(account.store.name)}</span>{account.store.accountName && <span className="block text-xs text-slate-500">{account.store.accountName}</span>}<span className="block text-xs text-slate-500">{[account.store.province, account.store.region, account.store.lineId].filter(Boolean).join(" · ") || "—"}</span><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${account.store.dataSource === "MASTER" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>{account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}</span></td>
                       <td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs ${account.connectionStatus === "CONNECTED" ? "bg-green-100 text-green-700" : account.connectionStatus === "READY" ? "bg-blue-100 text-blue-700" : account.connectionStatus === "ERROR" ? "bg-red-100 text-red-700" : account.connectionStatus === "DISABLED" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{connectionLabel(account.connectionStatus)}</span><span className={`mt-2 block text-xs ${account.credentialsHealthy ? "text-green-700" : "text-red-700"}`}>{account.credentialsHealthy ? text.credentialsReady : account.hasChannelSecret ? text.credentialDecryptionFailed : text.reenterChannelSecret}</span></td>
-                      <td className="max-w-52 px-3 py-4 text-xs">{webhookInfoById[account.id]?.webhookUrl ? <span className="block truncate" title={webhookInfoById[account.id].webhookUrl ?? undefined}>{webhookInfoById[account.id].webhookUrl}</span> : <span className="text-amber-700" title={text.publicWebhookRequired}>{text.webhookNotConfigured}</span>}</td><td className="px-3 py-4 text-xs">{account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}</td><td className="px-3 py-4 text-center">{account.messagesReceivedToday}</td>
-                      <td className="px-3 py-4"><div className="flex min-w-44 flex-wrap gap-1.5"><button onClick={() => openMonitoring({ lineOaId: account.id })} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.viewConversations}</button>{account.store.lineManagerUrl ? <a href={account.store.lineManagerUrl} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineManager} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineManager}</button>}{account.store.lineOaLink ? <a href={account.store.lineOaLink} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineOa} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineOa}</button>}<button disabled={lineOaSubmitting} onClick={() => void testLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.testConnection}</button><button disabled={!webhookInfoById[account.id]?.webhookUrl} title={!webhookInfoById[account.id]?.webhookUrl ? text.publicWebhookRequired : undefined} onClick={() => void copyWebhookUrl(account.id)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">{text.copyWebhook}</button><button onClick={() => editLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.edit}</button><button disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{account.isActive ? text.disable : text.activate}</button><button disabled={lineOaSubmitting} onClick={() => void regenerateWebhookUrl(account)} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800">{text.regenerateWebhook}</button>{account.archivedAt ? <button onClick={() => void restoreLineOa(account)} className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.restoreLineOa}</button> : <button onClick={() => void removeLineOa(account)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">{text.removeLineOa}</button>}</div>{connectionTest?.id === account.id && <p className="mt-2 text-xs text-slate-500">{connectionTestMessage(connectionTest.result)}</p>}</td>
+                      <td className="max-w-52 px-3 py-4 text-xs">{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ? <span className="block truncate" title={webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ?? undefined}>{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl}</span> : <span className="text-amber-700" title={text.publicWebhookRequired}>{text.webhookNotConfigured}</span>}</td><td className="px-3 py-4 text-xs">{account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}</td><td className="px-3 py-4 text-center">{account.messagesReceivedToday}</td>
+                      <td className="px-3 py-4"><div className="flex min-w-44 flex-wrap gap-1.5"><button onClick={() => openMonitoring({ lineOaId: account.id })} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.viewConversations}</button>{account.store.lineManagerUrl ? <a href={account.store.lineManagerUrl} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineManager} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineManager}</button>}{account.store.lineOaLink ? <a href={account.store.lineOaLink} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineOa} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineOa}</button>}<button disabled={lineOaSubmitting} onClick={() => void testLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.testConnection}</button><button disabled={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl} title={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl ? text.publicWebhookRequired : undefined} onClick={() => void copyWebhookUrl(account.id, account.webhookUrl)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">{text.copyWebhook}</button><button onClick={() => editLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.edit}</button><button disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{account.isActive ? text.disable : text.activate}</button><button disabled={lineOaSubmitting} onClick={() => void regenerateWebhookUrl(account)} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800">{text.regenerateWebhook}</button>{account.archivedAt ? <button onClick={() => void restoreLineOa(account)} className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.restoreLineOa}</button> : <button onClick={() => void removeLineOa(account)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">{text.removeLineOa}</button>}</div>{connectionTest?.id === account.id && <p className="mt-2 text-xs text-slate-500">{connectionTestMessage(connectionTest.result)}</p>}</td>
                     </tr>)}
                   </tbody></table></div>
                 )}
@@ -2100,12 +2191,12 @@ export default function Home() {
             {showLineOaForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{editingLineOaId ? text.edit : text.connectLineOa}</h3><button onClick={() => setShowLineOaForm(false)} className="text-xl text-slate-400">×</button></div>
               {lineOaError && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{lineOaError}</p>}
               <div className="mt-5 grid grid-cols-2 gap-4">
-                {!editingLineOaId && <div className="relative col-span-2"><label className="text-sm font-medium">{text.searchAccountName}<input role="combobox" aria-expanded={masterResults.length > 0} aria-controls="store-master-results" aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined} value={masterSearch} onKeyDown={handleMasterSearchKey} onChange={(event) => { setMasterSearch(event.target.value); setSelectedMaster(null); setMasterResults([]); setMasterSearchLoading(false); setLineOaForm((form) => ({ ...form, storeMasterId: undefined, storeId: undefined })); }} placeholder={text.selectStore} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
-                  {masterSearchLoading && <p className="mt-1 text-xs text-slate-500">{text.loadingData}</p>}{masterSearchError && <div className="mt-1 flex items-center gap-2 text-xs text-red-600"><span>{masterSearchError}</span><button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-red-200 px-2 py-1 font-medium">{text.retry}</button></div>}
-                  {!masterSearchLoading && masterSearch.trim().length >= 2 && !selectedMaster && masterResults.length === 0 && !masterSearchError && <p className="mt-1 text-xs text-slate-500">{text.noMatchingAccount}</p>}
-                  {masterResults.length > 0 && <div id="store-master-results" role="listbox" className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">{masterResults.length > 1 && <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800">{text.multipleMatches}</p>}{masterResults.map((item, index) => <button id={`master-result-${index}`} role="option" aria-selected={index === masterActiveIndex} key={item.id} type="button" onMouseEnter={() => setMasterActiveIndex(index)} onClick={() => selectMasterRecord(item)} className={`block w-full border-b px-3 py-3 text-left last:border-0 ${index === masterActiveIndex ? "bg-slate-100" : "hover:bg-slate-50"}`}><strong className="block text-sm">{item.accountName}</strong><span className="block text-xs text-slate-600">{item.storeName}</span><span className="mt-1 block text-xs text-slate-500">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>{item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{text.systemSuggested}</span>}</button>)}</div>}
+                {!editingLineOaId && <div className="relative col-span-2"><label className="text-sm font-medium">{text.searchAccountName}<input role="combobox" aria-expanded={masterResults.length > 0} aria-controls="store-master-results" aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined} value={searchQuery} onKeyDown={handleMasterSearchKey} onChange={(event) => { const nextQuery = event.target.value; setSearchQuery(nextQuery); setSelectedMaster(null); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1); setLineOaForm(clearStoreMasterSelection); }} placeholder={text.selectStore} className="app-input mt-1 w-full rounded-lg border p-2" /></label>
+                  {masterSearchState.status === "loading" && <p className="mt-1 text-xs text-slate-500">{text.searchingStoreMaster}</p>}{masterSearchState.status === "error" && <div className="mt-1 flex items-center gap-2 text-xs text-red-600"><span>{masterSearchState.message}</span><button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-red-200 px-2 py-1 font-medium">{text.retry}</button></div>}
+                  {masterSearchState.status === "success" && masterSearchState.query.length > 0 && masterSearchState.suggestions.length === 0 && <div className="app-muted mt-1 text-xs"><p>{text.noMatchingAccount}</p><p>{text.manualFallbackHint}</p></div>}
+                  {masterResults.length > 0 && <div id="store-master-results" role="listbox" className="app-surface absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border shadow-xl">{masterResults.length > 1 && <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800">{text.multipleMatches}</p>}{masterResults.map((item, index) => <button id={`master-result-${index}`} role="option" aria-selected={index === masterActiveIndex} key={item.id} type="button" onMouseEnter={() => setMasterActiveIndex(index)} onClick={() => selectMasterRecord(item)} className={`app-list-item block w-full border-b px-3 py-3 text-left last:border-0 ${index === masterActiveIndex ? "is-selected" : ""}`}><strong className="block text-sm">{item.accountName}</strong><span className="app-muted block text-xs">{item.storeName}</span><span className="app-muted mt-1 block text-xs">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>{item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{text.systemSuggested}</span>}</button>)}</div>}
                 </div>}
-                {selectedMaster && <div className="col-span-2 rounded-lg border border-green-200 bg-green-50 p-4 text-sm"><div className="flex items-center justify-between"><strong>{selectedMaster.accountName}</strong><span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-800">{text.masterFile}</span></div><dl className="mt-3 grid grid-cols-2 gap-2 text-xs"><div><dt className="text-slate-500">{text.storeName}</dt><dd>{selectedMaster.storeName}</dd></div><div><dt className="text-slate-500">{text.storeIdLabel}</dt><dd>{selectedMaster.externalStoreId ?? "—"}</dd></div><div><dt className="text-slate-500">{text.province}</dt><dd>{selectedMaster.province ?? "—"}</dd></div><div><dt className="text-slate-500">{text.region}</dt><dd>{selectedMaster.region ?? "—"}</dd></div><div><dt className="text-slate-500">{text.lineIdLabel}</dt><dd>{selectedMaster.lineId ?? "—"}</dd></div></dl>{selectedMaster.existingStore && <p className="mt-3 rounded bg-blue-50 p-2 text-blue-800">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}{selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-amber-700">{text.incompleteMasterData}</p>}</div>}
+                {selectedMaster && synchronizedMaster && <section className="store-master-sync-card col-span-2 p-4 text-sm" aria-labelledby="store-master-sync-title"><div className="flex items-center justify-between gap-3"><h4 id="store-master-sync-title" className="font-semibold">{text.syncedStoreMasterTitle}</h4><span className="app-chip rounded-full px-2 py-1 text-xs">{text.masterFile}</span></div><dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 text-xs sm:grid-cols-2"><div><dt className="store-master-sync-label">{text.storeIdLabel}</dt><dd>{synchronizedMaster.storeId}</dd></div><div><dt className="store-master-sync-label">{text.storeName}</dt><dd>{synchronizedMaster.storeName}</dd></div><div><dt className="store-master-sync-label">{text.accountName}</dt><dd>{synchronizedMaster.accountName}</dd></div><div><dt className="store-master-sync-label">{text.lineIdLabel}</dt><dd>{synchronizedMaster.lineId}</dd></div><div><dt className="store-master-sync-label">{text.province}</dt><dd>{synchronizedMaster.province}</dd></div><div><dt className="store-master-sync-label">{text.region}</dt><dd>{synchronizedMaster.region}</dd></div><div><dt className="store-master-sync-label">{text.openLineOa}</dt><dd>{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div><div><dt className="store-master-sync-label">{text.openLineManager}</dt><dd>{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div></dl>{selectedMaster.existingStore && <p className="mt-3 rounded bg-blue-50 p-2 text-blue-800">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}{selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-amber-700">{text.incompleteMasterData}</p>}</section>}
                 <p className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{text.rotateCredentialsWarning}</p>
                 <label className="col-span-2 text-sm">{text.lineOaName} *<input readOnly={Boolean(selectedMaster)} value={lineOaForm.name} onChange={(event) => setLineOaForm((form) => ({ ...form, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 read-only:bg-slate-100" /></label>
                 <label className="text-sm">{text.channelSecret} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelSecret} onChange={(event) => setLineOaForm((form) => ({ ...form, channelSecret: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.accessToken} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelAccessToken} onChange={(event) => setLineOaForm((form) => ({ ...form, channelAccessToken: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
@@ -2114,30 +2205,28 @@ export default function Home() {
                 {showAdvancedLineOa && <><label className="col-span-2 text-sm">{text.stores}<select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2"><option value="">{text.autoCreateStore}</option>{availableStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="text-sm">{text.region}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.area}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.basicId}<input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.channelId}<input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} />{text.activeStatus}</label></>}
               </div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowLineOaForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button><button disabled={lineOaSubmitting} onClick={() => void submitLineOa()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{lineOaSubmitting ? text.loadingData : text.saveConnection}</button></div>
             </div></div>}
-            {createdLineOa && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl"><div className="rounded-xl border border-green-200 bg-green-50 p-5"><h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3><p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p></div><div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="break-all font-mono text-sm">{createdLineOa.webhook.webhookUrl ?? text.webhookNotConfigured}</p><button disabled={!createdLineOa.webhook.webhookUrl} onClick={() => void copyWebhookUrl(createdLineOa.account.id)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{text.copyWebhook}</button></div><ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">{text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}</ol><div className="mt-6 flex justify-end gap-3"><button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.close}</button><button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.goToLineOaManagement}</button></div></div></div>}
+            {createdLineOa && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl"><div className="rounded-xl border border-green-200 bg-green-50 p-5"><h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3><p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p></div><div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p><button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.copyWebhook}</button></div><ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">{text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}</ol><div className="mt-6 flex justify-end gap-3"><button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.close}</button><button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.goToLineOaManagement}</button></div></div></div>}
           </section>
         ) : sidebarView === "dashboard" ? (
-          <section className="col-span-2 overflow-y-auto p-6">
+          <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
-              <label className="flex justify-end gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label>
-              {showArchivedStores && <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="rounded border border-green-300 px-3 py-1 text-xs text-green-700">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="text-sm text-slate-500">{text.noStoresFound}</p>}</div></div>}
-              <div className="grid grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
                 {([
-                  [text.totalIncoming, dashboardSummary?.totalConversations ?? conversations.length, "bg-slate-900 text-white"],
-                  [text.followUpRequired, dashboardSummary?.countByStatus.FOLLOW_UP ?? followUpCount, "bg-amber-50 text-amber-800"],
-                  [text.remindersSent, dashboardSummary?.countByStatus.REMINDED ?? remindedCount, "bg-blue-50 text-blue-800"],
-                  [text.acknowledgedKpi, dashboardSummary?.countByStatus.ACKNOWLEDGED ?? 0, "bg-purple-50 text-purple-800"],
-                  [text.completedKpi, dashboardSummary?.countByStatus.COMPLETED ?? 0, "bg-green-50 text-green-800"],
-                  [text.escalatedKpi, dashboardSummary?.countByStatus.ESCALATED ?? 0, "bg-red-50 text-red-800"],
-                ] as Array<[string, number, string]>).map(([label, value, className]) => (
-                  <div key={String(label)} className={`rounded-xl p-4 shadow-sm ${className}`}>
-                    <p className="text-xs font-medium opacity-75">{label}</p>
-                    <p className="mt-2 text-2xl font-bold">{value}</p>
+                  [text.totalIncoming, dashboardSummary?.totalConversations ?? conversations.length],
+                  [text.followUpRequired, dashboardSummary?.countByStatus.FOLLOW_UP ?? followUpCount],
+                  [text.remindersSent, dashboardSummary?.countByStatus.REMINDED ?? remindedCount],
+                  [text.acknowledgedKpi, dashboardSummary?.countByStatus.ACKNOWLEDGED ?? 0],
+                  [text.completedKpi, dashboardSummary?.countByStatus.COMPLETED ?? 0],
+                  [text.escalatedKpi, dashboardSummary?.countByStatus.ESCALATED ?? 0],
+                ] as Array<[string, number]>).map(([label, value]) => (
+                  <div key={String(label)} className="app-card p-5">
+                    <p className="app-muted text-xs font-medium">{label}</p>
+                    <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="app-card overflow-hidden">
                 <h2 className="border-b border-slate-200 p-5 font-semibold">{text.storeMonitoringOverview}</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -2182,7 +2271,7 @@ export default function Home() {
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <h2 className="mb-4 font-semibold">{text.recentMonitoringActivity}</h2>
-                  <div className="space-y-2">{recentActivity.map((activity) => <button key={activity.id} onClick={() => openMonitoring({ conversationId: activity.conversation.id })} className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><div><p className="text-sm font-medium">{activity.conversation.customer}</p><p className="text-xs text-slate-500">{getStoreDisplayName(activity.conversation.store)} · {activity.actionType === "messageReceived" ? text.messageReceivedActivity : getStatusLabel(language, activity.status)}</p></div><time className="text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(activity.timestamp))}</time></button>)}</div>
+                  <div className="space-y-2">{recentActivity.map((activity) => <button key={activity.id} onClick={() => openMonitoring({ conversationId: activity.conversation.id })} className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><div><p className="text-sm font-medium">{activity.conversation.customer}</p><p className="text-xs text-slate-500">{getStoreDisplayName(activity.conversation.store)} · {activity.actionType === "messageReceived" ? text.messageReceivedActivity : getStatusLabel(language, activity.status)}</p></div><time className="text-xs text-slate-400" dateTime={activity.timestamp}>{formatRelativeTime(activity.timestamp, language)}</time></button>)}</div>
                   {recentActivity.length === 0 && <p className="text-sm text-slate-500">{text.noActivity}</p>}
                 </div>
               </div>
@@ -2305,7 +2394,7 @@ export default function Home() {
                   </div>
 
                   <span className="whitespace-nowrap text-xs text-slate-400">
-                    {conversation.time} {text.minutesAgo}
+                    {formatRelativeTime(conversation.time, language)}
                   </span>
                 </div>
 
@@ -2382,8 +2471,7 @@ export default function Home() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  {text.messageReceived} {selectedConversation.time}{" "}
-                  {text.minutesAgo}
+                  {text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}
                 </p>
                 <button disabled={chatLoading} onClick={() => void refreshProfile()} className="mt-1 text-xs text-blue-700">{text.refreshLineProfile}</button>
                 {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="ml-2 text-xs text-amber-700">{text.profileUnavailable}</span>}
@@ -2420,7 +2508,7 @@ export default function Home() {
 
               <div className="max-h-[520px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-4">
                 {chatHistory.hasEarlier && <div className="text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs">{text.loadEarlierMessages}</button></div>}
-                {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}><p className="whitespace-pre-wrap text-sm">{content}</p>{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                 {chatHistory.items.length === 0 && <p className="py-12 text-center text-sm text-slate-500">{text.noMessages}</p>}
                 <div ref={chatEndRef} />
               </div>
@@ -2437,7 +2525,7 @@ export default function Home() {
                       {text.productSeries}
                     </p>
                     <p className="mt-1 font-medium">
-                      {selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.name).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}
+                      {selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}
                     </p>
                   </div>
 
@@ -2446,7 +2534,7 @@ export default function Home() {
                       {text.productModel}
                     </p>
                     <p className="mt-1 font-medium">
-                      {selectedApiConversation?.products.map(({ productModel }) => productModel.name).join(", ") || text.noProductDetected}
+                      {selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}
                     </p>
                   </div>
 
@@ -2531,7 +2619,7 @@ export default function Home() {
                     {text.waitingTime}
                   </p>
                   <p className="mt-1 text-sm font-semibold">
-                    {selectedConversation.time} {text.minutesAgo}
+                    {formatRelativeTime(selectedConversation.time, language)}
                   </p>
                 </div>
 
@@ -2639,11 +2727,8 @@ export default function Home() {
                             <>{text.statusChangedTo}{" "}<span className="font-semibold">{getStatusLabel(language, activity.status)}</span></>
                           )}
                         </p>
-                        <time className="text-xs text-slate-500">
-                          {new Intl.DateTimeFormat(language, {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          }).format(new Date(activity.timestamp))}
+                        <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
+                          {formatRelativeTime(activity.timestamp, language)}
                         </time>
                       </div>
                     ))}

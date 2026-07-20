@@ -15,9 +15,10 @@ import { LineProfileModule } from "./line-profile.module";
 import { StoreMasterModule } from "./store-master/store-master.module";
 import { AuthModule } from "./auth/auth.module";
 import { OperationsController } from "./operations.controller";
+import { MediaModule } from "./media/media.module";
 
 @Module({
-  imports: [AuthModule, CredentialsModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule],
+  imports: [AuthModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
   providers: [PrismaService, ConversationsService],
 })

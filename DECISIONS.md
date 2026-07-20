@@ -1,5 +1,21 @@
 # Architectural decisions
 
+## LINE OA create webhook contract
+
+The persisted webhook key is generated before LINE OA creation and written atomically with the OA. The create response derives its canonical URL from that freshly persisted key and validated `PUBLIC_WEBHOOK_BASE_URL`; the frontend treats this response as authoritative and does not issue a second webhook-info request. Unique-key collisions alone are retried, while invalid configuration or failed persistence aborts creation. Stable keys are never generated during reads or edits, and legacy null/blank records are repaired only through an explicit maintenance command.
+
+## Inbound LINE media
+
+Image bytes are never stored in PostgreSQL. An idempotent one-to-one `MessageMedia` row records processing metadata while a storage abstraction writes bytes to an ignored local directory in development or an S3-compatible bucket in production. Webhook message persistence and the PENDING media record are transactional; bounded LINE download and storage then update the row to READY or FAILED without converting media failures into webhook failures. Browsers fetch READY images only through an authenticated ADMIN endpoint, which streams private bytes without disclosing object keys or storage paths.
+
+## Frontend relative time
+
+Relative time is derived at render time from the original API timestamp and the browser clock, without fixed timezone offsets. One formatter owns Thai, English, and Chinese output and uses elapsed-duration thresholds: 60 seconds, 60 minutes, 24 hours, 30 days, and 365 days. Conversation mapping preserves timestamps instead of prematurely reducing them to minute counts, so every relative-time surface follows the same rules and invalid values can safely render as `-`.
+
+## Store Master-backed LINE OA creation
+
+The Connect LINE OA form keeps Store Master selection as a reference in the existing `CreateLineOaInput` (`storeMasterId` plus `storeId` when already linked) rather than copying master data into a new frontend or backend model. The backend remains responsible for reusing or linking the existing store and for credential encryption and webhook generation. Manual creation remains available when no result is selected. Every non-empty ACCOUNT NAME query is eligible for a 300 ms debounced search, and the UI only declares a no-match after that exact query completes successfully.
+
 ## Temporary Railway pilot administrator bootstrap
 
 Pilot administrator seeding is an application-startup provider, not an HTTP endpoint, and requires all three gates: production, pilot mode, and explicit bootstrap enablement. It targets only the normalized configured username, hashes the environment-supplied password through the normal password service, and fails on an internal-email collision rather than adopting a different user. Disabling bootstrap stops all mutation while leaving the verified database account available through the unchanged login/session flow.
@@ -7,6 +23,10 @@ Pilot administrator seeding is an application-startup provider, not an HTTP endp
 ## Frontend theme resolution
 
 The frontend stores the explicit `light`, `dark`, or `system` preference under `oppo-line-oa-theme`, while `html[data-theme]` is the only theme selector and always contains the resolved visual mode. Each change synchronously removes legacy root theme classes and the previous attribute before applying the new value. A small blocking script performs the same cleanup before body paint; the React provider owns persistence and one live operating-system listener. Core interactive surfaces use paired semantic light/dark tokens rather than depending on the absence of dark declarations.
+
+## Frontend primary information architecture
+
+Dashboard and Store Management have separate App Router URLs (`/dashboard` and `/stores`) while reusing the existing authenticated application component to avoid duplicating its data and session lifecycle. Dashboard owns monitoring, follow-up, activity, and operational views. Store Management owns LINE OA connection, store search, archived-store recovery, store-level actions, and the contextual connect action. Route-derived state overrides stale saved sidebar choices so refresh and browser navigation cannot expose store-management actions on Dashboard.
 
 ## Project-local runtime ownership
 
@@ -35,3 +55,9 @@ Railway uses `backend` as the service root rather than a repository-level Docker
 ## Temporary cross-site authentication
 
 Production session cookies are opaque random tokens stored hashed in PostgreSQL and use `HttpOnly`, `Secure`, and `SameSite=None` for the temporary localhost-to-Railway pilot. CORS accepts only `FRONTEND_URL`. Browser third-party-cookie restrictions can still make this topology unreliable, so deploying the frontend under HTTPS on the same site is the recommended next step; cookie security must not be weakened.
+# Product classification catalog (2026-07-20)
+
+- Reused ProductSeries as the product family and ProductModel/ProductAlias as canonical model/aliases; ProductGroup is metadata on ProductSeries. This avoids a competing taxonomy.
+- Catalog synchronization is additive and idempotent. It updates catalog-owned records but never deletes conversations, manual classifications, or unrelated catalog data.
+- Automatic analysis stores one primary match with confidence and evidence. Specific model matches outrank family/generic mentions regardless of recency, while recency breaks ties at the same specificity.
+- Any MANUAL conversation product is authoritative. Re-analysis refreshes RULE records only and does not add an automatic product beside a manual choice.

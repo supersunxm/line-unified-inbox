@@ -12,20 +12,25 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
-    ,"test": "tsx --test src/**/*.spec.ts src/**/**/*.spec.ts"
-    ,"test:line-webhook": "tsx --env-file=.env scripts/send-test-line-webhook.ts"
-    ,"test:line-verify": "tsx --env-file=.env scripts/send-test-line-verify.ts"
-    ,"test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts"
-    ,"store-master:import": "tsx --env-file=.env scripts/store-master.ts import"
-    ,"store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate"
-    ,"user:create-admin": "tsx --env-file=.env scripts/create-admin.ts"
-    ,"auth:status": "tsx --env-file=.env scripts/auth-status.ts"
-    ,"security:check": "sh scripts/security-check.sh"
-    ,"db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'"
-    ,"db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
+    "prisma:studio": "prisma studio",
+    "test": "tsx --test src/**/*.spec.ts src/**/**/*.spec.ts",
+    "test:line-webhook": "tsx --env-file=.env scripts/send-test-line-webhook.ts",
+    "test:line-verify": "tsx --env-file=.env scripts/send-test-line-verify.ts",
+    "test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts",
+    "store-master:import": "tsx --env-file=.env scripts/store-master.ts import",
+    "store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate",
+    "user:create-admin": "tsx --env-file=.env scripts/create-admin.ts",
+    "auth:status": "tsx --env-file=.env scripts/auth-status.ts",
+    "product-catalog:validate": "tsx scripts/product-catalog.ts validate",
+    "product-catalog:seed": "tsx --env-file=.env scripts/product-catalog.ts seed",
+    "classification:backfill-products": "tsx --env-file=.env scripts/backfill-product-classifications.ts",
+    "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
+    "security:check": "sh scripts/security-check.sh",
+    "db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'",
+    "db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1090.0",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",

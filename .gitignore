@@ -20,3 +20,4 @@ ngrok.yml
 *.xlsx
 tmp/
 .runtime/
+backend/.media/

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { LineOaConnectionStatus, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
@@ -58,6 +58,7 @@ export class LineOfficialAccountsService {
   }
 
   private safe(item: IncludedOa, messagesReceivedToday = 0) {
+    const webhook = this.webhookConfiguration(item.webhookKey);
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
@@ -68,6 +69,7 @@ export class LineOfficialAccountsService {
       credentialsHealthy: this.decryptable(item.encryptedChannelSecret),
       conversationCount: item._count.conversations, messagesReceivedToday, createdAt: item.createdAt, updatedAt: item.updatedAt,
       archivedAt: item.archivedAt,
+      webhookUrl: webhook.webhookUrl, webhookConfigured: Boolean(item.webhookKey) && webhook.configured,
     };
   }
 
@@ -83,8 +85,11 @@ export class LineOfficialAccountsService {
   }
 
   async create(dto: CreateLineOfficialAccountDto) {
-    try {
-      const id = await this.prisma.$transaction(async (tx) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const webhookKey = this.generateWebhookKey();
+      if (!this.webhookConfiguration(webhookKey).configured) throw new InternalServerErrorException("PUBLIC_WEBHOOK_BASE_URL is not configured for LINE OA creation");
+      try {
+        const item = await this.prisma.$transaction(async (tx) => {
         const master = dto.storeMasterId ? await tx.storeMaster.findUnique({ where: { id: dto.storeMasterId }, include: { stores: { select: { id: true } } } }) : null;
         if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
         const storeWithMatchingCode = master?.externalStoreId ? await tx.store.findUnique({ where: { code: master.externalStoreId } }) : null;
@@ -94,19 +99,31 @@ export class LineOfficialAccountsService {
           : dto.newStore
           ? (await tx.store.create({ data: { name: dto.newStore.name.trim(), code: this.clean(dto.newStore.code), region: this.clean(dto.newStore.region), area: this.clean(dto.newStore.area) } })).id
           : dto.storeId ?? (await tx.store.create({ data: { name: dto.name.trim() } })).id);
-        const item = await tx.lineOfficialAccount.create({ data: {
-          storeId, webhookKey: this.generateWebhookKey(), name: dto.name.trim(), basicId: this.clean(dto.basicId), channelId: this.clean(dto.channelId), destinationId: this.clean(dto.destinationId),
+        return tx.lineOfficialAccount.create({ data: {
+          storeId, webhookKey, name: dto.name.trim(), basicId: this.clean(dto.basicId), channelId: this.clean(dto.channelId), destinationId: this.clean(dto.destinationId),
           encryptedChannelSecret: this.encryption.encrypt(dto.channelSecret.trim()),
           encryptedChannelAccessToken: this.encryption.encrypt(dto.channelAccessToken.trim()),
           isActive: dto.isActive, connectionStatus: dto.isActive && this.webhookConfiguration("pending-key").configured ? "READY" : dto.isActive ? "NOT_CONFIGURED" : "DISABLED",
-        } });
-        return item.id;
-      });
-      return this.get(id);
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new ConflictException("Channel ID, Basic ID, or store code already exists");
-      throw error;
+        }, include: safeInclude });
+        });
+        if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
+        const response = this.safe(item);
+        if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
+        return response;
+      } catch (error) {
+        if (this.isWebhookKeyCollision(error) && attempt < 2) continue;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new ConflictException("Channel ID, Basic ID, or store code already exists");
+        throw error;
+      }
     }
+    throw new InternalServerErrorException("Unable to allocate a unique webhook key");
+  }
+
+  private isWebhookKeyCollision(error: unknown) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+    const target = error.meta?.target;
+    if (Array.isArray(target)) return target.some((value) => value === "webhookKey");
+    return typeof target === "string" && target.includes("webhookKey");
   }
 
   async update(id: string, dto: UpdateLineOfficialAccountDto) {

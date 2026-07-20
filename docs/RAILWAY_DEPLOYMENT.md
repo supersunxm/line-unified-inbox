@@ -41,6 +41,13 @@ Use Railway’s **Root Directory = `backend`** setting. This is simpler than mai
 - `EMAIL_PROVIDER=resend` for first-admin setup on a new database. Use `none` only when registration email is intentionally unavailable and an administrator already exists.
 - `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME` when using Resend
 - `DEV_ADMIN_ENABLED=false`
+- `MEDIA_STORAGE_DRIVER=s3` — Railway filesystems are ephemeral; use an S3-compatible bucket for inbound LINE images.
+- `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` — store these as Railway secrets.
+- `S3_ENDPOINT` — required by non-AWS S3-compatible providers; omit it for AWS S3.
+- `S3_PUBLIC_BASE_URL` — optional and not currently exposed to browsers; media is delivered through the authenticated backend endpoint.
+- `MEDIA_MAX_FILE_SIZE_BYTES=10485760` and `MEDIA_DOWNLOAD_TIMEOUT_MS=10000` — optional limits shown with their defaults.
+
+For local development, use `MEDIA_STORAGE_DRIVER=local` and `MEDIA_LOCAL_DIRECTORY=.media`. The directory is ignored by Git and its filesystem path is never returned by the API. Create the production bucket and credentials before deploying the media migration; do not use Railway's ephemeral service filesystem for durable images.
 
 Railway supplies `PORT`; do not hard-code it. Sessions use cryptographically random opaque tokens stored hashed in PostgreSQL, so this application has no cookie-signing/session-secret variable. Never invent or expose one merely to satisfy configuration lists.
 
@@ -69,6 +76,8 @@ Re-enabling bootstrap intentionally resets the configured account's password has
 4. Log in from the configured frontend and use LINE OA Management. Every displayed URL must be `https://<domain>/webhook/<persistedWebhookKey>`.
 5. Run the backend diagnostic locally or against an authorized environment using `npm run test:line-verify -- <lineOfficialAccountId>`.
 6. Only after signed tests pass, copy the displayed URL to LINE Developers Console, click **Verify**, enable **Use webhook**, and send a real LINE customer message.
+
+If legacy records were created without a key, run `npm run line-oa:backfill-webhook-keys` once from the backend service environment. It repairs only null or blank keys, preserves every existing key, reports scanned/repaired counts, and never prints LINE credentials. Do not add this command to startup. The existing webhook-key migration already enforces a non-null unique column for newly created records.
 
 ## Cookie and CORS limitation
 

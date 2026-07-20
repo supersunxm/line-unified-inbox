@@ -2,6 +2,10 @@ import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopi
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
+export function messageMediaUrl(messageId: string) {
+  return `${API_URL}/messages/${encodeURIComponent(messageId)}/media`;
+}
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
