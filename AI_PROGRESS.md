@@ -133,3 +133,29 @@ Fix intermittent missing webhook URLs after LINE OA creation.
 - Disabled image storage persists the image message and a `SKIPPED` media record without downloading content.
 - Added production-validation, processing, and frontend placeholder regression coverage.
 - Next: apply the additive enum migration and complete the full verification loop.
+# Current task: separate LINE OA Manager conversation action
+
+- Preserved the original/translated message toggle as an independent action.
+- Added validated `manager.line.biz` navigation using the selected conversation's Store Master manager URL.
+- Added clipboard-assisted customer search, success/fallback/missing-link toasts, and a Store Management link when configuration is absent.
+- Next: complete frontend and repository verification.
+# Current task: Store Master refresh and connected LINE OA metadata sync
+
+- Changed Store Master import identity from sheet row position to stable external Store ID when available.
+- Added an idempotent connected-LINE-OA metadata sync command with dry-run and outcome counters.
+- Protected credentials and webhook identity by limiting writes to Store metadata and the Store Master relation.
+- Conversation responses now resolve the latest validated manager URL through Store Master.
+- Next: run the full backend/frontend verification and inspect the final diff.
+# Current task: canonical LINE OA Manager URL resolution
+
+- Added one backend resolver shared by connected LINE OA list and conversation responses.
+- Resolution prefers the newest active Store Master row by stable Store ID, then the connected Store Master relation, then null.
+- Conversation detail now consumes `resolvedLineOaManagerUrl` directly with no frontend reconstruction.
+- Next: complete backend/frontend tests, builds, runtime checks, and diff review.
+# Current task: safe conversation API and resolved Manager URL
+
+- Replaced full Prisma LINE OA serialization in conversations with an explicit safe connected-account projection.
+- Conversation list/detail now include the canonical `resolvedLineOaManagerUrl` and omit Store Master internals and all credential/webhook identity fields.
+- Strengthened Manager URL validation against embedded credentials, query strings, fragments, and unsupported paths.
+- Added response-level regression tests that inspect serialized JSON for forbidden credential names and ciphertext values.
+- Next: complete all lint, build, test, runtime, and diff checks.

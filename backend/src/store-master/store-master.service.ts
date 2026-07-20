@@ -10,11 +10,15 @@ export class StoreMasterService {
   async importCsv(csv: string, source = "GOOGLE_SHEET") {
     const parsed = parseStoreMasterCsv(csv);
     const duplicateNames = new Set(parsed.map((row) => row.normalizedAccountName).filter((name, index, all) => name && all.indexOf(name) !== index));
-    await this.prisma.$transaction(parsed.map((row) => this.prisma.storeMaster.upsert({
-      where: { source_sourceRowNumber: { source, sourceRowNumber: row.sourceRowNumber } },
-      create: { ...row, source, region: row.region ?? regionFromProvince(row.province), dataQualityStatus: duplicateNames.has(row.normalizedAccountName) && row.dataQualityStatus === "COMPLETE" ? "DUPLICATE_ACCOUNT_NAME" : row.dataQualityStatus },
-      update: { ...row, region: row.region ?? regionFromProvince(row.province), dataQualityStatus: duplicateNames.has(row.normalizedAccountName) && row.dataQualityStatus === "COMPLETE" ? "DUPLICATE_ACCOUNT_NAME" : row.dataQualityStatus, isActive: true, sourceUpdatedAt: new Date() },
-    })));
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of parsed) {
+        const { sourceRowNumber, ...values } = row;
+        const data = { ...values, region: row.region ?? regionFromProvince(row.province), dataQualityStatus: duplicateNames.has(row.normalizedAccountName) && row.dataQualityStatus === "COMPLETE" ? "DUPLICATE_ACCOUNT_NAME" as const : row.dataQualityStatus, isActive: true, sourceUpdatedAt: new Date() };
+        const stable = row.externalStoreId ? await tx.storeMaster.findFirst({ where: { externalStoreId: row.externalStoreId, isActive: true }, orderBy: { createdAt: "asc" } }) : null;
+        if (stable) { await tx.storeMaster.update({ where: { id: stable.id }, data }); continue; }
+        await tx.storeMaster.upsert({ where: { source_sourceRowNumber: { source, sourceRowNumber } }, create: { ...data, source, sourceRowNumber }, update: data });
+      }
+    });
     return this.validate();
   }
 

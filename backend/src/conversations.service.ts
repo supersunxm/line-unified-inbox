@@ -2,10 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { ActivityActionType, FollowUpStatus, Prisma } from "@prisma/client";
 import { ConversationQueryDto, CreateNoteDto } from "./dto";
 import { PrismaService } from "./prisma.service";
+import { isValidManagerUrl } from "./store-master/store-master.utils";
+import { resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 
 export const conversationInclude = {
   customer: true,
-  store: true,
+  store: { include: { storeMaster: true } },
   lineOfficialAccount: true,
   messages: { orderBy: { sentAt: "desc" as const }, include: { media: true } },
   products: { include: { productModel: { include: { productSeries: true } } } },
@@ -18,9 +20,13 @@ type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conv
 @Injectable()
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
-  private safe(item: IncludedConversation) {
+  private async safe(item: IncludedConversation) {
     const value = item.customer.lineUserId;
-    return { ...item, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
+    const { storeMaster, ...store } = rawStore;
+    const resolvedLineOaManagerUrl = await resolveLineOaManagerUrl(this.prisma, item.store);
+    const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
+    return { ...conversation, resolvedLineOaManagerUrl, lineOfficialAccount, store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" }, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
   }
 
   private safeMessage<T extends { id: string; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
@@ -77,7 +83,7 @@ export class ConversationsService {
       this.prisma.conversation.findMany({ where, include: conversationInclude, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
       this.prisma.conversation.count({ where }),
     ]);
-    return { items: items.map((item) => this.safe(item)), total, page: query.page, pageSize: query.pageSize };
+    return { items: await Promise.all(items.map((item) => this.safe(item))), total, page: query.page, pageSize: query.pageSize };
   }
 
   async get(id: string) {

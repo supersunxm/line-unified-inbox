@@ -4,7 +4,8 @@ import { randomBytes } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
-import { isValidLineOaUrl, isValidManagerUrl } from "../store-master/store-master.utils";
+import { isValidLineOaUrl } from "../store-master/store-master.utils";
+import { resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
 type IncludedOa = Prisma.LineOfficialAccountGetPayload<{ include: typeof safeInclude }>;
@@ -57,12 +58,13 @@ export class LineOfficialAccountsService {
     try { this.encryption.decrypt(value); return true; } catch { return false; }
   }
 
-  private safe(item: IncludedOa, messagesReceivedToday = 0) {
+  private async safe(item: IncludedOa, messagesReceivedToday = 0) {
     const webhook = this.webhookConfiguration(item.webhookKey);
+    const resolvedLineOaManagerUrl = await resolveLineOaManagerUrl(this.prisma, item.store);
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
-      destinationId: item.destinationId, store: { id: item.store.id, name: item.store.name, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: isValidManagerUrl(item.store.storeMaster?.lineManagerUrl ?? null) ? item.store.storeMaster?.lineManagerUrl ?? null : null, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
+      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, name: item.store.name, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
       connectionStatus: this.calculatedStatus(item), isActive: item.isActive, lastWebhookReceivedAt: item.lastWebhookReceivedAt,
       lastConnectionTestAt: item.lastConnectionTestAt, lastConnectionError: item.lastConnectionError,
       hasChannelSecret: Boolean(item.encryptedChannelSecret), hasChannelAccessToken: Boolean(item.encryptedChannelAccessToken),
@@ -107,7 +109,7 @@ export class LineOfficialAccountsService {
         }, include: safeInclude });
         });
         if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
-        const response = this.safe(item);
+        const response = await this.safe(item);
         if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
         return response;
       } catch (error) {

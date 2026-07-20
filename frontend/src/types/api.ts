@@ -8,9 +8,10 @@ export type ApiConversation = {
   followUpStatus: ApiFollowUpStatus;
   productRelationship: string | null;
   purchaseIntent: string | null;
+  resolvedLineOaManagerUrl: string | null;
   customer: { id: string; lineUserId: string | null; displayName: string; pictureUrl: string | null; statusMessage: string | null; preferredLanguage: string | null; profileFetchStatus: string; profileFetchError: string | null };
-  store: { id: string; name: string };
-  lineOfficialAccount: { id: string; name: string };
+  store: { id: string; name: string; lineManagerUrl: string | null; lineManagerUrlStatus: "VALID" | "MISSING" | "INVALID" };
+  lineOfficialAccount: { id: string; name: string; basicId: string | null; connectionStatus: string; isActive: boolean; lastWebhookReceivedAt: string | null };
   messages: Array<{
     id: string;
     direction: "INBOUND" | "OUTBOUND" | "SYSTEM";
@@ -54,6 +55,7 @@ export type DashboardSummaryResponse = {
 export type LineOaConnectionStatus = "CONNECTED" | "READY" | "NOT_CONFIGURED" | "ERROR" | "DISABLED";
 export type LineOfficialAccountResponse = {
   id: string;
+  resolvedLineOaManagerUrl: string | null;
   name: string;
   basicId: string | null;
   channelId: string | null;

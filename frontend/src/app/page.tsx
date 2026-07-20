@@ -11,6 +11,7 @@ import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStore
 import { formatRelativeTime } from "./relative-time";
 import { MessageImage } from "./message-image";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
+import { openLineOaManager } from "./line-oa-manager";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -131,7 +132,7 @@ const translations = {
     latestMessage: "ข้อความล่าสุดจากลูกค้า",
     originalMessage: "ข้อความต้นฉบับ",
     translatedMessage: "ข้อความแปล",
-    translateMessage: "แปลข้อความ",
+    translateMessage: "ดูคำแปล",
     showOriginal: "ดูต้นฉบับ",
 
     productInsight: "ข้อมูลสินค้า",
@@ -385,7 +386,7 @@ const translations = {
     latestMessage: "Latest Customer Message",
     originalMessage: "Original Message",
     translatedMessage: "Translated Message",
-    translateMessage: "Translate Message",
+    translateMessage: "Show Translation",
     showOriginal: "Show Original",
 
     productInsight: "Product Insight",
@@ -638,7 +639,7 @@ const translations = {
     latestMessage: "客户最新消息",
     originalMessage: "原始消息",
     translatedMessage: "翻译消息",
-    translateMessage: "翻译消息",
+    translateMessage: "查看翻译",
     showOriginal: "查看原文",
 
     productInsight: "产品信息",
@@ -1110,6 +1111,7 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
   const [lineOaFilter, setLineOaFilter] = useState("all");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [managerLinkMissing, setManagerLinkMissing] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedApiConversation, setSelectedApiConversation] = useState<ApiConversation | null>(null);
   const [chatHistory, setChatHistory] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
@@ -1660,6 +1662,24 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
   function changeLanguage(newLanguage: Language) {
     setLanguage(newLanguage);
     setShowTranslation(true);
+  }
+
+  async function openSelectedConversationInLineOa() {
+    if (!selectedApiConversation) return;
+    const result = await openLineOaManager({
+      managerUrl: selectedApiConversation.resolvedLineOaManagerUrl,
+      customerName: selectedApiConversation.customer.displayName,
+      copy: (value) => navigator.clipboard.writeText(value),
+      open: (url, target, features) => window.open(url, target, features),
+    });
+    setManagerLinkMissing(result === "missing");
+    setToastMessage(result === "copied"
+      ? "คัดลอกชื่อลูกค้าแล้ว กรุณาวางในช่องค้นหาของ LINE OA Manager"
+      : result === "copy-failed"
+        ? "เปิด LINE OA Manager แล้ว กรุณาค้นหาลูกค้าด้วยตนเอง"
+        : selectedApiConversation.store.lineManagerUrlStatus === "INVALID"
+          ? "ลิงก์ LINE OA Manager สำหรับร้านนี้ไม่ถูกต้อง กรุณาอัปเดต Store Master"
+          : "ยังไม่มีลิงก์ LINE OA Manager สำหรับร้านนี้");
   }
 
   function selectSidebarView(view: SidebarView) {
@@ -2492,9 +2512,9 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
             </div>
 
             <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex items-center justify-between gap-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
                 <p className="text-xs text-slate-500">{chatHistory.total} {text.messagesToday}</p>
-
+                <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   onClick={() => setShowTranslation(!showTranslation)}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50"
@@ -2504,6 +2524,10 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
                     ? text.showOriginal
                     : text.translateMessage}
                 </button>
+                <button type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-secondary inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium" aria-label="เปิดใน LINE OA Manager">
+                  เปิดใน LINE OA <span aria-hidden="true">↗</span>
+                </button>
+                </div>
               </div>
 
               <div className="max-h-[520px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-4">
@@ -2772,7 +2796,8 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
           aria-live="polite"
           className="fixed bottom-6 right-6 z-50 rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-lg"
         >
-          {toastMessage}
+          <span>{toastMessage}</span>
+          {managerLinkMissing && <Link href="/stores" className="ml-3 underline underline-offset-2">{text.storeManagement}</Link>}
         </div>
       )}
     </main>

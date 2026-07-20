@@ -66,3 +66,22 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Inbound media retention is opt-in through `MEDIA_STORAGE_ENABLED=true`; absence and `false` both mean disabled. This prevents an optional subsystem from blocking core text webhook processing.
 - Image message metadata is always recorded. When retention is disabled, `MessageMedia.processingStatus=SKIPPED` documents the intentional outcome and no LINE content request or storage call occurs.
 - Production still rejects local storage and incomplete or obvious placeholder S3 configuration whenever the feature is enabled.
+# Conversation LINE OA Manager action (2026-07-20)
+
+- The translation toggle remains local UI state and is not reused for navigation.
+- Manager navigation accepts only HTTPS URLs whose exact hostname is `manager.line.biz`, preserves any stored supported path, and does not construct undocumented chat parameters.
+- Because no reliable customer-specific chat URL exists in the current data model, the action opens the stored account-level URL and copies the selected customer's display name for manual search.
+# Store Master refresh identity and sync (2026-07-20)
+
+- `externalStoreId` is authoritative for imports when present; sheet row number remains the fallback only for incomplete records without a stable ID.
+- Connected LINE OA credentials are not copied into or updated by Store Master synchronization. The command updates only Store name/region/province and its Store Master relation.
+- Account name, LINE ID, public LINE URL, and manager URL remain normalized master-owned fields and are resolved through the relation, avoiding stale duplicate columns.
+# Canonical LINE OA Manager URL resolution (2026-07-20)
+
+- Both store-management and conversation APIs use the same server-side resolver: newest active Store Master URL by stable `Store.code`, connected Store Master relation as fallback, otherwise null.
+- Only validated HTTPS `manager.line.biz` account URLs leave the backend. The frontend consumes the resolved field and does not independently reconstruct links.
+# Safe conversation response projection (2026-07-20)
+
+- Conversation APIs never serialize a full Prisma `LineOfficialAccount`. They return an allowlisted metadata object containing only ID, name, Basic ID, connection status, active state, and last webhook receipt time.
+- Webhook keys and encrypted/plain credential fields are excluded at the backend serialization boundary, not merely ignored by frontend types.
+- `resolvedLineOaManagerUrl` is a top-level conversation field produced by the shared canonical resolver for both list and detail responses.

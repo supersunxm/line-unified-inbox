@@ -29,3 +29,7 @@ void test("valid LINE Manager URL is accepted and province mapping is determinis
   assert.equal(isValidManagerUrl("https://manager.line.biz/account/22535"), true);
   assert.equal(regionFromProvince("Lamphun"), "Northern");
 });
+
+void test("manager URL validation rejects credentials and malformed account URLs", () => {
+  for (const value of ["https://user:password@manager.line.biz/account/22535", "https://manager.line.biz/account/22535?redirect=x", "https://manager.line.biz/account/22535#chat", "https://manager.line.biz/not-account/22535", "https://manager.line.biz/account/22535/chat"]) assert.equal(isValidManagerUrl(value), false);
+});
