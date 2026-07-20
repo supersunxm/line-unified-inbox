@@ -2,9 +2,22 @@
 
 ## Current task
 
-Prepare and validate the NestJS backend and PostgreSQL deployment configuration for Railway without deploying.
+Implement and validate an environment-gated temporary Railway pilot administrator bootstrap.
 
 ## Completed work
+
+- Added a production-only, pilot-only startup bootstrap gated by `PILOT_ADMIN_BOOTSTRAP_ENABLED=true`.
+- Added fail-fast username/password validation, common-password rejection, normalized usernames, scrypt hashing, verified ADMIN creation, and safe targeted updates without changing unrelated administrators.
+- Preserved normal username login, database sessions, secure cookies, guards, and first-admin setup behavior; no public creation route or authentication bypass was added.
+- Added Railway variables and an exact create-login-disable lifecycle to the deployment guide and environment example.
+- Added bootstrap, setup-status, login, update-safety, validation, and secret-safe logging tests.
+
+- Added a persisted `light` / `dark` / `system` theme provider and accessible selector in the application header.
+- Defaulted new users to the operating-system preference and subscribed to live `prefers-color-scheme` changes with listener cleanup.
+- Added a pre-hydration head script that resolves `oppo-line-oa-theme` and sets `html[data-theme]` before page content renders.
+- Reworked the frontend palette around semantic surface, border, text, input, hover, selected, and focus tokens, including dark-safe status colors across authentication, navigation, dashboards, inbox, conversations, forms, tables, dialogs, and state feedback.
+- Removed the build-time Google Fonts network dependency in favor of deterministic local system font stacks.
+- Added dependency-free focused theme tests covering restoration/defaulting, all persisted selections, and system preference resolution.
 
 - Consolidated inbound LINE delivery to the single public, signature-protected `POST /webhook/:webhookKey` route.
 - Removed legacy destination/environment-secret fallback resolution.
@@ -21,6 +34,16 @@ Prepare and validate the NestJS backend and PostgreSQL deployment configuration 
 - Completed webhook, deployment, Prisma safety, authentication/CORS, secret-management, and beginner-usability review passes.
 
 ## Checks run and passed
+
+- Backend lint passed and the final backend test suite passed with 70 tests.
+- Backend and frontend production builds passed; Prisma validation/generation/status passed with all 13 migrations current.
+- Final `npm run verify` exited 0 with `PASS`; runtime health, protected routes, and signed LINE webhook checks passed.
+
+- Frontend lint passed.
+- Frontend production build passed after rerunning outside the restricted process sandbox; TypeScript and static generation passed.
+- Three focused frontend theme tests passed.
+- Repository `npm run verify` passed, including 62 backend tests, both builds, migrations, service startup, health checks, and signed webhook verification.
+- Runtime frontend returned 200 with the pre-paint initializer and all theme choices present; recent service logs contained no hydration, compilation, or startup errors.
 
 - Prisma validation/generation/status passed; 13 migrations are current.
 - Backend lint/build passed; 57 tests passed.
@@ -41,4 +64,4 @@ Prepare and validate the NestJS backend and PostgreSQL deployment configuration 
 
 ## Next action
 
-- User creates the private GitHub repository and Railway services using `docs/RAILWAY_DEPLOYMENT.md`; do not push or deploy without explicit approval.
+- Pilot bootstrap work is complete; await user review and Railway configuration. Do not push or deploy without explicit approval.

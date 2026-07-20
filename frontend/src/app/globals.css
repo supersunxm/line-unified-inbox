@@ -2,7 +2,73 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #172033;
+  --surface: #ffffff;
+  --surface-elevated: #f8fafc;
+  --border: #cbd5e1;
+  --muted: #64748b;
+  --input-background: #ffffff;
+  --hover: #f1f5f9;
+  --selected: #dcfce7;
+  --focus: #16a34a;
+  --font-geist-sans: Arial, Helvetica, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+html[data-theme="dark"] {
+  --background: #0f1115;
+  --foreground: #f3f4f6;
+  --surface: #171a21;
+  --surface-elevated: #1e222b;
+  --border: #2b303b;
+  --muted: #9ca3af;
+  --input-background: #15181f;
+  --hover: #252a34;
+  --selected: #173b2a;
+  --focus: #4ade80;
+
+  --color-white: var(--surface);
+  --color-slate-50: var(--surface-elevated);
+  --color-slate-100: var(--hover);
+  --color-slate-200: var(--border);
+  --color-slate-300: #3b4250;
+  --color-slate-400: #8e98a8;
+  --color-slate-500: var(--muted);
+  --color-slate-600: #b4bbc6;
+  --color-slate-700: #d5d9df;
+  --color-slate-800: #e5e7eb;
+  --color-slate-900: #f3f4f6;
+
+  --color-green-50: #132b20;
+  --color-green-100: #173b2a;
+  --color-green-200: #24573d;
+  --color-green-300: #3a8059;
+  --color-green-700: #6ee7a0;
+  --color-green-800: #86efac;
+  --color-green-900: #bbf7d0;
+  --color-red-50: #35191d;
+  --color-red-100: #4a2025;
+  --color-red-200: #642d34;
+  --color-red-300: #88404a;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-amber-50: #342811;
+  --color-amber-100: #493716;
+  --color-amber-200: #685023;
+  --color-amber-300: #92702e;
+  --color-amber-600: #d99a27;
+  --color-amber-700: #f6c65b;
+  --color-amber-800: #f9d77e;
+  --color-amber-950: #fef3c7;
+  --color-blue-50: #14273e;
+  --color-blue-100: #183453;
+  --color-blue-200: #28557f;
+  --color-blue-700: #8ac5ff;
+  --color-blue-800: #acd7ff;
+  --color-blue-900: #dbeafe;
+  --color-purple-100: #33234a;
+  --color-purple-700: #d8b4fe;
 }
 
 @theme inline {
@@ -12,15 +78,76 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+button, input, select, textarea {
+  color: inherit;
+}
+
+input, select, textarea {
+  background-color: var(--input-background);
+  border-color: var(--border);
+}
+
+button, select, input, textarea, [tabindex]:not([tabindex="-1"]) {
+  outline-color: var(--focus);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+:disabled {
+  cursor: not-allowed;
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+::selection {
+  background: var(--selected);
+}
+
+.theme-control {
+  align-items: center;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  display: inline-flex;
+  gap: 0.35rem;
+  padding-left: 0.55rem;
+}
+
+.theme-control select {
+  appearance: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.45rem 0.55rem 0.45rem 0.1rem;
+}
+
+.theme-control__icon {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.theme-control--compact select {
+  font-size: 0.75rem;
+  padding-block: 0.35rem;
+}
+
+html[data-theme="dark"] img {
+  color-scheme: dark;
 }

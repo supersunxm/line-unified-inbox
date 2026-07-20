@@ -35,11 +35,31 @@ Use Railway’s **Root Directory = `backend`** setting. This is simpler than mai
 - `LINE_CREDENTIAL_ENCRYPTION_KEY` — the same stable 32-byte Base64 key used to encrypt existing OA credentials
 - `LINE_WEBHOOK_ENABLED=true`
 - `PILOT_MODE=true` or `false`
+- `PILOT_ADMIN_BOOTSTRAP_ENABLED=false` by default. Set it to `true` only for the temporary first pilot login described below.
+- `PILOT_ADMIN_USERNAME` and `PILOT_ADMIN_PASSWORD` when pilot bootstrap is enabled. Create these directly in Railway; never commit them. The password must be at least 12 characters and must not be a common password.
+- `PILOT_ADMIN_DISPLAY_NAME=Pilot Admin` (optional)
 - `EMAIL_PROVIDER=resend` for first-admin setup on a new database. Use `none` only when registration email is intentionally unavailable and an administrator already exists.
 - `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME` when using Resend
 - `DEV_ADMIN_ENABLED=false`
 
 Railway supplies `PORT`; do not hard-code it. Sessions use cryptographically random opaque tokens stored hashed in PostgreSQL, so this application has no cookie-signing/session-secret variable. Never invent or expose one merely to satisfy configuration lists.
+
+## Temporary pilot administrator bootstrap
+
+Use this only to seed the first Railway pilot administrator without email OTP. It still uses the normal `/auth/login` endpoint, password hashing, database sessions, secure cookies, and authentication guards.
+
+1. In the Railway backend service, confirm `NODE_ENV=production` and set `PILOT_MODE=true`.
+2. Set `PILOT_ADMIN_BOOTSTRAP_ENABLED=true`.
+3. Set `PILOT_ADMIN_USERNAME` to a new pilot-only username. It is trimmed and normalized to lowercase.
+4. Generate a unique password of at least 12 characters and set it as the Railway secret `PILOT_ADMIN_PASSWORD`. Do not place it in Git, documentation, deployment logs, or screenshots.
+5. Optionally set `PILOT_ADMIN_DISPLAY_NAME`; it defaults to `Pilot Admin`.
+6. Set `EMAIL_PROVIDER=none` if email delivery is not otherwise needed for the pilot, then deploy the backend.
+7. Confirm the deployment log contains `pilot_admin_bootstrap_created` or `pilot_admin_bootstrap_updated`. The password is never logged.
+8. Open the frontend. `/auth/setup-status` now reports `firstAdminRequired=false` and `registrationAvailable=false`, so the normal login screen appears.
+9. Sign in through the normal login form using `PILOT_ADMIN_USERNAME` and `PILOT_ADMIN_PASSWORD`.
+10. Immediately after the successful login, set `PILOT_ADMIN_BOOTSTRAP_ENABLED=false` in Railway and redeploy. Leave the username/password variables stored as Railway secrets or remove them after bootstrap is disabled. The verified ADMIN database account and its password remain usable after disabling bootstrap.
+
+Re-enabling bootstrap intentionally resets the configured account's password hash, display name, ADMIN role, active status, and verified status at startup. It does not delete or modify other administrators. If the internal pilot email is already owned by a different username, startup fails instead of overwriting that account.
 
 ## Generate the stable webhook URL
 
@@ -65,6 +85,7 @@ The backend allows only `FRONTEND_URL` and enables credentialed CORS; it never u
 ## Troubleshooting
 
 - **Startup fails:** inspect Railway deployment logs for the explicit missing-variable error.
+- **Pilot bootstrap fails:** confirm all three gates are exact strings (`NODE_ENV=production`, `PILOT_MODE=true`, and `PILOT_ADMIN_BOOTSTRAP_ENABLED=true`), then verify the username and password variables are present. Never paste the password into support logs.
 - **Migration fails:** verify `DATABASE_URL`, PostgreSQL availability, and `npm run db:migrate:deploy`; never substitute `migrate dev`.
 - **Health fails:** confirm Railway passed `PORT`, the process uses `npm run start:prod`, and `/health` is configured.
 - **Webhook 404:** confirm the exact persisted key and canonical `/webhook/<key>` path.

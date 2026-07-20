@@ -1,4 +1,6 @@
-const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "EMAIL_PROVIDER"] as const;
+import { readPilotAdminBootstrapConfig } from "../auth/pilot-admin-bootstrap.config";
+
+const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "PILOT_ADMIN_BOOTSTRAP_ENABLED", "EMAIL_PROVIDER"] as const;
 
 function validUrl(value: string, protocols: string[]) {
   try { const url = new URL(value); return protocols.includes(url.protocol) && !url.username && !url.password; } catch { return false; }
@@ -16,6 +18,8 @@ export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = p
   if (environment.DEV_ADMIN_ENABLED === "true") throw new Error("DEV_ADMIN_ENABLED must never be true in production");
   if (environment.LINE_WEBHOOK_ENABLED !== "true" && environment.LINE_WEBHOOK_ENABLED !== "false") throw new Error("LINE_WEBHOOK_ENABLED must be true or false");
   if (environment.PILOT_MODE !== "true" && environment.PILOT_MODE !== "false") throw new Error("PILOT_MODE must be true or false");
+  if (environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "true" && environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "false") throw new Error("PILOT_ADMIN_BOOTSTRAP_ENABLED must be true or false");
+  readPilotAdminBootstrapConfig(environment);
   const emailProvider = environment.EMAIL_PROVIDER!.trim().toLowerCase();
   if (emailProvider === "console") throw new Error("EMAIL_PROVIDER=console is not allowed in production");
   if (emailProvider === "resend" && (!environment.RESEND_API_KEY?.trim() || !environment.EMAIL_FROM?.trim())) throw new Error("RESEND_API_KEY and EMAIL_FROM are required when EMAIL_PROVIDER=resend");

@@ -8,6 +8,7 @@ import { PasswordService } from "./password.service";
 import { SetupService } from "./setup.service";
 import { EmailModule } from "../email/email.module";
 import { DevAdminService } from "./dev-admin.service";
+import { PilotAdminBootstrapService } from "./pilot-admin-bootstrap.service";
 
-@Module({ imports: [EmailModule], controllers: [AuthController], providers: [PrismaService, PasswordService, AuthService, SetupService, DevAdminService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService] })
+@Module({ imports: [EmailModule], controllers: [AuthController], providers: [PrismaService, PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService] })
 export class AuthModule {}

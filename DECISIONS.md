@@ -1,5 +1,13 @@
 # Architectural decisions
 
+## Temporary Railway pilot administrator bootstrap
+
+Pilot administrator seeding is an application-startup provider, not an HTTP endpoint, and requires all three gates: production, pilot mode, and explicit bootstrap enablement. It targets only the normalized configured username, hashes the environment-supplied password through the normal password service, and fails on an internal-email collision rather than adopting a different user. Disabling bootstrap stops all mutation while leaving the verified database account available through the unchanged login/session flow.
+
+## Frontend theme resolution
+
+The frontend stores the explicit `light`, `dark`, or `system` preference under `oppo-line-oa-theme`, while `html[data-theme]` always contains the resolved visual mode. A small blocking script in the document head applies that resolved mode before body content is painted; the React provider then owns persistence and live operating-system change subscriptions. Existing Tailwind color utilities resolve through semantic CSS tokens so every current screen and transient state shares one maintainable palette without per-component dark-style duplication.
+
 ## Project-local runtime ownership
 
 Development processes started by automation use PID files and logs under ignored `.runtime/`. Scripts validate both command identity and repository working directory before stopping a process. This prevents accidental termination of unrelated Node services.
