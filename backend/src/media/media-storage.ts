@@ -2,6 +2,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { Injectable } from "@nestjs/common";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+import { readMediaStorageEnabled } from "./media-storage.config";
 
 export type StoredMedia = { body: Buffer; contentType?: string };
 
@@ -46,8 +47,9 @@ export class S3MediaStorage implements MediaStorage {
 
 @Injectable()
 export class MediaStorageService implements MediaStorage {
-  private readonly storage: MediaStorage;
+  private readonly storage?: MediaStorage;
   constructor() {
+    if (!readMediaStorageEnabled()) return;
     const driver = (process.env.MEDIA_STORAGE_DRIVER ?? "local").trim().toLowerCase();
     if (driver === "local") {
       this.storage = new LocalMediaStorage(process.env.MEDIA_LOCAL_DIRECTORY?.trim() || resolve(process.cwd(), ".media"));
@@ -59,6 +61,6 @@ export class MediaStorageService implements MediaStorage {
     if (missing.length) throw new Error(`Missing S3 media storage variables: ${missing.join(", ")}`);
     this.storage = new S3MediaStorage(process.env.S3_BUCKET!, { endpoint: process.env.S3_ENDPOINT?.trim() || undefined, region: process.env.S3_REGION!, accessKeyId: process.env.S3_ACCESS_KEY_ID!, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY! });
   }
-  put(objectKey: string, body: Buffer, contentType: string) { return this.storage.put(objectKey, body, contentType); }
-  get(objectKey: string) { return this.storage.get(objectKey); }
+  put(objectKey: string, body: Buffer, contentType: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.put(objectKey, body, contentType); }
+  get(objectKey: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.get(objectKey); }
 }

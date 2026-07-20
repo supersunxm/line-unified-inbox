@@ -21,6 +21,7 @@ test("historical, failed, and loading image states render dedicated placeholders
   assert.match(component, /if \(!media\).*unavailableLabel/);
   assert.match(component, /processingStatus === "PENDING"/);
   assert.match(component, /processingStatus === "FAILED"/);
+  assert.match(component, /processingStatus === "SKIPPED"/);
   assert.match(page, /รูปภาพไม่ได้ถูกจัดเก็บในระบบ/);
 });
 

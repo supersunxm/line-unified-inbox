@@ -3,6 +3,7 @@ import { MessageType } from "@prisma/client";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "./media-storage";
+import { readMediaStorageEnabled } from "./media-storage.config";
 
 const supportedTypes = new Map([["image/jpeg", "jpg"], ["image/png", "png"], ["image/gif", "gif"], ["image/webp", "webp"]]);
 
@@ -15,6 +16,10 @@ export class LineImageService {
   constructor(private readonly prisma: PrismaService, private readonly encryption: CredentialEncryptionService, private readonly storage: MediaStorageService) {}
 
   async process(mediaId: string, lineOaId: string, providerMessageId: string, occurredAt: Date) {
+    if (!readMediaStorageEnabled()) {
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "SKIPPED", errorCode: "MEDIA_STORAGE_DISABLED", errorMessage: "Inbound image storage is disabled" } });
+      return;
+    }
     try {
       const oa = await this.prisma.lineOfficialAccount.findUnique({ where: { id: lineOaId }, select: { encryptedChannelAccessToken: true } });
       if (!oa?.encryptedChannelAccessToken) throw new MediaProcessingError("ACCESS_TOKEN_MISSING", "LINE OA access token is not configured");

@@ -38,6 +38,7 @@ export function MessageImage({ messageId, media, alt, unavailableLabel, errorLab
   if (!media) return <div className="message-image-placeholder">{unavailableLabel}</div>;
   if (media.processingStatus === "PENDING") return <div aria-label={alt} className="message-image-skeleton animate-pulse" />;
   if (media.processingStatus === "FAILED") return <div className="message-image-placeholder">{errorLabel}</div>;
+  if (media.processingStatus === "SKIPPED") return <div className="message-image-placeholder">{unavailableLabel}</div>;
   if (failed) return <div className="message-image-placeholder"><span>{errorLabel}</span><button type="button" onClick={() => { setFailed(false); setSource(null); setRetry((value) => value + 1); }}>{retryLabel}</button></div>;
   if (!source) return <div aria-label={alt} className="message-image-skeleton animate-pulse" />;
 

@@ -126,3 +126,10 @@ Fix intermittent missing webhook URLs after LINE OA creation.
 - Integrated matching into conversation re-analysis while preserving manual classifications and independent topic detection.
 - Added catalog/matcher regression coverage and exposed group/family/model/confidence in the frontend.
 - Next: complete the repository verification loop and repair any failures.
+# Current task: optional inbound media storage
+
+- Added `MEDIA_STORAGE_ENABLED`, defaulting to disabled in all environments.
+- Production S3 validation now runs only when media storage is explicitly enabled.
+- Disabled image storage persists the image message and a `SKIPPED` media record without downloading content.
+- Added production-validation, processing, and frontend placeholder regression coverage.
+- Next: apply the additive enum migration and complete the full verification loop.

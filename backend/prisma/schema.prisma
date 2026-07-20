@@ -70,6 +70,7 @@ enum MediaProcessingStatus {
   PENDING
   READY
   FAILED
+  SKIPPED
 }
 
 enum WebhookProcessingStatus {

@@ -41,13 +41,14 @@ Use Railway’s **Root Directory = `backend`** setting. This is simpler than mai
 - `EMAIL_PROVIDER=resend` for first-admin setup on a new database. Use `none` only when registration email is intentionally unavailable and an administrator already exists.
 - `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME` when using Resend
 - `DEV_ADMIN_ENABLED=false`
-- `MEDIA_STORAGE_DRIVER=s3` — Railway filesystems are ephemeral; use an S3-compatible bucket for inbound LINE images.
-- `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` — store these as Railway secrets.
+- `MEDIA_STORAGE_ENABLED=false` — recommended for the pilot when inbound image retention is not needed. Image events remain visible, but the backend does not download or store their content.
+- When image retention is required, set `MEDIA_STORAGE_ENABLED=true` and `MEDIA_STORAGE_DRIVER=s3`. Railway filesystems are ephemeral, so local storage is rejected in production.
+- With media enabled, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` are required Railway secrets. Missing or placeholder values fail startup together in a clear validation error.
 - `S3_ENDPOINT` — required by non-AWS S3-compatible providers; omit it for AWS S3.
 - `S3_PUBLIC_BASE_URL` — optional and not currently exposed to browsers; media is delivered through the authenticated backend endpoint.
 - `MEDIA_MAX_FILE_SIZE_BYTES=10485760` and `MEDIA_DOWNLOAD_TIMEOUT_MS=10000` — optional limits shown with their defaults.
 
-For local development, use `MEDIA_STORAGE_DRIVER=local` and `MEDIA_LOCAL_DIRECTORY=.media`. The directory is ignored by Git and its filesystem path is never returned by the API. Create the production bucket and credentials before deploying the media migration; do not use Railway's ephemeral service filesystem for durable images.
+For local development, media is also disabled by default. To test downloads, set `MEDIA_STORAGE_ENABLED=true`, `MEDIA_STORAGE_DRIVER=local`, and `MEDIA_LOCAL_DIRECTORY=.media`. The directory is ignored by Git and its filesystem path is never returned by the API. Create production bucket credentials before enabling media on Railway; never use Railway's ephemeral service filesystem for durable images.
 
 Railway supplies `PORT`; do not hard-code it. Sessions use cryptographically random opaque tokens stored hashed in PostgreSQL, so this application has no cookie-signing/session-secret variable. Never invent or expose one merely to satisfy configuration lists.
 

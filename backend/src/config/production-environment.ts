@@ -1,6 +1,8 @@
 import { readPilotAdminBootstrapConfig } from "../auth/pilot-admin-bootstrap.config";
 
-const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "PILOT_ADMIN_BOOTSTRAP_ENABLED", "EMAIL_PROVIDER", "MEDIA_STORAGE_DRIVER"] as const;
+import { readMediaStorageEnabled } from "../media/media-storage.config";
+
+const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "PILOT_ADMIN_BOOTSTRAP_ENABLED", "EMAIL_PROVIDER"] as const;
 
 function validUrl(value: string, protocols: string[]) {
   try { const url = new URL(value); return protocols.includes(url.protocol) && !url.username && !url.password; } catch { return false; }
@@ -19,9 +21,15 @@ export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = p
   if (environment.LINE_WEBHOOK_ENABLED !== "true" && environment.LINE_WEBHOOK_ENABLED !== "false") throw new Error("LINE_WEBHOOK_ENABLED must be true or false");
   if (environment.PILOT_MODE !== "true" && environment.PILOT_MODE !== "false") throw new Error("PILOT_MODE must be true or false");
   if (environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "true" && environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "false") throw new Error("PILOT_ADMIN_BOOTSTRAP_ENABLED must be true or false");
-  if (environment.MEDIA_STORAGE_DRIVER !== "s3") throw new Error("MEDIA_STORAGE_DRIVER must be s3 in production");
-  const missingS3 = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"].filter((name) => !environment[name]?.trim());
-  if (missingS3.length) throw new Error(`Missing S3 media storage variables: ${missingS3.join(", ")}`);
+  if (readMediaStorageEnabled(environment)) {
+    if (!environment.MEDIA_STORAGE_DRIVER?.trim()) throw new Error("Media storage is enabled but configuration is invalid: MEDIA_STORAGE_DRIVER is required and must be s3");
+    if (environment.MEDIA_STORAGE_DRIVER.trim().toLowerCase() !== "s3") throw new Error("Media storage is enabled but configuration is invalid: MEDIA_STORAGE_DRIVER must be s3 in production");
+    const requiredS3 = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
+    const missingS3 = requiredS3.filter((name) => !environment[name]?.trim());
+    if (missingS3.length) throw new Error(`Media storage is enabled but required S3 variables are missing: ${missingS3.join(", ")}`);
+    const placeholders = requiredS3.filter((name) => /(test|fake|example|placeholder|changeme|your[-_])/i.test(environment[name]!.trim()));
+    if (placeholders.length) throw new Error(`Media storage S3 variables contain placeholder values: ${placeholders.join(", ")}`);
+  }
   readPilotAdminBootstrapConfig(environment);
   const emailProvider = environment.EMAIL_PROVIDER!.trim().toLowerCase();
   if (emailProvider === "console") throw new Error("EMAIL_PROVIDER=console is not allowed in production");

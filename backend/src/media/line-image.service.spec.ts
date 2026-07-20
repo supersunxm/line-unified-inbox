@@ -11,6 +11,8 @@ type MediaUpdate = { processingStatus: string; mimeType?: string; objectKey?: st
 async function runImage(response: Response, maxBytes = "1024") {
   const previousFetch = global.fetch;
   const previousMax = process.env.MEDIA_MAX_FILE_SIZE_BYTES;
+  const previousEnabled = process.env.MEDIA_STORAGE_ENABLED;
+  process.env.MEDIA_STORAGE_ENABLED = "true";
   process.env.MEDIA_MAX_FILE_SIZE_BYTES = maxBytes;
   let authorization = "";
   let requestedUrl = "";
@@ -33,6 +35,7 @@ async function runImage(response: Response, maxBytes = "1024") {
   } finally {
     global.fetch = previousFetch;
     if (previousMax === undefined) delete process.env.MEDIA_MAX_FILE_SIZE_BYTES; else process.env.MEDIA_MAX_FILE_SIZE_BYTES = previousMax;
+    if (previousEnabled === undefined) delete process.env.MEDIA_STORAGE_ENABLED; else process.env.MEDIA_STORAGE_ENABLED = previousEnabled;
   }
 }
 
@@ -45,6 +48,17 @@ void test("image download uses the exact OA token and stores supported content",
   assert.equal(result.update?.fileSize, 5);
   assert.match(result.stored?.key ?? "", /^line-media\/oa-1\/2026\/07\/line-message-1\.png$/);
   assert.equal(JSON.stringify(result).includes("oa-specific-token"), true);
+});
+
+void test("disabled media storage skips without downloading or storing", async () => {
+  const previousEnabled = process.env.MEDIA_STORAGE_ENABLED; delete process.env.MEDIA_STORAGE_ENABLED;
+  const previousFetch = global.fetch; let fetched = false; let stored = false; let update: MediaUpdate | undefined;
+  global.fetch = () => { fetched = true; return Promise.resolve(new Response()); };
+  const prisma = { messageMedia: { update: ({ data }: { data: MediaUpdate }) => { update = data; return Promise.resolve({}); } } } as unknown as PrismaService;
+  const storage = { put: () => { stored = true; return Promise.resolve(); } } as unknown as MediaStorageService;
+  try { await new LineImageService(prisma, {} as CredentialEncryptionService, storage).process("media-1", "oa-1", "line-message-1", new Date()); }
+  finally { global.fetch = previousFetch; if (previousEnabled === undefined) delete process.env.MEDIA_STORAGE_ENABLED; else process.env.MEDIA_STORAGE_ENABLED = previousEnabled; }
+  assert.equal(update?.processingStatus, "SKIPPED"); assert.equal(update?.errorCode, "MEDIA_STORAGE_DISABLED"); assert.equal(fetched, false); assert.equal(stored, false);
 });
 
 void test("unsupported MIME type and oversized images become FAILED", async () => {

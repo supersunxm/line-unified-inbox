@@ -22,7 +22,7 @@ export type ApiConversation = {
     translatedChinese: string | null;
     sentAt: string;
     fileName: string | null;
-    media: { processingStatus: "PENDING" | "READY" | "FAILED"; mimeType: string | null; fileSize: number | null; url: string | null } | null;
+    media: { processingStatus: "PENDING" | "READY" | "FAILED" | "SKIPPED"; mimeType: string | null; fileSize: number | null; url: string | null } | null;
     latitude: number | null;
     longitude: number | null;
   }>;
