@@ -2,9 +2,15 @@
 
 ## Current task
 
-Implement and validate an environment-gated temporary Railway pilot administrator bootstrap.
+Fix and validate repeated dark/light theme switching in the Next.js frontend.
 
 ## Completed work
+
+- Made theme changes update `html[data-theme]` synchronously and exclusively, clearing stale root theme classes and attributes before every application.
+- Replaced the provider's competing localStorage/effect resolution with one mounted system listener that reads the current preference and cleans up correctly.
+- Added explicit paired light/dark tokens for backgrounds, surfaces, text, inputs, navigation selection, buttons, badges, disabled states, hover states, and borders.
+- Applied semantic theme classes to the application shell, header, sidebar navigation, store list, filter panel, selects, filter chips, conversation selection, buttons, and empty state.
+- Added regression coverage for light → dark → light root cleanup and representative semantic-token usage.
 
 - Added a production-only, pilot-only startup bootstrap gated by `PILOT_ADMIN_BOOTSTRAP_ENABLED=true`.
 - Added fail-fast username/password validation, common-password rejection, normalized usernames, scrypt hashing, verified ADMIN creation, and safe targeted updates without changing unrelated administrators.
@@ -35,6 +41,10 @@ Implement and validate an environment-gated temporary Railway pilot administrato
 
 ## Checks run and passed
 
+- Five focused frontend theme tests passed.
+- Frontend lint and production build passed after the build was rerun with the required Turbopack worker permission.
+- Final `npm run verify` exited 0 with `PASS`; backend/frontend builds, 70 backend tests, migrations, runtime health, protected routes, and signed webhook checks passed.
+
 - Backend lint passed and the final backend test suite passed with 70 tests.
 - Backend and frontend production builds passed; Prisma validation/generation/status passed with all 13 migrations current.
 - Final `npm run verify` exited 0 with `PASS`; runtime health, protected routes, and signed LINE webhook checks passed.
@@ -64,4 +74,4 @@ Implement and validate an environment-gated temporary Railway pilot administrato
 
 ## Next action
 
-- Pilot bootstrap work is complete; await user review and Railway configuration. Do not push or deploy without explicit approval.
+- Theme switching repair is complete; await user review. Do not push or deploy without explicit approval.

@@ -1611,11 +1611,7 @@ export default function Home() {
   }
 
   function sidebarButtonClass(view: SidebarView) {
-    return `w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
-      sidebarView === view
-        ? "bg-slate-900 text-white"
-        : "hover:bg-slate-100"
-    }`;
+    return `app-nav-item w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium ${sidebarView === view ? "is-selected" : ""}`;
   }
 
   function openMonitoring(filters: {
@@ -1879,8 +1875,8 @@ export default function Home() {
   if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><form onSubmit={(event) => void submitLogin(event)} className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-xl font-bold">OPPO LINE OA Monitor</h1><p className="mt-1 text-sm text-slate-500">Administrator sign in</p>{process.env.NODE_ENV !== "production" && <p className="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-800">{language === "th" ? "บัญชีทดสอบสำหรับเครื่อง Local เท่านั้น" : language === "zh" ? "仅限本地开发账户" : "Local development account only"}</p>}{loginError && <p className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">Username or email<input type="text" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="mt-4 block text-sm">Password<input type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><button disabled={loginLoading} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{loginLoading ? "Signing in…" : "Sign in"}</button></form></main>;
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
+    <main className="app-shell min-h-screen">
+      <header className="app-surface flex h-16 items-center justify-between border-b px-6">
         <div>
           <h1 className="text-xl font-bold">{text.appName}</h1>
           <p className="text-xs text-slate-500">{text.appDescription}</p>
@@ -1902,7 +1898,7 @@ export default function Home() {
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
             placeholder={text.searchPlaceholder}
-            className="w-72 rounded-lg border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-500"
+            className="app-input w-72 rounded-lg border px-4 py-2 text-sm outline-none focus:border-slate-500"
           />
 
           <select
@@ -1911,7 +1907,7 @@ export default function Home() {
               changeLanguage(event.target.value as Language)
             }
             aria-label={text.language}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium outline-none focus:border-slate-500"
+            className="app-input rounded-lg border px-3 py-2 text-sm font-medium outline-none focus:border-slate-500"
           >
             <option value="th">🇹🇭 ไทย</option>
             <option value="en">🇬🇧 English</option>
@@ -1944,7 +1940,7 @@ export default function Home() {
       )}
 
       <div className="grid h-[calc(100vh-64px)] grid-cols-[220px_380px_1fr]">
-        <aside className="overflow-y-auto border-r border-slate-200 bg-white p-4">
+        <aside className="app-surface overflow-y-auto border-r p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {text.overview}
           </p>
@@ -2024,18 +2020,14 @@ export default function Home() {
           <div className="space-y-1">
             <button
               onClick={() => openMonitoring({})}
-              className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
-                selectedStore === "all"
-                  ? "bg-slate-200 font-medium"
-                  : "hover:bg-slate-100"
-              }`}
+              className={`app-store-row w-full rounded-lg px-3 py-2 text-left text-sm ${selectedStore === "all" ? "is-selected font-medium" : ""}`}
             >
               {text.allStores}
             </button>
 
             {stores.map((store) => (
-              <div key={store.id} className={`flex items-center rounded-lg ${selectedStore === store.id ? "bg-slate-200 font-medium" : "hover:bg-slate-100"}`}>
-                <button onClick={() => openMonitoring({ store: store.id })} className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left text-sm"><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs">{store.waiting}</span>}</button>
+              <div key={store.id} className={`app-store-row flex items-center rounded-lg ${selectedStore === store.id ? "is-selected font-medium" : ""}`}>
+                <button onClick={() => openMonitoring({ store: store.id })} className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left text-sm"><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="app-chip rounded-full px-2 py-0.5 text-xs">{store.waiting}</span>}</button>
                 <button type="button" aria-label={`${text.removeStore}: ${store.name}`} title={text.removeStore} onClick={(event) => { event.stopPropagation(); void openStoreRemoval(store.id); }} className="mr-1 rounded p-1.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700">✕</button>
               </div>
             ))}
@@ -2047,7 +2039,7 @@ export default function Home() {
           <button
             type="button"
             onClick={resetTestData}
-            className="w-full rounded-lg border border-red-200 px-3 py-2.5 text-left text-sm font-medium text-red-700 hover:bg-red-50"
+            className="app-button-secondary w-full rounded-lg border px-3 py-2.5 text-left text-sm font-medium hover:bg-red-50 hover:text-red-700"
           >
             ↻ {text.resetTestData}
           </button>
@@ -2198,7 +2190,7 @@ export default function Home() {
           </section>
         ) : (
           <>
-        <section className="overflow-y-auto border-r border-slate-200 bg-white">
+        <section className="app-surface overflow-y-auto border-r">
           <div className="border-b border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -2213,59 +2205,59 @@ export default function Home() {
               <button
                 onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
                 aria-expanded={showFilterPanel}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
               >
                 {text.filter}
               </button>
             </div>
 
             {showFilterPanel && (
-              <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3">
-                <label className="text-xs text-slate-500">
+              <div className="app-filter-panel mt-4 grid grid-cols-2 gap-3 rounded-lg p-3">
+                <label className="app-muted text-xs">
                   {text.storeFilter}
-                  <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allStores}</option>
                     {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
                   </select>
                 </label>
-                <label className="text-xs text-slate-500">
+                <label className="app-muted text-xs">
                   {text.statusFilter}
-                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allStatuses}</option>
                     {statusOptions.map((status) => <option key={status} value={status}>{getStatusLabel(language, status)}</option>)}
                   </select>
                 </label>
-                <label className="text-xs text-slate-500">
+                <label className="app-muted text-xs">
                   {text.priorityFilter}
-                  <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allPriorities}</option>
                     {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority === "High" ? text.highPriority : text.normalPriority}</option>)}
                   </select>
                 </label>
-                <label className="text-xs text-slate-500">
+                <label className="app-muted text-xs">
                   {text.seriesFilter}
-                  <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allSeries}</option>
                     {seriesOptions.map((series) => <option key={series} value={series}>{series}</option>)}
                   </select>
                 </label>
-                <label className="col-span-2 text-xs text-slate-500">
+                <label className="app-muted col-span-2 text-xs">
                   {text.modelFilter}
-                  <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allModels}</option>
                     {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
                   </select>
                 </label>
-                <label className="col-span-2 text-xs text-slate-500">
+                <label className="app-muted col-span-2 text-xs">
                   {text.topicFilter}
-                  <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allTopics}</option>
                     {topicOptions.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
                   </select>
                 </label>
-                <label className="col-span-2 text-xs text-slate-500">
+                <label className="app-muted col-span-2 text-xs">
                   {text.lineOaManagement}
-                  <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-900">
+                  <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
                     <option value="all">{text.allLineOa}</option>
                     {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                   </select>
@@ -2275,15 +2267,15 @@ export default function Home() {
 
             {hasActiveFilters && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.searchFilter}: {searchText.trim()} ×</button>}
-                {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
-                {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
-                {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
-                {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.seriesFilter}: {seriesFilter} ×</button>}
-                {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
-                {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
-                {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                {(sidebarView === "followUp" || sidebarView === "reminded") && <button onClick={() => setSidebarView("dashboard")} className="rounded-full bg-slate-200 px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, sidebarView)} ×</button>}
+                {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-full px-2 py-1 text-xs">{text.searchFilter}: {searchText.trim()} ×</button>}
+                {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
+                {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
+                {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.seriesFilter}: {seriesFilter} ×</button>}
+                {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
+                {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
+                {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
+                {(sidebarView === "followUp" || sidebarView === "reminded") && <button onClick={() => setSidebarView("dashboard")} className="app-chip rounded-full px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, sidebarView)} ×</button>}
                 <button onClick={clearAllFilters} className="text-xs font-medium text-red-700 hover:underline">{text.clearAll}</button>
               </div>
             )}
@@ -2300,8 +2292,8 @@ export default function Home() {
                   setSelectedConversationId(conversation.id);
                   setShowTranslation(true);
                 }}
-                className={`w-full border-b border-slate-200 p-4 text-left hover:bg-slate-50 ${
-                  isSelected ? "bg-slate-100" : ""
+                className={`app-list-item w-full border-b border-slate-200 p-4 text-left ${
+                  isSelected ? "is-selected" : ""
                 }`}
               >
                 <div className="mb-2 flex items-start justify-between gap-3">
@@ -2366,10 +2358,10 @@ export default function Home() {
           })}
 
           {filteredConversations.length === 0 && (
-            <div className="px-6 py-16 text-center">
+            <div className="app-empty-state px-6 py-16 text-center">
               <p className="font-semibold">{text.noConversationsFound}</p>
-              <p className="mt-2 text-sm text-slate-500">{text.noResultsExplanation}</p>
-              <button onClick={clearAllFilters} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">{text.clearFilter}</button>
+              <p className="mt-2 text-sm">{text.noResultsExplanation}</p>
+              <button onClick={clearAllFilters} className="app-button-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium">{text.clearFilter}</button>
             </div>
           )}
         </section>

@@ -6,7 +6,7 @@ Pilot administrator seeding is an application-startup provider, not an HTTP endp
 
 ## Frontend theme resolution
 
-The frontend stores the explicit `light`, `dark`, or `system` preference under `oppo-line-oa-theme`, while `html[data-theme]` always contains the resolved visual mode. A small blocking script in the document head applies that resolved mode before body content is painted; the React provider then owns persistence and live operating-system change subscriptions. Existing Tailwind color utilities resolve through semantic CSS tokens so every current screen and transient state shares one maintainable palette without per-component dark-style duplication.
+The frontend stores the explicit `light`, `dark`, or `system` preference under `oppo-line-oa-theme`, while `html[data-theme]` is the only theme selector and always contains the resolved visual mode. Each change synchronously removes legacy root theme classes and the previous attribute before applying the new value. A small blocking script performs the same cleanup before body paint; the React provider owns persistence and one live operating-system listener. Core interactive surfaces use paired semantic light/dark tokens rather than depending on the absence of dark declarations.
 
 ## Project-local runtime ownership
 

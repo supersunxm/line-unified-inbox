@@ -3,11 +3,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  isThemePreference,
+  applyThemeToRoot,
   loadTheme,
   resolveTheme,
   saveTheme,
-  THEME_STORAGE_KEY,
 } from "./theme-logic";
 import type { ThemePreference } from "./theme-logic";
 
@@ -22,37 +21,37 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function applyResolvedTheme(theme: ThemePreference, systemDark: boolean) {
   const resolvedTheme = resolveTheme(theme, systemDark);
-  document.documentElement.dataset.theme = resolvedTheme;
-  document.documentElement.style.colorScheme = resolvedTheme;
+  applyThemeToRoot(document.documentElement, resolvedTheme);
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemePreference>("system");
 
   useEffect(() => {
+    const media = window.matchMedia(DARK_MEDIA_QUERY);
     const savedTheme = loadTheme(window.localStorage);
+    applyResolvedTheme(savedTheme, media.matches);
     const timer = window.setTimeout(() => {
       setThemeState(savedTheme);
     }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const media = window.matchMedia(DARK_MEDIA_QUERY);
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const effectiveTheme =
-      theme === "system" && isThemePreference(savedTheme) ? savedTheme : theme;
     const handleSystemThemeChange = (event: MediaQueryListEvent) => {
-      if (effectiveTheme === "system") applyResolvedTheme(effectiveTheme, event.matches);
+      const currentTheme = loadTheme(window.localStorage);
+      if (currentTheme === "system") applyResolvedTheme(currentTheme, event.matches);
     };
 
-    applyResolvedTheme(effectiveTheme, media.matches);
     media.addEventListener("change", handleSystemThemeChange);
-    return () => media.removeEventListener("change", handleSystemThemeChange);
-  }, [theme]);
+    return () => {
+      window.clearTimeout(timer);
+      media.removeEventListener("change", handleSystemThemeChange);
+    };
+  }, []);
 
   const setTheme = (nextTheme: ThemePreference) => {
     saveTheme(window.localStorage, nextTheme);
+    applyResolvedTheme(
+      nextTheme,
+      window.matchMedia(DARK_MEDIA_QUERY).matches,
+    );
     setThemeState(nextTheme);
   };
 

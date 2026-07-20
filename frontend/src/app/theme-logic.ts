@@ -23,3 +23,16 @@ export function resolveTheme(
 ): ResolvedTheme {
   return theme === "system" ? (systemDark ? "dark" : "light") : theme;
 }
+
+type ThemeRoot = {
+  classList: Pick<DOMTokenList, "remove">;
+  dataset: DOMStringMap;
+  style: Pick<CSSStyleDeclaration, "colorScheme">;
+};
+
+export function applyThemeToRoot(root: ThemeRoot, theme: ResolvedTheme) {
+  root.classList.remove("dark", "light");
+  delete root.dataset.theme;
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
+}

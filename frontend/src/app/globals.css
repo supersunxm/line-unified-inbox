@@ -10,9 +10,30 @@
   --input-background: #ffffff;
   --hover: #f1f5f9;
   --selected: #dcfce7;
+  --selected-navigation: #e2e8f0;
+  --button-background: #0f172a;
+  --button-foreground: #ffffff;
+  --button-secondary-background: #ffffff;
+  --button-secondary-foreground: #172033;
+  --disabled-background: #f1f5f9;
+  --disabled-foreground: #94a3b8;
+  --badge-background: #e2e8f0;
+  --badge-foreground: #334155;
   --focus: #16a34a;
   --font-geist-sans: Arial, Helvetica, sans-serif;
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --color-white: #ffffff;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
 }
 
 html[data-theme="dark"] {
@@ -25,6 +46,15 @@ html[data-theme="dark"] {
   --input-background: #15181f;
   --hover: #252a34;
   --selected: #173b2a;
+  --selected-navigation: #2b303b;
+  --button-background: #f3f4f6;
+  --button-foreground: #171a21;
+  --button-secondary-background: #1e222b;
+  --button-secondary-foreground: #f3f4f6;
+  --disabled-background: #20242c;
+  --disabled-foreground: #6b7280;
+  --badge-background: #2b303b;
+  --badge-foreground: #e5e7eb;
   --focus: #4ade80;
 
   --color-white: var(--surface);
@@ -105,6 +135,7 @@ button, select, input, textarea, [tabindex]:not([tabindex="-1"]) {
 
 :disabled {
   cursor: not-allowed;
+  color: var(--disabled-foreground);
 }
 
 ::placeholder {
@@ -150,4 +181,83 @@ button, select, input, textarea, [tabindex]:not([tabindex="-1"]) {
 
 html[data-theme="dark"] img {
   color-scheme: dark;
+}
+
+.app-shell {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.app-surface {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.app-muted {
+  color: var(--muted);
+}
+
+.app-filter-panel {
+  background: var(--surface-elevated);
+  color: var(--foreground);
+}
+
+.app-input {
+  background: var(--input-background);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.app-input:disabled {
+  background: var(--disabled-background);
+  color: var(--disabled-foreground);
+}
+
+.app-button-primary {
+  background: var(--button-background);
+  color: var(--button-foreground);
+}
+
+.app-button-secondary {
+  background: var(--button-secondary-background);
+  border-color: var(--border);
+  color: var(--button-secondary-foreground);
+}
+
+.app-button-secondary:hover:not(:disabled),
+.app-nav-item:hover:not(.is-selected),
+.app-store-row:hover:not(.is-selected),
+.app-list-item:hover:not(.is-selected) {
+  background: var(--hover);
+}
+
+.app-nav-item,
+.app-store-row,
+.app-list-item {
+  color: var(--foreground);
+}
+
+.app-nav-item.is-selected {
+  background: var(--button-background);
+  color: var(--button-foreground);
+}
+
+.app-store-row.is-selected,
+.app-list-item.is-selected {
+  background: var(--selected-navigation);
+  color: var(--foreground);
+}
+
+.app-chip {
+  background: var(--badge-background);
+  color: var(--badge-foreground);
+}
+
+.app-empty-state {
+  color: var(--foreground);
+}
+
+.app-empty-state p + p {
+  color: var(--muted);
 }

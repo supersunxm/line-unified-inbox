@@ -15,10 +15,14 @@ const themeInitializationScript = `
     const resolved = preference === "system"
       ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
       : preference;
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.removeAttribute("data-theme");
     document.documentElement.dataset.theme = resolved;
     document.documentElement.style.colorScheme = resolved;
   } catch {
     const resolved = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.removeAttribute("data-theme");
     document.documentElement.dataset.theme = resolved;
     document.documentElement.style.colorScheme = resolved;
   }
