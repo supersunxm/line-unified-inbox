@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import { AUTH_UNAUTHORIZED_EVENT, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import { primaryNavigationState } from "./primary-navigation";
 import type { PrimarySection } from "./primary-navigation";
@@ -13,6 +14,9 @@ import { MessageImage } from "./message-image";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
+import { ResizableSeparator } from "./resizable-separator";
+import { CHAT_PANE_LIMITS } from "./resizable-panes";
+import { useResizablePanes } from "./use-resizable-panes";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -1054,6 +1058,7 @@ export default function Home() {
 }
 
 export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
+  const chatPanes = useResizablePanes(initialSection === "chats");
   const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
@@ -1285,13 +1290,28 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [showArchivedLineOas, showArchivedStores]);
 
   const loadSystemStatus = useCallback(async () => {
-    const [status, errors] = await Promise.all([api.systemStatus(), api.operationalErrors()]);
-    setSystemStatus(status); setOperationalErrors(errors);
+    try {
+      const [status, errors] = await Promise.all([api.systemStatus(), api.operationalErrors()]);
+      setSystemStatus(status); setOperationalErrors(errors);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to load system status");
+    }
   }, []);
 
   const checkSetupStatus = useCallback(async () => {
     setAuthChecked(false); setSetupStatusError(null);
-    try { const status = await api.setupStatus(); setSetupStatus(status); if (!status.firstAdminRequired) setAuthUser(await api.me().catch(() => null)); }
+    try {
+      const status = await api.setupStatus();
+      setSetupStatus(status);
+      if (!status.firstAdminRequired) {
+        try {
+          setAuthUser(await api.me());
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 401) throw error;
+          setAuthUser(null);
+        }
+      }
+    }
     catch (error) { setSetupStatusError(error instanceof Error ? error.message : "Unable to check administrator setup"); }
     finally { setAuthChecked(true); }
   }, []);
@@ -1301,7 +1321,23 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!pilotChecklist) return; await api.updatePilotChecklist(pilotChecklist.oa.id, itemKey, status, note); await loadPilotChecklist(pilotChecklist.oa.id);
   }
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setAuthUser(null);
+      setLoginPassword("");
+      if (window.location.pathname !== "/login") window.location.replace("/login");
+    };
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, []);
+
   useEffect(() => { const timer = window.setTimeout(() => void checkSetupStatus(), 0); return () => window.clearTimeout(timer); }, [checkSetupStatus]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const destination = routeAfterLogin(window.location.pathname);
+    if (destination) window.location.replace(destination);
+  }, [authUser]);
 
   useEffect(() => {
     if (!setupChallenge) return; const timer = window.setInterval(() => { setSetupExpires((value) => Math.max(0, value - 1)); setSetupResend((value) => Math.max(0, value - 1)); }, 1000); return () => window.clearInterval(timer);
@@ -1995,6 +2031,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     finally { setLoginLoading(false); }
   }
 
+  async function logout() {
+    try {
+      await api.logout();
+    } finally {
+      setAuthUser(null);
+      setLoginPassword("");
+      window.location.replace("/login");
+    }
+  }
+
   async function sendSetupOtp(event: FormEvent) {
     event.preventDefault(); if (setupPassword !== setupPasswordConfirmation) { setLoginError("Passwords do not match"); return; }
     setLoginLoading(true); setLoginError(null);
@@ -2044,9 +2090,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
         <div className="app-header-controls">
           <ThemeControl compact />
+          {initialSection === "chats" && <button type="button" onClick={chatPanes.reset} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">{language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}</button>}
           {systemStatus?.pilotMode && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Pilot</span>}
           <span className="text-xs text-slate-500">{authUser.displayName} · {authUser.role}</span>
-          <button onClick={() => void api.logout().finally(() => setAuthUser(null))} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">Logout</button>
+          <button onClick={() => void logout()} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">Logout</button>
           {lastUpdatedAt && (
             <span className="app-header-metadata text-xs text-slate-400">
               {text.lastUpdated}{" "}
@@ -2099,8 +2146,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         </div>
       )}
 
-      <div className="app-workspace-grid grid min-h-[calc(100vh-80px)] grid-cols-[220px_380px_1fr]">
-        <aside className="app-surface overflow-y-auto border-r p-4">
+      <div
+        ref={chatPanes.containerRef}
+        className={`app-workspace-grid grid min-h-[calc(100vh-80px)] ${initialSection === "chats" ? "chat-resizable-grid" : "grid-cols-[220px_380px_1fr]"}`}
+        style={initialSection === "chats" ? { gridTemplateColumns: `${chatPanes.widths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPanes.widths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
+      >
+        <aside className="app-surface min-w-0 overflow-y-auto border-r p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {text.overview}
           </p>
@@ -2199,6 +2250,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           </button>
           </>}
         </aside>
+
+        {initialSection === "chats" && <ResizableSeparator separator="sidebar" value={chatPanes.widths.sidebar} minimum={CHAT_PANE_LIMITS.sidebar.min} maximum={CHAT_PANE_LIMITS.sidebar.max} onResize={chatPanes.resize} />}
 
         {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
           <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
@@ -2351,7 +2404,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           </section>
         ) : (
           <>
-        <section className="app-surface overflow-y-auto border-r">
+        <section className="app-surface min-w-0 overflow-y-auto border-r">
           <div className="border-b border-slate-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -2527,7 +2580,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           )}
         </section>
 
-        <section className="overflow-y-auto p-6">
+        <ResizableSeparator separator="conversations" value={chatPanes.widths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={chatPanes.resize} />
+
+        <section className="min-w-0 overflow-y-auto p-6">
           {selectedConversation && selectedConversationState ? (
             <div className="mx-auto max-w-4xl">
             <div className="mb-6 flex items-start justify-between">

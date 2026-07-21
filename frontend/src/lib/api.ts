@@ -1,9 +1,9 @@
 import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult } from "@/types/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
+import { API_BASE_URL } from "@/lib/runtime-config";
 
 export function messageMediaUrl(messageId: string) {
-  return `${API_URL}/messages/${encodeURIComponent(messageId)}/media`;
+  return `${API_BASE_URL}/messages/${encodeURIComponent(messageId)}/media`;
 }
 
 export class ApiError extends Error {
@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const requestUrl = `${API_URL}${path}`;
+  const requestUrl = `${API_BASE_URL}${path}`;
   let response: Response;
 
   try {
@@ -30,7 +30,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let message = `API request failed (${response.status})`;
     try { const body = await response.json() as { message?: string | string[] }; if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message; } catch {}
-    throw new ApiError(message, response.status);
+    const error = new ApiError(message, response.status);
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+    }
+    throw error;
   }
   return response.json() as Promise<T>;
 }

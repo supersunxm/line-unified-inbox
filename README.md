@@ -84,6 +84,8 @@ Run commands from the repository root unless a step says otherwise.
    npm install
    ```
 
+   Local frontend configuration uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001` and `NEXT_PUBLIC_APP_ENV=development`. Railway production configuration is documented in `docs/RAILWAY_DEPLOYMENT.md`.
+
 8. Start the frontend:
 
    ```bash

@@ -1,6 +1,6 @@
-# Railway backend deployment
+# Railway backend and frontend deployment
 
-This guide deploys only the NestJS backend and PostgreSQL. The temporary frontend remains local. Do not put real credentials in Git or this document.
+This guide deploys the NestJS backend, PostgreSQL, and the Next.js frontend as separate Railway services. Do not put real credentials in Git or this document.
 
 ## Selected strategy
 
@@ -26,11 +26,31 @@ Use Railway’s **Root Directory = `backend`** setting. This is simpler than mai
    - Start: `npm run start:prod`
 7. Configure the health-check path as `/health`.
 
+## Deploy the frontend service
+
+1. Add another service from the same private repository.
+2. Set its **Root Directory** to `frontend`.
+3. Configure the build command as `npm run build` and the start command as `npm run start`.
+4. Set `NEXT_PUBLIC_API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app`.
+5. Set `NEXT_PUBLIC_APP_ENV=production`. This enables production validation and requires an HTTPS API origin.
+6. Generate a public Railway domain for the frontend and set its health-check path to `/api/health`.
+7. Update the backend service's `FRONTEND_URL` to the frontend's exact HTTPS origin, without a trailing slash, and redeploy the backend. Credentialed CORS does not accept wildcard origins.
+8. Redeploy the frontend after changing any `NEXT_PUBLIC_` value because Next.js embeds public variables during the production build.
+
+Railway supplies `PORT`; `npm run start` binds Next.js to `0.0.0.0` and uses that port, defaulting to 3000 locally. The frontend service needs no database, encryption, LINE credential, or backend secret variables.
+
+### Required frontend Railway variables
+
+- `NEXT_PUBLIC_API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app`
+- `NEXT_PUBLIC_APP_ENV=production`
+
+Both values are intentionally public browser configuration. Never add `DATABASE_URL`, Channel Secret, Channel Access Token, encrypted credentials, or encryption keys to the frontend service or to a `NEXT_PUBLIC_` variable.
+
 ## Required Railway variables
 
 - `NODE_ENV=production`
 - `DATABASE_URL` — Railway PostgreSQL reference
-- `FRONTEND_URL=http://localhost:3000` during the temporary local-frontend pilot
+- `FRONTEND_URL=https://<railway-frontend-domain>` after the frontend service is deployed; use `http://localhost:3000` only for local development
 - `PUBLIC_WEBHOOK_BASE_URL=https://<railway-backend-domain>` after generating the domain
 - `LINE_CREDENTIAL_ENCRYPTION_KEY` — the same stable 32-byte Base64 key used to encrypt existing OA credentials
 - `LINE_WEBHOOK_ENABLED=true`
@@ -80,9 +100,9 @@ Re-enabling bootstrap intentionally resets the configured account's password has
 
 If legacy records were created without a key, run `npm run line-oa:backfill-webhook-keys` once from the backend service environment. It repairs only null or blank keys, preserves every existing key, reports scanned/repaired counts, and never prints LINE credentials. Do not add this command to startup. The existing webhook-key migration already enforces a non-null unique column for newly created records.
 
-## Cookie and CORS limitation
+## Cookies, sessions, and CORS
 
-The backend allows only `FRONTEND_URL` and enables credentialed CORS; it never uses wildcard origins. Production cookies are `HttpOnly`, `Secure`, and `SameSite=None` for the temporary cross-site local-to-Railway pilot. Some browsers block third-party cookies regardless, and an HTTP localhost frontend talking to a cloud backend is not a durable production topology. Deploy the frontend on HTTPS under the same site next; do not weaken cookie security if a browser blocks this pilot.
+The backend allows only `FRONTEND_URL` and enables credentialed CORS; it never uses wildcard origins. Production sessions use a persistent, `HttpOnly`, `Secure`, `SameSite=None` cookie backed by PostgreSQL. The frontend sends credentialed requests, restores the administrator through `/auth/me` after refresh or browser restart, and redirects expired sessions to `/login`. Do not store passwords or session tokens in browser storage, and do not weaken cookie security if a browser policy blocks cross-site cookies.
 
 ## Rollback
 
@@ -100,4 +120,6 @@ The backend allows only `FRONTEND_URL` and enables credentialed CORS; it never u
 - **Health fails:** confirm Railway passed `PORT`, the process uses `npm run start:prod`, and `/health` is configured.
 - **Webhook 404:** confirm the exact persisted key and canonical `/webhook/<key>` path.
 - **Webhook 401:** verify that the OA’s encrypted Channel Secret is current; LINE signatures use the exact raw request bytes.
-- **Frontend login fails:** check the exact `FRONTEND_URL`, HTTPS/CORS response, and browser third-party-cookie policy. Deploy the frontend rather than loosening cookie flags.
+- **Frontend build fails:** confirm both public variables are set and that `NEXT_PUBLIC_API_BASE_URL` is an HTTPS origin without a path or trailing API route.
+- **Frontend health fails:** confirm Root Directory is `frontend`, start command is `npm run start`, and Railway passed `PORT`; test `/api/health`.
+- **Frontend login fails:** check the exact backend `FRONTEND_URL`, frontend `NEXT_PUBLIC_API_BASE_URL`, HTTPS/CORS response, and browser third-party-cookie policy rather than loosening cookie flags.

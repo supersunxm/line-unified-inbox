@@ -182,3 +182,20 @@ Fix intermittent missing webhook URLs after LINE OA creation.
 - Removed the analogous LINE OA list N+1 patterns by batching manager metadata and daily message counts.
 - Centralized PrismaService in one global PrismaModule and enabled Nest shutdown hooks so one client pool is shared and disconnected only during application shutdown.
 - Next: run full verification, exercise runtime health, and review the final diff.
+
+# Current task: resizable Store Chats panes
+
+- Added two dependency-free draggable separators to the desktop Store Chats workspace with persisted sidebar and conversation-list widths.
+- Enforced the requested defaults and bounds while preserving a minimum 520px conversation-detail pane.
+- Added pointer capture, keyboard arrow resizing, accessible separator metadata, reset behavior, validated client-only restoration, and responsive fixed layouts below the desktop breakpoint.
+- Added focused regression coverage for resizing, bounds, persistence, reset, accessibility, responsive behavior, and theme-token readability.
+- Frontend lint, 46 frontend tests, and the production frontend build pass.
+- Next: complete full repository verification, runtime checks, and final diff review.
+
+# Current task: Railway production frontend
+
+- Replaced the legacy public API variable with validated `NEXT_PUBLIC_API_BASE_URL` and an explicit `NEXT_PUBLIC_APP_ENV` production gate.
+- Added Railway-compatible host/port startup, a safe `/api/health` route, and frontend-service deployment documentation.
+- Preserved server-cookie authentication restoration, centralized 401 expiry handling at `/login`, and contained network/500 failures in existing error UI.
+- Added focused deployment, environment, session, error, health-route, and command regression coverage.
+- Next: run lint, tests, production build, full repository verification, runtime health checks, and final diff review.

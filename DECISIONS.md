@@ -101,3 +101,17 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Conversation list serialization is database-free. Stable store codes are deduplicated and resolved by one Store Master batch query, then every row uses an in-memory map with the connected relation as fallback.
 - List responses intentionally include only one latest message, note, and activity entry per conversation; full message history remains on the paginated conversation messages/detail flow.
 - PrismaService is provided once by a global PrismaModule. Feature modules must inject that shared client rather than declaring new PrismaService providers and additional connection pools.
+
+# Resizable Store Chats workspace (2026-07-21)
+
+- Persist only the sidebar and conversation-list widths under `oppo-line-oa-chat-layout-v1`; the detail pane always consumes the remaining width and retains a 520px minimum.
+- The first separator redistributes the fixed combined width of the first two panes, while the second changes the conversation-list width subject to the available detail width. This keeps dragging predictable without changing application filters or conversation selection.
+- Saved widths are restored after hydration and accepted only when both values satisfy current bounds. Invalid or malformed values fall back to 240px and 340px defaults.
+- Resizing is disabled below 1120px in favor of deterministic tablet/mobile layouts, avoiding unusable narrow panes and horizontal page overflow.
+
+# Railway frontend runtime configuration (2026-07-21)
+
+- `NEXT_PUBLIC_API_BASE_URL` is the single browser API origin. When `NEXT_PUBLIC_APP_ENV=production`, it is required, must be HTTPS, and cannot contain credentials, paths, queries, or fragments.
+- Authentication remains an opaque backend session in a persistent secure HttpOnly cookie. The frontend restores it through `/auth/me`; it does not persist passwords, access tokens, or a parallel authentication flag.
+- Any API 401 emits one application-level expiry event that clears in-memory identity and routes to `/login`. Network and server errors stay in controlled setup/error-banner states instead of becoming unhandled render errors.
+- Railway runs Next.js from the self-contained `frontend` root, binds to `0.0.0.0:$PORT`, and exposes `/api/health` without returning configuration or secrets.
