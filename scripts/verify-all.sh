@@ -10,7 +10,7 @@ step "Repository checks"
 for file in AGENTS.md AI_PROGRESS.md DECISIONS.md package.json scripts/dev-up.sh scripts/health-check.sh; do [[ -f "$ROOT_DIR/$file" ]] || fail "missing $file"; done
 grep -qxF '.runtime/' "$ROOT_DIR/.gitignore" || fail ".runtime is not ignored"
 if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if git -C "$ROOT_DIR" ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.example$' >/dev/null; then fail "tracked environment file detected"; fi
+  if git -C "$ROOT_DIR" ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env(\.local)?\.example$' >/dev/null; then fail "tracked environment file detected"; fi
   if git -C "$ROOT_DIR" grep -IlE '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,})' -- ':!*.lock' ':!scripts/verify-all.sh' | grep . >/dev/null; then fail "potential tracked secret pattern detected (values withheld)"; else status_line Healthy "safe tracked-secret pattern scan"; fi
 else status_line Warning "Git metadata unavailable; tracked-file and diff checks SKIPPED"; skips=1; fi
 

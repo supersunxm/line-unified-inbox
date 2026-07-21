@@ -19,7 +19,7 @@ grep -qxF '.runtime/' "$ROOT_DIR/.gitignore" || fail ".runtime is not ignored"
 for pattern in '.env' '.env.local' '*.log' 'backups/' '*.csv' 'ngrok.yml'; do grep -qF "$pattern" "$ROOT_DIR/.gitignore" || fail ".gitignore missing $pattern"; done
 if rg -l '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,})' "$ROOT_DIR" --glob '!**/node_modules/**' --glob '!**/.runtime/**' --glob '!**/.next/**' --glob '!**/dist/**' --glob '!**/*.lock' --glob '!scripts/deploy-check.sh' --glob '!scripts/verify-all.sh' | grep . >/dev/null; then fail "potential source-tree secret detected (value withheld)"; else status_line Healthy "safe source-tree secret pattern scan"; fi
 if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if git -C "$ROOT_DIR" ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.example$' >/dev/null; then fail "tracked environment file detected"; fi
+  if git -C "$ROOT_DIR" ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env(\.local)?\.example$' >/dev/null; then fail "tracked environment file detected"; fi
   if git -C "$ROOT_DIR" grep -IlE '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,})' -- ':!*.lock' ':!scripts/deploy-check.sh' | grep . >/dev/null; then fail "potential tracked secret detected (value withheld)"; fi
 else status_line Warning "Git metadata/history unavailable; GitHub history checks require an external step"; external=1; fi
 

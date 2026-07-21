@@ -198,4 +198,5 @@ Fix intermittent missing webhook URLs after LINE OA creation.
 - Added Railway-compatible host/port startup, a safe `/api/health` route, and frontend-service deployment documentation.
 - Preserved server-cookie authentication restoration, centralized 401 expiry handling at `/login`, and contained network/500 failures in existing error UI.
 - Added focused deployment, environment, session, error, health-route, and command regression coverage.
-- Next: run lint, tests, production build, full repository verification, runtime health checks, and final diff review.
+- Frontend lint, 53 frontend tests, the Railway-configured production build, live `/api/health`, `/login`, and `/dashboard` probes, and full repository verification pass.
+- Next: await user approval before any push or Railway deployment.

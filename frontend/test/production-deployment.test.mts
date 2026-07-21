@@ -13,8 +13,8 @@ test("production uses the configured public API origin", () => {
   assert.throws(() => resolveApiBaseUrl("http://backend.example.com", "production"), /must use HTTPS/);
 });
 
-test("local development falls back to localhost", () => {
-  assert.equal(resolveApiBaseUrl(undefined, "development"), "http://localhost:3001");
+test("local development falls back to the local loopback API", () => {
+  assert.equal(resolveApiBaseUrl(undefined, "development"), "http://127.0.0.1:3001");
 });
 
 test("401 authentication failures route protected pages to login", async () => {

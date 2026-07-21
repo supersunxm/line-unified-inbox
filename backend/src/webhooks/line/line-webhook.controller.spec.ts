@@ -23,11 +23,11 @@ function controller(resolution: Record<string, unknown>) {
 }
 
 void test("unique LINE webhook route is registered as POST", () => {
-  const receiveForOa = Object.getOwnPropertyDescriptor(LineWebhookController.prototype, "receiveForOa")?.value as object;
+  const receiveForOa = LineWebhookController.prototype.receiveForOa;
   assert.equal(Reflect.getMetadata(PATH_METADATA, LineWebhookController), "webhook");
   assert.equal(Reflect.getMetadata(PATH_METADATA, receiveForOa), ":webhookKey");
   assert.equal(Reflect.getMetadata(METHOD_METADATA, receiveForOa), 1);
-  assert.equal(Reflect.getMetadata(IS_PUBLIC, LineWebhookController), true);
+  assert.equal(Reflect.getMetadata(IS_PUBLIC, receiveForOa), true);
   assert.equal(Object.hasOwn(LineWebhookController.prototype, "receive"), false);
 });
 

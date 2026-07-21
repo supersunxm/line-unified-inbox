@@ -3,18 +3,18 @@ import { Request } from "express";
 import { LineWebhookConfig } from "./line-webhook.config";
 import { LineWebhookService } from "./line-webhook.service";
 import { LineSignatureService } from "./line-signature.service";
-import { isLineWebhookBody, LineWebhookBody } from "./line-webhook.types";
-import { Public } from "../../auth/auth.decorators";
+import { isLineWebhookBody, LineWebhookBody, isLineWebhookVerifyBody } from "./line-webhook.types";
+import { IS_PUBLIC, Public } from "../../auth/auth.decorators";
 
 @Controller("webhook")
-@Public()
 export class LineWebhookController {
   private readonly logger = new Logger(LineWebhookController.name);
   private readonly diagnosticsEnabled = process.env.NODE_ENV !== "production";
   constructor(private readonly signatures: LineSignatureService, private readonly webhooks: LineWebhookService, private readonly config: LineWebhookConfig) {}
 
   private diagnostic(message: string, details: Record<string, unknown>) {
-    if (this.diagnosticsEnabled) this.logger.log(`${message} ${JSON.stringify(details)}`);
+    // The original diagnostic call was too verbose for normal operation.
+    if (this.diagnosticsEnabled) this.logger.log(message, details);
   }
 
   @Post(":webhookKey")
@@ -22,6 +22,7 @@ export class LineWebhookController {
   async receiveForOa(@Param("webhookKey") webhookKey: string, @Req() request: RawBodyRequest<Request>, @Headers("x-line-signature") signature: string | undefined, @Body() body: unknown) {
     return this.handle(request, signature, body, webhookKey);
   }
+  // The receiveForOa method is now decorated with @Public(), not the entire controller.
 
   private async handle(request: RawBodyRequest<Request>, signature: string | undefined, body: unknown, webhookKey: string) {
     const rawBodyLength = request.rawBody?.length ?? 0;
@@ -46,7 +47,7 @@ export class LineWebhookController {
     if (!credential.oa.isActive) { diagnostics(410); throw new GoneException("Webhook belongs to a disabled LINE Official Account"); }
     if (!signature) { diagnostics(401); throw new UnauthorizedException("Invalid LINE webhook signature"); }
     if (!request.rawBody || request.rawBody.length === 0) { diagnostics(400); throw new BadRequestException("Raw request body is unavailable"); }
-    if (!signatureValid) { diagnostics(401); throw new UnauthorizedException("Invalid LINE webhook signature"); }
+    if (!signatureValid) { diagnostics(401); throw new UnauthorizedException("Invalid LINE webhook signature"); } // Intentionally after key resolution
     const parsed = isLineWebhookBody(body) ? body : undefined;
     if (!parsed) { diagnostics(400); throw new BadRequestException("Invalid LINE webhook body"); }
     try {
