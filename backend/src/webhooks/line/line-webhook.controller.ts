@@ -3,8 +3,8 @@ import { Request } from "express";
 import { LineWebhookConfig } from "./line-webhook.config";
 import { LineWebhookService } from "./line-webhook.service";
 import { LineSignatureService } from "./line-signature.service";
-import { isLineWebhookBody, LineWebhookBody, isLineWebhookVerifyBody } from "./line-webhook.types";
-import { IS_PUBLIC, Public } from "../../auth/auth.decorators";
+import { isLineWebhookBody, LineWebhookBody } from "./line-webhook.types";
+import { Public } from "../../auth/auth.decorators";
 
 @Controller("webhook")
 export class LineWebhookController {
@@ -18,11 +18,11 @@ export class LineWebhookController {
   }
 
   @Post(":webhookKey")
+  @Public()
   @HttpCode(200)
   async receiveForOa(@Param("webhookKey") webhookKey: string, @Req() request: RawBodyRequest<Request>, @Headers("x-line-signature") signature: string | undefined, @Body() body: unknown) {
     return this.handle(request, signature, body, webhookKey);
   }
-  // The receiveForOa method is now decorated with @Public(), not the entire controller.
 
   private async handle(request: RawBodyRequest<Request>, signature: string | undefined, body: unknown, webhookKey: string) {
     const rawBodyLength = request.rawBody?.length ?? 0;
