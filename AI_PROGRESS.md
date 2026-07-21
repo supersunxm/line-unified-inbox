@@ -159,3 +159,26 @@ Fix intermittent missing webhook URLs after LINE OA creation.
 - Strengthened Manager URL validation against embedded credentials, query strings, fragments, and unsupported paths.
 - Added response-level regression tests that inspect serialized JSON for forbidden credential names and ciphertext values.
 - Next: complete all lint, build, test, runtime, and diff checks.
+# Current task: one-store LINE chat workspace test
+
+- Disabled the temporary bot-info/chat URL runtime flow and removed its one-store command and mapping.
+- Preserved the nullable database field and migration for possible future use, but conversation DTOs and UI no longer read or expose it.
+- Restored the stable canonical Store Master-first, connected-manager fallback through `resolvedLineOaManagerUrl` only.
+- Next: complete backend/frontend verification and review the final diff.
+
+# Current task: primary workspace navigation refactor
+
+- Split the authenticated application into `/dashboard`, `/chats`, and `/stores` route-focused workspaces while retaining the shared application shell, authentication, theme, language, and API state logic.
+- Added route-backed chat filters with refresh restoration and browser back/forward handling; dashboard and store actions now deep-link into filtered workspaces.
+- Dashboard is summary-only, Store Management contains LINE OA configuration, and Store Chats retains the operational three-column conversation workspace.
+- Added navigation, route-state, focus-boundary, responsive, theme, translation, and LINE OA action regression coverage.
+- Next: run the full repository verification and inspect route responses and final diff.
+
+# Current task: conversation connection-exhaustion repair
+
+- Removed the per-conversation Store Master lookup from conversation serialization and replaced it with one deduplicated `findMany` batch plus a synchronous URL map resolver.
+- Added a dedicated list projection that loads only the latest message, note, and activity summary while detail retains its complete relation shape.
+- Added defense-in-depth page-size clamping at 100 and a 100-row query-count regression test.
+- Removed the analogous LINE OA list N+1 patterns by batching manager metadata and daily message counts.
+- Centralized PrismaService in one global PrismaModule and enabled Nest shutdown hooks so one client pool is shared and disconnected only during application shutdown.
+- Next: run full verification, exercise runtime health, and review the final diff.

@@ -133,14 +133,22 @@ test("switching dark to light to dark also clears stale root state", () => {
   assert.deepEqual([...classes], []);
 });
 
-test("Dashboard and Store Management expose only their contextual primary action", () => {
+test("primary workspaces expose one active navigation state", () => {
   assert.deepEqual(primaryNavigationState("dashboard"), {
     dashboardActive: true,
+    chatsActive: false,
+    storesActive: false,
+    showStoreManagementAction: false,
+  });
+  assert.deepEqual(primaryNavigationState("chats"), {
+    dashboardActive: false,
+    chatsActive: true,
     storesActive: false,
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("stores"), {
     dashboardActive: false,
+    chatsActive: false,
     storesActive: true,
     showStoreManagementAction: true,
   });

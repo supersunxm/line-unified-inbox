@@ -1,5 +1,5 @@
-import Home from "../page";
+import { ApplicationWorkspace } from "../page";
 
 export default function StoresPage() {
-  return <Home initialSection="stores" />;
+  return <ApplicationWorkspace initialSection="stores" />;
 }

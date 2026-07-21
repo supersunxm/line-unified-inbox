@@ -85,3 +85,19 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Conversation APIs never serialize a full Prisma `LineOfficialAccount`. They return an allowlisted metadata object containing only ID, name, Basic ID, connection status, active state, and last webhook receipt time.
 - Webhook keys and encrypted/plain credential fields are excluded at the backend serialization boundary, not merely ignored by frontend types.
 - `resolvedLineOaManagerUrl` is a top-level conversation field produced by the shared canonical resolver for both list and detail responses.
+# LINE OA navigation rollback (2026-07-20)
+
+- Conversation navigation uses only the canonical validated `resolvedLineOaManagerUrl`: latest Store Master URL first, connected Store Master relation second, otherwise null.
+- Automatic bot-info and `chat.line.biz` navigation are disabled. The additive `lineChatWorkspaceUrl` database field and migration remain in place but are intentionally unused so the experiment can be revisited without destructive schema changes.
+
+# Primary application workspaces (2026-07-20)
+
+- Dashboard, Store Chats, and Store Management are distinct routes backed by one authenticated application workspace component. This preserves established fetching, auth, translation, theme, and mutation behavior without duplicating stateful business logic.
+- `/chats` query parameters are the shareable source for operational filters and selected conversation; local preferences continue to preserve language and non-route UI preferences.
+- `/` redirects to `/dashboard`. Dashboard cards and store actions deep-link to filtered `/chats` or `/stores` routes instead of switching hidden views inside the current page.
+
+# Bounded conversation query architecture (2026-07-21)
+
+- Conversation list serialization is database-free. Stable store codes are deduplicated and resolved by one Store Master batch query, then every row uses an in-memory map with the connected relation as fallback.
+- List responses intentionally include only one latest message, note, and activity entry per conversation; full message history remains on the paginated conversation messages/detail flow.
+- PrismaService is provided once by a global PrismaModule. Feature modules must inject that shared client rather than declaring new PrismaService providers and additional connection pools.

@@ -5,7 +5,7 @@ import { CredentialEncryptionService } from "../credentials/credential-encryptio
 import { PrismaService } from "../prisma.service";
 import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
-import { resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
+import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
 type IncludedOa = Prisma.LineOfficialAccountGetPayload<{ include: typeof safeInclude }>;
@@ -58,9 +58,9 @@ export class LineOfficialAccountsService {
     try { this.encryption.decrypt(value); return true; } catch { return false; }
   }
 
-  private async safe(item: IncludedOa, messagesReceivedToday = 0) {
+  private safe(item: IncludedOa, latestManagerUrls: LatestManagerUrlMap, messagesReceivedToday = 0) {
     const webhook = this.webhookConfiguration(item.webhookKey);
-    const resolvedLineOaManagerUrl = await resolveLineOaManagerUrl(this.prisma, item.store);
+    const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
@@ -78,12 +78,21 @@ export class LineOfficialAccountsService {
   async list(showArchived = false) {
     const items = await this.prisma.lineOfficialAccount.findMany({ where: showArchived ? undefined : { archivedAt: null, store: { archivedAt: null } }, include: safeInclude, orderBy: { name: "asc" } });
     const start = new Date(); start.setHours(0, 0, 0, 0);
-    return Promise.all(items.map(async (item) => this.safe(item, await this.prisma.message.count({ where: { sentAt: { gte: start }, conversation: { lineOfficialAccountId: item.id } } }))));
+    const [latestManagerUrls, conversationCounts] = await Promise.all([
+      loadLatestManagerUrls(this.prisma, items.map(({ store }) => store.code)),
+      this.prisma.conversation.findMany({
+        where: { lineOfficialAccountId: { in: items.map(({ id }) => id) } },
+        select: { lineOfficialAccountId: true, _count: { select: { messages: { where: { sentAt: { gte: start } } } } } },
+      }),
+    ]);
+    const messagesByOa = new Map<string, number>();
+    for (const conversation of conversationCounts) messagesByOa.set(conversation.lineOfficialAccountId, (messagesByOa.get(conversation.lineOfficialAccountId) ?? 0) + conversation._count.messages);
+    return items.map((item) => this.safe(item, latestManagerUrls, messagesByOa.get(item.id) ?? 0));
   }
   async get(id: string) {
     const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: safeInclude });
     if (!item) throw new NotFoundException("LINE Official Account not found");
-    return this.safe(item);
+    return this.safe(item, await loadLatestManagerUrls(this.prisma, [item.store.code]));
   }
 
   async create(dto: CreateLineOfficialAccountDto) {
@@ -109,7 +118,7 @@ export class LineOfficialAccountsService {
         }, include: safeInclude });
         });
         if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
-        const response = await this.safe(item);
+        const response = this.safe(item, await loadLatestManagerUrls(this.prisma, [item.store.code]));
         if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
         return response;
       } catch (error) {

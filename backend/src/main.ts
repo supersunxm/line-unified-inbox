@@ -8,6 +8,7 @@ async function bootstrap() {
   validateProductionEnvironment();
   // rawBody preserves the exact bytes required by LINE's HMAC signature check.
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  app.enableShutdownHooks();
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
   app.enableCors({ origin: frontendUrl, credentials: true });
   app.useGlobalPipes(

@@ -5,7 +5,7 @@ import { ConversationsService } from "./conversations.service";
 import { DashboardController } from "./dashboard.controller";
 import { HealthController } from "./health.controller";
 import { MetadataController } from "./metadata.controller";
-import { PrismaService } from "./prisma.service";
+import { PrismaModule } from "./prisma.module";
 import { StoresController } from "./stores.controller";
 import { LineWebhookModule } from "./webhooks/line/line-webhook.module";
 import { CredentialsModule } from "./credentials/credentials.module";
@@ -18,8 +18,8 @@ import { OperationsController } from "./operations.controller";
 import { MediaModule } from "./media/media.module";
 
 @Module({
-  imports: [AuthModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule],
+  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
-  providers: [PrismaService, ConversationsService],
+  providers: [ConversationsService],
 })
 export class AppModule {}

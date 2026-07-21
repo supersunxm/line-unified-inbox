@@ -1,5 +1,5 @@
-import Home from "../page";
+import { ApplicationWorkspace } from "../page";
 
 export default function DashboardPage() {
-  return <Home initialSection="dashboard" />;
+  return <ApplicationWorkspace initialSection="dashboard" />;
 }

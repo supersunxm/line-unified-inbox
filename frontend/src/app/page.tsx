@@ -12,6 +12,7 @@ import { formatRelativeTime } from "./relative-time";
 import { MessageImage } from "./message-image";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
+import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -1047,7 +1048,12 @@ function mapApiConversationState(item: ApiConversation): ConversationState {
   };
 }
 
-export default function Home({ initialSection = "dashboard" }: { initialSection?: PrimarySection }) {
+export default function Home() {
+  useEffect(() => window.location.replace("/dashboard"), []);
+  return <main className="app-shell flex min-h-screen items-center justify-center"><p className="app-muted text-sm">Opening dashboard…</p></main>;
+}
+
+export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
   const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
@@ -1099,8 +1105,13 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
   const [language, setLanguage] = useState<Language>("th");
   const [searchText, setSearchText] = useState("");
   const [storeManagementSearch, setStoreManagementSearch] = useState("");
+  const [storeRouteStatus] = useState<"all" | "active" | "error">(() => {
+    if (initialSection !== "stores" || typeof window === "undefined") return "all";
+    const status = new URLSearchParams(window.location.search).get("status");
+    return status === "active" || status === "error" ? status : "all";
+  });
   const [sidebarView, setSidebarView] = useState<SidebarView>(
-    initialSection === "stores" ? "lineOaManagement" : "dashboard",
+    initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "incoming" : "dashboard",
   );
   const [selectedStore, setSelectedStore] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -1131,6 +1142,7 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
   const lineOaSubmissionInFlight = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const newestChatMessageRef = useRef<string | null>(null);
+  const chatRouteHydrated = useRef(false);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const text = translations[language];
   const primaryNavigation = primaryNavigationState(initialSection);
@@ -1170,12 +1182,13 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
   );
   const visibleLineOas = useMemo(
     () => lineOas.filter((account) =>
-      !normalizedStoreManagementSearch ||
-      [account.name, account.store.name, account.store.accountName]
-        .filter(Boolean)
-        .some((value) => value?.toLowerCase().includes(normalizedStoreManagementSearch)),
+      (storeRouteStatus === "all" || (storeRouteStatus === "active" ? account.isActive : account.connectionStatus === "ERROR" || account.connectionStatus === "NOT_CONFIGURED")) &&
+      (!normalizedStoreManagementSearch ||
+        [account.name, account.store.name, account.store.accountName]
+          .filter(Boolean)
+          .some((value) => value?.toLowerCase().includes(normalizedStoreManagementSearch))),
     ),
-    [lineOas, normalizedStoreManagementSearch],
+    [lineOas, normalizedStoreManagementSearch, storeRouteStatus],
   );
   const synchronizedMaster = selectedMaster ? synchronizedStoreMasterData(selectedMaster) : null;
   const masterResults = masterSearchState.status === "success" ? masterSearchState.suggestions : [];
@@ -1322,11 +1335,7 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
       const saved = loadUiPreferences();
       setLanguage(saved.language);
       setSearchText(saved.searchText);
-      setSidebarView(initialSection === "stores"
-        ? "lineOaManagement"
-        : saved.sidebarView === "lineOaManagement" || saved.sidebarView === "stores"
-          ? "dashboard"
-          : saved.sidebarView);
+      setSidebarView(initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "incoming" : "dashboard");
       setSelectedStore(saved.store);
       setStatusFilter(saved.status);
       setPriorityFilter(saved.priority);
@@ -1339,6 +1348,40 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
 
     return () => window.clearTimeout(loadSavedPreferences);
   }, [initialSection]);
+
+  useEffect(() => {
+    if (!uiPreferencesLoaded || initialSection !== "chats") return;
+    const restoreRoute = () => {
+      const route = readChatRouteFilters(window.location.search);
+      setSelectedStore(route.store ?? "all");
+      setSidebarView(route.status === "follow-up" ? "followUp" : route.status === "reminded" ? "reminded" : "incoming");
+      setStatusFilter("all");
+      setPriorityFilter(route.priority?.toLowerCase() === "high" ? "High" : "all");
+      setModelFilter(route.model ?? "all");
+      setTopicFilter(route.topic ?? "all");
+      setLineOaFilter(route.lineOaId ?? "all");
+      setSelectedConversationId(route.conversationId ?? "");
+      chatRouteHydrated.current = true;
+    };
+    restoreRoute();
+    window.addEventListener("popstate", restoreRoute);
+    return () => window.removeEventListener("popstate", restoreRoute);
+  }, [initialSection, uiPreferencesLoaded]);
+
+  useEffect(() => {
+    if (initialSection !== "chats" || !uiPreferencesLoaded || !chatRouteHydrated.current) return;
+    const status = sidebarView === "followUp" ? "follow-up" : sidebarView === "reminded" ? "reminded" : statusFilter !== "all" ? statusFilter : undefined;
+    const href = buildChatsHref({
+      store: selectedStore,
+      status,
+      priority: priorityFilter === "High" ? "high" : undefined,
+      model: modelFilter,
+      topic: topicFilter,
+      lineOaId: lineOaFilter,
+      conversationId: selectedConversationId || undefined,
+    });
+    window.history.replaceState(null, "", href);
+  }, [initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
 
   useEffect(() => {
     if (!uiPreferencesLoaded) return;
@@ -1708,11 +1751,16 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
 
   function openMonitoring(filters: {
     store?: string;
+    status?: string;
     model?: string;
     topic?: string;
     lineOaId?: string;
     conversationId?: string;
   }) {
+    if (initialSection !== "chats") {
+      window.location.assign(buildChatsHref(filters));
+      return;
+    }
     setSidebarView("incoming");
     setSearchText("");
     setSelectedStore(filters.store ?? "all");
@@ -1722,6 +1770,8 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
     setModelFilter(filters.model ?? "all");
     setTopicFilter(filters.topic ?? "all");
     setLineOaFilter(filters.lineOaId ?? "all");
+    if (filters.status === "follow-up") setSidebarView("followUp");
+    if (filters.status === "reminded") setSidebarView("reminded");
     if (filters.conversationId !== undefined) {
       setSelectedConversationId(filters.conversationId);
     }
@@ -1983,6 +2033,9 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
             <Link href="/dashboard" aria-current={primaryNavigation.dashboardActive ? "page" : undefined}>
               {text.dashboard}
             </Link>
+            <Link href="/chats" aria-current={primaryNavigation.chatsActive ? "page" : undefined}>
+              {language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}
+            </Link>
             <Link href="/stores" aria-current={primaryNavigation.storesActive ? "page" : undefined}>
               {text.storeManagement}
             </Link>
@@ -2053,7 +2106,7 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
           </p>
 
           <nav className="space-y-1">
-            {initialSection === "dashboard" ? <>
+            {initialSection === "chats" ? <>
               <button
               onClick={() => selectSidebarView("dashboard")}
               className={sidebarButtonClass("dashboard")}
@@ -2091,26 +2144,25 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
               </span>
             </button>
 
-            <button
-              onClick={() => selectSidebarView("customerInsights")}
-              className={sidebarButtonClass("customerInsights")}
-            >
-              💡 {text.customerInsights}
-            </button>
-
-            <button onClick={() => { selectSidebarView("systemStatus"); void loadSystemStatus(); }} className={sidebarButtonClass("systemStatus")}>
-              🩺 {text.systemStatus}
-            </button>
-            <button onClick={() => selectSidebarView("pilotChecklist")} className={sidebarButtonClass("pilotChecklist")}>
-              ✅ {text.pilotChecklist}
-            </button>
-            </> : authUser.role === "ADMIN" ? <button
+            </> : initialSection === "stores" && authUser.role === "ADMIN" ? <button
               onClick={() => selectSidebarView("lineOaManagement")}
               className={sidebarButtonClass("lineOaManagement")}
             >
               🔗 {text.lineOaManagement}
-            </button> : <p className="app-muted px-3 py-2 text-sm">{text.lineOaManagement}</p>}
+            </button> : initialSection === "stores" ? <p className="app-muted px-3 py-2 text-sm">{text.lineOaManagement}</p> : <div className="space-y-2"><p className="app-muted px-3 py-2 text-sm">{language === "th" ? "ภาพรวมการดำเนินงาน" : language === "zh" ? "运营概览" : "Operational overview"}</p><Link href="/chats?status=follow-up" className="app-nav-item block rounded-lg px-3 py-2.5 text-sm font-medium">{text.followUp} →</Link><Link href="/stores?status=error" className="app-nav-item block rounded-lg px-3 py-2.5 text-sm font-medium">{text.connectionIssues} →</Link></div>}
           </nav>
+
+          {initialSection === "chats" && <>
+            <div className="my-5 border-t border-slate-200" />
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{text.stores}</p>
+              <button type="button" onClick={clearAllFilters} className="text-xs text-red-700 hover:underline">{text.clearAll}</button>
+            </div>
+            <div className="space-y-1">
+              <button type="button" onClick={() => setSelectedStore("all")} className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${selectedStore === "all" ? "is-selected font-medium" : ""}`}><span>{text.allStores}</span><span className="app-chip rounded-full px-2 py-0.5 text-xs">{conversations.length}</span></button>
+              {stores.map((store) => <button key={store.id} type="button" onClick={() => setSelectedStore(store.id)} className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${selectedStore === store.id ? "is-selected font-medium" : ""}`}><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="app-chip rounded-full px-2 py-0.5 text-xs">{store.waiting}</span>}</button>)}
+            </div>
+          </>}
 
           {initialSection === "stores" && <>
           <div className="my-5 border-t border-slate-200" />
@@ -2148,11 +2200,11 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
           </>}
         </aside>
 
-        {sidebarView === "pilotChecklist" ? (
+        {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
           <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
-        ) : sidebarView === "systemStatus" ? (
+        ) : initialSection === "chats" && sidebarView === "systemStatus" ? (
           <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
-        ) : sidebarView === "lineOaManagement" && primaryNavigation.showStoreManagementAction ? (
+        ) : initialSection === "stores" ? (
           <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
               <div className="flex items-start justify-between">
@@ -2227,22 +2279,22 @@ export default function Home({ initialSection = "dashboard" }: { initialSection?
             </div></div>}
             {createdLineOa && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl"><div className="rounded-xl border border-green-200 bg-green-50 p-5"><h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3><p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p></div><div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p><button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.copyWebhook}</button></div><ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">{text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}</ol><div className="mt-6 flex justify-end gap-3"><button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.close}</button><button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.goToLineOaManagement}</button></div></div></div>}
           </section>
-        ) : sidebarView === "dashboard" ? (
+        ) : initialSection === "dashboard" ? (
           <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
                 {([
-                  [text.totalIncoming, dashboardSummary?.totalConversations ?? conversations.length],
-                  [text.followUpRequired, dashboardSummary?.countByStatus.FOLLOW_UP ?? followUpCount],
-                  [text.remindersSent, dashboardSummary?.countByStatus.REMINDED ?? remindedCount],
-                  [text.acknowledgedKpi, dashboardSummary?.countByStatus.ACKNOWLEDGED ?? 0],
-                  [text.completedKpi, dashboardSummary?.countByStatus.COMPLETED ?? 0],
-                  [text.escalatedKpi, dashboardSummary?.countByStatus.ESCALATED ?? 0],
-                ] as Array<[string, number]>).map(([label, value]) => (
-                  <div key={String(label)} className="app-card p-5">
+                  [text.totalLineOa, lineOas.length, "/stores"],
+                  [text.activeLineOa, lineOas.filter(({ isActive }) => isActive).length, "/stores?status=active"],
+                  [text.connectionIssues, lineOas.filter(({ connectionStatus }) => connectionStatus === "ERROR" || connectionStatus === "NOT_CONFIGURED").length, "/stores?status=error"],
+                  [text.messagesToday, lineOas.reduce((sum, account) => sum + account.messagesReceivedToday, 0), "/chats"],
+                  [text.totalIncoming, dashboardSummary?.totalConversations ?? conversations.length, "/chats"],
+                  [text.followUpRequired, dashboardSummary?.countByStatus.FOLLOW_UP ?? followUpCount, "/chats?status=follow-up"],
+                ] as Array<[string, number, string]>).map(([label, value, href]) => (
+                  <Link key={String(label)} href={href} className="app-card block p-5 transition hover:-translate-y-0.5 hover:shadow-md">
                     <p className="app-muted text-xs font-medium">{label}</p>
                     <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-                  </div>
+                  </Link>
                 ))}
               </div>
 

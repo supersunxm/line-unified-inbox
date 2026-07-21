@@ -279,6 +279,7 @@ model LineOfficialAccount {
   destinationId               String?                @unique
   encryptedChannelSecret      String?
   encryptedChannelAccessToken String?
+  lineChatWorkspaceUrl        String?
   connectionStatus            LineOaConnectionStatus @default(NOT_CONFIGURED)
   lastWebhookReceivedAt       DateTime?
   lastConnectionTestAt        DateTime?

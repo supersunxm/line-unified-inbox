@@ -3,28 +3,37 @@ import { ActivityActionType, FollowUpStatus, Prisma } from "@prisma/client";
 import { ConversationQueryDto, CreateNoteDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
-import { resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
+import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 
-export const conversationInclude = {
+const conversationBaseInclude = {
   customer: true,
   store: { include: { storeMaster: true } },
   lineOfficialAccount: true,
-  messages: { orderBy: { sentAt: "desc" as const }, include: { media: true } },
   products: { include: { productModel: { include: { productSeries: true } } } },
   topics: { include: { topic: true } },
+} satisfies Prisma.ConversationInclude;
+export const conversationListInclude = {
+  ...conversationBaseInclude,
+  messages: { orderBy: { sentAt: "desc" as const }, take: 1, include: { media: true } },
+  notes: { orderBy: { createdAt: "desc" as const }, take: 1 },
+  activityHistory: { orderBy: { createdAt: "desc" as const }, take: 1 },
+} satisfies Prisma.ConversationInclude;
+export const conversationDetailInclude = {
+  ...conversationBaseInclude,
+  messages: { orderBy: { sentAt: "desc" as const }, include: { media: true } },
   notes: { orderBy: { createdAt: "desc" as const } },
   activityHistory: { orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.ConversationInclude;
-type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conversationInclude }>;
+type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conversationDetailInclude }>;
 
 @Injectable()
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
-  private async safe(item: IncludedConversation) {
+  private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
     const { storeMaster, ...store } = rawStore;
-    const resolvedLineOaManagerUrl = await resolveLineOaManagerUrl(this.prisma, item.store);
+    const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
     const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
     return { ...conversation, resolvedLineOaManagerUrl, lineOfficialAccount, store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" }, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
   }
@@ -79,17 +88,20 @@ export class ConversationsService {
     const orderBy: Prisma.ConversationOrderByWithRelationInput =
       query.sort === "latest-asc" ? { latestMessageAt: "asc" } :
       query.sort === "priority-desc" ? { priority: "desc" } : { latestMessageAt: "desc" };
+    const pageSize = Math.min(100, Math.max(1, Math.floor(query.pageSize)));
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.conversation.findMany({ where, include: conversationInclude, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      this.prisma.conversation.findMany({ where, include: conversationListInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
       this.prisma.conversation.count({ where }),
     ]);
-    return { items: await Promise.all(items.map((item) => this.safe(item))), total, page: query.page, pageSize: query.pageSize };
+    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, items.map(({ store }) => store.code));
+    return { items: items.map((item) => this.safe(item, latestManagerUrls)), total, page: query.page, pageSize };
   }
 
   async get(id: string) {
-    const item = await this.prisma.conversation.findUnique({ where: { id }, include: conversationInclude });
+    const item = await this.prisma.conversation.findUnique({ where: { id }, include: conversationDetailInclude });
     if (!item) throw new NotFoundException("Conversation not found");
-    return this.safe(item);
+    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, [item.store.code]);
+    return this.safe(item, latestManagerUrls);
   }
 
   async updateStatus(id: string, status: FollowUpStatus) {

@@ -11,8 +11,23 @@ void test("translation button remains a dedicated original/translated toggle", (
 
 void test("manager action copies the customer and opens the exact stored URL safely", async () => {
   const copied: string[] = []; const opened: string[][] = [];
-  const result = await openLineOaManager({ managerUrl: "https://manager.line.biz/account/@oppo/chat", customerName: "Nattaya", copy: (value) => { copied.push(value); return Promise.resolve(); }, open: (...args) => opened.push(args) });
-  assert.equal(result, "copied"); assert.deepEqual(copied, ["Nattaya"]); assert.deepEqual(opened, [["https://manager.line.biz/account/@oppo/chat", "_blank", "noopener,noreferrer"]]);
+  const result = await openLineOaManager({ managerUrl: "https://manager.line.biz/account/@oppo", customerName: "Nattaya", copy: (value) => { copied.push(value); return Promise.resolve(); }, open: (...args) => opened.push(args) });
+  assert.equal(result, "copied"); assert.deepEqual(copied, ["Nattaya"]); assert.deepEqual(opened, [["https://manager.line.biz/account/@oppo", "_blank", "noopener,noreferrer"]]);
+});
+
+void test("store manager link opens while chat URLs are ignored", async () => {
+  const opened: string[] = [];
+  const result = await openLineOaManager({ managerUrl: "https://manager.line.biz/account/26197", customerName: "Customer", copy: () => Promise.resolve(), open: (url) => opened.push(url) });
+  const ignoredChat = await openLineOaManager({ managerUrl: "https://chat.line.biz/U1234567890abcdef", customerName: "Customer", copy: () => Promise.resolve(), open: (url) => opened.push(url) });
+  assert.equal(result, "copied"); assert.equal(ignoredChat, "missing");
+  assert.deepEqual(opened, ["https://manager.line.biz/account/26197"]);
+});
+
+void test("both missing produces the missing-link result without opening a tab", async () => {
+  let opened = false;
+  const result = await openLineOaManager({ managerUrl: null, customerName: "Customer", copy: () => Promise.resolve(), open: () => { opened = true; } });
+  assert.equal(result, "missing");
+  assert.equal(opened, false);
 });
 
 void test("clipboard failure still opens the manager account", async () => {
@@ -28,15 +43,16 @@ void test("missing and invalid manager URLs are blocked", async () => {
   assert.equal(validLineOaManagerUrl("https://manager.line.biz/account/x"), "https://manager.line.biz/account/x");
 });
 
-void test("switching conversations uses each selected store manager URL", async () => {
+void test("switching conversations uses each resolved URL without retaining the previous store", async () => {
   const opened: string[] = [];
-  for (const managerUrl of ["https://manager.line.biz/account/store-a", "https://manager.line.biz/account/store-b/messages"]) await openLineOaManager({ managerUrl, customerName: "Customer", copy: () => Promise.resolve(), open: (url) => opened.push(url) });
-  assert.deepEqual(opened, ["https://manager.line.biz/account/store-a", "https://manager.line.biz/account/store-b/messages"]);
+  for (const managerUrl of ["https://manager.line.biz/account/store-a", "https://manager.line.biz/account/store-b"]) await openLineOaManager({ managerUrl, customerName: "Customer", copy: () => Promise.resolve(), open: (url) => opened.push(url) });
+  assert.deepEqual(opened, ["https://manager.line.biz/account/store-a", "https://manager.line.biz/account/store-b"]);
 });
 
-void test("conversation action reads the latest manager URL returned with its Store Master-backed store", () => {
+void test("conversation action uses only the backend-resolved manager URL field", () => {
   const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /managerUrl: selectedApiConversation\.resolvedLineOaManagerUrl/);
+  assert.match(page, /managerUrl: selectedApiConversation\.resolvedLineOaManagerUrl,/);
+  assert.doesNotMatch(page, /resolvedLineOa(?:Chat|Open)Url/);
   assert.match(page, /lineManagerUrlStatus === "INVALID"/);
 });
 
