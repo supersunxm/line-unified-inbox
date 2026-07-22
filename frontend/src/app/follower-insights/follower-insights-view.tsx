@@ -1,21 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { ByStoreAccountRow, SummaryDailyRow, SyncBatchResult } from "@/types/api";
-
-function getBkkDateStr(d: Date) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
-
-function formatBkkDateTime(d: string | Date | null) {
-  if (!d) return "—";
-  const dateObj = typeof d === "string" ? new Date(d) : d;
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
-  }).format(dateObj).replace(",", "");
-}
+import { DateRangePicker } from "./date-range-picker";
+import { DailySummaryTable } from "./daily-summary-table";
+import { StoreBreakdownTable } from "./store-breakdown-table";
+import { TrendChart } from "./trend-chart";
+import {
+  calculateCoverage,
+  formatBkkDateTime,
+  formatDateDisplay,
+  getBkkDateStr,
+} from "./follower-insights-utils";
 
 export function FollowerInsightsView() {
   const today = new Date();
@@ -26,13 +23,14 @@ export function FollowerInsightsView() {
 
   const [dateFrom, setDateFrom] = useState(defaultDateFrom);
   const [dateTo, setDateTo] = useState(defaultDateTo);
+
   const [summaryData, setSummaryData] = useState<SummaryDailyRow[]>([]);
   const [storeData, setStoreData] = useState<ByStoreAccountRow[]>([]);
-  
+
   const [loading, setLoading] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  
+
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [storeError, setStoreError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -40,12 +38,10 @@ export function FollowerInsightsView() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncBatchResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  
-  const [storeSearch, setStoreSearch] = useState("");
-  const [storeSort, setStoreSort] = useState<"periodIncrease" | "followers" | "accountName">("periodIncrease");
-  const [storeSortDir, setStoreSortDir] = useState<"asc" | "desc">("desc");
 
-  const [chartMetric, setChartMetric] = useState<"followers" | "targetedReaches" | "blocks">("followers");
+  const [chartMetric, setChartMetric] = useState<"followers" | "targetedReaches" | "blocks">(
+    "followers"
+  );
 
   const loadData = useCallback(async (start: string, end: string) => {
     const s = new Date(start).getTime();
@@ -54,8 +50,8 @@ export function FollowerInsightsView() {
       setValidationError("End date cannot be earlier than start date.");
       return;
     }
-    const diffDays = (e - s) / (1000 * 60 * 60 * 24);
-    if (diffDays > 89) {
+    const diffDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 90) {
       setValidationError("Date range cannot exceed 90 days.");
       return;
     }
@@ -63,7 +59,7 @@ export function FollowerInsightsView() {
     setLoading(true);
     setSummaryError(null);
     setStoreError(null);
-    
+
     let sumSucceeded = false;
     let storeSucceeded = false;
 
@@ -115,394 +111,306 @@ export function FollowerInsightsView() {
     const end = new Date();
     const start = new Date();
     start.setDate(end.getDate() - (days - 1));
-    setDateFrom(getBkkDateStr(start));
-    setDateTo(getBkkDateStr(end));
+    const sStr = getBkkDateStr(start);
+    const eStr = getBkkDateStr(end);
+    setDateFrom(sStr);
+    setDateTo(eStr);
   };
 
-  const latestSummary = summaryData.length > 0 ? summaryData[summaryData.length - 1] : null;
+  const { totalCalendarDays, usableDays, coveragePct, hasMissingDates } = useMemo(
+    () => calculateCoverage(summaryData, dateFrom, dateTo),
+    [summaryData, dateFrom, dateTo]
+  );
 
-  const filteredStores = useMemo(() => {
-    let res = storeData;
-    if (storeSearch) {
-      const q = storeSearch.toLowerCase();
-      res = res.filter(s => s.accountName.toLowerCase().includes(q) || s.storeName.toLowerCase().includes(q));
-    }
-    res = [...res].sort((a, b) => {
-      let aVal = a[storeSort] ?? 0;
-      let bVal = b[storeSort] ?? 0;
-      if (storeSort === "accountName") {
-         aVal = a.accountName; bVal = b.accountName;
-      }
-      if (aVal < bVal) return storeSortDir === "asc" ? -1 : 1;
-      if (aVal > bVal) return storeSortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-    return res;
-  }, [storeData, storeSearch, storeSort, storeSortDir]);
-
-  const handleSort = (field: "periodIncrease" | "followers" | "accountName") => {
-    setStoreSortDir(d => storeSort === field && d === "desc" ? "asc" : "desc");
-    setStoreSort(field);
-  };
+  // Requirement 5: KPI values must use dateTo row ONLY when dateTo has valid data (followers !== null)
+  const targetDateSummary = useMemo(() => {
+    return summaryData.find((d) => d.date === dateTo) || null;
+  }, [summaryData, dateTo]);
 
   return (
-    <section className="app-content-section col-span-2 overflow-y-auto bg-slate-50">
-      <div className="mx-auto max-w-6xl space-y-6 pb-20 p-4">
-        
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <section className="app-content-section col-span-2 overflow-y-auto bg-slate-950 text-slate-100 min-h-screen">
+      <div className="mx-auto max-w-7xl space-y-6 pb-20 p-4 md:p-6">
+        {/* Header Section */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-800 pb-6">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Follower Insights</h2>
-            <p className="text-sm text-slate-500">
-              {dateFrom} to {dateTo} 
-              {latestSummary && ` • Coverage: ${latestSummary.accountsReady}/${latestSummary.accountsExpected} Ready`}
-              {` • Last refreshed: ${lastRefreshedAt ? formatBkkDateTime(lastRefreshedAt) : "—"}`}
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold tracking-tight text-white">Follower Insights</h2>
+              {hasMissingDates && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 ring-1 ring-inset ring-amber-500/30">
+                  <svg className="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Partial data available
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+              <span className="font-medium text-slate-300">
+                {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
+              </span>
+              <span>•</span>
+              <span>
+                Data coverage: {usableDays} of {totalCalendarDays} days ({coveragePct}%)
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1.5 text-slate-400">
+                Last refreshed: {lastRefreshedAt ? formatBkkDateTime(lastRefreshedAt) : "—"}
+                <button
+                  type="button"
+                  onClick={() => void loadData(dateFrom, dateTo)}
+                  disabled={loading}
+                  className="rounded-md p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+                  title="Refresh data"
+                  aria-label="Refresh data"
+                >
+                  <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </span>
             </p>
           </div>
+
+          {/* Date Controls & Sync Button */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-1">
-              <button onClick={() => applyQuickRange(7)} className="rounded-md px-3 py-1 text-sm font-medium hover:bg-slate-100">7 Days</button>
-              <button onClick={() => applyQuickRange(14)} className="rounded-md px-3 py-1 text-sm font-medium hover:bg-slate-100">14 Days</button>
-              <button onClick={() => applyQuickRange(30)} className="rounded-md px-3 py-1 text-sm font-medium hover:bg-slate-100">30 Days</button>
+            {/* Quick Range Pills */}
+            <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-1">
+              <button
+                type="button"
+                onClick={() => applyQuickRange(7)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  totalCalendarDays === 7 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                }`}
+              >
+                7D
+              </button>
+              <button
+                type="button"
+                onClick={() => applyQuickRange(14)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  totalCalendarDays === 14 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                }`}
+              >
+                14D
+              </button>
+              <button
+                type="button"
+                onClick={() => applyQuickRange(30)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  totalCalendarDays === 30 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                }`}
+              >
+                30D
+              </button>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} max={dateTo} className="app-input rounded-lg border px-3 py-1.5 text-sm" />
-              <span className="text-slate-400">-</span>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} max={getBkkDateStr(new Date())} className="app-input rounded-lg border px-3 py-1.5 text-sm" />
-            </div>
-            <button onClick={handleSync} disabled={syncing || loading} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
-              {syncing ? "Syncing..." : "Sync Selected Date"}
+
+            {/* Custom Date Range Picker Component */}
+            <DateRangePicker
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onApply={(start, end) => {
+                setDateFrom(start);
+                setDateTo(end);
+              }}
+              onQuickRange={applyQuickRange}
+            />
+
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing || loading}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 disabled:opacity-50 transition-all"
+            >
+              {syncing ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Syncing...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Sync Selected Date</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
+        {/* Validation Error Banner */}
         {validationError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400 flex items-center gap-2">
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             {validationError}
           </div>
         )}
 
+        {/* Sync Error Banner */}
         {syncError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
             Sync Error: {syncError}
           </div>
         )}
 
+        {/* Sync Result Toast */}
         {syncResult && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            <p className="font-semibold mb-1">Sync complete for {syncResult.date}</p>
-            <p>Requested: {syncResult.requested} | Succeeded: {syncResult.succeeded} | Unready: {syncResult.unready} | Failed: {syncResult.failed} | Skipped: {syncResult.skipped}</p>
+          <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">
+            <p className="font-semibold text-white">Sync complete for {syncResult.date}</p>
+            <p className="mt-1 text-slate-300">
+              Requested: {syncResult.requested} | Succeeded: {syncResult.succeeded} | Unready: {syncResult.unready} | Failed: {syncResult.failed} | Skipped: {syncResult.skipped}
+            </p>
             {syncResult.errors && syncResult.errors.length > 0 && (
-              <ul className="mt-2 list-inside list-disc text-xs text-red-600 opacity-90">
-                {syncResult.errors.map((e, i) => <li key={i}>{e.accountName}: {e.code}</li>)}
+              <ul className="mt-2 list-inside list-disc text-xs text-red-400">
+                {syncResult.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.accountName}: {e.code}
+                  </li>
+                ))}
               </ul>
             )}
           </div>
         )}
 
-        {latestSummary && latestSummary.accountsMissing !== undefined && latestSummary.accountsMissing > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            ⚠️ Partial data: {latestSummary.accountsMissing} accounts are missing data for the latest date in the range. Try running a sync.
-          </div>
-        )}
-
+        {/* Loading Skeletons */}
         {loading && !initialLoadDone ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-              {[1,2,3,4,5].map(i => <div key={i} className="app-card h-24 animate-pulse bg-slate-200/50"></div>)}
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-28 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse"></div>
+              ))}
             </div>
-            <div className="app-card h-80 animate-pulse bg-slate-200/50"></div>
+            <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse"></div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-               <div className="app-card lg:col-span-1 h-64 animate-pulse bg-slate-200/50"></div>
-               <div className="app-card lg:col-span-2 h-64 animate-pulse bg-slate-200/50"></div>
+              <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse lg:col-span-1"></div>
+              <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse lg:col-span-2"></div>
             </div>
           </div>
         ) : (
           <>
-            {/* KPI Cards and Chart Section (Summary Data) */}
+            {/* KPI Cards & Trend Chart Section */}
             {summaryError ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-center justify-between">
-                <p>Summary Data Error: {summaryError}</p>
-                <button onClick={() => void loadData(dateFrom, dateTo)} className="app-button-secondary rounded-lg px-3 py-1.5 border border-amber-300 bg-white">Retry Summary</button>
-              </div>
-            ) : summaryData.length === 0 ? (
-              <div className="flex h-32 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 flex-col gap-2">
-                <p>No summary data found for the selected range.</p>
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 flex items-center justify-between">
+                <p>Summary Error: {summaryError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadData(dateFrom, dateTo)}
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/30"
+                >
+                  Retry Summary
+                </button>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-                  <div className="app-card p-5">
-                    <p className="text-xs font-medium text-slate-500">Total Followers</p>
-                    <p className="mt-2 text-2xl font-semibold">{latestSummary?.followers?.toLocaleString() ?? "—"}</p>
-                  </div>
-                  <div className="app-card p-5">
-                    <p className="text-xs font-medium text-slate-500">Daily Increase</p>
-                    <p className={`mt-2 text-2xl font-semibold ${latestSummary && latestSummary.dailyIncrease !== null && latestSummary.dailyIncrease > 0 ? "text-green-600" : ""}`}>
-                      {latestSummary?.dailyIncrease !== null && latestSummary?.dailyIncrease !== undefined ? (latestSummary.dailyIncrease > 0 ? "+" : "") + latestSummary.dailyIncrease.toLocaleString() : "—"}
+                  {/* Card 1: Total Followers */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <p className="text-xs font-medium text-slate-400">Total Followers</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                      {targetDateSummary?.followers?.toLocaleString() ?? "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
                     </p>
                   </div>
-                  <div className="app-card p-5">
-                    <p className="text-xs font-medium text-slate-500">Targeted Reach</p>
-                    <p className="mt-2 text-2xl font-semibold">{latestSummary?.targetedReaches?.toLocaleString() ?? "—"}</p>
+
+                  {/* Card 2: Daily Increase */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <p className="text-xs font-medium text-slate-400">Daily Increase</p>
+                    <p
+                      className={`mt-2 text-2xl font-bold tracking-tight ${
+                        targetDateSummary && targetDateSummary.dailyIncrease !== null && targetDateSummary.dailyIncrease > 0
+                          ? "text-emerald-400"
+                          : targetDateSummary && targetDateSummary.dailyIncrease !== null && targetDateSummary.dailyIncrease < 0
+                          ? "text-rose-400"
+                          : "text-white"
+                      }`}
+                    >
+                      {targetDateSummary?.dailyIncrease !== null && targetDateSummary?.dailyIncrease !== undefined
+                        ? (targetDateSummary.dailyIncrease > 0 ? "+" : "") + targetDateSummary.dailyIncrease.toLocaleString()
+                        : "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {targetDateSummary?.dailyIncrease !== null ? "1-day comparison" : "Missing previous date"}
+                    </p>
                   </div>
-                  <div className="app-card p-5">
-                    <p className="text-xs font-medium text-slate-500">Blocks</p>
-                    <p className="mt-2 text-2xl font-semibold">{latestSummary?.blocks?.toLocaleString() ?? "—"}</p>
+
+                  {/* Card 3: Targeted Reach */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <p className="text-xs font-medium text-slate-400">Targeted Reach</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                      {targetDateSummary?.targetedReaches?.toLocaleString() ?? "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
+                    </p>
                   </div>
-                  <div className="app-card p-5">
-                    <p className="text-xs font-medium text-slate-500">Accounts Ready</p>
-                    <p className="mt-2 text-2xl font-semibold">{latestSummary?.accountsReady ?? 0} <span className="text-sm font-normal text-slate-400">/ {latestSummary?.accountsExpected ?? 0}</span></p>
+
+                  {/* Card 4: Blocks */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <p className="text-xs font-medium text-slate-400">Blocks</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                      {targetDateSummary?.blocks?.toLocaleString() ?? "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
+                    </p>
+                  </div>
+
+                  {/* Card 5: Accounts Ready */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm col-span-2 md:col-span-1">
+                    <p className="text-xs font-medium text-slate-400">Accounts Ready</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                      {targetDateSummary?.accountsReady ?? 0}
+                      <span className="text-sm font-normal text-slate-500">
+                        {" "}
+                        / {targetDateSummary?.accountsExpected ?? 0}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {targetDateSummary?.accountsMissing && targetDateSummary.accountsMissing > 0
+                        ? `${targetDateSummary.accountsMissing} missing`
+                        : targetDateSummary
+                        ? "All accounts ready"
+                        : "No snapshot"}
+                    </p>
                   </div>
                 </div>
 
-                {/* SVG Chart */}
-                <div className="app-card p-5">
-                  <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h3 className="font-semibold">Trend Analysis</h3>
-                    <div className="flex items-center gap-2 text-sm bg-slate-100 p-1 rounded-lg">
-                      <button onClick={() => setChartMetric("followers")} className={`px-3 py-1 rounded-md ${chartMetric === "followers" ? "bg-white shadow-sm font-medium" : "text-slate-500 hover:bg-slate-200"}`}>Followers</button>
-                      <button onClick={() => setChartMetric("targetedReaches")} className={`px-3 py-1 rounded-md ${chartMetric === "targetedReaches" ? "bg-white shadow-sm font-medium" : "text-slate-500 hover:bg-slate-200"}`}>Targeted Reach</button>
-                      <button onClick={() => setChartMetric("blocks")} className={`px-3 py-1 rounded-md ${chartMetric === "blocks" ? "bg-white shadow-sm font-medium" : "text-slate-500 hover:bg-slate-200"}`}>Blocks</button>
-                    </div>
-                  </div>
-                  <div className="h-64 w-full">
-                    <TrendChart data={summaryData} metric={chartMetric} />
-                  </div>
-                </div>
+                {/* Trend Chart Component */}
+                <TrendChart
+                  data={summaryData}
+                  metric={chartMetric}
+                  onMetricChange={setChartMetric}
+                />
               </div>
             )}
 
-            {/* Tables */}
+            {/* Tables Grid */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Daily Summary Table */}
-              <div className="app-card lg:col-span-1 overflow-hidden flex flex-col max-h-[600px]">
-                <div className="border-b border-slate-200 p-4">
-                  <h3 className="font-semibold">Daily Summary</h3>
-                </div>
-                {summaryError ? (
-                  <div className="p-8 text-center text-sm text-amber-800">Error loading daily summary</div>
-                ) : summaryData.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-slate-400">No daily summary data</div>
-                ) : (
-                  <div className="overflow-x-auto overflow-y-auto">
-                    <table className="w-full text-left text-sm min-w-max">
-                      <thead className="bg-slate-50 text-xs text-slate-500 sticky top-0 z-10">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Date</th>
-                          <th className="px-4 py-3 font-medium text-right">Followers</th>
-                          <th className="px-4 py-3 font-medium text-right">Increase</th>
-                          <th className="px-4 py-3 font-medium text-center">Ready</th>
-                          <th className="px-4 py-3 font-medium text-center">Missing</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {[...summaryData].reverse().map(row => (
-                          <tr key={row.date}>
-                            <td className="px-4 py-3 font-medium">{row.date}</td>
-                            <td className="px-4 py-3 text-right">{row.followers?.toLocaleString() ?? "—"}</td>
-                            <td className={`px-4 py-3 text-right font-medium ${row.dailyIncrease && row.dailyIncrease > 0 ? "text-green-600" : row.dailyIncrease && row.dailyIncrease < 0 ? "text-red-600" : ""}`}>
-                              {row.dailyIncrease !== null ? (row.dailyIncrease > 0 ? "+" : "") + row.dailyIncrease.toLocaleString() : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-center">{row.accountsReady ?? "—"}</td>
-                            <td className={`px-4 py-3 text-center ${row.accountsMissing && row.accountsMissing > 0 ? "text-amber-600 font-medium" : ""}`}>{row.accountsMissing ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <DailySummaryTable
+                summaryData={summaryData}
+                summaryError={summaryError}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+              />
 
-              {/* Store Breakdown Table */}
-              <div className="app-card lg:col-span-2 overflow-hidden flex flex-col max-h-[600px]">
-                <div className="border-b border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h3 className="font-semibold">Store Breakdown ({dateTo})</h3>
-                  {!storeError && storeData.length > 0 && (
-                    <input type="text" placeholder="Search stores..." value={storeSearch} onChange={e => setStoreSearch(e.target.value)} className="app-input rounded-md border px-3 py-1.5 text-sm w-full sm:w-64" />
-                  )}
-                </div>
-                {storeError ? (
-                  <div className="p-8 text-sm text-amber-800 flex flex-col items-center justify-center gap-2">
-                    <p>Error: {storeError}</p>
-                    <button onClick={() => void loadData(dateFrom, dateTo)} className="app-button-secondary rounded-lg px-3 py-1.5 border border-amber-300 bg-white">Retry Store Data</button>
-                  </div>
-                ) : storeData.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-slate-400">No store breakdown data</div>
-                ) : (
-                  <div className="overflow-x-auto overflow-y-auto">
-                    <table className="w-full text-left text-sm min-w-max">
-                      <thead className="bg-slate-50 text-xs text-slate-500 sticky top-0 z-10">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Store</th>
-                          <th className="font-medium p-0" aria-sort={storeSort === "accountName" ? (storeSortDir === "asc" ? "ascending" : "descending") : "none"}>
-                            <button className="flex items-center gap-1 w-full h-full px-4 py-3 hover:bg-slate-100" onClick={() => handleSort("accountName")}>
-                              LINE OA {storeSort==="accountName" && (storeSortDir==="asc"?"↑":"↓")}
-                            </button>
-                          </th>
-                          <th className="font-medium text-right p-0" aria-sort={storeSort === "followers" ? (storeSortDir === "asc" ? "ascending" : "descending") : "none"}>
-                            <button className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-slate-100" onClick={() => handleSort("followers")}>
-                              Followers {storeSort==="followers" && (storeSortDir==="asc"?"↑":"↓")}
-                            </button>
-                          </th>
-                          <th className="px-4 py-3 font-medium text-right text-slate-400">Start Followers</th>
-                          <th className="font-medium text-right p-0" aria-sort={storeSort === "periodIncrease" ? (storeSortDir === "asc" ? "ascending" : "descending") : "none"}>
-                            <button className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-slate-100" onClick={() => handleSort("periodIncrease")}>
-                              Period Increase {storeSort==="periodIncrease" && (storeSortDir==="asc"?"↑":"↓")}
-                            </button>
-                          </th>
-                          <th className="px-4 py-3 font-medium text-right">Targeted Reach</th>
-                          <th className="px-4 py-3 font-medium text-right">Blocks</th>
-                          <th className="px-4 py-3 font-medium text-center">Status</th>
-                          <th className="px-4 py-3 font-medium">Last Fetched</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredStores.map(row => (
-                          <tr key={row.lineOaId}>
-                            <td className="px-4 py-3 text-slate-500">{row.storeName}</td>
-                            <td className="px-4 py-3 font-medium">{row.accountName}</td>
-                            <td className="px-4 py-3 text-right">{row.followers?.toLocaleString() ?? "—"}</td>
-                            <td className="px-4 py-3 text-right text-slate-400">{row.startFollowers?.toLocaleString() ?? "—"}</td>
-                            <td className={`px-4 py-3 text-right font-medium ${row.periodIncrease && row.periodIncrease > 0 ? "text-green-600" : row.periodIncrease && row.periodIncrease < 0 ? "text-red-600" : ""}`}>
-                              {row.periodIncrease !== null ? (row.periodIncrease > 0 ? "+" : "") + row.periodIncrease.toLocaleString() : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-right">{row.targetedReaches?.toLocaleString() ?? "—"}</td>
-                            <td className="px-4 py-3 text-right">{row.blocks?.toLocaleString() ?? "—"}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${row.status === "ready" ? "bg-green-100 text-green-800" : row.status === "missing" ? "bg-slate-100 text-slate-800" : "bg-amber-100 text-amber-800"}`}>
-                                {row.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-slate-500">{formatBkkDateTime(row.fetchedAt)}</td>
-                          </tr>
-                        ))}
-                        {filteredStores.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-500">No stores found</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <StoreBreakdownTable
+                storeData={storeData}
+                storeError={storeError}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                onRetry={() => void loadData(dateFrom, dateTo)}
+              />
             </div>
           </>
         )}
-
       </div>
     </section>
-  );
-}
-
-function TrendChart({ data, metric }: { data: SummaryDailyRow[]; metric: "followers" | "targetedReaches" | "blocks" }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-
-  if (data.length === 0) return <div className="flex h-full items-center justify-center text-sm text-slate-400">No chart data available</div>;
-
-  const validVals = data.map(d => d[metric]).filter((v): v is number => v !== null);
-  const minVal = validVals.length ? Math.min(...validVals) : 0;
-  const maxVal = validVals.length ? Math.max(...validVals) : 100;
-  
-  const rangeVal = maxVal - minVal || 100;
-  const yMin = Math.max(0, minVal - rangeVal * 0.1);
-  const yMax = maxVal + rangeVal * 0.1;
-
-  const width = 800;
-  const height = 250;
-  const paddingX = 40;
-  const paddingY = 20;
-  const chartW = width - paddingX * 2;
-  const chartH = height - paddingY * 2;
-
-  const getX = (idx: number) => paddingX + (idx / Math.max(1, data.length - 1)) * chartW;
-  const getY = (val: number | null) => {
-    if (val === null) return null;
-    return height - paddingY - ((val - yMin) / (yMax - yMin)) * chartH;
-  };
-
-  const metricColor = metric === "followers" ? "#3b82f6" : metric === "targetedReaches" ? "#22c55e" : "#ef4444";
-  const metricLabel = metric === "followers" ? "Followers" : metric === "targetedReaches" ? "Targeted Reach" : "Blocks";
-
-  const buildSegments = () => {
-    const segments: string[] = [];
-    let cur = "";
-    for (let i = 0; i < data.length; i++) {
-      const v = data[i][metric];
-      if (v === null || v === undefined) {
-        if (cur) segments.push(cur);
-        cur = "";
-      } else {
-        const cx = getX(i);
-        const cy = getY(v);
-        if (!cur) cur = `M ${cx} ${cy}`;
-        else cur += ` L ${cx} ${cy}`;
-      }
-    }
-    if (cur) segments.push(cur);
-    return segments;
-  };
-  const pathSegments = buildSegments();
-
-  return (
-    <div className="relative h-full w-full" ref={containerRef}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" preserveAspectRatio="none" onMouseLeave={() => setHoverIdx(null)}>
-        {[0, 0.25, 0.5, 0.75, 1].map(pct => {
-          const y = paddingY + pct * chartH;
-          const val = Math.round(yMax - pct * (yMax - yMin));
-          return (
-            <g key={pct}>
-              <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="#e2e8f0" strokeDasharray="4 4" />
-              <text x={paddingX - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8">{val > 1000 ? (val/1000).toFixed(1)+'k' : val}</text>
-            </g>
-          );
-        })}
-
-        {pathSegments.map((dStr, i) => (
-          <path key={i} d={dStr} fill="none" stroke={metricColor} strokeWidth="2" strokeLinejoin="round" />
-        ))}
-
-        {data.map((d, i) => {
-          const x = getX(i);
-          return (
-            <rect
-              key={i}
-              x={x - chartW / data.length / 2}
-              y={paddingY}
-              width={chartW / data.length}
-              height={chartH}
-              fill="transparent"
-              onMouseEnter={() => setHoverIdx(i)}
-            />
-          );
-        })}
-
-        {hoverIdx !== null && (
-          <g>
-            <line x1={getX(hoverIdx)} y1={paddingY} x2={getX(hoverIdx)} y2={height - paddingY} stroke="#94a3b8" strokeDasharray="4 4" />
-            {data[hoverIdx][metric] !== null && <circle cx={getX(hoverIdx)} cy={getY(data[hoverIdx][metric] as number)!} r="4" fill={metricColor} stroke="white" strokeWidth="2" />}
-          </g>
-        )}
-      </svg>
-
-      {hoverIdx !== null && (
-        <div 
-          className="absolute pointer-events-none rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-xl"
-          style={{
-            left: `${((getX(hoverIdx) - paddingX + 20) / chartW) * 100}%`,
-            top: '10px',
-            transform: getX(hoverIdx) > width / 2 ? 'translateX(-100%) translateX(-40px)' : 'none',
-            zIndex: 10
-          }}
-        >
-          <p className="mb-2 font-bold text-slate-900">{data[hoverIdx].date}</p>
-          <div className="space-y-1">
-            <p className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{backgroundColor: metricColor}}></span> {metricLabel}</span> 
-              <span className="font-semibold">{data[hoverIdx][metric]?.toLocaleString() ?? "—"}</span>
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
