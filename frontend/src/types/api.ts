@@ -141,3 +141,50 @@ export type LineOaWebhookInfo = {
   webhookPath: string;
   oa: { id: string; name: string; store: string; isActive: boolean };
 };
+
+export type SummaryDailyRow = {
+  date: string;
+  followers: number | null;
+  targetedReaches: number | null;
+  blocks: number | null;
+  dailyIncrease: number | null;
+  accountsExpected: number;
+  accountsWithData: number;
+  accountsReady: number;
+  accountsUnready: number;
+  accountsMissing: number;
+};
+
+export type ByStoreAccountRow = {
+  lineOaId: string;
+  accountName: string;
+  storeId: string;
+  storeName: string;
+  date: string;
+  followers: number | null;
+  previousFollowers: number | null;
+  dailyIncrease: number | null;
+  targetedReaches: number | null;
+  blocks: number | null;
+  status: string;
+  fetchedAt: Date | string | null;
+};
+
+export type SyncBatchResult = {
+  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  totalDays?: number;
+  requested?: number;
+  succeeded?: number;
+  unready?: number;
+  failed?: number;
+  skipped?: number;
+  errors?: Array<{
+    lineOaId: string;
+    accountName: string;
+    date: string;
+    code: string;
+  }>;
+  results?: SyncBatchResult[];
+};

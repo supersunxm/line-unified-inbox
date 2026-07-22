@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -84,4 +84,12 @@ export const api = {
   removeLineOfficialAccount: (id: string) => request<{ outcome: "deleted" | "archived"; id: string }>(`/line-official-accounts/${id}`, { method: "DELETE" }),
   archiveLineOfficialAccount: (id: string) => request<{ outcome: "archived"; id: string }>(`/line-official-accounts/${id}/archive`, { method: "POST" }),
   restoreLineOfficialAccount: (id: string) => request<{ outcome: "restored"; id: string }>(`/line-official-accounts/${id}/restore`, { method: "POST" }),
+  followerInsightsSummary: (params: Record<string, string | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) if (value) query.append(key, value);
+    return request<SummaryDailyRow[]>(`/follower-insights/summary?${query.toString()}`);
+  },
+  followerInsightsByStore: (date: string) => request<ByStoreAccountRow[]>(`/follower-insights/by-store?date=${encodeURIComponent(date)}`),
+  followerInsightsSync: (date: string) => request<SyncBatchResult>("/follower-insights/sync", { method: "POST", body: JSON.stringify({ date }) }),
+  followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaIds?: string[] }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
 };

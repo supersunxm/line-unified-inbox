@@ -14,6 +14,7 @@ import { MessageImage } from "./message-image";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
+import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -2085,6 +2086,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <Link href="/stores" aria-current={primaryNavigation.storesActive ? "page" : undefined}>
               {text.storeManagement}
             </Link>
+            <Link href="/follower-insights" aria-current={primaryNavigation.followerInsightsActive ? "page" : undefined}>
+              {language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}
+            </Link>
           </nav>
         </div>
 
@@ -2402,6 +2406,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </div>
             </div>
           </section>
+        ) : initialSection === "follower-insights" ? (
+          <FollowerInsightsView />
         ) : (
           <>
         <section className="app-surface min-w-0 overflow-y-auto border-r">
