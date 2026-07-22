@@ -10,11 +10,14 @@ import {
 interface DateRangePickerProps {
   dateFrom: string;
   dateTo: string;
+  readyDates?: Set<string>;
+  partialDates?: Set<string>;
+  missingDates?: Set<string>;
   onApply: (start: string, end: string) => void;
   onQuickRange: (days: number) => void;
 }
 
-export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: DateRangePickerProps) {
+export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, missingDates, onApply, onQuickRange }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftStart, setDraftStart] = useState<string | null>(dateFrom);
   const [draftEnd, setDraftEnd] = useState<string | null>(dateTo);
@@ -152,7 +155,7 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
         ref={triggerRef}
         type="button"
         onClick={() => (isOpen ? setIsOpen(false) : handleOpenPopover())}
-        className="flex items-center gap-2.5 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-700 hover:bg-slate-800/80 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-950"
+        className="flex items-center gap-2.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--surface)] transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         aria-label="Select date range"
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -163,7 +166,7 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
         <span className="truncate">
           {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
         </span>
-        <svg className={`h-4 w-4 text-slate-400 transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className={`h-4 w-4 text-[var(--muted)] transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -175,12 +178,12 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
           role="dialog"
           aria-modal="true"
           aria-label="Date range calendar picker"
-          className="absolute right-0 top-full mt-2 z-50 w-[330px] md:w-[680px] max-w-[92vw] rounded-2xl border border-slate-800 bg-slate-900 p-4 md:p-5 shadow-2xl text-slate-100 animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
+          className="absolute right-0 top-full mt-2 z-50 w-[330px] md:w-[680px] max-w-[92vw] rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 md:p-5 shadow-2xl text-[var(--foreground)] animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
         >
           {/* Header Bar */}
-          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-800 mb-4 gap-2">
+          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-[var(--border)] mb-4 gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Range</span>
+              <span className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Select Range</span>
               <span className="text-xs font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
                 {draftStart ? formatDateDisplay(draftStart) : "Start date"} — {draftEnd ? formatDateDisplay(draftEnd) : "End date"}
               </span>
@@ -195,7 +198,7 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
                   setIsOpen(false);
                   triggerRef.current?.focus();
                 }}
-                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="rounded-lg bg-[var(--surface)] hover:bg-[var(--hover)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 7D
               </button>
@@ -206,7 +209,7 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
                   setIsOpen(false);
                   triggerRef.current?.focus();
                 }}
-                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="rounded-lg bg-[var(--surface)] hover:bg-[var(--hover)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 14D
               </button>
@@ -217,7 +220,7 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
                   setIsOpen(false);
                   triggerRef.current?.focus();
                 }}
-                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="rounded-lg bg-[var(--surface)] hover:bg-[var(--hover)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 30D
               </button>
@@ -238,6 +241,9 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
               draftStart={draftStart}
               draftEnd={draftEnd}
               todayIso={todayIso}
+              readyDates={readyDates}
+              partialDates={partialDates}
+              missingDates={missingDates}
               onDateClick={handleDateClick}
               onPrevMonth={prevMonth}
               onNextMonth={nextMonth}
@@ -251,6 +257,9 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
                 draftStart={draftStart}
                 draftEnd={draftEnd}
                 todayIso={todayIso}
+                readyDates={readyDates}
+                partialDates={partialDates}
+                missingDates={missingDates}
                 onDateClick={handleDateClick}
                 onPrevMonth={prevMonth}
                 onNextMonth={nextMonth}
@@ -261,13 +270,13 @@ export function DateRangePicker({ dateFrom, dateTo, onApply, onQuickRange }: Dat
           </div>
 
           {/* Footer Bar */}
-          <div className="mt-4 border-t border-slate-800 pt-3 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-slate-400">Max 90 calendar days range.</span>
+          <div className="mt-4 border-t border-[var(--border)] pt-3 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-[var(--muted)]">Max 90 calendar days range.</span>
             <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={handleCancelClick}
-                className="rounded-xl border border-slate-800 bg-slate-800 px-4 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--hover)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 Cancel
               </button>
@@ -292,6 +301,9 @@ function CalendarMonthGrid({
   draftStart,
   draftEnd,
   todayIso,
+  readyDates,
+  partialDates,
+  missingDates,
   onDateClick,
   onPrevMonth,
   onNextMonth,
@@ -302,6 +314,9 @@ function CalendarMonthGrid({
   draftStart: string | null;
   draftEnd: string | null;
   todayIso: string;
+  readyDates?: Set<string>;
+  partialDates?: Set<string>;
+  missingDates?: Set<string>;
   onDateClick: (isoStr: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
@@ -381,7 +396,7 @@ function CalendarMonthGrid({
           <button
             type="button"
             onClick={onPrevMonth}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
             aria-label="Previous month"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -398,7 +413,7 @@ function CalendarMonthGrid({
           <button
             type="button"
             onClick={onNextMonth}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
             aria-label="Next month"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -410,24 +425,28 @@ function CalendarMonthGrid({
         )}
       </div>
 
-      {/* Weekday Labels */}
-      <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 uppercase pb-2">
-        <span>Su</span>
-        <span>Mo</span>
-        <span>Tu</span>
-        <span>We</span>
-        <span>Th</span>
-        <span>Fr</span>
-        <span>Sa</span>
-      </div>
+      {/* Calendar Grid */}
+      <div role="grid" aria-label="Calendar">
+        {/* Weekday Labels */}
+        <div className="grid grid-cols-7 text-center text-[10px] font-bold text-[var(--muted)] uppercase pb-2" role="row">
+          <span role="columnheader">Su</span>
+          <span role="columnheader">Mo</span>
+          <span role="columnheader">Tu</span>
+          <span role="columnheader">We</span>
+          <span role="columnheader">Th</span>
+          <span role="columnheader">Fr</span>
+          <span role="columnheader">Sa</span>
+        </div>
 
-      {/* Day Cells Grid */}
-      <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
-        {daysArray.map((item, idx) => {
-          if (!item) {
-            return <div key={`empty-${idx}`} className="h-8"></div>;
-          }
-          const { dayNumber, isoStr } = item;
+        {/* Day Cells Grid */}
+        <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
+          {Array.from({ length: Math.ceil(daysArray.length / 7) }).map((_, weekIdx) => (
+            <div key={weekIdx} className="contents" role="row">
+              {daysArray.slice(weekIdx * 7, weekIdx * 7 + 7).map((item, colIdx) => {
+                if (!item) {
+                  return <div key={`empty-${weekIdx}-${colIdx}`} className="h-8" role="gridcell"></div>;
+                }
+                const { dayNumber, isoStr } = item;
           const isStart = draftStart === isoStr;
           const isEnd = draftEnd === isoStr;
           const isInRange = Boolean(draftStart && draftEnd && isoStr > draftStart && isoStr < draftEnd);
@@ -438,7 +457,7 @@ function CalendarMonthGrid({
             "h-8 w-full font-medium transition-colors flex items-center justify-center relative focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-10 ";
 
           if (isFuture) {
-            btnClass += "text-slate-600 cursor-not-allowed opacity-40";
+            btnClass += "text-[var(--disabled-foreground)] cursor-not-allowed opacity-40";
           } else if (isStart && isEnd) {
             btnClass += "bg-blue-600 text-white font-bold rounded-lg shadow-sm";
           } else if (isStart) {
@@ -448,29 +467,37 @@ function CalendarMonthGrid({
           } else if (isInRange) {
             btnClass += "bg-blue-600/20 text-blue-200 hover:bg-blue-600/30";
           } else {
-            btnClass += "text-slate-300 hover:bg-slate-800 rounded-lg";
+            btnClass += "text-[var(--foreground)] hover:bg-[var(--surface)] rounded-lg";
           }
 
           return (
-            <button
-              key={isoStr}
-              data-date={isoStr}
-              type="button"
-              disabled={isFuture}
-              onClick={() => onDateClick(isoStr)}
-              onKeyDown={(e) => handleKeyDown(e, isoStr)}
-              className={btnClass}
-              aria-label={isoStr}
-              aria-selected={isStart || isEnd || isInRange}
-              aria-current={isToday ? "date" : undefined}
-            >
-              {dayNumber}
-              {isToday && !isStart && !isEnd && (
-                <span className="absolute bottom-1 h-1 w-1 rounded-full bg-blue-400"></span>
-              )}
-            </button>
+            <div key={isoStr} role="gridcell" aria-selected={isStart || isEnd || isInRange}>
+              <button
+                data-date={isoStr}
+                type="button"
+                disabled={isFuture}
+                onClick={() => onDateClick(isoStr)}
+                onKeyDown={(e) => handleKeyDown(e, isoStr)}
+                className={btnClass}
+                aria-label={isoStr}
+                aria-current={isToday ? "date" : undefined}
+              >
+                <span className="relative z-10">{dayNumber}</span>
+                <div className="absolute bottom-[2px] flex justify-center w-full gap-[2px]">
+                  {readyDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-blue-500"></span>}
+                  {partialDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-amber-400"></span>}
+                  {missingDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full border border-[var(--muted)]"></span>}
+                  {isToday && !readyDates?.has(isoStr) && !partialDates?.has(isoStr) && !missingDates?.has(isoStr) && (
+                    <span className="h-[3px] w-[3px] rounded-full bg-blue-400"></span>
+                  )}
+                </div>
+              </button>
+            </div>
           );
         })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

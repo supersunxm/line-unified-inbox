@@ -15,7 +15,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
 
   if (data.length === 0) {
     return (
-      <div className="flex h-72 items-center justify-center text-sm text-slate-500">
+      <div className="flex h-72 items-center justify-center text-sm text-[var(--muted)]">
         No chart data available for the selected period
       </div>
     );
@@ -70,31 +70,31 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
   const pathSegments = buildSegments();
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
       {/* Header Controls */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Trend Analysis</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">Trend Analysis</h3>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
             Historical metrics preserving all calendar dates (gaps indicate unpopulated dates)
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
           {/* Chart Legend */}
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: metricColor }}></span>
               Available data
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full border border-dashed border-slate-500"></span>
+              <span className="h-2 w-2 rounded-full border border-dashed border-[var(--border)]"></span>
               No data
             </span>
           </div>
 
           {/* Metric Selector */}
-          <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 p-1">
+          <div className="flex items-center rounded-xl bg-[var(--input-background)] border border-[var(--border)] p-1">
             <button
               type="button"
               onClick={() => onMetricChange("followers")}
@@ -103,7 +103,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 metric === "followers"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
               }`}
             >
               Followers
@@ -116,7 +116,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 metric === "targetedReaches"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
               }`}
             >
               Targeted Reach
@@ -129,7 +129,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 metric === "blocks"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
               }`}
             >
               Blocks
@@ -142,7 +142,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
       <div className="relative h-72 w-full" ref={containerRef}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-full w-full overflow-visible"
+          className="h-full w-full overflow-visible text-[var(--muted)]"
           preserveAspectRatio="none"
           onMouseLeave={() => setHoverIdx(null)}
         >
@@ -151,9 +151,9 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
             const y = paddingY + pct * chartH;
             const val = Math.round(yMax - pct * (yMax - yMin));
             return (
-              <g key={pct}>
-                <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="#1e293b" strokeDasharray="4 4" />
-                <text x={paddingX - 10} y={y + 4} textAnchor="end" fontSize="10" fill="#64748b">
+              <g key={pct} className="opacity-40">
+                <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="currentColor" strokeDasharray="4 4" />
+                <text x={paddingX - 10} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor">
                   {val >= 1000 ? (val / 1000).toFixed(1) + "k" : val}
                 </text>
               </g>
@@ -165,7 +165,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
             if (data.length > 14 && i % Math.ceil(data.length / 7) !== 0 && i !== data.length - 1) return null;
             const x = getX(i);
             return (
-              <text key={i} x={x} y={height - 5} textAnchor="middle" fontSize="10" fill="#64748b">
+              <text key={i} x={x} y={height - 5} textAnchor="middle" fontSize="10" fill="currentColor">
                 {d.date.slice(5)}
               </text>
             );
@@ -190,7 +190,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
             if (val === null || val === undefined) return null;
             const x = getX(i);
             const y = getY(val)!;
-            return <circle key={i} cx={x} cy={y} r="3.5" fill={metricColor} stroke="#0f172a" strokeWidth="2" />;
+            return <circle key={i} cx={x} cy={y} r="3.5" fill={metricColor} stroke="var(--surface)" strokeWidth="2" />;
           })}
 
           {/* Invisible interactive hover hit areas */}
@@ -217,7 +217,8 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
                 y1={paddingY}
                 x2={getX(hoverIdx)}
                 y2={height - paddingY}
-                stroke="#475569"
+                stroke="currentColor"
+                className="opacity-60"
                 strokeDasharray="4 4"
               />
               {data[hoverIdx][metric] !== null && data[hoverIdx][metric] !== undefined && (
@@ -237,7 +238,7 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
         {/* Hover Tooltip */}
         {hoverIdx !== null && (
           <div
-            className="absolute pointer-events-none rounded-xl border border-slate-800 bg-slate-900/95 p-3 text-xs shadow-xl backdrop-blur-sm text-slate-100"
+            className="absolute pointer-events-none rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-3 text-xs shadow-xl backdrop-blur-sm text-[var(--foreground)]"
             style={{
               left: `${((getX(hoverIdx) - paddingX + 20) / chartW) * 100}%`,
               top: "10px",
@@ -245,17 +246,17 @@ export function TrendChart({ data, metric, onMetricChange }: TrendChartProps) {
               zIndex: 10,
             }}
           >
-            <p className="mb-2 font-bold text-white border-b border-slate-800 pb-1">{data[hoverIdx].date}</p>
+            <p className="mb-2 font-bold text-[var(--foreground)] border-b border-[var(--border)] pb-1">{data[hoverIdx].date}</p>
             <div className="space-y-1">
               <p className="flex items-center justify-between gap-4">
                 <span className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: metricColor }}></span> {metricLabel}
                 </span>
-                <span className="font-bold text-white">
+                <span className="font-bold text-[var(--foreground)]">
                   {data[hoverIdx][metric]?.toLocaleString() ?? "No data"}
                 </span>
               </p>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-[var(--muted)]">
                 Accounts Ready: {data[hoverIdx].accountsReady} / {data[hoverIdx].accountsExpected}
               </p>
             </div>

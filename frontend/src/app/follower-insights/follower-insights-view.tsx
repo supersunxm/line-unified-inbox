@@ -11,7 +11,7 @@ import {
   calculateCoverage,
   formatBkkDateTime,
   formatDateDisplay,
-  getBkkDateStr,
+  getBkkDateStr, getInclusiveCalendarDays,
 } from "./follower-insights-utils";
 
 export function FollowerInsightsView() {
@@ -42,6 +42,7 @@ export function FollowerInsightsView() {
   const [chartMetric, setChartMetric] = useState<"followers" | "targetedReaches" | "blocks">(
     "followers"
   );
+  const [showSyncMissingModal, setShowSyncMissingModal] = useState(false);
 
   const loadData = useCallback(async (start: string, end: string) => {
     const s = new Date(start).getTime();
@@ -107,6 +108,7 @@ export function FollowerInsightsView() {
     }
   };
 
+
   const applyQuickRange = (days: number) => {
     const end = new Date();
     const start = new Date();
@@ -115,6 +117,118 @@ export function FollowerInsightsView() {
     const eStr = getBkkDateStr(end);
     setDateFrom(sStr);
     setDateTo(eStr);
+  };
+
+  const { readyDates, partialDates, missingDates } = useMemo(() => {
+    const ready = new Set<string>();
+    const partial = new Set<string>();
+    const missing = new Set<string>();
+
+    for (const r of summaryData) {
+      const followersValid = r.followers !== null && r.followers !== undefined;
+      const readyCount = r.accountsReady ?? 0;
+      const expectedCount = r.accountsExpected ?? 0;
+
+      if (followersValid && readyCount === expectedCount && expectedCount > 0) {
+        ready.add(r.date);
+      } else if (followersValid && readyCount > 0 && readyCount < expectedCount) {
+        partial.add(r.date);
+      } else {
+        missing.add(r.date);
+      }
+    }
+    return { readyDates: ready, partialDates: partial, missingDates: missing };
+  }, [summaryData]);
+
+  const missingDateRanges = useMemo(() => {
+    if (missingDates.size === 0) return [];
+    const inRange = Array.from(missingDates).filter(d => d >= dateFrom && d <= dateTo).sort();
+    if (inRange.length === 0) return [];
+
+    const ranges: { start: string; end: string }[] = [];
+    let currentStart = inRange[0];
+    let currentEnd = inRange[0];
+
+    for (let i = 1; i < inRange.length; i++) {
+      const prevDate = new Date(currentEnd);
+      prevDate.setDate(prevDate.getDate() + 1);
+      const nextStr = getBkkDateStr(prevDate);
+
+      if (inRange[i] === nextStr) {
+        currentEnd = inRange[i];
+      } else {
+        ranges.push({ start: currentStart, end: currentEnd });
+        currentStart = inRange[i];
+        currentEnd = inRange[i];
+      }
+    }
+    ranges.push({ start: currentStart, end: currentEnd });
+    return ranges;
+  }, [missingDates, dateFrom, dateTo]);
+
+  const endpointsUsable = readyDates.has(dateFrom) && readyDates.has(dateTo);
+
+  const totalMissingDays = useMemo(
+    () => missingDateRanges.reduce((acc, r) => acc + getInclusiveCalendarDays(r.start, r.end), 0),
+    [missingDateRanges]
+  );
+
+  const expectedAccounts = storeData.length || summaryData[0]?.accountsExpected || 35;
+  const maxLineApiCalls = totalMissingDays * expectedAccounts;
+
+  const handleSyncMissing = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncError(null);
+    let totalRequested = 0;
+    let totalSucceeded = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+    let totalUnready = 0;
+    const errors: { lineOaId: string; accountName: string; date: string; code: string }[] = [];
+
+    try {
+      for (const range of missingDateRanges) {
+        try {
+          const res = await api.followerInsightsBackfill({ dateFrom: range.start, dateTo: range.end });
+          if (res.results) {
+            for (const r of res.results) {
+              totalRequested += r.requested ?? 0;
+              totalSucceeded += r.succeeded ?? 0;
+              totalFailed += r.failed ?? 0;
+              totalSkipped += r.skipped ?? 0;
+              totalUnready += r.unready ?? 0;
+              if (r.errors) errors.push(...r.errors);
+            }
+          }
+        } catch (rangeErr) {
+          totalFailed += 1;
+          errors.push({
+            lineOaId: "ALL",
+            accountName: "System",
+            date: `${range.start} - ${range.end}`,
+            code: rangeErr instanceof Error ? rangeErr.message : "Range backfill failed",
+          });
+        }
+      }
+      setSyncResult({
+        dateFrom: missingDateRanges[0]?.start,
+        dateTo: missingDateRanges[missingDateRanges.length - 1]?.end,
+        totalDays: totalMissingDays,
+        requested: totalRequested,
+        succeeded: totalSucceeded,
+        failed: totalFailed,
+        skipped: totalSkipped,
+        unready: totalUnready,
+        errors,
+      });
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Backfill failed");
+    } finally {
+      setSyncing(false);
+      setShowSyncMissingModal(false);
+      void loadData(dateFrom, dateTo);
+    }
   };
 
   const { totalCalendarDays, usableDays, coveragePct, hasMissingDates } = useMemo(
@@ -128,24 +242,24 @@ export function FollowerInsightsView() {
   }, [summaryData, dateTo]);
 
   return (
-    <section className="app-content-section col-span-2 overflow-y-auto bg-slate-950 text-slate-100 min-h-screen">
+    <section className="app-content-section col-span-2 overflow-y-auto bg-[var(--background)] text-[var(--foreground)] min-h-screen">
       <div className="mx-auto max-w-7xl space-y-6 pb-20 p-4 md:p-6">
         {/* Header Section */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-800 pb-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-[var(--border)] pb-6">
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold tracking-tight text-white">Follower Insights</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Follower Insights</h2>
               {hasMissingDates && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400 ring-1 ring-inset ring-amber-500/30">
-                  <svg className="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/30">
+                  <svg className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   Partial data available
                 </span>
               )}
             </div>
-            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-              <span className="font-medium text-slate-300">
+            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+              <span className="font-medium text-[var(--foreground)]">
                 {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
               </span>
               <span>•</span>
@@ -153,13 +267,13 @@ export function FollowerInsightsView() {
                 Data coverage: {usableDays} of {totalCalendarDays} days ({coveragePct}%)
               </span>
               <span>•</span>
-              <span className="inline-flex items-center gap-1.5 text-slate-400">
+              <span className="inline-flex items-center gap-1.5 text-[var(--muted)]">
                 Last refreshed: {lastRefreshedAt ? formatBkkDateTime(lastRefreshedAt) : "—"}
                 <button
                   type="button"
                   onClick={() => void loadData(dateFrom, dateTo)}
                   disabled={loading}
-                  className="rounded-md p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+                  className="rounded-md p-1 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
                   title="Refresh data"
                   aria-label="Refresh data"
                 >
@@ -174,12 +288,12 @@ export function FollowerInsightsView() {
           {/* Date Controls & Sync Button */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Quick Range Pills */}
-            <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-1">
+            <div className="flex items-center rounded-xl bg-[var(--input-background)] border border-[var(--border)] p-1">
               <button
                 type="button"
                 onClick={() => applyQuickRange(7)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 7 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  totalCalendarDays === 7 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
                 }`}
               >
                 7D
@@ -188,7 +302,7 @@ export function FollowerInsightsView() {
                 type="button"
                 onClick={() => applyQuickRange(14)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 14 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  totalCalendarDays === 14 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
                 }`}
               >
                 14D
@@ -197,7 +311,7 @@ export function FollowerInsightsView() {
                 type="button"
                 onClick={() => applyQuickRange(30)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 30 ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  totalCalendarDays === 30 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
                 }`}
               >
                 30D
@@ -208,6 +322,9 @@ export function FollowerInsightsView() {
             <DateRangePicker
               dateFrom={dateFrom}
               dateTo={dateTo}
+              readyDates={readyDates}
+              partialDates={partialDates}
+              missingDates={missingDates}
               onApply={(start, end) => {
                 setDateFrom(start);
                 setDateTo(end);
@@ -215,34 +332,59 @@ export function FollowerInsightsView() {
               onQuickRange={applyQuickRange}
             />
 
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={syncing || loading}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 disabled:opacity-50 transition-all"
-            >
-              {syncing ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Syncing...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Sync Selected Date</span>
-                </>
-              )}
-            </button>
+            {hasMissingDates ? (
+              <button
+                type="button"
+                onClick={handleSyncMissing}
+                disabled={syncing || loading}
+                className="flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-amber-600/20 hover:bg-amber-500 disabled:opacity-50 transition-all"
+              >
+                {syncing ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Syncing missing...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                    </svg>
+                    <span>Sync Missing Dates</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={syncing || loading}
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 disabled:opacity-50 transition-all"
+              >
+                {syncing ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Syncing...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Sync Selected Date</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
         {/* Validation Error Banner */}
         {validationError && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400 flex items-center gap-2">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
             <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -252,20 +394,20 @@ export function FollowerInsightsView() {
 
         {/* Sync Error Banner */}
         {syncError && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400">
             Sync Error: {syncError}
           </div>
         )}
 
         {/* Sync Result Toast */}
         {syncResult && (
-          <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">
-            <p className="font-semibold text-white">Sync complete for {syncResult.date}</p>
-            <p className="mt-1 text-slate-300">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
+            <p className="font-semibold text-[var(--foreground)]">Sync complete</p>
+            <p className="mt-1 text-[var(--muted)]">
               Requested: {syncResult.requested} | Succeeded: {syncResult.succeeded} | Unready: {syncResult.unready} | Failed: {syncResult.failed} | Skipped: {syncResult.skipped}
             </p>
             {syncResult.errors && syncResult.errors.length > 0 && (
-              <ul className="mt-2 list-inside list-disc text-xs text-red-400">
+              <ul className="mt-2 list-inside list-disc text-xs text-red-600 dark:text-red-400">
                 {syncResult.errors.map((e, i) => (
                   <li key={i}>
                     {e.accountName}: {e.code}
@@ -281,98 +423,98 @@ export function FollowerInsightsView() {
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-28 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse"></div>
+                <div key={i} className="h-28 rounded-2xl bg-[var(--surface)] border border-[var(--border)] animate-pulse"></div>
               ))}
             </div>
-            <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse"></div>
+            <div className="h-80 rounded-2xl bg-[var(--surface)] border border-[var(--border)] animate-pulse"></div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse lg:col-span-1"></div>
-              <div className="h-80 rounded-2xl bg-slate-900 border border-slate-800 animate-pulse lg:col-span-2"></div>
+              <div className="h-80 rounded-2xl bg-[var(--surface)] border border-[var(--border)] animate-pulse lg:col-span-1"></div>
+              <div className="h-80 rounded-2xl bg-[var(--surface)] border border-[var(--border)] animate-pulse lg:col-span-2"></div>
             </div>
           </div>
         ) : (
           <>
             {/* KPI Cards & Trend Chart Section */}
             {summaryError ? (
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 flex items-center justify-between">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center justify-between">
                 <p>Summary Error: {summaryError}</p>
-                <button
-                  type="button"
-                  onClick={() => void loadData(dateFrom, dateTo)}
-                  className="rounded-xl border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/30"
-                >
-                  Retry Summary
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSyncMissingModal(true)}
+                    className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 shadow-sm transition-colors"
+                  >
+                    Sync Missing Dates ({missingDateRanges.reduce((acc, r) => acc + getInclusiveCalendarDays(r.start, r.end), 0)})
+                  </button>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                   {/* Card 1: Total Followers */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <p className="text-xs font-medium text-slate-400">Total Followers</p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <p className="text-xs font-medium text-[var(--muted)]">Total Followers</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.followers?.toLocaleString() ?? "—"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
                     </p>
                   </div>
 
                   {/* Card 2: Daily Increase */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <p className="text-xs font-medium text-slate-400">Daily Increase</p>
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <p className="text-xs font-medium text-[var(--muted)]">Daily Increase</p>
                     <p
                       className={`mt-2 text-2xl font-bold tracking-tight ${
                         targetDateSummary && targetDateSummary.dailyIncrease !== null && targetDateSummary.dailyIncrease > 0
-                          ? "text-emerald-400"
+                          ? "text-emerald-600 dark:text-emerald-400"
                           : targetDateSummary && targetDateSummary.dailyIncrease !== null && targetDateSummary.dailyIncrease < 0
-                          ? "text-rose-400"
-                          : "text-white"
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-[var(--foreground)]"
                       }`}
                     >
                       {targetDateSummary?.dailyIncrease !== null && targetDateSummary?.dailyIncrease !== undefined
                         ? (targetDateSummary.dailyIncrease > 0 ? "+" : "") + targetDateSummary.dailyIncrease.toLocaleString()
                         : "—"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary?.dailyIncrease !== null ? "1-day comparison" : "Missing previous date"}
                     </p>
                   </div>
 
                   {/* Card 3: Targeted Reach */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <p className="text-xs font-medium text-slate-400">Targeted Reach</p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <p className="text-xs font-medium text-[var(--muted)]">Targeted Reach</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.targetedReaches?.toLocaleString() ?? "—"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
                     </p>
                   </div>
 
                   {/* Card 4: Blocks */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <p className="text-xs font-medium text-slate-400">Blocks</p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <p className="text-xs font-medium text-[var(--muted)]">Blocks</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.blocks?.toLocaleString() ?? "—"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
                     </p>
                   </div>
 
                   {/* Card 5: Accounts Ready */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-sm col-span-2 md:col-span-1">
-                    <p className="text-xs font-medium text-slate-400">Accounts Ready</p>
-                    <p className="mt-2 text-2xl font-bold tracking-tight text-white">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm col-span-2 md:col-span-1">
+                    <p className="text-xs font-medium text-[var(--muted)]">Accounts Ready</p>
+                    <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.accountsReady ?? 0}
-                      <span className="text-sm font-normal text-slate-500">
+                      <span className="text-sm font-normal text-[var(--muted)]">
                         {" "}
                         / {targetDateSummary?.accountsExpected ?? 0}
                       </span>
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary?.accountsMissing && targetDateSummary.accountsMissing > 0
                         ? `${targetDateSummary.accountsMissing} missing`
                         : targetDateSummary
@@ -400,17 +542,105 @@ export function FollowerInsightsView() {
                 dateTo={dateTo}
               />
 
-              <StoreBreakdownTable
-                storeData={storeData}
-                storeError={storeError}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                onRetry={() => void loadData(dateFrom, dateTo)}
-              />
+              <div className="lg:col-span-2">
+                {!endpointsUsable && (
+                  <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+                    <strong>Warning:</strong> Selected range endpoints contain missing or partial data. Period Increase cannot be calculated accurately.
+                  </div>
+                )}
+                <StoreBreakdownTable
+                  storeData={storeData}
+                  storeError={storeError}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  endpointsUsable={endpointsUsable}
+                  onRetry={() => void loadData(dateFrom, dateTo)}
+                />
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {/* Sync Missing Dates Modal */}
+      {showSyncMissingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95"
+          >
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-2">Sync Missing Dates</h2>
+              <p className="text-sm text-[var(--muted)] mb-4">
+                This action will request LINE APIs to fetch historical follower insights for missing dates within your selected range.
+              </p>
+
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl p-4 mb-4 space-y-3 text-xs">
+                <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                  <span className="text-[var(--muted)]">Selected Range:</span>
+                  <span className="font-semibold text-[var(--foreground)]">{dateFrom} to {dateTo}</span>
+                </div>
+                <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                  <span className="text-[var(--muted)]">Exact Missing Days:</span>
+                  <span className="font-semibold text-[var(--foreground)]">{totalMissingDays} day(s)</span>
+                </div>
+                <div className="flex justify-between border-b border-[var(--border)] pb-2">
+                  <span className="text-[var(--muted)]">Target Accounts:</span>
+                  <span className="font-semibold text-[var(--foreground)]">{expectedAccounts} account(s)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted)]">Est. Max LINE API Calls:</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
+                    ~{maxLineApiCalls.toLocaleString()} requests ({totalMissingDays} days × {expectedAccounts} accounts)
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl p-4 mb-6">
+                <div className="mb-2 text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Contiguous Missing Ranges</div>
+                <ul className="space-y-1 text-sm font-medium">
+                  {missingDateRanges.map((r, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                      {r.start === r.end ? r.start : `${r.start} to ${r.end}`} ({getInclusiveCalendarDays(r.start, r.end)} days)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex gap-3 justify-end mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowSyncMissingModal(false)}
+                  disabled={syncing}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-[var(--border)] hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSyncMissing}
+                  disabled={syncing || missingDateRanges.length === 0}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {syncing ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Syncing...
+                    </>
+                  ) : (
+                    "Confirm Sync"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
