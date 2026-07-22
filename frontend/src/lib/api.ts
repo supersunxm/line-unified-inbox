@@ -89,7 +89,7 @@ export const api = {
     for (const [key, value] of Object.entries(params)) if (value) query.append(key, value);
     return request<SummaryDailyRow[]>(`/follower-insights/summary?${query.toString()}`);
   },
-  followerInsightsByStore: (date: string) => request<ByStoreAccountRow[]>(`/follower-insights/by-store?date=${encodeURIComponent(date)}`),
+  followerInsightsByStore: (dateFrom: string, dateTo: string) => request<ByStoreAccountRow[]>(`/follower-insights/by-store?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`),
   followerInsightsSync: (date: string) => request<SyncBatchResult>("/follower-insights/sync", { method: "POST", body: JSON.stringify({ date }) }),
   followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaIds?: string[] }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
 };

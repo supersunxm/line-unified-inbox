@@ -163,7 +163,9 @@ export type ByStoreAccountRow = {
   date: string;
   followers: number | null;
   previousFollowers: number | null;
+  startFollowers: number | null;
   dailyIncrease: number | null;
+  periodIncrease: number | null;
   targetedReaches: number | null;
   blocks: number | null;
   status: string;

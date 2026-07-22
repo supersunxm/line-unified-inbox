@@ -340,3 +340,81 @@ void test("missing by-store rows have fetchedAt null and status missing", async 
   assert.notEqual(readyRow.fetchedAt, null);
   assert.equal(readyRow.followers, 300);
 });
+
+test("getByStore range comparison logic and OPPO regression fixture", async () => {
+  let findManyArgs: any = null;
+
+  const mockPrisma = {
+    lineOfficialAccount: {
+      findMany: (args: any) => {
+        findManyArgs = args;
+        return Promise.resolve([
+          {
+            id: "oppo-chonburi",
+            name: "OPPO BS RBS Chonburi",
+            store: { id: "store1", name: "Store 1" },
+            followerSnapshots: [
+              { status: "ready", followers: 6866, snapshotDate: toUtcDateForDb("2026-06-30") },
+              { status: "ready", followers: 6879, snapshotDate: toUtcDateForDb("2026-07-01") },
+              { status: "ready", followers: 7151, snapshotDate: toUtcDateForDb("2026-07-15") },
+            ],
+          },
+          {
+            id: "oa2", // Missing start snapshot
+            name: "Account 2",
+            store: { id: "store1", name: "Store 1" },
+            followerSnapshots: [
+              { status: "ready", followers: 150, snapshotDate: toUtcDateForDb("2026-07-15") },
+            ],
+          },
+          {
+            id: "oa4", // Same date dateFrom/dateTo resulting in zero increase
+            name: "Account 4",
+            store: { id: "store1", name: "Store 1" },
+            followerSnapshots: [
+              { status: "ready", followers: 100, snapshotDate: toUtcDateForDb("2026-07-15") },
+              { status: "ready", followers: 100, snapshotDate: toUtcDateForDb("2026-07-15") }, // duplicate for same date handling test
+            ],
+          }
+        ]);
+      },
+    },
+    lineOaFollowerSnapshot: {
+      findFirst: () => Promise.resolve(null),
+    },
+  } as unknown as PrismaService;
+
+  const mockEncryption = { decrypt: (val: string) => val } as unknown as CredentialEncryptionService;
+  const service = new FollowerInsightsService(mockPrisma, mockEncryption);
+
+  // 1. Normal range 07-01 to 07-15
+  const rows = await service.getByStore({ dateFrom: "2026-07-01", dateTo: "2026-07-15" });
+
+  // Verify Prisma findMany args
+  assert.ok(findManyArgs, "findMany should be called");
+  const inCondition = findManyArgs?.include?.followerSnapshots?.where?.snapshotDate?.in;
+  assert.ok(inCondition, "followerSnapshots query should use 'in' operator");
+  assert.equal(inCondition.length, 2, "followerSnapshots should query exactly 2 dates");
+  assert.equal(inCondition[0].getTime(), toUtcDateForDb("2026-07-01").getTime(), "Start date must be exactly 2026-07-01");
+  assert.equal(inCondition[1].getTime(), toUtcDateForDb("2026-07-15").getTime(), "End date must be exactly 2026-07-15");
+  // Proves that 2026-06-30 is not queried
+
+  // Assert OPPO fixture values
+  const oppo = rows.find(r => r.lineOaId === "oppo-chonburi");
+  assert.ok(oppo, "OPPO account must exist in result");
+  assert.equal(oppo.startFollowers, 6879, "startFollowers must be 6879 (not 6866)");
+  assert.equal(oppo.followers, 7151, "currentFollowers must be 7151");
+  assert.equal(oppo.periodIncrease, 272, "periodIncrease must be 7151 - 6879 = 272");
+
+  const oa2 = rows.find(r => r.lineOaId === "oa2");
+  assert.equal(oa2?.startFollowers, null, "oa2 missing startFollowers should be null");
+  assert.equal(oa2?.periodIncrease, null, "oa2 missing periodIncrease should be null");
+  assert.equal(oa2?.status, "missing-baseline", "oa2 missing start should indicate missing-baseline");
+
+  // 2. Same date range 07-15 to 07-15
+  const rowsSameDate = await service.getByStore({ dateFrom: "2026-07-15", dateTo: "2026-07-15" });
+  const oa4 = rowsSameDate.find(r => r.lineOaId === "oa4");
+  assert.equal(oa4?.startFollowers, 100, "oa4 startFollowers");
+  assert.equal(oa4?.followers, 100, "oa4 currentFollowers");
+  assert.equal(oa4?.periodIncrease, 0, "oa4 same date resulting in zero increase");
+});

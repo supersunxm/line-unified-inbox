@@ -42,7 +42,7 @@ export function FollowerInsightsView() {
   const [syncError, setSyncError] = useState<string | null>(null);
   
   const [storeSearch, setStoreSearch] = useState("");
-  const [storeSort, setStoreSort] = useState<"dailyIncrease" | "followers" | "accountName">("dailyIncrease");
+  const [storeSort, setStoreSort] = useState<"periodIncrease" | "followers" | "accountName">("periodIncrease");
   const [storeSortDir, setStoreSortDir] = useState<"asc" | "desc">("desc");
 
   const [chartMetric, setChartMetric] = useState<"followers" | "targetedReaches" | "blocks">("followers");
@@ -76,7 +76,7 @@ export function FollowerInsightsView() {
     }
 
     try {
-      const stores = await api.followerInsightsByStore(end);
+      const stores = await api.followerInsightsByStore(start, end);
       setStoreData(stores);
       storeSucceeded = true;
     } catch (err) {
@@ -140,7 +140,7 @@ export function FollowerInsightsView() {
     return res;
   }, [storeData, storeSearch, storeSort, storeSortDir]);
 
-  const handleSort = (field: "dailyIncrease" | "followers" | "accountName") => {
+  const handleSort = (field: "periodIncrease" | "followers" | "accountName") => {
     setStoreSortDir(d => storeSort === field && d === "desc" ? "asc" : "desc");
     setStoreSort(field);
   };
@@ -346,10 +346,10 @@ export function FollowerInsightsView() {
                               Followers {storeSort==="followers" && (storeSortDir==="asc"?"↑":"↓")}
                             </button>
                           </th>
-                          <th className="px-4 py-3 font-medium text-right text-slate-400">Prev Followers</th>
-                          <th className="font-medium text-right p-0" aria-sort={storeSort === "dailyIncrease" ? (storeSortDir === "asc" ? "ascending" : "descending") : "none"}>
-                            <button className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-slate-100" onClick={() => handleSort("dailyIncrease")}>
-                              Increase {storeSort==="dailyIncrease" && (storeSortDir==="asc"?"↑":"↓")}
+                          <th className="px-4 py-3 font-medium text-right text-slate-400">Start Followers</th>
+                          <th className="font-medium text-right p-0" aria-sort={storeSort === "periodIncrease" ? (storeSortDir === "asc" ? "ascending" : "descending") : "none"}>
+                            <button className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-slate-100" onClick={() => handleSort("periodIncrease")}>
+                              Period Increase {storeSort==="periodIncrease" && (storeSortDir==="asc"?"↑":"↓")}
                             </button>
                           </th>
                           <th className="px-4 py-3 font-medium text-right">Targeted Reach</th>
@@ -364,9 +364,9 @@ export function FollowerInsightsView() {
                             <td className="px-4 py-3 text-slate-500">{row.storeName}</td>
                             <td className="px-4 py-3 font-medium">{row.accountName}</td>
                             <td className="px-4 py-3 text-right">{row.followers?.toLocaleString() ?? "—"}</td>
-                            <td className="px-4 py-3 text-right text-slate-400">{row.previousFollowers?.toLocaleString() ?? "—"}</td>
-                            <td className={`px-4 py-3 text-right font-medium ${row.dailyIncrease && row.dailyIncrease > 0 ? "text-green-600" : row.dailyIncrease && row.dailyIncrease < 0 ? "text-red-600" : ""}`}>
-                              {row.dailyIncrease !== null ? (row.dailyIncrease > 0 ? "+" : "") + row.dailyIncrease.toLocaleString() : "—"}
+                            <td className="px-4 py-3 text-right text-slate-400">{row.startFollowers?.toLocaleString() ?? "—"}</td>
+                            <td className={`px-4 py-3 text-right font-medium ${row.periodIncrease && row.periodIncrease > 0 ? "text-green-600" : row.periodIncrease && row.periodIncrease < 0 ? "text-red-600" : ""}`}>
+                              {row.periodIncrease !== null ? (row.periodIncrease > 0 ? "+" : "") + row.periodIncrease.toLocaleString() : "—"}
                             </td>
                             <td className="px-4 py-3 text-right">{row.targetedReaches?.toLocaleString() ?? "—"}</td>
                             <td className="px-4 py-3 text-right">{row.blocks?.toLocaleString() ?? "—"}</td>
