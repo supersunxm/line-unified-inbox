@@ -271,28 +271,29 @@ model StoreMaster {
 }
 
 model LineOfficialAccount {
-  id                          String                 @id @default(uuid())
-  webhookKey                  String                 @unique
+  id                          String                   @id @default(uuid())
+  webhookKey                  String                   @unique
   name                        String
-  basicId                     String?                @unique
-  channelId                   String?                @unique
-  destinationId               String?                @unique
+  basicId                     String?                  @unique
+  channelId                   String?                  @unique
+  destinationId               String?                  @unique
   encryptedChannelSecret      String?
   encryptedChannelAccessToken String?
   lineChatWorkspaceUrl        String?
-  connectionStatus            LineOaConnectionStatus @default(NOT_CONFIGURED)
+  connectionStatus            LineOaConnectionStatus   @default(NOT_CONFIGURED)
   lastWebhookReceivedAt       DateTime?
   lastConnectionTestAt        DateTime?
   lastConnectionError         String?
   storeId                     String
-  isActive                    Boolean                @default(true)
+  isActive                    Boolean                  @default(true)
   archivedAt                  DateTime?
-  createdAt                   DateTime               @default(now())
-  updatedAt                   DateTime               @updatedAt
-  store                       Store                  @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+  store                       Store                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   conversations               Conversation[]
   webhookEvents               WebhookEvent[]
   pilotChecklist              PilotChecklistItem[]
+  followerSnapshots           LineOaFollowerSnapshot[]
 
   @@index([storeId, isActive])
 }
@@ -417,29 +418,29 @@ model WebhookEvent {
 }
 
 model ProductSeries {
-  id        String         @id @default(uuid())
-  name      String         @unique
-  isActive  Boolean        @default(true)
-  productGroup ProductGroup @default(UNKNOWN)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  models    ProductModel[]
+  id           String         @id @default(uuid())
+  name         String         @unique
+  isActive     Boolean        @default(true)
+  productGroup ProductGroup   @default(UNKNOWN)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  models       ProductModel[]
 
   @@index([isActive])
 }
 
 model ProductModel {
-  id              String                @id @default(uuid())
-  name            String                @unique
-  productSeriesId String
-  isActive        Boolean               @default(true)
-  classificationLevel String            @default("MODEL")
-  priority        Int                   @default(0)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  productSeries   ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
-  conversations   ConversationProduct[]
-  aliases         ProductAlias[]
+  id                  String                @id @default(uuid())
+  name                String                @unique
+  productSeriesId     String
+  isActive            Boolean               @default(true)
+  classificationLevel String                @default("MODEL")
+  priority            Int                   @default(0)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  productSeries       ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
+  conversations       ConversationProduct[]
+  aliases             ProductAlias[]
 
   @@index([isActive])
   @@index([productSeriesId])
@@ -459,15 +460,15 @@ model ProductAlias {
 }
 
 model ConversationProduct {
-  conversationId String
-  productModelId String
-  confidence     Float?
-  source         String?
-  matchedPhrase  String?
+  conversationId  String
+  productModelId  String
+  confidence      Float?
+  source          String?
+  matchedPhrase   String?
   detectionMethod String?
   sourceMessageId String?
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  productModel   ProductModel @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Restrict)
 
   @@id([conversationId, productModelId])
   @@index([productModelId])
@@ -523,4 +524,23 @@ model ActivityHistory {
 
   @@index([conversationId, createdAt])
   @@index([createdAt])
+}
+
+model LineOaFollowerSnapshot {
+  id              String   @id @default(uuid())
+  lineOaId        String
+  snapshotDate    DateTime @db.Date
+  status          String
+  followers       Int?
+  targetedReaches Int?
+  blocks          Int?
+  fetchedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+
+  @@unique([lineOaId, snapshotDate])
+  @@index([snapshotDate])
+  @@index([lineOaId])
 }
