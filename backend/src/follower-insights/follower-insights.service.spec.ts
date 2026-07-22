@@ -48,10 +48,11 @@ void test("invalid calendar dates are rejected without JS Date rollover", () => 
   assert.throws(() => formatToIsoDate("2026-02-29"), /Invalid calendar date/);
 });
 
-void test("summary dailyIncrease uses most recent earlier ready snapshot", async () => {
+void test("summary dailyIncrease only compares with exact previous Bangkok calendar date", async () => {
   const fakeSnapshots = [
     { lineOaId: "oa1", snapshotDate: toUtcDateForDb("2026-07-01"), status: "ready", followers: 100, targetedReaches: 50, blocks: 5 },
-    { lineOaId: "oa1", snapshotDate: toUtcDateForDb("2026-07-03"), status: "ready", followers: 120, targetedReaches: 60, blocks: 6 },
+    { lineOaId: "oa1", snapshotDate: toUtcDateForDb("2026-07-02"), status: "ready", followers: 110, targetedReaches: 55, blocks: 5 },
+    { lineOaId: "oa1", snapshotDate: toUtcDateForDb("2026-07-04"), status: "ready", followers: 130, targetedReaches: 65, blocks: 7 },
   ];
 
   const mockPrisma = {
@@ -60,35 +61,29 @@ void test("summary dailyIncrease uses most recent earlier ready snapshot", async
     },
     lineOaFollowerSnapshot: {
       findMany: () => Promise.resolve(fakeSnapshots),
-      findFirst: (params: { where: { lineOaId: string; status: string; snapshotDate: { lt: Date } } }) => {
-        const matching = fakeSnapshots
-          .filter(
-            (s) =>
-              s.lineOaId === params.where.lineOaId &&
-              s.status === "ready" &&
-              s.snapshotDate.getTime() < params.where.snapshotDate.lt.getTime()
-          )
-          .sort((a, b) => b.snapshotDate.getTime() - a.snapshotDate.getTime());
-        return Promise.resolve(matching[0] || null);
-      },
     },
   } as unknown as PrismaService;
 
   const mockEncryption = { decrypt: (val: string) => val } as unknown as CredentialEncryptionService;
 
   const service = new FollowerInsightsService(mockPrisma, mockEncryption);
-  const summary = await service.getSummary({ dateFrom: "2026-07-01", dateTo: "2026-07-03", lineOaId: "oa1" });
+  const summary = await service.getSummary({ dateFrom: "2026-07-01", dateTo: "2026-07-04", lineOaId: "oa1" });
 
-  assert.equal(summary.length, 3);
+  assert.equal(summary.length, 4);
   assert.equal(summary[0].date, "2026-07-01");
   assert.equal(summary[0].dailyIncrease, null);
 
   assert.equal(summary[1].date, "2026-07-02");
-  assert.equal(summary[1].followers, null);
+  assert.equal(summary[1].followers, 110);
+  assert.equal(summary[1].dailyIncrease, 10); // 110 - 100
 
   assert.equal(summary[2].date, "2026-07-03");
-  assert.equal(summary[2].followers, 120);
-  assert.equal(summary[2].dailyIncrease, 20);
+  assert.equal(summary[2].followers, null);
+  assert.equal(summary[2].dailyIncrease, null);
+
+  assert.equal(summary[3].date, "2026-07-04");
+  assert.equal(summary[3].followers, 130);
+  assert.equal(summary[3].dailyIncrease, null); // 2026-07-03 is missing, so dailyIncrease must be null (not 130 - 110)!
 });
 
 void test("unready snapshots and missing metrics remain null and are not aggregated as zero", async () => {
@@ -373,9 +368,18 @@ test("getByStore range comparison logic and OPPO regression fixture", async () =
             store: { id: "store1", name: "Store 1" },
             followerSnapshots: [
               { status: "ready", followers: 100, snapshotDate: toUtcDateForDb("2026-07-15") },
-              { status: "ready", followers: 100, snapshotDate: toUtcDateForDb("2026-07-15") }, // duplicate for same date handling test
             ],
-          }
+          },
+          {
+            id: "oa-intervening-missing", // Intervening dates missing, dailyIncrease must be null
+            name: "Account Intervening Missing",
+            store: { id: "store1", name: "Store 1" },
+            followerSnapshots: [
+              { status: "ready", followers: 5000, snapshotDate: toUtcDateForDb("2026-07-01") },
+              { status: "ready", followers: 5150, snapshotDate: toUtcDateForDb("2026-07-15") },
+              // Note: 2026-07-14 snapshot is missing!
+            ],
+          },
         ]);
       },
     },
@@ -390,19 +394,17 @@ test("getByStore range comparison logic and OPPO regression fixture", async () =
   // 1. Normal range 07-01 to 07-15
   const rows = await service.getByStore({ dateFrom: "2026-07-01", dateTo: "2026-07-15" });
 
-  // Verify Prisma findMany args
+  // Verify Prisma findMany args query exact dates
   assert.ok(findManyArgs, "findMany should be called");
   const inCondition = findManyArgs?.include?.followerSnapshots?.where?.snapshotDate?.in;
   assert.ok(inCondition, "followerSnapshots query should use 'in' operator");
-  assert.equal(inCondition.length, 2, "followerSnapshots should query exactly 2 dates");
-  assert.equal(inCondition[0].getTime(), toUtcDateForDb("2026-07-01").getTime(), "Start date must be exactly 2026-07-01");
-  assert.equal(inCondition[1].getTime(), toUtcDateForDb("2026-07-15").getTime(), "End date must be exactly 2026-07-15");
-  // Proves that 2026-06-30 is not queried
+  assert.equal(inCondition.length, 3, "followerSnapshots should query start date, target date, and previous target date");
 
   // Assert OPPO fixture values
   const oppo = rows.find(r => r.lineOaId === "oppo-chonburi");
   assert.ok(oppo, "OPPO account must exist in result");
-  assert.equal(oppo.startFollowers, 6879, "startFollowers must be 6879 (not 6866)");
+  assert.equal(oppo.status, "ready", "OPPO status must be ready");
+  assert.equal(oppo.startFollowers, 6879, "startFollowers must be 6879 (matching 2026-07-01 snapshot)");
   assert.equal(oppo.followers, 7151, "currentFollowers must be 7151");
   assert.equal(oppo.periodIncrease, 272, "periodIncrease must be 7151 - 6879 = 272");
 
@@ -410,6 +412,11 @@ test("getByStore range comparison logic and OPPO regression fixture", async () =
   assert.equal(oa2?.startFollowers, null, "oa2 missing startFollowers should be null");
   assert.equal(oa2?.periodIncrease, null, "oa2 missing periodIncrease should be null");
   assert.equal(oa2?.status, "missing-baseline", "oa2 missing start should indicate missing-baseline");
+
+  const oaIntervening = rows.find(r => r.lineOaId === "oa-intervening-missing");
+  assert.ok(oaIntervening);
+  assert.equal(oaIntervening.dailyIncrease, null, "dailyIncrease must be null when previous calendar date snapshot (2026-07-14) is missing");
+  assert.equal(oaIntervening.periodIncrease, 150, "periodIncrease for range 2026-07-01 to 2026-07-15 is still 150");
 
   // 2. Same date range 07-15 to 07-15
   const rowsSameDate = await service.getByStore({ dateFrom: "2026-07-15", dateTo: "2026-07-15" });

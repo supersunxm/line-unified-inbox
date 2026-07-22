@@ -6,6 +6,7 @@ import {
   formatToIsoDate,
   formatToLineApiDate,
   getDateRangeArray,
+  getPreviousBangkokDateString,
   getTodayBangkokDateString,
   toUtcDateForDb,
 } from "./date-utils";
@@ -335,19 +336,18 @@ export class FollowerInsightsService {
       let aggregateIncrease: number | null = null;
       let validIncreaseCount = 0;
 
+      const prevIsoDate = getPreviousBangkokDateString(dStr);
+      const prevDaySnapshots = snapshotsByDate.get(prevIsoDate) || [];
+      const prevSnapMap = new Map<string, typeof snapshots[0]>();
+      for (const pSnap of prevDaySnapshots) {
+        if (pSnap.status === "ready" && pSnap.followers !== null) {
+          prevSnapMap.set(pSnap.lineOaId, pSnap);
+        }
+      }
+
       for (const snap of readySnapshots) {
         if (snap.followers === null) continue;
-        const currentUtc = toUtcDateForDb(dStr);
-
-        const prevSnap = await this.prisma.lineOaFollowerSnapshot.findFirst({
-          where: {
-            lineOaId: snap.lineOaId,
-            status: "ready",
-            followers: { not: null },
-            snapshotDate: { lt: currentUtc },
-          },
-          orderBy: { snapshotDate: "desc" },
-        });
+        const prevSnap = prevSnapMap.get(snap.lineOaId);
 
         if (prevSnap && prevSnap.followers !== null) {
           const increase = snap.followers - prevSnap.followers;
@@ -381,6 +381,9 @@ export class FollowerInsightsService {
     const startIsoDate = query.dateFrom ? formatToIsoDate(query.dateFrom) : targetIsoDate;
     const startUtcDate = toUtcDateForDb(startIsoDate);
 
+    const prevTargetIsoDate = getPreviousBangkokDateString(targetIsoDate);
+    const prevTargetUtcDate = toUtcDateForDb(prevTargetIsoDate);
+
     const accounts = await this.prisma.lineOfficialAccount.findMany({
       where: {
         isActive: true,
@@ -395,7 +398,7 @@ export class FollowerInsightsService {
         },
         followerSnapshots: {
           where: {
-            snapshotDate: { in: [startUtcDate, targetUtcDate] },
+            snapshotDate: { in: [startUtcDate, targetUtcDate, prevTargetUtcDate] },
           },
         },
       },
@@ -405,7 +408,7 @@ export class FollowerInsightsService {
     const rows: ByStoreAccountRow[] = [];
 
     for (const account of accounts) {
-      const endSnap = account.followerSnapshots.find(s => s.snapshotDate.getTime() === targetUtcDate.getTime());
+      const endSnap = account.followerSnapshots.find(s => formatDbDateToIso(s.snapshotDate) === targetIsoDate);
       const isReady = endSnap?.status === "ready";
       const currentFollowers = isReady && endSnap.followers !== null ? endSnap.followers : null;
 
@@ -413,7 +416,7 @@ export class FollowerInsightsService {
       let periodIncrease: number | null = null;
       let status = endSnap?.status || "missing";
 
-      const startSnap = account.followerSnapshots.find(s => s.snapshotDate.getTime() === startUtcDate.getTime());
+      const startSnap = account.followerSnapshots.find(s => formatDbDateToIso(s.snapshotDate) === startIsoDate);
       if (!startSnap || startSnap.status !== "ready") {
         status = status === "ready" ? "missing-baseline" : status;
       } else {
@@ -424,15 +427,9 @@ export class FollowerInsightsService {
         periodIncrease = currentFollowers - startFollowers;
       }
 
-      const prevSnapForDaily = await this.prisma.lineOaFollowerSnapshot.findFirst({
-        where: {
-          lineOaId: account.id,
-          status: "ready",
-          followers: { not: null },
-          snapshotDate: { lt: targetUtcDate },
-        },
-        orderBy: { snapshotDate: "desc" },
-      });
+      const prevSnapForDaily = account.followerSnapshots.find(
+        s => formatDbDateToIso(s.snapshotDate) === prevTargetIsoDate && s.status === "ready"
+      );
 
       const previousFollowers = prevSnapForDaily?.followers ?? null;
       let dailyIncrease: number | null = null;

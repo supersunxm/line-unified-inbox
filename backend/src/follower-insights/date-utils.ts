@@ -87,3 +87,11 @@ export function getDateRangeArray(dateFromStr: string, dateToStr: string): strin
 
   return result;
 }
+
+export function getPreviousBangkokDateString(isoDateStr: string): string {
+  const iso = formatToIsoDate(isoDateStr);
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return formatDbDateToIso(dt);
+}
