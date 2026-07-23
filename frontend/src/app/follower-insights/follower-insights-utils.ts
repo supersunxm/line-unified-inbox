@@ -1,5 +1,7 @@
 import type { ByStoreAccountRow, SummaryDailyRow } from "@/types/api";
 
+export type Language = "th" | "en" | "zh";
+
 export function getBkkDateStr(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok",
@@ -9,10 +11,11 @@ export function getBkkDateStr(d: Date): string {
   }).format(d);
 }
 
-export function formatBkkDateTime(d: string | Date | null): string {
+export function formatBkkDateTime(d: string | Date | null, locale: Language = "en"): string {
   if (!d) return "—";
   const dateObj = typeof d === "string" ? new Date(d) : d;
-  return new Intl.DateTimeFormat("en-CA", {
+  const intlLocale = locale === "th" ? "th-TH-u-ca-gregory" : locale === "zh" ? "zh-CN" : "en-CA";
+  return new Intl.DateTimeFormat(intlLocale, {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
@@ -26,12 +29,13 @@ export function formatBkkDateTime(d: string | Date | null): string {
     .replace(",", "");
 }
 
-export function formatDateDisplay(isoStr: string): string {
+export function formatDateDisplay(isoStr: string, locale: Language = "en"): string {
   if (!isoStr) return "";
   const [y, m, d] = isoStr.split("-").map((n) => parseInt(n, 10));
   if (isNaN(y) || isNaN(m) || isNaN(d)) return isoStr;
   const dateObj = new Date(Date.UTC(y, m - 1, d));
-  return new Intl.DateTimeFormat("en-US", {
+  const intlLocale = locale === "th" ? "th-TH-u-ca-gregory" : locale === "zh" ? "zh-CN" : "en-US";
+  return new Intl.DateTimeFormat(intlLocale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -61,16 +65,44 @@ export function getInclusiveCalendarDays(dateFrom: string, dateTo: string): numb
   return Math.round((utcEnd - utcStart) / msPerDay) + 1;
 }
 
-export function validateDateRange(dateFrom: string, dateTo: string): { valid: boolean; error: string | null } {
+export function validateDateRange(
+  dateFrom: string,
+  dateTo: string,
+  language: Language = "en"
+): { valid: boolean; error: string | null } {
   if (!dateFrom || !dateTo) {
-    return { valid: false, error: "Please select both start and end dates." };
+    return {
+      valid: false,
+      error:
+        language === "th"
+          ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น"
+          : language === "zh"
+          ? "结束日期不能早于开始日期。"
+          : "End date cannot be earlier than start date.",
+    };
   }
   const days = getInclusiveCalendarDays(dateFrom, dateTo);
   if (days <= 0) {
-    return { valid: false, error: "End date cannot be earlier than start date." };
+    return {
+      valid: false,
+      error:
+        language === "th"
+          ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น"
+          : language === "zh"
+          ? "结束日期不能早于开始日期。"
+          : "End date cannot be earlier than start date.",
+    };
   }
   if (days > 90) {
-    return { valid: false, error: "Date range cannot exceed 90 calendar days." };
+    return {
+      valid: false,
+      error:
+        language === "th"
+          ? "ช่วงวันที่ต้องไม่เกิน 90 วัน"
+          : language === "zh"
+          ? "日期范围不能超过 90 天。"
+          : "Date range cannot exceed 90 days.",
+    };
   }
   return { valid: true, error: null };
 }
@@ -115,18 +147,26 @@ export function escapeCsvCell(val: string | number | null | undefined): string {
   return str;
 }
 
-export function exportStoreCsv(data: ByStoreAccountRow[], dateFrom: string, dateTo: string) {
-  const headers = [
-    "Store",
-    "LINE OA",
-    "Followers",
-    "Start Followers",
-    "Period Increase",
-    "Targeted Reach",
-    "Blocks",
-    "Status",
-    "Last Fetched",
-  ];
+export function exportStoreCsv(
+  data: ByStoreAccountRow[],
+  dateFrom: string,
+  dateTo: string,
+  language: Language = "en"
+) {
+  const headers =
+    language === "th"
+      ? ["ร้านค้า", "LINE OA", "ผู้ติดตาม", "ผู้ติดตามวันเริ่มต้น", "เพิ่มขึ้นในช่วงเวลา", "ผู้รับข้อความที่เข้าถึงได้", "จำนวนบล็อก", "สถานะ", "ดึงข้อมูลล่าสุด"]
+      : language === "zh"
+      ? ["门店", "LINE OA", "关注者", "起始关注者", "期间增加", "目标覆盖人数", "屏蔽数", "状态", "最新拉取"]
+      : ["Store", "LINE OA", "Followers", "Start Followers", "Period Increase", "Targeted Reach", "Blocks", "Status", "Last Fetched"];
+
+  const formatStatusCell = (status: string) => {
+    if (status === "ready") return language === "th" ? "พร้อม" : language === "zh" ? "就绪" : "Ready";
+    if (status === "partial") return language === "th" ? "ข้อมูลบางส่วน" : language === "zh" ? "部分" : "Partial";
+    if (status === "missing") return language === "th" ? "ไม่มีข้อมูล" : language === "zh" ? "缺失" : "Missing";
+    if (status === "missing-baseline") return language === "th" ? "ไม่มีข้อมูลวันเริ่มต้น" : language === "zh" ? "缺少基线数据" : "Missing baseline";
+    return status;
+  };
 
   const rows = data.map((r) => [
     escapeCsvCell(r.storeName),
@@ -136,8 +176,8 @@ export function exportStoreCsv(data: ByStoreAccountRow[], dateFrom: string, date
     escapeCsvCell(r.periodIncrease),
     escapeCsvCell(r.targetedReaches),
     escapeCsvCell(r.blocks),
-    escapeCsvCell(r.status),
-    escapeCsvCell(r.fetchedAt ? formatBkkDateTime(r.fetchedAt) : null),
+    escapeCsvCell(formatStatusCell(r.status)),
+    escapeCsvCell(r.fetchedAt ? formatBkkDateTime(r.fetchedAt, language) : null),
   ]);
 
   const csvString = [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");

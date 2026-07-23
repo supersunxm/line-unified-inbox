@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import type { SummaryDailyRow } from "@/types/api";
+import { getFollowerInsightsText, type Language } from "./follower-insights-translations";
+import { formatDateDisplay } from "./follower-insights-utils";
 
 interface DailySummaryTableProps {
   summaryData: SummaryDailyRow[];
   summaryError: string | null;
   dateFrom: string;
   dateTo: string;
+  language?: Language;
 }
 
 export function DailySummaryTable({
@@ -15,13 +18,15 @@ export function DailySummaryTable({
   summaryError,
   dateFrom,
   dateTo,
+  language = "en",
 }: DailySummaryTableProps) {
   // Use range key to reset page state when date range changes
   return (
     <DailySummaryTableInner
-      key={`${dateFrom}_${dateTo}`}
+      key={`${dateFrom}_${dateTo}_${language}`}
       summaryData={summaryData}
       summaryError={summaryError}
+      language={language}
     />
   );
 }
@@ -29,10 +34,13 @@ export function DailySummaryTable({
 function DailySummaryTableInner({
   summaryData,
   summaryError,
+  language = "en",
 }: {
   summaryData: SummaryDailyRow[];
   summaryError: string | null;
+  language?: Language;
 }) {
+  const t = getFollowerInsightsText(language);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
@@ -51,25 +59,25 @@ function DailySummaryTableInner({
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col lg:col-span-1 shadow-sm">
       <div className="border-b border-[var(--border)] p-4 flex items-center justify-between">
-        <h3 className="font-semibold text-[var(--foreground)]">Daily Summary</h3>
-        <span className="text-xs text-[var(--muted)]">{summaryData.length} total days</span>
+        <h3 className="font-semibold text-[var(--foreground)]">{t.dailySummary}</h3>
+        <span className="text-xs text-[var(--muted)]">{t.totalDaysCount(summaryData.length)}</span>
       </div>
 
       {summaryError ? (
-        <div className="p-8 text-center text-sm text-amber-600 dark:text-amber-400">Error loading daily summary</div>
+        <div className="p-8 text-center text-sm text-amber-600 dark:text-amber-400">{t.errorLoadingSummary}</div>
       ) : summaryData.length === 0 ? (
-        <div className="p-8 text-center text-sm text-[var(--muted)]">No daily summary data</div>
+        <div className="p-8 text-center text-sm text-[var(--muted)]">{t.noDailySummaryData}</div>
       ) : (
         <>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-max">
               <thead className="bg-[var(--surface-elevated)] text-xs text-[var(--muted)] border-b border-[var(--border)]">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium text-right">Followers</th>
-                  <th className="px-4 py-3 font-medium text-right">Increase</th>
-                  <th className="px-4 py-3 font-medium text-center">Ready</th>
-                  <th className="px-4 py-3 font-medium text-center">Data Status</th>
+                  <th className="px-4 py-3 font-medium">{language === "th" ? "วันที่" : "Date"}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t.followers}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t.dailyIncrease}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t.ready}</th>
+                  <th className="px-4 py-3 font-medium text-center">{language === "th" ? "สถานะข้อมูล" : "Data Status"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)] text-[var(--foreground)]">
@@ -81,7 +89,9 @@ function DailySummaryTableInner({
 
                   return (
                     <tr key={row.date} className="hover:bg-[var(--hover)] transition-colors">
-                      <td className="px-4 py-3 font-medium text-[var(--foreground)]">{row.date}</td>
+                      <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                        {formatDateDisplay(row.date, language)}
+                      </td>
                       <td className="px-4 py-3 text-right">{row.followers?.toLocaleString() ?? "—"}</td>
                       <td
                         className={`px-4 py-3 text-right font-medium ${
@@ -102,17 +112,17 @@ function DailySummaryTableInner({
                       <td className="px-4 py-3 text-center">
                         {isFullyReady && (
                           <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20">
-                            Ready
+                            {t.ready}
                           </span>
                         )}
                         {isPartial && (
                           <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20">
-                            Partial
+                            {t.partial}
                           </span>
                         )}
                         {isNoData && (
                           <span className="inline-flex items-center rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-500/20">
-                            No data
+                            {t.noData}
                           </span>
                         )}
                       </td>
@@ -126,7 +136,7 @@ function DailySummaryTableInner({
           {/* Pagination Controls */}
           <div className="border-t border-[var(--border)] px-4 py-3 flex items-center justify-between text-xs text-[var(--muted)]">
             <span>
-              Showing {startRecord} to {endRecord} of {reversedSummary.length} days
+              {t.showingDaysText(startRecord, endRecord, reversedSummary.length)}
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -134,8 +144,9 @@ function DailySummaryTableInner({
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
                 className="rounded-lg border border-[var(--border)] px-2.5 py-1 hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
+                aria-label={t.previous}
               >
-                Prev
+                {t.previous}
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                 <button
@@ -154,8 +165,9 @@ function DailySummaryTableInner({
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
                 className="rounded-lg border border-[var(--border)] px-2.5 py-1 hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
+                aria-label={t.next}
               >
-                Next
+                {t.next}
               </button>
             </div>
           </div>

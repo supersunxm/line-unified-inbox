@@ -2407,7 +2407,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             </div>
           </section>
         ) : initialSection === "follower-insights" ? (
-          <FollowerInsightsView />
+          <FollowerInsightsView language={language} />
         ) : (
           <>
         <section className="app-surface min-w-0 overflow-y-auto border-r">

@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   calculateCoverage,
   calculatePaginationBounds,
   escapeCsvCell,
+  formatBkkDateTime,
+  formatDateDisplay,
   getInclusiveCalendarDays,
   validateDateRange,
 } from "../src/app/follower-insights/follower-insights-utils.ts";
+import {
+  followerInsightsTranslations,
+  getFollowerInsightsText,
+} from "../src/app/follower-insights/follower-insights-translations.ts";
 import type { SummaryDailyRow } from "../src/types/api.ts";
 
 test("getInclusiveCalendarDays calculates pure UTC calendar day differences", () => {
@@ -17,18 +24,22 @@ test("getInclusiveCalendarDays calculates pure UTC calendar day differences", ()
   assert.equal(getInclusiveCalendarDays("2026-07-15", "2026-07-01"), 0);
 });
 
-test("validateDateRange enforces exact 90 calendar day limits and date ordering", () => {
-  const allowed = validateDateRange("2026-07-01", "2026-09-28");
+test("validateDateRange enforces exact 90 calendar day limits and date ordering in both locales", () => {
+  const allowed = validateDateRange("2026-07-01", "2026-09-28", "en");
   assert.equal(allowed.valid, true);
   assert.equal(allowed.error, null);
 
-  const rejected91 = validateDateRange("2026-07-01", "2026-09-29");
-  assert.equal(rejected91.valid, false);
-  assert.equal(rejected91.error, "Date range cannot exceed 90 calendar days.");
+  const rejected91En = validateDateRange("2026-07-01", "2026-09-29", "en");
+  assert.equal(rejected91En.valid, false);
+  assert.equal(rejected91En.error, "Date range cannot exceed 90 days.");
 
-  const reversed = validateDateRange("2026-07-15", "2026-07-01");
-  assert.equal(reversed.valid, false);
-  assert.equal(reversed.error, "End date cannot be earlier than start date.");
+  const rejected91Th = validateDateRange("2026-07-01", "2026-09-29", "th");
+  assert.equal(rejected91Th.valid, false);
+  assert.equal(rejected91Th.error, "ช่วงวันที่ต้องไม่เกิน 90 วัน");
+
+  const reversedTh = validateDateRange("2026-07-15", "2026-07-01", "th");
+  assert.equal(reversedTh.valid, false);
+  assert.equal(reversedTh.error, "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มต้น");
 });
 
 test("calculateCoverage counts only populated rows with followers !== null and accountsReady > 0", () => {
@@ -99,4 +110,123 @@ test("calculatePaginationBounds handles 0, 1, 10, 11, and 35 row boundary cases 
   assert.equal(p35_clamp.safePage, 4);
   assert.equal(p35_clamp.startRecord, 31);
   assert.equal(p35_clamp.endRecord, 35);
+});
+
+test("Follower Insights localization dictionary returns correct Thai, English, and Chinese labels", () => {
+  const th = getFollowerInsightsText("th");
+  const en = getFollowerInsightsText("en");
+  const zh = getFollowerInsightsText("zh");
+
+  assert.equal(th.followerInsightsTitle, "ข้อมูลผู้ติดตาม");
+  assert.equal(en.followerInsightsTitle, "Follower Insights");
+  assert.equal(zh.followerInsightsTitle, "关注者洞察");
+
+  assert.equal(th.partialDataAvailable, "มีข้อมูลเพียงบางส่วน");
+  assert.equal(en.partialDataAvailable, "Partial data available");
+  assert.equal(zh.partialDataAvailable, "部分数据可用");
+
+  assert.equal(th.syncMissingDates, "ดึงข้อมูลวันที่ขาด");
+  assert.equal(en.syncMissingDates, "Sync Missing Dates");
+  assert.equal(zh.syncMissingDates, "同步缺失日期");
+
+  assert.equal(th.totalFollowers, "ผู้ติดตามทั้งหมด");
+  assert.equal(en.totalFollowers, "Total Followers");
+  assert.equal(zh.totalFollowers, "总关注者");
+
+  assert.equal(th.startFollowers, "ผู้ติดตามวันเริ่มต้น");
+  assert.equal(en.startFollowers, "Start Followers");
+  assert.equal(zh.startFollowers, "起始关注者");
+
+  assert.equal(th.periodIncrease, "เพิ่มขึ้นในช่วงเวลา");
+  assert.equal(en.periodIncrease, "Period Increase");
+  assert.equal(zh.periodIncrease, "期间增加");
+
+  assert.equal(th.ready, "พร้อม");
+  assert.equal(en.ready, "Ready");
+  assert.equal(zh.ready, "就绪");
+
+  assert.equal(th.missingBaseline, "ไม่มีข้อมูลวันเริ่มต้น");
+  assert.equal(en.missingBaseline, "Missing baseline");
+  assert.equal(zh.missingBaseline, "缺少基线数据");
+});
+
+test("Dynamic localization formatters interpolate text correctly across all locales", () => {
+  const th = getFollowerInsightsText("th");
+  const en = getFollowerInsightsText("en");
+  const zh = getFollowerInsightsText("zh");
+
+  assert.equal(th.dataCoverageText(4, 7, 57), "ความครอบคลุมของข้อมูล: 4 จาก 7 วัน (57%)");
+  assert.equal(en.dataCoverageText(4, 7, 57), "Data coverage: 4 of 7 days (57%)");
+  assert.equal(zh.dataCoverageText(4, 7, 57), "数据覆盖率: 7 天中的 4 天 (57%)");
+
+  assert.equal(th.showingDaysText(1, 10, 35), "แสดงวันที่ 1 ถึง 10 จากทั้งหมด 35 วัน");
+  assert.equal(en.showingDaysText(1, 10, 35), "Showing 1 to 10 of 35 days");
+  assert.equal(zh.showingDaysText(1, 10, 35), "显示第 1 至 10 天，共 35 天");
+
+  assert.equal(th.showingStoresText(1, 10, 35), "แสดงร้านที่ 1 ถึง 10 จากทั้งหมด 35 ร้าน");
+  assert.equal(en.showingStoresText(1, 10, 35), "Showing 1 to 10 of 35 stores");
+  assert.equal(zh.showingStoresText(1, 10, 35), "显示第 1 至 10 家门店，共 35 家");
+
+  assert.equal(th.estimatedCallsDetail(17, 35), "~595 ครั้ง (17 วัน × 35 บัญชี)");
+  assert.equal(en.estimatedCallsDetail(17, 35), "~595 requests (17 days × 35 accounts)");
+  assert.equal(zh.estimatedCallsDetail(17, 35), "~595 次请求 (17 天 × 35 个账号)");
+});
+
+test("Date display and timestamp formatting respect the requested locale", () => {
+  const isoDate = "2026-07-01";
+  const formattedEn = formatDateDisplay(isoDate, "en");
+  const formattedTh = formatDateDisplay(isoDate, "th");
+  const formattedZh = formatDateDisplay(isoDate, "zh");
+
+  assert.equal(formattedEn, "Jul 1, 2026");
+  assert.equal(formattedTh, "1 ก.ค. 2026");
+  assert.equal(formattedZh, "2026年7月1日");
+
+  const bkkIso = "2026-07-22T11:05:00Z";
+  const bkkEn = formatBkkDateTime(bkkIso, "en");
+  const bkkTh = formatBkkDateTime(bkkIso, "th");
+
+  assert.equal(bkkEn, "2026-07-22 18:05:00");
+  assert.equal(bkkTh, "22/07/2026 18:05:00");
+});
+
+test("Every locale (en, th, zh) exposes the exact same complete set of translation keys", () => {
+  const enKeys = Object.keys(followerInsightsTranslations.en).sort();
+  const thKeys = Object.keys(followerInsightsTranslations.th).sort();
+  const zhKeys = Object.keys(followerInsightsTranslations.zh).sort();
+
+  assert.deepEqual(thKeys, enKeys, "Thai translation keys must match English keys");
+  assert.deepEqual(zhKeys, enKeys, "Chinese translation keys must match English keys");
+});
+
+test("Live locale switching updates rendered UI elements instantly across en, th, and zh without reload", () => {
+  const viewCode = readFileSync(new URL("../src/app/follower-insights/follower-insights-view.tsx", import.meta.url), "utf8");
+  const pickerCode = readFileSync(new URL("../src/app/follower-insights/date-range-picker.tsx", import.meta.url), "utf8");
+  const tableCode = readFileSync(new URL("../src/app/follower-insights/store-breakdown-table.tsx", import.meta.url), "utf8");
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+
+  // Verify FollowerInsightsView receives language prop and calls getFollowerInsightsText(language)
+  assert.match(viewCode, /export function FollowerInsightsView\(\{\s*language\s*=\s*"en"\s*\}[\s\S]*getFollowerInsightsText\(language\)/);
+
+  // Verify page.tsx passes global language state to FollowerInsightsView without page reload
+  assert.match(pageCode, /<FollowerInsightsView language=\{language\} \/>/);
+
+  // Verify child components receive language prop and query getFollowerInsightsText
+  assert.match(pickerCode, /getFollowerInsightsText\(language\)/);
+  assert.match(tableCode, /getFollowerInsightsText\(language\)/);
+
+  // Verify text returned for language="en"
+  const textEn = getFollowerInsightsText("en");
+  assert.equal(textEn.followerInsightsTitle, "Follower Insights");
+  assert.equal(textEn.totalFollowers, "Total Followers");
+
+  // Verify text returned for language="th"
+  const textTh = getFollowerInsightsText("th");
+  assert.equal(textTh.followerInsightsTitle, "ข้อมูลผู้ติดตาม");
+  assert.equal(textTh.totalFollowers, "ผู้ติดตามทั้งหมด");
+
+  // Verify text returned for language="zh"
+  const textZh = getFollowerInsightsText("zh");
+  assert.equal(textZh.followerInsightsTitle, "关注者洞察");
+  assert.equal(textZh.totalFollowers, "总关注者");
 });

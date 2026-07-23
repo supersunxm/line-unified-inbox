@@ -6,6 +6,7 @@ import {
   getBkkDateStr,
   validateDateRange,
 } from "./follower-insights-utils";
+import { getFollowerInsightsText, type Language } from "./follower-insights-translations";
 
 interface DateRangePickerProps {
   dateFrom: string;
@@ -13,11 +14,22 @@ interface DateRangePickerProps {
   readyDates?: Set<string>;
   partialDates?: Set<string>;
   missingDates?: Set<string>;
+  language?: Language;
   onApply: (start: string, end: string) => void;
   onQuickRange: (days: number) => void;
 }
 
-export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, missingDates, onApply, onQuickRange }: DateRangePickerProps) {
+export function DateRangePicker({
+  dateFrom,
+  dateTo,
+  readyDates,
+  partialDates,
+  missingDates,
+  language = "en",
+  onApply,
+  onQuickRange,
+}: DateRangePickerProps) {
+  const t = getFollowerInsightsText(language);
   const [isOpen, setIsOpen] = useState(false);
   const [draftStart, setDraftStart] = useState<string | null>(dateFrom);
   const [draftEnd, setDraftEnd] = useState<string | null>(dateTo);
@@ -125,7 +137,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
     if (!draftStart) return;
     const finalEnd = draftEnd || draftStart;
 
-    const validation = validateDateRange(draftStart, finalEnd);
+    const validation = validateDateRange(draftStart, finalEnd, language);
     if (!validation.valid) {
       setPickerError(validation.error);
       return;
@@ -156,7 +168,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
         type="button"
         onClick={() => (isOpen ? setIsOpen(false) : handleOpenPopover())}
         className="flex items-center gap-2.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--surface)] transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        aria-label="Select date range"
+        aria-label={t.selectDateRange}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
@@ -164,7 +176,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         <span className="truncate">
-          {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
+          {formatDateDisplay(dateFrom, language)} – {formatDateDisplay(dateTo, language)}
         </span>
         <svg className={`h-4 w-4 text-[var(--muted)] transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -177,15 +189,15 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
           ref={popoverRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Date range calendar picker"
+          aria-label={t.selectDateRange}
           className="absolute right-0 top-full mt-2 z-50 w-[330px] md:w-[680px] max-w-[92vw] rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] p-4 md:p-5 shadow-2xl text-[var(--foreground)] animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
         >
           {/* Header Bar */}
           <div className="flex flex-wrap items-center justify-between pb-3 border-b border-[var(--border)] mb-4 gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Select Range</span>
+              <span className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{t.selectDateRange}</span>
               <span className="text-xs font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                {draftStart ? formatDateDisplay(draftStart) : "Start date"} — {draftEnd ? formatDateDisplay(draftEnd) : "End date"}
+                {draftStart ? formatDateDisplay(draftStart, language) : "—"} — {draftEnd ? formatDateDisplay(draftEnd, language) : "—"}
               </span>
             </div>
 
@@ -244,6 +256,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
               readyDates={readyDates}
               partialDates={partialDates}
               missingDates={missingDates}
+              language={language}
               onDateClick={handleDateClick}
               onPrevMonth={prevMonth}
               onNextMonth={nextMonth}
@@ -260,6 +273,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
                 readyDates={readyDates}
                 partialDates={partialDates}
                 missingDates={missingDates}
+                language={language}
                 onDateClick={handleDateClick}
                 onPrevMonth={prevMonth}
                 onNextMonth={nextMonth}
@@ -271,14 +285,14 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
 
           {/* Footer Bar */}
           <div className="mt-4 border-t border-[var(--border)] pt-3 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-[var(--muted)]">Max 90 calendar days range.</span>
+            <span className="text-xs text-[var(--muted)]">{t.max90DaysNote}</span>
             <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={handleCancelClick}
                 className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--hover)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 type="button"
@@ -286,7 +300,7 @@ export function DateRangePicker({ dateFrom, dateTo, readyDates, partialDates, mi
                 disabled={!draftStart}
                 className="rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-40 transition-colors shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
-                Apply Range
+                {t.apply}
               </button>
             </div>
           </div>
@@ -304,6 +318,7 @@ function CalendarMonthGrid({
   readyDates,
   partialDates,
   missingDates,
+  language = "en",
   onDateClick,
   onPrevMonth,
   onNextMonth,
@@ -317,18 +332,21 @@ function CalendarMonthGrid({
   readyDates?: Set<string>;
   partialDates?: Set<string>;
   missingDates?: Set<string>;
+  language?: Language;
   onDateClick: (isoStr: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   showPrevBtn: boolean;
   showNextBtn: boolean;
 }) {
+  const t = getFollowerInsightsText(language);
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
 
   const monthLabel = useMemo(() => {
-    return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(monthDate);
-  }, [monthDate]);
+    const intlLocale = language === "th" ? "th-TH-u-ca-gregory" : language === "zh" ? "zh-CN" : "en-US";
+    return new Intl.DateTimeFormat(intlLocale, { month: "long", year: "numeric" }).format(monthDate);
+  }, [monthDate, language]);
 
   const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
   const firstDayOfWeek = useMemo(() => new Date(year, month, 1).getDay(), [year, month]);
@@ -397,7 +415,7 @@ function CalendarMonthGrid({
             type="button"
             onClick={onPrevMonth}
             className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            aria-label="Previous month"
+            aria-label={t.prevMonth}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -407,14 +425,14 @@ function CalendarMonthGrid({
           <div className="w-6"></div>
         )}
 
-        <span className="text-sm font-semibold text-white">{monthLabel}</span>
+        <span className="text-sm font-semibold text-[var(--foreground)]">{monthLabel}</span>
 
         {showNextBtn ? (
           <button
             type="button"
             onClick={onNextMonth}
             className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)] transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            aria-label="Next month"
+            aria-label={t.nextMonth}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -426,16 +444,12 @@ function CalendarMonthGrid({
       </div>
 
       {/* Calendar Grid */}
-      <div role="grid" aria-label="Calendar">
+      <div role="grid" aria-label={t.selectDateRange}>
         {/* Weekday Labels */}
         <div className="grid grid-cols-7 text-center text-[10px] font-bold text-[var(--muted)] uppercase pb-2" role="row">
-          <span role="columnheader">Su</span>
-          <span role="columnheader">Mo</span>
-          <span role="columnheader">Tu</span>
-          <span role="columnheader">We</span>
-          <span role="columnheader">Th</span>
-          <span role="columnheader">Fr</span>
-          <span role="columnheader">Sa</span>
+          {t.weekdays.map((day, idx) => (
+            <span key={idx} role="columnheader">{day}</span>
+          ))}
         </div>
 
         {/* Day Cells Grid */}
@@ -447,54 +461,54 @@ function CalendarMonthGrid({
                   return <div key={`empty-${weekIdx}-${colIdx}`} className="h-8" role="gridcell"></div>;
                 }
                 const { dayNumber, isoStr } = item;
-          const isStart = draftStart === isoStr;
-          const isEnd = draftEnd === isoStr;
-          const isInRange = Boolean(draftStart && draftEnd && isoStr > draftStart && isoStr < draftEnd);
-          const isToday = isoStr === todayIso;
-          const isFuture = isoStr > todayIso;
+                const isStart = draftStart === isoStr;
+                const isEnd = draftEnd === isoStr;
+                const isInRange = Boolean(draftStart && draftEnd && isoStr > draftStart && isoStr < draftEnd);
+                const isToday = isoStr === todayIso;
+                const isFuture = isoStr > todayIso;
 
-          let btnClass =
-            "h-8 w-full font-medium transition-colors flex items-center justify-center relative focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-10 ";
+                let btnClass =
+                  "h-8 w-full font-medium transition-colors flex items-center justify-center relative focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-10 ";
 
-          if (isFuture) {
-            btnClass += "text-[var(--disabled-foreground)] cursor-not-allowed opacity-40";
-          } else if (isStart && isEnd) {
-            btnClass += "bg-blue-600 text-white font-bold rounded-lg shadow-sm";
-          } else if (isStart) {
-            btnClass += "bg-blue-600 text-white font-bold rounded-l-lg shadow-sm";
-          } else if (isEnd) {
-            btnClass += "bg-blue-600 text-white font-bold rounded-r-lg shadow-sm";
-          } else if (isInRange) {
-            btnClass += "bg-blue-600/20 text-blue-200 hover:bg-blue-600/30";
-          } else {
-            btnClass += "text-[var(--foreground)] hover:bg-[var(--surface)] rounded-lg";
-          }
+                if (isFuture) {
+                  btnClass += "text-[var(--disabled-foreground)] cursor-not-allowed opacity-40";
+                } else if (isStart && isEnd) {
+                  btnClass += "bg-blue-600 text-white font-bold rounded-lg shadow-sm";
+                } else if (isStart) {
+                  btnClass += "bg-blue-600 text-white font-bold rounded-l-lg shadow-sm";
+                } else if (isEnd) {
+                  btnClass += "bg-blue-600 text-white font-bold rounded-r-lg shadow-sm";
+                } else if (isInRange) {
+                  btnClass += "bg-blue-600/20 text-blue-200 hover:bg-blue-600/30";
+                } else {
+                  btnClass += "text-[var(--foreground)] hover:bg-[var(--surface)] rounded-lg";
+                }
 
-          return (
-            <div key={isoStr} role="gridcell" aria-selected={isStart || isEnd || isInRange}>
-              <button
-                data-date={isoStr}
-                type="button"
-                disabled={isFuture}
-                onClick={() => onDateClick(isoStr)}
-                onKeyDown={(e) => handleKeyDown(e, isoStr)}
-                className={btnClass}
-                aria-label={isoStr}
-                aria-current={isToday ? "date" : undefined}
-              >
-                <span className="relative z-10">{dayNumber}</span>
-                <div className="absolute bottom-[2px] flex justify-center w-full gap-[2px]">
-                  {readyDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-blue-500"></span>}
-                  {partialDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-amber-400"></span>}
-                  {missingDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full border border-[var(--muted)]"></span>}
-                  {isToday && !readyDates?.has(isoStr) && !partialDates?.has(isoStr) && !missingDates?.has(isoStr) && (
-                    <span className="h-[3px] w-[3px] rounded-full bg-blue-400"></span>
-                  )}
-                </div>
-              </button>
-            </div>
-          );
-        })}
+                return (
+                  <div key={isoStr} role="gridcell" aria-selected={isStart || isEnd || isInRange}>
+                    <button
+                      data-date={isoStr}
+                      type="button"
+                      disabled={isFuture}
+                      onClick={() => onDateClick(isoStr)}
+                      onKeyDown={(e) => handleKeyDown(e, isoStr)}
+                      className={btnClass}
+                      aria-label={formatDateDisplay(isoStr, language)}
+                      aria-current={isToday ? "date" : undefined}
+                    >
+                      <span className="relative z-10">{dayNumber}</span>
+                      <div className="absolute bottom-[2px] flex justify-center w-full gap-[2px]">
+                        {readyDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-blue-500"></span>}
+                        {partialDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full bg-amber-400"></span>}
+                        {missingDates?.has(isoStr) && <span className="h-[3px] w-[3px] rounded-full border border-[var(--muted)]"></span>}
+                        {isToday && !readyDates?.has(isoStr) && !partialDates?.has(isoStr) && !missingDates?.has(isoStr) && (
+                          <span className="h-[3px] w-[3px] rounded-full bg-blue-400"></span>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

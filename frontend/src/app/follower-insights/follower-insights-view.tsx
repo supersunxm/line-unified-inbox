@@ -11,10 +11,14 @@ import {
   calculateCoverage,
   formatBkkDateTime,
   formatDateDisplay,
-  getBkkDateStr, getInclusiveCalendarDays,
+  getBkkDateStr,
+  getInclusiveCalendarDays,
+  validateDateRange,
 } from "./follower-insights-utils";
+import { getFollowerInsightsText, type Language } from "./follower-insights-translations";
 
-export function FollowerInsightsView() {
+export function FollowerInsightsView({ language = "en" }: { language?: Language }) {
+  const t = getFollowerInsightsText(language);
   const today = new Date();
   const defaultDateTo = getBkkDateStr(today);
   const dateFromInit = new Date(today);
@@ -44,48 +48,45 @@ export function FollowerInsightsView() {
   );
   const [showSyncMissingModal, setShowSyncMissingModal] = useState(false);
 
-  const loadData = useCallback(async (start: string, end: string) => {
-    const s = new Date(start).getTime();
-    const e = new Date(end).getTime();
-    if (e < s) {
-      setValidationError("End date cannot be earlier than start date.");
-      return;
-    }
-    const diffDays = Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
-    if (diffDays > 90) {
-      setValidationError("Date range cannot exceed 90 days.");
-      return;
-    }
-    setValidationError(null);
-    setLoading(true);
-    setSummaryError(null);
-    setStoreError(null);
+  const loadData = useCallback(
+    async (start: string, end: string) => {
+      const validation = validateDateRange(start, end, language);
+      if (!validation.valid) {
+        setValidationError(validation.error);
+        return;
+      }
+      setValidationError(null);
+      setLoading(true);
+      setSummaryError(null);
+      setStoreError(null);
 
-    let sumSucceeded = false;
-    let storeSucceeded = false;
+      let sumSucceeded = false;
+      let storeSucceeded = false;
 
-    try {
-      const sum = await api.followerInsightsSummary({ dateFrom: start, dateTo: end });
-      setSummaryData(sum);
-      sumSucceeded = true;
-    } catch (err) {
-      setSummaryError(err instanceof Error ? err.message : "Error loading summary data");
-    }
+      try {
+        const sum = await api.followerInsightsSummary({ dateFrom: start, dateTo: end });
+        setSummaryData(sum);
+        sumSucceeded = true;
+      } catch (err) {
+        setSummaryError(err instanceof Error ? err.message : t.errorLoadingSummary);
+      }
 
-    try {
-      const stores = await api.followerInsightsByStore(start, end);
-      setStoreData(stores);
-      storeSucceeded = true;
-    } catch (err) {
-      setStoreError(err instanceof Error ? err.message : "Error loading store data");
-    }
+      try {
+        const stores = await api.followerInsightsByStore(start, end);
+        setStoreData(stores);
+        storeSucceeded = true;
+      } catch (err) {
+        setStoreError(err instanceof Error ? err.message : t.errorLoadingStore);
+      }
 
-    if (sumSucceeded || storeSucceeded) {
-      setInitialLoadDone(true);
-      setLastRefreshedAt(new Date());
-    }
-    setLoading(false);
-  }, []);
+      if (sumSucceeded || storeSucceeded) {
+        setInitialLoadDone(true);
+        setLastRefreshedAt(new Date());
+      }
+      setLoading(false);
+    },
+    [language, t]
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadData(dateFrom, dateTo), 0);
@@ -93,7 +94,6 @@ export function FollowerInsightsView() {
   }, [dateFrom, dateTo, loadData]);
 
   const handleSync = async () => {
-    if (!window.confirm(`Sync LINE OA insights for ${dateTo}?`)) return;
     setSyncing(true);
     setSyncResult(null);
     setSyncError(null);
@@ -107,7 +107,6 @@ export function FollowerInsightsView() {
       setSyncing(false);
     }
   };
-
 
   const applyQuickRange = (days: number) => {
     const end = new Date();
@@ -142,7 +141,7 @@ export function FollowerInsightsView() {
 
   const missingDateRanges = useMemo(() => {
     if (missingDates.size === 0) return [];
-    const inRange = Array.from(missingDates).filter(d => d >= dateFrom && d <= dateTo).sort();
+    const inRange = Array.from(missingDates).filter((d) => d >= dateFrom && d <= dateTo).sort();
     if (inRange.length === 0) return [];
 
     const ranges: { start: string; end: string }[] = [];
@@ -174,7 +173,6 @@ export function FollowerInsightsView() {
   );
 
   const expectedAccounts = storeData.length || summaryData[0]?.accountsExpected || 35;
-  const maxLineApiCalls = totalMissingDays * expectedAccounts;
 
   const handleSyncMissing = async () => {
     setSyncing(true);
@@ -236,7 +234,6 @@ export function FollowerInsightsView() {
     [summaryData, dateFrom, dateTo]
   );
 
-  // Requirement 5: KPI values must use dateTo row ONLY when dateTo has valid data (followers !== null)
   const targetDateSummary = useMemo(() => {
     return summaryData.find((d) => d.date === dateTo) || null;
   }, [summaryData, dateTo]);
@@ -248,34 +245,34 @@ export function FollowerInsightsView() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-[var(--border)] pb-6">
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Follower Insights</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">{t.followerInsightsTitle}</h2>
               {hasMissingDates && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/30">
                   <svg className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
-                  Partial data available
+                  {t.partialDataAvailable}
                 </span>
               )}
             </div>
             <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
               <span className="font-medium text-[var(--foreground)]">
-                {formatDateDisplay(dateFrom)} – {formatDateDisplay(dateTo)}
+                {formatDateDisplay(dateFrom, language)} – {formatDateDisplay(dateTo, language)}
               </span>
               <span>•</span>
               <span>
-                Data coverage: {usableDays} of {totalCalendarDays} days ({coveragePct}%)
+                {t.dataCoverageText(usableDays, totalCalendarDays, coveragePct)}
               </span>
               <span>•</span>
               <span className="inline-flex items-center gap-1.5 text-[var(--muted)]">
-                Last refreshed: {lastRefreshedAt ? formatBkkDateTime(lastRefreshedAt) : "—"}
+                {t.lastRefreshed}: {lastRefreshedAt ? formatBkkDateTime(lastRefreshedAt, language) : "—"}
                 <button
                   type="button"
                   onClick={() => void loadData(dateFrom, dateTo)}
                   disabled={loading}
                   className="rounded-md p-1 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
-                  title="Refresh data"
-                  aria-label="Refresh data"
+                  title={t.lastRefreshed}
+                  aria-label={t.lastRefreshed}
                 >
                   <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -325,6 +322,7 @@ export function FollowerInsightsView() {
               readyDates={readyDates}
               partialDates={partialDates}
               missingDates={missingDates}
+              language={language}
               onApply={(start, end) => {
                 setDateFrom(start);
                 setDateTo(end);
@@ -335,7 +333,7 @@ export function FollowerInsightsView() {
             {hasMissingDates ? (
               <button
                 type="button"
-                onClick={handleSyncMissing}
+                onClick={() => setShowSyncMissingModal(true)}
                 disabled={syncing || loading}
                 className="flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-amber-600/20 hover:bg-amber-500 disabled:opacity-50 transition-all"
               >
@@ -344,14 +342,14 @@ export function FollowerInsightsView() {
                     <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span>Syncing missing...</span>
+                    <span>{t.syncingBtn}</span>
                   </>
                 ) : (
                   <>
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                     </svg>
-                    <span>Sync Missing Dates</span>
+                    <span>{t.syncMissingBtnWithCount(totalMissingDays)}</span>
                   </>
                 )}
               </button>
@@ -367,14 +365,14 @@ export function FollowerInsightsView() {
                     <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span>Syncing...</span>
+                    <span>{t.syncingBtn}</span>
                   </>
                 ) : (
                   <>
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span>Sync Selected Date</span>
+                    <span>{language === "th" ? "ดึงข้อมูลวันที่เลือก" : "Sync Selected Date"}</span>
                   </>
                 )}
               </button>
@@ -402,9 +400,15 @@ export function FollowerInsightsView() {
         {/* Sync Result Toast */}
         {syncResult && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
-            <p className="font-semibold text-[var(--foreground)]">Sync complete</p>
+            <p className="font-semibold text-[var(--foreground)]">{t.syncComplete}</p>
             <p className="mt-1 text-[var(--muted)]">
-              Requested: {syncResult.requested} | Succeeded: {syncResult.succeeded} | Unready: {syncResult.unready} | Failed: {syncResult.failed} | Skipped: {syncResult.skipped}
+              {t.syncSummaryResult(
+                syncResult.requested ?? 0,
+                syncResult.succeeded ?? 0,
+                syncResult.unready ?? 0,
+                syncResult.failed ?? 0,
+                syncResult.skipped ?? 0
+              )}
             </p>
             {syncResult.errors && syncResult.errors.length > 0 && (
               <ul className="mt-2 list-inside list-disc text-xs text-red-600 dark:text-red-400">
@@ -437,14 +441,14 @@ export function FollowerInsightsView() {
             {/* KPI Cards & Trend Chart Section */}
             {summaryError ? (
               <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center justify-between">
-                <p>Summary Error: {summaryError}</p>
-                  <button
-                    type="button"
-                    onClick={() => setShowSyncMissingModal(true)}
-                    className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 shadow-sm transition-colors"
-                  >
-                    Sync Missing Dates ({missingDateRanges.reduce((acc, r) => acc + getInclusiveCalendarDays(r.start, r.end), 0)})
-                  </button>
+                <p>{t.errorLoadingSummary}: {summaryError}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowSyncMissingModal(true)}
+                  className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 shadow-sm transition-colors"
+                >
+                  {t.syncMissingBtnWithCount(totalMissingDays)}
+                </button>
               </div>
             ) : (
               <div className="space-y-6">
@@ -452,18 +456,20 @@ export function FollowerInsightsView() {
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                   {/* Card 1: Total Followers */}
                   <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <p className="text-xs font-medium text-[var(--muted)]">Total Followers</p>
+                    <p className="text-xs font-medium text-[var(--muted)]">{t.totalFollowers}</p>
                     <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.followers?.toLocaleString() ?? "—"}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
+                      {targetDateSummary
+                        ? t.snapshotForDate(formatDateDisplay(dateTo, language))
+                        : t.noDataForDate(formatDateDisplay(dateTo, language))}
                     </p>
                   </div>
 
                   {/* Card 2: Daily Increase */}
                   <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <p className="text-xs font-medium text-[var(--muted)]">Daily Increase</p>
+                    <p className="text-xs font-medium text-[var(--muted)]">{t.dailyIncrease}</p>
                     <p
                       className={`mt-2 text-2xl font-bold tracking-tight ${
                         targetDateSummary && targetDateSummary.dailyIncrease !== null && targetDateSummary.dailyIncrease > 0
@@ -478,35 +484,39 @@ export function FollowerInsightsView() {
                         : "—"}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {targetDateSummary?.dailyIncrease !== null ? "1-day comparison" : "Missing previous date"}
+                      {targetDateSummary?.dailyIncrease !== null ? t.oneDayComparison : t.missingPreviousDate}
                     </p>
                   </div>
 
                   {/* Card 3: Targeted Reach */}
                   <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <p className="text-xs font-medium text-[var(--muted)]">Targeted Reach</p>
+                    <p className="text-xs font-medium text-[var(--muted)]">{t.targetedReach}</p>
                     <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.targetedReaches?.toLocaleString() ?? "—"}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
+                      {targetDateSummary
+                        ? t.snapshotForDate(formatDateDisplay(dateTo, language))
+                        : t.noDataForDate(formatDateDisplay(dateTo, language))}
                     </p>
                   </div>
 
                   {/* Card 4: Blocks */}
                   <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <p className="text-xs font-medium text-[var(--muted)]">Blocks</p>
+                    <p className="text-xs font-medium text-[var(--muted)]">{t.blocks}</p>
                     <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.blocks?.toLocaleString() ?? "—"}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      {targetDateSummary ? `Snapshot for ${dateTo}` : `No data for ${dateTo}`}
+                      {targetDateSummary
+                        ? t.snapshotForDate(formatDateDisplay(dateTo, language))
+                        : t.noDataForDate(formatDateDisplay(dateTo, language))}
                     </p>
                   </div>
 
                   {/* Card 5: Accounts Ready */}
                   <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm col-span-2 md:col-span-1">
-                    <p className="text-xs font-medium text-[var(--muted)]">Accounts Ready</p>
+                    <p className="text-xs font-medium text-[var(--muted)]">{t.accountsReady}</p>
                     <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)]">
                       {targetDateSummary?.accountsReady ?? 0}
                       <span className="text-sm font-normal text-[var(--muted)]">
@@ -516,10 +526,10 @@ export function FollowerInsightsView() {
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {targetDateSummary?.accountsMissing && targetDateSummary.accountsMissing > 0
-                        ? `${targetDateSummary.accountsMissing} missing`
+                        ? t.accountsMissingText(targetDateSummary.accountsMissing)
                         : targetDateSummary
-                        ? "All accounts ready"
-                        : "No snapshot"}
+                        ? t.allAccountsReady
+                        : t.noSnapshot}
                     </p>
                   </div>
                 </div>
@@ -528,6 +538,7 @@ export function FollowerInsightsView() {
                 <TrendChart
                   data={summaryData}
                   metric={chartMetric}
+                  language={language}
                   onMetricChange={setChartMetric}
                 />
               </div>
@@ -540,12 +551,13 @@ export function FollowerInsightsView() {
                 summaryError={summaryError}
                 dateFrom={dateFrom}
                 dateTo={dateTo}
+                language={language}
               />
 
               <div className="lg:col-span-2">
                 {!endpointsUsable && (
                   <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-                    <strong>Warning:</strong> Selected range endpoints contain missing or partial data. Period Increase cannot be calculated accurately.
+                    <strong>{language === "th" ? "คำเตือน:" : "Warning:"}</strong> {t.endpointWarning}
                   </div>
                 )}
                 <StoreBreakdownTable
@@ -554,6 +566,7 @@ export function FollowerInsightsView() {
                   dateFrom={dateFrom}
                   dateTo={dateTo}
                   endpointsUsable={endpointsUsable}
+                  language={language}
                   onRetry={() => void loadData(dateFrom, dateTo)}
                 />
               </div>
@@ -568,42 +581,48 @@ export function FollowerInsightsView() {
           <div
             role="dialog"
             aria-modal="true"
+            aria-label={t.syncMissingDates}
             className="w-full max-w-md bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95"
           >
             <div className="p-6">
-              <h2 className="text-xl font-bold mb-2">Sync Missing Dates</h2>
+              <h2 className="text-xl font-bold mb-2">{t.syncMissingDates}</h2>
               <p className="text-sm text-[var(--muted)] mb-4">
-                This action will request LINE APIs to fetch historical follower insights for missing dates within your selected range.
+                {t.syncMissingModalDesc}
               </p>
 
               <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl p-4 mb-4 space-y-3 text-xs">
                 <div className="flex justify-between border-b border-[var(--border)] pb-2">
-                  <span className="text-[var(--muted)]">Selected Range:</span>
-                  <span className="font-semibold text-[var(--foreground)]">{dateFrom} to {dateTo}</span>
+                  <span className="text-[var(--muted)]">{t.selectedRange}:</span>
+                  <span className="font-semibold text-[var(--foreground)]">
+                    {formatDateDisplay(dateFrom, language)} – {formatDateDisplay(dateTo, language)}
+                  </span>
                 </div>
                 <div className="flex justify-between border-b border-[var(--border)] pb-2">
-                  <span className="text-[var(--muted)]">Exact Missing Days:</span>
-                  <span className="font-semibold text-[var(--foreground)]">{totalMissingDays} day(s)</span>
+                  <span className="text-[var(--muted)]">{t.exactMissingDays}:</span>
+                  <span className="font-semibold text-[var(--foreground)]">{t.dayUnit(totalMissingDays)}</span>
                 </div>
                 <div className="flex justify-between border-b border-[var(--border)] pb-2">
-                  <span className="text-[var(--muted)]">Target Accounts:</span>
-                  <span className="font-semibold text-[var(--foreground)]">{expectedAccounts} account(s)</span>
+                  <span className="text-[var(--muted)]">{t.targetAccounts}:</span>
+                  <span className="font-semibold text-[var(--foreground)]">{t.accountUnit(expectedAccounts)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--muted)]">Est. Max LINE API Calls:</span>
+                  <span className="text-[var(--muted)]">{t.estimatedMaxCalls}:</span>
                   <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    ~{maxLineApiCalls.toLocaleString()} requests ({totalMissingDays} days × {expectedAccounts} accounts)
+                    {t.estimatedCallsDetail(totalMissingDays, expectedAccounts)}
                   </span>
                 </div>
               </div>
 
               <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-xl p-4 mb-6">
-                <div className="mb-2 text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Contiguous Missing Ranges</div>
+                <div className="mb-2 text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">{t.contiguousMissingRanges}</div>
                 <ul className="space-y-1 text-sm font-medium">
                   {missingDateRanges.map((r, i) => (
                     <li key={i} className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                      {r.start === r.end ? r.start : `${r.start} to ${r.end}`} ({getInclusiveCalendarDays(r.start, r.end)} days)
+                      {r.start === r.end
+                        ? formatDateDisplay(r.start, language)
+                        : `${formatDateDisplay(r.start, language)} – ${formatDateDisplay(r.end, language)}`}{" "}
+                      ({t.dayUnit(getInclusiveCalendarDays(r.start, r.end))})
                     </li>
                   ))}
                 </ul>
@@ -616,7 +635,7 @@ export function FollowerInsightsView() {
                   disabled={syncing}
                   className="px-4 py-2 rounded-xl text-sm font-semibold border border-[var(--border)] hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
                 <button
                   type="button"
@@ -630,10 +649,10 @@ export function FollowerInsightsView() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                      Syncing...
+                      {t.syncingBtn}
                     </>
                   ) : (
-                    "Confirm Sync"
+                    t.confirmSync
                   )}
                 </button>
               </div>
