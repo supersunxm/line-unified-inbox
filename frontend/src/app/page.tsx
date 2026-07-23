@@ -18,6 +18,9 @@ import { FollowerInsightsView } from "./follower-insights/follower-insights-view
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
+import { ConversationPaginationFooter } from "./conversation-pagination-footer";
+import { ConversationRowSkeleton } from "./conversation-row-skeleton";
+import { getChatsPaginationText } from "./chats-pagination-utils";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -1150,7 +1153,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const newestChatMessageRef = useRef<string | null>(null);
   const chatRouteHydrated = useRef(false);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
+  const [chatPage, setChatPage] = useState(1);
+  const [chatPageSize, setChatPageSize] = useState(20);
+  const [chatTotalCount, setChatTotalCount] = useState(0);
+  const [isChatPageLoading, setIsChatPageLoading] = useState(false);
+  const [chatPageError, setChatPageError] = useState<string | null>(null);
+  const [hasNewChatsAvailable, setHasNewChatsAvailable] = useState(false);
   const text = translations[language];
+  const chatsPaginationText = getChatsPaginationText(language);
   const primaryNavigation = primaryNavigationState(initialSection);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
@@ -1224,6 +1234,113 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     };
   }, [editingLineOaId, masterRetryNonce, searchQuery, selectedMaster, showLineOaForm, text.storeMasterSearchFailed]);
 
+  const prevFilterState = useRef({
+    selectedStore,
+    lineOaFilter,
+    searchText,
+    statusFilter,
+    priorityFilter,
+    seriesFilter,
+    modelFilter,
+    topicFilter,
+    sidebarView,
+    chatPageSize,
+  });
+
+  useEffect(() => {
+    const prev = prevFilterState.current;
+    const filtersChanged =
+      prev.selectedStore !== selectedStore ||
+      prev.lineOaFilter !== lineOaFilter ||
+      prev.searchText !== searchText ||
+      prev.statusFilter !== statusFilter ||
+      prev.priorityFilter !== priorityFilter ||
+      prev.seriesFilter !== seriesFilter ||
+      prev.modelFilter !== modelFilter ||
+      prev.topicFilter !== topicFilter ||
+      prev.sidebarView !== sidebarView ||
+      prev.chatPageSize !== chatPageSize;
+
+    prevFilterState.current = {
+      selectedStore,
+      lineOaFilter,
+      searchText,
+      statusFilter,
+      priorityFilter,
+      seriesFilter,
+      modelFilter,
+      topicFilter,
+      sidebarView,
+      chatPageSize,
+    };
+
+    const targetPage = filtersChanged ? 1 : chatPage;
+    if (filtersChanged && chatPage !== 1) {
+      setChatPage(1);
+    }
+
+    if (initialSection !== "chats") return;
+    let isCancelled = false;
+
+    const activeStatus =
+      sidebarView === "followUp"
+        ? "FOLLOW_UP"
+        : sidebarView === "reminded"
+          ? "REMINDED"
+          : statusFilter !== "all"
+            ? uiToApiStatus[statusFilter]
+            : undefined;
+
+    const params: Record<string, string | number | boolean | undefined> = {
+      page: targetPage,
+      pageSize: chatPageSize,
+      search: searchText.trim() || undefined,
+      storeId: selectedStore !== "all" ? selectedStore : undefined,
+      lineOaId: lineOaFilter !== "all" ? lineOaFilter : undefined,
+      followUpStatus: activeStatus,
+      priority: priorityFilter !== "all" ? (priorityFilter === "High" ? "HIGH" : "NORMAL") : undefined,
+    };
+
+    api
+      .conversations(params)
+      .then((res) => {
+        if (!isCancelled) {
+          const mapped = res.items.map(mapApiConversation);
+          setConversations(mapped);
+          setChatTotalCount(res.total);
+          setConversationStates((current) => ({
+            ...current,
+            ...Object.fromEntries(res.items.map((item) => [item.id, mapApiConversationState(item)])),
+          }));
+          setIsChatPageLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          setChatPageError(err instanceof Error ? err.message : text.connectionError);
+          setIsChatPageLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    initialSection,
+    chatPage,
+    chatPageSize,
+    selectedStore,
+    lineOaFilter,
+    searchText,
+    statusFilter,
+    priorityFilter,
+    seriesFilter,
+    modelFilter,
+    topicFilter,
+    sidebarView,
+    text.connectionError,
+  ]);
+
   const loadApplicationData = useCallback(async (silent = false) => {
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
@@ -1231,7 +1348,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setApiError(null);
     try {
       const [conversationResponse, storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse] = await Promise.all([
-        api.conversations(),
+        api.conversations({ page: chatPage, pageSize: chatPageSize }),
         api.stores(showArchivedStores),
         api.products(),
         api.topics(),
@@ -1240,6 +1357,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       ]);
       const mappedConversations = conversationResponse.items.map(mapApiConversation);
       setConversations(mappedConversations);
+      setChatTotalCount(conversationResponse.total);
       setConversationStates(
         Object.fromEntries(
           conversationResponse.items.map((item) => [
@@ -1288,7 +1406,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       if (!silent) setIsLoading(false);
       refreshInProgress.current = false;
     }
-  }, [showArchivedLineOas, showArchivedStores]);
+  }, [chatPage, chatPageSize, showArchivedLineOas, showArchivedStores]);
 
   const loadSystemStatus = useCallback(async () => {
     try {
@@ -2152,7 +2270,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
       <div
         ref={chatPanes.containerRef}
-        className={`app-workspace-grid grid min-h-[calc(100vh-80px)] ${initialSection === "chats" ? "chat-resizable-grid" : "grid-cols-[220px_380px_1fr]"}`}
+        className={`app-workspace-grid grid h-[calc(100vh-80px)] max-h-[calc(100vh-80px)] overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : "grid-cols-[220px_380px_1fr]"}`}
         style={initialSection === "chats" ? { gridTemplateColumns: `${chatPanes.widths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPanes.widths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
       >
         <aside className="app-surface min-w-0 overflow-y-auto border-r p-4">
@@ -2410,15 +2528,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           <FollowerInsightsView language={language} />
         ) : (
           <>
-        <section className="app-surface min-w-0 overflow-y-auto border-r">
-          <div className="border-b border-slate-200 p-4">
+        <section className="app-surface min-w-0 flex flex-col h-full overflow-hidden border-r">
+          <div className="border-b border-slate-200 p-4 shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold">
                   {text.conversationsToFollow}
                 </h2>
                 <p className="text-sm text-slate-500">
-                  {filteredConversations.length} {text.searchResults}
+                  {chatTotalCount || filteredConversations.length} {text.searchResults}
                 </p>
               </div>
 
@@ -2501,89 +2619,138 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             )}
           </div>
 
-          {filteredConversations.map((conversation) => {
-            const isSelected =
-              conversation.id === selectedConversation?.id;
-
-            return (
+          {hasNewChatsAvailable && (
+            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-xs text-blue-700 shrink-0">
+              <span>{chatsPaginationText.newChatsAvailable}</span>
               <button
-                key={conversation.id}
+                type="button"
                 onClick={() => {
-                  setSelectedConversationId(conversation.id);
-                  setShowTranslation(true);
+                  setHasNewChatsAvailable(false);
+                  setChatPage(1);
                 }}
-                className={`app-list-item w-full border-b border-slate-200 p-4 text-left ${
-                  isSelected ? "is-selected" : ""
-                }`}
+                className="font-semibold underline hover:text-blue-900 focus:outline-none"
               >
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{conversation.customer}</p>
-                    <p className="text-xs text-slate-500">
-                      {conversation.store}
-                    </p>
-                  </div>
-
-                  <span className="whitespace-nowrap text-xs text-slate-400">
-                    {formatRelativeTime(conversation.time, language)}
-                  </span>
-                </div>
-
-                <p className="mb-3 line-clamp-2 text-sm text-slate-700">
-                  {conversation.translations[language]}
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
-                    {conversation.product}
-                  </span>
-
-                  <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700">
-                    {conversation.topic}
-                  </span>
-
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      conversation.priority === "High"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {conversation.priority === "High"
-                      ? text.highPriority
-                      : text.normalPriority}
-                  </span>
-
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      conversationStates[conversation.id].status === "followUp"
-                        ? "bg-amber-100 text-amber-700"
-                        : conversationStates[conversation.id].status === "reminded"
-                          ? "bg-blue-100 text-blue-700"
-                          : conversationStates[conversation.id].status === "acknowledged"
-                            ? "bg-purple-100 text-purple-700"
-                            : conversationStates[conversation.id].status === "completed"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {getStatusLabel(
-                      language,
-                      conversationStates[conversation.id].status,
-                    )}
-                  </span>
-                </div>
+                {chatsPaginationText.refreshPage1}
               </button>
-            );
-          })}
-
-          {filteredConversations.length === 0 && (
-            <div className="app-empty-state px-6 py-16 text-center">
-              <p className="font-semibold">{text.noConversationsFound}</p>
-              <p className="mt-2 text-sm">{text.noResultsExplanation}</p>
-              <button onClick={clearAllFilters} className="app-button-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium">{text.clearFilter}</button>
             </div>
           )}
+
+          <div className="flex-1 overflow-y-auto">
+            {isChatPageLoading ? (
+              <ConversationRowSkeleton count={chatPageSize} />
+            ) : chatPageError ? (
+              <div className="p-8 text-center text-sm text-red-600">
+                <p>{chatsPaginationText.failedToLoadConversations}: {chatPageError}</p>
+                <button
+                  type="button"
+                  onClick={() => setIsChatPageLoading((v) => !v)}
+                  className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  {text.retry}
+                </button>
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="app-empty-state px-6 py-16 text-center">
+                <p className="font-semibold">{text.noConversationsFound}</p>
+                <p className="mt-2 text-sm">{text.noResultsExplanation}</p>
+                {hasActiveFilters && (
+                  <button onClick={clearAllFilters} className="app-button-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium">
+                    {text.clearFilter}
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredConversations.map((conversation) => {
+                const isSelected = conversation.id === selectedConversation?.id;
+
+                return (
+                  <button
+                    key={conversation.id}
+                    onClick={() => {
+                      setSelectedConversationId(conversation.id);
+                      setShowTranslation(true);
+                    }}
+                    className={`app-list-item w-full border-b border-slate-200 p-4 text-left ${
+                      isSelected ? "is-selected" : ""
+                    }`}
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{conversation.customer}</p>
+                        <p className="text-xs text-slate-500">
+                          {conversation.store}
+                        </p>
+                      </div>
+
+                      <span className="whitespace-nowrap text-xs text-slate-400">
+                        {formatRelativeTime(conversation.time, language)}
+                      </span>
+                    </div>
+
+                    <p className="mb-3 line-clamp-2 text-sm text-slate-700">
+                      {conversation.translations[language]}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
+                        {conversation.product}
+                      </span>
+
+                      <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700">
+                        {conversation.topic}
+                      </span>
+
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs ${
+                          conversation.priority === "High"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {conversation.priority === "High"
+                          ? text.highPriority
+                          : text.normalPriority}
+                      </span>
+
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs ${
+                          conversationStates[conversation.id]?.status === "followUp"
+                            ? "bg-amber-100 text-amber-700"
+                            : conversationStates[conversation.id]?.status === "reminded"
+                              ? "bg-blue-100 text-blue-700"
+                              : conversationStates[conversation.id]?.status === "acknowledged"
+                                ? "bg-purple-100 text-purple-700"
+                                : conversationStates[conversation.id]?.status === "completed"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {getStatusLabel(
+                          language,
+                          conversationStates[conversation.id]?.status,
+                        )}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="shrink-0">
+            <ConversationPaginationFooter
+              currentPage={chatPage}
+              pageSize={chatPageSize}
+              totalCount={chatTotalCount || filteredConversations.length}
+              loading={isChatPageLoading}
+              language={language}
+              onPageChange={(newPage) => setChatPage(newPage)}
+              onPageSizeChange={(newSize) => {
+                setChatPageSize(newSize);
+                setChatPage(1);
+              }}
+            />
+          </div>
         </section>
 
         <ResizableSeparator separator="conversations" value={chatPanes.widths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={chatPanes.resize} />

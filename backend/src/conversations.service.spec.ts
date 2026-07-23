@@ -68,3 +68,57 @@ void test("100 list rows use one Store Master batch query, cap page size, and lo
   assert.equal(result.items[1].resolvedLineOaManagerUrl, null);
   assert.equal(JSON.stringify(result).includes("encryptedChannelAccessToken"), false);
 });
+
+void test("ConversationsService.list supports lineOaId filter, unknown lineOaId, and page skip/take pagination", async () => {
+  const capturedArgs: Array<Record<string, unknown>> = [];
+  const fakeConversations = [
+    {
+      id: "conv-1", customerId: "cust-1", storeId: "store-1", lineOfficialAccountId: "oa-1", priority: "NORMAL", prioritySource: null, followUpStatus: "FOLLOW_UP", productRelationship: null, purchaseIntent: null, latestMessageAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+      customer: { id: "cust-1", lineUserId: "U1", displayName: "Cust 1", pictureUrl: null, statusMessage: null, preferredLanguage: null, profileFetchedAt: null, profileFetchStatus: "SUCCESS", profileFetchError: null, createdAt: new Date(), updatedAt: new Date() },
+      store: { id: "store-1", code: "S1", name: "Store 1", region: null, area: null, isActive: true, archivedAt: null, createdAt: new Date(), updatedAt: new Date(), storeMasterId: null, provinceSource: null, regionSource: null, storeMaster: null },
+      lineOfficialAccount: { id: "oa-1", name: "OA 1", basicId: null, channelId: null, destinationId: null, encryptedChannelSecret: "c", encryptedChannelAccessToken: "c", webhookKey: "w", lineChatWorkspaceUrl: null, connectionStatus: "CONNECTED", lastWebhookReceivedAt: null, lastConnectionTestAt: null, lastConnectionError: null, storeId: "store-1", isActive: true, archivedAt: null, createdAt: new Date(), updatedAt: new Date() },
+      messages: [], products: [], topics: [], notes: [], activityHistory: [],
+    },
+  ];
+
+  const prisma = {
+    conversation: {
+      findMany: (args: Record<string, unknown>) => {
+        capturedArgs.push(args);
+        return Promise.resolve(fakeConversations);
+      },
+      count: () => Promise.resolve(1),
+    },
+    storeMaster: { findMany: () => Promise.resolve([]) },
+    $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+
+  // 1. No lineOaId (page 1, size 20)
+  await service.list({ page: 1, pageSize: 20, sort: "latest-desc" });
+  const req1 = capturedArgs[0] as { where: { lineOfficialAccountId?: string }; skip: number; take: number };
+  assert.equal(req1.where.lineOfficialAccountId, undefined);
+  assert.equal(req1.skip, 0);
+  assert.equal(req1.take, 20);
+
+  // 2. Valid lineOaId
+  await service.list({ page: 1, pageSize: 20, lineOaId: "oa-1", sort: "latest-desc" });
+  const req2 = capturedArgs[1] as { where: { lineOfficialAccountId?: string }; skip: number; take: number };
+  assert.equal(req2.where.lineOfficialAccountId, "oa-1");
+  assert.equal(req2.skip, 0);
+  assert.equal(req2.take, 20);
+
+  // 3. Unknown lineOaId
+  await service.list({ page: 1, pageSize: 20, lineOaId: "unknown-oa", sort: "latest-desc" });
+  const req3 = capturedArgs[2] as { where: { lineOfficialAccountId?: string }; skip: number; take: number };
+  assert.equal(req3.where.lineOfficialAccountId, "unknown-oa");
+
+  // 4. Page 2 with same filter
+  await service.list({ page: 2, pageSize: 20, lineOaId: "oa-1", sort: "latest-desc" });
+  const req4 = capturedArgs[3] as { where: { lineOfficialAccountId?: string }; skip: number; take: number };
+  assert.equal(req4.where.lineOfficialAccountId, "oa-1");
+  assert.equal(req4.skip, 20);
+  assert.equal(req4.take, 20);
+});
+

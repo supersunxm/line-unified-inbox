@@ -48,6 +48,7 @@ export class ConversationsService {
     const where: Prisma.ConversationWhereInput = {
       store: { archivedAt: null },
       storeId: query.storeId,
+      lineOfficialAccountId: query.lineOaId,
       followUpStatus: query.followUpStatus,
       priority: query.priority,
       products: query.productModelId
@@ -85,9 +86,12 @@ export class ConversationsService {
         },
       ] : undefined,
     };
-    const orderBy: Prisma.ConversationOrderByWithRelationInput =
-      query.sort === "latest-asc" ? { latestMessageAt: "asc" } :
-      query.sort === "priority-desc" ? { priority: "desc" } : { latestMessageAt: "desc" };
+    const orderBy: Prisma.ConversationOrderByWithRelationInput[] =
+      query.sort === "latest-asc"
+        ? [{ latestMessageAt: "asc" }, { id: "asc" }]
+        : query.sort === "priority-desc"
+          ? [{ priority: "desc" }, { latestMessageAt: "desc" }, { id: "desc" }]
+          : [{ latestMessageAt: "desc" }, { id: "desc" }];
     const pageSize = Math.min(100, Math.max(1, Math.floor(query.pageSize)));
     const [items, total] = await this.prisma.$transaction([
       this.prisma.conversation.findMany({ where, include: conversationListInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),

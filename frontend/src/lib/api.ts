@@ -53,7 +53,18 @@ export const api = {
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
   health: () => request<{ status: string }>("/health"),
   searchStoreMaster: (query: string, limit = 10) => request<StoreMasterSuggestion[]>(`/store-master/search?q=${encodeURIComponent(query)}&limit=${limit}`),
-  conversations: () => request<ConversationListResponse>("/conversations?pageSize=100"),
+  conversations: (params?: Record<string, string | number | boolean | undefined>) => {
+    const query = new URLSearchParams();
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      }
+    }
+    const qStr = query.toString();
+    return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`);
+  },
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
   conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
   reanalyzeConversation: (id: string) => request<ApiConversation>(`/conversations/${id}/reanalyze`, { method: "POST" }),
