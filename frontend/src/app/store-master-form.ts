@@ -47,7 +47,7 @@ export function applyStoreMasterSelection(
     ...form,
     storeMasterId: master.id,
     storeId: master.existingStore?.id,
-    name: master.accountName,
+    name: master.accountName ? master.accountName.trim() : "",
     basicId: master.lineId ?? "",
     newStore: undefined,
   };
