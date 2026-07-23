@@ -48,6 +48,12 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
   );
   const [showSyncMissingModal, setShowSyncMissingModal] = useState(false);
 
+  // Store-level Trend Filter State
+  const [selectedLineOaId, setSelectedLineOaId] = useState<string | null>(null);
+  const [storeTrendData, setStoreTrendData] = useState<SummaryDailyRow[]>([]);
+  const [storeTrendLoading, setStoreTrendLoading] = useState(false);
+  const [storeTrendError, setStoreTrendError] = useState<string | null>(null);
+
   const loadData = useCallback(
     async (start: string, end: string) => {
       const validation = validateDateRange(start, end, language);
@@ -92,6 +98,48 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
     const timer = window.setTimeout(() => void loadData(dateFrom, dateTo), 0);
     return () => window.clearTimeout(timer);
   }, [dateFrom, dateTo, loadData]);
+
+  // Derive effective selected store ID (resets to null if selected store no longer exists in storeData)
+  const effectiveSelectedLineOaId = useMemo(() => {
+    if (!selectedLineOaId) return null;
+    if (storeData.length > 0 && !storeData.some((s) => s.lineOaId === selectedLineOaId)) {
+      return null;
+    }
+    return selectedLineOaId;
+  }, [selectedLineOaId, storeData]);
+
+  const handleSelectStore = (lineOaId: string | null) => {
+    setSelectedLineOaId(lineOaId);
+    if (lineOaId) {
+      setStoreTrendLoading(true);
+      setStoreTrendError(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!effectiveSelectedLineOaId) return;
+    let isCancelled = false;
+
+    api
+      .followerInsightsSummary({ dateFrom, dateTo, lineOaId: effectiveSelectedLineOaId })
+      .then((data) => {
+        if (!isCancelled) {
+          setStoreTrendData(data);
+          setStoreTrendError(null);
+          setStoreTrendLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          setStoreTrendError(err instanceof Error ? err.message : t.failedToLoadStoreTrend);
+          setStoreTrendLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [effectiveSelectedLineOaId, dateFrom, dateTo, t]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -534,12 +582,17 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
                   </div>
                 </div>
 
-                {/* Trend Chart Component */}
+                {/* Trend Chart Component with Store Filter */}
                 <TrendChart
-                  data={summaryData}
+                  data={effectiveSelectedLineOaId ? storeTrendData : summaryData}
                   metric={chartMetric}
                   language={language}
+                  stores={storeData}
+                  selectedLineOaId={effectiveSelectedLineOaId}
+                  isLoadingTrend={effectiveSelectedLineOaId ? storeTrendLoading : false}
+                  trendError={effectiveSelectedLineOaId ? storeTrendError : null}
                   onMetricChange={setChartMetric}
+                  onSelectStore={handleSelectStore}
                 />
               </div>
             )}

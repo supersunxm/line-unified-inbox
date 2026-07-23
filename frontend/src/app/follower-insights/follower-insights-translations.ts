@@ -79,12 +79,18 @@ export type FollowerInsightsTranslations = {
   quickRange90: string;
   max90DaysNote: string;
 
-  // Trend chart
+  // Trend chart & Store filter
   trendSubheader: string;
   noChartData: string;
   metricViewFollowers: string;
   metricViewTargetedReach: string;
   metricViewBlocks: string;
+  allStores: string;
+  searchStoresOrLineOas: string;
+  selectedStore: string;
+  noDataForStoreInRange: string;
+  failedToLoadStoreTrend: string;
+  clearStoreFilter: string;
 };
 
 export const followerInsightsTranslations: Record<Language, FollowerInsightsTranslations> = {
@@ -173,6 +179,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     metricViewFollowers: "ดูตัวเลขผู้ติดตาม",
     metricViewTargetedReach: "ดูตัวเลขผู้รับข้อความที่เข้าถึงได้",
     metricViewBlocks: "ดูตัวเลขการบล็อก",
+    allStores: "ทุกร้าน",
+    searchStoresOrLineOas: "ค้นหาร้านค้าหรือ LINE OA...",
+    selectedStore: "ร้านค้าที่เลือก",
+    noDataForStoreInRange: "ไม่มีข้อมูลสำหรับร้านนี้ในช่วงวันที่เลือก",
+    failedToLoadStoreTrend: "โหลดข้อมูลแนวโน้มของร้านค้าไม่สำเร็จ",
+    clearStoreFilter: "ล้างตัวกรองร้านค้า",
   },
   en: {
     followerInsightsTitle: "Follower Insights",
@@ -259,6 +271,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     metricViewFollowers: "View Followers metric",
     metricViewTargetedReach: "View Targeted Reach metric",
     metricViewBlocks: "View Blocks metric",
+    allStores: "All stores",
+    searchStoresOrLineOas: "Search stores or LINE OAs...",
+    selectedStore: "Selected store",
+    noDataForStoreInRange: "No data for this store in the selected range",
+    failedToLoadStoreTrend: "Failed to load store trend",
+    clearStoreFilter: "Clear store filter",
   },
   zh: {
     followerInsightsTitle: "关注者洞察",
@@ -345,6 +363,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     metricViewFollowers: "查看关注者指标",
     metricViewTargetedReach: "查看目标覆盖指标",
     metricViewBlocks: "查看屏蔽指标",
+    allStores: "全部门店",
+    searchStoresOrLineOas: "搜索门店或 LINE OA...",
+    selectedStore: "已选门店",
+    noDataForStoreInRange: "所选范围内该门店无数据",
+    failedToLoadStoreTrend: "加载门店趋势数据失败",
+    clearStoreFilter: "清除门店筛选",
   },
 };
 

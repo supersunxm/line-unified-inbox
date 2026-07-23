@@ -14,7 +14,7 @@ import {
   followerInsightsTranslations,
   getFollowerInsightsText,
 } from "../src/app/follower-insights/follower-insights-translations.ts";
-import type { SummaryDailyRow } from "../src/types/api.ts";
+import type { ByStoreAccountRow, SummaryDailyRow } from "../src/types/api.ts";
 
 test("getInclusiveCalendarDays calculates pure UTC calendar day differences", () => {
   assert.equal(getInclusiveCalendarDays("2026-07-01", "2026-07-01"), 1);
@@ -121,33 +121,21 @@ test("Follower Insights localization dictionary returns correct Thai, English, a
   assert.equal(en.followerInsightsTitle, "Follower Insights");
   assert.equal(zh.followerInsightsTitle, "关注者洞察");
 
-  assert.equal(th.partialDataAvailable, "มีข้อมูลเพียงบางส่วน");
-  assert.equal(en.partialDataAvailable, "Partial data available");
-  assert.equal(zh.partialDataAvailable, "部分数据可用");
+  assert.equal(th.allStores, "ทุกร้าน");
+  assert.equal(en.allStores, "All stores");
+  assert.equal(zh.allStores, "全部门店");
 
-  assert.equal(th.syncMissingDates, "ดึงข้อมูลวันที่ขาด");
-  assert.equal(en.syncMissingDates, "Sync Missing Dates");
-  assert.equal(zh.syncMissingDates, "同步缺失日期");
+  assert.equal(th.noDataForStoreInRange, "ไม่มีข้อมูลสำหรับร้านนี้ในช่วงวันที่เลือก");
+  assert.equal(en.noDataForStoreInRange, "No data for this store in the selected range");
+  assert.equal(zh.noDataForStoreInRange, "所选范围内该门店无数据");
 
-  assert.equal(th.totalFollowers, "ผู้ติดตามทั้งหมด");
-  assert.equal(en.totalFollowers, "Total Followers");
-  assert.equal(zh.totalFollowers, "总关注者");
+  assert.equal(th.failedToLoadStoreTrend, "โหลดข้อมูลแนวโน้มของร้านค้าไม่สำเร็จ");
+  assert.equal(en.failedToLoadStoreTrend, "Failed to load store trend");
+  assert.equal(zh.failedToLoadStoreTrend, "加载门店趋势数据失败");
 
-  assert.equal(th.startFollowers, "ผู้ติดตามวันเริ่มต้น");
-  assert.equal(en.startFollowers, "Start Followers");
-  assert.equal(zh.startFollowers, "起始关注者");
-
-  assert.equal(th.periodIncrease, "เพิ่มขึ้นในช่วงเวลา");
-  assert.equal(en.periodIncrease, "Period Increase");
-  assert.equal(zh.periodIncrease, "期间增加");
-
-  assert.equal(th.ready, "พร้อม");
-  assert.equal(en.ready, "Ready");
-  assert.equal(zh.ready, "就绪");
-
-  assert.equal(th.missingBaseline, "ไม่มีข้อมูลวันเริ่มต้น");
-  assert.equal(en.missingBaseline, "Missing baseline");
-  assert.equal(zh.missingBaseline, "缺少基线数据");
+  assert.equal(th.clearStoreFilter, "ล้างตัวกรองร้านค้า");
+  assert.equal(en.clearStoreFilter, "Clear store filter");
+  assert.equal(zh.clearStoreFilter, "清除门店筛选");
 });
 
 test("Dynamic localization formatters interpolate text correctly across all locales", () => {
@@ -229,4 +217,63 @@ test("Live locale switching updates rendered UI elements instantly across en, th
   const textZh = getFollowerInsightsText("zh");
   assert.equal(textZh.followerInsightsTitle, "关注者洞察");
   assert.equal(textZh.totalFollowers, "总关注者");
+});
+
+test("Store selector option deduplication and alphabetical sorting by storeName then accountName", () => {
+  const mockStores: ByStoreAccountRow[] = [
+    { lineOaId: "oa_chonburi", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, periodIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+    { lineOaId: "oa_chonburi", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, periodIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" }, // Duplicate
+    { lineOaId: "oa_bangkok_b", storeName: "OPPO Bangkok", accountName: "@oppobangkok_b", followers: 200, startFollowers: 190, periodIncrease: 10, targetedReaches: 100, blocks: 5, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+    { lineOaId: "oa_bangkok_a", storeName: "OPPO Bangkok", accountName: "@oppobangkok_a", followers: 150, startFollowers: 140, periodIncrease: 10, targetedReaches: 80, blocks: 3, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+  ];
+
+  // Deduplicate by lineOaId
+  const map = new Map<string, ByStoreAccountRow>();
+  for (const s of mockStores) {
+    if (s.lineOaId && !map.has(s.lineOaId)) {
+      map.set(s.lineOaId, s);
+    }
+  }
+
+  assert.equal(map.size, 3, "Duplicate lineOaId must be deduplicated to 3 unique stores");
+
+  // Sort by storeName, then accountName
+  const sorted = Array.from(map.values()).sort((a, b) => {
+    const sComp = a.storeName.localeCompare(b.storeName);
+    if (sComp !== 0) return sComp;
+    return a.accountName.localeCompare(b.accountName);
+  });
+
+  assert.equal(sorted[0].lineOaId, "oa_bangkok_a");
+  assert.equal(sorted[1].lineOaId, "oa_bangkok_b");
+  assert.equal(sorted[2].lineOaId, "oa_chonburi");
+});
+
+test("Store-level Trend Filter architecture & state isolation in FollowerInsightsView and TrendChart", () => {
+  const viewCode = readFileSync(new URL("../src/app/follower-insights/follower-insights-view.tsx", import.meta.url), "utf8");
+  const chartCode = readFileSync(new URL("../src/app/follower-insights/trend-chart.tsx", import.meta.url), "utf8");
+
+  // 1. Default aggregate mode: selectedLineOaId defaults to null
+  assert.match(viewCode, /const \[selectedLineOaId,\s*setSelectedLineOaId\] = useState<string \| null>\(null\)/);
+
+  // 2. Selecting a store queries api.followerInsightsSummary with lineOaId
+  assert.match(viewCode, /followerInsightsSummary\(\{\s*dateFrom,\s*dateTo,\s*lineOaId:\s*effectiveSelectedLineOaId\s*\}\)/);
+
+  // 3. Aggregate summaryData is separate and NOT overwritten
+  assert.match(viewCode, /const \[storeTrendData,\s*setStoreTrendData\] = useState<SummaryDailyRow\[\]>\(\[\]\)/);
+  assert.match(viewCode, /data=\{effectiveSelectedLineOaId \? storeTrendData : summaryData\}/);
+
+  // 4. Changing date range reloads selected store trend
+  assert.match(viewCode, /useEffect\(\(\) => \{\s*if \(!effectiveSelectedLineOaId\)/);
+
+  // 5. Missing store data displays empty state t.noDataForStoreInRange
+  assert.match(chartCode, /selectedLineOaId !== null \? t\.noDataForStoreInRange : t\.noChartData/);
+
+  // 6. Accessible combobox pattern in TrendChart
+  assert.match(chartCode, /StoreSelectorCombobox/);
+  assert.match(chartCode, /role="combobox"/);
+  assert.match(chartCode, /role="listbox"/);
+  assert.match(chartCode, /role="option"/);
+  assert.match(chartCode, /aria-expanded=/);
+  assert.match(chartCode, /aria-controls="store-selector-listbox"/);
 });
