@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from "@nestjs/common";
 import { FollowerInsightsService } from "./follower-insights.service";
 import { Roles } from "../auth/auth.decorators";
 import {
   BackfillBatchResult,
   BackfillFollowerInsightsDto,
+  BackfillJobResponseDto,
   ByStoreAccountRow,
   ByStoreQueryDto,
   QueueSummaryDto,
@@ -50,7 +51,7 @@ export class FollowerInsightsController {
    */
   @Roles("ADMIN")
   @Get("backfill/jobs/:lineOaId")
-  async getJobStatus(@Param("lineOaId") lineOaId: string): Promise<any> {
+  async getJobStatus(@Param("lineOaId") lineOaId: string): Promise<BackfillJobResponseDto> {
     return this.followerInsightsService.getJobStatus(lineOaId);
   }
 
@@ -61,7 +62,7 @@ export class FollowerInsightsController {
   @Roles("ADMIN")
   @Post("backfill/retry")
   @HttpCode(HttpStatus.OK)
-  async retryJob(@Body() body: { lineOaId: string }): Promise<any> {
+  async retryJob(@Body() body: { lineOaId: string }): Promise<BackfillJobResponseDto> {
     return this.followerInsightsService.retryBackfillJob(body.lineOaId);
   }
 

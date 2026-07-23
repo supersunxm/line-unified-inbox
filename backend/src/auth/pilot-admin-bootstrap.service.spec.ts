@@ -90,7 +90,7 @@ function createPrisma(initialUsers: StoredUser[] = []) {
 
 const fakePasswords = {
   hash: () => Promise.resolve("safely-hashed-value"),
-} as PasswordService;
+} as unknown as PasswordService;
 
 void test("disabled bootstrap does nothing", async () => {
   await withEnvironment(

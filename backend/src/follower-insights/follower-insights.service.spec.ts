@@ -1187,8 +1187,8 @@ test("processClaimedJob applies exponential backoff with jitter on retryable err
   const service = new FollowerInsightsService(mockPrisma, {} as any);
   await service.processClaimedJob("job-backoff-1", "test-worker");
 
-  assert.ok(capturedNextAttemptAt instanceof Date, "nextAttemptAt must be set on retryable failure");
-  const delayMs = capturedNextAttemptAt!.getTime() - Date.now();
+  assert.ok(capturedNextAttemptAt !== null, "nextAttemptAt must be set on retryable failure");
+  const delayMs = (capturedNextAttemptAt as Date).getTime() - Date.now();
   // For attempts=1, base backoff = 2^1 * 60s = 120s ± 10% = 108s–132s
   assert.ok(delayMs > 100_000 && delayMs < 145_000, `Backoff delay ${delayMs}ms should be in [100s, 145s] range`);
 });

@@ -17,9 +17,10 @@ import { AuthModule } from "./auth/auth.module";
 import { OperationsController } from "./operations.controller";
 import { MediaModule } from "./media/media.module";
 import { FollowerInsightsModule } from "./follower-insights/follower-insights.module";
+import { FriendSourceLinksModule } from "./friend-source-links/friend-source-links.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule],
+  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
   providers: [ConversationsService],
 })

@@ -237,6 +237,7 @@ model Store {
   storeMaster          StoreMaster?          @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
   lineOfficialAccounts LineOfficialAccount[]
   conversations        Conversation[]
+  friendSourceLinks    FriendSourceLink[]
 
   @@index([isActive])
 }
@@ -304,6 +305,7 @@ model LineOfficialAccount {
   pilotChecklist              PilotChecklistItem[]
   followerSnapshots           LineOaFollowerSnapshot[]
   backfillJobs                LineOaBackfillJob[]
+  friendSourceLinks           FriendSourceLink[]
 
   @@index([storeId, isActive])
   @@index([isActive, lastBackfillReconciledAt])
@@ -586,4 +588,66 @@ model LineOaFollowerSnapshot {
   @@unique([lineOaId, snapshotDate])
   @@index([snapshotDate])
   @@index([lineOaId])
+}
+
+enum FriendSource {
+  STORE_QR
+  TIKTOK
+  FACEBOOK
+  INSTAGRAM
+}
+
+enum FriendAttributionStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  UNMATCHED
+}
+
+model FriendSourceLink {
+  id             String                  @id @default(uuid())
+  storeId        String
+  lineOaId       String
+  source         FriendSource
+  shortCode      String                  @unique
+  destinationUrl String
+  isActive       Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  store          Store                   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOa         LineOfficialAccount     @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+  clicks         FriendSourceClick[]
+  attributions   FriendSourceAttribution[]
+
+  @@unique([lineOaId, source])
+  @@index([storeId, isActive])
+  @@index([lineOaId, isActive])
+}
+
+model FriendSourceClick {
+  id                 String           @id @default(uuid())
+  friendSourceLinkId String
+  trackingSessionId  String           @unique
+  clickedAt          DateTime         @default(now())
+  referrer           String?
+  userAgent          String?
+  ipHash             String?
+  friendSourceLink   FriendSourceLink @relation(fields: [friendSourceLinkId], references: [id], onDelete: Cascade)
+
+  @@index([friendSourceLinkId, clickedAt])
+}
+
+model FriendSourceAttribution {
+  id                 String                  @id @default(uuid())
+  friendSourceLinkId String
+  trackingSessionId  String?
+  lineUserIdHash     String?
+  followedAt         DateTime
+  status             FriendAttributionStatus
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  friendSourceLink   FriendSourceLink        @relation(fields: [friendSourceLinkId], references: [id], onDelete: Cascade)
+
+  @@index([friendSourceLinkId, status])
+  @@index([trackingSessionId])
 }

@@ -7,7 +7,6 @@ import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto } from "./li
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
-import { getPreviousBangkokDateString, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
 type IncludedOa = Prisma.LineOfficialAccountGetPayload<{ include: typeof safeInclude }>;

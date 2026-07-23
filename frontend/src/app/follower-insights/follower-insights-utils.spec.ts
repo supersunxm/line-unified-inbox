@@ -1,4 +1,5 @@
-import { describe, expect, it } from "@jest/globals";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   calculateCoverage,
   calculatePaginationBounds,
@@ -7,6 +8,11 @@ import {
   validateDateRange,
 } from "./follower-insights-utils";
 import type { SummaryDailyRow } from "@/types/api";
+
+const expect = (actual: unknown) => ({
+  toBe: (expected: unknown) => assert.equal(actual, expected),
+  toBeNull: () => assert.equal(actual, null),
+});
 
 describe("Follower Insights Pure Utility Helpers", () => {
   describe("getInclusiveCalendarDays", () => {
@@ -54,9 +60,9 @@ describe("Follower Insights Pure Utility Helpers", () => {
   describe("calculateCoverage", () => {
     it("counts only rows with followers !== null and accountsReady > 0", () => {
       const mockSummary: SummaryDailyRow[] = [
-        { date: "2026-07-01", followers: 100, accountsReady: 10, accountsExpected: 10, accountsWithData: 10, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 2 },
-        { date: "2026-07-02", followers: null, accountsReady: 0, accountsExpected: 10, accountsWithData: 0, accountsMissing: 10, dailyIncrease: null, targetedReaches: null, blocks: null },
-        { date: "2026-07-03", followers: 120, accountsReady: 5, accountsExpected: 10, accountsWithData: 5, accountsMissing: 5, dailyIncrease: 20, targetedReaches: 60, blocks: 3 },
+        { date: "2026-07-01", followers: 100, accountsReady: 10, accountsUnready: 0, accountsExpected: 10, accountsWithData: 10, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 2 },
+        { date: "2026-07-02", followers: null, accountsReady: 0, accountsUnready: 0, accountsExpected: 10, accountsWithData: 0, accountsMissing: 10, dailyIncrease: null, targetedReaches: null, blocks: null },
+        { date: "2026-07-03", followers: 120, accountsReady: 5, accountsUnready: 0, accountsExpected: 10, accountsWithData: 5, accountsMissing: 5, dailyIncrease: 20, targetedReaches: 60, blocks: 3 },
       ];
 
       const res = calculateCoverage(mockSummary, "2026-07-01", "2026-07-03");

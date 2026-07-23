@@ -1,5 +1,4 @@
 import { Injectable, Logger, NotFoundException, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
@@ -398,7 +397,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
         enqueuedCount++;
         inspectedAndSuccessfulIds.push(acc.id);
       } catch (err) {
-        if (err && typeof err === "object" && (err as any).code === "P2002") {
+        if ((err as { code?: string })?.code === "P2002") {
           skippedCollisions++;
           inspectedAndSuccessfulIds.push(acc.id);
           this.logger.debug(`Reconciliation: collision for ${acc.id} (expected in multi-instance)`);
@@ -890,13 +889,15 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
         },
       });
 
-      setImmediate(() => {
-        void this.pollAndProcessJobs().catch(() => null);
-      });
+      if (BackfillConfig.workerEnabled) {
+        setImmediate(() => {
+          void this.pollAndProcessJobs().catch(() => null);
+        });
+      }
 
       return this.mapJobToDto(job);
     } catch (error) {
-      if (error && typeof error === "object" && (error as any).code === "P2002") {
+      if ((error as { code?: string })?.code === "P2002") {
         const existing = await this.prisma.lineOaBackfillJob.findFirst({
           where: { lineOaId, status: { in: ["QUEUED", "RUNNING"] } },
           orderBy: { createdAt: "desc" },
@@ -971,7 +972,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
       const errMessage = error instanceof Error ? error.message : "Backfill execution error";
 
       // Honor Retry-After from 429 errors
-      const retryAfterMs = (error as any)?.retryAfterMs as number | undefined;
+      const retryAfterMs = (error as { retryAfterMs?: number })?.retryAfterMs;
 
       if (job.attempts < job.maxAttempts) {
         const baseBackoffMs = retryAfterMs ?? Math.pow(2, job.attempts) * 60 * 1000;
@@ -1005,7 +1006,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
   }
 
   async executeBackfillJob(jobId: string): Promise<void> {
-    void this.processClaimedJob(jobId);
+    await this.processClaimedJob(jobId);
   }
 
   // ---------------------------------------------------------------------------

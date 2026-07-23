@@ -80,7 +80,9 @@ void test("LINE 404 and 410 are recorded as FAILED without throwing", async () =
   }
 });
 
+import { join } from "node:path";
+
 void test("access token is never written by the media service", () => {
-  const source = readFileSync(new URL("./line-image.service.ts", import.meta.url), "utf8");
+  const source = readFileSync(join(__dirname, "line-image.service.ts"), "utf8");
   assert.doesNotMatch(source, /logger\.(log|warn|error).*accessToken/);
 });

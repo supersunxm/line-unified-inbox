@@ -44,9 +44,9 @@ test("validateDateRange enforces exact 90 calendar day limits and date ordering 
 
 test("calculateCoverage counts only populated rows with followers !== null and accountsReady > 0", () => {
   const mockSummary: SummaryDailyRow[] = [
-    { date: "2026-07-01", followers: 100, accountsReady: 10, accountsExpected: 10, accountsWithData: 10, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 2 },
-    { date: "2026-07-02", followers: null, accountsReady: 0, accountsExpected: 10, accountsWithData: 0, accountsMissing: 10, dailyIncrease: null, targetedReaches: null, blocks: null },
-    { date: "2026-07-03", followers: 120, accountsReady: 5, accountsExpected: 10, accountsWithData: 5, accountsMissing: 5, dailyIncrease: 20, targetedReaches: 60, blocks: 3 },
+    { date: "2026-07-01", followers: 100, accountsReady: 10, accountsUnready: 0, accountsExpected: 10, accountsWithData: 10, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 2 },
+    { date: "2026-07-02", followers: null, accountsReady: 0, accountsUnready: 0, accountsExpected: 10, accountsWithData: 0, accountsMissing: 10, dailyIncrease: null, targetedReaches: null, blocks: null },
+    { date: "2026-07-03", followers: 120, accountsReady: 5, accountsUnready: 0, accountsExpected: 10, accountsWithData: 5, accountsMissing: 5, dailyIncrease: 20, targetedReaches: 60, blocks: 3 },
   ];
 
   const res = calculateCoverage(mockSummary, "2026-07-01", "2026-07-03");
@@ -221,10 +221,10 @@ test("Live locale switching updates rendered UI elements instantly across en, th
 
 test("Store selector option deduplication and alphabetical sorting by storeName then accountName", () => {
   const mockStores: ByStoreAccountRow[] = [
-    { lineOaId: "oa_chonburi", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, periodIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
-    { lineOaId: "oa_chonburi", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, periodIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" }, // Duplicate
-    { lineOaId: "oa_bangkok_b", storeName: "OPPO Bangkok", accountName: "@oppobangkok_b", followers: 200, startFollowers: 190, periodIncrease: 10, targetedReaches: 100, blocks: 5, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
-    { lineOaId: "oa_bangkok_a", storeName: "OPPO Bangkok", accountName: "@oppobangkok_a", followers: 150, startFollowers: 140, periodIncrease: 10, targetedReaches: 80, blocks: 3, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+    { lineOaId: "oa_chonburi", storeId: "s1", date: "2026-07-22", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, previousFollowers: 90, periodIncrease: 10, dailyIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+    { lineOaId: "oa_chonburi", storeId: "s1", date: "2026-07-22", storeName: "OPPO Chonburi", accountName: "@oppochonburi", followers: 100, startFollowers: 90, previousFollowers: 90, periodIncrease: 10, dailyIncrease: 10, targetedReaches: 50, blocks: 2, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" }, // Duplicate
+    { lineOaId: "oa_bangkok_b", storeId: "s2", date: "2026-07-22", storeName: "OPPO Bangkok", accountName: "@oppobangkok_b", followers: 200, startFollowers: 190, previousFollowers: 190, periodIncrease: 10, dailyIncrease: 10, targetedReaches: 100, blocks: 5, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
+    { lineOaId: "oa_bangkok_a", storeId: "s2", date: "2026-07-22", storeName: "OPPO Bangkok", accountName: "@oppobangkok_a", followers: 150, startFollowers: 140, previousFollowers: 140, periodIncrease: 10, dailyIncrease: 10, targetedReaches: 80, blocks: 3, status: "ready", fetchedAt: "2026-07-22T00:00:00Z" },
   ];
 
   // Deduplicate by lineOaId
