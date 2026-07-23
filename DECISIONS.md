@@ -115,3 +115,22 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Authentication remains an opaque backend session in a persistent secure HttpOnly cookie. The frontend restores it through `/auth/me`; it does not persist passwords, access tokens, or a parallel authentication flag.
 - Any API 401 emits one application-level expiry event that clears in-memory identity and routes to `/login`. Network and server errors stay in controlled setup/error-banner states instead of becoming unhandled render errors.
 - Railway runs Next.js from the self-contained `frontend` root, binds to `0.0.0.0:$PORT`, and exposes `/api/health` without returning configuration or secrets.
+
+# Follower Insights Backfill Worker Architecture & Multi-Instance Safety (2026-07-23)
+
+- **Opt-in environment flags**: `FOLLOWER_BACKFILL_WORKER_ENABLED` and `FOLLOWER_BACKFILL_RECONCILIATION_ENABLED` default to `false`. Web instances keep workers and reconciliation disabled. Dedicated worker processes run with `FOLLOWER_BACKFILL_WORKER_ENABLED=true` and `FOLLOWER_BACKFILL_RECONCILIATION_ENABLED=true`.
+- **Durable starvation-free reconciliation**: Account ordering uses `lastBackfillReconciledAt ASC NULLS FIRST` and `id ASC` on `LineOfficialAccount`. Inspected accounts update `lastBackfillReconciledAt` durably in PostgreSQL after each batch, ensuring restarts, deployments, and multi-instance workers cycle fairly through all 150+ accounts without starvation or memory state dependency.
+- **Strict single-job concurrency per worker instance**: Per-instance worker loops enforce single-job execution via `isWorkerProcessing` lock. Total system concurrency scales horizontally by running additional dedicated worker service instances on Railway.
+- **Unknown job contract**: `GET /follower-insights/backfill/jobs/:lineOaId` throws `NotFoundException` (HTTP 404) when no backfill job exists for the requested LINE OA account ID.
+- **Railway Deployment Topology**:
+  - **Backend Web Service**:
+    - `FOLLOWER_BACKFILL_WORKER_ENABLED=false`
+    - `FOLLOWER_BACKFILL_RECONCILIATION_ENABLED=false`
+  - **Dedicated Backfill Worker Service**:
+    - `FOLLOWER_BACKFILL_WORKER_ENABLED=true`
+    - `FOLLOWER_BACKFILL_RECONCILIATION_ENABLED=true`
+    - `FOLLOWER_BACKFILL_RECONCILIATION_INTERVAL_MS=300000`
+    - `FOLLOWER_BACKFILL_RECONCILIATION_BATCH_SIZE=10`
+    - `FOLLOWER_BACKFILL_MAX_ENQUEUE_PER_CYCLE=10`
+    - `FOLLOWER_BACKFILL_POLL_INTERVAL_MS=5000`
+    - `FOLLOWER_BACKFILL_API_DELAY_MS=200`

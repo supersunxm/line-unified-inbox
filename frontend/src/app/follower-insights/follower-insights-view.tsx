@@ -54,6 +54,69 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
   const [storeTrendLoading, setStoreTrendLoading] = useState(false);
   const [storeTrendError, setStoreTrendError] = useState<string | null>(null);
 
+  // Comparison Mode State ("comparable" | "available")
+  const [comparisonMode, setComparisonMode] = useState<"comparable" | "available">("comparable");
+
+  // Derive comparable accounts & summary data
+  const { comparableLineOaIds, comparableSummaryData } = useMemo(() => {
+    if (!summaryData.length || !storeData.length) {
+      return { comparableLineOaIds: new Set<string>(), comparableSummaryData: summaryData };
+    }
+
+    const allDates = summaryData.map((d) => d.date);
+
+    // Group storeData by lineOaId -> Set of ready dates
+    const accountReadyDates = new Map<string, Set<string>>();
+    for (const row of storeData) {
+      if (row.lineOaId && row.status === "ready" && row.followers !== null) {
+        if (!accountReadyDates.has(row.lineOaId)) {
+          accountReadyDates.set(row.lineOaId, new Set());
+        }
+        accountReadyDates.get(row.lineOaId)!.add(row.date);
+      }
+    }
+
+    const comparableIds = new Set<string>();
+    accountReadyDates.forEach((readyDates, lineOaId) => {
+      const isReadyAllDates = allDates.every((d) => readyDates.has(d));
+      if (isReadyAllDates) {
+        comparableIds.add(lineOaId);
+      }
+    });
+
+    const comparableCount = comparableIds.size;
+
+    // Group storeData by date -> rows
+    const dateStoreMap = new Map<string, ByStoreAccountRow[]>();
+    for (const row of storeData) {
+      if (row.lineOaId && comparableIds.has(row.lineOaId)) {
+        if (!dateStoreMap.has(row.date)) {
+          dateStoreMap.set(row.date, []);
+        }
+        dateStoreMap.get(row.date)!.push(row);
+      }
+    }
+
+    const compSummary: SummaryDailyRow[] = summaryData.map((originalRow) => {
+      const rowsForDate = dateStoreMap.get(originalRow.date) || [];
+      const followersSum = rowsForDate.reduce((acc, r) => acc + (r.followers ?? 0), 0);
+      const reachSum = rowsForDate.reduce((acc, r) => acc + (r.targetedReaches ?? 0), 0);
+      const blocksSum = rowsForDate.reduce((acc, r) => acc + (r.blocks ?? 0), 0);
+
+      return {
+        ...originalRow,
+        followers: rowsForDate.length > 0 ? followersSum : null,
+        targetedReaches: rowsForDate.length > 0 ? reachSum : null,
+        blocks: rowsForDate.length > 0 ? blocksSum : null,
+        accountsExpected: comparableCount,
+        accountsReady: comparableCount,
+        accountsWithData: comparableCount,
+      };
+    });
+
+    return { comparableLineOaIds: comparableIds, comparableSummaryData: compSummary };
+  }, [summaryData, storeData]);
+
   const loadData = useCallback(
     async (start: string, end: string) => {
       const validation = validateDateRange(start, end, language);
@@ -582,15 +645,24 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
                   </div>
                 </div>
 
-                {/* Trend Chart Component with Store Filter */}
+                {/* Trend Chart Component with Store Filter & Comparison Mode */}
                 <TrendChart
-                  data={effectiveSelectedLineOaId ? storeTrendData : summaryData}
+                  data={
+                    effectiveSelectedLineOaId
+                      ? storeTrendData
+                      : comparisonMode === "comparable"
+                      ? comparableSummaryData
+                      : summaryData
+                  }
                   metric={chartMetric}
                   language={language}
                   stores={storeData}
                   selectedLineOaId={effectiveSelectedLineOaId}
                   isLoadingTrend={effectiveSelectedLineOaId ? storeTrendLoading : false}
                   trendError={effectiveSelectedLineOaId ? storeTrendError : null}
+                  comparisonMode={comparisonMode}
+                  comparableCount={comparableLineOaIds.size}
+                  onComparisonModeChange={setComparisonMode}
                   onMetricChange={setChartMetric}
                   onSelectStore={handleSelectStore}
                 />

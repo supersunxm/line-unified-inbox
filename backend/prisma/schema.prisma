@@ -270,6 +270,14 @@ model StoreMaster {
   @@index([isActive])
 }
 
+enum BackfillJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
 model LineOfficialAccount {
   id                          String                   @id @default(uuid())
   webhookKey                  String                   @unique
@@ -289,13 +297,48 @@ model LineOfficialAccount {
   archivedAt                  DateTime?
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
+  lastBackfillReconciledAt    DateTime?
   store                       Store                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   conversations               Conversation[]
   webhookEvents               WebhookEvent[]
   pilotChecklist              PilotChecklistItem[]
   followerSnapshots           LineOaFollowerSnapshot[]
+  backfillJobs                LineOaBackfillJob[]
 
   @@index([storeId, isActive])
+  @@index([isActive, lastBackfillReconciledAt])
+}
+
+model LineOaBackfillJob {
+  id              String            @id @default(uuid())
+  lineOaId        String
+  workerId        String?
+  status          BackfillJobStatus @default(QUEUED)
+  dateFrom        String
+  dateTo          String
+  totalDays       Int               @default(0)
+  requested       Int               @default(0)
+  succeeded       Int               @default(0)
+  skipped         Int               @default(0)
+  unready         Int               @default(0)
+  failed          Int               @default(0)
+  attempts        Int               @default(0)
+  maxAttempts     Int               @default(3)
+  errorMessage    String?
+  claimedAt       DateTime?
+  heartbeatAt     DateTime?
+  nextAttemptAt   DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+
+  @@index([lineOaId, status])
+  @@index([status, heartbeatAt])
+  @@index([nextAttemptAt])
+  @@index([createdAt])
 }
 
 model PilotChecklistItem {

@@ -12,7 +12,9 @@ export interface SyncFollowerInsightsDto {
 export interface BackfillFollowerInsightsDto {
   dateFrom: string;
   dateTo: string;
+  lineOaId?: string;
   lineOaIds?: string[];
+  force?: boolean;
 }
 
 export interface SanitizedSyncError {
@@ -46,6 +48,27 @@ export interface SummaryQueryDto {
   storeId?: string;
   region?: string;
   province?: string;
+  comparisonMode?: "comparable" | "available";
+}
+
+export interface BackfillJobResponseDto {
+  id: string;
+  lineOaId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED";
+  dateFrom: string;
+  dateTo: string;
+  totalDays: number;
+  requested: number;
+  succeeded: number;
+  skipped: number;
+  unready: number;
+  failed: number;
+  attempts?: number;
+  maxAttempts?: number;
+  errorMessage?: string | null;
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  createdAt: Date | string;
 }
 
 export interface SummaryDailyRow {
@@ -82,4 +105,15 @@ export interface ByStoreAccountRow {
   blocks: number | null;
   status: string;
   fetchedAt: Date | string | null;
+}
+
+export interface QueueSummaryDto {
+  queued: number;
+  running: number;
+  completed: number;
+  completedWithErrors: number;
+  failed: number;
+  oldestQueuedAt: Date | null;
+  /** Informational: total remaining account-date API calls across all queued jobs */
+  estimatedRemainingAccountDateCalls: number | null;
 }

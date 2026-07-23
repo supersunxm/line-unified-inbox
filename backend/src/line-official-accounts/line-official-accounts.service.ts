@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, InternalServerErrorException, NotFoundException, Optional } from "@nestjs/common";
 import { LineOaConnectionStatus, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
@@ -6,13 +6,19 @@ import { PrismaService } from "../prisma.service";
 import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
+import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
+import { getPreviousBangkokDateString, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
 type IncludedOa = Prisma.LineOfficialAccountGetPayload<{ include: typeof safeInclude }>;
 
 @Injectable()
 export class LineOfficialAccountsService {
-  constructor(private readonly prisma: PrismaService, private readonly encryption: CredentialEncryptionService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: CredentialEncryptionService,
+    @Optional() @Inject(FollowerInsightsService) private readonly followerInsightsService?: FollowerInsightsService,
+  ) {}
 
   private clean(value?: string) { const result = value?.trim(); return result || undefined; }
   private generateWebhookKey() { return randomBytes(24).toString("base64url"); }
@@ -120,6 +126,7 @@ export class LineOfficialAccountsService {
         if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
         const response = this.safe(item, await loadLatestManagerUrls(this.prisma, [item.store.code]));
         if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
+        void this.followerInsightsService?.enqueueAutoBackfillJob?.(response.id)?.catch?.(() => null);
         return response;
       } catch (error) {
         if (this.isWebhookKeyCollision(error) && attempt < 2) continue;
@@ -154,6 +161,15 @@ export class LineOfficialAccountsService {
       const saved = await this.prisma.lineOfficialAccount.findUniqueOrThrow({ where: { id } });
       if (encryptedChannelSecret) this.encryption.decrypt(saved.encryptedChannelSecret!);
       if (encryptedChannelAccessToken) this.encryption.decrypt(saved.encryptedChannelAccessToken!);
+
+      if (this.followerInsightsService) {
+        const { dateFrom, dateTo } = this.followerInsightsService.getAutoBackfillDates();
+        const missingDates = await this.followerInsightsService.getMissingHistoricalDates(id, dateFrom, dateTo);
+        if (missingDates.length > 0) {
+          void this.followerInsightsService.enqueueAutoBackfillJob(id).catch(() => null);
+        }
+      }
+
       return this.get(id);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new ConflictException("Channel ID or Basic ID already exists");

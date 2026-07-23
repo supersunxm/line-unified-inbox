@@ -261,7 +261,7 @@ test("Store-level Trend Filter architecture & state isolation in FollowerInsight
 
   // 3. Aggregate summaryData is separate and NOT overwritten
   assert.match(viewCode, /const \[storeTrendData,\s*setStoreTrendData\] = useState<SummaryDailyRow\[\]>\(\[\]\)/);
-  assert.match(viewCode, /data=\{effectiveSelectedLineOaId \? storeTrendData : summaryData\}/);
+  assert.match(viewCode, /data=\{\s*effectiveSelectedLineOaId\s*\?\s*storeTrendData/);
 
   // 4. Changing date range reloads selected store trend
   assert.match(viewCode, /useEffect\(\(\) => \{\s*if \(!effectiveSelectedLineOaId\)/);

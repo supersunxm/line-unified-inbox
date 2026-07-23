@@ -91,6 +91,19 @@ export type FollowerInsightsTranslations = {
   noDataForStoreInRange: string;
   failedToLoadStoreTrend: string;
   clearStoreFilter: string;
+  comparableAccounts: string;
+  availableAccounts: string;
+  comparableCountLabel: (count: number) => string;
+  availableCoverageNote: string;
+  accountCoverageDiffersNote: string;
+  backfillHistoricalData: string;
+  skipForNow: string;
+  confirmHistoricalBackfill: string;
+  estimatedApiCallVolume: (days: number, oaName: string) => string;
+  backfillStatusQueued: string;
+  backfillStatusCompleted: string;
+  backfillStatusPartial: string;
+  backfillStatusFailed: string;
 };
 
 export const followerInsightsTranslations: Record<Language, FollowerInsightsTranslations> = {
@@ -185,6 +198,19 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "ไม่มีข้อมูลสำหรับร้านนี้ในช่วงวันที่เลือก",
     failedToLoadStoreTrend: "โหลดข้อมูลแนวโน้มของร้านค้าไม่สำเร็จ",
     clearStoreFilter: "ล้างตัวกรองร้านค้า",
+    comparableAccounts: "บัญชีที่เปรียบเทียบกันได้",
+    availableAccounts: "บัญชีทั้งหมดที่มีข้อมูล",
+    comparableCountLabel: (count) => `${count} บัญชีที่เปรียบเทียบกันได้`,
+    availableCoverageNote: "รวมทุกบัญชีที่มีข้อมูลในแต่ละวัน (จำนวนบัญชีอาจแตกต่างกันในแต่ละวัน)",
+    accountCoverageDiffersNote: "จำนวนบัญชีที่นำมาคำนวณแตกต่างกันในแต่ละวัน",
+    backfillHistoricalData: "ดึงข้อมูลประวัติผู้ติดตามย้อนหลัง",
+    skipForNow: "ข้ามไปก่อน",
+    confirmHistoricalBackfill: "ยืนยันการดึงข้อมูลย้อนหลัง",
+    estimatedApiCallVolume: (days, oaName) => `ประมาณการเรียก LINE API: ${days} วัน สำหรับบัญชี ${oaName}`,
+    backfillStatusQueued: "เชื่อมต่อสำเร็จ กำลังดึงข้อมูลผู้ติดตามย้อนหลัง",
+    backfillStatusCompleted: "ดึงข้อมูลย้อนหลังสำเร็จ",
+    backfillStatusPartial: "ดึงข้อมูลย้อนหลังสำเร็จบางส่วน",
+    backfillStatusFailed: "ดึงข้อมูลย้อนหลังไม่สำเร็จ คลิกเพื่อลองใหม่",
   },
   en: {
     followerInsightsTitle: "Follower Insights",
@@ -277,6 +303,19 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "No data for this store in the selected range",
     failedToLoadStoreTrend: "Failed to load store trend",
     clearStoreFilter: "Clear store filter",
+    comparableAccounts: "Comparable accounts",
+    availableAccounts: "Available accounts",
+    comparableCountLabel: (count) => `${count} comparable accounts`,
+    availableCoverageNote: "Sums all ready accounts per date (account coverage can differ by date)",
+    accountCoverageDiffersNote: "Account coverage differs by date",
+    backfillHistoricalData: "Backfill historical follower data",
+    skipForNow: "Skip for now",
+    confirmHistoricalBackfill: "Confirm Historical Backfill",
+    estimatedApiCallVolume: (days, oaName) => `Estimated LINE API calls: ${days} dates for account ${oaName}`,
+    backfillStatusQueued: "Connected successfully. Historical follower data is being fetched.",
+    backfillStatusCompleted: "Historical backfill completed.",
+    backfillStatusPartial: "Historical backfill completed with some errors.",
+    backfillStatusFailed: "Historical backfill failed. Click to retry.",
   },
   zh: {
     followerInsightsTitle: "关注者洞察",
@@ -369,6 +408,19 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "所选范围内该门店无数据",
     failedToLoadStoreTrend: "加载门店趋势数据失败",
     clearStoreFilter: "清除门店筛选",
+    comparableAccounts: "可比账号",
+    availableAccounts: "所有可用账号",
+    comparableCountLabel: (count) => `${count} 个可比账号`,
+    availableCoverageNote: "汇总每日所有就绪账号（每日账号覆盖数可能不同）",
+    accountCoverageDiffersNote: "每日参与计算的账号数量不同",
+    backfillHistoricalData: "补全历史关注者数据",
+    skipForNow: "暂时跳过",
+    confirmHistoricalBackfill: "确认补全历史数据",
+    estimatedApiCallVolume: (days, oaName) => `预估 LINE API 调用：账号 ${oaName} 共 ${days} 天`,
+    backfillStatusQueued: "连接成功，正在获取历史关注者数据。",
+    backfillStatusCompleted: "历史数据回填完成。",
+    backfillStatusPartial: "历史数据回填完成，但部分日期失败。",
+    backfillStatusFailed: "历史数据回填失败，点击重试。",
   },
 };
 

@@ -13,6 +13,9 @@ interface TrendChartProps {
   selectedLineOaId?: string | null;
   isLoadingTrend?: boolean;
   trendError?: string | null;
+  comparisonMode?: "comparable" | "available";
+  comparableCount?: number;
+  onComparisonModeChange?: (mode: "comparable" | "available") => void;
   onMetricChange: (metric: "followers" | "targetedReaches" | "blocks") => void;
   onSelectStore?: (lineOaId: string | null) => void;
 }
@@ -25,6 +28,9 @@ export function TrendChart({
   selectedLineOaId = null,
   isLoadingTrend = false,
   trendError = null,
+  comparisonMode = "comparable",
+  comparableCount,
+  onComparisonModeChange,
   onMetricChange,
   onSelectStore,
 }: TrendChartProps) {
@@ -88,10 +94,34 @@ export function TrendChart({
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[var(--foreground)]">{t.trendAnalysis}</h3>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">{t.trendSubheader}</p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            {selectedLineOaId === null && comparisonMode === "available"
+              ? t.availableCoverageNote
+              : t.trendSubheader}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Comparison Mode Selector (Aggregate view only) */}
+          {selectedLineOaId === null && onComparisonModeChange && (
+            <div className="flex items-center gap-2">
+              <select
+                aria-label={t.comparableAccounts}
+                value={comparisonMode}
+                onChange={(e) => onComparisonModeChange(e.target.value as "comparable" | "available")}
+                className="rounded-xl border border-[var(--border)] bg-[var(--input-background)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="comparable">{t.comparableAccounts}</option>
+                <option value="available">{t.availableAccounts}</option>
+              </select>
+              {comparisonMode === "comparable" && comparableCount !== undefined && (
+                <span className="rounded-lg bg-blue-500/10 px-2 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  {t.comparableCountLabel(comparableCount)}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Store Selector Combobox */}
           {onSelectStore && (
             <StoreSelectorCombobox

@@ -56,12 +56,24 @@ function DailySummaryTableInner({
   const startRecord = reversedSummary.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const endRecord = Math.min(reversedSummary.length, safePage * pageSize);
 
+  const accountsReadyValues = useMemo(() => new Set(summaryData.map((d) => d.accountsReady)), [summaryData]);
+  const hasCoverageVariation = accountsReadyValues.size > 1;
+
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col lg:col-span-1 shadow-sm">
       <div className="border-b border-[var(--border)] p-4 flex items-center justify-between">
         <h3 className="font-semibold text-[var(--foreground)]">{t.dailySummary}</h3>
         <span className="text-xs text-[var(--muted)]">{t.totalDaysCount(summaryData.length)}</span>
       </div>
+
+      {hasCoverageVariation && (
+        <div className="border-b border-[var(--border)] bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-2">
+          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{t.accountCoverageDiffersNote}</span>
+        </div>
+      )}
 
       {summaryError ? (
         <div className="p-8 text-center text-sm text-amber-600 dark:text-amber-400">{t.errorLoadingSummary}</div>

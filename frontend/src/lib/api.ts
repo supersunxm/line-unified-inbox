@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -102,5 +102,7 @@ export const api = {
   },
   followerInsightsByStore: (dateFrom: string, dateTo: string) => request<ByStoreAccountRow[]>(`/follower-insights/by-store?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`),
   followerInsightsSync: (date: string) => request<SyncBatchResult>("/follower-insights/sync", { method: "POST", body: JSON.stringify({ date }) }),
-  followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaIds?: string[] }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
+  followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaId?: string; lineOaIds?: string[]; force?: boolean }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
+  followerInsightsJobStatus: (lineOaId: string) => request<BackfillJobResponseDto>(`/follower-insights/backfill/jobs/${encodeURIComponent(lineOaId)}`),
+  followerInsightsRetryJob: (lineOaId: string) => request<BackfillJobResponseDto>("/follower-insights/backfill/retry", { method: "POST", body: JSON.stringify({ lineOaId }) }),
 };

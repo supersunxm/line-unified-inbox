@@ -190,3 +190,21 @@ export type SyncBatchResult = {
   }>;
   results?: SyncBatchResult[];
 };
+
+export type BackfillJobResponseDto = {
+  id: string;
+  lineOaId: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED";
+  dateFrom: string;
+  dateTo: string;
+  totalDays: number;
+  requested: number;
+  succeeded: number;
+  skipped: number;
+  unready: number;
+  failed: number;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+};

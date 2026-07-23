@@ -2,9 +2,18 @@
 
 ## Current task
 
-Fix intermittent missing webhook URLs after LINE OA creation.
+Harden Follower Insights backfill worker & multi-instance scale safety.
 
 ## Completed work
+
+- Refactored `FollowerInsightsService` with durable starvation-free account reconciliation ordering by `lastBackfillReconciledAt ASC NULLS FIRST` and `id ASC`.
+- Updated reconciliation to persist `lastBackfillReconciledAt` ONLY after an account has been fully inspected (or enqueued / collided on P2002), leaving timestamps untouched on unexpected failures.
+- Updated `schema.prisma` and migration `20260723143000_add_line_oa_backfill_jobs/migration.sql` with `lastBackfillReconciledAt` on `LineOfficialAccount` and index `@@index([isActive, lastBackfillReconciledAt])`.
+- Configured safe-by-default environment flags: `FOLLOWER_BACKFILL_WORKER_ENABLED=false`, `FOLLOWER_BACKFILL_RECONCILIATION_ENABLED=false`, and `FOLLOWER_BACKFILL_RECONCILIATION_INTERVAL_MS=300000` (5 minutes). Removed misleading `FOLLOWER_BACKFILL_JOB_CONCURRENCY` setting in favor of strict single-job per instance concurrency lock.
+- Fixed `getJobStatus` contract for unknown jobs to throw `NotFoundException` (HTTP 404).
+- Added periodic reconciliation timer with separate lifecycle management and shutdown cleanup.
+- Added comprehensive unit tests for reconciliation timestamp safety, 150-account scale reconciliation, rapid connection enqueueing, 429 Retry-After parsing (seconds & HTTP-date), queue summary estimated remaining API calls, and `@Roles("ADMIN")` route authorization.
+- All 215 backend unit tests and 89 frontend unit tests passing cleanly.
 
 - Made the LINE OA create response authoritative by returning the canonical URL derived from the key persisted in the same transaction; normal reads now return the same URL.
 - Added collision-only key allocation retry, explicit failure for invalid public webhook configuration or missing persisted keys, and preserved stable keys across reads/edits.

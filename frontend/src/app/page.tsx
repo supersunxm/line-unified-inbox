@@ -15,13 +15,15 @@ import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
+import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
+import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
 import { ConversationPaginationFooter } from "./conversation-pagination-footer";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
-import type { ApiConversation, ApiFollowUpStatus, ApiStore, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -1099,6 +1101,43 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [masterRetryNonce, setMasterRetryNonce] = useState(0);
   const [showAdvancedLineOa, setShowAdvancedLineOa] = useState(false);
   const [createdLineOa, setCreatedLineOa] = useState<{ account: LineOfficialAccountResponse; webhookUrl: string } | null>(null);
+  const [backfillModalOpen, setBackfillModalOpen] = useState(false);
+  const [backfillDateFrom, setBackfillDateFrom] = useState("2026-07-01");
+  const [backfillDateTo, setBackfillDateTo] = useState("2026-07-22");
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<SyncBatchResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
+  const [backfillJob, setBackfillJob] = useState<BackfillJobResponseDto | null>(null);
+
+  useEffect(() => {
+    const oaId = createdLineOa?.account?.id;
+    if (!oaId) return;
+
+    let timer: NodeJS.Timeout | null = null;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const job = await api.followerInsightsJobStatus(oaId);
+        if (!cancelled && job) {
+          setBackfillJob(job);
+          if (job.status === "QUEUED" || job.status === "RUNNING") {
+            timer = setTimeout(poll, 2000);
+          }
+        }
+      } catch {
+        // Safe poll catch
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [createdLineOa?.account?.id]);
+
   const [lineOaSubmitting, setLineOaSubmitting] = useState(false);
   const [editingLineOaId, setEditingLineOaId] = useState<string | null>(null);
   const [lineOaError, setLineOaError] = useState<string | null>(null);
@@ -2452,7 +2491,172 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 {showAdvancedLineOa && <><label className="col-span-2 text-sm">{text.stores}<select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2"><option value="">{text.autoCreateStore}</option>{availableStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="text-sm">{text.region}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.area}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.basicId}<input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.channelId}<input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} />{text.activeStatus}</label></>}
               </div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowLineOaForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button><button disabled={lineOaSubmitting} onClick={() => void submitLineOa()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{lineOaSubmitting ? text.loadingData : text.saveConnection}</button></div>
             </div></div>}
-            {createdLineOa && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl"><div className="rounded-xl border border-green-200 bg-green-50 p-5"><h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3><p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p></div><div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p><button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.copyWebhook}</button></div><ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">{text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}</ol><div className="mt-6 flex justify-end gap-3"><button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.close}</button><button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.goToLineOaManagement}</button></div></div></div>}
+            {createdLineOa && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
+                <div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl">
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                    <h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3>
+                    <p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p>
+                  </div>
+                  <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p>
+                    <button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
+                      {text.copyWebhook}
+                    </button>
+                  </div>
+
+                  {/* Automatic Background Backfill Status */}
+                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-slate-800">
+                    <h4 className="font-semibold text-sm text-blue-900 flex items-center gap-2">
+                      <svg className="h-4 w-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {followerInsightsTranslations[language]?.backfillStatusQueued || "Connected successfully. Historical follower data is being fetched."}
+                    </h4>
+
+                    {backfillJob ? (
+                      <div className="mt-2 text-xs space-y-1">
+                        <p className="font-medium text-slate-700">
+                          {backfillJob.status === "COMPLETED"
+                            ? followerInsightsTranslations[language]?.backfillStatusCompleted
+                            : backfillJob.status === "COMPLETED_WITH_ERRORS"
+                            ? followerInsightsTranslations[language]?.backfillStatusPartial
+                            : backfillJob.status === "FAILED"
+                            ? followerInsightsTranslations[language]?.backfillStatusFailed
+                            : followerInsightsTranslations[language]?.backfillStatusQueued}
+                        </p>
+                        <p className="text-slate-500 font-mono">
+                          Range: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | Days: {backfillJob.totalDays} | Succeeded: {backfillJob.succeeded} | Skipped: {backfillJob.skipped} | Failed: {backfillJob.failed}
+                        </p>
+                        {backfillResult && (
+                          <p className="mt-1 text-xs font-semibold text-green-700">
+                            ✓ {backfillResult.succeeded ?? 0} dates updated.
+                          </p>
+                        )}
+                        {(backfillJob.status === "FAILED" || backfillJob.status === "COMPLETED_WITH_ERRORS") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void api.followerInsightsRetryJob(createdLineOa.account.id);
+                            }}
+                            className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
+                          >
+                            {followerInsightsTranslations[language]?.backfillStatusFailed || "Historical backfill failed. Click to retry."}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-slate-600">
+                        {followerInsightsTranslations[language]?.backfillStatusQueued}
+                      </p>
+                    )}
+                  </div>
+
+                  <ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">
+                    {text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}
+                  </ol>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
+                      {text.close}
+                    </button>
+                    <button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
+                      {text.goToLineOaManagement}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Backfill Confirmation Dialog */}
+            {backfillModalOpen && createdLineOa && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-6">
+                <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {language === "th" ? "ดึงข้อมูลประวัติผู้ติดตามย้อนหลัง" : language === "zh" ? "补全历史关注者数据" : "Backfill historical follower data"}
+                  </h3>
+                  <p className="mt-1 text-xs font-medium text-slate-600">
+                    {createdLineOa.account.name}
+                  </p>
+
+                  <div className="mt-4 space-y-3 text-xs">
+                    <div>
+                      <label className="font-medium text-slate-700">
+                        {language === "th" ? "วันเริ่มต้น" : language === "zh" ? "开始日期" : "Start Date"}
+                      </label>
+                      <input
+                        type="date"
+                        value={backfillDateFrom}
+                        onChange={(e) => setBackfillDateFrom(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">
+                        {language === "th" ? "วันสิ้นสุด" : language === "zh" ? "结束日期" : "End Date"}
+                      </label>
+                      <input
+                        type="date"
+                        value={backfillDateTo}
+                        onChange={(e) => setBackfillDateTo(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                      />
+                    </div>
+
+                    <div className="rounded-lg bg-slate-100 p-3 text-slate-700 font-medium">
+                      {language === "th"
+                        ? `ประมาณการเรียก LINE API: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} วัน สำหรับบัญชี ${createdLineOa.account.name}`
+                        : language === "zh"
+                        ? `预估 LINE API 调用：账号 ${createdLineOa.account.name} 共 ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} 天`
+                        : `Estimated LINE API calls: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} dates for account ${createdLineOa.account.name}`}
+                    </div>
+
+                    {backfillError && (
+                      <div className="rounded-lg bg-rose-50 p-2 text-rose-700 border border-rose-200">
+                        {backfillError}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      disabled={backfillLoading}
+                      onClick={() => setBackfillModalOpen(false)}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={backfillLoading}
+                      onClick={async () => {
+                        setBackfillLoading(true);
+                        setBackfillError(null);
+                        try {
+                          const res = await api.followerInsightsBackfill({
+                            dateFrom: backfillDateFrom,
+                            dateTo: backfillDateTo,
+                            lineOaId: createdLineOa.account.id,
+                          });
+                          setBackfillResult(res);
+                          setBackfillModalOpen(false);
+                        } catch (err) {
+                          setBackfillError(err instanceof Error ? err.message : "Backfill failed");
+                        } finally {
+                          setBackfillLoading(false);
+                        }
+                      }}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {backfillLoading
+                        ? (language === "th" ? "กำลังดึงข้อมูล..." : "Backfilling...")
+                        : (language === "th" ? "ยืนยันการดึงข้อมูลย้อนหลัง" : language === "zh" ? "确认补全历史数据" : "Confirm Historical Backfill")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         ) : initialSection === "dashboard" ? (
           <section className="app-content-section col-span-2 overflow-y-auto">
