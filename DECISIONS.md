@@ -1,5 +1,9 @@
 # Architectural decisions
 
+## Database-driven Multi-store LIFF Attribution Configuration
+
+Attribution tracking uses a per-LINE-OA configuration model (`FriendAttributionConfig`) stored in PostgreSQL, allowing each store/OA to be configured independently with its own LINE Login Channel ID and LIFF ID without source code changes or environment redeployments. Public short link redirects query `FriendAttributionConfig` for the link's `lineOaId` to route customers to the correct store LIFF app (`https://liff.line.me/{liffId}/?token=...`), while falling back to direct LINE OA destination URLs (`https://line.me/R/ti/p/@...`) when attribution is unconfigured or disabled. `identifySession` strictly resolves the session's specific `lineOaId` configuration and validates that the LINE Login ID token audience (`aud`) matches that OA's registered Channel ID, rejecting cross-OA tokens with HTTP 401. To ensure smooth pilot transition, legacy environment variables (`FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID`) act as an automatic fallback when database configuration is absent.
+
 ## LINE OA create webhook contract
 
 The persisted webhook key is generated before LINE OA creation and written atomically with the OA. The create response derives its canonical URL from that freshly persisted key and validated `PUBLIC_WEBHOOK_BASE_URL`; the frontend treats this response as authoritative and does not issue a second webhook-info request. Unique-key collisions alone are retried, while invalid configuration or failed persistence aborts creation. Stable keys are never generated during reads or edits, and legacy null/blank records are repaired only through an explicit maintenance command.

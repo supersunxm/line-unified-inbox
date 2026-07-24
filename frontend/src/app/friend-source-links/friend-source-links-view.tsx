@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { FriendSource, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
+import type { FriendAttributionConfigDto, FriendSource, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
 import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations.ts";
 import {
   ALL_SOURCES,
@@ -71,6 +71,15 @@ export function FriendSourceLinksView({
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  // Attribution configs state
+  const [attrConfigs, setAttrConfigs] = useState<FriendAttributionConfigDto[]>([]);
+  const [editingConfig, setEditingConfig] = useState<FriendAttributionConfigDto | null>(null);
+  const [modalChannelId, setModalChannelId] = useState("");
+  const [modalLiffId, setModalLiffId] = useState("");
+  const [modalIsEnabled, setModalIsEnabled] = useState(true);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const loadData = useCallback(async () => {
     if (userRole === "VIEWER") {
       setIs403(true);
@@ -87,14 +96,16 @@ export function FriendSourceLinksView({
         ...(filterSource ? { source: filterSource } : {}),
         ...(filterStatus ? { isActive: filterStatus as "true" | "false" } : {}),
       };
-      const [linksData, summaryData, oasData] = await Promise.all([
+      const [linksData, summaryData, oasData, attrConfigsData] = await Promise.all([
         api.friendSourceLinks(Object.keys(filters).length ? filters : undefined),
         api.friendSourceLinksSummary(),
         api.lineOfficialAccounts(),
+        api.friendAttributionConfigs().catch(() => []),
       ]);
       setLinks(linksData);
       setSummary(summaryData);
       setLineOas(oasData);
+      setAttrConfigs(attrConfigsData);
     } catch (err) {
       const evaluated = evaluateApiError(err, t.errorState);
       if (evaluated.is403) {
@@ -111,6 +122,40 @@ export function FriendSourceLinksView({
     const timer = window.setTimeout(() => void loadData(), 0);
     return () => window.clearTimeout(timer);
   }, [loadData]);
+
+  const handleSaveAttrConfig = async () => {
+    if (!editingConfig) return;
+    setModalError(null);
+
+    const channelClean = modalChannelId.trim();
+    const liffClean = modalLiffId.trim();
+
+    if (!/^[0-9]{8,20}$/.test(channelClean)) {
+      setModalError(t.attrInvalidChannelId);
+      return;
+    }
+    if (!/^[0-9]{8,20}-[a-zA-Z0-9_-]+$/.test(liffClean)) {
+      setModalError(t.attrInvalidLiffId);
+      return;
+    }
+
+    setSavingConfig(true);
+    try {
+      await api.upsertFriendAttributionConfig(editingConfig.lineOaId, {
+        lineOaId: editingConfig.lineOaId,
+        lineLoginChannelId: channelClean,
+        liffId: liffClean,
+        isEnabled: modalIsEnabled,
+      });
+      showToast(t.copiedToast);
+      setEditingConfig(null);
+      await loadData();
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : "Failed to save attribution configuration");
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const eligibleOas = lineOas.filter(isAccountEligible);
   const filteredGeneratorOas = filterEligibleAccounts(lineOas, generatorSearch);
@@ -396,10 +441,10 @@ export function FriendSourceLinksView({
         return (
           <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
             {[
-              [t.kpiTotalClicks, attrKpis.totalClicks, "👆"],
-              [t.kpiIdentifiedVisits, attrKpis.identifiedVisits, "👤"],
-              [t.kpiConfirmedAdds, attrKpis.confirmedAdds, "🎉"],
-              [t.kpiOverallConversion, attrKpis.overallConversionRate, "📈"],
+              [t.totalClicks, attrKpis.totalClicks, "👆"],
+              [t.totalIdentifiedVisits, attrKpis.identifiedVisits, "👤"],
+              [t.totalConfirmedAdds, attrKpis.confirmedAdds, "🎉"],
+              [t.overallConversionRate, attrKpis.overallConversionRate, "📈"],
             ].map(([label, value, icon]) => (
               <div key={String(label)} className="app-card p-5">
                 <p className="app-muted text-xs font-medium">{label}</p>
@@ -523,6 +568,160 @@ export function FriendSourceLinksView({
           </button>
         </div>
       </div>
+
+      {/* Attribution Config Card for ADMIN */}
+      {userRole === "ADMIN" && (
+        <div className="app-card mb-6 rounded-2xl p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.attributionSectionTitle}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t.attributionSectionDesc}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 divide-y divide-slate-100 rounded-lg border">
+            {lineOas.map((oa) => {
+              const cfg = attrConfigs.find((c) => c.lineOaId === oa.id);
+              const isConfigured = cfg?.isConfigured ?? Boolean(cfg?.liffId);
+              const isEnabled = cfg?.isEnabled ?? false;
+              const isEligible = isAccountEligible(oa);
+
+              return (
+                <div key={oa.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-900">{oa.store?.name || oa.name}</span>
+                      <span className="text-xs text-slate-500">({oa.name} · {oa.basicId})</span>
+                    </div>
+                    {isConfigured && cfg?.liffId && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Channel ID: <span className="font-mono">{cfg.lineLoginChannelId}</span> · LIFF ID: <span className="font-mono">{cfg.liffId}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        !isEligible
+                          ? "bg-red-100 text-red-800"
+                          : !isConfigured
+                          ? "bg-slate-100 text-slate-600"
+                          : isEnabled
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {!isEligible
+                        ? t.filterStatusInactive
+                        : !isConfigured
+                        ? t.attrStatusNotConfigured
+                        : isEnabled
+                        ? t.attrStatusEnabled
+                        : t.attrStatusDisabled}
+                    </span>
+
+                    <button
+                      disabled={!isEligible}
+                      title={!isEligible ? t.eligibleOnly : undefined}
+                      onClick={() => {
+                        setEditingConfig({
+                          lineOaId: oa.id,
+                          lineOaName: oa.name,
+                          basicId: oa.basicId,
+                          storeName: oa.store?.name || null,
+                          storeCode: oa.store?.externalStoreId || null,
+                          lineLoginChannelId: cfg?.lineLoginChannelId || "",
+                          liffId: cfg?.liffId || "",
+                          isEnabled: cfg?.isEnabled ?? true,
+                          isConfigured: Boolean(isConfigured),
+                          updatedAt: cfg?.updatedAt || null,
+                        });
+                        setModalChannelId(cfg?.lineLoginChannelId || "");
+                        setModalLiffId(cfg?.liffId || "");
+                        setModalIsEnabled(cfg?.isEnabled ?? true);
+                        setModalError(null);
+                      }}
+                      className="rounded border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      {isConfigured ? t.attrEditBtn : t.attrConfigureBtn}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Attribution Config Modal */}
+      {editingConfig && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="app-card w-full max-w-md rounded-2xl p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold">{t.attrModalTitle(editingConfig.storeName || editingConfig.lineOaName)}</h3>
+            <p className="mt-1 text-xs text-slate-500">{editingConfig.lineOaName} ({editingConfig.basicId})</p>
+
+            {modalError && (
+              <div role="alert" className="mt-3 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">
+                {modalError}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">{t.attrModalChannelId}</label>
+                <input
+                  type="text"
+                  value={modalChannelId}
+                  onChange={(e) => setModalChannelId(e.target.value)}
+                  placeholder="e.g. 2007073384"
+                  className="app-input mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700">{t.attrModalLiffId}</label>
+                <input
+                  type="text"
+                  value={modalLiffId}
+                  onChange={(e) => setModalLiffId(e.target.value)}
+                  placeholder="e.g. 2007073384-AbCdEfGh"
+                  className="app-input mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="attr-modal-enabled"
+                  checked={modalIsEnabled}
+                  onChange={(e) => setModalIsEnabled(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600"
+                />
+                <label htmlFor="attr-modal-enabled" className="text-xs font-medium text-slate-700">
+                  {t.attrModalEnabled}
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingConfig(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium hover:bg-slate-50"
+              >
+                {t.attrModalCancelBtn}
+              </button>
+              <button
+                onClick={() => void handleSaveAttrConfig()}
+                disabled={savingConfig}
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                {savingConfig ? t.toggleSaving : t.attrModalSaveBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-3">

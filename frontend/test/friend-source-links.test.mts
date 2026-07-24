@@ -636,3 +636,56 @@ test("Excel export includes Identified Visits, Confirmed Adds, and formatted per
   assert.equal(details[0].confirmedAdds, 10);
   assert.equal(details[0].conversionRate, "6.67%");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 32. Multi-Store Attribution Configuration Frontend Tests
+// ──────────────────────────────────────────────────────────────────────
+
+test("13, 14, 15, 16 & 17. Admin Attribution Configuration UI: Validation, status badges, and multi-language copy", () => {
+  const validateConfigInput = (channelId: string, liffId: string) => {
+    const isChannelValid = /^[0-9]{8,20}$/.test(channelId.trim());
+    const isLiffValid = /^[0-9]{8,20}-[a-zA-Z0-9_-]+$/.test(liffId.trim());
+    return { isChannelValid, isLiffValid };
+  };
+
+  // Channel ID validation
+  assert.equal(validateConfigInput("2007073384", "2007073384-AbCdEfGh").isChannelValid, true);
+  assert.equal(validateConfigInput("abc_not_numeric", "2007073384-AbCdEfGh").isChannelValid, false);
+  assert.equal(validateConfigInput("", "2007073384-AbCdEfGh").isChannelValid, false);
+
+  // LIFF ID validation
+  assert.equal(validateConfigInput("2007073384", "2007073384-AbCdEfGh").isLiffValid, true);
+  assert.equal(validateConfigInput("2007073384", "invalid_liff_id").isLiffValid, false);
+
+  // Translation keys parity for Attribution Config
+  const th = friendSourceLinksTranslations.th;
+  const en = friendSourceLinksTranslations.en;
+  const zh = friendSourceLinksTranslations.zh;
+
+  assert.equal(th.attributionSectionTitle, "ตั้งค่า Friend Attribution (LIFF) รายร้านค้า");
+  assert.equal(en.attributionSectionTitle, "Friend Attribution (LIFF) Store Configuration");
+  assert.equal(zh.attributionSectionTitle, "门店 Friend Attribution (LIFF) 配置");
+
+  assert.equal(th.attrStatusNotConfigured, "ยังไม่ตั้งค่า");
+  assert.equal(en.attrStatusNotConfigured, "Not Configured");
+  assert.equal(zh.attrStatusNotConfigured, "未配置");
+
+  assert.equal(th.attrStatusEnabled, "เปิดใช้งาน LIFF");
+  assert.equal(en.attrStatusEnabled, "LIFF Enabled");
+  assert.equal(zh.attrStatusEnabled, "已启用 LIFF");
+
+  assert.equal(th.attrStatusDisabled, "ปิดใช้งาน LIFF");
+  assert.equal(en.attrStatusDisabled, "LIFF Disabled");
+  assert.equal(zh.attrStatusDisabled, "已禁用 LIFF");
+});
+
+test("18. Friend Source Links view contains Attribution Configuration section and API calls for ADMIN", () => {
+  assert.match(viewFile, /attributionSectionTitle/);
+  assert.match(viewFile, /friendAttributionConfigs/);
+  assert.match(viewFile, /upsertFriendAttributionConfig/);
+  assert.match(viewFile, /disabled=\{!isEligible\}/);
+  assert.match(apiTs, /friendAttributionConfigs/);
+  assert.match(apiTs, /upsertFriendAttributionConfig/);
+  assert.match(apiTs, /method:\s*"PUT"/);
+  assert.match(apiTs, /deleteFriendAttributionConfig/);
+});

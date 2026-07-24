@@ -34,3 +34,23 @@ export class UpdateFriendshipStatusDto {
   @IsBoolean()
   isFriend!: boolean;
 }
+
+export class UpsertFriendAttributionConfigDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 128)
+  lineOaId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[0-9]{8,20}$/, { message: "lineLoginChannelId must be numeric digits (e.g. 10 to 20 digits)" })
+  lineLoginChannelId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[0-9]{8,20}-[a-zA-Z0-9_-]+$/, { message: "liffId must be a valid LIFF ID format (e.g. 1234567890-AbCdEfGh)" })
+  liffId!: string;
+
+  @IsBoolean()
+  isEnabled!: boolean;
+}

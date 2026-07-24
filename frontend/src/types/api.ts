@@ -255,6 +255,26 @@ export type FriendSourceLinksSummaryItem = {
   conversionRate?: number;
 };
 
+export type FriendAttributionConfigDto = {
+  lineOaId: string;
+  lineOaName: string;
+  basicId: string | null;
+  storeName: string | null;
+  storeCode: string | null;
+  lineLoginChannelId: string | null;
+  liffId: string | null;
+  isEnabled: boolean;
+  isConfigured: boolean;
+  updatedAt: string | null;
+};
+
+export type UpsertFriendAttributionConfigInput = {
+  lineOaId: string;
+  lineLoginChannelId: string;
+  liffId: string;
+  isEnabled: boolean;
+};
+
 export type FriendSourceLinksFilters = {
   storeId?: string;
   lineOaId?: string;

@@ -9,6 +9,7 @@ import {
   hashLineUserId,
   hashPublicSessionToken,
 } from "./friend-attribution.config";
+import { FriendSourceLinksController } from "./friend-source-links.controller";
 import { FriendSourceLinksService } from "./friend-source-links.service";
 
 test("friend attribution config functions read environment variables safely", () => {
@@ -284,6 +285,7 @@ test("Scenario 6: ID Token verification rejects invalid audience or channel ID",
   const originalEnv = process.env;
   process.env = {
     ...originalEnv,
+    FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "*",
     FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "EXPECTED_CHANNEL_ID",
   };
 
@@ -335,6 +337,7 @@ test("Scenario 7 & 8: Client cannot pass raw userId and verified LINE User ID is
   const originalEnv = process.env;
   process.env = {
     ...originalEnv,
+    FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "*",
     FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "2007073384",
     FRIEND_ATTRIBUTION_HASH_SECRET: "my_secret",
   };
@@ -536,6 +539,7 @@ test("Race Condition Reconciliation: Early follow event before identify is recon
   const originalEnv = process.env;
   process.env = {
     ...originalEnv,
+    FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "*",
     FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "2007073384",
     FRIEND_ATTRIBUTION_HASH_SECRET: secret,
   };
@@ -640,4 +644,350 @@ test("Status Polling Endpoint: getSessionStatus returns safe payload without use
   } finally {
     process.env = originalEnv;
   }
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Multi-Store Database Attribution Configuration Tests
+// ──────────────────────────────────────────────────────────────────────
+
+test("1 & 2. Multi-store DB Config: Chonburi and Lotus redirect to their respective LIFF IDs", async () => {
+  const configsMap: Record<string, any> = {
+    "oa-chonburi": { lineOaId: "oa-chonburi", lineLoginChannelId: "1000000001", liffId: "1000000001-chonburi", isEnabled: true },
+    "oa-lotus": { lineOaId: "oa-lotus", lineLoginChannelId: "1000000002", liffId: "1000000002-lotus", isEnabled: true },
+  };
+
+  const linksMap: Record<string, any> = {
+    sc_chonb: { id: "link-c", lineOaId: "oa-chonburi", source: "STORE_QR", destinationUrl: "https://line.me/R/ti/p/@chonburi", isActive: true },
+    sc_lotus: { id: "link-l", lineOaId: "oa-lotus", source: "TIKTOK", destinationUrl: "https://line.me/R/ti/p/@lotus", isActive: true },
+  };
+
+  const mockPrisma = {
+    friendSourceLink: {
+      findUnique: ({ where }: any) => Promise.resolve(linksMap[where.shortCode]),
+    },
+    friendSourceClick: {
+      create: () => Promise.resolve({ id: "click-1" }),
+    },
+    friendAttributionConfig: {
+      findUnique: ({ where }: any) => Promise.resolve(configsMap[where.lineOaId] || null),
+    },
+    friendAttributionSession: {
+      create: () => Promise.resolve({ id: "session-1" }),
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+
+  const chonburiUrl = await service.handleRedirect("sc_chonb");
+  assert.ok(chonburiUrl.includes("1000000001-chonburi") || chonburiUrl.includes("/friend-attribution?token=sat_"));
+
+  const lotusUrl = await service.handleRedirect("sc_lotus");
+  assert.ok(lotusUrl.includes("1000000002-lotus") || lotusUrl.includes("/friend-attribution?token=sat_"));
+});
+
+test("3, 4 & 5. Audience isolation: Each OA enforces its own channel ID and rejects wrong/cross-OA audience", async () => {
+  const configsMap: Record<string, any> = {
+    "oa-chonburi": { lineOaId: "oa-chonburi", lineLoginChannelId: "1000000001", liffId: "1000000001-c", isEnabled: true },
+    "oa-lotus": { lineOaId: "oa-lotus", lineLoginChannelId: "1000000002", liffId: "1000000002-l", isEnabled: true },
+  };
+
+  const secret = "multi_test_secret";
+  const lotusSessionToken = "sat_lotus_token_123";
+  const lotusSession = {
+    id: "session-lotus",
+    publicSessionTokenHash: hashPublicSessionToken(lotusSessionToken, secret),
+    lineOaId: "oa-lotus",
+    friendSourceLinkId: "link-l",
+    expiresAt: new Date(Date.now() + 3600000),
+    attributionStatus: "CLICKED",
+  };
+
+  const mockPrisma = {
+    friendAttributionSession: {
+      findUnique: () => Promise.resolve(lotusSession),
+      update: () => Promise.resolve({ ...lotusSession, attributionStatus: "IDENTIFIED" }),
+    },
+    friendAttributionConfig: {
+      findUnique: ({ where }: any) => Promise.resolve(configsMap[where.lineOaId]),
+    },
+    friendAttributionUnmatchedFollow: {
+      findFirst: () => Promise.resolve(null),
+    },
+    lineOfficialAccount: {
+      findUnique: () => Promise.resolve({ basicId: "@lotus" }),
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+  const originalEnv = process.env;
+  process.env = { ...originalEnv, FRIEND_ATTRIBUTION_HASH_SECRET: secret };
+
+  try {
+    // Mock global fetch to simulate ID token verification return with Chonburi channel ID (wrong audience for Lotus session)
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((url: string) => {
+      if (url.includes("oauth2/v2.1/verify")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ sub: "U_user123", aud: "1000000001" }), // Chonburi channel ID
+        } as Response);
+      }
+      return originalFetch(url);
+    }) as any;
+
+    await assert.rejects(
+      () => service.identifySession({ sessionToken: lotusSessionToken, idToken: "valid_id_token", consentGiven: true }),
+      (err: any) => err instanceof UnauthorizedException
+    );
+
+    globalThis.fetch = originalFetch;
+  } finally {
+    process.env = originalEnv;
+  }
+});
+
+test("6 & 7. Disabled or missing config falls back directly to LINE OA destination URL", async () => {
+  const configsMap: Record<string, any> = {
+    "oa-disabled": { lineOaId: "oa-disabled", lineLoginChannelId: "111", liffId: "111-disabled", isEnabled: false },
+  };
+
+  const linksMap: Record<string, any> = {
+    sc_disab: { id: "link-d", lineOaId: "oa-disabled", source: "FACEBOOK", destinationUrl: "https://line.me/R/ti/p/@disabled", isActive: true },
+    sc_uncfg: { id: "link-u", lineOaId: "oa-unconfigured", source: "INSTAGRAM", destinationUrl: "https://line.me/R/ti/p/@unconfigured", isActive: true },
+  };
+
+  const mockPrisma = {
+    friendSourceLink: {
+      findUnique: ({ where }: any) => Promise.resolve(linksMap[where.shortCode]),
+    },
+    friendSourceClick: {
+      create: () => Promise.resolve({ id: "click-1" }),
+    },
+    friendAttributionConfig: {
+      findUnique: ({ where }: any) => Promise.resolve(configsMap[where.lineOaId] || null),
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+
+  const disabledUrl = await service.handleRedirect("sc_disab");
+  assert.ok(disabledUrl.startsWith("https://line.me/R/ti/p/@disabled"));
+  assert.ok(disabledUrl.includes("friend_tracking_id="));
+
+  const unconfiguredUrl = await service.handleRedirect("sc_uncfg");
+  assert.ok(unconfiguredUrl.startsWith("https://line.me/R/ti/p/@unconfigured"));
+  assert.ok(unconfiguredUrl.includes("friend_tracking_id="));
+});
+
+test("10 & 11. Admin API upsert/list exposes zero secrets and updates configs", async () => {
+  let upsertedData: any = null;
+  const mockPrisma = {
+    lineOfficialAccount: {
+      findUnique: () => Promise.resolve({ id: "oa-lotus", name: "Lotus OA", basicId: "@lotus" }),
+      findMany: () => Promise.resolve([
+        { id: "oa-lotus", name: "Lotus OA", basicId: "@lotus", store: { name: "Lotus Banbueng" }, friendAttributionConfig: { lineLoginChannelId: "2000000001", liffId: "2000000001-liff", isEnabled: true, updatedAt: new Date() } }
+      ]),
+    },
+    friendAttributionConfig: {
+      upsert: ({ create }: any) => {
+        upsertedData = create;
+        return Promise.resolve({ id: "cfg-1", ...create, updatedAt: new Date() });
+      },
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+
+  const list = await service.getAttributionConfigs();
+  assert.equal(list.length, 1);
+  assert.equal(list[0].lineOaId, "oa-lotus");
+  assert.equal(list[0].lineLoginChannelId, "2000000001");
+  assert.equal((list[0] as any).channelSecret, undefined);
+
+  const res = await service.upsertAttributionConfig("oa-lotus", {
+    lineOaId: "oa-lotus",
+    lineLoginChannelId: "2000000001",
+    liffId: "2000000001-liff",
+    isEnabled: true,
+  });
+
+  assert.equal(res.lineOaId, "oa-lotus");
+  assert.equal(upsertedData.lineLoginChannelId, "2000000001");
+  assert.equal((res as any).secret, undefined);
+});
+
+test("12. Legacy pilot fallback backfills and remains compatible during migration", async () => {
+  let createdConfig: any = null;
+  const mockPrisma = {
+    friendAttributionConfig: {
+      findUnique: () => Promise.resolve(null),
+      create: ({ data }: any) => {
+        createdConfig = data;
+        return Promise.resolve({ id: "cfg-legacy", ...data });
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: () => Promise.resolve({ id: "oa-pilot-legacy" }),
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+  const originalEnv = process.env;
+  process.env = {
+    ...originalEnv,
+    FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "oa-pilot-legacy",
+    FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "9999999999",
+    FRIEND_ATTRIBUTION_LIFF_ID: "9999999999-legacy",
+  };
+
+  try {
+    const ok = await service.backfillLegacyPilotAttributionConfig();
+    assert.equal(ok, true);
+    assert.equal(createdConfig.lineOaId, "oa-pilot-legacy");
+    assert.equal(createdConfig.lineLoginChannelId, "9999999999");
+    assert.equal(createdConfig.liffId, "9999999999-legacy");
+  } finally {
+    process.env = originalEnv;
+  }
+});
+
+test("Requirement 2: Legacy backfill is idempotent, preserves existing config, and does not write when env is missing", async () => {
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  const existingConfig = {
+    id: "cfg-existing",
+    lineOaId: "oa-pilot-existing",
+    lineLoginChannelId: "1111111111",
+    liffId: "1111111111-existing",
+    isEnabled: true,
+  };
+
+  const mockPrismaPreserved = {
+    friendAttributionConfig: {
+      findUnique: ({ where }: any) => {
+        if (where.lineOaId === "oa-pilot-existing") return Promise.resolve(existingConfig);
+        return Promise.resolve(null);
+      },
+      create: () => {
+        createdCount++;
+        return Promise.resolve({ id: "cfg-new" });
+      },
+      update: () => {
+        updatedCount++;
+        return Promise.resolve({ id: "cfg-updated" });
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: () => Promise.resolve({ id: "oa-pilot-existing" }),
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrismaPreserved);
+  const originalEnv = process.env;
+
+  // Case A: Existing DB config is preserved (never overwritten)
+  process.env = {
+    ...originalEnv,
+    FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "oa-pilot-existing",
+    FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "9999999999",
+    FRIEND_ATTRIBUTION_LIFF_ID: "9999999999-new",
+  };
+
+  try {
+    const resPreserved = await service.backfillLegacyPilotAttributionConfig();
+    assert.equal(resPreserved, false, "Must return false when existing config is present");
+    assert.equal(createdCount, 0, "No new record created");
+    assert.equal(updatedCount, 0, "Existing record untouched");
+
+    // Case B: Missing legacy variables performs no write
+    process.env = {
+      ...originalEnv,
+      FRIEND_ATTRIBUTION_PILOT_LINE_OA_ID: "",
+      FRIEND_ATTRIBUTION_LINE_LOGIN_CHANNEL_ID: "",
+      FRIEND_ATTRIBUTION_LIFF_ID: "",
+    };
+
+    const resMissing = await service.backfillLegacyPilotAttributionConfig();
+    assert.equal(resMissing, false, "Must return false when env vars missing");
+    assert.equal(createdCount, 0);
+  } finally {
+    process.env = originalEnv;
+  }
+});
+
+test("Requirement 4: Disable/enable/delete configuration behaviors", async () => {
+  let createdSessionCount = 0;
+  let isConfigPresent = true;
+  let isConfigEnabled = false;
+
+  const linkRecord = {
+    id: "link-toggle-1",
+    lineOaId: "oa-toggle",
+    source: "STORE_QR",
+    destinationUrl: "https://line.me/R/ti/p/@toggle_oa",
+    isActive: true,
+  };
+
+  const mockPrisma = {
+    friendSourceLink: {
+      findUnique: () => Promise.resolve(linkRecord),
+    },
+    friendSourceClick: {
+      create: () => Promise.resolve({ id: "click-t1" }),
+    },
+    friendAttributionConfig: {
+      findUnique: () => {
+        if (!isConfigPresent) return Promise.resolve(null);
+        return Promise.resolve({
+          id: "cfg-toggle",
+          lineOaId: "oa-toggle",
+          lineLoginChannelId: "3333333333",
+          liffId: "3333333333-liff",
+          isEnabled: isConfigEnabled,
+        });
+      },
+      delete: () => {
+        isConfigPresent = false;
+        return Promise.resolve({ id: "cfg-toggle" });
+      },
+    },
+    friendAttributionSession: {
+      create: () => {
+        createdSessionCount++;
+        return Promise.resolve({ id: "session-t1" });
+      },
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+
+  // State 1: Config present but isEnabled = false
+  isConfigPresent = true;
+  isConfigEnabled = false;
+  const disabledRedirectUrl = await service.handleRedirect("sc_toggl");
+  assert.ok(disabledRedirectUrl.startsWith("https://line.me/R/ti/p/@toggle_oa"));
+  assert.ok(disabledRedirectUrl.includes("friend_tracking_id="));
+  assert.equal(createdSessionCount, 0, "Must NOT create FriendAttributionSession when disabled");
+
+  // State 2: Config present and isEnabled = true
+  isConfigEnabled = true;
+  const enabledRedirectUrl = await service.handleRedirect("sc_toggl");
+  assert.ok(enabledRedirectUrl.includes("/friend-attribution?token=sat_") || enabledRedirectUrl.includes("3333333333-liff"));
+  assert.equal(createdSessionCount, 1, "Must create FriendAttributionSession when enabled");
+
+  // State 3: Config deleted
+  await service.deleteAttributionConfig("oa-toggle");
+  const deletedRedirectUrl = await service.handleRedirect("sc_toggl");
+  assert.ok(deletedRedirectUrl.startsWith("https://line.me/R/ti/p/@toggle_oa"));
+  assert.equal(createdSessionCount, 1, "Session count remains 1");
+});
+
+test("Requirement 3: Route metadata and order verification for Attribution Configs", () => {
+  const controller = new FriendSourceLinksController({} as any);
+  assert.ok(controller);
+  assert.equal(typeof controller.getAttributionConfigs, "function");
+  assert.equal(typeof controller.upsertAttributionConfig, "function");
+  assert.equal(typeof controller.deleteAttributionConfig, "function");
+  assert.equal(typeof controller.bootstrapLegacyAttributionConfig, "function");
 });

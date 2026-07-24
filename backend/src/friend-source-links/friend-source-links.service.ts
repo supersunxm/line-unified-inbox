@@ -11,7 +11,7 @@ import {
   hashLineUserId,
   hashPublicSessionToken,
 } from "./friend-attribution.config";
-import { IdentifyFriendAttributionDto, UpdateFriendshipStatusDto } from "./friend-attribution.dto";
+import { IdentifyFriendAttributionDto, UpdateFriendshipStatusDto, UpsertFriendAttributionConfigDto } from "./friend-attribution.dto";
 import { getFriendSourceIpHashKey, getFriendSourcePublicBaseUrl } from "./friend-source-links.config";
 import { GenerateFriendSourceLinksDto, QueryFriendSourceLinksDto, UpdateFriendSourceLinkDto } from "./friend-source-links.dto";
 
@@ -361,10 +361,25 @@ export class FriendSourceLinksService {
       },
     });
 
-    const pilotOaId = getFriendAttributionPilotLineOaId();
-    const isPilotOa = Boolean(pilotOaId && (link.lineOaId === pilotOaId || pilotOaId === "*"));
+    let isAttributionEnabled = false;
+    let configuredLiffId: string | null = null;
 
-    if (isPilotOa) {
+    const dbConfig = await this.prisma.friendAttributionConfig?.findUnique({
+      where: { lineOaId: link.lineOaId },
+    });
+
+    if (dbConfig) {
+      isAttributionEnabled = dbConfig.isEnabled;
+      configuredLiffId = dbConfig.liffId;
+    } else {
+      const pilotOaId = getFriendAttributionPilotLineOaId();
+      if (pilotOaId && (link.lineOaId === pilotOaId || pilotOaId === "*")) {
+        isAttributionEnabled = true;
+        configuredLiffId = process.env.FRIEND_ATTRIBUTION_LIFF_ID || null;
+      }
+    }
+
+    if (isAttributionEnabled) {
       const rawSessionToken = `sat_${randomBytes(24).toString("hex")}`;
       const hashSecret = getFriendAttributionHashSecret();
       const publicSessionTokenHash = hashPublicSessionToken(rawSessionToken, hashSecret);
@@ -383,7 +398,14 @@ export class FriendSourceLinksService {
         },
       });
 
-      const liffBaseUrl = getFriendAttributionLiffBaseUrl() || "https://frontend-production-e5c6.up.railway.app/friend-attribution";
+      let liffBaseUrl = getFriendAttributionLiffBaseUrl();
+      if (!liffBaseUrl && configuredLiffId) {
+        liffBaseUrl = `https://liff.line.me/${configuredLiffId}`;
+      }
+      if (!liffBaseUrl) {
+        liffBaseUrl = "https://frontend-production-e5c6.up.railway.app/friend-attribution";
+      }
+
       const targetUrl = new URL(liffBaseUrl);
       targetUrl.searchParams.set("token", rawSessionToken);
       return targetUrl.toString();
@@ -429,7 +451,27 @@ export class FriendSourceLinksService {
     }
 
     let verifiedLineUserId: string | null = null;
-    const channelId = getFriendAttributionLineLoginChannelId();
+    let channelId: string | null = null;
+
+    const dbConfig = await this.prisma.friendAttributionConfig?.findUnique({
+      where: { lineOaId: session.lineOaId },
+    });
+
+    if (dbConfig) {
+      if (!dbConfig.isEnabled) {
+        throw new UnauthorizedException("Friend attribution is disabled for this LINE OA");
+      }
+      channelId = dbConfig.lineLoginChannelId;
+    } else {
+      const pilotOaId = getFriendAttributionPilotLineOaId();
+      if (!pilotOaId || pilotOaId === "*" || session.lineOaId === pilotOaId) {
+        channelId = getFriendAttributionLineLoginChannelId();
+      }
+    }
+
+    if (!channelId) {
+      throw new UnauthorizedException("No attribution configuration found for this LINE OA");
+    }
 
     if (dto.idToken && dto.idToken.trim()) {
       try {
@@ -688,6 +730,107 @@ export class FriendSourceLinksService {
     } catch {
       return "https://line.me/R/ti/p/@oppo_thailand";
     }
+  }
+
+  async getAttributionConfigs() {
+    const oas = await this.prisma.lineOfficialAccount.findMany({
+      select: {
+        id: true,
+        name: true,
+        basicId: true,
+        isActive: true,
+        store: { select: { name: true, code: true } },
+        friendAttributionConfig: true,
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return oas.map((oa) => ({
+      lineOaId: oa.id,
+      lineOaName: oa.name,
+      basicId: oa.basicId,
+      storeName: oa.store?.name || null,
+      storeCode: oa.store?.code || null,
+      lineLoginChannelId: oa.friendAttributionConfig?.lineLoginChannelId || null,
+      liffId: oa.friendAttributionConfig?.liffId || null,
+      isEnabled: oa.friendAttributionConfig?.isEnabled ?? false,
+      isConfigured: Boolean(oa.friendAttributionConfig),
+      updatedAt: oa.friendAttributionConfig?.updatedAt || null,
+    }));
+  }
+
+  async upsertAttributionConfig(lineOaId: string, dto: UpsertFriendAttributionConfigDto) {
+    const targetOaId = (dto.lineOaId || lineOaId).trim();
+    const oa = await this.prisma.lineOfficialAccount.findUnique({
+      where: { id: targetOaId },
+    });
+
+    if (!oa) {
+      throw new NotFoundException(`LINE OA with ID '${targetOaId}' not found`);
+    }
+
+    const updated = await this.prisma.friendAttributionConfig.upsert({
+      where: { lineOaId: targetOaId },
+      create: {
+        lineOaId: targetOaId,
+        lineLoginChannelId: dto.lineLoginChannelId.trim(),
+        liffId: dto.liffId.trim(),
+        isEnabled: dto.isEnabled,
+      },
+      update: {
+        lineLoginChannelId: dto.lineLoginChannelId.trim(),
+        liffId: dto.liffId.trim(),
+        isEnabled: dto.isEnabled,
+      },
+    });
+
+    return {
+      id: updated.id,
+      lineOaId: updated.lineOaId,
+      lineLoginChannelId: updated.lineLoginChannelId,
+      liffId: updated.liffId,
+      isEnabled: updated.isEnabled,
+      updatedAt: updated.updatedAt,
+    };
+  }
+
+  async deleteAttributionConfig(lineOaId: string) {
+    try {
+      await this.prisma.friendAttributionConfig.delete({
+        where: { lineOaId },
+      });
+      return { success: true, lineOaId };
+    } catch {
+      throw new NotFoundException(`Attribution configuration for LINE OA '${lineOaId}' not found`);
+    }
+  }
+
+  async backfillLegacyPilotAttributionConfig(): Promise<boolean> {
+    const pilotOaId = getFriendAttributionPilotLineOaId();
+    const channelId = getFriendAttributionLineLoginChannelId();
+    const liffId = process.env.FRIEND_ATTRIBUTION_LIFF_ID;
+
+    if (!pilotOaId || !channelId || !liffId) return false;
+
+    const existing = await this.prisma.friendAttributionConfig.findUnique({
+      where: { lineOaId: pilotOaId },
+    });
+
+    if (!existing) {
+      const oa = await this.prisma.lineOfficialAccount.findUnique({ where: { id: pilotOaId } });
+      if (oa) {
+        await this.prisma.friendAttributionConfig.create({
+          data: {
+            lineOaId: pilotOaId,
+            lineLoginChannelId: channelId,
+            liffId,
+            isEnabled: true,
+          },
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   private formatLinkResponse(link: LinkWithRelations) {

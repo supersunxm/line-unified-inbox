@@ -9,6 +9,9 @@ export type FriendSourceLinksTranslations = {
   totalLinks: string;
   activeLinks: string;
   totalClicks: string;
+  totalIdentifiedVisits: string;
+  totalConfirmedAdds: string;
+  overallConversionRate: string;
   storesConfigured: string;
 
   // Source names
@@ -50,11 +53,23 @@ export type FriendSourceLinksTranslations = {
   tooltipConfirmed: string;
   tooltipConversion: string;
 
-  // KPI
-  kpiTotalClicks: string;
-  kpiIdentifiedVisits: string;
-  kpiConfirmedAdds: string;
-  kpiOverallConversion: string;
+  // Attribution Config
+  attributionSectionTitle: string;
+  attributionSectionDesc: string;
+  attrStatusNotConfigured: string;
+  attrStatusEnabled: string;
+  attrStatusDisabled: string;
+  attrConfigureBtn: string;
+  attrEditBtn: string;
+  attrDisableBtn: string;
+  attrModalTitle: (storeName: string) => string;
+  attrModalChannelId: string;
+  attrModalLiffId: string;
+  attrModalEnabled: string;
+  attrModalSaveBtn: string;
+  attrModalCancelBtn: string;
+  attrInvalidChannelId: string;
+  attrInvalidLiffId: string;
   copyLink: string;
   openLink: string;
   activate: string;
@@ -148,9 +163,12 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     pilotNote: "การยืนยันการเพิ่มเพื่อนจะใช้งานได้เต็มรูปแบบเมื่อ LIFF integration พร้อม",
 
     totalLinks: "ลิงก์ทั้งหมด",
-    activeLinks: "ลิงก์ที่ใช้งาน",
+    activeLinks: "ลิงก์ที่ใช้งานอยู่",
     totalClicks: "คลิกทั้งหมด",
-    storesConfigured: "ร้านค้าที่ตั้งค่าแล้ว",
+    totalIdentifiedVisits: "ยืนยันตัวตนทั้งหมด",
+    totalConfirmedAdds: "เพิ่มเพื่อนสำเร็จทั้งหมด",
+    overallConversionRate: "Conversion ภาพรวม",
+    storesConfigured: "ร้านค้าที่ลงทะเบียน",
 
     sourceStoreQr: "QR หน้าร้าน",
     sourceTikTok: "TikTok",
@@ -187,10 +205,22 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tooltipConfirmed: "ยืนยันการเพิ่มเพื่อนจาก LINE Webhook เรียบร้อยแล้ว",
     tooltipConversion: "อัตราส่วนการเพิ่มเพื่อนสำเร็จต่อจำนวนคลิกทั้งหมด",
 
-    kpiTotalClicks: "คลิกทั้งหมด",
-    kpiIdentifiedVisits: "ยืนยันตัวตนทั้งหมด",
-    kpiConfirmedAdds: "เพิ่มเพื่อนสำเร็จทั้งหมด",
-    kpiOverallConversion: "Conversion ภาพรวม",
+    attributionSectionTitle: "ตั้งค่า Friend Attribution (LIFF) รายร้านค้า",
+    attributionSectionDesc: "กำหนด LINE Login Channel ID และ LIFF ID แยกตามแต่ละร้านค้า เพื่อให้ระบบติดตามการเพิ่มเพื่อนจริงผ่าน LIFF ได้แบบอัตโนมัติ",
+    attrStatusNotConfigured: "ยังไม่ตั้งค่า",
+    attrStatusEnabled: "เปิดใช้งาน LIFF",
+    attrStatusDisabled: "ปิดใช้งาน LIFF",
+    attrConfigureBtn: "ตั้งค่า LIFF",
+    attrEditBtn: "แก้ไข",
+    attrDisableBtn: "ปิดใช้งาน",
+    attrModalTitle: (storeName) => `ตั้งค่า LIFF Attribution — ${storeName}`,
+    attrModalChannelId: "LINE Login Channel ID",
+    attrModalLiffId: "LIFF ID",
+    attrModalEnabled: "เปิดใช้งาน Attribution tracking สำหรับร้านค้านี้",
+    attrModalSaveBtn: "บันทึกการตั้งค่า",
+    attrModalCancelBtn: "ยกเลิก",
+    attrInvalidChannelId: "LINE Login Channel ID ต้องเป็นตัวเลขเท่านั้น (เช่น 2007073384)",
+    attrInvalidLiffId: "LIFF ID รูปแบบไม่ถูกต้อง (เช่น 2007073384-AbCdEfGh)",
     copyLink: "คัดลอก",
     openLink: "เปิดลิงก์",
     activate: "เปิดใช้งาน",
@@ -280,6 +310,9 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     totalLinks: "Total Links",
     activeLinks: "Active Links",
     totalClicks: "Total Clicks",
+    totalIdentifiedVisits: "Total Identified Visits",
+    totalConfirmedAdds: "Total Confirmed Adds",
+    overallConversionRate: "Overall Conversion Rate",
     storesConfigured: "Stores Configured",
 
     sourceStoreQr: "Store QR",
@@ -317,10 +350,22 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tooltipConfirmed: "Valid LINE follow webhook matched to the source link",
     tooltipConversion: "Confirmed adds divided by clicks",
 
-    kpiTotalClicks: "Total Clicks",
-    kpiIdentifiedVisits: "Total Identified Visits",
-    kpiConfirmedAdds: "Total Confirmed Adds",
-    kpiOverallConversion: "Overall Conversion Rate",
+    attributionSectionTitle: "Friend Attribution (LIFF) Store Configuration",
+    attributionSectionDesc: "Configure individual LINE Login Channel IDs and LIFF IDs for each store to track verified friend additions.",
+    attrStatusNotConfigured: "Not Configured",
+    attrStatusEnabled: "LIFF Enabled",
+    attrStatusDisabled: "LIFF Disabled",
+    attrConfigureBtn: "Configure LIFF",
+    attrEditBtn: "Edit",
+    attrDisableBtn: "Disable",
+    attrModalTitle: (storeName) => `LIFF Attribution Configuration — ${storeName}`,
+    attrModalChannelId: "LINE Login Channel ID",
+    attrModalLiffId: "LIFF ID",
+    attrModalEnabled: "Enable Attribution tracking for this store",
+    attrModalSaveBtn: "Save Configuration",
+    attrModalCancelBtn: "Cancel",
+    attrInvalidChannelId: "LINE Login Channel ID must be numeric digits (e.g. 2007073384)",
+    attrInvalidLiffId: "Invalid LIFF ID format (e.g. 2007073384-AbCdEfGh)",
     copyLink: "Copy",
     openLink: "Open",
     activate: "Activate",
@@ -407,9 +452,12 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     pageDescription: "每个选定的门店将获得门店二维码、TikTok、Facebook 和 Instagram 的永久链接 — 立即可以追踪点击次数，无需等待 LIFF 集成。",
     pilotNote: "确认加好友归因将在 LIFF 集成完成后启用。",
 
-    totalLinks: "链接总数",
-    activeLinks: "活跃链接",
+    totalLinks: "总链接数",
+    activeLinks: "活跃链接数",
     totalClicks: "总点击次数",
+    totalIdentifiedVisits: "总识别次数",
+    totalConfirmedAdds: "总成功加好友数",
+    overallConversionRate: "整体转化率",
     storesConfigured: "已配置门店",
 
     sourceStoreQr: "门店二维码",
@@ -443,14 +491,26 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tableStatus: "状态",
     tableActions: "操作",
 
-    tooltipIdentified: "用户已完成 LIFF 身份验证",
-    tooltipConfirmed: "LINE 关注 Webhook 已成功匹配至来源链接",
-    tooltipConversion: "成功加好友数除以总点击数",
+    tooltipIdentified: "用户已通过 LIFF 完成身份识别",
+    tooltipConfirmed: "LINE Webhook 已确认成功加好友",
+    tooltipConversion: "成功加好友数与总点击次数的比率",
 
-    kpiTotalClicks: "总点击次数",
-    kpiIdentifiedVisits: "总识别次数",
-    kpiConfirmedAdds: "总成功加好友数",
-    kpiOverallConversion: "整体转化率",
+    attributionSectionTitle: "门店 Friend Attribution (LIFF) 配置",
+    attributionSectionDesc: "为每个门店单独配置 LINE Login Channel ID 和 LIFF ID，以自动追踪真实的加好友归因。",
+    attrStatusNotConfigured: "未配置",
+    attrStatusEnabled: "已启用 LIFF",
+    attrStatusDisabled: "已禁用 LIFF",
+    attrConfigureBtn: "配置 LIFF",
+    attrEditBtn: "编辑",
+    attrDisableBtn: "禁用",
+    attrModalTitle: (storeName) => `LIFF 归因配置 — ${storeName}`,
+    attrModalChannelId: "LINE Login Channel ID",
+    attrModalLiffId: "LIFF ID",
+    attrModalEnabled: "为此门店启用归因追踪",
+    attrModalSaveBtn: "保存配置",
+    attrModalCancelBtn: "取消",
+    attrInvalidChannelId: "LINE Login Channel ID 必须为数字（例如 2007073384）",
+    attrInvalidLiffId: "LIFF ID 格式无效（例如 2007073384-AbCdEfGh）",
     copyLink: "复制",
     openLink: "打开",
     activate: "启用",

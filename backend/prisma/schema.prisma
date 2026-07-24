@@ -308,6 +308,7 @@ model LineOfficialAccount {
   friendSourceLinks           FriendSourceLink[]
   attributionSessions         FriendAttributionSession[]
   unmatchedFollows            FriendAttributionUnmatchedFollow[]
+  friendAttributionConfig     FriendAttributionConfig?
 
   @@index([storeId, isActive])
   @@index([isActive, lastBackfillReconciledAt])
@@ -703,4 +704,17 @@ model FriendAttributionUnmatchedFollow {
 
   @@index([lineOaId, lineUserIdHash, consumedAt])
   @@index([expiresAt])
+}
+
+model FriendAttributionConfig {
+  id                 String              @id @default(uuid())
+  lineOaId           String              @unique
+  lineLoginChannelId String
+  liffId             String
+  isEnabled          Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  lineOa             LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+
+  @@index([isEnabled])
 }

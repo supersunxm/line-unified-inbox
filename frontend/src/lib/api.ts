@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -129,4 +129,15 @@ export const api = {
     request<UpdateFriendshipStatusResult>("/friend-attribution/friendship-status", { method: "POST", body: JSON.stringify(input) }),
   getFriendAttributionSessionStatus: (token: string) =>
     request<FriendAttributionSessionStatusResult>(`/friend-attribution/session-status?token=${encodeURIComponent(token)}`),
+  friendAttributionConfigs: () =>
+    request<FriendAttributionConfigDto[]>("/friend-source-links/attribution-configs"),
+  upsertFriendAttributionConfig: (lineOaId: string, input: UpsertFriendAttributionConfigInput) =>
+    request<FriendAttributionConfigDto>(`/friend-source-links/attribution-configs/${encodeURIComponent(lineOaId)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteFriendAttributionConfig: (lineOaId: string) =>
+    request<{ success: boolean; lineOaId: string }>(`/friend-source-links/attribution-configs/${encodeURIComponent(lineOaId)}`, {
+      method: "DELETE",
+    }),
 };
