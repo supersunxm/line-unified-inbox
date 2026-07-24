@@ -20,6 +20,7 @@ export type FriendAttributionTranslationKeys = {
   invalidSessionError: string;
   customerErrorMessage: string;
   fallbackBtn: string;
+  retryAddFriendBtn: string;
   loading: string;
 };
 
@@ -44,6 +45,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     invalidSessionError: "ลิงก์ติดตามหมดอายุหรือไม่อยู่ในระบบ กรุณาสแกน QR Code หรือคลิกลิงก์ใหม่อีกครั้ง",
     customerErrorMessage: "ไม่สามารถยืนยันข้อมูลได้ กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่อีกครั้ง",
     fallbackBtn: "เปิดหน้า LINE Official Account",
+    retryAddFriendBtn: "ลองเพิ่มเพื่อนอีกครั้ง",
     loading: "กำลังโหลด...",
   },
   en: {
@@ -66,6 +68,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     invalidSessionError: "The attribution tracking link has expired or is invalid. Please rescan the QR code.",
     customerErrorMessage: "Verification failed. Please close this window and open the link again.",
     fallbackBtn: "Open LINE Official Account",
+    retryAddFriendBtn: "Retry Add Friend",
     loading: "Loading...",
   },
   zh: {
@@ -88,6 +91,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     invalidSessionError: "追踪链接已失效或不存在，请重新扫描二维码。",
     customerErrorMessage: "验证失败，请关闭此页面并重新打开链接。",
     fallbackBtn: "直接打开 LINE 官方账号",
+    retryAddFriendBtn: "重试添加好友",
     loading: "加载中...",
   },
 };

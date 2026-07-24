@@ -20,6 +20,16 @@ function getInitialAttributionState() {
   return { liffId, sessionToken: token, initialStep: "CONSENT" as const };
 }
 
+export type LiffDiagnosticInfo = {
+  operation: "requestFriendship";
+  code: string;
+  message: string;
+  liffVersion: string | null;
+  lineVersion: string | null;
+  isInClient: boolean;
+  apiAvailable: boolean;
+};
+
 export function FriendAttributionView() {
   const [locale, setLocale] = useState<FriendAttributionLocale>("th");
   const [{ liffId, sessionToken, initialStep }] = useState(getInitialAttributionState);
@@ -37,6 +47,7 @@ export function FriendAttributionView() {
     | "ERROR"
   >(initialStep);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<LiffDiagnosticInfo | null>(null);
   const [isFriend, setIsFriend] = useState<boolean | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string>(() => {
     const raw = process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_FALLBACK_URL;
@@ -103,25 +114,64 @@ export function FriendAttributionView() {
   const handleRequestFriendship = async () => {
     if (!sessionToken) return;
 
-    try {
-      setStep("WAITING_FOLLOW");
+    setDiagnosticInfo(null);
+    setErrorMsg(null);
+    setStep("WAITING_FOLLOW");
 
+    try {
       const liffModule = await import("@line/liff");
       const liff = liffModule.default;
 
-      if (liff.isApiAvailable("requestFriendship")) {
-        await liff.requestFriendship();
+      const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
+      const apiAvailable = typeof liff.isApiAvailable === "function" ? liff.isApiAvailable("requestFriendship") : false;
+      const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
+      const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+
+      // Log getFriendship before calling requestFriendship
+      const friendshipBefore = await liff.getFriendship().catch(() => null);
+      console.log("LIFF getFriendship result before requestFriendship:", friendshipBefore);
+
+      // Confirm liff.isInClient() === true and requestFriendship function availability before calling
+      if (!isInClient || !apiAvailable || typeof liff.requestFriendship !== "function") {
+        const diag: LiffDiagnosticInfo = {
+          operation: "requestFriendship",
+          code: !isInClient ? "NOT_IN_CLIENT" : "API_UNAVAILABLE",
+          message: !isInClient
+            ? "liff.requestFriendship requires running inside the LINE app"
+            : "liff.requestFriendship is not available for this LIFF/OA configuration",
+          liffVersion,
+          lineVersion,
+          isInClient,
+          apiAvailable,
+        };
+        console.error("LIFF Friend Attribution requestFriendship error:", diag);
+        setDiagnosticInfo(diag);
+        setErrorMsg(t.customerErrorMessage);
+        setStep("PROMPT_ADD_FRIEND");
+        return;
       }
 
-      const friendship = await liff.getFriendship();
-      if (friendship?.friendFlag) {
-        setIsFriend(true);
-        const statusRes = await api.updateFriendshipStatus({ sessionToken, isFriend: true });
-        if (statusRes.fallbackUrl) {
-          setFallbackUrl(statusRes.fallbackUrl);
-        }
+      // Execute requestFriendship
+      await liff.requestFriendship();
+
+      // Re-check getFriendship AFTER requestFriendship resolves
+      const friendshipAfter = await liff.getFriendship().catch(() => null);
+      console.log("LIFF getFriendship result after requestFriendship:", friendshipAfter);
+      const isFriendAfter = Boolean(friendshipAfter?.friendFlag);
+      setIsFriend(isFriendAfter);
+
+      // Update backend friendship status using actual friendFlag
+      const statusRes = await api.updateFriendshipStatus({ sessionToken, isFriend: isFriendAfter });
+      if (statusRes.fallbackUrl) {
+        setFallbackUrl(statusRes.fallbackUrl);
       }
 
+      if (isFriendAfter) {
+        setStep("ALREADY_FRIEND");
+        return;
+      }
+
+      // Poll session status for webhook follow confirmation
       let attempts = 0;
       const pollInterval = setInterval(async () => {
         attempts++;
@@ -135,14 +185,36 @@ export function FriendAttributionView() {
             setStep("CONFIRMED");
           } else if (attempts >= 10) {
             clearInterval(pollInterval);
-            setStep(isFriend ? "ALREADY_FRIEND" : "PROMPT_ADD_FRIEND");
+            setStep("PROMPT_ADD_FRIEND");
           }
         } catch {
           if (attempts >= 10) clearInterval(pollInterval);
         }
       }, 2000);
     } catch (err: unknown) {
-      console.error("LIFF Friend Attribution requestFriendship error:", err);
+      const errObj = err as { code?: string | number; message?: string; name?: string };
+      const liffModule = await import("@line/liff");
+      const liff = liffModule.default;
+
+      const code = errObj.code ? String(errObj.code) : errObj.name || "UNKNOWN_ERROR";
+      const message = errObj.message || String(err);
+      const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
+      const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+      const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
+      const apiAvailable = typeof liff.isApiAvailable === "function" ? liff.isApiAvailable("requestFriendship") : false;
+
+      const diag: LiffDiagnosticInfo = {
+        operation: "requestFriendship",
+        code,
+        message,
+        liffVersion,
+        lineVersion,
+        isInClient,
+        apiAvailable,
+      };
+
+      console.error("LIFF Friend Attribution requestFriendship error:", diag);
+      setDiagnosticInfo(diag);
       setErrorMsg(t.customerErrorMessage);
       setStep("PROMPT_ADD_FRIEND");
     }
@@ -239,13 +311,53 @@ export function FriendAttributionView() {
         {step === "PROMPT_ADD_FRIEND" && (
           <div>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>{t.promptAddFriendTitle}</h2>
-            <p style={{ fontSize: "14px", color: "#475569", marginBottom: "20px" }}>{t.promptAddFriendDesc}</p>
-            <button
-              onClick={handleRequestFriendship}
-              style={{ width: "100%", padding: "14px", backgroundColor: "#06C755", color: "#FFFFFF", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "16px", cursor: "pointer", boxShadow: "0 2px 6px rgba(6,199,85,0.3)" }}
-            >
-              {t.addFriendBtn}
-            </button>
+            <p style={{ fontSize: "14px", color: "#475569", marginBottom: "16px" }}>{errorMsg || t.promptAddFriendDesc}</p>
+
+            {diagnosticInfo && (
+              <div
+                id="liff-diagnostic-info"
+                style={{
+                  marginBottom: "16px",
+                  padding: "10px 12px",
+                  borderRadius: "6px",
+                  backgroundColor: "#FEF2F2",
+                  border: "1px solid #FCA5A5",
+                  textAlign: "left",
+                  fontSize: "12px",
+                  color: "#991B1B",
+                }}
+              >
+                <p style={{ fontWeight: 600, margin: "0 0 4px 0" }}>Diagnostic Info ({diagnosticInfo.code})</p>
+                <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", lineHeight: 1.4 }}>
+                  <div>Code: {diagnosticInfo.code}</div>
+                  <div>Message: {diagnosticInfo.message}</div>
+                  <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
+                  <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
+                  <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>API Available: {diagnosticInfo.apiAvailable ? "Yes" : "No"}</div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button
+                id="liff-retry-add-friend-btn"
+                onClick={handleRequestFriendship}
+                style={{ width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "15px", cursor: "pointer", boxShadow: "0 2px 6px rgba(6,199,85,0.3)" }}
+              >
+                {diagnosticInfo ? t.retryAddFriendBtn : t.addFriendBtn}
+              </button>
+
+              <a
+                id="liff-open-official-account-link"
+                href={fallbackUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "block", width: "100%", padding: "10px", backgroundColor: "#F1F5F9", color: "#334155", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box", border: "1px solid #CBD5E1" }}
+              >
+                {t.fallbackBtn}
+              </a>
+            </div>
           </div>
         )}
 
@@ -275,14 +387,52 @@ export function FriendAttributionView() {
         {step === "ERROR" && (
           <div>
             <p style={{ color: "#DC2626", fontSize: "14px", marginBottom: "16px" }}>{errorMsg || t.customerErrorMessage}</p>
-            <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noreferrer"
-              style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}
-            >
-              {t.fallbackBtn}
-            </a>
+
+            {diagnosticInfo && (
+              <div
+                id="liff-diagnostic-info"
+                style={{
+                  marginBottom: "16px",
+                  padding: "10px 12px",
+                  borderRadius: "6px",
+                  backgroundColor: "#FEF2F2",
+                  border: "1px solid #FCA5A5",
+                  textAlign: "left",
+                  fontSize: "12px",
+                  color: "#991B1B",
+                }}
+              >
+                <p style={{ fontWeight: 600, margin: "0 0 4px 0" }}>Diagnostic Info ({diagnosticInfo.code})</p>
+                <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", lineHeight: 1.4 }}>
+                  <div>Code: {diagnosticInfo.code}</div>
+                  <div>Message: {diagnosticInfo.message}</div>
+                  <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
+                  <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
+                  <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>API Available: {diagnosticInfo.apiAvailable ? "Yes" : "No"}</div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button
+                id="liff-retry-add-friend-btn"
+                onClick={handleRequestFriendship}
+                style={{ width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "15px", cursor: "pointer", boxShadow: "0 2px 6px rgba(6,199,85,0.3)" }}
+              >
+                {t.retryAddFriendBtn}
+              </button>
+
+              <a
+                id="liff-open-official-account-link"
+                href={fallbackUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "block", width: "100%", padding: "10px", backgroundColor: "#F1F5F9", color: "#334155", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box", border: "1px solid #CBD5E1" }}
+              >
+                {t.fallbackBtn}
+              </a>
+            </div>
           </div>
         )}
       </div>
