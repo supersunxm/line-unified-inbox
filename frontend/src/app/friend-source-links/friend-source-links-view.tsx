@@ -73,12 +73,29 @@ export function FriendSourceLinksView({
 
   // Attribution configs state
   const [attrConfigs, setAttrConfigs] = useState<FriendAttributionConfigDto[]>([]);
+  const [attrConfigsLoading, setAttrConfigsLoading] = useState(false);
+  const [attrConfigsError, setAttrConfigsError] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<FriendAttributionConfigDto | null>(null);
   const [modalChannelId, setModalChannelId] = useState("");
   const [modalLiffId, setModalLiffId] = useState("");
   const [modalIsEnabled, setModalIsEnabled] = useState(true);
   const [modalError, setModalError] = useState<string | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
+
+  const loadAttrConfigs = useCallback(async () => {
+    if (userRole !== "ADMIN") return;
+    setAttrConfigsLoading(true);
+    setAttrConfigsError(null);
+    try {
+      const data = await api.friendAttributionConfigs();
+      setAttrConfigs(data);
+    } catch (err) {
+      const evaluated = evaluateApiError(err, t.errorState);
+      setAttrConfigsError(evaluated.message);
+    } finally {
+      setAttrConfigsLoading(false);
+    }
+  }, [t.errorState, userRole]);
 
   const loadData = useCallback(async () => {
     if (userRole === "VIEWER") {
@@ -96,16 +113,17 @@ export function FriendSourceLinksView({
         ...(filterSource ? { source: filterSource } : {}),
         ...(filterStatus ? { isActive: filterStatus as "true" | "false" } : {}),
       };
-      const [linksData, summaryData, oasData, attrConfigsData] = await Promise.all([
+      const [linksData, summaryData, oasData] = await Promise.all([
         api.friendSourceLinks(Object.keys(filters).length ? filters : undefined),
         api.friendSourceLinksSummary(),
         api.lineOfficialAccounts(),
-        api.friendAttributionConfigs().catch(() => []),
       ]);
       setLinks(linksData);
       setSummary(summaryData);
       setLineOas(oasData);
-      setAttrConfigs(attrConfigsData);
+      if (userRole === "ADMIN") {
+        void loadAttrConfigs();
+      }
     } catch (err) {
       const evaluated = evaluateApiError(err, t.errorState);
       if (evaluated.is403) {
@@ -116,7 +134,7 @@ export function FriendSourceLinksView({
     } finally {
       setLoading(false);
     }
-  }, [filterSearch, filterStore, filterSource, filterStatus, t.errorState, userRole]);
+  }, [filterSearch, filterStore, filterSource, filterStatus, loadAttrConfigs, t.errorState, userRole]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadData(), 0);
@@ -149,7 +167,7 @@ export function FriendSourceLinksView({
       });
       showToast(t.copiedToast);
       setEditingConfig(null);
-      await loadData();
+      await loadAttrConfigs();
     } catch (err) {
       setModalError(err instanceof Error ? err.message : "Failed to save attribution configuration");
     } finally {
@@ -571,7 +589,7 @@ export function FriendSourceLinksView({
 
       {/* Attribution Config Card for ADMIN */}
       {userRole === "ADMIN" && (
-        <div className="app-card mb-6 rounded-2xl p-6">
+        <div id="fsl-attribution-card" className="app-card mb-6 rounded-2xl p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold">{t.attributionSectionTitle}</h2>
@@ -579,78 +597,82 @@ export function FriendSourceLinksView({
             </div>
           </div>
 
-          <div className="mt-4 divide-y divide-slate-100 rounded-lg border">
-            {lineOas.map((oa) => {
-              const cfg = attrConfigs.find((c) => c.lineOaId === oa.id);
-              const isConfigured = cfg?.isConfigured ?? Boolean(cfg?.liffId);
-              const isEnabled = cfg?.isEnabled ?? false;
-              const isEligible = isAccountEligible(oa);
+          {attrConfigsLoading ? (
+            <div role="status" className="mt-4 p-4 text-center text-sm text-slate-500">
+              {t.generating}
+            </div>
+          ) : attrConfigsError ? (
+            <div role="alert" className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">
+              <p>{attrConfigsError}</p>
+              <button
+                onClick={() => void loadAttrConfigs()}
+                className="mt-2 text-xs font-semibold underline hover:text-red-800"
+              >
+                {t.retry}
+              </button>
+            </div>
+          ) : attrConfigs.length === 0 ? (
+            <div role="status" className="mt-4 p-4 text-center text-sm text-slate-500">
+              {t.noEligibleAccounts}
+            </div>
+          ) : (
+            <div className="mt-4 divide-y divide-slate-100 rounded-lg border">
+              {attrConfigs.map((cfg) => {
+                const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
+                const isEnabled = cfg.isEnabled;
 
-              return (
-                <div key={oa.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900">{oa.store?.name || oa.name}</span>
-                      <span className="text-xs text-slate-500">({oa.name} · {oa.basicId})</span>
+                return (
+                  <div key={cfg.lineOaId} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">{cfg.storeName || cfg.lineOaName}</span>
+                        <span className="text-xs text-slate-500">
+                          ({cfg.lineOaName}{cfg.basicId ? ` · ${cfg.basicId}` : ""})
+                        </span>
+                      </div>
+                      {isConfigured && cfg.liffId && (
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Channel ID: <span className="font-mono">{cfg.lineLoginChannelId || "-"}</span> · LIFF ID:{" "}
+                          <span className="font-mono">{cfg.liffId}</span>
+                        </p>
+                      )}
                     </div>
-                    {isConfigured && cfg?.liffId && (
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Channel ID: <span className="font-mono">{cfg.lineLoginChannelId}</span> · LIFF ID: <span className="font-mono">{cfg.liffId}</span>
-                      </p>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        !isEligible
-                          ? "bg-red-100 text-red-800"
-                          : !isConfigured
-                          ? "bg-slate-100 text-slate-600"
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          !isConfigured
+                            ? "bg-slate-100 text-slate-600"
+                            : isEnabled
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {!isConfigured
+                          ? t.attrStatusNotConfigured
                           : isEnabled
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {!isEligible
-                        ? t.filterStatusInactive
-                        : !isConfigured
-                        ? t.attrStatusNotConfigured
-                        : isEnabled
-                        ? t.attrStatusEnabled
-                        : t.attrStatusDisabled}
-                    </span>
+                          ? t.attrStatusEnabled
+                          : t.attrStatusDisabled}
+                      </span>
 
-                    <button
-                      disabled={!isEligible}
-                      title={!isEligible ? t.eligibleOnly : undefined}
-                      onClick={() => {
-                        setEditingConfig({
-                          lineOaId: oa.id,
-                          lineOaName: oa.name,
-                          basicId: oa.basicId,
-                          storeName: oa.store?.name || null,
-                          storeCode: oa.store?.externalStoreId || null,
-                          lineLoginChannelId: cfg?.lineLoginChannelId || "",
-                          liffId: cfg?.liffId || "",
-                          isEnabled: cfg?.isEnabled ?? true,
-                          isConfigured: Boolean(isConfigured),
-                          updatedAt: cfg?.updatedAt || null,
-                        });
-                        setModalChannelId(cfg?.lineLoginChannelId || "");
-                        setModalLiffId(cfg?.liffId || "");
-                        setModalIsEnabled(cfg?.isEnabled ?? true);
-                        setModalError(null);
-                      }}
-                      className="rounded border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
-                    >
-                      {isConfigured ? t.attrEditBtn : t.attrConfigureBtn}
-                    </button>
+                      <button
+                        onClick={() => {
+                          setEditingConfig(cfg);
+                          setModalChannelId(cfg.lineLoginChannelId || "");
+                          setModalLiffId(cfg.liffId || "");
+                          setModalIsEnabled(cfg.isEnabled ?? true);
+                          setModalError(null);
+                        }}
+                        className="rounded border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50"
+                      >
+                        {isConfigured ? t.attrEditBtn : t.attrConfigureBtn}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

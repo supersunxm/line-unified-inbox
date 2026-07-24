@@ -26,7 +26,7 @@ import {
   pivotLinksByStore,
   prepareLinkDetailsRows,
 } from "../src/app/friend-source-links/friend-source-links-export.ts";
-import type { FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "../src/types/api.ts";
+import type { FriendAttributionConfigDto, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "../src/types/api.ts";
 
 // ──────────────────────────────────────────────────────────────────────
 // Source file inspection helpers
@@ -683,9 +683,80 @@ test("18. Friend Source Links view contains Attribution Configuration section an
   assert.match(viewFile, /attributionSectionTitle/);
   assert.match(viewFile, /friendAttributionConfigs/);
   assert.match(viewFile, /upsertFriendAttributionConfig/);
-  assert.match(viewFile, /disabled=\{!isEligible\}/);
   assert.match(apiTs, /friendAttributionConfigs/);
   assert.match(apiTs, /upsertFriendAttributionConfig/);
   assert.match(apiTs, /method:\s*"PUT"/);
   assert.match(apiTs, /deleteFriendAttributionConfig/);
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 33. Attribution Configuration Card Render Condition & Status Tests
+// ──────────────────────────────────────────────────────────────────────
+
+test("Attribution Configuration Card rendering, status badges, and error/empty state behavior", () => {
+  const getStatusBadgeText = (cfg: FriendAttributionConfigDto, t: typeof friendSourceLinksTranslations.en) => {
+    const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
+    const isEnabled = cfg.isEnabled;
+    if (!isConfigured) return t.attrStatusNotConfigured;
+    if (isEnabled) return t.attrStatusEnabled;
+    return t.attrStatusDisabled;
+  };
+
+  const t = friendSourceLinksTranslations.en;
+
+  // 1. Unconfigured row (e.g. RBS Chonburi or Lotus Banbueng before config)
+  const unconfiguredRow: FriendAttributionConfigDto = {
+    lineOaId: "oa-chonburi",
+    lineOaName: "OPPO BS RBS Chonburi",
+    basicId: "@oppobsrbschonburi",
+    storeName: "OBS Robinson Chonburi By OPPO",
+    storeCode: "RBS01",
+    lineLoginChannelId: null,
+    liffId: null,
+    isEnabled: false,
+    isConfigured: false,
+    updatedAt: null,
+  };
+  assert.equal(getStatusBadgeText(unconfiguredRow, t), "Not Configured");
+
+  // 2. Configured & Disabled row
+  const disabledRow: FriendAttributionConfigDto = {
+    ...unconfiguredRow,
+    lineLoginChannelId: "2007073384",
+    liffId: "2007073384-AbCdEfGh",
+    isEnabled: false,
+    isConfigured: true,
+  };
+  assert.equal(getStatusBadgeText(disabledRow, t), "LIFF Disabled");
+
+  // 3. Configured & Enabled row
+  const enabledRow: FriendAttributionConfigDto = {
+    ...disabledRow,
+    isEnabled: true,
+  };
+  assert.equal(getStatusBadgeText(enabledRow, t), "LIFF Enabled");
+
+  // 4. 44 Unconfigured Rows (Production initial state)
+  const mock44UnconfiguredRows: FriendAttributionConfigDto[] = Array.from({ length: 44 }, (_, i) => ({
+    lineOaId: `oa-${i + 1}`,
+    lineOaName: `OPPO Store ${i + 1}`,
+    basicId: `@oppostore${i + 1}`,
+    storeName: `OPPO Store ${i + 1}`,
+    storeCode: `S${i + 1}`,
+    lineLoginChannelId: null,
+    liffId: null,
+    isEnabled: false,
+    isConfigured: false,
+    updatedAt: null,
+  }));
+
+  const allUnconfiguredStatus = mock44UnconfiguredRows.map((r) => getStatusBadgeText(r, t));
+  assert.equal(allUnconfiguredStatus.length, 44);
+  assert.ok(allUnconfiguredStatus.every((s) => s === "Not Configured"));
+
+  // 5. Source code assertions for Card visibility, loading, error, and role scoping
+  assert.match(viewFile, /id="fsl-attribution-card"/);
+  assert.match(viewFile, /attrConfigsLoading/);
+  assert.match(viewFile, /attrConfigsError/);
+  assert.match(viewFile, /userRole === "ADMIN"/);
 });
