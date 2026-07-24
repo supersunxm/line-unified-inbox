@@ -27,7 +27,6 @@ export type LiffDiagnosticInfo = {
   liffVersion: string | null;
   lineVersion: string | null;
   isInClient: boolean;
-  apiAvailable: boolean;
 };
 
 export function FriendAttributionView() {
@@ -48,7 +47,7 @@ export function FriendAttributionView() {
   >(initialStep);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [diagnosticInfo, setDiagnosticInfo] = useState<LiffDiagnosticInfo | null>(null);
-  const [isFriend, setIsFriend] = useState<boolean | null>(null);
+  const [, setIsFriend] = useState<boolean | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string>(() => {
     const raw = process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_FALLBACK_URL;
     if (raw && raw.trim()) return raw.trim();
@@ -123,7 +122,6 @@ export function FriendAttributionView() {
       const liff = liffModule.default;
 
       const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
-      const apiAvailable = typeof liff.isApiAvailable === "function" ? liff.isApiAvailable("requestFriendship") : false;
       const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
       const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
 
@@ -132,17 +130,16 @@ export function FriendAttributionView() {
       console.log("LIFF getFriendship result before requestFriendship:", friendshipBefore);
 
       // Confirm liff.isInClient() === true and requestFriendship function availability before calling
-      if (!isInClient || !apiAvailable || typeof liff.requestFriendship !== "function") {
+      if (!isInClient || typeof liff.requestFriendship !== "function") {
         const diag: LiffDiagnosticInfo = {
           operation: "requestFriendship",
-          code: !isInClient ? "NOT_IN_CLIENT" : "API_UNAVAILABLE",
+          code: !isInClient ? "NOT_IN_CLIENT" : "FUNCTION_NOT_FOUND",
           message: !isInClient
-            ? "liff.requestFriendship requires running inside the LINE app"
-            : "liff.requestFriendship is not available for this LIFF/OA configuration",
+            ? "liff.requestFriendship requires running inside the LINE in-app browser"
+            : "liff.requestFriendship function is not defined on LIFF SDK",
           liffVersion,
           lineVersion,
           isInClient,
-          apiAvailable,
         };
         console.error("LIFF Friend Attribution requestFriendship error:", diag);
         setDiagnosticInfo(diag);
@@ -201,7 +198,6 @@ export function FriendAttributionView() {
       const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
       const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
       const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
-      const apiAvailable = typeof liff.isApiAvailable === "function" ? liff.isApiAvailable("requestFriendship") : false;
 
       const diag: LiffDiagnosticInfo = {
         operation: "requestFriendship",
@@ -210,7 +206,6 @@ export function FriendAttributionView() {
         liffVersion,
         lineVersion,
         isInClient,
-        apiAvailable,
       };
 
       console.error("LIFF Friend Attribution requestFriendship error:", diag);
@@ -334,7 +329,6 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
-                  <div>API Available: {diagnosticInfo.apiAvailable ? "Yes" : "No"}</div>
                 </div>
               </div>
             )}
@@ -409,7 +403,6 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
-                  <div>API Available: {diagnosticInfo.apiAvailable ? "Yes" : "No"}</div>
                 </div>
               </div>
             )}

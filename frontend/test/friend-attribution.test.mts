@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
 import { extractSessionTokenFromUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
@@ -183,7 +184,15 @@ test("Scenario 26 & 27: Admin reporting and Excel export aggregate attribution m
 // ──────────────────────────────────────────────────────────────────────
 
 test("Scenario 35: LIFF requestFriendship error diagnostics, pre/post checks, and manual user buttons", async () => {
-  const buildDiagnosticInfo = (err: unknown, liff: { getVersion: () => string; getLineVersion: () => string; isInClient: () => boolean; isApiAvailable: (name: string) => boolean }) => {
+  const viewFile = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
+
+  // 1. Source code verification: isApiAvailable("requestFriendship") MUST NOT be called
+  assert.doesNotMatch(viewFile, /isApiAvailable\(\s*["']requestFriendship["']\s*\)/, "Source must NOT call unsupported isApiAvailable('requestFriendship')");
+  assert.match(viewFile, /typeof liff\.isInClient === "function"/, "Source must check isInClient()");
+  assert.match(viewFile, /typeof liff\.requestFriendship !== "function"/, "Source must check function existence");
+  assert.doesNotMatch(viewFile, /API Available:/, "UI must NOT display misleading API Available field");
+
+  const buildDiagnosticInfo = (err: unknown, liff: { getVersion: () => string; getLineVersion: () => string; isInClient: () => boolean }) => {
     const errObj = err as { code?: string | number; message?: string; name?: string };
     const code = errObj.code ? String(errObj.code) : errObj.name || "UNKNOWN_ERROR";
     const message = errObj.message || String(err);
@@ -195,39 +204,37 @@ test("Scenario 35: LIFF requestFriendship error diagnostics, pre/post checks, an
       liffVersion: liff.getVersion(),
       lineVersion: liff.getLineVersion(),
       isInClient: liff.isInClient(),
-      apiAvailable: liff.isApiAvailable("requestFriendship"),
     };
   };
 
   const mockLiff = {
-    getVersion: () => "2.24.0",
-    getLineVersion: () => "13.4.0",
+    getVersion: () => "2.29.1",
+    getLineVersion: () => "26.11.0",
     isInClient: () => true,
-    isApiAvailable: (name: string) => name === "requestFriendship",
   };
 
-  // 1. FORBIDDEN error formatting
+  // 2. FORBIDDEN error formatting
   const forbiddenErr = { code: "FORBIDDEN", message: "Feature is not available for this app/OA" };
   const diagForbidden = buildDiagnosticInfo(forbiddenErr, mockLiff);
   assert.equal(diagForbidden.code, "FORBIDDEN");
   assert.equal(diagForbidden.message, "Feature is not available for this app/OA");
   assert.equal(diagForbidden.isInClient, true);
-  assert.equal(diagForbidden.apiAvailable, true);
+  assert.equal("apiAvailable" in diagForbidden, false);
 
-  // 2. UNKNOWN_ERROR formatting
+  // 3. UNKNOWN_ERROR formatting
   const unknownErr = new Error("Network timeout while calling LIFF bridge");
   const diagUnknown = buildDiagnosticInfo(unknownErr, mockLiff);
   assert.equal(diagUnknown.code, "Error");
   assert.equal(diagUnknown.message, "Network timeout while calling LIFF bridge");
 
-  // 3. Privacy audit: Ensure diagnostic object contains ZERO secrets or tokens
+  // 4. Privacy audit: Ensure diagnostic object contains ZERO secrets or tokens
   const sensitiveKeys = ["sessionToken", "idToken", "accessToken", "lineUserId", "secret", "channelSecret"];
   for (const sKey of sensitiveKeys) {
     assert.equal(sKey in diagForbidden, false, `Secret key '${sKey}' must NOT be in diagnostic object`);
     assert.equal(sKey in diagUnknown, false, `Secret key '${sKey}' must NOT be in diagnostic object`);
   }
 
-  // 4. Verification that requestFriendship re-checks getFriendship after resolving
+  // 5. Verification that requestFriendship re-checks getFriendship after resolving
   let getFriendshipCallCount = 0;
   let friendshipFlag = false;
 
