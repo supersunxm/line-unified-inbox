@@ -561,6 +561,7 @@ export class FriendSourceLinksService {
     return {
       status: updated.attributionStatus,
       expiresAt: updated.expiresAt,
+      fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
     };
   }
 
@@ -616,6 +617,7 @@ export class FriendSourceLinksService {
       action: nextAction,
       status: updated.attributionStatus,
       expiresAt: updated.expiresAt,
+      fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
     };
   }
 
@@ -647,15 +649,45 @@ export class FriendSourceLinksService {
       throw new NotFoundException("Attribution session not found");
     }
 
-    const isExpired = session.expiresAt <= new Date();
-    const isConfirmed = session.attributionStatus === "CONFIRMED" || Boolean(session.confirmedFollowAt);
+    if (session.expiresAt <= new Date()) {
+      if (session.attributionStatus !== "EXPIRED") {
+        await this.prisma.friendAttributionSession.update({
+          where: { id: session.id },
+          data: { attributionStatus: "EXPIRED" },
+        });
+      }
+      return {
+        status: "EXPIRED" as const,
+        confirmed: false,
+        confirmedFollowAt: null,
+        expiresAt: session.expiresAt,
+        fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
+      };
+    }
 
     return {
-      status: isExpired && !isConfirmed ? "EXPIRED" : session.attributionStatus,
-      confirmed: isConfirmed,
+      status: session.attributionStatus,
+      confirmed: session.attributionStatus === "CONFIRMED" && Boolean(session.confirmedFollowAt),
       confirmedFollowAt: session.confirmedFollowAt,
       expiresAt: session.expiresAt,
+      fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
     };
+  }
+
+  private async resolveFallbackUrl(lineOaId: string): Promise<string> {
+    try {
+      const oa = await this.prisma.lineOfficialAccount?.findUnique({
+        where: { id: lineOaId },
+        select: { basicId: true },
+      });
+
+      const rawId = oa?.basicId || process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_FALLBACK_BASIC_ID || "@oppo_thailand";
+      const clean = rawId.trim();
+      const normalized = clean.startsWith("@") ? clean : `@${clean}`;
+      return `https://line.me/R/ti/p/${encodeURIComponent(normalized)}`;
+    } catch {
+      return "https://line.me/R/ti/p/@oppo_thailand";
+    }
   }
 
   private formatLinkResponse(link: LinkWithRelations) {

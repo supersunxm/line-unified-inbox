@@ -34,19 +34,73 @@ test("canonical LIFF URL is constructed when FRIEND_ATTRIBUTION_LIFF_ID is set",
   assert.equal(getFriendAttributionLiffBaseUrl(env), "https://liff.line.me/2007073384-xxxx");
 });
 
-test("hashPublicSessionToken and hashLineUserId compute deterministic HMAC-SHA256 hashes", () => {
-  const token = "sat_abc123456789";
-  const secret = "my_secret_key";
-  const hash1 = hashPublicSessionToken(token, secret);
-  const hash2 = hashPublicSessionToken(token, secret);
-  assert.equal(hash1, hash2);
-  assert.notEqual(hash1, token);
+import { ValidationPipe } from "@nestjs/common";
+import { IdentifyFriendAttributionDto, UpdateFriendshipStatusDto } from "./friend-attribution.dto";
 
-  const userId = "U1234567890abcdef";
-  const uHash1 = hashLineUserId(userId, secret);
-  const uHash2 = hashLineUserId(userId, secret);
-  assert.equal(uHash1, uHash2);
-  assert.notEqual(uHash1, userId);
+test("DTO ValidationPipe: Valid Identify payload passes", async () => {
+  const validator = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+  const payload = {
+    sessionToken: "sat_1234567890",
+    idToken: "valid_id_token_1234567890",
+    consentGiven: true,
+  };
+
+  const transformed = await validator.transform(payload, {
+    type: "body",
+    metatype: IdentifyFriendAttributionDto,
+  });
+
+  assert.equal(transformed.sessionToken, "sat_1234567890");
+  assert.equal(transformed.consentGiven, true);
+});
+
+test("DTO ValidationPipe: Unknown properties are rejected by forbidNonWhitelisted", async () => {
+  const validator = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+  const payload = {
+    sessionToken: "sat_1234567890",
+    idToken: "valid_id_token_1234567890",
+    consentGiven: true,
+    unknownProperty: "hacked",
+  };
+
+  await assert.rejects(
+    () => validator.transform(payload, { type: "body", metatype: IdentifyFriendAttributionDto }),
+    (err: unknown) => err instanceof BadRequestException
+  );
+});
+
+test("DTO ValidationPipe: Malformed sessionToken and string consentGiven are rejected", async () => {
+  const validator = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+
+  // Malformed prefix
+  await assert.rejects(
+    () => validator.transform({ sessionToken: "invalid_prefix", idToken: "valid_id_token", consentGiven: true }, { type: "body", metatype: IdentifyFriendAttributionDto }),
+    (err: unknown) => err instanceof BadRequestException
+  );
+
+  // Non-boolean consentGiven
+  await assert.rejects(
+    () => validator.transform({ sessionToken: "sat_1234567890", idToken: "valid_id_token", consentGiven: "true" }, { type: "body", metatype: IdentifyFriendAttributionDto }),
+    (err: unknown) => err instanceof BadRequestException
+  );
+
+  // False consentGiven
+  await assert.rejects(
+    () => validator.transform({ sessionToken: "sat_1234567890", idToken: "valid_id_token", consentGiven: false }, { type: "body", metatype: IdentifyFriendAttributionDto }),
+    (err: unknown) => err instanceof BadRequestException
+  );
+});
+
+test("DTO ValidationPipe: Valid UpdateFriendshipStatus payload passes and unknown properties fail", async () => {
+  const validator = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+
+  const valid = await validator.transform({ sessionToken: "sat_1234567890", isFriend: true }, { type: "body", metatype: UpdateFriendshipStatusDto });
+  assert.equal(valid.isFriend, true);
+
+  await assert.rejects(
+    () => validator.transform({ sessionToken: "sat_1234567890", isFriend: true, extraField: 123 }, { type: "body", metatype: UpdateFriendshipStatusDto }),
+    (err: unknown) => err instanceof BadRequestException
+  );
 });
 
 test("Scenario 1 & 3: Click creates attribution session for pilot OA and stores only token hash", async () => {

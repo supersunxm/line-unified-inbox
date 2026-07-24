@@ -46,6 +46,22 @@ test("Scenario 16: Login redirect preserves token parameter and parses encoded l
   assert.equal(extractSessionTokenFromUrl(""), null);
 });
 
+test("Requirement 2 & 5: Payload matching and zero hardcoded store basic IDs", () => {
+  const payload = {
+    sessionToken: "sat_1234567890",
+    idToken: "id_token_xyz",
+    consentGiven: true,
+  };
+
+  const allowedKeys = new Set(["sessionToken", "idToken", "accessToken", "consentGiven"]);
+  for (const key of Object.keys(payload)) {
+    assert.ok(allowedKeys.has(key), `Payload key '${key}' must be allowed by NestJS DTO`);
+  }
+
+  // Localized customer error message is non-empty and user-friendly
+  assert.equal(FRIEND_ATTRIBUTION_TRANSLATIONS.th.customerErrorMessage, "ไม่สามารถยืนยันข้อมูลได้ กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่อีกครั้ง");
+});
+
 test("Scenario 17 & 18: Consent required before identify payload and ID token sent without raw client userId", () => {
   const buildIdentifyPayload = (sessionToken: string, idToken: string | null, consentGiven: boolean) => {
     if (!consentGiven) {

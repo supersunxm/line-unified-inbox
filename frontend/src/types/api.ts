@@ -273,6 +273,7 @@ export type IdentifyFriendAttributionInput = {
 export type IdentifyFriendAttributionResult = {
   status: string;
   expiresAt: string;
+  fallbackUrl?: string;
 };
 
 export type UpdateFriendshipStatusInput = {
@@ -284,6 +285,7 @@ export type UpdateFriendshipStatusResult = {
   action: "ALREADY_FRIEND" | "REQUEST_FRIENDSHIP" | "WAITING_FOR_FOLLOW" | "EXPIRED";
   status: string;
   expiresAt: string;
+  fallbackUrl?: string;
 };
 
 export type FriendAttributionSessionStatusResult = {
@@ -291,4 +293,5 @@ export type FriendAttributionSessionStatusResult = {
   confirmed: boolean;
   confirmedFollowAt: string | null;
   expiresAt: string;
+  fallbackUrl?: string;
 };

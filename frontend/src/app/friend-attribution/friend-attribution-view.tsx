@@ -38,6 +38,11 @@ export function FriendAttributionView() {
   >(initialStep);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isFriend, setIsFriend] = useState<boolean | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string>(() => {
+    const raw = process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_FALLBACK_URL;
+    if (raw && raw.trim()) return raw.trim();
+    return "https://line.me/R/ti/p/@oppo_thailand";
+  });
 
   const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
 
@@ -59,11 +64,15 @@ export function FriendAttributionView() {
 
       const idToken = liff.getIDToken();
 
-      await api.identifyFriendAttribution({
+      const identifyRes = await api.identifyFriendAttribution({
         sessionToken,
         idToken: idToken || undefined,
         consentGiven: true,
       });
+
+      if (identifyRes.fallbackUrl) {
+        setFallbackUrl(identifyRes.fallbackUrl);
+      }
 
       setStep("CHECKING_FRIENDSHIP");
       const friendship = await liff.getFriendship();
@@ -75,13 +84,18 @@ export function FriendAttributionView() {
         isFriend: isAlreadyFriend,
       });
 
+      if (statusRes.fallbackUrl) {
+        setFallbackUrl(statusRes.fallbackUrl);
+      }
+
       if (isAlreadyFriend || statusRes.action === "ALREADY_FRIEND") {
         setStep("ALREADY_FRIEND");
       } else {
         setStep("PROMPT_ADD_FRIEND");
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      console.error("LIFF Friend Attribution consent error:", err);
+      setErrorMsg(t.customerErrorMessage);
       setStep("ERROR");
     }
   };
@@ -102,7 +116,10 @@ export function FriendAttributionView() {
       const friendship = await liff.getFriendship();
       if (friendship?.friendFlag) {
         setIsFriend(true);
-        await api.updateFriendshipStatus({ sessionToken, isFriend: true });
+        const statusRes = await api.updateFriendshipStatus({ sessionToken, isFriend: true });
+        if (statusRes.fallbackUrl) {
+          setFallbackUrl(statusRes.fallbackUrl);
+        }
       }
 
       let attempts = 0;
@@ -110,6 +127,9 @@ export function FriendAttributionView() {
         attempts++;
         try {
           const res = await api.getFriendAttributionSessionStatus(sessionToken);
+          if (res.fallbackUrl) {
+            setFallbackUrl(res.fallbackUrl);
+          }
           if (res.confirmed) {
             clearInterval(pollInterval);
             setStep("CONFIRMED");
@@ -122,7 +142,8 @@ export function FriendAttributionView() {
         }
       }, 2000);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      console.error("LIFF Friend Attribution requestFriendship error:", err);
+      setErrorMsg(t.customerErrorMessage);
       setStep("PROMPT_ADD_FRIEND");
     }
   };
@@ -167,7 +188,7 @@ export function FriendAttributionView() {
           <div>
             <p style={{ color: "#DC2626", fontSize: "14px", marginBottom: "16px" }}>{t.invalidSessionError}</p>
             <a
-              href="https://line.me/R/ti/p/@oppobsrbschonburi"
+              href={fallbackUrl}
               target="_blank"
               rel="noreferrer"
               style={{ display: "inline-block", padding: "10px 16px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px" }}
@@ -205,7 +226,7 @@ export function FriendAttributionView() {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#166534", marginBottom: "8px" }}>{t.alreadyFriendTitle}</h2>
             <p style={{ fontSize: "14px", color: "#475569", marginBottom: "20px" }}>{t.alreadyFriendDesc}</p>
             <a
-              href="https://line.me/R/ti/p/@oppobsrbschonburi"
+              href={fallbackUrl}
               target="_blank"
               rel="noreferrer"
               style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}
@@ -241,7 +262,7 @@ export function FriendAttributionView() {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#166534", marginBottom: "8px" }}>{t.confirmedTitle}</h2>
             <p style={{ fontSize: "14px", color: "#475569", marginBottom: "20px" }}>{t.confirmedDesc}</p>
             <a
-              href="https://line.me/R/ti/p/@oppobsrbschonburi"
+              href={fallbackUrl}
               target="_blank"
               rel="noreferrer"
               style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}
@@ -253,9 +274,9 @@ export function FriendAttributionView() {
 
         {step === "ERROR" && (
           <div>
-            <p style={{ color: "#DC2626", fontSize: "14px", marginBottom: "16px" }}>{errorMsg || t.invalidSessionError}</p>
+            <p style={{ color: "#DC2626", fontSize: "14px", marginBottom: "16px" }}>{errorMsg || t.customerErrorMessage}</p>
             <a
-              href="https://line.me/R/ti/p/@oppobsrbschonburi"
+              href={fallbackUrl}
               target="_blank"
               rel="noreferrer"
               style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}

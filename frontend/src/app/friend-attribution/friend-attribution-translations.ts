@@ -18,6 +18,7 @@ export type FriendAttributionTranslationKeys = {
   confirmedDesc: string;
   liffConfigError: string;
   invalidSessionError: string;
+  customerErrorMessage: string;
   fallbackBtn: string;
   loading: string;
 };
@@ -41,6 +42,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     confirmedDesc: "ขอบคุณที่เพิ่มเพื่อนกับเรา บันทึกข้อมูลการเพิ่มเพื่อนเรียบร้อยแล้ว",
     liffConfigError: "ระบบยังไม่ได้ตั้งค่า LIFF ID กรุณาติดต่อผู้ดูแลระบบ",
     invalidSessionError: "ลิงก์ติดตามหมดอายุหรือไม่อยู่ในระบบ กรุณาสแกน QR Code หรือคลิกลิงก์ใหม่อีกครั้ง",
+    customerErrorMessage: "ไม่สามารถยืนยันข้อมูลได้ กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่อีกครั้ง",
     fallbackBtn: "เปิดหน้า LINE Official Account",
     loading: "กำลังโหลด...",
   },
@@ -62,6 +64,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     confirmedDesc: "Thank you for adding us as a friend. Your attribution has been verified.",
     liffConfigError: "LIFF ID is not configured. Please contact the administrator.",
     invalidSessionError: "The attribution tracking link has expired or is invalid. Please rescan the QR code.",
+    customerErrorMessage: "Verification failed. Please close this window and open the link again.",
     fallbackBtn: "Open LINE Official Account",
     loading: "Loading...",
   },
@@ -83,6 +86,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     confirmedDesc: "感谢添加好友，已为您记录关注来源。",
     liffConfigError: "系统未配置 LIFF ID，请联系管理员。",
     invalidSessionError: "追踪链接已失效或不存在，请重新扫描二维码。",
+    customerErrorMessage: "验证失败，请关闭此页面并重新打开链接。",
     fallbackBtn: "直接打开 LINE 官方账号",
     loading: "加载中...",
   },
