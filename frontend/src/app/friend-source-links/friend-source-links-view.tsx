@@ -29,7 +29,7 @@ export function FriendSourceLinksView({
   userRole,
 }: {
   language?: Language;
-  userRole?: "ADMIN" | "VIEWER" | string;
+  userRole: "ADMIN" | "VIEWER";
 }) {
   const t = getFriendSourceLinksText(language);
 

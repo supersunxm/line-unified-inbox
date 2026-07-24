@@ -759,4 +759,10 @@ test("Attribution Configuration Card rendering, status badges, and error/empty s
   assert.match(viewFile, /attrConfigsLoading/);
   assert.match(viewFile, /attrConfigsError/);
   assert.match(viewFile, /userRole === "ADMIN"/);
+
+  // 6. Role propagation & fail-closed prop assertions
+  assert.match(page, /<FriendSourceLinksView\s+language=\{language\}\s+userRole=\{authUser\.role\}/);
+  assert.doesNotMatch(page, /<FriendSourceLinksView\s+language=\{language\}\s+userRole="ADMIN"/, "Role prop must NOT be hardcoded in page.tsx");
+  assert.doesNotMatch(viewFile, /userRole\s*=\s*"ADMIN"/, "No default ADMIN fallback must exist in FriendSourceLinksView");
+  assert.match(viewFile, /userRole:\s*"ADMIN"\s*\|\s*"VIEWER";/, "userRole prop must be a required 'ADMIN' | 'VIEWER' type");
 });

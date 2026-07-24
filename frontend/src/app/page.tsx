@@ -2737,7 +2737,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         ) : initialSection === "follower-insights" ? (
           <FollowerInsightsView language={language} />
         ) : initialSection === "friend-source-links" ? (
-          <FriendSourceLinksView language={language} />
+          <FriendSourceLinksView language={language} userRole={authUser.role} />
         ) : (
           <>
         <section className="app-surface min-w-0 flex flex-col h-full overflow-hidden border-r">
