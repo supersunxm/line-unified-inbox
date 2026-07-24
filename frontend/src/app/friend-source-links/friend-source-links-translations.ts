@@ -1,0 +1,297 @@
+export type Language = "th" | "en" | "zh";
+
+export type FriendSourceLinksTranslations = {
+  pageTitle: string;
+  pageDescription: string;
+  pilotNote: string;
+
+  // KPI
+  totalLinks: string;
+  activeLinks: string;
+  totalClicks: string;
+  storesConfigured: string;
+
+  // Source names
+  sourceStoreQr: string;
+  sourceTikTok: string;
+  sourceFacebook: string;
+  sourceInstagram: string;
+
+  // Generator
+  generatorTitle: string;
+  generatorDescription: string;
+  searchPlaceholder: string;
+  selectedCount: (count: number, max: number) => string;
+  generatorPreview: (stores: number, sources: number, links: number) => string;
+  generateButton: string;
+  generating: string;
+  generateSuccess: (created: number, existing: number) => string;
+  generateIdempotentNote: string;
+  minOneRequired: string;
+  maxFiveAllowed: string;
+  noDuplicates: string;
+  eligibleOnly: string;
+  noEligibleAccounts: string;
+
+  // Table
+  tableStore: string;
+  tableLineOa: string;
+  tableSource: string;
+  tableShortLink: string;
+  tableClicks: string;
+  tableStatus: string;
+  tableActions: string;
+  copyLink: string;
+  openLink: string;
+  activate: string;
+  deactivate: string;
+  qrDownloadSoon: string;
+  statusActive: string;
+  statusInactive: string;
+  copiedToast: string;
+  copyFailedToast: string;
+  confirmDeactivate: (shortUrl: string) => string;
+  deactivateConfirmYes: string;
+  deactivateConfirmNo: string;
+  toggleSaving: string;
+
+  // Filters
+  filterSearch: string;
+  filterStore: string;
+  filterSource: string;
+  filterStatus: string;
+  filterStatusAll: string;
+  filterStatusActive: string;
+  filterStatusInactive: string;
+  clearFilters: string;
+
+  // States
+  loading: string;
+  emptyState: string;
+  emptyStateDescription: string;
+  noResults: string;
+  noResultsDescription: string;
+  errorState: string;
+  retry: string;
+  error403: string;
+  error403Description: string;
+};
+
+export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTranslations> = {
+  th: {
+    pageTitle: "ลิงก์เพิ่มเพื่อน",
+    pageDescription: "แต่ละร้านที่เลือกจะได้รับลิงก์ถาวรสำหรับ QR หน้าร้าน, TikTok, Facebook และ Instagram — สามารถติดตามจำนวนคลิกได้ทันที โดยไม่ต้องรอ LIFF integration",
+    pilotNote: "การยืนยันการเพิ่มเพื่อนจะใช้งานได้เต็มรูปแบบเมื่อ LIFF integration พร้อม",
+
+    totalLinks: "ลิงก์ทั้งหมด",
+    activeLinks: "ลิงก์ที่ใช้งาน",
+    totalClicks: "คลิกทั้งหมด",
+    storesConfigured: "ร้านค้าที่ตั้งค่าแล้ว",
+
+    sourceStoreQr: "QR หน้าร้าน",
+    sourceTikTok: "TikTok",
+    sourceFacebook: "Facebook",
+    sourceInstagram: "Instagram",
+
+    generatorTitle: "สร้างลิงก์ Pilot (สูงสุด 5 ร้าน)",
+    generatorDescription: "เลือก LINE OA ที่ต้องการสร้างลิงก์ (ใช้ได้เฉพาะบัญชีที่เชื่อมต่อแล้วและมี Basic ID)",
+    searchPlaceholder: "ค้นหาร้านค้า, ชื่อ LINE OA หรือ Basic ID",
+    selectedCount: (count, max) => `เลือกแล้ว ${count}/${max}`,
+    generatorPreview: (stores, sources, links) => `${stores} ร้าน × ${sources} แหล่ง = ${links} ลิงก์`,
+    generateButton: "สร้างลิงก์",
+    generating: "กำลังสร้าง...",
+    generateSuccess: (created, existing) => `สร้างลิงก์ใหม่ ${created} ลิงก์ · มีอยู่แล้ว ${existing} ลิงก์ (สร้างซ้ำได้)`,
+    generateIdempotentNote: "การสร้างซ้ำจะไม่ทำให้ลิงก์เดิมถูกลบหรือเปลี่ยน",
+    minOneRequired: "กรุณาเลือกอย่างน้อย 1 LINE OA",
+    maxFiveAllowed: "เลือกได้สูงสุด 5 LINE OA",
+    noDuplicates: "ไม่สามารถเลือก LINE OA ซ้ำกันได้",
+    eligibleOnly: "แสดงเฉพาะ LINE OA ที่เชื่อมต่อแล้ว ใช้งานอยู่ และมี Basic ID",
+    noEligibleAccounts: "ไม่พบ LINE OA ที่มีคุณสมบัติเหมาะสม",
+
+    tableStore: "ร้านค้า",
+    tableLineOa: "LINE OA",
+    tableSource: "แหล่ง",
+    tableShortLink: "ลิงก์สั้น",
+    tableClicks: "คลิก",
+    tableStatus: "สถานะ",
+    tableActions: "ดำเนินการ",
+    copyLink: "คัดลอก",
+    openLink: "เปิดลิงก์",
+    activate: "เปิดใช้งาน",
+    deactivate: "ปิดใช้งาน",
+    qrDownloadSoon: "ดาวน์โหลด QR (เร็วๆ นี้)",
+    statusActive: "ใช้งาน",
+    statusInactive: "ปิด",
+    copiedToast: "คัดลอกลิงก์แล้ว",
+    copyFailedToast: "ไม่สามารถคัดลอกได้ กรุณาคัดลอกด้วยตนเอง",
+    confirmDeactivate: (shortUrl) => `ปิดใช้งานลิงก์ ${shortUrl} หรือไม่? ลิงก์นี้จะหยุดใช้งานทันที`,
+    deactivateConfirmYes: "ปิดใช้งาน",
+    deactivateConfirmNo: "ยกเลิก",
+    toggleSaving: "กำลังบันทึก...",
+
+    filterSearch: "ค้นหา",
+    filterStore: "ร้านค้า",
+    filterSource: "แหล่ง",
+    filterStatus: "สถานะ",
+    filterStatusAll: "ทั้งหมด",
+    filterStatusActive: "ใช้งาน",
+    filterStatusInactive: "ปิด",
+    clearFilters: "ล้างตัวกรอง",
+
+    loading: "กำลังโหลด...",
+    emptyState: "ยังไม่มีลิงก์",
+    emptyStateDescription: "เลือก LINE OA และคลิก 'สร้างลิงก์' เพื่อเริ่มต้น",
+    noResults: "ไม่พบผลลัพธ์",
+    noResultsDescription: "ลองเปลี่ยนคำค้นหาหรือล้างตัวกรอง",
+    errorState: "ไม่สามารถโหลดข้อมูลได้",
+    retry: "ลองอีกครั้ง",
+    error403: "ไม่มีสิทธิ์เข้าถึง",
+    error403Description: "หน้านี้ใช้ได้เฉพาะผู้ดูแลระบบ (ADMIN) เท่านั้น",
+  },
+
+  en: {
+    pageTitle: "Friend Source Links",
+    pageDescription: "Each selected store receives permanent links for Store QR, TikTok, Facebook, and Instagram — click tracking is available immediately without waiting for LIFF integration.",
+    pilotNote: "Confirmed Add Friend attribution will be available when LIFF integration is ready.",
+
+    totalLinks: "Total Links",
+    activeLinks: "Active Links",
+    totalClicks: "Total Clicks",
+    storesConfigured: "Stores Configured",
+
+    sourceStoreQr: "Store QR",
+    sourceTikTok: "TikTok",
+    sourceFacebook: "Facebook",
+    sourceInstagram: "Instagram",
+
+    generatorTitle: "Generate Pilot Links (up to 5 stores)",
+    generatorDescription: "Select LINE OAs to generate links. Only connected accounts with a Basic ID are eligible.",
+    searchPlaceholder: "Search store name, LINE OA name, or Basic ID",
+    selectedCount: (count, max) => `${count}/${max} selected`,
+    generatorPreview: (stores, sources, links) => `${stores} stores × ${sources} sources = ${links} links`,
+    generateButton: "Generate Links",
+    generating: "Generating...",
+    generateSuccess: (created, existing) => `${created} new link(s) created · ${existing} already existed (idempotent)`,
+    generateIdempotentNote: "Re-generating is safe — existing links are preserved and not replaced.",
+    minOneRequired: "Select at least 1 LINE OA",
+    maxFiveAllowed: "Maximum 5 LINE OAs allowed",
+    noDuplicates: "Duplicate LINE OA IDs are not allowed",
+    eligibleOnly: "Only connected, active LINE OAs with a Basic ID are shown",
+    noEligibleAccounts: "No eligible LINE OA accounts found",
+
+    tableStore: "Store",
+    tableLineOa: "LINE OA",
+    tableSource: "Source",
+    tableShortLink: "Short Link",
+    tableClicks: "Clicks",
+    tableStatus: "Status",
+    tableActions: "Actions",
+    copyLink: "Copy",
+    openLink: "Open",
+    activate: "Activate",
+    deactivate: "Deactivate",
+    qrDownloadSoon: "QR Download (coming soon)",
+    statusActive: "Active",
+    statusInactive: "Inactive",
+    copiedToast: "Link copied!",
+    copyFailedToast: "Copy failed. Please copy manually.",
+    confirmDeactivate: (shortUrl) => `Deactivate ${shortUrl}? This link will stop working immediately.`,
+    deactivateConfirmYes: "Deactivate",
+    deactivateConfirmNo: "Cancel",
+    toggleSaving: "Saving...",
+
+    filterSearch: "Search",
+    filterStore: "Store",
+    filterSource: "Source",
+    filterStatus: "Status",
+    filterStatusAll: "All",
+    filterStatusActive: "Active",
+    filterStatusInactive: "Inactive",
+    clearFilters: "Clear Filters",
+
+    loading: "Loading...",
+    emptyState: "No links yet",
+    emptyStateDescription: "Select LINE OAs and click 'Generate Links' to get started.",
+    noResults: "No results found",
+    noResultsDescription: "Try changing your search or clearing filters.",
+    errorState: "Failed to load data",
+    retry: "Retry",
+    error403: "Access Denied",
+    error403Description: "This page is only accessible to ADMIN users.",
+  },
+
+  zh: {
+    pageTitle: "加好友来源链接",
+    pageDescription: "每个选定的门店将获得门店二维码、TikTok、Facebook 和 Instagram 的永久链接 — 立即可以追踪点击次数，无需等待 LIFF 集成。",
+    pilotNote: "确认加好友归因将在 LIFF 集成完成后启用。",
+
+    totalLinks: "链接总数",
+    activeLinks: "活跃链接",
+    totalClicks: "总点击次数",
+    storesConfigured: "已配置门店",
+
+    sourceStoreQr: "门店二维码",
+    sourceTikTok: "TikTok",
+    sourceFacebook: "Facebook",
+    sourceInstagram: "Instagram",
+
+    generatorTitle: "生成试点链接（最多 5 家门店）",
+    generatorDescription: "选择要生成链接的 LINE OA（仅限已连接且具有 Basic ID 的账户）",
+    searchPlaceholder: "搜索门店名、LINE OA 名或 Basic ID",
+    selectedCount: (count, max) => `已选 ${count}/${max}`,
+    generatorPreview: (stores, sources, links) => `${stores} 家门店 × ${sources} 个来源 = ${links} 个链接`,
+    generateButton: "生成链接",
+    generating: "生成中...",
+    generateSuccess: (created, existing) => `已创建 ${created} 个新链接 · ${existing} 个已存在（幂等操作）`,
+    generateIdempotentNote: "重复生成是安全的 — 现有链接将被保留，不会被替换。",
+    minOneRequired: "请至少选择 1 个 LINE OA",
+    maxFiveAllowed: "最多允许选择 5 个 LINE OA",
+    noDuplicates: "不允许选择重复的 LINE OA",
+    eligibleOnly: "仅显示已连接、活跃且有 Basic ID 的 LINE OA",
+    noEligibleAccounts: "未找到符合条件的 LINE OA 账户",
+
+    tableStore: "门店",
+    tableLineOa: "LINE OA",
+    tableSource: "来源",
+    tableShortLink: "短链接",
+    tableClicks: "点击次数",
+    tableStatus: "状态",
+    tableActions: "操作",
+    copyLink: "复制",
+    openLink: "打开",
+    activate: "启用",
+    deactivate: "禁用",
+    qrDownloadSoon: "二维码下载（即将推出）",
+    statusActive: "活跃",
+    statusInactive: "已禁用",
+    copiedToast: "链接已复制！",
+    copyFailedToast: "复制失败，请手动复制。",
+    confirmDeactivate: (shortUrl) => `禁用 ${shortUrl}？此链接将立即停止工作。`,
+    deactivateConfirmYes: "禁用",
+    deactivateConfirmNo: "取消",
+    toggleSaving: "保存中...",
+
+    filterSearch: "搜索",
+    filterStore: "门店",
+    filterSource: "来源",
+    filterStatus: "状态",
+    filterStatusAll: "全部",
+    filterStatusActive: "活跃",
+    filterStatusInactive: "已禁用",
+    clearFilters: "清除筛选",
+
+    loading: "加载中...",
+    emptyState: "暂无链接",
+    emptyStateDescription: "选择 LINE OA 并点击「生成链接」开始使用。",
+    noResults: "未找到结果",
+    noResultsDescription: "请尝试修改搜索词或清除筛选条件。",
+    errorState: "加载数据失败",
+    retry: "重试",
+    error403: "访问被拒绝",
+    error403Description: "此页面仅限 ADMIN 用户访问。",
+  },
+};
+
+export function getFriendSourceLinksText(language: Language): FriendSourceLinksTranslations {
+  return friendSourceLinksTranslations[language];
+}

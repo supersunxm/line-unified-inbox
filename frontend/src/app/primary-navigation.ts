@@ -1,4 +1,4 @@
-export type PrimarySection = "dashboard" | "chats" | "stores" | "follower-insights";
+export type PrimarySection = "dashboard" | "chats" | "stores" | "follower-insights" | "friend-source-links";
 
 export function primaryNavigationState(section: PrimarySection) {
   return {
@@ -6,6 +6,7 @@ export function primaryNavigationState(section: PrimarySection) {
     chatsActive: section === "chats",
     storesActive: section === "stores",
     followerInsightsActive: section === "follower-insights",
+    friendSourceLinksActive: section === "friend-source-links",
     showStoreManagementAction: section === "stores",
   };
 }

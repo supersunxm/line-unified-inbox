@@ -139,6 +139,7 @@ test("primary workspaces expose one active navigation state", () => {
     chatsActive: false,
     storesActive: false,
     followerInsightsActive: false,
+    friendSourceLinksActive: false,
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("chats"), {
@@ -146,6 +147,7 @@ test("primary workspaces expose one active navigation state", () => {
     chatsActive: true,
     storesActive: false,
     followerInsightsActive: false,
+    friendSourceLinksActive: false,
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("stores"), {
@@ -153,6 +155,7 @@ test("primary workspaces expose one active navigation state", () => {
     chatsActive: false,
     storesActive: true,
     followerInsightsActive: false,
+    friendSourceLinksActive: false,
     showStoreManagementAction: true,
   });
 });

@@ -17,6 +17,7 @@ import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
+import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -2246,6 +2247,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <Link href="/follower-insights" aria-current={primaryNavigation.followerInsightsActive ? "page" : undefined}>
               {language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}
             </Link>
+            {authUser?.role === "ADMIN" && (
+              <Link href="/friend-source-links" aria-current={primaryNavigation.friendSourceLinksActive ? "page" : undefined}>
+                {language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -2730,6 +2736,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           </section>
         ) : initialSection === "follower-insights" ? (
           <FollowerInsightsView language={language} />
+        ) : initialSection === "friend-source-links" ? (
+          <FriendSourceLinksView language={language} />
         ) : (
           <>
         <section className="app-surface min-w-0 flex flex-col h-full overflow-hidden border-r">

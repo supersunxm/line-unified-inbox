@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -105,4 +105,22 @@ export const api = {
   followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaId?: string; lineOaIds?: string[]; force?: boolean }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
   followerInsightsJobStatus: (lineOaId: string) => request<BackfillJobResponseDto>(`/follower-insights/backfill/jobs/${encodeURIComponent(lineOaId)}`),
   followerInsightsRetryJob: (lineOaId: string) => request<BackfillJobResponseDto>("/follower-insights/backfill/retry", { method: "POST", body: JSON.stringify({ lineOaId }) }),
+  friendSourceLinks: (filters?: FriendSourceLinksFilters) => {
+    const query = new URLSearchParams();
+    if (filters) {
+      if (filters.storeId) query.append("storeId", filters.storeId);
+      if (filters.lineOaId) query.append("lineOaId", filters.lineOaId);
+      if (filters.source) query.append("source", filters.source);
+      if (filters.isActive !== undefined) query.append("isActive", filters.isActive);
+      if (filters.search) query.append("search", filters.search);
+    }
+    const qs = query.toString();
+    return request<FriendSourceLink[]>(`/friend-source-links${qs ? `?${qs}` : ""}`);
+  },
+  generateFriendSourceLinks: (lineOaIds: string[]) =>
+    request<FriendSourceLinksGenerateResult>("/friend-source-links/generate", { method: "POST", body: JSON.stringify({ lineOaIds }) }),
+  updateFriendSourceLink: (id: string, input: { isActive?: boolean; destinationUrl?: string }) =>
+    request<FriendSourceLink>(`/friend-source-links/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }),
+  friendSourceLinksSummary: () =>
+    request<FriendSourceLinksSummaryItem[]>("/friend-source-links/summary"),
 };

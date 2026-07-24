@@ -208,3 +208,47 @@ export type BackfillJobResponseDto = {
   completedAt?: string | null;
   createdAt: string;
 };
+
+export type FriendSource = "STORE_QR" | "TIKTOK" | "FACEBOOK" | "INSTAGRAM";
+
+export type FriendSourceLink = {
+  id: string;
+  storeId: string;
+  storeName: string | null;
+  storeCode: string | null;
+  lineOaId: string;
+  lineOaName: string | null;
+  source: FriendSource;
+  shortCode: string;
+  /** Full short URL, e.g. https://example.com/f/{shortCode} */
+  shortUrl: string;
+  destinationUrl: string;
+  isActive: boolean;
+  clickCount: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+export type FriendSourceLinksGenerateResult = {
+  createdCount: number;
+  existingCount: number;
+  items: FriendSourceLink[];
+};
+
+export type FriendSourceLinksSummaryItem = {
+  storeId: string;
+  storeName: string;
+  storeCode: string | null;
+  source: FriendSource;
+  totalLinks: number;
+  activeLinks: number;
+  clicks: number;
+};
+
+export type FriendSourceLinksFilters = {
+  storeId?: string;
+  lineOaId?: string;
+  source?: FriendSource;
+  isActive?: "true" | "false";
+  search?: string;
+};
