@@ -159,7 +159,7 @@ test("Scenario 26 & 27: Admin reporting and Excel export aggregate attribution m
   assert.equal(pRow.totalClicks, 100);
   assert.equal(pRow.identifiedVisits, 85);
   assert.equal(pRow.confirmedAdds, 40);
-  assert.equal(pRow.conversionRate, "40.0%");
+  assert.equal(pRow.conversionRate, "40.00%");
 
   const detailRows = prepareLinkDetailsRows(sampleLinks, "en");
   assert.equal(detailRows.length, 1);
@@ -168,7 +168,7 @@ test("Scenario 26 & 27: Admin reporting and Excel export aggregate attribution m
   assert.equal(dRow.clicks, 100);
   assert.equal(dRow.identifiedVisits, 85);
   assert.equal(dRow.confirmedAdds, 40);
-  assert.equal(dRow.conversionRate, "40.0%");
+  assert.equal(dRow.conversionRate, "40.00%");
 
   // Verify privacy: no user IDs, session tokens, or raw credentials in export objects
   assert.equal("lineUserId" in pRow, false);

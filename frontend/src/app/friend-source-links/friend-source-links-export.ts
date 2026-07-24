@@ -1,5 +1,6 @@
 import type { FriendSourceLink } from "@/types/api";
 import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations.ts";
+import { formatConversionRate } from "./friend-source-links-utils.ts";
 
 export type StoreDistributionRow = {
   storeName: string;
@@ -156,7 +157,7 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
 
   // Convert to array and sort by Store Name asc, then LINE OA Name asc
   const rows: StoreDistributionRow[] = Array.from(map.values()).map((item) => {
-    const rate = item.totalClicks > 0 ? `${((item.confirmedAdds / item.totalClicks) * 100).toFixed(1)}%` : "0.0%";
+    const rate = formatConversionRate(item.totalClicks > 0 ? item.confirmedAdds / item.totalClicks : 0);
     return {
       storeName: item.storeName,
       storeCode: item.storeCode,
@@ -204,7 +205,7 @@ export function prepareLinkDetailsRows(
   return cleanLinks.map((link) => {
     const clicks = link.clickCount || 0;
     const confirmed = link.confirmedAdds || 0;
-    const rate = clicks > 0 ? `${((confirmed / clicks) * 100).toFixed(1)}%` : "0.0%";
+    const rate = link.conversionRate != null ? formatConversionRate(link.conversionRate) : formatConversionRate(clicks > 0 ? confirmed / clicks : 0);
     return {
       storeName: link.storeName ?? "",
       storeCode: link.storeCode ?? "",

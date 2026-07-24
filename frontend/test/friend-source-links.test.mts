@@ -5,10 +5,12 @@ import { friendSourceLinksTranslations, getFriendSourceLinksText } from "../src/
 import {
   MAX_PILOT_STORES,
   buildFriendSourceLinksQueryParams,
+  calculateAttributionKPIs,
   calculateSummaryKPIs,
   canRoleAccessFriendSourceLinks,
   evaluateApiError,
   filterEligibleAccounts,
+  formatConversionRate,
   formatShortUrlForClipboard,
   isAccountEligible,
   isQrEndpointRequested,
@@ -509,3 +511,128 @@ test("FriendSourceLink type includes exact backend formatLinkResponse fields", (
 
 // Unused type helper to ensure compilation
 void (null as unknown as FriendSourceLink);
+
+// ──────────────────────────────────────────────────────────────────────
+// 31. Attribution Metrics & Percentage Formatting Tests
+// ──────────────────────────────────────────────────────────────────────
+test("Attribution metric formatting: 0.0667 displays as 6.67% and zero as 0.00%", () => {
+  assert.equal(formatConversionRate(0.0667), "6.67%");
+  assert.equal(formatConversionRate(0), "0.00%");
+  assert.equal(formatConversionRate(null), "0.00%");
+  assert.equal(formatConversionRate(NaN), "0.00%");
+});
+
+test("Attribution KPIs: totals use filtered rows, overall conversion uses confirmed adds / clicks, and distinct from identified visits", () => {
+  const filteredLinks: FriendSourceLink[] = [
+    {
+      id: "link-1",
+      storeId: "store-1",
+      storeName: "Store 1",
+      storeCode: "S1",
+      lineOaId: "oa-1",
+      lineOaName: "OA 1",
+      source: "STORE_QR",
+      shortCode: "sc1",
+      shortUrl: "https://x.co/sc1",
+      destinationUrl: "https://line.me",
+      isActive: true,
+      clickCount: 100,
+      identifiedVisits: 85,
+      confirmedAdds: 40,
+      conversionRate: 0.4,
+      createdAt: "2026-07-24T00:00:00Z",
+      updatedAt: "2026-07-24T00:00:00Z",
+    },
+    {
+      id: "link-2",
+      storeId: "store-1",
+      storeName: "Store 1",
+      storeCode: "S1",
+      lineOaId: "oa-1",
+      lineOaName: "OA 1",
+      source: "TIKTOK",
+      shortCode: "sc2",
+      shortUrl: "https://x.co/sc2",
+      destinationUrl: "https://line.me",
+      isActive: true,
+      clickCount: 50,
+      identifiedVisits: 30,
+      confirmedAdds: 10,
+      conversionRate: 0.2,
+      createdAt: "2026-07-24T00:00:00Z",
+      updatedAt: "2026-07-24T00:00:00Z",
+    },
+  ];
+
+  const attrKpis = calculateAttributionKPIs(filteredLinks);
+  assert.equal(attrKpis.totalClicks, 150);
+  assert.equal(attrKpis.identifiedVisits, 115);
+  assert.equal(attrKpis.confirmedAdds, 50);
+  // overall conversion = 50 / 150 = 33.33%
+  assert.equal(attrKpis.overallConversionRate, "33.33%");
+
+  // Identified visits (115) != Confirmed adds (50)
+  assert.notEqual(attrKpis.identifiedVisits, attrKpis.confirmedAdds);
+});
+
+test("Attribution translation keys exist in th, en, and zh", () => {
+  const th = friendSourceLinksTranslations.th;
+  const en = friendSourceLinksTranslations.en;
+  const zh = friendSourceLinksTranslations.zh;
+
+  assert.equal(th.tableClicks, "คลิก");
+  assert.equal(th.tableIdentifiedVisits, "ยืนยันตัวตน");
+  assert.equal(th.tableConfirmedAdds, "เพิ่มเพื่อนสำเร็จ");
+  assert.equal(th.tableConversionRate, "Conversion");
+
+  assert.equal(en.tableClicks, "Clicks");
+  assert.equal(en.tableIdentifiedVisits, "Identified");
+  assert.equal(en.tableConfirmedAdds, "Confirmed Adds");
+  assert.equal(en.tableConversionRate, "Conversion");
+
+  assert.equal(zh.tableClicks, "点击");
+  assert.equal(zh.tableIdentifiedVisits, "已识别");
+  assert.equal(zh.tableConfirmedAdds, "成功加好友");
+  assert.equal(zh.tableConversionRate, "转化率");
+});
+
+test("Responsive table has overflow-x-auto wrapper and tooltips", () => {
+  assert.match(viewFile, /overflow-x-auto/);
+  assert.match(viewFile, /tooltipIdentified/);
+  assert.match(viewFile, /tooltipConfirmed/);
+  assert.match(viewFile, /tooltipConversion/);
+});
+
+test("Excel export includes Identified Visits, Confirmed Adds, and formatted percentage output (6.67%)", () => {
+  const testLinks: FriendSourceLink[] = [
+    {
+      id: "link-1",
+      storeId: "store-1",
+      storeName: "Test Store",
+      storeCode: "TS1",
+      lineOaId: "oa-1",
+      lineOaName: "Test OA",
+      source: "STORE_QR",
+      shortCode: "sc1",
+      shortUrl: "https://x.co/sc1",
+      destinationUrl: "https://line.me",
+      isActive: true,
+      clickCount: 150,
+      identifiedVisits: 100,
+      confirmedAdds: 10,
+      conversionRate: 0.0667,
+      createdAt: "2026-07-24T00:00:00Z",
+      updatedAt: "2026-07-24T00:00:00Z",
+    },
+  ];
+
+  const pivot = pivotLinksByStore(testLinks);
+  assert.equal(pivot[0].identifiedVisits, 100);
+  assert.equal(pivot[0].confirmedAdds, 10);
+  assert.equal(pivot[0].conversionRate, "6.67%");
+
+  const details = prepareLinkDetailsRows(testLinks, "en");
+  assert.equal(details[0].identifiedVisits, 100);
+  assert.equal(details[0].confirmedAdds, 10);
+  assert.equal(details[0].conversionRate, "6.67%");
+});

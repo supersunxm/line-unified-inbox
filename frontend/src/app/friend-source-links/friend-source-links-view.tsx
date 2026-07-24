@@ -7,9 +7,11 @@ import { getFriendSourceLinksText, type Language } from "./friend-source-links-t
 import {
   ALL_SOURCES,
   MAX_PILOT_STORES,
+  calculateAttributionKPIs,
   calculateSummaryKPIs,
   evaluateApiError,
   filterEligibleAccounts,
+  formatConversionRate,
   formatShortUrlForClipboard,
   isAccountEligible,
   prepareGeneratePayload,
@@ -389,23 +391,26 @@ export function FriendSourceLinksView({
       </div>
 
       {/* KPI cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {(
-          [
-            [t.totalLinks, kpis.totalLinks, "🔗"],
-            [t.activeLinks, kpis.activeLinks, "✅"],
-            [t.totalClicks, kpis.totalClicks, "👆"],
-            [t.storesConfigured, kpis.storesConfigured, "🏪"],
-          ] as Array<[string, number, string]>
-        ).map(([label, value, icon]) => (
-          <div key={label} className="app-card p-5">
-            <p className="app-muted text-xs font-medium">{label}</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight">
-              {icon} {value}
-            </p>
+      {(() => {
+        const attrKpis = calculateAttributionKPIs(links);
+        return (
+          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {[
+              [t.kpiTotalClicks, attrKpis.totalClicks, "👆"],
+              [t.kpiIdentifiedVisits, attrKpis.identifiedVisits, "👤"],
+              [t.kpiConfirmedAdds, attrKpis.confirmedAdds, "🎉"],
+              [t.kpiOverallConversion, attrKpis.overallConversionRate, "📈"],
+            ].map(([label, value, icon]) => (
+              <div key={String(label)} className="app-card p-5">
+                <p className="app-muted text-xs font-medium">{label}</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight">
+                  {icon} {value}
+                </p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       {/* Generator card */}
       <div className="app-card mb-6 rounded-2xl p-6">
@@ -612,11 +617,22 @@ export function FriendSourceLinksView({
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
-                  {[t.tableStore, t.tableLineOa, t.tableSource, t.tableShortLink, t.tableClicks, t.tableStatus, t.tableActions].map((h) => (
-                    <th key={h} scope="col" className="px-4 py-3 font-medium">
-                      {h}
-                    </th>
-                  ))}
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableStore}</th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableLineOa}</th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableSource}</th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableShortLink}</th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableClicks}</th>
+                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipIdentified}>
+                    <span className="cursor-help underline decoration-dotted">{t.tableIdentifiedVisits}</span>
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipConfirmed}>
+                    <span className="cursor-help underline decoration-dotted">{t.tableConfirmedAdds}</span>
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipConversion}>
+                    <span className="cursor-help underline decoration-dotted">{t.tableConversionRate}</span>
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableStatus}</th>
+                  <th scope="col" className="px-4 py-3 font-medium">{t.tableActions}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -633,6 +649,23 @@ export function FriendSourceLinksView({
                       <span className="font-mono text-xs text-slate-700">{link.shortUrl}</span>
                     </td>
                     <td className="px-4 py-3 tabular-nums">{link.clickCount}</td>
+                    <td className="px-4 py-3 tabular-nums text-slate-700">{link.identifiedVisits || 0}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      <span
+                        className={
+                          (link.confirmedAdds || 0) > 0
+                            ? "inline-block rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800"
+                            : "text-slate-700"
+                        }
+                      >
+                        {link.confirmedAdds || 0}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-medium text-slate-900">
+                      {formatConversionRate(
+                        link.conversionRate ?? (link.clickCount > 0 ? (link.confirmedAdds || 0) / link.clickCount : 0)
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${

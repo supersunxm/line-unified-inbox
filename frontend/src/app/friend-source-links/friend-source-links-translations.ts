@@ -39,8 +39,22 @@ export type FriendSourceLinksTranslations = {
   tableSource: string;
   tableShortLink: string;
   tableClicks: string;
+  tableIdentifiedVisits: string;
+  tableConfirmedAdds: string;
+  tableConversionRate: string;
   tableStatus: string;
   tableActions: string;
+
+  // Tooltips
+  tooltipIdentified: string;
+  tooltipConfirmed: string;
+  tooltipConversion: string;
+
+  // KPI
+  kpiTotalClicks: string;
+  kpiIdentifiedVisits: string;
+  kpiConfirmedAdds: string;
+  kpiOverallConversion: string;
   copyLink: string;
   openLink: string;
   activate: string;
@@ -163,8 +177,20 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tableSource: "แหล่ง",
     tableShortLink: "ลิงก์สั้น",
     tableClicks: "คลิก",
+    tableIdentifiedVisits: "ยืนยันตัวตน",
+    tableConfirmedAdds: "เพิ่มเพื่อนสำเร็จ",
+    tableConversionRate: "Conversion",
     tableStatus: "สถานะ",
     tableActions: "ดำเนินการ",
+
+    tooltipIdentified: "ผู้ใช้ยืนยันตัวตนผ่าน LIFF เรียบร้อยแล้ว",
+    tooltipConfirmed: "ยืนยันการเพิ่มเพื่อนจาก LINE Webhook เรียบร้อยแล้ว",
+    tooltipConversion: "อัตราส่วนการเพิ่มเพื่อนสำเร็จต่อจำนวนคลิกทั้งหมด",
+
+    kpiTotalClicks: "คลิกทั้งหมด",
+    kpiIdentifiedVisits: "ยืนยันตัวตนทั้งหมด",
+    kpiConfirmedAdds: "เพิ่มเพื่อนสำเร็จทั้งหมด",
+    kpiOverallConversion: "Conversion ภาพรวม",
     copyLink: "คัดลอก",
     openLink: "เปิดลิงก์",
     activate: "เปิดใช้งาน",
@@ -281,8 +307,20 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tableSource: "Source",
     tableShortLink: "Short Link",
     tableClicks: "Clicks",
+    tableIdentifiedVisits: "Identified",
+    tableConfirmedAdds: "Confirmed Adds",
+    tableConversionRate: "Conversion",
     tableStatus: "Status",
     tableActions: "Actions",
+
+    tooltipIdentified: "User completed LIFF identity verification",
+    tooltipConfirmed: "Valid LINE follow webhook matched to the source link",
+    tooltipConversion: "Confirmed adds divided by clicks",
+
+    kpiTotalClicks: "Total Clicks",
+    kpiIdentifiedVisits: "Total Identified Visits",
+    kpiConfirmedAdds: "Total Confirmed Adds",
+    kpiOverallConversion: "Overall Conversion Rate",
     copyLink: "Copy",
     openLink: "Open",
     activate: "Activate",
@@ -398,9 +436,21 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     tableLineOa: "LINE OA",
     tableSource: "来源",
     tableShortLink: "短链接",
-    tableClicks: "点击次数",
+    tableClicks: "点击",
+    tableIdentifiedVisits: "已识别",
+    tableConfirmedAdds: "成功加好友",
+    tableConversionRate: "转化率",
     tableStatus: "状态",
     tableActions: "操作",
+
+    tooltipIdentified: "用户已完成 LIFF 身份验证",
+    tooltipConfirmed: "LINE 关注 Webhook 已成功匹配至来源链接",
+    tooltipConversion: "成功加好友数除以总点击数",
+
+    kpiTotalClicks: "总点击次数",
+    kpiIdentifiedVisits: "总识别次数",
+    kpiConfirmedAdds: "总成功加好友数",
+    kpiOverallConversion: "整体转化率",
     copyLink: "复制",
     openLink: "打开",
     activate: "启用",

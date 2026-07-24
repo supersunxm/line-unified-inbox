@@ -1,4 +1,4 @@
-import type { FriendSource, FriendSourceLinksFilters, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
+import type { FriendSource, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
 
 export const MAX_PILOT_STORES = 5;
 export const ALL_SOURCES: FriendSource[] = ["STORE_QR", "TIKTOK", "FACEBOOK", "INSTAGRAM"];
@@ -104,6 +104,40 @@ export function buildFriendSourceLinksQueryParams(filters?: FriendSourceLinksFil
   if (filters.search?.trim()) query.append("search", filters.search.trim());
   const str = query.toString();
   return str ? `?${str}` : "";
+}
+
+/**
+ * Formats a decimal conversion rate into a clean percentage string with 2 decimal places.
+ * e.g. 0.0667 -> "6.67%", 0 -> "0.00%", NaN -> "0.00%"
+ */
+export function formatConversionRate(rate?: number | null): string {
+  if (rate == null || isNaN(rate) || !isFinite(rate)) {
+    return "0.00%";
+  }
+  const pct = rate * 100;
+  return `${pct.toFixed(2)}%`;
+}
+
+/**
+ * Computes top-level attribution KPI totals from filtered link list.
+ */
+export function calculateAttributionKPIs(links: FriendSourceLink[]): {
+  totalClicks: number;
+  identifiedVisits: number;
+  confirmedAdds: number;
+  overallConversionRate: string;
+} {
+  const totalClicks = links.reduce((sum, l) => sum + (l.clickCount || 0), 0);
+  const identifiedVisits = links.reduce((sum, l) => sum + (l.identifiedVisits || 0), 0);
+  const confirmedAdds = links.reduce((sum, l) => sum + (l.confirmedAdds || 0), 0);
+  const overallConversionRate = formatConversionRate(totalClicks > 0 ? confirmedAdds / totalClicks : 0);
+
+  return {
+    totalClicks,
+    identifiedVisits,
+    confirmedAdds,
+    overallConversionRate,
+  };
 }
 
 /**
