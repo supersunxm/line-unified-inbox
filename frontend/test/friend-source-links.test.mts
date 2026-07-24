@@ -766,3 +766,84 @@ test("Attribution Configuration Card rendering, status badges, and error/empty s
   assert.doesNotMatch(viewFile, /userRole\s*=\s*"ADMIN"/, "No default ADMIN fallback must exist in FriendSourceLinksView");
   assert.match(viewFile, /userRole:\s*"ADMIN"\s*\|\s*"VIEWER";/, "userRole prop must be a required 'ADMIN' | 'VIEWER' type");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 34. Collapsible Attribution Configuration Card UX, Sorting & Filter Tests
+// ──────────────────────────────────────────────────────────────────────
+
+test("Collapsible Attribution Configuration Card UX, summary counts, search, status filter, and sorting", () => {
+  const t = friendSourceLinksTranslations.en;
+
+  // 1. Summary formatter verification
+  assert.equal(
+    t.attrSummary(44, 1, 0, 43),
+    "44 stores · 1 Enabled · 0 Disabled · 43 Not Configured"
+  );
+  assert.equal(
+    friendSourceLinksTranslations.th.attrSummary(44, 1, 0, 43),
+    "44 ร้านค้า · 1 เปิดใช้งาน · 0 ปิดใช้งาน · 43 ยังไม่ตั้งค่า"
+  );
+  assert.equal(
+    friendSourceLinksTranslations.zh.attrSummary(44, 1, 0, 43),
+    "44 家门店 · 1 已启用 · 0 已禁用 · 43 未配置"
+  );
+
+  // 2. Useful ordering verification: LIFF Enabled (1) -> Configured but Disabled (2) -> Not Configured (3) -> Name asc
+  const sampleRows: FriendAttributionConfigDto[] = [
+    { lineOaId: "1", lineOaName: "Z Store", basicId: "@z", storeName: "Z Store", storeCode: "Z1", lineLoginChannelId: null, liffId: null, isEnabled: false, isConfigured: false, updatedAt: null },
+    { lineOaId: "2", lineOaName: "Chonburi", basicId: "@chonburi", storeName: "OBS Robinson Chonburi By OPPO", storeCode: "RBS01", lineLoginChannelId: "2007073384", liffId: "2007073384-Chonburi", isEnabled: true, isConfigured: true, updatedAt: "2026-07-24T00:00:00Z" },
+    { lineOaId: "3", lineOaName: "A Store", basicId: "@a", storeName: "A Store", storeCode: "A1", lineLoginChannelId: null, liffId: null, isEnabled: false, isConfigured: false, updatedAt: null },
+    { lineOaId: "4", lineOaName: "Banbueng", basicId: "@banbueng", storeName: "OPPO Lotus Banbueng", storeCode: "LTS01", lineLoginChannelId: "2007073384", liffId: "2007073384-Banbueng", isEnabled: false, isConfigured: true, updatedAt: "2026-07-24T00:00:00Z" },
+  ];
+
+  const getRank = (cfg: FriendAttributionConfigDto) => {
+    const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
+    if (isConfigured && cfg.isEnabled) return 1;
+    if (isConfigured && !cfg.isEnabled) return 2;
+    return 3;
+  };
+
+  const sorted = [...sampleRows].sort((a, b) => {
+    const rankDiff = getRank(a) - getRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return (a.storeName || a.lineOaName || "").localeCompare(b.storeName || b.lineOaName || "");
+  });
+
+  assert.equal(sorted[0].lineOaId, "2", "Enabled store (Chonburi) must be first (Rank 1)");
+  assert.equal(sorted[1].lineOaId, "4", "Disabled store (Banbueng) must be second (Rank 2)");
+  assert.equal(sorted[2].lineOaId, "3", "Unconfigured store A Store must be third (Rank 3, sorted alphabetically)");
+  assert.equal(sorted[3].lineOaId, "1", "Unconfigured store Z Store must be fourth (Rank 3, sorted alphabetically)");
+
+  // 3. Search & Status filtering verification
+  const filterRows = (rows: FriendAttributionConfigDto[], query: string, statusFilter: string) => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((cfg) => {
+      const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
+      const isEnabled = cfg.isEnabled;
+      if (statusFilter === "ENABLED" && !(isConfigured && isEnabled)) return false;
+      if (statusFilter === "DISABLED" && !(isConfigured && !isEnabled)) return false;
+      if (statusFilter === "NOT_CONFIGURED" && isConfigured) return false;
+
+      if (q) {
+        const text = `${cfg.storeName || ""} ${cfg.lineOaName || ""} ${cfg.basicId || ""}`.toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    });
+  };
+
+  assert.equal(filterRows(sampleRows, "Chonburi", "ALL").length, 1);
+  assert.equal(filterRows(sampleRows, "", "ENABLED").length, 1);
+  assert.equal(filterRows(sampleRows, "", "DISABLED").length, 1);
+  assert.equal(filterRows(sampleRows, "", "NOT_CONFIGURED").length, 2);
+
+  // 4. Source code assertions for Collapsible card, Max-Height, ARIA attributes, and persistence
+  assert.match(viewFile, /const \[attrExpanded, setAttrExpanded\] = useState\(false\)/, "Card must be collapsed by default");
+  assert.match(viewFile, /id="fsl-attribution-toggle-btn"/);
+  assert.match(viewFile, /aria-expanded=\{attrExpanded\}/);
+  assert.match(viewFile, /aria-controls="fsl-attribution-content"/);
+  assert.match(viewFile, /id="fsl-attribution-summary"/);
+  assert.match(viewFile, /id="fsl-attribution-search"/);
+  assert.match(viewFile, /id="fsl-attribution-status-filter"/);
+  assert.match(viewFile, /max-h-\[440px\]\s+overflow-y-auto/, "List container must use internal scrolling max-height");
+});

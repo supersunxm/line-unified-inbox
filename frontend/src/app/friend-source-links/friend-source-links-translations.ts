@@ -59,6 +59,14 @@ export type FriendSourceLinksTranslations = {
   attrStatusNotConfigured: string;
   attrStatusEnabled: string;
   attrStatusDisabled: string;
+  attrExpand: string;
+  attrCollapse: string;
+  attrSummary: (total: number, enabled: number, disabled: number, notConfigured: number) => string;
+  attrSearchPlaceholder: string;
+  attrFilterAll: string;
+  attrFilterEnabled: string;
+  attrFilterDisabled: string;
+  attrFilterNotConfigured: string;
   attrConfigureBtn: string;
   attrEditBtn: string;
   attrDisableBtn: string;
@@ -210,6 +218,15 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     attrStatusNotConfigured: "ยังไม่ตั้งค่า",
     attrStatusEnabled: "เปิดใช้งาน LIFF",
     attrStatusDisabled: "ปิดใช้งาน LIFF",
+    attrExpand: "แสดงรายการ",
+    attrCollapse: "ซ่อนรายการ",
+    attrSummary: (total, enabled, disabled, notConfigured) =>
+      `${total} ร้านค้า · ${enabled} เปิดใช้งาน · ${disabled} ปิดใช้งาน · ${notConfigured} ยังไม่ตั้งค่า`,
+    attrSearchPlaceholder: "ค้นหาชื่อร้าน, LINE OA หรือ Basic ID...",
+    attrFilterAll: "สถานะทั้งหมด",
+    attrFilterEnabled: "เปิดใช้งาน LIFF",
+    attrFilterDisabled: "ปิดใช้งาน LIFF",
+    attrFilterNotConfigured: "ยังไม่ตั้งค่า",
     attrConfigureBtn: "ตั้งค่า LIFF",
     attrEditBtn: "แก้ไข",
     attrDisableBtn: "ปิดใช้งาน",
@@ -355,6 +372,15 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     attrStatusNotConfigured: "Not Configured",
     attrStatusEnabled: "LIFF Enabled",
     attrStatusDisabled: "LIFF Disabled",
+    attrExpand: "Expand",
+    attrCollapse: "Collapse",
+    attrSummary: (total, enabled, disabled, notConfigured) =>
+      `${total} stores · ${enabled} Enabled · ${disabled} Disabled · ${notConfigured} Not Configured`,
+    attrSearchPlaceholder: "Search store, LINE OA, or Basic ID...",
+    attrFilterAll: "All Statuses",
+    attrFilterEnabled: "LIFF Enabled",
+    attrFilterDisabled: "Configured but Disabled",
+    attrFilterNotConfigured: "Not Configured",
     attrConfigureBtn: "Configure LIFF",
     attrEditBtn: "Edit",
     attrDisableBtn: "Disable",
@@ -500,6 +526,15 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     attrStatusNotConfigured: "未配置",
     attrStatusEnabled: "已启用 LIFF",
     attrStatusDisabled: "已禁用 LIFF",
+    attrExpand: "展开列表",
+    attrCollapse: "折叠列表",
+    attrSummary: (total, enabled, disabled, notConfigured) =>
+      `${total} 家门店 · ${enabled} 已启用 · ${disabled} 已禁用 · ${notConfigured} 未配置`,
+    attrSearchPlaceholder: "搜索门店、LINE OA 或 Basic ID...",
+    attrFilterAll: "全部状态",
+    attrFilterEnabled: "已启用 LIFF",
+    attrFilterDisabled: "已配置但禁用",
+    attrFilterNotConfigured: "未配置",
     attrConfigureBtn: "配置 LIFF",
     attrEditBtn: "编辑",
     attrDisableBtn: "禁用",
