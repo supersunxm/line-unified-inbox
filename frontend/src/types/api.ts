@@ -314,4 +314,5 @@ export type FriendAttributionSessionStatusResult = {
   confirmedFollowAt: string | null;
   expiresAt: string;
   fallbackUrl?: string;
+  liffId?: string | null;
 };

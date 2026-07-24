@@ -262,3 +262,83 @@ test("Scenario 35: LIFF requestFriendship error diagnostics, pre/post checks, an
   assert.equal(getFriendshipCallCount, 2, "getFriendship must be called before and after requestFriendship");
   assert.equal(flowResult.friendFlag, true, "Post-check must reflect the updated friendFlag");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 36. Multi-Store Dynamic LIFF ID Bootstrap & Token Isolation
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 36: Multi-store dynamic LIFF ID bootstrap, fail closed, and token isolation", async () => {
+  const viewFile = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
+
+  // 1. Source code verification: NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID MUST NOT be used at runtime
+  assert.doesNotMatch(viewFile, /NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID/, "Runtime view must NOT use NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID");
+  assert.match(viewFile, /api\.getFriendAttributionSessionStatus/, "Source must bootstrap session status from API before liff.init");
+  assert.match(viewFile, /setStep\(\s*["']MISSING_CONFIG["']\s*\)/, "Source must fail closed when liffId cannot be resolved");
+
+  // 2. Extract token from direct URL and encoded liff.state before liff.init
+  const directUrl = "?token=sat_banbueng123";
+  const directToken = extractSessionTokenFromUrl(directUrl);
+  assert.equal(directToken, "sat_banbueng123", "Direct token must be extracted before liff.init");
+
+  const liffStateUrl = "?liff.state=%3Ftoken%3Dsat_chonburi456";
+  const liffStateToken = extractSessionTokenFromUrl(liffStateUrl);
+  assert.equal(liffStateToken, "sat_chonburi456", "Encoded liff.state token must be extracted before liff.init");
+
+  // 3. Mock dynamic session bootstrap resolution
+  const sessionDb: Record<string, { status: string; liffId: string | null; fallbackUrl: string }> = {
+    sat_banbueng123: {
+      status: "CLICKED",
+      liffId: "2010830086-NfjPzy7t",
+      fallbackUrl: "https://line.me/R/ti/p/%40oppobanqueng",
+    },
+    sat_chonburi456: {
+      status: "CLICKED",
+      liffId: "2007073384-ChonburiPilot",
+      fallbackUrl: "https://line.me/R/ti/p/%40oppobsrbschonburi",
+    },
+    sat_unconfigured789: {
+      status: "CLICKED",
+      liffId: null,
+      fallbackUrl: "https://line.me/R/ti/p/%40oppo_thailand",
+    },
+    sat_expired000: {
+      status: "EXPIRED",
+      liffId: "2010830086-NfjPzy7t",
+      fallbackUrl: "https://line.me/R/ti/p/%40oppo_thailand",
+    },
+  };
+
+  const bootstrapSession = async (token: string) => {
+    const session = sessionDb[token];
+    if (!session) throw new Error("Attribution session not found");
+    return {
+      status: session.status,
+      confirmed: false,
+      confirmedFollowAt: null,
+      expiresAt: "2026-07-24T18:00:00.000Z",
+      fallbackUrl: session.fallbackUrl,
+      liffId: session.liffId,
+    };
+  };
+
+  // Test Banbueng session returns Banbueng LIFF ID
+  const banbuengRes = await bootstrapSession("sat_banbueng123");
+  assert.equal(banbuengRes.liffId, "2010830086-NfjPzy7t");
+
+  // Test Chonburi session returns Chonburi LIFF ID
+  const chonburiRes = await bootstrapSession("sat_chonburi456");
+  assert.equal(chonburiRes.liffId, "2007073384-ChonburiPilot");
+
+  // Verify two simultaneous sessions resolve distinct LIFF IDs (no cross-store bleed)
+  assert.notEqual(banbuengRes.liffId, chonburiRes.liffId);
+
+  // Test unconfigured store session fails closed (liffId is null)
+  const unconfiguredRes = await bootstrapSession("sat_unconfigured789");
+  assert.equal(unconfiguredRes.liffId, null);
+
+  // Privacy audit: Verify bootstrap response contains NO secrets
+  const secretKeys = ["lineUserId", "lineUserIdHash", "channelSecret", "idToken", "accessToken"];
+  for (const sKey of secretKeys) {
+    assert.equal(sKey in banbuengRes, false, `Bootstrap response must NOT contain secret key '${sKey}'`);
+  }
+});

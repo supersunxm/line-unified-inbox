@@ -672,6 +672,7 @@ model FriendAttributionSession {
   friendSourceLinkId     String
   lineOaId               String
   source                 FriendSource
+  liffId                 String?
   clickedAt              DateTime                       @default(now())
   expiresAt              DateTime
   identifiedAt           DateTime?

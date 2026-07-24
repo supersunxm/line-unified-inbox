@@ -1,23 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS, FriendAttributionLocale } from "./friend-attribution-translations";
 import { extractSessionTokenFromUrl } from "./friend-attribution-utils";
 
 function getInitialAttributionState() {
   if (typeof window === "undefined") {
-    return { liffId: null, sessionToken: null, initialStep: "LOADING" as const };
-  }
-  const liffId = process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID || null;
-  if (!liffId) {
-    return { liffId: null, sessionToken: null, initialStep: "MISSING_CONFIG" as const };
+    return { sessionToken: null, initialStep: "LOADING" as const };
   }
   const token = extractSessionTokenFromUrl(window.location.search);
   if (!token) {
-    return { liffId, sessionToken: null, initialStep: "MISSING_TOKEN" as const };
+    return { sessionToken: null, initialStep: "MISSING_TOKEN" as const };
   }
-  return { liffId, sessionToken: token, initialStep: "CONSENT" as const };
+  return { sessionToken: token, initialStep: "LOADING" as const };
 }
 
 export type LiffDiagnosticInfo = {
@@ -27,11 +23,14 @@ export type LiffDiagnosticInfo = {
   liffVersion: string | null;
   lineVersion: string | null;
   isInClient: boolean;
+  initializedLiffId: string | null;
 };
 
 export function FriendAttributionView() {
   const [locale, setLocale] = useState<FriendAttributionLocale>("th");
-  const [{ liffId, sessionToken, initialStep }] = useState(getInitialAttributionState);
+  const [{ sessionToken, initialStep }] = useState(getInitialAttributionState);
+  const [liffId, setLiffId] = useState<string | null>(null);
+  const [initializedLiffId, setInitializedLiffId] = useState<string | null>(null);
   const [step, setStep] = useState<
     | "LOADING"
     | "MISSING_CONFIG"
@@ -55,6 +54,43 @@ export function FriendAttributionView() {
   });
 
   const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
+
+  useEffect(() => {
+    if (!sessionToken) return;
+
+    let isSubscribed = true;
+    api
+      .getFriendAttributionSessionStatus(sessionToken)
+      .then((res) => {
+        if (!isSubscribed) return;
+        if (res.fallbackUrl) {
+          setFallbackUrl(res.fallbackUrl);
+        }
+        if (res.liffId && res.liffId.trim()) {
+          const cleanLiffId = res.liffId.trim();
+          setLiffId(cleanLiffId);
+          setInitializedLiffId(cleanLiffId);
+          if (res.status === "EXPIRED") {
+            setErrorMsg(t.invalidSessionError);
+            setStep("ERROR");
+          } else {
+            setStep("CONSENT");
+          }
+        } else {
+          setStep("MISSING_CONFIG");
+        }
+      })
+      .catch((err: unknown) => {
+        if (!isSubscribed) return;
+        console.error("LIFF Friend Attribution bootstrap error:", err);
+        setErrorMsg(t.invalidSessionError);
+        setStep("MISSING_CONFIG");
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [sessionToken, t.invalidSessionError]);
 
   const handleConsent = async () => {
     if (!liffId || !sessionToken) return;
@@ -140,6 +176,7 @@ export function FriendAttributionView() {
           liffVersion,
           lineVersion,
           isInClient,
+          initializedLiffId,
         };
         console.error("LIFF Friend Attribution requestFriendship error:", diag);
         setDiagnosticInfo(diag);
@@ -206,6 +243,7 @@ export function FriendAttributionView() {
         liffVersion,
         lineVersion,
         isInClient,
+        initializedLiffId,
       };
 
       console.error("LIFF Friend Attribution requestFriendship error:", diag);
@@ -244,6 +282,13 @@ export function FriendAttributionView() {
         </div>
 
         <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#0F172A", marginBottom: "16px" }}>{t.pageTitle}</h1>
+
+        {step === "LOADING" && (
+          <div>
+            <div style={{ width: "24px", height: "24px", border: "3px solid #E2E8F0", borderTopColor: "#06C755", borderRadius: "50%", margin: "0 auto 16px auto", animation: "spin 1s linear infinite" }} />
+            <p style={{ fontSize: "14px", color: "#475569" }}>{t.loading}</p>
+          </div>
+        )}
 
         {step === "MISSING_CONFIG" && (
           <div>
@@ -329,6 +374,7 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
             )}
@@ -403,6 +449,7 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
             )}

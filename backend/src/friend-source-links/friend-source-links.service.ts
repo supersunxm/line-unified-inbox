@@ -395,6 +395,7 @@ export class FriendSourceLinksService {
           clickedAt: new Date(),
           expiresAt,
           attributionStatus: "CLICKED",
+          liffId: configuredLiffId,
         },
       });
 
@@ -691,6 +692,8 @@ export class FriendSourceLinksService {
       throw new NotFoundException("Attribution session not found");
     }
 
+    const resolvedLiffId = session.liffId || (await this.resolveLiffIdForOa(session.lineOaId));
+
     if (session.expiresAt <= new Date()) {
       if (session.attributionStatus !== "EXPIRED") {
         await this.prisma.friendAttributionSession.update({
@@ -704,6 +707,7 @@ export class FriendSourceLinksService {
         confirmedFollowAt: null,
         expiresAt: session.expiresAt,
         fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
+        liffId: resolvedLiffId,
       };
     }
 
@@ -713,7 +717,22 @@ export class FriendSourceLinksService {
       confirmedFollowAt: session.confirmedFollowAt,
       expiresAt: session.expiresAt,
       fallbackUrl: await this.resolveFallbackUrl(session.lineOaId),
+      liffId: resolvedLiffId,
     };
+  }
+
+  private async resolveLiffIdForOa(lineOaId: string): Promise<string | null> {
+    const dbConfig = await this.prisma.friendAttributionConfig?.findUnique({
+      where: { lineOaId },
+    });
+    if (dbConfig?.liffId) {
+      return dbConfig.liffId;
+    }
+    const pilotOaId = getFriendAttributionPilotLineOaId();
+    if (pilotOaId && (lineOaId === pilotOaId || pilotOaId === "*")) {
+      return process.env.FRIEND_ATTRIBUTION_LIFF_ID || null;
+    }
+    return null;
   }
 
   private async resolveFallbackUrl(lineOaId: string): Promise<string> {
