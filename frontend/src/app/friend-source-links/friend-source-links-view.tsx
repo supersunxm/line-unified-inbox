@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { FriendSource, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
-import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations";
+import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations.ts";
 import {
   ALL_SOURCES,
   MAX_PILOT_STORES,
@@ -15,7 +15,12 @@ import {
   prepareGeneratePayload,
   prepareUpdatePayload,
   toggleAccountSelection,
-} from "./friend-source-links-utils";
+} from "./friend-source-links-utils.ts";
+import {
+  buildExportFilename,
+  createExcelWorkbookBuffer,
+  triggerBrowserDownload,
+} from "./friend-source-links-export.ts";
 
 export function FriendSourceLinksView({
   language = "en",
@@ -55,9 +60,13 @@ export function FriendSourceLinksView({
   const [confirmDeactivate, setConfirmDeactivate] = useState<FriendSourceLink | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Export state
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 4000);
   }, []);
 
   const loadData = useCallback(async () => {
@@ -174,6 +183,41 @@ export function FriendSourceLinksView({
     window.open(shortUrl, "_blank", "noopener,noreferrer");
   };
 
+  const handleExportExcel = async (mode: "all" | "current") => {
+    setExportMenuOpen(false);
+    setExporting(true);
+    try {
+      let exportData: FriendSourceLink[] = [];
+      if (mode === "all") {
+        // Fetch ALL links without UI filters
+        exportData = await api.friendSourceLinks();
+      } else {
+        // Fetch current filtered links
+        const filters = {
+          ...(filterSearch ? { search: filterSearch } : {}),
+          ...(filterStore ? { storeId: filterStore } : {}),
+          ...(filterSource ? { source: filterSource } : {}),
+          ...(filterStatus ? { isActive: filterStatus as "true" | "false" } : {}),
+        };
+        exportData = await api.friendSourceLinks(Object.keys(filters).length ? filters : undefined);
+      }
+
+      if (!exportData || exportData.length === 0) {
+        showToast(t.exportNoData);
+        return;
+      }
+
+      const filename = buildExportFilename();
+      const buffer = await createExcelWorkbookBuffer(exportData, language);
+      triggerBrowserDownload(buffer, filename);
+      showToast(t.exportSuccess(filename));
+    } catch (err) {
+      showToast(t.exportError(err instanceof Error ? err.message : "Export failed"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const sourceLabel = (source: FriendSource) => {
     const labels: Record<FriendSource, string> = {
       STORE_QR: t.sourceStoreQr,
@@ -279,11 +323,69 @@ export function FriendSourceLinksView({
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{t.pageTitle}</h1>
-        <p className="mt-1 text-sm text-slate-500">{t.pageDescription}</p>
-        <p className="mt-1 text-xs text-amber-600">{t.pilotNote}</p>
+      {/* Header with Export Button */}
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">{t.pageTitle}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t.pageDescription}</p>
+          <p className="mt-1 text-xs text-amber-600">{t.pilotNote}</p>
+        </div>
+
+        {/* Excel Export Button & Choice Menu */}
+        <div className="relative shrink-0">
+          <button
+            id="fsl-export-button"
+            type="button"
+            disabled={loading || exporting || (links.length === 0 && kpis.totalLinks === 0)}
+            onClick={() => setExportMenuOpen((prev) => !prev)}
+            aria-expanded={exportMenuOpen}
+            aria-haspopup="true"
+            className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span>📊</span>
+            <span>{exporting ? t.exportRunning : t.exportExcel}</span>
+            <span className="text-xs">▼</span>
+          </button>
+
+          {exportMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
+            >
+              <button
+                id="fsl-export-all"
+                role="menuitem"
+                onClick={() => void handleExportExcel("all")}
+                className="flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100"
+              >
+                <span className="font-semibold text-slate-900">{t.exportAll}</span>
+                <span className="text-xs text-slate-500">
+                  {language === "th"
+                    ? "ดาวน์โหลดลิงก์จากทุกร้านค้าในระบบ"
+                    : language === "zh"
+                    ? "下载系统中所有门店的链接"
+                    : "Download all links across all stores"}
+                </span>
+              </button>
+
+              <button
+                id="fsl-export-current"
+                role="menuitem"
+                onClick={() => void handleExportExcel("current")}
+                className="mt-1 flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100"
+              >
+                <span className="font-semibold text-slate-900">{t.exportCurrent}</span>
+                <span className="text-xs text-slate-500">
+                  {language === "th"
+                    ? "ดาวน์โหลดเฉพาะรายการที่ตรงกับตัวกรอง"
+                    : language === "zh"
+                    ? "仅下载符合当前筛选条件的链接"
+                    : "Download links matching active filters"}
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPI cards */}

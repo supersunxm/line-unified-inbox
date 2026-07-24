@@ -65,6 +65,53 @@ export type FriendSourceLinksTranslations = {
   filterStatusInactive: string;
   clearFilters: string;
 
+  // Excel Export
+  exportExcel: string;
+  exportAll: string;
+  exportCurrent: string;
+  exportRunning: string;
+  exportSuccess: (filename: string) => string;
+  exportError: (msg: string) => string;
+  exportNoData: string;
+
+  // Excel Sheet Headers & Content
+  excelStoreName: string;
+  excelStoreCode: string;
+  excelLineOaName: string;
+  excelBasicId: string;
+  excelStoreQrLink: string;
+  excelTikTokLink: string;
+  excelFacebookLink: string;
+  excelInstagramLink: string;
+  excelActiveSources: string;
+  excelTotalClicks: string;
+  excelGeneratedAt: string;
+  excelSource: string;
+  excelShortLink: string;
+  excelClicks: string;
+  excelStatus: string;
+  excelCreatedAt: string;
+  excelUpdatedAt: string;
+
+  // Excel Instructions Sheet Content
+  excelInstTitle: string;
+  excelInstQrTitle: string;
+  excelInstQrDesc: string;
+  excelInstTiktokTitle: string;
+  excelInstTiktokDesc: string;
+  excelInstFbTitle: string;
+  excelInstFbDesc: string;
+  excelInstIgTitle: string;
+  excelInstIgDesc: string;
+  excelInstRuleTitle: string;
+  excelInstRuleDesc: string;
+  excelInstNoMixTitle: string;
+  excelInstNoMixDesc: string;
+  excelInstTrackingTitle: string;
+  excelInstTrackingDesc: string;
+  excelInstLiffTitle: string;
+  excelInstLiffDesc: string;
+
   // States
   loading: string;
   emptyState: string;
@@ -138,6 +185,50 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     filterStatusInactive: "ปิด",
     clearFilters: "ล้างตัวกรอง",
 
+    exportExcel: "ดาวน์โหลด Excel",
+    exportAll: "ส่งออกทุกร้านค้า",
+    exportCurrent: "ส่งออกผลลัพธ์ปัจจุบัน",
+    exportRunning: "กำลังสร้างไฟล์ Excel...",
+    exportSuccess: (filename) => `ส่งออกไฟล์ ${filename} สำเร็จ`,
+    exportError: (msg) => `ส่งออกไม่สำเร็จ: ${msg}`,
+    exportNoData: "ไม่มีข้อมูลสำหรับส่งออก",
+
+    excelStoreName: "ชื่อร้านค้า",
+    excelStoreCode: "รหัสร้านค้า",
+    excelLineOaName: "ชื่อ LINE OA",
+    excelBasicId: "LINE Basic ID",
+    excelStoreQrLink: "Store QR Link",
+    excelTikTokLink: "TikTok Link",
+    excelFacebookLink: "Facebook Link",
+    excelInstagramLink: "Instagram Link",
+    excelActiveSources: "ช่องทางที่ใช้งาน",
+    excelTotalClicks: "คลิกทั้งหมด",
+    excelGeneratedAt: "วันที่สร้าง",
+    excelSource: "ช่องทาง",
+    excelShortLink: "ลิงก์สั้น",
+    excelClicks: "คลิก",
+    excelStatus: "สถานะ",
+    excelCreatedAt: "สร้างเมื่อ",
+    excelUpdatedAt: "อัปเดตเมื่อ",
+
+    excelInstTitle: "คำแนะนำการใช้งานลิงก์ติดตามการเพิ่มเพื่อน (Friend Source Links)",
+    excelInstQrTitle: "1. Store QR Link",
+    excelInstQrDesc: "ใช้สำหรับพิมพ์สื่อหน้าร้าน ป้ายตั้งโต๊ะ หรือ QR Code ที่วางในร้านค้า",
+    excelInstTiktokTitle: "2. TikTok Link",
+    excelInstTiktokDesc: "ใช้ใส่ในโปรไฟล์ TikTok, แคปชันวิดีโอ, คอมเมนต์ หรือแชท TikTok",
+    excelInstFbTitle: "3. Facebook Link",
+    excelInstFbDesc: "ใช้ใส่ในเพจ Facebook ของร้านค้า, โพสต์ หรือข้อความ Messenger",
+    excelInstIgTitle: "4. Instagram Link",
+    excelInstIgDesc: "ใช้ใส่ใน Bio ของ Instagram, สตอรี่ หรือข้อความ Direct Message",
+    excelInstRuleTitle: "5. กฎการแยกช่องทาง",
+    excelInstRuleDesc: "ลิงก์แต่ละช่องทางถูกออกแบบให้ติดตามแยกกันโดยเฉพาะ ห้ามนำลิงก์ผิดช่องทางไปใช้",
+    excelInstNoMixTitle: "6. ห้ามคัดลอกข้ามช่องทาง",
+    excelInstNoMixDesc: "ห้ามนำ TikTok Link ไปโพสต์บน Facebook เพราะจะทำให้สถิติการระบุแหล่งที่มาผิดพลาด",
+    excelInstTrackingTitle: "7. ระบบบันทึกจำนวนคลิก",
+    excelInstTrackingDesc: "ระบบปัจจุบันบันทึกจำนวนคลิกเข้าชมลิงก์ทันทีแบบเรียลไทม์",
+    excelInstLiffTitle: "8. การยืนยันการเพิ่มเพื่อน",
+    excelInstLiffDesc: "ระบบยืนยันการกดเพิ่มเพื่อนจริง (Confirmed Add Friend) จะพร้อมใช้งานหลังเชื่อมต่อ LIFF",
+
     loading: "กำลังโหลด...",
     emptyState: "ยังไม่มีลิงก์",
     emptyStateDescription: "เลือก LINE OA และคลิก 'สร้างลิงก์' เพื่อเริ่มต้น",
@@ -209,6 +300,50 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     filterStatusInactive: "Inactive",
     clearFilters: "Clear Filters",
 
+    exportExcel: "Export Excel",
+    exportAll: "Export all stores",
+    exportCurrent: "Export current results",
+    exportRunning: "Exporting Excel...",
+    exportSuccess: (filename) => `Successfully exported ${filename}`,
+    exportError: (msg) => `Export failed: ${msg}`,
+    exportNoData: "No data available to export",
+
+    excelStoreName: "Store Name",
+    excelStoreCode: "Store Code",
+    excelLineOaName: "LINE OA Name",
+    excelBasicId: "LINE Basic ID",
+    excelStoreQrLink: "Store QR Link",
+    excelTikTokLink: "TikTok Link",
+    excelFacebookLink: "Facebook Link",
+    excelInstagramLink: "Instagram Link",
+    excelActiveSources: "Active Sources",
+    excelTotalClicks: "Total Clicks",
+    excelGeneratedAt: "Generated At",
+    excelSource: "Source",
+    excelShortLink: "Short Link",
+    excelClicks: "Clicks",
+    excelStatus: "Status",
+    excelCreatedAt: "Created At",
+    excelUpdatedAt: "Updated At",
+
+    excelInstTitle: "Friend Source Links Usage & Distribution Guidelines",
+    excelInstQrTitle: "1. Store QR Link",
+    excelInstQrDesc: "Use for printed materials or QR placement inside the physical store.",
+    excelInstTiktokTitle: "2. TikTok Link",
+    excelInstTiktokDesc: "Use in TikTok profile bio, video captions, comments, or direct messages.",
+    excelInstFbTitle: "3. Facebook Link",
+    excelInstFbDesc: "Use on the store's Facebook page, posts, or Messenger replies.",
+    excelInstIgTitle: "4. Instagram Link",
+    excelInstIgDesc: "Use in Instagram bio, stories, or direct messages.",
+    excelInstRuleTitle: "5. Channel Isolation Rule",
+    excelInstRuleDesc: "Each source link must only be used in its assigned channel to preserve accurate tracking.",
+    excelInstNoMixTitle: "6. Do Not Mix Links",
+    excelInstNoMixDesc: "Do not copy the TikTok link for use on Facebook; attribution would become incorrect.",
+    excelInstTrackingTitle: "7. Real-Time Click Tracking",
+    excelInstTrackingDesc: "The system currently tracks link clicks in real time.",
+    excelInstLiffTitle: "8. Confirmed Add Friend",
+    excelInstLiffDesc: "Confirmed Add Friend attribution will be added after LIFF integration is complete.",
+
     loading: "Loading...",
     emptyState: "No links yet",
     emptyStateDescription: "Select LINE OAs and click 'Generate Links' to get started.",
@@ -279,6 +414,50 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     filterStatusActive: "活跃",
     filterStatusInactive: "已禁用",
     clearFilters: "清除筛选",
+
+    exportExcel: "导出 Excel",
+    exportAll: "导出所有门店",
+    exportCurrent: "导出当前筛选结果",
+    exportRunning: "正在导出 Excel...",
+    exportSuccess: (filename) => `成功导出 ${filename}`,
+    exportError: (msg) => `导出失败: ${msg}`,
+    exportNoData: "没有可导出的数据",
+
+    excelStoreName: "门店名称",
+    excelStoreCode: "门店代码",
+    excelLineOaName: "LINE OA 名称",
+    excelBasicId: "LINE Basic ID",
+    excelStoreQrLink: "门店二维码链接",
+    excelTikTokLink: "TikTok 链接",
+    excelFacebookLink: "Facebook 链接",
+    excelInstagramLink: "Instagram 链接",
+    excelActiveSources: "活跃渠道数",
+    excelTotalClicks: "总点击量",
+    excelGeneratedAt: "生成时间",
+    excelSource: "来源",
+    excelShortLink: "短链接",
+    excelClicks: "点击量",
+    excelStatus: "状态",
+    excelCreatedAt: "创建时间",
+    excelUpdatedAt: "更新时间",
+
+    excelInstTitle: "加好友来源链接使用与分发指南",
+    excelInstQrTitle: "1. 门店二维码链接",
+    excelInstQrDesc: "用于印刷宣传品或门店内的二维码摆牌。",
+    excelInstTiktokTitle: "2. TikTok 链接",
+    excelInstTiktokDesc: "用于 TikTok 个人主页 Bio、视频文案、评论或私信。",
+    excelInstFbTitle: "3. Facebook 链接",
+    excelInstFbDesc: "用于门店 Facebook 主页、帖子或 Messenger 自动回复。",
+    excelInstIgTitle: "4. Instagram 链接",
+    excelInstIgDesc: "用于 Instagram 个人主页 Bio、Story 或私信。",
+    excelInstRuleTitle: "5. 渠道隔离规则",
+    excelInstRuleDesc: "每个渠道链接仅限在其指定的渠道中使用，以确保数据追踪准确。",
+    excelInstNoMixTitle: "6. 禁止跨渠道混用",
+    excelInstNoMixDesc: "切勿将 TikTok 链接复制发布到 Facebook，否则归因数据将失真。",
+    excelInstTrackingTitle: "7. 实时点击追踪",
+    excelInstTrackingDesc: "系统目前实时记录链接点击量。",
+    excelInstLiffTitle: "8. 确认加好友归因",
+    excelInstLiffDesc: "确认加好友归因功能将在 LIFF 集成完成后启用。",
 
     loading: "加载中...",
     emptyState: "暂无链接",
