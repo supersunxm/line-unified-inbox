@@ -8,6 +8,10 @@ export class HealthController {
   @Public()
   @Get()
   health() { return { status: "ok", timestamp: new Date().toISOString() }; }
+  @Public()
   @Get("readiness")
-  async readiness() { await this.prisma.$queryRaw`SELECT 1`; return { status: "ready" }; }
+  async readiness() {
+    await this.prisma.$queryRaw`SELECT 1`;
+    return { status: "ready" };
+  }
 }
