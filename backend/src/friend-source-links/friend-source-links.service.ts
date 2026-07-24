@@ -98,9 +98,10 @@ export class FriendSourceLinksService {
               include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
             });
           } catch (err: unknown) {
-            if (err && typeof err === "object" && (err as { code?: string }).code === "P2002") {
-              const target = err.meta?.target;
-              const targetArray = Array.isArray(target) ? target : typeof target === "string" ? [target] : [];
+            const errWithMeta = err as { code?: string; meta?: { target?: unknown } } | null | undefined;
+            if (errWithMeta && typeof errWithMeta === "object" && errWithMeta.code === "P2002") {
+              const target = errWithMeta.meta?.target;
+              const targetArray = Array.isArray(target) ? (target as string[]) : typeof target === "string" ? [target] : [];
               if (targetArray.includes("shortCode")) {
                 continue;
               }

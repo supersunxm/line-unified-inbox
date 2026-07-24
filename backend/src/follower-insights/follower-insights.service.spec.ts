@@ -7,6 +7,7 @@ import {
   formatToIsoDate,
   formatToLineApiDate,
   getDateRangeArray,
+  getPreviousBangkokDateString,
   getTodayBangkokDateString,
   toUtcDateForDb,
 } from "./date-utils";
@@ -835,15 +836,18 @@ test("full 30 days ready → no new job created", async () => {
 });
 
 test("old COMPLETED job with new missing date when rolling window advances → new job enqueued", async () => {
-  const { dateFrom, dateTo } = { dateFrom: "2026-06-23", dateTo: "2026-07-22" };
-  // Simulate yesterday (2026-07-22) is missing because rolling date window advanced by 1 day
-  const readyDates = getDateRangeArray("2026-06-23", "2026-07-21");
-
   let createCalled = false;
   const mockPrisma: any = {
     lineOfficialAccount: { findFirst: async () => ({ id: "oa-test-3", isActive: true }) },
     lineOaFollowerSnapshot: {
-      findMany: async () => readyDates.map(d => ({ snapshotDate: toUtcDateForDb(d), status: "ready", followers: 1000 })),
+      findMany: async ({ where }: any) => {
+        const gteStr = formatDbDateToIso(where.snapshotDate.gte);
+        const lteStr = formatDbDateToIso(where.snapshotDate.lte);
+        const range = getDateRangeArray(gteStr, lteStr);
+        // Omit the last day (lteStr) to simulate 1 missing date as rolling window advances
+        const readyDates = range.slice(0, -1);
+        return readyDates.map((d) => ({ snapshotDate: toUtcDateForDb(d), status: "ready", followers: 1000 }));
+      },
     },
     lineOaBackfillJob: {
       findFirst: async () => null, // No active job
