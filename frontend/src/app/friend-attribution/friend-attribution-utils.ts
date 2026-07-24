@@ -32,3 +32,30 @@ export function isValidTokenFormat(token: string): boolean {
   if (/[^a-zA-Z0-9_\-]/.test(trimmed)) return false;
   return true;
 }
+
+export function extractLiffIdFromUrl(searchString: string): string | null {
+  if (!searchString) return null;
+  const params = new URLSearchParams(searchString);
+
+  const directLid = params.get("lid");
+  if (directLid && directLid.trim()) {
+    return directLid.trim();
+  }
+
+  const liffStateRaw = params.get("liff.state") || params.get("state");
+  if (liffStateRaw) {
+    try {
+      const decoded = decodeURIComponent(liffStateRaw);
+      const searchPart = decoded.includes("?") ? decoded.substring(decoded.indexOf("?")) : decoded;
+      const nestedParams = new URLSearchParams(searchPart);
+      const nestedLid = nestedParams.get("lid");
+      if (nestedLid && nestedLid.trim()) {
+        return nestedLid.trim();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}

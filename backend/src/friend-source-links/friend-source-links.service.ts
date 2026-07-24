@@ -409,6 +409,9 @@ export class FriendSourceLinksService {
 
       const targetUrl = new URL(liffBaseUrl);
       targetUrl.searchParams.set("token", rawSessionToken);
+      if (configuredLiffId) {
+        targetUrl.searchParams.set("lid", configuredLiffId);
+      }
       return targetUrl.toString();
     }
 

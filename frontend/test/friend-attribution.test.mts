@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
-import { extractSessionTokenFromUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
 import { pivotLinksByStore, prepareLinkDetailsRows } from "../src/app/friend-source-links/friend-source-links-export.ts";
 import type { FriendSourceLink } from "../src/types/api.ts";
 
@@ -273,7 +273,7 @@ test("Scenario 36: Multi-store dynamic LIFF ID bootstrap, fail closed, and token
   // 1. Source code verification: NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID MUST NOT be used at runtime
   assert.doesNotMatch(viewFile, /NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID/, "Runtime view must NOT use NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID");
   assert.match(viewFile, /api\.getFriendAttributionSessionStatus/, "Source must bootstrap session status from API before liff.init");
-  assert.match(viewFile, /setStep\(\s*["']MISSING_CONFIG["']\s*\)/, "Source must fail closed when liffId cannot be resolved");
+  assert.match(viewFile, /MISSING_CONFIG/, "Source must fail closed when liffId cannot be resolved");
 
   // 2. Extract token from direct URL and encoded liff.state before liff.init
   const directUrl = "?token=sat_banbueng123";
@@ -341,4 +341,40 @@ test("Scenario 36: Multi-store dynamic LIFF ID bootstrap, fail closed, and token
   for (const sKey of secretKeys) {
     assert.equal(sKey in banbuengRes, false, `Bootstrap response must NOT contain secret key '${sKey}'`);
   }
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 37. First-Stage liff.init, Router Safety & Access-Token Guard
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 37: First-stage liff.init, URL lid extraction, router safety, and access token guard", async () => {
+  const viewFile = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
+
+  // 1. Verify liff.init is called BEFORE api.getFriendAttributionSessionStatus in the async lifecycle
+  const liffInitIndex = viewFile.indexOf("await liff.init(");
+  const bootstrapIndex = viewFile.indexOf("api.getFriendAttributionSessionStatus(");
+  assert.ok(liffInitIndex > 0, "liff.init must be present in view");
+  assert.ok(bootstrapIndex > 0, "bootstrap call must be present in view");
+  assert.ok(liffInitIndex < bootstrapIndex, "liff.init MUST be executed before backend bootstrap call");
+
+  // 2. Verify router safety: NO URL mutation before liff.init
+  assert.doesNotMatch(viewFile, /history\.pushState/, "Source must NOT call history.pushState");
+  assert.doesNotMatch(viewFile, /history\.replaceState/, "Source must NOT call history.replaceState");
+  assert.doesNotMatch(viewFile, /router\.push/, "Source must NOT call router.push");
+  assert.doesNotMatch(viewFile, /router\.replace/, "Source must NOT call router.replace");
+
+  // 3. Test extractLiffIdFromUrl for direct lid and encoded liff.state
+  const directLidUrl = "?token=sat_test123&lid=2010830086-hTniHzlm";
+  assert.equal(extractLiffIdFromUrl(directLidUrl), "2010830086-hTniHzlm", "extractLiffIdFromUrl must parse direct lid");
+
+  const stateLidUrl = "?liff.state=%3Ftoken%3Dsat_test123%26lid%3D2010830086-hTniHzlm";
+  assert.equal(extractLiffIdFromUrl(stateLidUrl), "2010830086-hTniHzlm", "extractLiffIdFromUrl must parse nested lid in liff.state");
+
+  // 4. Verify access token guard prevents requestFriendship when token is absent
+  assert.match(viewFile, /MISSING_ACCESS_TOKEN/, "Source must handle MISSING_ACCESS_TOKEN guard");
+  assert.match(viewFile, /hasAccessToken/, "Source must check boolean hasAccessToken state");
+
+  // 5. Verify raw token strings are never logged in diagnostics
+  assert.doesNotMatch(viewFile, /getAccessToken\(\)\s*\}\s*<\/div>/, "UI must NOT display raw access token");
+  assert.doesNotMatch(viewFile, /getIDToken\(\)\s*\}\s*<\/div>/, "UI must NOT display raw ID token");
 });

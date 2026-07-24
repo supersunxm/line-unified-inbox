@@ -3,17 +3,23 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS, FriendAttributionLocale } from "./friend-attribution-translations";
-import { extractSessionTokenFromUrl } from "./friend-attribution-utils";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl } from "./friend-attribution-utils";
 
 function getInitialAttributionState() {
   if (typeof window === "undefined") {
-    return { sessionToken: null, initialStep: "LOADING" as const };
+    return { lid: null, sessionToken: null, initialStep: "LOADING" as const };
   }
-  const token = extractSessionTokenFromUrl(window.location.search);
+  const search = window.location.search;
+  const lid = extractLiffIdFromUrl(search);
+  const token = extractSessionTokenFromUrl(search);
+
+  if (!lid) {
+    return { lid: null, sessionToken: token, initialStep: "MISSING_CONFIG" as const };
+  }
   if (!token) {
-    return { sessionToken: null, initialStep: "MISSING_TOKEN" as const };
+    return { lid, sessionToken: null, initialStep: "MISSING_TOKEN" as const };
   }
-  return { sessionToken: token, initialStep: "LOADING" as const };
+  return { lid, sessionToken: token, initialStep: "LOADING" as const };
 }
 
 export type LiffDiagnosticInfo = {
@@ -23,14 +29,15 @@ export type LiffDiagnosticInfo = {
   liffVersion: string | null;
   lineVersion: string | null;
   isInClient: boolean;
+  isLoggedIn?: boolean;
+  hasAccessToken?: boolean;
+  hasIdToken?: boolean;
   initializedLiffId: string | null;
 };
 
 export function FriendAttributionView() {
   const [locale, setLocale] = useState<FriendAttributionLocale>("th");
-  const [{ sessionToken, initialStep }] = useState(getInitialAttributionState);
-  const [liffId, setLiffId] = useState<string | null>(null);
-  const [initializedLiffId, setInitializedLiffId] = useState<string | null>(null);
+  const [{ lid, sessionToken, initialStep }] = useState(getInitialAttributionState);
   const [step, setStep] = useState<
     | "LOADING"
     | "MISSING_CONFIG"
@@ -56,52 +63,110 @@ export function FriendAttributionView() {
   const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
 
   useEffect(() => {
-    if (!sessionToken) return;
+    if (!lid || !sessionToken) return;
+    const activeLid = lid;
+    const activeSessionToken = sessionToken;
 
     let isSubscribed = true;
-    api
-      .getFriendAttributionSessionStatus(sessionToken)
-      .then((res) => {
-        if (!isSubscribed) return;
-        if (res.fallbackUrl) {
-          setFallbackUrl(res.fallbackUrl);
+
+    async function initializeLiffAndBootstrap() {
+      try {
+        // FIRST-STAGE INITIALIZATION: Call liff.init({ liffId: lid }) BEFORE any backend network request or router mutation
+        const liffModule = await import("@line/liff");
+        const liff = liffModule.default;
+
+        const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
+        const initOptions: { liffId: string; withLoginOnExternalBrowser?: boolean } = { liffId: activeLid };
+        if (!isInClient) {
+          initOptions.withLoginOnExternalBrowser = true;
         }
-        if (res.liffId && res.liffId.trim()) {
-          const cleanLiffId = res.liffId.trim();
-          setLiffId(cleanLiffId);
-          setInitializedLiffId(cleanLiffId);
-          if (res.status === "EXPIRED") {
-            setErrorMsg(t.invalidSessionError);
+
+        await liff.init(initOptions);
+
+        if (!isSubscribed) return;
+
+        // Record safe booleans (NEVER expose token values)
+        const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
+        const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
+        const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
+        const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
+        const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+
+        const currentDiag: LiffDiagnosticInfo = {
+          operation: "requestFriendship",
+          code: "INITIALIZED",
+          message: "LIFF SDK initialized successfully",
+          liffVersion,
+          lineVersion,
+          isInClient,
+          isLoggedIn,
+          hasAccessToken,
+          hasIdToken,
+          initializedLiffId: activeLid,
+        };
+        setDiagnosticInfo(currentDiag);
+
+        // POST-INIT VERIFICATION: Call backend session status after liff.init resolves
+        const bootstrap = await api.getFriendAttributionSessionStatus(activeSessionToken);
+        if (!isSubscribed) return;
+
+        if (bootstrap.fallbackUrl) {
+          setFallbackUrl(bootstrap.fallbackUrl);
+        }
+
+        // Verify liffId match between link (lid) and backend session configuration
+        if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
+          console.error(`LIFF ID mismatch: bootstrap returned '${bootstrap.liffId}' but page initialized '${lid}'`);
+          setErrorMsg(t.liffConfigError);
+          setStep("ERROR");
+          return;
+        }
+
+        if (bootstrap.status === "EXPIRED") {
+          setErrorMsg(t.invalidSessionError);
+          setStep("ERROR");
+          return;
+        }
+
+        // ACCESS TOKEN & LOGIN GUARD
+        if (isInClient) {
+          if (!hasAccessToken) {
+            console.error("LIFF in-client access token is missing");
+            setErrorMsg(t.customerErrorMessage);
             setStep("ERROR");
-          } else {
-            setStep("CONSENT");
+            return;
           }
+          setStep("CONSENT");
         } else {
-          setStep("MISSING_CONFIG");
+          if (!isLoggedIn) {
+            liff.login({ redirectUri: window.location.href });
+            return;
+          }
+          setStep("CONSENT");
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!isSubscribed) return;
-        console.error("LIFF Friend Attribution bootstrap error:", err);
-        setErrorMsg(t.invalidSessionError);
-        setStep("MISSING_CONFIG");
-      });
+        console.error("LIFF initialization error:", err);
+        setErrorMsg(t.customerErrorMessage);
+        setStep("ERROR");
+      }
+    }
+
+    initializeLiffAndBootstrap();
 
     return () => {
       isSubscribed = false;
     };
-  }, [sessionToken, t.invalidSessionError]);
+  }, [lid, sessionToken, t.customerErrorMessage, t.invalidSessionError, t.liffConfigError]);
 
   const handleConsent = async () => {
-    if (!liffId || !sessionToken) return;
+    if (!lid || !sessionToken) return;
 
     try {
       setStep("IDENTIFYING");
 
       const liffModule = await import("@line/liff");
       const liff = liffModule.default;
-
-      await liff.init({ liffId });
 
       if (!liff.isLoggedIn()) {
         liff.login({ redirectUri: window.location.href });
@@ -149,7 +214,6 @@ export function FriendAttributionView() {
   const handleRequestFriendship = async () => {
     if (!sessionToken) return;
 
-    setDiagnosticInfo(null);
     setErrorMsg(null);
     setStep("WAITING_FOLLOW");
 
@@ -158,8 +222,32 @@ export function FriendAttributionView() {
       const liff = liffModule.default;
 
       const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
+      const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
+      const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
+      const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
       const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
       const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+
+      // Access Token Guard: Stop if access token is absent inside LINE app
+      if (isInClient && !hasAccessToken) {
+        const diag: LiffDiagnosticInfo = {
+          operation: "requestFriendship",
+          code: "MISSING_ACCESS_TOKEN",
+          message: "Access token is missing inside LINE client",
+          liffVersion,
+          lineVersion,
+          isInClient,
+          isLoggedIn,
+          hasAccessToken,
+          hasIdToken,
+          initializedLiffId: lid,
+        };
+        console.error("LIFF Friend Attribution requestFriendship error:", diag);
+        setDiagnosticInfo(diag);
+        setErrorMsg(t.customerErrorMessage);
+        setStep("PROMPT_ADD_FRIEND");
+        return;
+      }
 
       // Log getFriendship before calling requestFriendship
       const friendshipBefore = await liff.getFriendship().catch(() => null);
@@ -176,7 +264,10 @@ export function FriendAttributionView() {
           liffVersion,
           lineVersion,
           isInClient,
-          initializedLiffId,
+          isLoggedIn,
+          hasAccessToken,
+          hasIdToken,
+          initializedLiffId: lid,
         };
         console.error("LIFF Friend Attribution requestFriendship error:", diag);
         setDiagnosticInfo(diag);
@@ -235,6 +326,9 @@ export function FriendAttributionView() {
       const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
       const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
       const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
+      const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
+      const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
+      const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
 
       const diag: LiffDiagnosticInfo = {
         operation: "requestFriendship",
@@ -243,7 +337,10 @@ export function FriendAttributionView() {
         liffVersion,
         lineVersion,
         isInClient,
-        initializedLiffId,
+        isLoggedIn,
+        hasAccessToken,
+        hasIdToken,
+        initializedLiffId: lid,
       };
 
       console.error("LIFF Friend Attribution requestFriendship error:", diag);
@@ -374,6 +471,9 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
+                  <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
+                  <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
                   <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
@@ -449,6 +549,9 @@ export function FriendAttributionView() {
                   <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
                   <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
+                  <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
+                  <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
+                  <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
                   <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
