@@ -12,6 +12,9 @@ export type StoreDistributionRow = {
   instagramLink: string;
   activeSourcesCount: number;
   totalClicks: number;
+  identifiedVisits: number;
+  confirmedAdds: number;
+  conversionRate: string;
   generatedAt: string;
 };
 
@@ -22,6 +25,9 @@ export type LinkDetailRow = {
   source: string;
   shortUrl: string;
   clicks: number;
+  identifiedVisits: number;
+  confirmedAdds: number;
+  conversionRate: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -92,6 +98,8 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
       instagramLink: string;
       activeSourcesCount: number;
       totalClicks: number;
+      identifiedVisits: number;
+      confirmedAdds: number;
       earliestCreatedAt: Date | null;
     }
   >();
@@ -111,6 +119,8 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
         instagramLink: "",
         activeSourcesCount: 0,
         totalClicks: 0,
+        identifiedVisits: 0,
+        confirmedAdds: 0,
         earliestCreatedAt: null,
       };
       map.set(key, item);
@@ -131,6 +141,8 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
     }
 
     item.totalClicks += link.clickCount || 0;
+    item.identifiedVisits += link.identifiedVisits || 0;
+    item.confirmedAdds += link.confirmedAdds || 0;
 
     if (link.createdAt) {
       const dt = new Date(link.createdAt);
@@ -143,19 +155,25 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
   }
 
   // Convert to array and sort by Store Name asc, then LINE OA Name asc
-  const rows: StoreDistributionRow[] = Array.from(map.values()).map((item) => ({
-    storeName: item.storeName,
-    storeCode: item.storeCode,
-    lineOaName: item.lineOaName,
-    basicId: item.basicId,
-    qrLink: item.qrLink,
-    tiktokLink: item.tiktokLink,
-    facebookLink: item.facebookLink,
-    instagramLink: item.instagramLink,
-    activeSourcesCount: item.activeSourcesCount,
-    totalClicks: item.totalClicks,
-    generatedAt: formatDateForExcel(item.earliestCreatedAt),
-  }));
+  const rows: StoreDistributionRow[] = Array.from(map.values()).map((item) => {
+    const rate = item.totalClicks > 0 ? `${((item.confirmedAdds / item.totalClicks) * 100).toFixed(1)}%` : "0.0%";
+    return {
+      storeName: item.storeName,
+      storeCode: item.storeCode,
+      lineOaName: item.lineOaName,
+      basicId: item.basicId,
+      qrLink: item.qrLink,
+      tiktokLink: item.tiktokLink,
+      facebookLink: item.facebookLink,
+      instagramLink: item.instagramLink,
+      activeSourcesCount: item.activeSourcesCount,
+      totalClicks: item.totalClicks,
+      identifiedVisits: item.identifiedVisits,
+      confirmedAdds: item.confirmedAdds,
+      conversionRate: rate,
+      generatedAt: formatDateForExcel(item.earliestCreatedAt),
+    };
+  });
 
   rows.sort((a, b) => {
     const storeCmp = a.storeName.localeCompare(b.storeName);
@@ -183,17 +201,25 @@ export function prepareLinkDetailsRows(
     INSTAGRAM: t.sourceInstagram,
   };
 
-  return cleanLinks.map((link) => ({
-    storeName: link.storeName ?? "",
-    storeCode: link.storeCode ?? "",
-    lineOaName: link.lineOaName ?? "",
-    source: sourceLabels[link.source] ?? link.source,
-    shortUrl: link.shortUrl,
-    clicks: link.clickCount || 0,
-    status: link.isActive ? t.statusActive : t.statusInactive,
-    createdAt: formatDateForExcel(link.createdAt),
-    updatedAt: formatDateForExcel(link.updatedAt),
-  }));
+  return cleanLinks.map((link) => {
+    const clicks = link.clickCount || 0;
+    const confirmed = link.confirmedAdds || 0;
+    const rate = clicks > 0 ? `${((confirmed / clicks) * 100).toFixed(1)}%` : "0.0%";
+    return {
+      storeName: link.storeName ?? "",
+      storeCode: link.storeCode ?? "",
+      lineOaName: link.lineOaName ?? "",
+      source: sourceLabels[link.source] ?? link.source,
+      shortUrl: link.shortUrl,
+      clicks,
+      identifiedVisits: link.identifiedVisits || 0,
+      confirmedAdds: confirmed,
+      conversionRate: rate,
+      status: link.isActive ? t.statusActive : t.statusInactive,
+      createdAt: formatDateForExcel(link.createdAt),
+      updatedAt: formatDateForExcel(link.updatedAt),
+    };
+  });
 }
 
 /**
@@ -253,6 +279,9 @@ export async function createExcelWorkbookBuffer(
     t.excelInstagramLink,
     t.excelActiveSources,
     t.excelTotalClicks,
+    t.excelIdentifiedVisits,
+    t.excelConfirmedAdds,
+    t.excelConversionRate,
     t.excelGeneratedAt,
   ];
 
@@ -267,7 +296,10 @@ export async function createExcelWorkbookBuffer(
     { header: distHeaders[7], key: "instagramLink", width: 36 },
     { header: distHeaders[8], key: "activeSourcesCount", width: 16 },
     { header: distHeaders[9], key: "totalClicks", width: 14 },
-    { header: distHeaders[10], key: "generatedAt", width: 18 },
+    { header: distHeaders[10], key: "identifiedVisits", width: 16 },
+    { header: distHeaders[11], key: "confirmedAdds", width: 16 },
+    { header: distHeaders[12], key: "conversionRate", width: 18 },
+    { header: distHeaders[13], key: "generatedAt", width: 18 },
   ];
 
   // Apply header styling
@@ -288,6 +320,9 @@ export async function createExcelWorkbookBuffer(
       basicId: item.basicId,
       activeSourcesCount: item.activeSourcesCount,
       totalClicks: item.totalClicks,
+      identifiedVisits: item.identifiedVisits,
+      confirmedAdds: item.confirmedAdds,
+      conversionRate: item.conversionRate,
       generatedAt: item.generatedAt,
     });
 
@@ -317,7 +352,7 @@ export async function createExcelWorkbookBuffer(
   if (pivotedRows.length > 0) {
     sheet1.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: pivotedRows.length + 1, column: 11 },
+      to: { row: pivotedRows.length + 1, column: 14 },
     };
   }
 
@@ -335,6 +370,9 @@ export async function createExcelWorkbookBuffer(
     t.excelSource,
     t.excelShortLink,
     t.excelClicks,
+    t.excelIdentifiedVisits,
+    t.excelConfirmedAdds,
+    t.excelConversionRate,
     t.excelStatus,
     t.excelCreatedAt,
     t.excelUpdatedAt,
@@ -347,9 +385,12 @@ export async function createExcelWorkbookBuffer(
     { header: detailHeaders[3], key: "source", width: 16 },
     { header: detailHeaders[4], key: "shortUrl", width: 38 },
     { header: detailHeaders[5], key: "clicks", width: 12 },
-    { header: detailHeaders[6], key: "status", width: 14 },
-    { header: detailHeaders[7], key: "createdAt", width: 18 },
-    { header: detailHeaders[8], key: "updatedAt", width: 18 },
+    { header: detailHeaders[6], key: "identifiedVisits", width: 16 },
+    { header: detailHeaders[7], key: "confirmedAdds", width: 16 },
+    { header: detailHeaders[8], key: "conversionRate", width: 16 },
+    { header: detailHeaders[9], key: "status", width: 14 },
+    { header: detailHeaders[10], key: "createdAt", width: 18 },
+    { header: detailHeaders[11], key: "updatedAt", width: 18 },
   ];
 
   const sheet2Row1 = sheet2.getRow(1);
@@ -368,6 +409,9 @@ export async function createExcelWorkbookBuffer(
       lineOaName: item.lineOaName,
       source: item.source,
       clicks: item.clicks,
+      identifiedVisits: item.identifiedVisits,
+      confirmedAdds: item.confirmedAdds,
+      conversionRate: item.conversionRate,
       status: item.status,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
@@ -389,7 +433,7 @@ export async function createExcelWorkbookBuffer(
   if (detailRows.length > 0) {
     sheet2.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: detailRows.length + 1, column: 9 },
+      to: { row: detailRows.length + 1, column: 12 },
     };
   }
 

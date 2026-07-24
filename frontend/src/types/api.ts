@@ -225,6 +225,11 @@ export type FriendSourceLink = {
   destinationUrl: string;
   isActive: boolean;
   clickCount: number;
+  identifiedVisits?: number;
+  alreadyFriends?: number;
+  promptedAdds?: number;
+  confirmedAdds?: number;
+  conversionRate?: number;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -243,6 +248,11 @@ export type FriendSourceLinksSummaryItem = {
   totalLinks: number;
   activeLinks: number;
   clicks: number;
+  identifiedVisits?: number;
+  alreadyFriends?: number;
+  promptedAdds?: number;
+  confirmedAdds?: number;
+  conversionRate?: number;
 };
 
 export type FriendSourceLinksFilters = {
@@ -251,4 +261,34 @@ export type FriendSourceLinksFilters = {
   source?: FriendSource;
   isActive?: "true" | "false";
   search?: string;
+};
+
+export type IdentifyFriendAttributionInput = {
+  sessionToken: string;
+  idToken?: string;
+  accessToken?: string;
+  consentGiven: boolean;
+};
+
+export type IdentifyFriendAttributionResult = {
+  status: string;
+  expiresAt: string;
+};
+
+export type UpdateFriendshipStatusInput = {
+  sessionToken: string;
+  isFriend: boolean;
+};
+
+export type UpdateFriendshipStatusResult = {
+  action: "ALREADY_FRIEND" | "REQUEST_FRIENDSHIP" | "WAITING_FOR_FOLLOW" | "EXPIRED";
+  status: string;
+  expiresAt: string;
+};
+
+export type FriendAttributionSessionStatusResult = {
+  status: string;
+  confirmed: boolean;
+  confirmedFollowAt: string | null;
+  expiresAt: string;
 };

@@ -1,7 +1,17 @@
-import { BadRequestException, GoneException, Injectable, NotFoundException } from "@nestjs/common";
-import { FriendSource, Prisma } from "@prisma/client";
+import { BadRequestException, GoneException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { FriendAttributionSessionStatus, FriendSource, Prisma } from "@prisma/client";
 import { createHmac, randomBytes } from "crypto";
 import { PrismaService } from "../prisma.service";
+import {
+  getFriendAttributionHashSecret,
+  getFriendAttributionLiffBaseUrl,
+  getFriendAttributionLineLoginChannelId,
+  getFriendAttributionPilotLineOaId,
+  getFriendAttributionSessionTtlSeconds,
+  hashLineUserId,
+  hashPublicSessionToken,
+} from "./friend-attribution.config";
+import { IdentifyFriendAttributionDto, UpdateFriendshipStatusDto } from "./friend-attribution.dto";
 import { getFriendSourceIpHashKey, getFriendSourcePublicBaseUrl } from "./friend-source-links.config";
 import { GenerateFriendSourceLinksDto, QueryFriendSourceLinksDto, UpdateFriendSourceLinkDto } from "./friend-source-links.dto";
 
@@ -156,7 +166,45 @@ export class FriendSourceLinksService {
       orderBy: [{ store: { name: "asc" } }, { source: "asc" }],
     });
 
-    return links.map((link) => this.formatLinkResponse(link));
+    const sessions = await this.prisma.friendAttributionSession.findMany({
+      where: {
+        friendSourceLinkId: { in: links.map((l) => l.id) },
+      },
+      select: {
+        friendSourceLinkId: true,
+        attributionStatus: true,
+        identifiedAt: true,
+        friendshipBefore: true,
+        confirmedFollowAt: true,
+      },
+    });
+
+    const linkMetricsMap = new Map<string, { identifiedVisits: number; alreadyFriends: number; promptedAdds: number; confirmedAdds: number }>();
+    for (const s of sessions) {
+      let m = linkMetricsMap.get(s.friendSourceLinkId);
+      if (!m) {
+        m = { identifiedVisits: 0, alreadyFriends: 0, promptedAdds: 0, confirmedAdds: 0 };
+        linkMetricsMap.set(s.friendSourceLinkId, m);
+      }
+      if (s.identifiedAt || s.attributionStatus !== "CLICKED") m.identifiedVisits++;
+      if (s.attributionStatus === "ALREADY_FRIEND" || s.friendshipBefore === true) m.alreadyFriends++;
+      if (s.attributionStatus === "ADD_FRIEND_PROMPTED") m.promptedAdds++;
+      if (s.attributionStatus === "CONFIRMED" || s.confirmedFollowAt !== null) m.confirmedAdds++;
+    }
+
+    return links.map((link) => {
+      const m = linkMetricsMap.get(link.id) || { identifiedVisits: 0, alreadyFriends: 0, promptedAdds: 0, confirmedAdds: 0 };
+      const clicks = link._count?.clicks ?? 0;
+      const conversionRate = clicks > 0 ? Number((m.confirmedAdds / clicks).toFixed(4)) : 0;
+      return {
+        ...this.formatLinkResponse(link),
+        identifiedVisits: m.identifiedVisits,
+        alreadyFriends: m.alreadyFriends,
+        promptedAdds: m.promptedAdds,
+        confirmedAdds: m.confirmedAdds,
+        conversionRate,
+      };
+    });
   }
 
   async updateLink(id: string, dto: UpdateFriendSourceLinkDto) {
@@ -200,7 +248,46 @@ export class FriendSourceLinksService {
       orderBy: [{ store: { name: "asc" } }, { source: "asc" }],
     });
 
-    const summaryMap = new Map<string, { storeId: string; storeName: string; storeCode: string | null; source: FriendSource; totalLinks: number; activeLinks: number; clicks: number }>();
+    const sessions = await this.prisma.friendAttributionSession.findMany({
+      select: {
+        friendSourceLinkId: true,
+        attributionStatus: true,
+        identifiedAt: true,
+        friendshipBefore: true,
+        confirmedFollowAt: true,
+      },
+    });
+
+    const linkMetricsMap = new Map<string, { identifiedVisits: number; alreadyFriends: number; promptedAdds: number; confirmedAdds: number }>();
+    for (const s of sessions) {
+      let m = linkMetricsMap.get(s.friendSourceLinkId);
+      if (!m) {
+        m = { identifiedVisits: 0, alreadyFriends: 0, promptedAdds: 0, confirmedAdds: 0 };
+        linkMetricsMap.set(s.friendSourceLinkId, m);
+      }
+      if (s.identifiedAt || s.attributionStatus !== "CLICKED") m.identifiedVisits++;
+      if (s.attributionStatus === "ALREADY_FRIEND" || s.friendshipBefore === true) m.alreadyFriends++;
+      if (s.attributionStatus === "ADD_FRIEND_PROMPTED") m.promptedAdds++;
+      if (s.attributionStatus === "CONFIRMED" || s.confirmedFollowAt !== null) m.confirmedAdds++;
+    }
+
+    const summaryMap = new Map<
+      string,
+      {
+        storeId: string;
+        storeName: string;
+        storeCode: string | null;
+        source: FriendSource;
+        totalLinks: number;
+        activeLinks: number;
+        clicks: number;
+        identifiedVisits: number;
+        alreadyFriends: number;
+        promptedAdds: number;
+        confirmedAdds: number;
+        conversionRate: number;
+      }
+    >();
 
     for (const link of links) {
       const key = `${link.storeId}:${link.source}`;
@@ -214,15 +301,29 @@ export class FriendSourceLinksService {
           totalLinks: 0,
           activeLinks: 0,
           clicks: 0,
+          identifiedVisits: 0,
+          alreadyFriends: 0,
+          promptedAdds: 0,
+          confirmedAdds: 0,
+          conversionRate: 0,
         };
         summaryMap.set(key, item);
       }
       item.totalLinks++;
       if (link.isActive) item.activeLinks++;
+
+      const m = linkMetricsMap.get(link.id) || { identifiedVisits: 0, alreadyFriends: 0, promptedAdds: 0, confirmedAdds: 0 };
       item.clicks += link._count.clicks;
+      item.identifiedVisits += m.identifiedVisits;
+      item.alreadyFriends += m.alreadyFriends;
+      item.promptedAdds += m.promptedAdds;
+      item.confirmedAdds += m.confirmedAdds;
     }
 
-    return Array.from(summaryMap.values());
+    return Array.from(summaryMap.values()).map((item) => ({
+      ...item,
+      conversionRate: item.clicks > 0 ? Number((item.confirmedAdds / item.clicks).toFixed(4)) : 0,
+    }));
   }
 
   async handleRedirect(shortCode: string, referrer?: string, userAgent?: string, clientIp?: string): Promise<string> {
@@ -260,9 +361,301 @@ export class FriendSourceLinksService {
       },
     });
 
+    const pilotOaId = getFriendAttributionPilotLineOaId();
+    const isPilotOa = Boolean(pilotOaId && (link.lineOaId === pilotOaId || pilotOaId === "*"));
+
+    if (isPilotOa) {
+      const rawSessionToken = `sat_${randomBytes(24).toString("hex")}`;
+      const hashSecret = getFriendAttributionHashSecret();
+      const publicSessionTokenHash = hashPublicSessionToken(rawSessionToken, hashSecret);
+      const ttlSeconds = getFriendAttributionSessionTtlSeconds();
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+      await this.prisma.friendAttributionSession.create({
+        data: {
+          publicSessionTokenHash,
+          friendSourceLinkId: link.id,
+          lineOaId: link.lineOaId,
+          source: link.source,
+          clickedAt: new Date(),
+          expiresAt,
+          attributionStatus: "CLICKED",
+        },
+      });
+
+      const liffBaseUrl = getFriendAttributionLiffBaseUrl() || "https://frontend-production-e5c6.up.railway.app/friend-attribution";
+      const targetUrl = new URL(liffBaseUrl);
+      targetUrl.searchParams.set("token", rawSessionToken);
+      return targetUrl.toString();
+    }
+
     const targetUrl = new URL(link.destinationUrl);
     targetUrl.searchParams.set("friend_tracking_id", trackingSessionId);
     return targetUrl.toString();
+  }
+
+  async identifySession(dto: IdentifyFriendAttributionDto) {
+    if (!dto.consentGiven) {
+      throw new BadRequestException("Explicit user consent is required before linking LINE account");
+    }
+
+    if (!dto.sessionToken || !dto.sessionToken.trim()) {
+      throw new BadRequestException("sessionToken is required");
+    }
+
+    const hashSecret = getFriendAttributionHashSecret();
+    const tokenHash = hashPublicSessionToken(dto.sessionToken, hashSecret);
+
+    const session = await this.prisma.friendAttributionSession.findUnique({
+      where: { publicSessionTokenHash: tokenHash },
+    });
+
+    if (!session) {
+      throw new NotFoundException("Attribution session not found or invalid");
+    }
+
+    if (session.attributionStatus === "EXPIRED" || session.expiresAt <= new Date()) {
+      if (session.attributionStatus !== "EXPIRED") {
+        await this.prisma.friendAttributionSession.update({
+          where: { id: session.id },
+          data: { attributionStatus: "EXPIRED" },
+        });
+      }
+      throw new GoneException("Attribution session has expired");
+    }
+
+    if (session.attributionStatus === "FAILED") {
+      throw new BadRequestException("Attribution session is in a failed state");
+    }
+
+    let verifiedLineUserId: string | null = null;
+    const channelId = getFriendAttributionLineLoginChannelId();
+
+    if (dto.idToken && dto.idToken.trim()) {
+      try {
+        const body = new URLSearchParams();
+        body.append("id_token", dto.idToken.trim());
+        if (channelId) body.append("client_id", channelId);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const verifyRes = await globalThis.fetch("https://api.line.me/oauth2/v2.1/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!verifyRes.ok) {
+          throw new UnauthorizedException(`LINE ID token verification failed with status ${verifyRes.status}`);
+        }
+
+        const data = (await verifyRes.json()) as { sub?: string; aud?: string; iss?: string; exp?: number };
+        if (!data.sub) {
+          throw new UnauthorizedException("LINE ID token did not return a valid user identity (sub)");
+        }
+        if (channelId && data.aud && data.aud !== channelId) {
+          throw new UnauthorizedException(`LINE ID token audience '${data.aud}' does not match configured channel '${channelId}'`);
+        }
+        if (data.iss && data.iss !== "https://access.line.me") {
+          throw new UnauthorizedException(`LINE ID token issuer '${data.iss}' is invalid`);
+        }
+        if (data.exp && data.exp * 1000 <= Date.now()) {
+          throw new UnauthorizedException("LINE ID token has expired");
+        }
+        verifiedLineUserId = data.sub;
+      } catch (err: unknown) {
+        if (err instanceof UnauthorizedException || err instanceof BadRequestException) throw err;
+        throw new UnauthorizedException("Failed to verify LINE ID token: " + (err instanceof Error ? err.message : "Network error"));
+      }
+    } else if (dto.accessToken && dto.accessToken.trim()) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const verifyRes = await globalThis.fetch(`https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(dto.accessToken.trim())}`, {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!verifyRes.ok) {
+          throw new UnauthorizedException("LINE access token verification failed");
+        }
+        const verifyData = (await verifyRes.json()) as { client_id?: string };
+        if (channelId && verifyData.client_id && verifyData.client_id !== channelId) {
+          throw new UnauthorizedException(`LINE access token client_id '${verifyData.client_id}' does not match configured channel '${channelId}'`);
+        }
+
+        const profileRes = await globalThis.fetch("https://api.line.me/v2/profile", {
+          headers: { Authorization: `Bearer ${dto.accessToken.trim()}` },
+        });
+        if (!profileRes.ok) {
+          throw new UnauthorizedException("Failed to fetch LINE profile");
+        }
+        const profileData = (await profileRes.json()) as { userId?: string };
+        if (!profileData.userId) {
+          throw new UnauthorizedException("LINE profile did not return a valid userId");
+        }
+        verifiedLineUserId = profileData.userId;
+      } catch (err: unknown) {
+        if (err instanceof UnauthorizedException || err instanceof BadRequestException) throw err;
+        throw new UnauthorizedException("Failed to verify LINE access token");
+      }
+    } else {
+      throw new BadRequestException("LINE ID token or access token is required");
+    }
+
+    const lineUserIdHash = hashLineUserId(verifiedLineUserId, hashSecret);
+
+    // Reconcile any early follow event that occurred before identifySession was called
+    const unmatchedFollow = await this.prisma.friendAttributionUnmatchedFollow.findFirst({
+      where: {
+        lineOaId: session.lineOaId,
+        lineUserIdHash,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { receivedAt: "desc" },
+    });
+
+    const isConfirmedByEarlyFollow = Boolean(unmatchedFollow);
+    const nextStatus: FriendAttributionSessionStatus = session.attributionStatus === "CONFIRMED"
+      ? "CONFIRMED"
+      : isConfirmedByEarlyFollow
+      ? "CONFIRMED"
+      : "IDENTIFIED";
+
+    const confirmedFollowAt = session.confirmedFollowAt || (unmatchedFollow ? unmatchedFollow.receivedAt : null);
+
+    const updated = await this.prisma.friendAttributionSession.update({
+      where: { id: session.id },
+      data: {
+        lineUserIdHash,
+        identifiedAt: session.identifiedAt || new Date(),
+        attributionStatus: nextStatus,
+        confirmedFollowAt,
+        friendshipAfter: isConfirmedByEarlyFollow ? true : session.friendshipAfter,
+      },
+    });
+
+    if (unmatchedFollow) {
+      await this.prisma.friendAttributionUnmatchedFollow.update({
+        where: { id: unmatchedFollow.id },
+        data: { consumedAt: new Date() },
+      });
+
+      await this.prisma.friendSourceAttribution.create({
+        data: {
+          friendSourceLinkId: session.friendSourceLinkId,
+          lineUserIdHash,
+          followedAt: unmatchedFollow.receivedAt,
+          status: "CONFIRMED",
+        },
+      });
+    }
+
+    return {
+      status: updated.attributionStatus,
+      expiresAt: updated.expiresAt,
+    };
+  }
+
+  async updateFriendshipStatus(dto: UpdateFriendshipStatusDto) {
+    if (!dto.sessionToken || !dto.sessionToken.trim()) {
+      throw new BadRequestException("sessionToken is required");
+    }
+
+    const hashSecret = getFriendAttributionHashSecret();
+    const tokenHash = hashPublicSessionToken(dto.sessionToken, hashSecret);
+
+    const session = await this.prisma.friendAttributionSession.findUnique({
+      where: { publicSessionTokenHash: tokenHash },
+    });
+
+    if (!session) {
+      throw new NotFoundException("Attribution session not found or invalid");
+    }
+
+    if (session.attributionStatus === "EXPIRED" || session.expiresAt <= new Date()) {
+      if (session.attributionStatus !== "EXPIRED") {
+        await this.prisma.friendAttributionSession.update({
+          where: { id: session.id },
+          data: { attributionStatus: "EXPIRED" },
+        });
+      }
+      throw new GoneException("Attribution session has expired");
+    }
+
+    if (session.attributionStatus === "FAILED") {
+      throw new BadRequestException("Attribution session is in a failed state");
+    }
+
+    // State Transition Guard: CONFIRMED sessions can NEVER revert to an earlier status!
+    const nextStatus: FriendAttributionSessionStatus = session.attributionStatus === "CONFIRMED"
+      ? "CONFIRMED"
+      : dto.isFriend
+      ? "ALREADY_FRIEND"
+      : "ADD_FRIEND_PROMPTED";
+
+    const nextAction = dto.isFriend ? "ALREADY_FRIEND" : "REQUEST_FRIENDSHIP";
+
+    const updated = await this.prisma.friendAttributionSession.update({
+      where: { id: session.id },
+      data: {
+        friendshipBefore: session.friendshipBefore ?? dto.isFriend,
+        friendshipAfter: dto.isFriend,
+        attributionStatus: nextStatus,
+      },
+    });
+
+    return {
+      action: nextAction,
+      status: updated.attributionStatus,
+      expiresAt: updated.expiresAt,
+    };
+  }
+
+  async cleanupExpiredUnmatchedFollows(): Promise<number> {
+    const result = await this.prisma.friendAttributionUnmatchedFollow.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lte: new Date() } },
+          { consumedAt: { not: null } },
+        ],
+      },
+    });
+    return result.count;
+  }
+
+  async getSessionStatus(sessionToken: string) {
+    if (!sessionToken || !sessionToken.trim()) {
+      throw new BadRequestException("sessionToken is required");
+    }
+
+    const hashSecret = getFriendAttributionHashSecret();
+    const tokenHash = hashPublicSessionToken(sessionToken, hashSecret);
+
+    const session = await this.prisma.friendAttributionSession.findUnique({
+      where: { publicSessionTokenHash: tokenHash },
+    });
+
+    if (!session) {
+      throw new NotFoundException("Attribution session not found");
+    }
+
+    const isExpired = session.expiresAt <= new Date();
+    const isConfirmed = session.attributionStatus === "CONFIRMED" || Boolean(session.confirmedFollowAt);
+
+    return {
+      status: isExpired && !isConfirmed ? "EXPIRED" : session.attributionStatus,
+      confirmed: isConfirmed,
+      confirmedFollowAt: session.confirmedFollowAt,
+      expiresAt: session.expiresAt,
+    };
   }
 
   private formatLinkResponse(link: LinkWithRelations) {

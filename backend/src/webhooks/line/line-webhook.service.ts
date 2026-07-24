@@ -8,6 +8,7 @@ import { LineMessage, LineWebhookBody, LineWebhookEvent, messagePlaceholder } fr
 import { ClassificationService } from "../../classification/classification.service";
 import { LineProfileService } from "../../line-profile.service";
 import { LineImageService } from "../../media/line-image.service";
+import { getFriendAttributionHashSecret, hashLineUserId } from "../../friend-source-links/friend-attribution.config";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -63,7 +64,7 @@ export class LineWebhookService {
     }
 
     try {
-      if (event.type === "follow") await this.processFollow(event);
+      if (event.type === "follow") await this.processFollow(event, resolvedOaId);
       else if (event.type === "unfollow") { /* Historical data is intentionally retained. */ }
       else if (event.type === "message" && "message" in event) await this.processMessage(destination, event, event.message, resolvedOaId);
       else {
@@ -85,9 +86,59 @@ export class LineWebhookService {
     return this.prisma.webhookEvent.update({ where: { externalWebhookEventId }, data: { processingStatus, errorMessage, processedAt: new Date() } });
   }
 
-  private async processFollow(event: LineWebhookEvent) {
+  private async processFollow(event: LineWebhookEvent, resolvedOaId: string) {
     if (!event.source.userId) return;
     await this.prisma.customer.upsert({ where: { lineUserId: event.source.userId }, update: {}, create: { lineUserId: event.source.userId, displayName: "LINE Customer" } });
+
+    try {
+      const hashSecret = getFriendAttributionHashSecret();
+      const lineUserIdHash = hashLineUserId(event.source.userId, hashSecret);
+
+      const recentSession = await this.prisma.friendAttributionSession.findFirst({
+        where: {
+          lineOaId: resolvedOaId,
+          lineUserIdHash,
+          attributionStatus: { in: ["IDENTIFIED", "ADD_FRIEND_PROMPTED", "ALREADY_FRIEND", "CLICKED"] },
+          expiresAt: { gt: new Date() },
+          confirmedFollowAt: null,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (recentSession) {
+        await this.prisma.friendAttributionSession.update({
+          where: { id: recentSession.id },
+          data: {
+            attributionStatus: "CONFIRMED",
+            confirmedFollowAt: new Date(),
+            friendshipAfter: true,
+          },
+        });
+
+        await this.prisma.friendSourceAttribution.create({
+          data: {
+            friendSourceLinkId: recentSession.friendSourceLinkId,
+            lineUserIdHash,
+            followedAt: new Date(),
+            status: "CONFIRMED",
+          },
+        });
+
+        this.logger.log(`Friend attribution confirmed for OA ${resolvedOaId} session ${recentSession.id}`);
+      } else {
+        await this.prisma.friendAttributionUnmatchedFollow.create({
+          data: {
+            lineOaId: resolvedOaId,
+            lineUserIdHash,
+            receivedAt: new Date(),
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        });
+        this.logger.log(`Early unmatched follow event stored for OA ${resolvedOaId}`);
+      }
+    } catch (err: unknown) {
+      this.logger.warn(`Failed to process friend attribution for follow event: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async resolveOa(resolvedOaId: string) {

@@ -85,6 +85,9 @@ export type FriendSourceLinksTranslations = {
   excelInstagramLink: string;
   excelActiveSources: string;
   excelTotalClicks: string;
+  excelIdentifiedVisits: string;
+  excelConfirmedAdds: string;
+  excelConversionRate: string;
   excelGeneratedAt: string;
   excelSource: string;
   excelShortLink: string;
@@ -201,9 +204,12 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     excelTikTokLink: "TikTok Link",
     excelFacebookLink: "Facebook Link",
     excelInstagramLink: "Instagram Link",
-    excelActiveSources: "ช่องทางที่ใช้งาน",
+    excelActiveSources: "ช่องทางที่เปิดใช้งาน",
     excelTotalClicks: "คลิกทั้งหมด",
-    excelGeneratedAt: "วันที่สร้าง",
+    excelIdentifiedVisits: "ยืนยันตัวตนแล้ว",
+    excelConfirmedAdds: "เพิ่มเพื่อนสำเร็จ",
+    excelConversionRate: "อัตราแปลงเป็นเพื่อน %",
+    excelGeneratedAt: "วันที่สร้างลิงก์",
     excelSource: "ช่องทาง",
     excelShortLink: "ลิงก์สั้น",
     excelClicks: "คลิก",
@@ -316,10 +322,13 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     excelTikTokLink: "TikTok Link",
     excelFacebookLink: "Facebook Link",
     excelInstagramLink: "Instagram Link",
-    excelActiveSources: "Active Sources",
+    excelActiveSources: "Active Channels",
     excelTotalClicks: "Total Clicks",
-    excelGeneratedAt: "Generated At",
-    excelSource: "Source",
+    excelIdentifiedVisits: "Identified Visits",
+    excelConfirmedAdds: "Confirmed Adds",
+    excelConversionRate: "Conversion Rate %",
+    excelGeneratedAt: "Created At",
+    excelSource: "Channel",
     excelShortLink: "Short Link",
     excelClicks: "Clicks",
     excelStatus: "Status",
@@ -342,7 +351,7 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     excelInstTrackingTitle: "7. Real-Time Click Tracking",
     excelInstTrackingDesc: "The system currently tracks link clicks in real time.",
     excelInstLiffTitle: "8. Confirmed Add Friend",
-    excelInstLiffDesc: "Confirmed Add Friend attribution will be added after LIFF integration is complete.",
+    excelInstLiffDesc: "Confirmed Add Friend attribution is verified securely via LIFF ID token verification and follow webhooks.",
 
     loading: "Loading...",
     emptyState: "No links yet",
@@ -433,6 +442,9 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     excelInstagramLink: "Instagram 链接",
     excelActiveSources: "活跃渠道数",
     excelTotalClicks: "总点击量",
+    excelIdentifiedVisits: "已身份识别",
+    excelConfirmedAdds: "已确认添加好友",
+    excelConversionRate: "转化率 %",
     excelGeneratedAt: "生成时间",
     excelSource: "来源",
     excelShortLink: "短链接",

@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -123,4 +123,10 @@ export const api = {
     request<FriendSourceLink>(`/friend-source-links/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }),
   friendSourceLinksSummary: () =>
     request<FriendSourceLinksSummaryItem[]>("/friend-source-links/summary"),
+  identifyFriendAttribution: (input: IdentifyFriendAttributionInput) =>
+    request<IdentifyFriendAttributionResult>("/friend-attribution/identify", { method: "POST", body: JSON.stringify(input) }),
+  updateFriendshipStatus: (input: UpdateFriendshipStatusInput) =>
+    request<UpdateFriendshipStatusResult>("/friend-attribution/friendship-status", { method: "POST", body: JSON.stringify(input) }),
+  getFriendAttributionSessionStatus: (token: string) =>
+    request<FriendAttributionSessionStatusResult>(`/friend-attribution/session-status?token=${encodeURIComponent(token)}`),
 };

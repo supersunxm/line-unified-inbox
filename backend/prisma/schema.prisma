@@ -306,6 +306,8 @@ model LineOfficialAccount {
   followerSnapshots           LineOaFollowerSnapshot[]
   backfillJobs                LineOaBackfillJob[]
   friendSourceLinks           FriendSourceLink[]
+  attributionSessions         FriendAttributionSession[]
+  unmatchedFollows            FriendAttributionUnmatchedFollow[]
 
   @@index([storeId, isActive])
   @@index([isActive, lastBackfillReconciledAt])
@@ -604,20 +606,31 @@ enum FriendAttributionStatus {
   UNMATCHED
 }
 
+enum FriendAttributionSessionStatus {
+  CLICKED
+  IDENTIFIED
+  ALREADY_FRIEND
+  ADD_FRIEND_PROMPTED
+  CONFIRMED
+  EXPIRED
+  FAILED
+}
+
 model FriendSourceLink {
-  id             String                  @id @default(uuid())
-  storeId        String
-  lineOaId       String
-  source         FriendSource
-  shortCode      String                  @unique
-  destinationUrl String
-  isActive       Boolean                 @default(true)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
-  store          Store                   @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  lineOa         LineOfficialAccount     @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
-  clicks         FriendSourceClick[]
-  attributions   FriendSourceAttribution[]
+  id                  String                     @id @default(uuid())
+  storeId             String
+  lineOaId            String
+  source              FriendSource
+  shortCode           String                     @unique
+  destinationUrl      String
+  isActive            Boolean                    @default(true)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  store               Store                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOa              LineOfficialAccount        @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+  clicks              FriendSourceClick[]
+  attributions        FriendSourceAttribution[]
+  attributionSessions FriendAttributionSession[]
 
   @@unique([lineOaId, source])
   @@index([storeId, isActive])
@@ -650,4 +663,44 @@ model FriendSourceAttribution {
 
   @@index([friendSourceLinkId, status])
   @@index([trackingSessionId])
+}
+
+model FriendAttributionSession {
+  id                     String                         @id @default(uuid())
+  publicSessionTokenHash String                         @unique
+  friendSourceLinkId     String
+  lineOaId               String
+  source                 FriendSource
+  clickedAt              DateTime                       @default(now())
+  expiresAt              DateTime
+  identifiedAt           DateTime?
+  lineUserIdHash         String?
+  friendshipBefore       Boolean?
+  friendshipAfter        Boolean?
+  confirmedFollowAt      DateTime?
+  attributionStatus      FriendAttributionSessionStatus @default(CLICKED)
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
+
+  friendSourceLink    FriendSourceLink    @relation(fields: [friendSourceLinkId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+
+  @@index([publicSessionTokenHash])
+  @@index([lineOaId, lineUserIdHash])
+  @@index([attributionStatus, expiresAt])
+  @@index([confirmedFollowAt])
+}
+
+model FriendAttributionUnmatchedFollow {
+  id             String    @id @default(uuid())
+  lineOaId       String
+  lineUserIdHash String
+  receivedAt     DateTime  @default(now())
+  expiresAt      DateTime
+  consumedAt     DateTime?
+
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
+
+  @@index([lineOaId, lineUserIdHash, consumedAt])
+  @@index([expiresAt])
 }
