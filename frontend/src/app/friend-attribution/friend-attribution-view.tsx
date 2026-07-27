@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import { FRIEND_ATTRIBUTION_TRANSLATIONS, FriendAttributionLocale } from "./friend-attribution-translations";
+import { FriendAttributionLocale, FriendAttributionTranslationKeys, getSafeTranslation } from "./friend-attribution-translations";
 import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl } from "./friend-attribution-utils";
 
 function getInitialAttributionState() {
@@ -23,12 +23,12 @@ function getInitialAttributionState() {
 }
 
 export type LiffDiagnosticInfo = {
-  operation: "requestFriendship";
-  code: string;
-  message: string;
-  liffVersion: string | null;
-  lineVersion: string | null;
-  isInClient: boolean;
+  operation?: string;
+  code?: string;
+  message?: string;
+  liffVersion?: string | null;
+  lineVersion?: string | null;
+  isInClient?: boolean;
   isLoggedIn?: boolean;
   hasAccessToken?: boolean;
   hasIdToken?: boolean;
@@ -36,12 +36,13 @@ export type LiffDiagnosticInfo = {
   entryMode?: string;
   sessionTokenRestored?: boolean;
   bootstrapStatus?: "Success" | "Failed" | "Skipped" | "Pending";
-  initializedLiffId: string | null;
+  initializedLiffId?: string | null;
 };
 
 export function FriendAttributionView() {
-  const [locale, setLocale] = useState<FriendAttributionLocale>("th");
-  const [{ lid, sessionToken, initialStep }] = useState(getInitialAttributionState);
+  const [initialState] = useState(getInitialAttributionState);
+  const { lid, sessionToken, initialStep } = initialState;
+
   const [step, setStep] = useState<
     | "LOADING"
     | "MISSING_CONFIG"
@@ -55,6 +56,7 @@ export function FriendAttributionView() {
     | "CONFIRMED"
     | "ERROR"
   >(initialStep);
+  const [locale, setLocale] = useState<FriendAttributionLocale>("th");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [diagnosticInfo, setDiagnosticInfo] = useState<LiffDiagnosticInfo | null>(null);
   const [, setIsFriend] = useState<boolean | null>(null);
@@ -64,7 +66,11 @@ export function FriendAttributionView() {
     return "https://line.me/R/ti/p/@oppo_thailand";
   });
 
-  const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
+  const t = new Proxy({} as FriendAttributionTranslationKeys, {
+    get(_target, prop: keyof FriendAttributionTranslationKeys) {
+      return getSafeTranslation(locale, prop);
+    }
+  });
   const isDebugMode = isAttributionDebugEnabled();
 
   const handleManualFallbackClick = (e?: React.MouseEvent) => {

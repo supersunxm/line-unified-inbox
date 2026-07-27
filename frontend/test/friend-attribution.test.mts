@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
+import { FRIEND_ATTRIBUTION_TRANSLATIONS, getSafeTranslation } from "../src/app/friend-attribution/friend-attribution-translations.ts";
 import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl, isValidLiffIdFormat, safeDecodeURIComponentBounded } from "../src/app/friend-attribution/friend-attribution-utils.ts";
 import { pivotLinksByStore, prepareLinkDetailsRows } from "../src/app/friend-source-links/friend-source-links-export.ts";
 import type { FriendSourceLink } from "../src/types/api.ts";
@@ -618,7 +618,7 @@ test("Scenario 44: Defensive already-friend handling, rejection fallbacks, singl
   assert.match(viewCode, /if\s*\(\s*!sessionToken\s*\|\|\s*isSubmitting\s*\)\s*return;/, "handleRequestFriendship MUST guard against duplicate concurrent invocations");
 
   // 4. Verify single title rendering (no duplicated headings)
-  assert.match(bootstrapRoute, /document\.getElementById\(["']page-title["']\)\.innerText = t\.alreadyFriendTitle/, "Already-friend state MUST set page-title text dynamically");
+  assert.match(bootstrapRoute, /document\.getElementById\(["']page-title["']\)\.innerText = getT\(["']alreadyFriendTitle["']\)/, "Already-friend state MUST set page-title text dynamically");
   assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.alreadyFriendTitle\}<\/h2>/, "app-content MUST NOT contain duplicate alreadyFriendTitle h2");
   assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.confirmedTitle\}<\/h2>/, "app-content MUST NOT contain duplicate confirmedTitle h2");
 });
@@ -666,4 +666,58 @@ test("Scenario 45: Pre-init liff.state restoration, precedence rules, and bounde
 
   // 8. Bounded decoding safety check
   assert.equal(safeDecodeURIComponentBounded("%25253Ftest", 3), "?test", "Bounded decoding must resolve up to maxAttempts");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 46. Translation Contract, Complete Copy & Fallback Safety
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 46: Translation contract, required copy, state coverage, and fallback safety", () => {
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+
+  // 1. Verify required customer copy in TH, EN, ZH
+  const th = FRIEND_ATTRIBUTION_TRANSLATIONS.th;
+  const en = FRIEND_ATTRIBUTION_TRANSLATIONS.en;
+  const zh = FRIEND_ATTRIBUTION_TRANSLATIONS.zh;
+
+  assert.equal(th.promptAddFriendTitle, "เพิ่มเพื่อน LINE Official Account");
+  assert.equal(th.promptAddFriendDesc, "เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน");
+  assert.equal(th.addFriendBtn, "เพิ่มเพื่อน LINE OA");
+
+  assert.equal(en.promptAddFriendTitle, "Add LINE Official Account");
+  assert.equal(en.promptAddFriendDesc, "Add us as a friend to receive news, promotions, and store services.");
+  assert.equal(en.addFriendBtn, "Add LINE Official Account");
+
+  assert.equal(zh.promptAddFriendTitle, "添加 LINE 官方账号");
+  assert.equal(zh.promptAddFriendDesc, "添加好友以获取门店最新动态、优惠活动及服务。");
+  assert.equal(zh.addFriendBtn, "添加 LINE 官方账号");
+
+  // 2. Verify all keys exist across all 3 locales
+  const requiredKeys = [
+    "pageTitle", "promptAddFriendTitle", "promptAddFriendDesc", "addFriendBtn",
+    "submitting", "alreadyFriendTitle", "alreadyFriendDesc", "confirmedTitle",
+    "confirmedDesc", "fallbackBtn", "retryAddFriendBtn", "customerErrorMessage",
+    "liffConfigError", "invalidSessionError", "loading"
+  ] as const;
+
+  for (const key of requiredKeys) {
+    assert.ok(th[key] && th[key].trim(), `TH translation key '${key}' must exist and not be empty`);
+    assert.ok(en[key] && en[key].trim(), `EN translation key '${key}' must exist and not be empty`);
+    assert.ok(zh[key] && zh[key].trim(), `ZH translation key '${key}' must exist and not be empty`);
+  }
+
+  // 3. Verify route.ts contains all promptAddFriend translation keys in its inline translations dictionary
+  assert.match(bootstrapRoute, /promptAddFriendTitle:\s*"เพิ่มเพื่อน LINE Official Account"/, "Bootstrap route MUST contain promptAddFriendTitle in TH translations");
+  assert.match(bootstrapRoute, /promptAddFriendDesc:\s*"เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน"/, "Bootstrap route MUST contain promptAddFriendDesc in TH translations");
+  assert.match(bootstrapRoute, /function getT\(key\)/, "Bootstrap route MUST contain getT helper function for safe translation fallback");
+
+  // 4. Verify getSafeTranslation fallback safety chain
+  assert.equal(getSafeTranslation("th", "promptAddFriendTitle"), "เพิ่มเพื่อน LINE Official Account");
+  // @ts-expect-error testing missing key fallback safety
+  assert.equal(getSafeTranslation("th", "unknown_missing_key"), "เพิ่มเพื่อน LINE Official Account", "Missing keys must fall back to safe default string, never undefined");
+
+  // 5. Verify route.ts templates call getT and never render raw undefined
+  assert.doesNotMatch(bootstrapRoute, /\$\{t\.promptAddFriendTitle\}/, "route.ts MUST NOT render undefined t.promptAddFriendTitle variable");
+  assert.match(bootstrapRoute, /getT\("promptAddFriendTitle"\)/, "route.ts MUST use getT('promptAddFriendTitle')");
+  assert.match(bootstrapRoute, /\$\{getT\("promptAddFriendDesc"\)\}/, "route.ts MUST use getT('promptAddFriendDesc') inside innerHTML template");
 });

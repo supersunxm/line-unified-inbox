@@ -83,55 +83,93 @@ export function GET() {
     const translations = {
       th: {
         pageTitle: "เพิ่มเพื่อน LINE Official Account",
-        loading: "กำลังโหลด...",
+        promptAddFriendTitle: "เพิ่มเพื่อน LINE Official Account",
+        promptAddFriendDesc: "เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน",
         addFriendBtn: "เพิ่มเพื่อน LINE OA",
+        submitting: "กำลังดำเนินการ...",
         alreadyFriendTitle: "คุณเป็นเพื่อนกับเราแล้ว",
         alreadyFriendDesc: "กำลังเปิดหน้า LINE Official Account...",
         confirmedTitle: "เพิ่มเพื่อนสำเร็จ",
         confirmedDesc: "กำลังเปิดหน้า LINE Official Account...",
         fallbackBtn: "เปิด LINE Official Account",
+        retryAddFriendBtn: "ลองเพิ่มเพื่อนอีกครั้ง",
         customerErrorMessage: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
         liffConfigError: "ระบบยังไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง",
-        invalidSessionError: "ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง"
+        invalidSessionError: "ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง",
+        loading: "กำลังโหลด..."
       },
       en: {
         pageTitle: "Add LINE Official Account",
-        loading: "Loading...",
+        promptAddFriendTitle: "Add LINE Official Account",
+        promptAddFriendDesc: "Add us as a friend to receive news, promotions, and store services.",
         addFriendBtn: "Add LINE Official Account",
+        submitting: "Processing...",
         alreadyFriendTitle: "You are already our friend",
         alreadyFriendDesc: "Opening LINE Official Account...",
         confirmedTitle: "Friend Added Successfully",
         confirmedDesc: "Opening LINE Official Account...",
         fallbackBtn: "Open LINE Official Account",
+        retryAddFriendBtn: "Try Again",
         customerErrorMessage: "An error occurred. Please try again.",
         liffConfigError: "System is currently unavailable. Please try again.",
-        invalidSessionError: "Link has expired or is invalid. Please try again."
+        invalidSessionError: "Link has expired or is invalid. Please try again.",
+        loading: "Loading..."
       },
       zh: {
         pageTitle: "添加 LINE 官方账号",
-        loading: "加载中...",
+        promptAddFriendTitle: "添加 LINE 官方账号",
+        promptAddFriendDesc: "添加好友以获取门店最新动态、优惠活动及服务。",
         addFriendBtn: "添加 LINE 官方账号",
+        submitting: "处理中...",
         alreadyFriendTitle: "您已经是我们的好友",
         alreadyFriendDesc: "正在打开 LINE 官方账号...",
         confirmedTitle: "好友添加成功",
         confirmedDesc: "正在打开 LINE 官方账号...",
         fallbackBtn: "打开 LINE 官方账号",
+        retryAddFriendBtn: "重试",
         customerErrorMessage: "发生错误，请重试。",
         liffConfigError: "系统暂不可用，请重试。",
-        invalidSessionError: "链接已过期或无效，请重试。"
+        invalidSessionError: "链接已过期或无效，请重试。",
+        loading: "加载中..."
       }
     };
+
+    const hardcodedFallbacks = {
+      pageTitle: "เพิ่มเพื่อน LINE Official Account",
+      promptAddFriendTitle: "เพิ่มเพื่อน LINE Official Account",
+      promptAddFriendDesc: "เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน",
+      addFriendBtn: "เพิ่มเพื่อน LINE OA",
+      submitting: "กำลังดำเนินการ...",
+      alreadyFriendTitle: "คุณเป็นเพื่อนกับเราแล้ว",
+      alreadyFriendDesc: "กำลังเปิดหน้า LINE Official Account...",
+      confirmedTitle: "เพิ่มเพื่อนสำเร็จ",
+      confirmedDesc: "กำลังเปิดหน้า LINE Official Account...",
+      fallbackBtn: "เปิด LINE Official Account",
+      retryAddFriendBtn: "ลองเพิ่มเพื่อนอีกครั้ง",
+      customerErrorMessage: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+      liffConfigError: "ระบบยังไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+      invalidSessionError: "ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง",
+      loading: "กำลังโหลด..."
+    };
+
+    function getT(key) {
+      const loc = translations[window.currentLocale] || translations.th || {};
+      const val = loc[key] || (translations.th && translations.th[key]) || hardcodedFallbacks[key] || "";
+      if (val && typeof val === "string" && val.trim()) {
+        return val;
+      }
+      return hardcodedFallbacks[key] || "เพิ่มเพื่อน LINE Official Account";
+    }
 
     function setLang(lang) {
       window.currentLocale = lang;
       document.querySelectorAll(".lang-btn").forEach(btn => {
         btn.classList.toggle("active", btn.innerText.toLowerCase() === lang);
       });
-      const t = translations[lang] || translations.th;
       if (window.currentRenderState) {
         window.currentRenderState();
       } else {
-        document.getElementById("page-title").innerText = t.pageTitle;
+        document.getElementById("page-title").innerText = getT("pageTitle");
       }
     }
 
@@ -317,54 +355,50 @@ export function GET() {
     }
 
     function renderError(msgKeyOrText) {
-      const t = translations[window.currentLocale] || translations.th;
-      const text = t[msgKeyOrText] || msgKeyOrText || t.customerErrorMessage;
+      const text = getT(msgKeyOrText) || msgKeyOrText || getT("customerErrorMessage");
       window.currentRenderState = () => renderError(msgKeyOrText);
-      document.getElementById("page-title").innerText = t.pageTitle;
+      document.getElementById("page-title").innerText = getT("pageTitle");
 
       document.getElementById("app-content").innerHTML = \`
         <p class="error-msg">\${text}</p>
-        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${t.fallbackBtn}</a>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${getT("fallbackBtn")}</a>
       \`;
     }
 
     function renderAlreadyFriend() {
-      const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderAlreadyFriend;
-      document.getElementById("page-title").innerText = t.alreadyFriendTitle;
+      document.getElementById("page-title").innerText = getT("alreadyFriendTitle");
 
       document.getElementById("app-content").innerHTML = \`
         <div class="success-icon">✅</div>
-        <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.alreadyFriendDesc}</p>
-        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
+        <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${getT("alreadyFriendDesc")}</p>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${getT("fallbackBtn")}</a>
       \`;
 
       scheduleAutoRedirect(window.oppoFallbackUrl);
     }
 
     function renderPromptAddFriend() {
-      const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderPromptAddFriend;
-      document.getElementById("page-title").innerText = t.promptAddFriendTitle;
+      document.getElementById("page-title").innerText = getT("promptAddFriendTitle");
 
       document.getElementById("app-content").innerHTML = \`
         <div style="display:flex; flex-direction:column; gap:10px;">
-          <p style="font-size:14px; color:#475569; margin:0 0 12px 0;">\${t.promptAddFriendDesc}</p>
-          <button id="liff-add-friend-btn" class="btn-primary" onclick="handleUserRequestFriendship()">\${t.addFriendBtn}</button>
-          <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${t.fallbackBtn}</a>
+          <p style="font-size:14px; color:#475569; margin:0 0 12px 0;">\${getT("promptAddFriendDesc")}</p>
+          <button id="liff-add-friend-btn" class="btn-primary" onclick="handleUserRequestFriendship()">\${getT("addFriendBtn")}</button>
+          <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${getT("fallbackBtn")}</a>
         </div>
       \`;
     }
 
     function renderConfirmed() {
-      const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderConfirmed;
-      document.getElementById("page-title").innerText = t.confirmedTitle;
+      document.getElementById("page-title").innerText = getT("confirmedTitle");
 
       document.getElementById("app-content").innerHTML = \`
         <div class="success-icon">✅</div>
-        <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.confirmedDesc}</p>
-        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
+        <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${getT("confirmedDesc")}</p>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${getT("fallbackBtn")}</a>
       \`;
 
       scheduleAutoRedirect(window.oppoFallbackUrl);
@@ -375,7 +409,10 @@ export function GET() {
       isRequestingFriendship = true;
 
       const btn = document.getElementById("liff-add-friend-btn");
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = getT("submitting");
+      }
 
       try {
         // 1. Check friendship BEFORE calling requestFriendship
@@ -405,7 +442,10 @@ export function GET() {
 
         // If still false, show recoverable error and restore button
         isRequestingFriendship = false;
-        if (btn) btn.disabled = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = getT("addFriendBtn");
+        }
         renderError("customerErrorMessage");
       } catch (err) {
         console.error("liff.requestFriendship error:", err);
@@ -424,7 +464,10 @@ export function GET() {
         }
 
         isRequestingFriendship = false;
-        if (btn) btn.disabled = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = getT("addFriendBtn");
+        }
         renderError("customerErrorMessage");
       }
     }

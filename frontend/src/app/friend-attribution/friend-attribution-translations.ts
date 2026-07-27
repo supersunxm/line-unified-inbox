@@ -13,6 +13,7 @@ export type FriendAttributionTranslationKeys = {
   promptAddFriendTitle: string;
   promptAddFriendDesc: string;
   addFriendBtn: string;
+  submitting: string;
   waitingFollow: string;
   confirmedTitle: string;
   confirmedDesc: string;
@@ -38,6 +39,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     promptAddFriendTitle: "เพิ่มเพื่อน LINE Official Account",
     promptAddFriendDesc: "เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน",
     addFriendBtn: "เพิ่มเพื่อน LINE OA",
+    submitting: "กำลังดำเนินการ...",
     waitingFollow: "กำลังตรวจสอบการเพิ่มเพื่อน...",
     confirmedTitle: "เพิ่มเพื่อนสำเร็จ",
     confirmedDesc: "กำลังเปิดหน้า LINE Official Account...",
@@ -61,6 +63,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     promptAddFriendTitle: "Add LINE Official Account",
     promptAddFriendDesc: "Add us as a friend to receive news, promotions, and store services.",
     addFriendBtn: "Add LINE Official Account",
+    submitting: "Processing...",
     waitingFollow: "Verifying friend addition...",
     confirmedTitle: "Friend Added Successfully",
     confirmedDesc: "Opening LINE Official Account...",
@@ -84,6 +87,7 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     promptAddFriendTitle: "添加 LINE 官方账号",
     promptAddFriendDesc: "添加好友以获取门店最新动态、优惠活动及服务。",
     addFriendBtn: "添加 LINE 官方账号",
+    submitting: "处理中...",
     waitingFollow: "正在确认好友状态...",
     confirmedTitle: "好友添加成功",
     confirmedDesc: "正在打开 LINE 官方账号...",
@@ -95,3 +99,33 @@ export const FRIEND_ATTRIBUTION_TRANSLATIONS: Record<FriendAttributionLocale, Fr
     loading: "加载中...",
   },
 };
+
+export function getSafeTranslation(locale: FriendAttributionLocale, key: keyof FriendAttributionTranslationKeys): string {
+  const locDict = FRIEND_ATTRIBUTION_TRANSLATIONS[locale] || FRIEND_ATTRIBUTION_TRANSLATIONS.th;
+  const val = locDict ? locDict[key] : undefined;
+  if (val && typeof val === "string" && val.trim()) {
+    return val;
+  }
+  const fallbackVal = FRIEND_ATTRIBUTION_TRANSLATIONS.th[key];
+  if (fallbackVal && typeof fallbackVal === "string" && fallbackVal.trim()) {
+    return fallbackVal;
+  }
+  const hardcodedFallbacks: Partial<Record<keyof FriendAttributionTranslationKeys, string>> = {
+    pageTitle: "เพิ่มเพื่อน LINE Official Account",
+    promptAddFriendTitle: "เพิ่มเพื่อน LINE Official Account",
+    promptAddFriendDesc: "เพิ่มเพื่อนเพื่อรับข่าวสาร โปรโมชัน และบริการจากร้าน",
+    addFriendBtn: "เพิ่มเพื่อน LINE OA",
+    submitting: "กำลังดำเนินการ...",
+    alreadyFriendTitle: "คุณเป็นเพื่อนกับเราแล้ว",
+    alreadyFriendDesc: "กำลังเปิดหน้า LINE Official Account...",
+    confirmedTitle: "เพิ่มเพื่อนสำเร็จ",
+    confirmedDesc: "กำลังเปิดหน้า LINE Official Account...",
+    fallbackBtn: "เปิด LINE Official Account",
+    retryAddFriendBtn: "ลองเพิ่มเพื่อนอีกครั้ง",
+    customerErrorMessage: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+    liffConfigError: "ระบบยังไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+    invalidSessionError: "ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง",
+    loading: "กำลังโหลด...",
+  };
+  return hardcodedFallbacks[key] || "เพิ่มเพื่อน LINE Official Account";
+}
