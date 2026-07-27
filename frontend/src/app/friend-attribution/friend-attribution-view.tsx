@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS, FriendAttributionLocale } from "./friend-attribution-translations";
-import { extractLiffIdFromUrl, extractSessionTokenFromUrl } from "./friend-attribution-utils";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled } from "./friend-attribution-utils";
 
 function getInitialAttributionState() {
   if (typeof window === "undefined") {
@@ -65,6 +65,7 @@ export function FriendAttributionView() {
   });
 
   const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
+  const isDebugMode = isAttributionDebugEnabled();
 
   useEffect(() => {
     if (!lid || !sessionToken) return;
@@ -464,7 +465,7 @@ export function FriendAttributionView() {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>{t.promptAddFriendTitle}</h2>
             <p style={{ fontSize: "14px", color: "#475569", marginBottom: "16px" }}>{errorMsg || t.promptAddFriendDesc}</p>
 
-            {diagnosticInfo && (
+            {isDebugMode && diagnosticInfo && (
               <div
                 id="liff-diagnostic-info"
                 style={{
@@ -541,7 +542,7 @@ export function FriendAttributionView() {
           <div>
             <p style={{ color: "#DC2626", fontSize: "14px", marginBottom: "16px" }}>{errorMsg || t.customerErrorMessage}</p>
 
-            {diagnosticInfo && (
+            {isDebugMode && diagnosticInfo && (
               <div
                 id="liff-diagnostic-info"
                 style={{

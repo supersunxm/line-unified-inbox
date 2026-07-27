@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
-import { extractLiffIdFromUrl, extractSessionTokenFromUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled } from "../src/app/friend-attribution/friend-attribution-utils.ts";
 import { pivotLinksByStore, prepareLinkDetailsRows } from "../src/app/friend-source-links/friend-source-links-export.ts";
 import type { FriendSourceLink } from "../src/types/api.ts";
 
@@ -514,4 +514,33 @@ test("Scenario 41: Raw bootstrap uses configured backend API origin and exact Ne
 
   // 5. Verify restored session token takes precedence in Entry Mode
   assert.match(bootstrapRoute, /if\s*\(\s*sessionTokenRestored\s*\)\s*\{\s*return\s*["']LIFF_WITH_ADDITIONAL_INFO["']/, "Restored session token MUST take precedence for LIFF_WITH_ADDITIONAL_INFO entry mode");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 42. Production Diagnostic Hiding & Debug Mode (?debug=1) Enforcement
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 42: Production diagnostic hiding and debug mode (?debug=1) enforcement", () => {
+  // 1. debug=1 in direct search string enables debug mode
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm&debug=1"), true, "debug=1 must enable debug mode");
+
+  // 2. debug=1 inside liff.state enables debug mode
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm&liff.state=%3Ftoken%3Dsat_123%26debug%3D1"), true, "debug=1 in liff.state must enable debug mode");
+
+  // 3. Reject debug=true, debug=yes, debug=0, or missing debug parameter
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm&debug=true"), false, "debug=true must NOT enable debug mode");
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm&debug=yes"), false, "debug=yes must NOT enable debug mode");
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm&debug=0"), false, "debug=0 must NOT enable debug mode");
+  assert.equal(isAttributionDebugEnabled("?lid=2010830086-hTniHzlm"), false, "Missing debug parameter must default to false");
+  assert.equal(isAttributionDebugEnabled(""), false, "Empty search must default to false");
+
+  // 4. Verify route.ts hides #diag-panel by default when isAttributionDebugEnabled is false
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+  assert.match(bootstrapRoute, /function isAttributionDebugEnabled/, "Route script MUST contain isAttributionDebugEnabled helper");
+  assert.match(bootstrapRoute, /if\s*\(\s*!isDebug\s*\)\s*\{\s*panel\.style\.display\s*=\s*["']none["']/, "Route updateDiag MUST hide panel when isDebug is false");
+  assert.match(bootstrapRoute, /id="diag-panel"\s+class="diag-box"\s+style="display:none;"/, "Route HTML #diag-panel MUST be style=display:none by default");
+
+  // 5. Verify customer-facing error messages remain available
+  assert.match(bootstrapRoute, /renderError\(["']invalidSessionError["']\)/, "Customer-facing invalidSessionError must be rendered");
+  assert.match(bootstrapRoute, /renderError\(["']customerErrorMessage["']\)/, "Customer-facing customerErrorMessage must be rendered");
 });

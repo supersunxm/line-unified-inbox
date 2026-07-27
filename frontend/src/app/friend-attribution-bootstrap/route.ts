@@ -131,6 +131,23 @@ export function GET() {
       }
     }
 
+    function isAttributionDebugEnabled(searchStr) {
+      const p = new URLSearchParams(searchStr || "");
+      if (p.get("debug") === "1") return true;
+
+      const liffState = p.get("liff.state") || p.get("state");
+      if (liffState) {
+        try {
+          const decoded = decodeURIComponent(liffState);
+          const innerParams = new URLSearchParams(decoded.startsWith("?") ? decoded : "?" + decoded);
+          if (innerParams.get("debug") === "1") return true;
+        } catch {
+          if (/[?&]debug=1(?:&|$)/.test(liffState)) return true;
+        }
+      }
+      return false;
+    }
+
     function extractSessionTokenFromUrl(searchStr) {
       const p = new URLSearchParams(searchStr || "");
       const direct = p.get("token") || p.get("sessionToken");
@@ -160,7 +177,13 @@ export function GET() {
     }
 
     function updateDiag(data) {
+      const isDebug = isAttributionDebugEnabled(window.location.search);
       const panel = document.getElementById("diag-panel");
+      if (!panel) return;
+      if (!isDebug) {
+        panel.style.display = "none";
+        return;
+      }
       panel.style.display = "block";
       if (data.code) document.getElementById("diag-code").innerText = data.code;
       if (data.initializedLiffId !== undefined) document.getElementById("diag-liff-id").innerText = data.initializedLiffId || "N/A";
@@ -332,7 +355,7 @@ export function GET() {
       });
 
       if (!sessionTokenRestored) {
-        // Distinct Error Separation: Session token is missing from restored state
+        // Customer-facing failure: invalid/missing link
         renderError("invalidSessionError");
         updateDiag({ code: "ATTRIBUTION_TOKEN_MISSING", bootstrapStatus: "Failed" });
         return;
@@ -381,7 +404,7 @@ export function GET() {
         window.oppoFallbackUrl = bootstrap.fallbackUrl;
       }
 
-      // Distinct Error Separation: Session liffId mismatch
+      // Customer-facing failure: configuration error
       if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
         console.error(\`LIFF ID mismatch: bootstrap returned '\${bootstrap.liffId}' but page initialized '\${lid}'\`);
         renderError("liffConfigError");
@@ -395,7 +418,7 @@ export function GET() {
         return;
       }
 
-      // Distinct Error Separation: In-client access token is missing
+      // Access Token & Login Guard
       if (isInClient) {
         if (!hasAccessToken) {
           console.error("LIFF in-client access token is missing");

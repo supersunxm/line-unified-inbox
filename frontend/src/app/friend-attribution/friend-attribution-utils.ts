@@ -59,3 +59,25 @@ export function extractLiffIdFromUrl(searchString: string): string | null {
 
   return null;
 }
+
+export function isAttributionDebugEnabled(searchString?: string): boolean {
+  const search = searchString ?? (typeof window !== "undefined" ? window.location.search : "");
+  if (!search) return false;
+
+  const params = new URLSearchParams(search);
+  if (params.get("debug") === "1") return true;
+
+  const liffStateRaw = params.get("liff.state") || params.get("state");
+  if (liffStateRaw) {
+    try {
+      const decoded = decodeURIComponent(liffStateRaw);
+      const searchPart = decoded.includes("?") ? decoded.substring(decoded.indexOf("?")) : decoded;
+      const nestedParams = new URLSearchParams(searchPart);
+      if (nestedParams.get("debug") === "1") return true;
+    } catch {
+      if (/[?&]debug=1(?:&|$)/.test(liffStateRaw)) return true;
+    }
+  }
+
+  return false;
+}
