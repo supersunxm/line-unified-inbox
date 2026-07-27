@@ -32,6 +32,11 @@ export type LiffDiagnosticInfo = {
   isLoggedIn?: boolean;
   hasAccessToken?: boolean;
   hasIdToken?: boolean;
+  hasLiffStateQuery?: boolean;
+  hasCredentialFragment?: boolean;
+  fragmentContainsAccessTokenKey?: boolean;
+  fragmentContainsIdTokenKey?: boolean;
+  stage?: "PRIMARY" | "SECONDARY";
   initializedLiffId: string | null;
 };
 
@@ -71,7 +76,47 @@ export function FriendAttributionView() {
 
     async function initializeLiffAndBootstrap() {
       try {
-        // FIRST-STAGE INITIALIZATION: Call liff.init({ liffId: lid }) BEFORE any backend network request or router mutation
+        // Read pre-init boolean diagnostics from sessionStorage (set by raw HTML pre-hydration route)
+        let preDiag: {
+          hasLiffStateQuery: boolean;
+          hasCredentialFragment: boolean;
+          fragmentContainsAccessTokenKey: boolean;
+          fragmentContainsIdTokenKey: boolean;
+          stage: "PRIMARY" | "SECONDARY";
+        } = {
+          hasLiffStateQuery: false,
+          hasCredentialFragment: false,
+          fragmentContainsAccessTokenKey: false,
+          fragmentContainsIdTokenKey: false,
+          stage: "SECONDARY",
+        };
+
+        try {
+          const rawPre = sessionStorage.getItem("oppo_liff_pre_diag");
+          if (rawPre) {
+            const parsed = JSON.parse(rawPre);
+            preDiag = {
+              hasLiffStateQuery: Boolean(parsed.hasLiffStateQuery),
+              hasCredentialFragment: Boolean(parsed.hasCredentialFragment),
+              fragmentContainsAccessTokenKey: Boolean(parsed.fragmentContainsAccessTokenKey),
+              fragmentContainsIdTokenKey: Boolean(parsed.fragmentContainsIdTokenKey),
+              stage: "PRIMARY",
+            };
+          } else if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const hash = window.location.hash || "";
+            preDiag = {
+              hasLiffStateQuery: Boolean(params.get("liff.state") || params.get("state")),
+              hasCredentialFragment: Boolean(hash),
+              fragmentContainsAccessTokenKey: hash.includes("access_token"),
+              fragmentContainsIdTokenKey: hash.includes("id_token"),
+              stage: "SECONDARY",
+            };
+          }
+        } catch {
+          // Ignore parse errors
+        }
+
         const liffModule = await import("@line/liff");
         const liff = liffModule.default;
 
@@ -102,6 +147,11 @@ export function FriendAttributionView() {
           isLoggedIn,
           hasAccessToken,
           hasIdToken,
+          hasLiffStateQuery: preDiag.hasLiffStateQuery,
+          hasCredentialFragment: preDiag.hasCredentialFragment,
+          fragmentContainsAccessTokenKey: preDiag.fragmentContainsAccessTokenKey,
+          fragmentContainsIdTokenKey: preDiag.fragmentContainsIdTokenKey,
+          stage: preDiag.stage,
           initializedLiffId: activeLid,
         };
         setDiagnosticInfo(currentDiag);
@@ -474,6 +524,7 @@ export function FriendAttributionView() {
                   <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
                   <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
                   <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
+                  <div>Initialization Stage: {diagnosticInfo.stage || "SECONDARY"}</div>
                   <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
@@ -552,6 +603,7 @@ export function FriendAttributionView() {
                   <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
                   <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
                   <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
+                  <div>Initialization Stage: {diagnosticInfo.stage || "SECONDARY"}</div>
                   <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                 </div>
               </div>
