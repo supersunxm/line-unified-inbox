@@ -9,11 +9,11 @@
   --muted: #64748b;
   --input-background: #ffffff;
   --hover: #f1f5f9;
-  --selected: #dcfce7;
-  --selected-navigation: #e2e8f0;
-  --button-primary-bg: #15803d;
+  --selected: #dbeafe;
+  --selected-navigation: #eff6ff;
+  --button-primary-bg: #2563eb;
   --button-primary-text: #ffffff;
-  --button-primary-hover-bg: #166534;
+  --button-primary-hover-bg: #1d4ed8;
   --button-primary-disabled-bg: #e2e8f0;
   --button-primary-disabled-text: #475569;
   --button-secondary-background: #ffffff;
@@ -22,7 +22,7 @@
   --disabled-foreground: #94a3b8;
   --badge-background: #e2e8f0;
   --badge-foreground: #334155;
-  --focus: #16a34a;
+  --focus: #2563eb;
   --synced-card-background: #f0fdf4;
   --synced-card-border: #bbf7d0;
   --synced-link: #166534;
@@ -51,20 +51,20 @@ html[data-theme="dark"] {
   --muted: #9ca3af;
   --input-background: #15181f;
   --hover: #252a34;
-  --selected: #173b2a;
-  --selected-navigation: #2b303b;
-  --button-primary-bg: #4ade80;
-  --button-primary-text: #07130b;
-  --button-primary-hover-bg: #86efac;
-  --button-primary-disabled-bg: #29332d;
-  --button-primary-disabled-text: #aebbb3;
+  --selected: #1e3a8a;
+  --selected-navigation: #172554;
+  --button-primary-bg: #2563eb;
+  --button-primary-text: #ffffff;
+  --button-primary-hover-bg: #60a5fa;
+  --button-primary-disabled-bg: #1e293b;
+  --button-primary-disabled-text: #94a3b8;
   --button-secondary-background: #1e222b;
   --button-secondary-foreground: #f3f4f6;
   --disabled-background: #20242c;
   --disabled-foreground: #6b7280;
   --badge-background: #2b303b;
   --badge-foreground: #e5e7eb;
-  --focus: #4ade80;
+  --focus: #3b82f6;
   --synced-card-background: #132b20;
   --synced-card-border: #24573d;
   --synced-link: #86efac;
@@ -307,9 +307,25 @@ button.bg-slate-900.text-white:disabled {
   color: var(--foreground);
 }
 
+.app-button-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.app-button-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.app-button-danger:disabled {
+  background: var(--disabled-background);
+  color: var(--disabled-foreground);
+  opacity: 1;
+}
+
 .app-primary-nav a[aria-current="page"] {
   background: var(--selected-navigation);
-  color: var(--foreground);
+  color: var(--button-primary-bg);
+  border: 1px solid color-mix(in srgb, var(--button-primary-bg) 30%, transparent);
 }
 
 .app-header-controls {

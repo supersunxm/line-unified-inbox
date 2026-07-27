@@ -79,6 +79,7 @@ test("representative navigation, text, and controls use paired semantic tokens",
     assert.match(css, new RegExp(`:root[\\s\\S]*${token}:`));
     assert.match(css, new RegExp(`html\\[data-theme="dark"\\][\\s\\S]*${token}:`));
   }
+  const contextSidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
   for (const semanticClass of [
     "app-shell",
     "app-surface",
@@ -87,7 +88,7 @@ test("representative navigation, text, and controls use paired semantic tokens",
     "app-button-primary",
     "app-empty-state",
   ]) {
-    assert.match(page, new RegExp(semanticClass));
+    assert.match(`${page}\n${contextSidebarCode}`, new RegExp(semanticClass));
   }
 });
 

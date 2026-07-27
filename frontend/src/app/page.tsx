@@ -6,7 +6,6 @@ import Link from "next/link";
 import { ApiError, api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
-import { primaryNavigationState } from "./primary-navigation";
 import type { PrimarySection } from "./primary-navigation";
 import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStoreMasterData } from "./store-master-form";
 import { formatRelativeTime } from "./relative-time";
@@ -18,6 +17,7 @@ import { FollowerInsightsView } from "./follower-insights/follower-insights-view
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
+import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -1065,7 +1065,7 @@ export default function Home() {
 }
 
 export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
-  const chatPanes = useResizablePanes(initialSection === "chats");
+  const { widths: chatPaneWidths, containerRef: chatContainerRef, resize: resizeChatPanes, reset: resetChatPanes } = useResizablePanes(initialSection === "chats");
   const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
@@ -1201,7 +1201,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [hasNewChatsAvailable, setHasNewChatsAvailable] = useState(false);
   const text = translations[language];
   const chatsPaginationText = getChatsPaginationText(language);
-  const primaryNavigation = primaryNavigationState(initialSection);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
     [availableStores],
@@ -1229,13 +1228,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     [lineOas],
   );
   const normalizedStoreManagementSearch = storeManagementSearch.trim().toLowerCase();
-  const visibleManagedStores = useMemo(
-    () => stores.filter((store) =>
-      !normalizedStoreManagementSearch ||
-      store.name.toLowerCase().includes(normalizedStoreManagementSearch),
-    ),
-    [normalizedStoreManagementSearch, stores],
-  );
   const visibleLineOas = useMemo(
     () => lineOas.filter((account) =>
       (storeRouteStatus === "all" || (storeRouteStatus === "active" ? account.isActive : account.connectionStatus === "ERROR" || account.connectionStatus === "NOT_CONFIGURED")) &&
@@ -1890,13 +1882,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }
 
-  function resetTestData() {
-    if (!window.confirm(text.resetTestDataConfirmation)) return;
-    localStorage.removeItem(UI_PREFERENCES_STORAGE_KEY);
-    clearAllFilters();
-    setLanguage("th");
-  }
-
   function changeLanguage(newLanguage: Language) {
     setLanguage(newLanguage);
     setShowTranslation(true);
@@ -1938,10 +1923,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setTopicFilter("all");
     setLineOaFilter("all");
     setSidebarView("dashboard");
-  }
-
-  function sidebarButtonClass(view: SidebarView) {
-    return `app-nav-item w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium ${sidebarView === view ? "is-selected" : ""}`;
   }
 
   function openMonitoring(filters: {
@@ -2084,13 +2065,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     finally { setLineOaSubmitting(false); }
   }
 
-  async function openStoreRemoval(storeId: string) {
-    setStoreRemovalLoading(true); setStoreRemovalMessage(null); setPermanentDeleteStep(false); setPermanentDeleteConfirmation("");
-    try { setStoreRemovalPreview(await api.getStoreDeletionPreview(storeId)); }
-    catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
-    finally { setStoreRemovalLoading(false); }
-  }
-
   async function deleteStorePermanently() {
     if (!storeRemovalPreview) return;
     setStoreRemovalLoading(true); setStoreRemovalMessage(null);
@@ -2227,205 +2201,55 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><form onSubmit={(event) => void submitLogin(event)} className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-xl font-bold">OPPO LINE OA Monitor</h1><p className="mt-1 text-sm text-slate-500">Administrator sign in</p>{process.env.NODE_ENV !== "production" && <p className="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-800">{language === "th" ? "บัญชีทดสอบสำหรับเครื่อง Local เท่านั้น" : language === "zh" ? "仅限本地开发账户" : "Local development account only"}</p>}{loginError && <p className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">Username or email<input type="text" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="mt-4 block text-sm">Password<input type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><button disabled={loginLoading} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{loginLoading ? "Signing in…" : "Sign in"}</button></form></main>;
 
   return (
-    <main className="app-shell min-h-screen">
-      <header className="app-header app-surface flex min-h-20 items-center justify-between gap-5 border-b px-6 py-3">
-        <div className="flex min-w-0 items-center gap-6">
-          <div className="min-w-max">
-          <h1 className="text-xl font-bold">{text.appName}</h1>
-          <p className="text-xs text-slate-500">{text.appDescription}</p>
-          </div>
-          <nav aria-label="Primary navigation" className="app-primary-nav">
-            <Link href="/dashboard" aria-current={primaryNavigation.dashboardActive ? "page" : undefined}>
-              {text.dashboard}
-            </Link>
-            <Link href="/chats" aria-current={primaryNavigation.chatsActive ? "page" : undefined}>
-              {language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}
-            </Link>
-            <Link href="/stores" aria-current={primaryNavigation.storesActive ? "page" : undefined}>
-              {text.storeManagement}
-            </Link>
-            <Link href="/follower-insights" aria-current={primaryNavigation.followerInsightsActive ? "page" : undefined}>
-              {language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}
-            </Link>
-            {authUser?.role === "ADMIN" && (
-              <Link href="/friend-source-links" aria-current={primaryNavigation.friendSourceLinksActive ? "page" : undefined}>
-                {language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}
-              </Link>
-            )}
-          </nav>
-        </div>
-
-        <div className="app-header-controls">
-          <ThemeControl compact />
-          {initialSection === "chats" && <button type="button" onClick={chatPanes.reset} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">{language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}</button>}
-          {systemStatus?.pilotMode && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Pilot</span>}
-          <span className="text-xs text-slate-500">{authUser.displayName} · {authUser.role}</span>
-          <button onClick={() => void logout()} className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs">Logout</button>
-          {lastUpdatedAt && (
-            <span className="app-header-metadata text-xs text-slate-400">
-              {text.lastUpdated}{" "}
-              {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(lastUpdatedAt)}
-            </span>
-          )}
-          <input
-            type="text"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder={text.searchPlaceholder}
-            className="app-header-search app-input w-72 rounded-lg border px-4 py-2 text-sm outline-none focus:border-slate-500"
-          />
-
-          <select
-            value={language}
-            onChange={(event) =>
-              changeLanguage(event.target.value as Language)
-            }
-            aria-label={text.language}
-            className="app-input rounded-lg border px-3 py-2 text-sm font-medium outline-none focus:border-slate-500"
-          >
-            <option value="th">🇹🇭 ไทย</option>
-            <option value="en">🇬🇧 English</option>
-            <option value="zh">🇨🇳 中文</option>
-          </select>
-
-          <button className="rounded-lg bg-slate-100 px-3 py-2 text-sm">
-            🔔 12
-          </button>
-
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-            S
-          </div>
-        </div>
-      </header>
-
-      {isLoading && (
-        <div className="border-b border-blue-200 bg-blue-50 px-6 py-2 text-center text-sm text-blue-700">
-          {text.loadingData}
-        </div>
-      )}
-
-      {apiError && (
-        <div role="alert" className="flex items-center justify-center gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
-          <span>{text.apiError}: {apiError}</span>
-          <button onClick={() => void loadApplicationData()} className="rounded-md border border-red-300 px-2 py-1 font-medium hover:bg-red-100">
-            {text.retry}
-          </button>
-        </div>
-      )}
-
+    <AppShell
+      currentSection={initialSection}
+      authUser={authUser}
+      text={text}
+      language={language}
+      changeLanguage={changeLanguage}
+      searchText={searchText}
+      setSearchText={setSearchText}
+      pilotMode={systemStatus?.pilotMode}
+      lastUpdatedAt={lastUpdatedAt}
+      logout={logout}
+      resetPaneSizes={initialSection === "chats" ? resetChatPanes : null}
+      isLoading={isLoading}
+      apiError={apiError}
+      loadApplicationData={loadApplicationData}
+    >
       <div
-        ref={chatPanes.containerRef}
-        className={`app-workspace-grid grid h-[calc(100vh-80px)] max-h-[calc(100vh-80px)] overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : "grid-cols-[220px_380px_1fr]"}`}
-        style={initialSection === "chats" ? { gridTemplateColumns: `${chatPanes.widths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPanes.widths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
-      >
-        <aside className="app-surface min-w-0 overflow-y-auto border-r p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            {text.overview}
-          </p>
+        ref={chatContainerRef}
+        className={`app-workspace-grid grid h-full max-h-full overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : ""}`}
+        style={initialSection === "chats" ? { gridTemplateColumns: `${chatPaneWidths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPaneWidths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
+      >        {initialSection === "chats" && (
+          <ContextSidebar
+            sidebarView={sidebarView}
+            selectSidebarView={selectSidebarView}
+            conversationsCount={conversations.length}
+            followUpCount={followUpCount}
+            remindedCount={remindedCount}
+            selectedStore={selectedStore}
+            setSelectedStore={setSelectedStore}
+            clearAllFilters={clearAllFilters}
+            stores={stores}
+            text={text}
+            getStoreDisplayName={getStoreDisplayName}
+          />
+        )}
 
-          <nav className="space-y-1">
-            {initialSection === "chats" ? <>
-              <button
-              onClick={() => selectSidebarView("dashboard")}
-              className={sidebarButtonClass("dashboard")}
-            >
-              📊 {text.dashboard}
-            </button>
-
-            <button
-              onClick={() => selectSidebarView("incoming")}
-              className={`${sidebarButtonClass("incoming")} flex items-center justify-between`}
-            >
-              <span>📥 {text.incoming}</span>
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">
-                {conversations.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => selectSidebarView("followUp")}
-              className={`${sidebarButtonClass("followUp")} flex items-center justify-between`}
-            >
-              <span>⏰ {text.followUp}</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-                {followUpCount}
-              </span>
-            </button>
-
-            <button
-              onClick={() => selectSidebarView("reminded")}
-              className={`${sidebarButtonClass("reminded")} flex items-center justify-between`}
-            >
-              <span>📣 {text.reminded}</span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                {remindedCount}
-              </span>
-            </button>
-
-            </> : initialSection === "stores" && authUser.role === "ADMIN" ? <button
-              onClick={() => selectSidebarView("lineOaManagement")}
-              className={sidebarButtonClass("lineOaManagement")}
-            >
-              🔗 {text.lineOaManagement}
-            </button> : initialSection === "stores" ? <p className="app-muted px-3 py-2 text-sm">{text.lineOaManagement}</p> : <div className="space-y-2"><p className="app-muted px-3 py-2 text-sm">{language === "th" ? "ภาพรวมการดำเนินงาน" : language === "zh" ? "运营概览" : "Operational overview"}</p><Link href="/chats?status=follow-up" className="app-nav-item block rounded-lg px-3 py-2.5 text-sm font-medium">{text.followUp} →</Link><Link href="/stores?status=error" className="app-nav-item block rounded-lg px-3 py-2.5 text-sm font-medium">{text.connectionIssues} →</Link></div>}
-          </nav>
-
-          {initialSection === "chats" && <>
-            <div className="my-5 border-t border-slate-200" />
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{text.stores}</p>
-              <button type="button" onClick={clearAllFilters} className="text-xs text-red-700 hover:underline">{text.clearAll}</button>
-            </div>
-            <div className="space-y-1">
-              <button type="button" onClick={() => setSelectedStore("all")} className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${selectedStore === "all" ? "is-selected font-medium" : ""}`}><span>{text.allStores}</span><span className="app-chip rounded-full px-2 py-0.5 text-xs">{conversations.length}</span></button>
-              {stores.map((store) => <button key={store.id} type="button" onClick={() => setSelectedStore(store.id)} className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${selectedStore === store.id ? "is-selected font-medium" : ""}`}><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="app-chip rounded-full px-2 py-0.5 text-xs">{store.waiting}</span>}</button>)}
-            </div>
-          </>}
-
-          {initialSection === "stores" && <>
-          <div className="my-5 border-t border-slate-200" />
-
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            {text.stores}
-          </p>
-
-          <div className="space-y-1">
-            <button
-              onClick={() => openMonitoring({})}
-              className={`app-store-row w-full rounded-lg px-3 py-2 text-left text-sm ${selectedStore === "all" ? "is-selected font-medium" : ""}`}
-            >
-              {text.allStores}
-            </button>
-
-            {visibleManagedStores.map((store) => (
-              <div key={store.id} className={`app-store-row flex items-center rounded-lg ${selectedStore === store.id ? "is-selected font-medium" : ""}`}>
-                <button onClick={() => openMonitoring({ store: store.id })} className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-left text-sm"><span className="truncate">{getStoreDisplayName(store.name)}</span>{store.waiting > 0 && <span className="app-chip rounded-full px-2 py-0.5 text-xs">{store.waiting}</span>}</button>
-                <button type="button" aria-label={`${text.removeStore}: ${store.name}`} title={text.removeStore} onClick={(event) => { event.stopPropagation(); void openStoreRemoval(store.id); }} className="mr-1 rounded p-1.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700">✕</button>
-              </div>
-            ))}
-            {visibleManagedStores.length === 0 && <p className="px-3 py-4 text-center text-xs text-slate-400">{text.noStoresFound}</p>}
-          </div>
-
-          <div className="my-5 border-t border-slate-200" />
-
-          <button
-            type="button"
-            onClick={resetTestData}
-            className="app-button-secondary w-full rounded-lg border px-3 py-2.5 text-left text-sm font-medium hover:bg-red-50 hover:text-red-700"
-          >
-            ↻ {text.resetTestData}
-          </button>
-          </>}
-        </aside>
-
-        {initialSection === "chats" && <ResizableSeparator separator="sidebar" value={chatPanes.widths.sidebar} minimum={CHAT_PANE_LIMITS.sidebar.min} maximum={CHAT_PANE_LIMITS.sidebar.max} onResize={chatPanes.resize} />}
+        {initialSection === "chats" && <ResizableSeparator separator="sidebar" value={chatPaneWidths.sidebar} minimum={CHAT_PANE_LIMITS.sidebar.min} maximum={CHAT_PANE_LIMITS.sidebar.max} onResize={resizeChatPanes} />}
 
         {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
-          <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
+          <PageContainer variant="full">
+            <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
+          </PageContainer>
         ) : initialSection === "chats" && sidebarView === "systemStatus" ? (
-          <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
+          <PageContainer variant="full">
+            <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
+          </PageContainer>
         ) : initialSection === "stores" ? (
-          <section className="app-content-section col-span-2 overflow-y-auto">
+          <PageContainer variant="wide">
+            <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
               <div className="flex items-start justify-between">
                 <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
@@ -2664,8 +2488,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </div>
             )}
           </section>
+          </PageContainer>
         ) : initialSection === "dashboard" ? (
-          <section className="app-content-section col-span-2 overflow-y-auto">
+          <PageContainer variant="readable">
+            <section className="app-content-section col-span-2 overflow-y-auto">
             <div className="mx-auto max-w-7xl space-y-6">
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
                 {([
@@ -2734,12 +2560,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </div>
             </div>
           </section>
+          </PageContainer>
         ) : initialSection === "follower-insights" ? (
-          <FollowerInsightsView language={language} />
+          <PageContainer variant="readable">
+            <FollowerInsightsView language={language} />
+          </PageContainer>
         ) : initialSection === "friend-source-links" ? (
-          <FriendSourceLinksView language={language} userRole={authUser.role} />
+          <PageContainer variant="readable">
+            <FriendSourceLinksView language={language} userRole={authUser.role} />
+          </PageContainer>
         ) : (
-          <>
+          <PageContainer variant="full">
         <section className="app-surface min-w-0 flex flex-col h-full overflow-hidden border-r">
           <div className="border-b border-slate-200 p-4 shrink-0">
             <div className="flex items-center justify-between">
@@ -2965,7 +2796,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           </div>
         </section>
 
-        <ResizableSeparator separator="conversations" value={chatPanes.widths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={chatPanes.resize} />
+        <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
 
         <section className="min-w-0 overflow-y-auto p-6">
           {selectedConversation && selectedConversationState ? (
@@ -3265,7 +3096,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             </div>
           )}
         </section>
-          </>
+          </PageContainer>
         )}
       </div>
       {storeRemovalPreview && (
@@ -3292,6 +3123,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           {managerLinkMissing && <Link href="/stores" className="ml-3 underline underline-offset-2">{text.storeManagement}</Link>}
         </div>
       )}
-    </main>
+    </AppShell>
   );
 }

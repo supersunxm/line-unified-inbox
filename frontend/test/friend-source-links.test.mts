@@ -104,10 +104,12 @@ function mockLink(overrides?: Partial<FriendSourceLink>): FriendSourceLink {
 // ──────────────────────────────────────────────────────────────────────
 // 1. Role gating: ADMIN navigation visibility
 // ──────────────────────────────────────────────────────────────────────
+const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+
 test("canRoleAccessFriendSourceLinks returns true for ADMIN role", () => {
   assert.equal(canRoleAccessFriendSourceLinks("ADMIN"), true);
-  assert.match(page, /authUser\?\.role === "ADMIN"/);
-  assert.match(page, /href="\/friend-source-links"/);
+  assert.match(topNavCode, /authUser\?\.role === "ADMIN"/);
+  assert.match(topNavCode, /href="\/friend-source-links"/);
 });
 
 // ──────────────────────────────────────────────────────────────────────

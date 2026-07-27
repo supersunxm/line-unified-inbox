@@ -14,9 +14,13 @@ test("chat filter URLs are shareable and restorable", () => {
   });
 });
 
-test("application exposes three primary routes with active navigation", () => {
-  for (const route of ["/dashboard", "/chats", "/stores"]) assert.match(page, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
-  assert.match(page, /aria-current=\{primaryNavigation\.chatsActive \? "page"/);
+const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+
+test("application exposes primary routes with active navigation", () => {
+  for (const route of ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"]) {
+    assert.match(topNavCode, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
+  }
+  assert.match(topNavCode, /aria-current=\{currentSection === "chats" \? "page" : undefined\}/);
 });
 
 test("dashboard links to filtered workspaces and root redirects safely", () => {
@@ -28,7 +32,7 @@ test("dashboard links to filtered workspaces and root redirects safely", () => {
 test("stores and chats remain focused workspaces", () => {
   assert.match(page, /initialSection === "stores" \? \(/);
   assert.match(page, /initialSection === "dashboard" \? \(/);
-  assert.match(page, /grid-cols-\[220px_380px_1fr\]/);
+  assert.match(page, /chat-resizable-grid/);
   assert.match(page, /managerUrl: selectedApiConversation\.resolvedLineOaManagerUrl/);
   assert.match(page, /setShowTranslation\(!showTranslation\)/);
 });

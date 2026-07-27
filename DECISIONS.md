@@ -1,4 +1,6 @@
-# Architectural decisions
+## Frontend Global Application Shell & Navigation (Phase 1)
+
+The frontend application uses a single global application shell (`AppShell`) wrapping every route. Primary top navigation (`TopNavigation`) manages all 5 top-level modules (`/dashboard`, `/chats`, `/stores`, `/follower-insights`, `/friend-source-links`) with neutral/blue active navigation selection (`aria-current="page"`) and semantic design tokens, eliminating green from primary selection states. Layouts are standardized into container primitives (`PageContainer`, `PageHeader`, `SectionHeader`) with 3 specific variants: `readable` (`max-w-7xl`) for reports and insights, `wide` (`max-w-[1440px]`) for Store Management, and `full` (`w-full h-full`) for the Conversations workspace. The contextual sidebar (`ContextSidebar`) is rendered exclusively on `/chats` for status filters and store filter selection, while permanent sidebars are removed from all other pages.
 
 ## Database-driven Multi-store LIFF Attribution Configuration
 
