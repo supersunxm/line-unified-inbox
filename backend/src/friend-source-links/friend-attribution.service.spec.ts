@@ -1023,3 +1023,100 @@ test("Requirement: LIFF redirect contains v=3 cache-buster parameter and opaque 
   assert.equal(url.searchParams.get("lid"), "2010830086-v3test", "LIFF redirect MUST contain configured lid parameter");
   assert.doesNotMatch(redirectUrl, /secret|key|password|hash/i, "LIFF redirect MUST NOT expose secret parameters");
 });
+
+test("Requirement 5: Cross-store LIFF redirect isolation and store-specific LIFF ID alignment", async () => {
+  const banbuengLink = {
+    id: "link-banbueng",
+    shortCode: "sc_banbu",
+    lineOaId: "oa-banbueng",
+    connectionStatus: "CONNECTED",
+    isActive: true,
+    basicId: "@banbueng",
+    lineOfficialAccount: { lineOaId: "oa-banbueng", name: "Banbueng OA", isArchived: false, isActive: true },
+    destinationUrl: "https://line.me/R/ti/p/@banbueng",
+  };
+
+  const chonburiLink = {
+    id: "link-chonburi",
+    shortCode: "sc_chonb",
+    lineOaId: "oa-chonburi",
+    connectionStatus: "CONNECTED",
+    isActive: true,
+    basicId: "@chonburi",
+    lineOfficialAccount: { lineOaId: "oa-chonburi", name: "Chonburi OA", isArchived: false, isActive: true },
+    destinationUrl: "https://line.me/R/ti/p/@chonburi",
+  };
+
+  const disabledLink = {
+    id: "link-disabled",
+    shortCode: "sc_disab",
+    lineOaId: "oa-disabled",
+    connectionStatus: "CONNECTED",
+    isActive: true,
+    basicId: "@disabled",
+    lineOfficialAccount: { lineOaId: "oa-disabled", name: "Disabled OA", isArchived: false, isActive: true },
+    destinationUrl: "https://line.me/R/ti/p/@disabled",
+  };
+
+  const configsMap: Record<string, any> = {
+    "oa-banbueng": { lineOaId: "oa-banbueng", liffId: "2010830086-hTniHzlm", isEnabled: true },
+    "oa-chonburi": { lineOaId: "oa-chonburi", liffId: "2010826792-0ALToj1m", isEnabled: true },
+    "oa-disabled": { lineOaId: "oa-disabled", liffId: "2010830086-disabled", isEnabled: false },
+  };
+
+  const createdSessions: any[] = [];
+
+  const mockPrisma = {
+    friendSourceLink: {
+      findUnique: (args: any) => {
+        if (args.where.shortCode === "sc_banbu") return Promise.resolve(banbuengLink);
+        if (args.where.shortCode === "sc_chonb") return Promise.resolve(chonburiLink);
+        if (args.where.shortCode === "sc_disab") return Promise.resolve(disabledLink);
+        return Promise.resolve(null);
+      },
+    },
+    friendAttributionConfig: {
+      findUnique: ({ where }: any) => Promise.resolve(configsMap[where.lineOaId] || null),
+    },
+    friendSourceClick: { create: () => Promise.resolve({ id: "click-1" }) },
+    friendAttributionSession: {
+      create: ({ data }: any) => {
+        createdSessions.push(data);
+        return Promise.resolve({ id: "session-1", ...data });
+      },
+    },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+
+  // 1. Verify Banbueng produces exact store-specific LIFF ID in path, query lid, and session
+  const banbuengUrl = await service.handleRedirect("sc_banbu");
+  assert.equal(banbuengUrl.split("?")[0], "https://liff.line.me/2010830086-hTniHzlm");
+  const banbuengParsed = new URL(banbuengUrl);
+  assert.equal(banbuengParsed.searchParams.get("lid"), "2010830086-hTniHzlm");
+  assert.equal(banbuengParsed.searchParams.get("v"), "3");
+  assert.ok(banbuengParsed.searchParams.get("token")?.startsWith("sat_"));
+
+  const banbuengSession = createdSessions.find((s) => s.lineOaId === "oa-banbueng");
+  assert.ok(banbuengSession);
+  assert.equal(banbuengSession.liffId, "2010830086-hTniHzlm");
+
+  // 2. Verify Chonburi produces its own store-specific LIFF ID
+  const chonburiUrl = await service.handleRedirect("sc_chonb");
+  assert.equal(chonburiUrl.split("?")[0], "https://liff.line.me/2010826792-0ALToj1m");
+  const chonburiParsed = new URL(chonburiUrl);
+  assert.equal(chonburiParsed.searchParams.get("lid"), "2010826792-0ALToj1m");
+
+  const chonburiSession = createdSessions.find((s) => s.lineOaId === "oa-chonburi");
+  assert.ok(chonburiSession);
+  assert.equal(chonburiSession.liffId, "2010826792-0ALToj1m");
+
+  // 3. Verify cross-store LIFF ID reuse is IMPOSSIBLE
+  assert.notEqual(banbuengParsed.searchParams.get("lid"), chonburiParsed.searchParams.get("lid"));
+  assert.notEqual(banbuengUrl.split("?")[0], chonburiUrl.split("?")[0]);
+
+  // 4. Verify disabled store fails closed (no session created, redirects to store OA destination)
+  const disabledUrl = await service.handleRedirect("sc_disab");
+  assert.ok(disabledUrl.startsWith("https://line.me/R/ti/p/@disabled"));
+  assert.equal(createdSessions.filter((s) => s.lineOaId === "oa-disabled").length, 0);
+});

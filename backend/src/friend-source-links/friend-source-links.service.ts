@@ -4,7 +4,6 @@ import { createHmac, randomBytes } from "crypto";
 import { PrismaService } from "../prisma.service";
 import {
   getFriendAttributionHashSecret,
-  getFriendAttributionLiffBaseUrl,
   getFriendAttributionLineLoginChannelId,
   getFriendAttributionPilotLineOaId,
   getFriendAttributionSessionTtlSeconds,
@@ -369,17 +368,24 @@ export class FriendSourceLinksService {
     });
 
     if (dbConfig) {
-      isAttributionEnabled = dbConfig.isEnabled;
-      configuredLiffId = dbConfig.liffId;
+      if (dbConfig.isEnabled && dbConfig.liffId && dbConfig.liffId.trim()) {
+        isAttributionEnabled = true;
+        configuredLiffId = dbConfig.liffId.trim();
+      } else {
+        // Fail closed: If DB config is disabled or liffId is blank, do not create session or fall back
+        isAttributionEnabled = false;
+        configuredLiffId = null;
+      }
     } else {
       const pilotOaId = getFriendAttributionPilotLineOaId();
-      if (pilotOaId && (link.lineOaId === pilotOaId || pilotOaId === "*")) {
+      const legacyLiffId = (process.env.FRIEND_ATTRIBUTION_LIFF_ID || process.env.NEXT_PUBLIC_FRIEND_ATTRIBUTION_LIFF_ID || "").trim();
+      if (pilotOaId && (link.lineOaId === pilotOaId || pilotOaId === "*") && legacyLiffId) {
         isAttributionEnabled = true;
-        configuredLiffId = process.env.FRIEND_ATTRIBUTION_LIFF_ID || null;
+        configuredLiffId = legacyLiffId;
       }
     }
 
-    if (isAttributionEnabled) {
+    if (isAttributionEnabled && configuredLiffId) {
       const rawSessionToken = `sat_${randomBytes(24).toString("hex")}`;
       const hashSecret = getFriendAttributionHashSecret();
       const publicSessionTokenHash = hashPublicSessionToken(rawSessionToken, hashSecret);
@@ -399,19 +405,11 @@ export class FriendSourceLinksService {
         },
       });
 
-      let liffBaseUrl = getFriendAttributionLiffBaseUrl();
-      if (!liffBaseUrl && configuredLiffId) {
-        liffBaseUrl = `https://liff.line.me/${configuredLiffId}`;
-      }
-      if (!liffBaseUrl) {
-        liffBaseUrl = "https://frontend-production-e5c6.up.railway.app/friend-attribution";
-      }
-
+      // SINGLE SOURCE OF TRUTH: Path, lid query param, and persisted session liffId are 100% identical
+      const liffBaseUrl = `https://liff.line.me/${configuredLiffId}`;
       const targetUrl = new URL(liffBaseUrl);
       targetUrl.searchParams.set("token", rawSessionToken);
-      if (configuredLiffId) {
-        targetUrl.searchParams.set("lid", configuredLiffId);
-      }
+      targetUrl.searchParams.set("lid", configuredLiffId);
       targetUrl.searchParams.set("v", "3");
       return targetUrl.toString();
     }
