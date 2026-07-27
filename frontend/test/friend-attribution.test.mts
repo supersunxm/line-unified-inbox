@@ -395,7 +395,7 @@ test("Scenario 38: Single-document standard LIFF lifecycle, zero navigation, and
 
   // 2. Verify liff.init occurs BEFORE any backend API fetch (status/identify/friendship-status)
   const liffInitIdx = bootstrapRoute.indexOf("await liff.init(");
-  const statusFetchIdx = bootstrapRoute.indexOf("/api/friend-source-links/attribution-session/status");
+  const statusFetchIdx = bootstrapRoute.indexOf("/friend-attribution/session-status");
   assert.ok(liffInitIdx > 0 && statusFetchIdx > 0, "Both init and status fetch must exist in bootstrap route");
   assert.ok(liffInitIdx < statusFetchIdx, "liff.init MUST complete before fetching backend session status");
 
@@ -449,7 +449,7 @@ test("Scenario 39: Privacy-safe pre-init diagnostics, entry modes, and distinct 
 
   // 4. Verify backend fetch is skipped when session token is absent
   const tokenCheckIdx = bootstrapRoute.indexOf("if (!sessionTokenRestored)");
-  const backendFetchIdx = bootstrapRoute.indexOf("const statusRes = await fetch(");
+  const backendFetchIdx = bootstrapRoute.indexOf("fetch(statusUrl.toString()");
   assert.ok(tokenCheckIdx > 0 && backendFetchIdx > 0, "Both token check and backend fetch must exist");
   assert.ok(tokenCheckIdx < backendFetchIdx, "Backend fetch MUST NOT occur when session token is absent");
 
@@ -484,4 +484,34 @@ test("Scenario 40: Anti-cache hardening, route dynamic config, and build marker 
   // 4. Verify no secret parameters or navigation introduced
   assert.doesNotMatch(bootstrapRoute, /window\.location\.replace/, "Must NOT reintroduce manual navigation");
   assert.doesNotMatch(bootstrapRoute, /secret_key|private_key|auth_password/i, "Must NOT contain secret strings");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 41. Backend API Origin & Exact NestJS Controller Route Verification
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 41: Raw bootstrap uses configured backend API origin and exact NestJS controller routes", async () => {
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+
+  // 1. Verify backend API origin import and injection
+  assert.match(bootstrapRoute, /import\s*\{\s*API_BASE_URL\s*\}\s*from\s*["']\.\.\/\.\.\/lib\/runtime-config["']/, "Route MUST import API_BASE_URL from runtime-config");
+  assert.match(bootstrapRoute, /window\.oppoBackendOrigin\s*=\s*["']\$\{backendOrigin\}["']/, "Script MUST inject configured backend origin into window.oppoBackendOrigin");
+
+  // 2. Verify exact NestJS controller routes are called
+  assert.match(bootstrapRoute, /new URL\(["']\/friend-attribution\/session-status["'],\s*window\.oppoBackendOrigin\)/, "Bootstrap MUST call GET /friend-attribution/session-status using backend origin");
+  assert.match(bootstrapRoute, /new URL\(["']\/friend-attribution\/identify["'],\s*window\.oppoBackendOrigin\)/, "Bootstrap MUST call POST /friend-attribution/identify using backend origin");
+  assert.match(bootstrapRoute, /new URL\(["']\/friend-attribution\/friendship-status["'],\s*window\.oppoBackendOrigin\)/, "Bootstrap MUST call POST /friend-attribution/friendship-status using backend origin");
+
+  // 3. Verify NO frontend same-origin /api/... calls remain
+  assert.doesNotMatch(bootstrapRoute, /\/api\/friend-source-links\/attribution-session/, "Must NOT contain old /api/friend-source-links/attribution-session URL");
+
+  // 4. Verify bootstrap host, HTTP status code, and distinct error codes
+  assert.match(bootstrapRoute, /Bootstrap Request Host:/, "UI MUST render Bootstrap Request Host");
+  assert.match(bootstrapRoute, /Bootstrap HTTP Status:/, "UI MUST render Bootstrap HTTP Status");
+  assert.match(bootstrapRoute, /UNAUTHORIZED_TOKEN/, "Error code UNAUTHORIZED_TOKEN must exist for 401 response");
+  assert.match(bootstrapRoute, /ATTRIBUTION_SESSION_NOT_FOUND/, "Error code ATTRIBUTION_SESSION_NOT_FOUND must exist for 404 response");
+  assert.match(bootstrapRoute, /SESSION_EXPIRED/, "Error code SESSION_EXPIRED must exist for 410 response");
+
+  // 5. Verify restored session token takes precedence in Entry Mode
+  assert.match(bootstrapRoute, /if\s*\(\s*sessionTokenRestored\s*\)\s*\{\s*return\s*["']LIFF_WITH_ADDITIONAL_INFO["']/, "Restored session token MUST take precedence for LIFF_WITH_ADDITIONAL_INFO entry mode");
 });

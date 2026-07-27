@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { API_BASE_URL } from "../../lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export function GET() {
+  const backendOrigin = API_BASE_URL;
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,12 +65,15 @@ export function GET() {
         <div>Has Access Token: <span id="diag-has-access">No</span></div>
         <div>Has ID Token: <span id="diag-has-id">No</span></div>
         <div>Session Token Restored: <span id="diag-token-restored">No</span></div>
+        <div>Bootstrap Request Host: <span id="diag-bootstrap-host">BACKEND</span></div>
+        <div>Bootstrap HTTP Status: <span id="diag-bootstrap-status-code">N/A</span></div>
         <div>Session Bootstrap: <span id="diag-bootstrap-status">Skipped</span></div>
       </div>
     </div>
   </div>
 
   <script>
+    window.oppoBackendOrigin = "${backendOrigin}";
     window.oppoFallbackUrl = "https://line.me/R/ti/p/@oppo_thailand";
     window.currentLocale = "th";
 
@@ -100,7 +106,7 @@ export function GET() {
       },
       zh: {
         pageTitle: "LINE 官方账号好友来源确认",
-        loading: "正在加载并验证来源数据...",
+        loading: "กำลังดาวน์โหลดและยืนยันข้อมูล...",
         addFriendBtn: "添加 LINE 官方账号为好友",
         alreadyFriendTitle: "您已经是该 LINE 官方账号的好友",
         alreadyFriendDesc: "感谢您关注我们，您的来源追踪已成功记录。",
@@ -109,7 +115,7 @@ export function GET() {
         fallbackBtn: "打开 LINE 官方账号",
         customerErrorMessage: "无法处理好友来源确认，请重试。",
         liffConfigError: "该门店尚未配置好友来源确认。",
-        invalidSessionError: "来源链接无效或已过期。"
+        invalidSessionError: "来源链接无效หรือ已过期。"
       }
     };
 
@@ -143,17 +149,14 @@ export function GET() {
       return null;
     }
 
-    function deriveEntryMode(preDiag, sessionTokenRestored) {
-      if (preDiag.hasLiffStateQuery && sessionTokenRestored) {
+    function deriveEntryMode(preDiag, sessionTokenRestored, hasLiffAuth) {
+      if (sessionTokenRestored) {
         return "LIFF_WITH_ADDITIONAL_INFO";
       }
-      if (preDiag.hasLiffStateQuery || preDiag.hasUrlFragment) {
+      if (hasLiffAuth || preDiag.hasLiffStateQuery || preDiag.hasUrlFragment) {
         return "DIRECT_LIFF";
       }
-      if (!preDiag.hasLiffStateQuery && !preDiag.hasUrlFragment && preDiag.endpointLiffIdPresent) {
-        return "ENDPOINT_DIRECT";
-      }
-      return "UNKNOWN";
+      return "ENDPOINT_DIRECT";
     }
 
     function updateDiag(data) {
@@ -171,6 +174,8 @@ export function GET() {
       if (data.hasAccessToken !== undefined) document.getElementById("diag-has-access").innerText = data.hasAccessToken ? "Yes" : "No";
       if (data.hasIdToken !== undefined) document.getElementById("diag-has-id").innerText = data.hasIdToken ? "Yes" : "No";
       if (data.sessionTokenRestored !== undefined) document.getElementById("diag-token-restored").innerText = data.sessionTokenRestored ? "Yes" : "No";
+      if (data.bootstrapHost) document.getElementById("diag-bootstrap-host").innerText = data.bootstrapHost;
+      if (data.bootstrapStatusCode !== undefined) document.getElementById("diag-bootstrap-status-code").innerText = String(data.bootstrapStatusCode);
       if (data.bootstrapStatus !== undefined) document.getElementById("diag-bootstrap-status").innerText = data.bootstrapStatus;
     }
 
@@ -266,10 +271,12 @@ export function GET() {
         updateDiag({
           code: "LIFF_CONFIG_MISSING",
           initializedLiffId: "N/A",
-          entryMode: deriveEntryMode(preDiag, false),
+          entryMode: deriveEntryMode(preDiag, false, false),
           hasLiffStateQuery: preDiag.hasLiffStateQuery,
           hasUrlFragment: preDiag.hasUrlFragment,
           fragKeys: fragKeysStr,
+          bootstrapHost: "BACKEND",
+          bootstrapStatusCode: "N/A",
           bootstrapStatus: "Failed"
         });
         return;
@@ -284,10 +291,12 @@ export function GET() {
         updateDiag({
           code: "LIFF_INIT_FAILED",
           initializedLiffId: lid,
-          entryMode: deriveEntryMode(preDiag, false),
+          entryMode: deriveEntryMode(preDiag, false, false),
           hasLiffStateQuery: preDiag.hasLiffStateQuery,
           hasUrlFragment: preDiag.hasUrlFragment,
           fragKeys: fragKeysStr,
+          bootstrapHost: "BACKEND",
+          bootstrapStatusCode: "N/A",
           bootstrapStatus: "Failed"
         });
         return;
@@ -298,11 +307,12 @@ export function GET() {
       const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
       const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
       const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
+      const hasLiffAuth = isInClient ? hasAccessToken : isLoggedIn;
 
       // 4. READ RESTORED SESSION TOKEN ONLY AFTER LIFF.INIT RESOLVES
       const sessionToken = extractSessionTokenFromUrl(window.location.search);
       const sessionTokenRestored = Boolean(sessionToken);
-      const entryMode = deriveEntryMode(preDiag, sessionTokenRestored);
+      const entryMode = deriveEntryMode(preDiag, sessionTokenRestored, hasLiffAuth);
 
       updateDiag({
         code: "INITIALIZED",
@@ -316,6 +326,8 @@ export function GET() {
         hasAccessToken,
         hasIdToken,
         sessionTokenRestored,
+        bootstrapHost: "BACKEND",
+        bootstrapStatusCode: "N/A",
         bootstrapStatus: sessionTokenRestored ? "Pending" : "Skipped"
       });
 
@@ -326,78 +338,103 @@ export function GET() {
         return;
       }
 
-      // 5. CALL TOKEN-SCOPED BACKEND SESSION STATUS ENDPOINT (Only when sessionToken exists)
+      // 5. CALL BACKEND PUBLIC CONTROLLER (/friend-attribution/session-status?token=...) USING CONFIGURED BACKEND ORIGIN
+      const statusUrl = new URL("/friend-attribution/session-status", window.oppoBackendOrigin);
+      statusUrl.searchParams.set("token", sessionToken);
+
+      let statusRes;
       try {
-        const statusRes = await fetch(\`/api/friend-source-links/attribution-session/status?token=\${encodeURIComponent(sessionToken)}\`);
-        if (!statusRes.ok) {
-          renderError("invalidSessionError");
-          updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
-          return;
-        }
-        const bootstrap = await statusRes.json();
-
-        if (bootstrap.fallbackUrl) {
-          window.oppoFallbackUrl = bootstrap.fallbackUrl;
-        }
-
-        // Distinct Error Separation: Session liffId mismatch
-        if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
-          console.error(\`LIFF ID mismatch: bootstrap returned '\${bootstrap.liffId}' but page initialized '\${lid}'\`);
-          renderError("liffConfigError");
-          updateDiag({ code: "LIFF_ID_MISMATCH", bootstrapStatus: "Failed" });
-          return;
-        }
-
-        if (bootstrap.status === "EXPIRED") {
-          renderError("invalidSessionError");
-          updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
-          return;
-        }
-
-        // Distinct Error Separation: In-client access token is missing
-        if (isInClient) {
-          if (!hasAccessToken) {
-            console.error("LIFF in-client access token is missing");
-            renderError("customerErrorMessage");
-            updateDiag({ code: "LIFF_AUTH_MISSING", bootstrapStatus: "Failed" });
-            return;
-          }
-        } else {
-          if (!isLoggedIn) {
-            liff.login({ redirectUri: window.location.href });
-            return;
-          }
-        }
-
-        updateDiag({ code: "BOOTSTRAP_SUCCESS", bootstrapStatus: "Success" });
-
-        // 6. Identity verification & friendship check
-        const idToken = liff.getIDToken();
-        await fetch("/api/friend-source-links/attribution-session/identify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionToken, idToken: idToken || undefined, consentGiven: true })
+        statusRes = await fetch(statusUrl.toString(), {
+          method: "GET",
+          headers: { "Accept": "application/json" }
         });
-
-        const friendship = await liff.getFriendship().catch(() => ({ friendFlag: false }));
-        const isAlreadyFriend = Boolean(friendship && friendship.friendFlag);
-
-        await fetch("/api/friend-source-links/attribution-session/friendship-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionToken, isFriend: isAlreadyFriend })
-        });
-
-        if (isAlreadyFriend) {
-          renderAlreadyFriend();
-        } else {
-          renderPromptAddFriend();
-        }
-
       } catch (err) {
-        console.error("Attribution session bootstrap error:", err);
+        console.error("Attribution session status network error:", err);
         renderError("customerErrorMessage");
-        updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
+        updateDiag({
+          code: "SESSION_BOOTSTRAP_FAILED",
+          bootstrapHost: "BACKEND",
+          bootstrapStatusCode: "N/A",
+          bootstrapStatus: "Failed"
+        });
+        return;
+      }
+
+      updateDiag({
+        bootstrapHost: "BACKEND",
+        bootstrapStatusCode: statusRes.status
+      });
+
+      if (!statusRes.ok) {
+        renderError("invalidSessionError");
+        const code = statusRes.status === 401 ? "UNAUTHORIZED_TOKEN"
+          : statusRes.status === 404 ? "ATTRIBUTION_SESSION_NOT_FOUND"
+          : statusRes.status === 410 ? "SESSION_EXPIRED"
+          : "SESSION_BOOTSTRAP_FAILED";
+        updateDiag({ code, bootstrapStatus: "Failed" });
+        return;
+      }
+
+      const bootstrap = await statusRes.json();
+
+      if (bootstrap.fallbackUrl) {
+        window.oppoFallbackUrl = bootstrap.fallbackUrl;
+      }
+
+      // Distinct Error Separation: Session liffId mismatch
+      if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
+        console.error(\`LIFF ID mismatch: bootstrap returned '\${bootstrap.liffId}' but page initialized '\${lid}'\`);
+        renderError("liffConfigError");
+        updateDiag({ code: "LIFF_ID_MISMATCH", bootstrapStatus: "Failed" });
+        return;
+      }
+
+      if (bootstrap.status === "EXPIRED") {
+        renderError("invalidSessionError");
+        updateDiag({ code: "SESSION_EXPIRED", bootstrapStatus: "Failed" });
+        return;
+      }
+
+      // Distinct Error Separation: In-client access token is missing
+      if (isInClient) {
+        if (!hasAccessToken) {
+          console.error("LIFF in-client access token is missing");
+          renderError("customerErrorMessage");
+          updateDiag({ code: "LIFF_AUTH_MISSING", bootstrapStatus: "Failed" });
+          return;
+        }
+      } else {
+        if (!isLoggedIn) {
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+      }
+
+      updateDiag({ code: "BOOTSTRAP_SUCCESS", bootstrapStatus: "Success" });
+
+      // 6. Identity verification & friendship check using configured backend origin
+      const idToken = liff.getIDToken();
+      const identifyUrl = new URL("/friend-attribution/identify", window.oppoBackendOrigin);
+      await fetch(identifyUrl.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken, idToken: idToken || undefined, consentGiven: true })
+      });
+
+      const friendship = await liff.getFriendship().catch(() => ({ friendFlag: false }));
+      const isAlreadyFriend = Boolean(friendship && friendship.friendFlag);
+
+      const friendshipUrl = new URL("/friend-attribution/friendship-status", window.oppoBackendOrigin);
+      await fetch(friendshipUrl.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken, isFriend: isAlreadyFriend })
+      });
+
+      if (isAlreadyFriend) {
+        renderAlreadyFriend();
+      } else {
+        renderPromptAddFriend();
       }
     })();
   </script>
