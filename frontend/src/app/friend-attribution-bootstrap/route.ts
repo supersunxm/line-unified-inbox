@@ -135,39 +135,113 @@ export function GET() {
       }
     }
 
-    function isAttributionDebugEnabled(searchStr) {
-      const p = new URLSearchParams(searchStr || "");
-      if (p.get("debug") === "1") return true;
-
-      const liffState = p.get("liff.state") || p.get("state");
-      if (liffState) {
+    function safeDecodeURIComponentBounded(input, maxAttempts = 3) {
+      if (!input || typeof input !== "string") return "";
+      let current = input;
+      let attempts = 0;
+      while (attempts < maxAttempts) {
+        if (!current.includes("%")) break;
         try {
-          const decoded = decodeURIComponent(liffState);
-          const innerParams = new URLSearchParams(decoded.startsWith("?") ? decoded : "?" + decoded);
-          if (innerParams.get("debug") === "1") return true;
+          const decoded = decodeURIComponent(current);
+          if (decoded === current) break;
+          current = decoded;
+          attempts++;
         } catch {
-          if (/[?&]debug=1(?:&|$)/.test(liffState)) return true;
+          break;
         }
       }
-      return false;
+      return current;
+    }
+
+    function extractParamsFromUrlOrState(rawInput) {
+      const decoded = safeDecodeURIComponentBounded(rawInput, 3);
+      let searchPart = decoded;
+      if (searchPart.includes("?")) {
+        searchPart = searchPart.substring(searchPart.indexOf("?"));
+      } else if (!searchPart.startsWith("?")) {
+        searchPart = "?" + searchPart;
+      }
+      try {
+        return new URLSearchParams(searchPart);
+      } catch {
+        return new URLSearchParams("");
+      }
+    }
+
+    function isValidLiffIdFormat(liffId) {
+      if (!liffId || typeof liffId !== "string") return false;
+      const trimmed = liffId.trim();
+      if (trimmed.length < 5 || trimmed.length > 64) return false;
+      if (!/^[a-zA-Z0-9_\\-]+$/.test(trimmed)) return false;
+      if (/[/\\?#&= \\t\\r\\n]/.test(trimmed)) return false;
+      return true;
+    }
+
+    function isValidTokenFormat(token) {
+      if (!token || typeof token !== "string") return false;
+      const trimmed = token.trim();
+      if (!trimmed.startsWith("sat_")) return false;
+      if (trimmed.length < 10 || trimmed.length > 128) return false;
+      if (/[^a-zA-Z0-9_\\-]/.test(trimmed)) return false;
+      return true;
+    }
+
+    function extractLiffIdFromUrl(searchStr) {
+      if (!searchStr) return null;
+      const directParams = new URLSearchParams(searchStr);
+
+      const directLid = directParams.get("lid");
+      if (directLid && isValidLiffIdFormat(directLid)) {
+        return directLid.trim();
+      }
+
+      const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
+      if (liffStateRaw) {
+        const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+        const nestedLid = nestedParams.get("lid");
+        if (nestedLid && isValidLiffIdFormat(nestedLid)) {
+          return nestedLid.trim();
+        }
+      }
+
+      return null;
     }
 
     function extractSessionTokenFromUrl(searchStr) {
-      const p = new URLSearchParams(searchStr || "");
-      const direct = p.get("token") || p.get("sessionToken");
-      if (direct) return direct;
-      const liffState = p.get("liff.state") || p.get("state");
-      if (liffState) {
-        try {
-          const decoded = decodeURIComponent(liffState);
-          const innerParams = new URLSearchParams(decoded.startsWith("?") ? decoded : "?" + decoded);
-          return innerParams.get("token") || innerParams.get("sessionToken");
-        } catch {
-          const match = liffState.match(/[?&]token=([^&]+)/);
-          if (match) return decodeURIComponent(match[1]);
+      if (!searchStr) return null;
+      const directParams = new URLSearchParams(searchStr);
+
+      const directToken = directParams.get("token") || directParams.get("sessionToken");
+      if (directToken && isValidTokenFormat(directToken)) {
+        return directToken.trim();
+      }
+
+      const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
+      if (liffStateRaw) {
+        const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+        const nestedToken = nestedParams.get("token") || nestedParams.get("sessionToken");
+        if (nestedToken && isValidTokenFormat(nestedToken)) {
+          return nestedToken.trim();
         }
       }
+
       return null;
+    }
+
+    function isAttributionDebugEnabled(searchStr) {
+      const search = searchStr || (typeof window !== "undefined" ? window.location.search : "");
+      if (!search) return false;
+
+      const directParams = new URLSearchParams(search);
+      if (directParams.get("debug") === "1") return true;
+
+      const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
+      if (liffStateRaw) {
+        const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+        if (nestedParams.get("debug") === "1") return true;
+      }
+
+      return false;
     }
 
     function deriveEntryMode(preDiag, sessionTokenRestored, hasLiffAuth) {
@@ -356,7 +430,7 @@ export function GET() {
     }
 
     (async () => {
-      // 1. PRE-INIT DIAGNOSTICS (Booleans only - NO raw credential data or tokens)
+      // 1. PRE-INIT DIAGNOSTICS & PARAMETER RESTORATION (Booleans only - NO raw credential data or tokens)
       const search = window.location.search || "";
       const hash = window.location.hash || "";
       const params = new URLSearchParams(search);
@@ -373,7 +447,7 @@ export function GET() {
       };
 
       const fragKeysStr = \`\${preDiag.fragmentHasAccessTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasIdTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasContextTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasClientIdKey ? "Yes" : "No"}\`;
-      const lid = params.get("lid") || "";
+      const lid = extractLiffIdFromUrl(search);
 
       if (!lid) {
         renderError("liffConfigError");
@@ -391,7 +465,7 @@ export function GET() {
         return;
       }
 
-      // 2. STANDARD LIFF LIFECYCLE: Call liff.init on document load BEFORE backend fetch
+      // 2. STANDARD LIFF LIFECYCLE: Call liff.init on document load BEFORE backend fetch using restored LIFF ID
       try {
         await liff.init({ liffId: lid });
       } catch (err) {

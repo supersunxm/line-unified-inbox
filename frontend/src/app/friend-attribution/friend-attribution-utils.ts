@@ -1,28 +1,46 @@
-export function extractSessionTokenFromUrl(searchString: string): string | null {
-  if (!searchString) return null;
-  const params = new URLSearchParams(searchString);
+export function safeDecodeURIComponentBounded(input: string, maxAttempts = 3): string {
+  if (!input || typeof input !== "string") return "";
+  let current = input;
+  let attempts = 0;
 
-  const directToken = params.get("token");
-  if (directToken && isValidTokenFormat(directToken)) {
-    return directToken.trim();
-  }
-
-  const liffStateRaw = params.get("liff.state") || params.get("state");
-  if (liffStateRaw) {
+  while (attempts < maxAttempts) {
+    if (!current.includes("%")) break;
     try {
-      const decoded = decodeURIComponent(liffStateRaw);
-      const searchPart = decoded.includes("?") ? decoded.substring(decoded.indexOf("?")) : decoded;
-      const nestedParams = new URLSearchParams(searchPart);
-      const nestedToken = nestedParams.get("token");
-      if (nestedToken && isValidTokenFormat(nestedToken)) {
-        return nestedToken.trim();
-      }
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) break;
+      current = decoded;
+      attempts++;
     } catch {
-      return null;
+      break;
     }
   }
+  return current;
+}
 
-  return null;
+export function extractParamsFromUrlOrState(rawInput: string): URLSearchParams {
+  const decoded = safeDecodeURIComponentBounded(rawInput, 3);
+  let searchPart = decoded;
+
+  if (searchPart.includes("?")) {
+    searchPart = searchPart.substring(searchPart.indexOf("?"));
+  } else if (!searchPart.startsWith("?")) {
+    searchPart = "?" + searchPart;
+  }
+
+  try {
+    return new URLSearchParams(searchPart);
+  } catch {
+    return new URLSearchParams("");
+  }
+}
+
+export function isValidLiffIdFormat(liffId: string | null | undefined): boolean {
+  if (!liffId || typeof liffId !== "string") return false;
+  const trimmed = liffId.trim();
+  if (trimmed.length < 5 || trimmed.length > 64) return false;
+  if (!/^[a-zA-Z0-9_\-]+$/.test(trimmed)) return false;
+  if (/[/\?#&= \t\r\n]/.test(trimmed)) return false;
+  return true;
 }
 
 export function isValidTokenFormat(token: string): boolean {
@@ -33,27 +51,42 @@ export function isValidTokenFormat(token: string): boolean {
   return true;
 }
 
+export function extractSessionTokenFromUrl(searchString: string): string | null {
+  if (!searchString) return null;
+  const directParams = new URLSearchParams(searchString);
+
+  const directToken = directParams.get("token") || directParams.get("sessionToken");
+  if (directToken && isValidTokenFormat(directToken)) {
+    return directToken.trim();
+  }
+
+  const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
+  if (liffStateRaw) {
+    const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+    const nestedToken = nestedParams.get("token") || nestedParams.get("sessionToken");
+    if (nestedToken && isValidTokenFormat(nestedToken)) {
+      return nestedToken.trim();
+    }
+  }
+
+  return null;
+}
+
 export function extractLiffIdFromUrl(searchString: string): string | null {
   if (!searchString) return null;
-  const params = new URLSearchParams(searchString);
+  const directParams = new URLSearchParams(searchString);
 
-  const directLid = params.get("lid");
-  if (directLid && directLid.trim()) {
+  const directLid = directParams.get("lid");
+  if (directLid && isValidLiffIdFormat(directLid)) {
     return directLid.trim();
   }
 
-  const liffStateRaw = params.get("liff.state") || params.get("state");
+  const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
   if (liffStateRaw) {
-    try {
-      const decoded = decodeURIComponent(liffStateRaw);
-      const searchPart = decoded.includes("?") ? decoded.substring(decoded.indexOf("?")) : decoded;
-      const nestedParams = new URLSearchParams(searchPart);
-      const nestedLid = nestedParams.get("lid");
-      if (nestedLid && nestedLid.trim()) {
-        return nestedLid.trim();
-      }
-    } catch {
-      return null;
+    const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+    const nestedLid = nestedParams.get("lid");
+    if (nestedLid && isValidLiffIdFormat(nestedLid)) {
+      return nestedLid.trim();
     }
   }
 
@@ -64,19 +97,13 @@ export function isAttributionDebugEnabled(searchString?: string): boolean {
   const search = searchString ?? (typeof window !== "undefined" ? window.location.search : "");
   if (!search) return false;
 
-  const params = new URLSearchParams(search);
-  if (params.get("debug") === "1") return true;
+  const directParams = new URLSearchParams(search);
+  if (directParams.get("debug") === "1") return true;
 
-  const liffStateRaw = params.get("liff.state") || params.get("state");
+  const liffStateRaw = directParams.get("liff.state") || directParams.get("state");
   if (liffStateRaw) {
-    try {
-      const decoded = decodeURIComponent(liffStateRaw);
-      const searchPart = decoded.includes("?") ? decoded.substring(decoded.indexOf("?")) : decoded;
-      const nestedParams = new URLSearchParams(searchPart);
-      if (nestedParams.get("debug") === "1") return true;
-    } catch {
-      if (/[?&]debug=1(?:&|$)/.test(liffStateRaw)) return true;
-    }
+    const nestedParams = extractParamsFromUrlOrState(liffStateRaw);
+    if (nestedParams.get("debug") === "1") return true;
   }
 
   return false;

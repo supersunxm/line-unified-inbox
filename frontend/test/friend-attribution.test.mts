@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
-import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl, isValidLiffIdFormat, safeDecodeURIComponentBounded } from "../src/app/friend-attribution/friend-attribution-utils.ts";
 import { pivotLinksByStore, prepareLinkDetailsRows } from "../src/app/friend-source-links/friend-source-links-export.ts";
 import type { FriendSourceLink } from "../src/types/api.ts";
 
@@ -621,4 +621,49 @@ test("Scenario 44: Defensive already-friend handling, rejection fallbacks, singl
   assert.match(bootstrapRoute, /document\.getElementById\(["']page-title["']\)\.innerText = t\.alreadyFriendTitle/, "Already-friend state MUST set page-title text dynamically");
   assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.alreadyFriendTitle\}<\/h2>/, "app-content MUST NOT contain duplicate alreadyFriendTitle h2");
   assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.confirmedTitle\}<\/h2>/, "app-content MUST NOT contain duplicate confirmedTitle h2");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 45. Pre-Init liff.state Restoration, Precedence & Bounded Decoding
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 45: Pre-init liff.state restoration, precedence rules, and bounded decoding", () => {
+  // 1. Direct lid and token parsing
+  const directUrl = "?lid=2010860767-sDz30YMz&token=sat_amata999";
+  assert.equal(extractLiffIdFromUrl(directUrl), "2010860767-sDz30YMz", "Direct lid must be extracted");
+  assert.equal(extractSessionTokenFromUrl(directUrl), "sat_amata999", "Direct token must be extracted");
+
+  // 2. Encoded liff.state restores lid and token
+  const stateUrl = "?liff.state=%3Ftoken%3Dsat_amata999%26lid%3D2010860767-sDz30YMz%26v%3D3";
+  assert.equal(extractLiffIdFromUrl(stateUrl), "2010860767-sDz30YMz", "Encoded liff.state must restore lid");
+  assert.equal(extractSessionTokenFromUrl(stateUrl), "sat_amata999", "Encoded liff.state must restore token");
+
+  // 3. Path-plus-query liff.state restores lid and token
+  const pathStateUrl = "?liff.state=%2Ffriend-attribution-bootstrap%3Ftoken%3Dsat_amata999%26lid%3D2010860767-sDz30YMz%26v%3D3";
+  assert.equal(extractLiffIdFromUrl(pathStateUrl), "2010860767-sDz30YMz", "Path-plus-query liff.state must restore lid");
+  assert.equal(extractSessionTokenFromUrl(pathStateUrl), "sat_amata999", "Path-plus-query liff.state must restore token");
+
+  // 4. Double-encoded liff.state restores lid and token
+  const doubleEncodedUrl = "?liff.state=%253Ftoken%253Dsat_amata999%2526lid%253D2010860767-sDz30YMz%2526v%253D3";
+  assert.equal(extractLiffIdFromUrl(doubleEncodedUrl), "2010860767-sDz30YMz", "Double-encoded liff.state must restore lid");
+  assert.equal(extractSessionTokenFromUrl(doubleEncodedUrl), "sat_amata999", "Double-encoded liff.state must restore token");
+
+  // 5. Direct query parameter takes precedence over liff.state
+  const precedenceUrl = "?lid=2010830086-hTniHzlm&token=sat_direct123&liff.state=%3Ftoken%3Dsat_state999%26lid%3D2010860767-sDz30YMz";
+  assert.equal(extractLiffIdFromUrl(precedenceUrl), "2010830086-hTniHzlm", "Direct lid must take precedence over liff.state");
+  assert.equal(extractSessionTokenFromUrl(precedenceUrl), "sat_direct123", "Direct token must take precedence over liff.state");
+
+  // 6. debug=1 is restored from liff.state
+  const debugStateUrl = "?liff.state=%3Ftoken%3Dsat_amata999%26lid%3D2010860767-sDz30YMz%26debug%3D1";
+  assert.equal(isAttributionDebugEnabled(debugStateUrl), true, "debug=1 in liff.state must enable debug mode");
+
+  // 7. Malformed state and invalid LIFF IDs fail closed
+  assert.equal(isValidLiffIdFormat("2010860767-sDz30YMz"), true, "Valid LIFF ID format must pass");
+  assert.equal(isValidLiffIdFormat("2010860767-sDz30YMz?token=123"), false, "LIFF ID with query delimiters must be rejected");
+  assert.equal(isValidLiffIdFormat("N/A"), false, "N/A must be rejected");
+  assert.equal(isValidLiffIdFormat("   "), false, "Whitespace LIFF ID must be rejected");
+  assert.equal(extractLiffIdFromUrl("?liff.state=malformed_non_query_string"), null, "Malformed state must fail closed");
+
+  // 8. Bounded decoding safety check
+  assert.equal(safeDecodeURIComponentBounded("%25253Ftest", 3), "?test", "Bounded decoding must resolve up to maxAttempts");
 });
