@@ -594,3 +594,31 @@ test("Scenario 43: Automatic redirect after confirmed friendship and non-technic
   assert.match(viewCode, /if\s*\(\s*isDebugMode\s*\)\s*return;/, "View auto-redirect useEffect MUST bypass redirect in debug mode");
   assert.match(viewCode, /window\.location\.replace\(fallbackUrl\)/, "View MUST use window.location.replace for fallback redirect");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 44. Defensive Already-Friend Handling, Rejection Fallbacks & Lock State
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 44: Defensive already-friend handling, rejection fallbacks, single title rendering, and click locking", async () => {
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+  const viewCode = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
+
+  // 1. Verify initial friendship check before requestFriendship in route.ts
+  assert.match(bootstrapRoute, /const friendship = await liff\.getFriendship\(\)/, "Bootstrap MUST call liff.getFriendship() after bootstrap");
+  assert.match(bootstrapRoute, /if\s*\(\s*isAlreadyFriend\s*\)\s*\{\s*updateDiag\(\{\s*code:\s*["']ALREADY_FRIEND["']/, "Initial friendFlag=true MUST render ALREADY_FRIEND and update diagnostics");
+
+  // 2. Verify handleUserRequestFriendship checks getFriendship before AND after requestFriendship AND in catch block
+  assert.match(bootstrapRoute, /const checkBefore = await liff\.getFriendship\(\)/, "handleUserRequestFriendship MUST check getFriendship() before requestFriendship");
+  assert.match(bootstrapRoute, /const checkAfter = await liff\.getFriendship\(\)/, "handleUserRequestFriendship MUST check getFriendship() after requestFriendship");
+  assert.match(bootstrapRoute, /const fallbackCheck = await liff\.getFriendship\(\)/, "handleUserRequestFriendship MUST check getFriendship() in catch block");
+
+  // 3. Verify click locking in route.ts and View component
+  assert.match(bootstrapRoute, /let isRequestingFriendship = false;/, "Bootstrap script MUST maintain isRequestingFriendship lock variable");
+  assert.match(viewCode, /const \[isSubmitting, setIsSubmitting\] = useState\(false\);/, "View component MUST maintain isSubmitting lock state");
+  assert.match(viewCode, /if\s*\(\s*!sessionToken\s*\|\|\s*isSubmitting\s*\)\s*return;/, "handleRequestFriendship MUST guard against duplicate concurrent invocations");
+
+  // 4. Verify single title rendering (no duplicated headings)
+  assert.match(bootstrapRoute, /document\.getElementById\(["']page-title["']\)\.innerText = t\.alreadyFriendTitle/, "Already-friend state MUST set page-title text dynamically");
+  assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.alreadyFriendTitle\}<\/h2>/, "app-content MUST NOT contain duplicate alreadyFriendTitle h2");
+  assert.doesNotMatch(bootstrapRoute, /<h2[^>]*>\$\{t\.confirmedTitle\}<\/h2>/, "app-content MUST NOT contain duplicate confirmedTitle h2");
+});

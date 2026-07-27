@@ -26,6 +26,7 @@ export function GET() {
     .spinner { width: 24px; height: 24px; border: 3px solid #E2E8F0; border-top-color: #06C755; border-radius: 50%; margin: 0 auto 16px auto; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     .btn-primary { width: 100%; padding: 12px; background-color: #06C755; color: #FFFFFF; border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 2px 6px rgba(6,199,85,0.3); text-decoration: none; display: inline-block; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-secondary { display: block; width: 100%; padding: 10px; background-color: #F1F5F9; color: #334155; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border: 1px solid #CBD5E1; }
     .diag-box { margin-top: 20px; padding: 10px 12px; border-radius: 6px; background-color: #FEF2F2; border: 1px solid #FCA5A5; text-align: left; font-size: 12px; color: #991B1B; word-break: break-all; }
     .diag-title { font-weight: 600; margin: 0 0 4px 0; }
@@ -77,6 +78,7 @@ export function GET() {
     window.oppoFallbackUrl = "https://line.me/R/ti/p/@oppo_thailand";
     window.currentLocale = "th";
     let autoRedirectTimer = null;
+    let isRequestingFriendship = false;
 
     const translations = {
       th: {
@@ -126,9 +128,10 @@ export function GET() {
         btn.classList.toggle("active", btn.innerText.toLowerCase() === lang);
       });
       const t = translations[lang] || translations.th;
-      document.getElementById("page-title").innerText = t.pageTitle;
       if (window.currentRenderState) {
         window.currentRenderState();
+      } else {
+        document.getElementById("page-title").innerText = t.pageTitle;
       }
     }
 
@@ -243,6 +246,7 @@ export function GET() {
       const t = translations[window.currentLocale] || translations.th;
       const text = t[msgKeyOrText] || msgKeyOrText || t.customerErrorMessage;
       window.currentRenderState = () => renderError(msgKeyOrText);
+      document.getElementById("page-title").innerText = t.pageTitle;
 
       document.getElementById("app-content").innerHTML = \`
         <p class="error-msg">\${text}</p>
@@ -253,10 +257,10 @@ export function GET() {
     function renderAlreadyFriend() {
       const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderAlreadyFriend;
+      document.getElementById("page-title").innerText = t.alreadyFriendTitle;
 
       document.getElementById("app-content").innerHTML = \`
         <div class="success-icon">✅</div>
-        <h2 style="font-size:16px; font-weight:700; color:#166534; margin:0 0 8px 0;">\${t.alreadyFriendTitle}</h2>
         <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.alreadyFriendDesc}</p>
         <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
       \`;
@@ -267,6 +271,7 @@ export function GET() {
     function renderPromptAddFriend() {
       const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderPromptAddFriend;
+      document.getElementById("page-title").innerText = t.promptAddFriendTitle;
 
       document.getElementById("app-content").innerHTML = \`
         <div style="display:flex; flex-direction:column; gap:10px;">
@@ -280,10 +285,10 @@ export function GET() {
     function renderConfirmed() {
       const t = translations[window.currentLocale] || translations.th;
       window.currentRenderState = renderConfirmed;
+      document.getElementById("page-title").innerText = t.confirmedTitle;
 
       document.getElementById("app-content").innerHTML = \`
         <div class="success-icon">✅</div>
-        <h2 style="font-size:16px; font-weight:700; color:#166534; margin:0 0 8px 0;">\${t.confirmedTitle}</h2>
         <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.confirmedDesc}</p>
         <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
       \`;
@@ -292,22 +297,61 @@ export function GET() {
     }
 
     async function handleUserRequestFriendship() {
-      try {
-        const btn = document.getElementById("liff-add-friend-btn");
-        if (btn) btn.disabled = true;
+      if (isRequestingFriendship) return;
+      isRequestingFriendship = true;
 
-        if (typeof liff !== "undefined" && typeof liff.requestFriendship === "function") {
-          await liff.requestFriendship();
-          const check = await liff.getFriendship().catch(() => null);
-          if (check && check.friendFlag) {
-            renderConfirmed();
+      const btn = document.getElementById("liff-add-friend-btn");
+      if (btn) btn.disabled = true;
+
+      try {
+        // 1. Check friendship BEFORE calling requestFriendship
+        if (typeof liff !== "undefined" && typeof liff.getFriendship === "function") {
+          const checkBefore = await liff.getFriendship().catch(() => null);
+          if (checkBefore && checkBefore.friendFlag) {
+            isRequestingFriendship = false;
+            renderAlreadyFriend();
             return;
           }
         }
-        handleManualFallbackClick(null);
+
+        // 2. Call requestFriendship defensively
+        if (typeof liff !== "undefined" && typeof liff.requestFriendship === "function") {
+          await liff.requestFriendship().catch(() => null);
+        }
+
+        // 3. Re-check getFriendship AFTER requestFriendship resolves or rejects
+        if (typeof liff !== "undefined" && typeof liff.getFriendship === "function") {
+          const checkAfter = await liff.getFriendship().catch(() => null);
+          if (checkAfter && checkAfter.friendFlag) {
+            isRequestingFriendship = false;
+            renderAlreadyFriend();
+            return;
+          }
+        }
+
+        // If still false, show recoverable error and restore button
+        isRequestingFriendship = false;
+        if (btn) btn.disabled = false;
+        renderError("customerErrorMessage");
       } catch (err) {
         console.error("liff.requestFriendship error:", err);
-        handleManualFallbackClick(null);
+        // Defensive check in catch block
+        try {
+          if (typeof liff !== "undefined" && typeof liff.getFriendship === "function") {
+            const fallbackCheck = await liff.getFriendship().catch(() => null);
+            if (fallbackCheck && fallbackCheck.friendFlag) {
+              isRequestingFriendship = false;
+              renderAlreadyFriend();
+              return;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        isRequestingFriendship = false;
+        if (btn) btn.disabled = false;
+        renderError("customerErrorMessage");
       }
     }
 
@@ -497,6 +541,7 @@ export function GET() {
       });
 
       if (isAlreadyFriend) {
+        updateDiag({ code: "ALREADY_FRIEND", bootstrapStatus: "Success" });
         renderAlreadyFriend();
       } else {
         renderPromptAddFriend();

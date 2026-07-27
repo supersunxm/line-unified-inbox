@@ -249,9 +249,12 @@ export function FriendAttributionView() {
     }
   };
 
-  const handleRequestFriendship = async () => {
-    if (!sessionToken) return;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleRequestFriendship = async () => {
+    if (!sessionToken || isSubmitting) return;
+
+    setIsSubmitting(true);
     setErrorMsg(null);
     setStep("WAITING_FOLLOW");
 
@@ -265,6 +268,15 @@ export function FriendAttributionView() {
       const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
       const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
       const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+
+      // 1. Check getFriendship BEFORE calling requestFriendship
+      const friendshipBefore = await liff.getFriendship().catch(() => null);
+      if (friendshipBefore && friendshipBefore.friendFlag) {
+        setIsFriend(true);
+        setIsSubmitting(false);
+        setStep("ALREADY_FRIEND");
+        return;
+      }
 
       // Access Token Guard: Stop if access token is absent inside LINE app
       if (isInClient && !hasAccessToken) {
@@ -282,14 +294,11 @@ export function FriendAttributionView() {
         };
         console.error("LIFF Friend Attribution requestFriendship error:", diag);
         setDiagnosticInfo(diag);
+        setIsSubmitting(false);
         setErrorMsg(t.customerErrorMessage);
         setStep("PROMPT_ADD_FRIEND");
         return;
       }
-
-      // Log getFriendship before calling requestFriendship
-      const friendshipBefore = await liff.getFriendship().catch(() => null);
-      console.log("LIFF getFriendship result before requestFriendship:", friendshipBefore);
 
       // Confirm liff.isInClient() === true and requestFriendship function availability before calling
       if (!isInClient || typeof liff.requestFriendship !== "function") {
@@ -309,27 +318,24 @@ export function FriendAttributionView() {
         };
         console.error("LIFF Friend Attribution requestFriendship error:", diag);
         setDiagnosticInfo(diag);
+        setIsSubmitting(false);
         setErrorMsg(t.customerErrorMessage);
         setStep("PROMPT_ADD_FRIEND");
         return;
       }
 
-      // Execute requestFriendship
-      await liff.requestFriendship();
+      // 2. Execute requestFriendship defensively
+      await liff.requestFriendship().catch(() => null);
 
-      // Re-check getFriendship AFTER requestFriendship resolves
+      // 3. Re-check getFriendship AFTER requestFriendship resolves or rejects
       const friendshipAfter = await liff.getFriendship().catch(() => null);
-      console.log("LIFF getFriendship result after requestFriendship:", friendshipAfter);
       const isFriendAfter = Boolean(friendshipAfter?.friendFlag);
       setIsFriend(isFriendAfter);
 
-      // Update backend friendship status using actual friendFlag
-      const statusRes = await api.updateFriendshipStatus({ sessionToken, isFriend: isFriendAfter });
-      if (statusRes.fallbackUrl) {
-        setFallbackUrl(statusRes.fallbackUrl);
-      }
-
       if (isFriendAfter) {
+        const statusRes = await api.updateFriendshipStatus({ sessionToken, isFriend: true }).catch(() => ({ fallbackUrl: null }));
+        if (statusRes.fallbackUrl) setFallbackUrl(statusRes.fallbackUrl);
+        setIsSubmitting(false);
         setStep("ALREADY_FRIEND");
         return;
       }
@@ -340,49 +346,41 @@ export function FriendAttributionView() {
         attempts++;
         try {
           const res = await api.getFriendAttributionSessionStatus(sessionToken);
-          if (res.fallbackUrl) {
-            setFallbackUrl(res.fallbackUrl);
-          }
+          if (res.fallbackUrl) setFallbackUrl(res.fallbackUrl);
           if (res.confirmed) {
             clearInterval(pollInterval);
+            setIsSubmitting(false);
             setStep("CONFIRMED");
-          } else if (attempts >= 10) {
+          } else if (attempts >= 5) {
             clearInterval(pollInterval);
+            setIsSubmitting(false);
             setStep("PROMPT_ADD_FRIEND");
           }
         } catch {
-          if (attempts >= 10) clearInterval(pollInterval);
+          if (attempts >= 5) {
+            clearInterval(pollInterval);
+            setIsSubmitting(false);
+            setStep("PROMPT_ADD_FRIEND");
+          }
         }
-      }, 2000);
+      }, 1500);
     } catch (err: unknown) {
-      const errObj = err as { code?: string | number; message?: string; name?: string };
-      const liffModule = await import("@line/liff");
-      const liff = liffModule.default;
+      console.error("LIFF Friend Attribution requestFriendship error:", err);
+      // 4. Defensive check in catch block
+      try {
+        const liffModule = await import("@line/liff");
+        const fallbackCheck = await liffModule.default.getFriendship().catch(() => null);
+        if (fallbackCheck && fallbackCheck.friendFlag) {
+          setIsFriend(true);
+          setIsSubmitting(false);
+          setStep("ALREADY_FRIEND");
+          return;
+        }
+      } catch {
+        // ignore
+      }
 
-      const code = errObj.code ? String(errObj.code) : errObj.name || "UNKNOWN_ERROR";
-      const message = errObj.message || String(err);
-      const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
-      const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
-      const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
-      const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
-      const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
-      const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
-
-      const diag: LiffDiagnosticInfo = {
-        operation: "requestFriendship",
-        code,
-        message,
-        liffVersion,
-        lineVersion,
-        isInClient,
-        isLoggedIn,
-        hasAccessToken,
-        hasIdToken,
-        initializedLiffId: lid,
-      };
-
-      console.error("LIFF Friend Attribution requestFriendship error:", diag);
-      setDiagnosticInfo(diag);
+      setIsSubmitting(false);
       setErrorMsg(t.customerErrorMessage);
       setStep("PROMPT_ADD_FRIEND");
     }
