@@ -14,7 +14,7 @@ export function GET() {
     .lang-switcher { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
     .lang-btn { padding: 4px 8px; border-radius: 4px; border: 1px solid #CBD5E1; background-color: #FFFFFF; color: #334155; cursor: pointer; font-size: 12px; font-weight: 600; }
     .lang-btn.active { background-color: #0284C7; color: #FFFFFF; border-color: #0284C7; }
-    .card { background: #FFFFFF; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 24px; max-width: 420px; width: 100%; text-align: center; }
+    .card { background: #FFFFFF; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 24px; max-width: 440px; width: 100%; text-align: center; }
     .logo-badge { width: 48px; height: 48px; border-radius: 24px; background-color: #E0F2FE; color: #0284C7; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; font-weight: 700; font-size: 20px; }
     .title { font-size: 18px; font-weight: 700; color: #0F172A; margin: 0 0 16px 0; }
     .spinner { width: 24px; height: 24px; border: 3px solid #E2E8F0; border-top-color: #06C755; border-radius: 50%; margin: 0 auto 16px auto; animation: spin 1s linear infinite; }
@@ -45,15 +45,20 @@ export function GET() {
     </div>
 
     <div id="diag-panel" class="diag-box" style="display:none;">
-      <p class="diag-title">Diagnostic Info</p>
+      <p class="diag-title">Diagnostic Info (<span id="diag-code">INITIALIZED</span>)</p>
       <div class="diag-content">
         <div>Initialized LIFF ID: <span id="diag-liff-id">N/A</span></div>
+        <div>Current Path: <span id="diag-current-path">N/A</span></div>
+        <div>Entry Mode: <span id="diag-entry-mode">UNKNOWN</span></div>
+        <div>Pre-Init Has LIFF State: <span id="diag-pre-liff-state">No</span></div>
+        <div>Pre-Init Has Fragment: <span id="diag-pre-fragment">No</span></div>
+        <div>Fragment Keys (Access/ID/Context/Client): <span id="diag-frag-keys">No / No / No / No</span></div>
         <div>In Client: <span id="diag-in-client">No</span></div>
         <div>Is Logged In: <span id="diag-logged-in">No</span></div>
         <div>Has Access Token: <span id="diag-has-access">No</span></div>
         <div>Has ID Token: <span id="diag-has-id">No</span></div>
-        <div>Current Path: <span id="diag-current-path">N/A</span></div>
-        <div>Session Bootstrap: <span id="diag-bootstrap-status">Failed</span></div>
+        <div>Session Token Restored: <span id="diag-token-restored">No</span></div>
+        <div>Session Bootstrap: <span id="diag-bootstrap-status">Skipped</span></div>
       </div>
     </div>
   </div>
@@ -134,15 +139,34 @@ export function GET() {
       return null;
     }
 
+    function deriveEntryMode(preDiag, sessionTokenRestored) {
+      if (preDiag.hasLiffStateQuery && sessionTokenRestored) {
+        return "LIFF_WITH_ADDITIONAL_INFO";
+      }
+      if (preDiag.hasLiffStateQuery || preDiag.hasUrlFragment) {
+        return "DIRECT_LIFF";
+      }
+      if (!preDiag.hasLiffStateQuery && !preDiag.hasUrlFragment && preDiag.endpointLiffIdPresent) {
+        return "ENDPOINT_DIRECT";
+      }
+      return "UNKNOWN";
+    }
+
     function updateDiag(data) {
       const panel = document.getElementById("diag-panel");
       panel.style.display = "block";
+      if (data.code) document.getElementById("diag-code").innerText = data.code;
       if (data.initializedLiffId !== undefined) document.getElementById("diag-liff-id").innerText = data.initializedLiffId || "N/A";
+      document.getElementById("diag-current-path").innerText = window.location.pathname || "N/A";
+      if (data.entryMode) document.getElementById("diag-entry-mode").innerText = data.entryMode;
+      if (data.hasLiffStateQuery !== undefined) document.getElementById("diag-pre-liff-state").innerText = data.hasLiffStateQuery ? "Yes" : "No";
+      if (data.hasUrlFragment !== undefined) document.getElementById("diag-pre-fragment").innerText = data.hasUrlFragment ? "Yes" : "No";
+      if (data.fragKeys) document.getElementById("diag-frag-keys").innerText = data.fragKeys;
       if (data.isInClient !== undefined) document.getElementById("diag-in-client").innerText = data.isInClient ? "Yes" : "No";
       if (data.isLoggedIn !== undefined) document.getElementById("diag-logged-in").innerText = data.isLoggedIn ? "Yes" : "No";
       if (data.hasAccessToken !== undefined) document.getElementById("diag-has-access").innerText = data.hasAccessToken ? "Yes" : "No";
       if (data.hasIdToken !== undefined) document.getElementById("diag-has-id").innerText = data.hasIdToken ? "Yes" : "No";
-      document.getElementById("diag-current-path").innerText = window.location.pathname || "N/A";
+      if (data.sessionTokenRestored !== undefined) document.getElementById("diag-token-restored").innerText = data.sessionTokenRestored ? "Yes" : "No";
       if (data.bootstrapStatus !== undefined) document.getElementById("diag-bootstrap-status").innerText = data.bootstrapStatus;
     }
 
@@ -214,13 +238,36 @@ export function GET() {
     }
 
     (async () => {
-      // 1. Read endpoint-owned lid parameter
-      const params = new URLSearchParams(window.location.search);
+      // 1. PRE-INIT DIAGNOSTICS (Booleans only - NO raw secrets or tokens)
+      const search = window.location.search || "";
+      const hash = window.location.hash || "";
+      const params = new URLSearchParams(search);
+
+      const preDiag = {
+        pathname: window.location.pathname,
+        hasLiffStateQuery: Boolean(params.get("liff.state") || params.get("state")),
+        hasUrlFragment: Boolean(hash),
+        fragmentHasAccessTokenKey: hash.includes("access_token"),
+        fragmentHasIdTokenKey: hash.includes("id_token"),
+        fragmentHasContextTokenKey: hash.includes("context_token") || hash.includes("context"),
+        fragmentHasClientIdKey: hash.includes("client_id"),
+        endpointLiffIdPresent: Boolean(params.get("lid"))
+      };
+
+      const fragKeysStr = \`\${preDiag.fragmentHasAccessTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasIdTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasContextTokenKey ? "Yes" : "No"} / \${preDiag.fragmentHasClientIdKey ? "Yes" : "No"}\`;
       const lid = params.get("lid") || "";
 
       if (!lid) {
         renderError("liffConfigError");
-        updateDiag({ initializedLiffId: "N/A", bootstrapStatus: "Failed" });
+        updateDiag({
+          code: "LIFF_CONFIG_MISSING",
+          initializedLiffId: "N/A",
+          entryMode: deriveEntryMode(preDiag, false),
+          hasLiffStateQuery: preDiag.hasLiffStateQuery,
+          hasUrlFragment: preDiag.hasUrlFragment,
+          fragKeys: fragKeysStr,
+          bootstrapStatus: "Failed"
+        });
         return;
       }
 
@@ -230,39 +277,57 @@ export function GET() {
       } catch (err) {
         console.error("LIFF initialization error:", err);
         renderError("customerErrorMessage");
-        updateDiag({ initializedLiffId: lid, bootstrapStatus: "Failed" });
+        updateDiag({
+          code: "LIFF_INIT_FAILED",
+          initializedLiffId: lid,
+          entryMode: deriveEntryMode(preDiag, false),
+          hasLiffStateQuery: preDiag.hasLiffStateQuery,
+          hasUrlFragment: preDiag.hasUrlFragment,
+          fragKeys: fragKeysStr,
+          bootstrapStatus: "Failed"
+        });
         return;
       }
 
-      // 3. Post-init state using initialized window.liff instance
+      // 3. POST-INIT DIAGNOSTICS (Booleans only)
       const isInClient = typeof liff.isInClient === "function" ? liff.isInClient() : false;
       const isLoggedIn = typeof liff.isLoggedIn === "function" ? liff.isLoggedIn() : false;
       const hasAccessToken = Boolean(typeof liff.getAccessToken === "function" && liff.getAccessToken());
       const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
 
-      // 4. Read restored token query parameter ONLY AFTER liff.init resolves
+      // 4. READ RESTORED SESSION TOKEN ONLY AFTER LIFF.INIT RESOLVES
       const sessionToken = extractSessionTokenFromUrl(window.location.search);
+      const sessionTokenRestored = Boolean(sessionToken);
+      const entryMode = deriveEntryMode(preDiag, sessionTokenRestored);
 
       updateDiag({
+        code: "INITIALIZED",
         initializedLiffId: liff.id || lid,
+        entryMode,
+        hasLiffStateQuery: preDiag.hasLiffStateQuery,
+        hasUrlFragment: preDiag.hasUrlFragment,
+        fragKeys: fragKeysStr,
         isInClient,
         isLoggedIn,
         hasAccessToken,
         hasIdToken,
-        bootstrapStatus: sessionToken ? "Success" : "Failed"
+        sessionTokenRestored,
+        bootstrapStatus: sessionTokenRestored ? "Pending" : "Skipped"
       });
 
-      if (!sessionToken) {
+      if (!sessionTokenRestored) {
+        // Distinct Error Separation: Session token is missing from restored state
         renderError("invalidSessionError");
+        updateDiag({ code: "ATTRIBUTION_TOKEN_MISSING", bootstrapStatus: "Failed" });
         return;
       }
 
-      // 5. Call token-scoped backend session status endpoint
+      // 5. CALL TOKEN-SCOPED BACKEND SESSION STATUS ENDPOINT (Only when sessionToken exists)
       try {
         const statusRes = await fetch(\`/api/friend-source-links/attribution-session/status?token=\${encodeURIComponent(sessionToken)}\`);
         if (!statusRes.ok) {
           renderError("invalidSessionError");
-          updateDiag({ bootstrapStatus: "Failed" });
+          updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
           return;
         }
         const bootstrap = await statusRes.json();
@@ -271,26 +336,26 @@ export function GET() {
           window.oppoFallbackUrl = bootstrap.fallbackUrl;
         }
 
-        // Verify session.liffId === lid
+        // Distinct Error Separation: Session liffId mismatch
         if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
           console.error(\`LIFF ID mismatch: bootstrap returned '\${bootstrap.liffId}' but page initialized '\${lid}'\`);
           renderError("liffConfigError");
-          updateDiag({ bootstrapStatus: "Failed" });
+          updateDiag({ code: "LIFF_ID_MISMATCH", bootstrapStatus: "Failed" });
           return;
         }
 
         if (bootstrap.status === "EXPIRED") {
           renderError("invalidSessionError");
-          updateDiag({ bootstrapStatus: "Failed" });
+          updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
           return;
         }
 
-        // Access token & login guard (DO NOT call liff.login when isInClient is true)
+        // Distinct Error Separation: In-client access token is missing
         if (isInClient) {
           if (!hasAccessToken) {
             console.error("LIFF in-client access token is missing");
             renderError("customerErrorMessage");
-            updateDiag({ bootstrapStatus: "Failed" });
+            updateDiag({ code: "LIFF_AUTH_MISSING", bootstrapStatus: "Failed" });
             return;
           }
         } else {
@@ -299,6 +364,8 @@ export function GET() {
             return;
           }
         }
+
+        updateDiag({ code: "BOOTSTRAP_SUCCESS", bootstrapStatus: "Success" });
 
         // 6. Identity verification & friendship check
         const idToken = liff.getIDToken();
@@ -326,7 +393,7 @@ export function GET() {
       } catch (err) {
         console.error("Attribution session bootstrap error:", err);
         renderError("customerErrorMessage");
-        updateDiag({ bootstrapStatus: "Failed" });
+        updateDiag({ code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" });
       }
     })();
   </script>

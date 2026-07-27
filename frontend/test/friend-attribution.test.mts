@@ -421,3 +421,41 @@ test("Scenario 38: Single-document standard LIFF lifecycle, zero navigation, and
   assert.doesNotMatch(bootstrapRoute, /getAccessToken\(\)\s*\}<\/div>/, "UI must NOT display raw access token");
   assert.doesNotMatch(bootstrapRoute, /getIDToken\(\)\s*\}<\/div>/, "UI must NOT display raw ID token");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 39. Privacy-Safe Pre-Init Diagnostics, Entry Modes & Error Separation
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 39: Privacy-safe pre-init diagnostics, entry modes, and distinct error separation", async () => {
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+
+  // 1. Verify pre-init diagnostics capture booleans only
+  assert.match(bootstrapRoute, /hasLiffStateQuery:\s*Boolean\(/, "Pre-init must capture boolean hasLiffStateQuery");
+  assert.match(bootstrapRoute, /hasUrlFragment:\s*Boolean\(/, "Pre-init must capture boolean hasUrlFragment");
+  assert.match(bootstrapRoute, /fragmentHasAccessTokenKey:\s*hash\.includes\(["']access_token["']\)/, "Pre-init must capture boolean fragmentHasAccessTokenKey");
+  assert.match(bootstrapRoute, /fragmentHasIdTokenKey:\s*hash\.includes\(["']id_token["']\)/, "Pre-init must capture boolean fragmentHasIdTokenKey");
+  assert.match(bootstrapRoute, /fragmentHasContextTokenKey:\s*hash\.includes/, "Pre-init must capture boolean fragmentHasContextTokenKey");
+  assert.match(bootstrapRoute, /fragmentHasClientIdKey:\s*hash\.includes\(["']client_id["']\)/, "Pre-init must capture boolean fragmentHasClientIdKey");
+  assert.match(bootstrapRoute, /endpointLiffIdPresent:\s*Boolean\(/, "Pre-init must capture boolean endpointLiffIdPresent");
+
+  // 2. Verify currentPath uses location.pathname (excludes search query and hash)
+  assert.match(bootstrapRoute, /window\.location\.pathname/, "Current Path must display location.pathname only");
+
+  // 3. Verify entry modes (DIRECT_LIFF, LIFF_WITH_ADDITIONAL_INFO, ENDPOINT_DIRECT, UNKNOWN) logic
+  assert.match(bootstrapRoute, /function deriveEntryMode/, "deriveEntryMode helper function must exist");
+  assert.match(bootstrapRoute, /"LIFF_WITH_ADDITIONAL_INFO"/, "Entry mode LIFF_WITH_ADDITIONAL_INFO must exist");
+  assert.match(bootstrapRoute, /"DIRECT_LIFF"/, "Entry mode DIRECT_LIFF must exist");
+  assert.match(bootstrapRoute, /"ENDPOINT_DIRECT"/, "Entry mode ENDPOINT_DIRECT must exist");
+
+  // 4. Verify backend fetch is skipped when session token is absent
+  const tokenCheckIdx = bootstrapRoute.indexOf("if (!sessionTokenRestored)");
+  const backendFetchIdx = bootstrapRoute.indexOf("const statusRes = await fetch(");
+  assert.ok(tokenCheckIdx > 0 && backendFetchIdx > 0, "Both token check and backend fetch must exist");
+  assert.ok(tokenCheckIdx < backendFetchIdx, "Backend fetch MUST NOT occur when session token is absent");
+
+  // 5. Verify distinct error separation codes (LIFF_AUTH_MISSING, ATTRIBUTION_TOKEN_MISSING, SESSION_BOOTSTRAP_FAILED, LIFF_ID_MISMATCH)
+  assert.match(bootstrapRoute, /LIFF_AUTH_MISSING/, "Error code LIFF_AUTH_MISSING must exist for in-client auth failure");
+  assert.match(bootstrapRoute, /ATTRIBUTION_TOKEN_MISSING/, "Error code ATTRIBUTION_TOKEN_MISSING must exist when token is absent");
+  assert.match(bootstrapRoute, /SESSION_BOOTSTRAP_FAILED/, "Error code SESSION_BOOTSTRAP_FAILED must exist on API error");
+  assert.match(bootstrapRoute, /LIFF_ID_MISMATCH/, "Error code LIFF_ID_MISMATCH must exist on ID mismatch");
+});

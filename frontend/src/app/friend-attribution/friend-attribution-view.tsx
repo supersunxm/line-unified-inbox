@@ -33,7 +33,9 @@ export type LiffDiagnosticInfo = {
   hasAccessToken?: boolean;
   hasIdToken?: boolean;
   currentPath?: string;
-  bootstrapStatus?: "Success" | "Failed";
+  entryMode?: string;
+  sessionTokenRestored?: boolean;
+  bootstrapStatus?: "Success" | "Failed" | "Skipped" | "Pending";
   initializedLiffId: string | null;
 };
 
@@ -93,6 +95,7 @@ export function FriendAttributionView() {
         const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
         const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
         const currentPath = typeof window !== "undefined" ? window.location.pathname : "N/A";
+        const sessionTokenRestored = Boolean(activeSessionToken);
 
         const currentDiag: LiffDiagnosticInfo = {
           operation: "requestFriendship",
@@ -105,7 +108,8 @@ export function FriendAttributionView() {
           hasAccessToken,
           hasIdToken,
           currentPath,
-          bootstrapStatus: "Success",
+          sessionTokenRestored,
+          bootstrapStatus: "Pending",
           initializedLiffId: activeLid,
         };
         setDiagnosticInfo(currentDiag);
@@ -121,12 +125,14 @@ export function FriendAttributionView() {
         // Verify liffId match between link (lid) and backend session configuration
         if (bootstrap.liffId && bootstrap.liffId.trim() && bootstrap.liffId.trim() !== lid) {
           console.error(`LIFF ID mismatch: bootstrap returned '${bootstrap.liffId}' but page initialized '${lid}'`);
+          setDiagnosticInfo((prev) => (prev ? { ...prev, code: "LIFF_ID_MISMATCH", bootstrapStatus: "Failed" } : prev));
           setErrorMsg(t.liffConfigError);
           setStep("ERROR");
           return;
         }
 
         if (bootstrap.status === "EXPIRED") {
+          setDiagnosticInfo((prev) => (prev ? { ...prev, code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" } : prev));
           setErrorMsg(t.invalidSessionError);
           setStep("ERROR");
           return;
@@ -136,21 +142,25 @@ export function FriendAttributionView() {
         if (isInClient) {
           if (!hasAccessToken) {
             console.error("LIFF in-client access token is missing");
+            setDiagnosticInfo((prev) => (prev ? { ...prev, code: "LIFF_AUTH_MISSING", bootstrapStatus: "Failed" } : prev));
             setErrorMsg(t.customerErrorMessage);
             setStep("ERROR");
             return;
           }
+          setDiagnosticInfo((prev) => (prev ? { ...prev, code: "BOOTSTRAP_SUCCESS", bootstrapStatus: "Success" } : prev));
           setStep("CONSENT");
         } else {
           if (!isLoggedIn) {
             liff.login({ redirectUri: window.location.href });
             return;
           }
+          setDiagnosticInfo((prev) => (prev ? { ...prev, code: "BOOTSTRAP_SUCCESS", bootstrapStatus: "Success" } : prev));
           setStep("CONSENT");
         }
       } catch (err: unknown) {
         if (!isSubscribed) return;
         console.error("LIFF initialization error:", err);
+        setDiagnosticInfo((prev) => (prev ? { ...prev, code: "SESSION_BOOTSTRAP_FAILED", bootstrapStatus: "Failed" } : prev));
         setErrorMsg(t.customerErrorMessage);
         setStep("ERROR");
       }
