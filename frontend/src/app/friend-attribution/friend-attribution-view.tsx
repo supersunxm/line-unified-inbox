@@ -480,6 +480,7 @@ export function FriendAttributionView() {
               >
                 <p style={{ fontWeight: 600, margin: "0 0 4px 0" }}>Diagnostic Info ({diagnosticInfo.code})</p>
                 <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", lineHeight: 1.4 }}>
+                  <div>Build Marker: LIFF-ATTR-V3</div>
                   <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
                   <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>

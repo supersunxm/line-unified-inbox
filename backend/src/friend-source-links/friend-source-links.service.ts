@@ -412,6 +412,7 @@ export class FriendSourceLinksService {
       if (configuredLiffId) {
         targetUrl.searchParams.set("lid", configuredLiffId);
       }
+      targetUrl.searchParams.set("v", "3");
       return targetUrl.toString();
     }
 

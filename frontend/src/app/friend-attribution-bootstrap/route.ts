@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export function GET() {
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -47,6 +50,7 @@ export function GET() {
     <div id="diag-panel" class="diag-box" style="display:none;">
       <p class="diag-title">Diagnostic Info (<span id="diag-code">INITIALIZED</span>)</p>
       <div class="diag-content">
+        <div>Build Marker: <span id="diag-build-marker">LIFF-ATTR-V3</span></div>
         <div>Initialized LIFF ID: <span id="diag-liff-id">N/A</span></div>
         <div>Current Path: <span id="diag-current-path">N/A</span></div>
         <div>Entry Mode: <span id="diag-entry-mode">UNKNOWN</span></div>
@@ -238,7 +242,7 @@ export function GET() {
     }
 
     (async () => {
-      // 1. PRE-INIT DIAGNOSTICS (Booleans only - NO raw secrets or tokens)
+      // 1. PRE-INIT DIAGNOSTICS (Booleans only - NO raw credential data or tokens)
       const search = window.location.search || "";
       const hash = window.location.hash || "";
       const params = new URLSearchParams(search);
@@ -404,7 +408,11 @@ export function GET() {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "Pragma": "no-cache",
+      "Expires": "0",
+      "CDN-Cache-Control": "no-store",
+      "Surrogate-Control": "no-store",
     },
   });
 }

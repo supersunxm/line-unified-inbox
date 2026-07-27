@@ -459,3 +459,29 @@ test("Scenario 39: Privacy-safe pre-init diagnostics, entry modes, and distinct 
   assert.match(bootstrapRoute, /SESSION_BOOTSTRAP_FAILED/, "Error code SESSION_BOOTSTRAP_FAILED must exist on API error");
   assert.match(bootstrapRoute, /LIFF_ID_MISMATCH/, "Error code LIFF_ID_MISMATCH must exist on ID mismatch");
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// 40. Anti-Cache Hardening, Route Dynamic Config & Build Marker V3
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 40: Anti-cache hardening, route dynamic config, and build marker V3", async () => {
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+
+  // 1. Verify dynamic route exports
+  assert.match(bootstrapRoute, /export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/, "Route MUST export dynamic = force-dynamic");
+  assert.match(bootstrapRoute, /export\s+const\s+revalidate\s*=\s*0/, "Route MUST export revalidate = 0");
+
+  // 2. Verify no-store & anti-cache response headers
+  assert.match(bootstrapRoute, /"Cache-Control":\s*["']no-store,\s*no-cache,\s*must-revalidate,\s*max-age=0["']/, "Response headers MUST include max-age=0");
+  assert.match(bootstrapRoute, /"Pragma":\s*["']no-cache["']/, "Response headers MUST include Pragma: no-cache");
+  assert.match(bootstrapRoute, /"Expires":\s*["']0["']/, "Response headers MUST include Expires: 0");
+  assert.match(bootstrapRoute, /"CDN-Cache-Control":\s*["']no-store["']/, "Response headers MUST include CDN-Cache-Control: no-store");
+  assert.match(bootstrapRoute, /"Surrogate-Control":\s*["']no-store["']/, "Response headers MUST include Surrogate-Control: no-store");
+
+  // 3. Verify Build Marker LIFF-ATTR-V3 is rendered in UI
+  assert.match(bootstrapRoute, /LIFF-ATTR-V3/, "Route UI MUST display Build Marker LIFF-ATTR-V3");
+
+  // 4. Verify no secret parameters or navigation introduced
+  assert.doesNotMatch(bootstrapRoute, /window\.location\.replace/, "Must NOT reintroduce manual navigation");
+  assert.doesNotMatch(bootstrapRoute, /secret_key|private_key|auth_password/i, "Must NOT contain secret strings");
+});

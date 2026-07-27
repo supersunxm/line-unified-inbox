@@ -991,3 +991,35 @@ test("Requirement 3: Route metadata and order verification for Attribution Confi
   assert.equal(typeof controller.deleteAttributionConfig, "function");
   assert.equal(typeof controller.bootstrapLegacyAttributionConfig, "function");
 });
+
+test("Requirement: LIFF redirect contains v=3 cache-buster parameter and opaque session token without secrets", async () => {
+  const linkRecord = {
+    id: "link-v3",
+    shortCode: "sc_v3test",
+    lineOaId: "oa-v3",
+    connectionStatus: "CONNECTED",
+    isActive: true,
+    basicId: "@v3test",
+    lineOfficialAccount: { lineOaId: "oa-v3", name: "V3 Test OA", isArchived: false, isActive: true },
+  };
+
+  const mockPrisma = {
+    friendSourceLink: {
+      findUnique: (args: any) => (args.where.shortCode === "sc_v3test" ? Promise.resolve(linkRecord) : Promise.resolve(null)),
+    },
+    friendAttributionConfig: {
+      findUnique: () => Promise.resolve({ lineOaId: "oa-v3", liffId: "2010830086-v3test", isEnabled: true }),
+    },
+    friendSourceClick: { create: () => Promise.resolve({ id: "click-v3" }) },
+    friendAttributionSession: { create: () => Promise.resolve({ id: "session-v3" }) },
+  } as any;
+
+  const service = new FriendSourceLinksService(mockPrisma);
+  const redirectUrl = await service.handleRedirect("sc_v3test");
+
+  const url = new URL(redirectUrl);
+  assert.equal(url.searchParams.get("v"), "3", "LIFF redirect MUST contain v=3 parameter");
+  assert.ok(url.searchParams.get("token")?.startsWith("sat_"), "LIFF redirect MUST contain opaque session token starting with sat_");
+  assert.equal(url.searchParams.get("lid"), "2010830086-v3test", "LIFF redirect MUST contain configured lid parameter");
+  assert.doesNotMatch(redirectUrl, /secret|key|password|hash/i, "LIFF redirect MUST NOT expose secret parameters");
+});
