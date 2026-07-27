@@ -81,3 +81,14 @@ export function isAttributionDebugEnabled(searchString?: string): boolean {
 
   return false;
 }
+
+export function isValidFallbackUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url.trim());
+    return (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+           (parsed.hostname.includes("line.me") || parsed.hostname.includes("line-official-account"));
+  } catch {
+    return false;
+  }
+}

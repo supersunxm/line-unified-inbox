@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS, FriendAttributionLocale } from "./friend-attribution-translations";
-import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled } from "./friend-attribution-utils";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl } from "./friend-attribution-utils";
 
 function getInitialAttributionState() {
   if (typeof window === "undefined") {
@@ -66,6 +66,29 @@ export function FriendAttributionView() {
 
   const t = FRIEND_ATTRIBUTION_TRANSLATIONS[locale];
   const isDebugMode = isAttributionDebugEnabled();
+
+  const handleManualFallbackClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (isValidFallbackUrl(fallbackUrl)) {
+      window.location.replace(fallbackUrl);
+    }
+  };
+
+  useEffect(() => {
+    if (step !== "CONFIRMED" && step !== "ALREADY_FRIEND") return;
+    if (isDebugMode) return;
+    if (!isValidFallbackUrl(fallbackUrl)) return;
+
+    const timer = setTimeout(() => {
+      if (isValidFallbackUrl(fallbackUrl)) {
+        window.location.replace(fallbackUrl);
+      }
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [step, fallbackUrl, isDebugMode]);
 
   useEffect(() => {
     if (!lid || !sessionToken) return;
@@ -446,13 +469,12 @@ export function FriendAttributionView() {
 
         {step === "ALREADY_FRIEND" && (
           <div>
-            <div style={{ fontSize: "36px", marginBottom: "8px" }}>🎉</div>
+            <div style={{ fontSize: "36px", marginBottom: "8px" }}>✅</div>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#166534", marginBottom: "8px" }}>{t.alreadyFriendTitle}</h2>
             <p style={{ fontSize: "14px", color: "#475569", marginBottom: "20px" }}>{t.alreadyFriendDesc}</p>
             <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noreferrer"
+              href="#"
+              onClick={handleManualFallbackClick}
               style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}
             >
               {t.fallbackBtn}
@@ -504,9 +526,8 @@ export function FriendAttributionView() {
 
               <a
                 id="liff-open-official-account-link"
-                href={fallbackUrl}
-                target="_blank"
-                rel="noreferrer"
+                href="#"
+                onClick={handleManualFallbackClick}
                 style={{ display: "block", width: "100%", padding: "10px", backgroundColor: "#F1F5F9", color: "#334155", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box", border: "1px solid #CBD5E1" }}
               >
                 {t.fallbackBtn}
@@ -528,9 +549,8 @@ export function FriendAttributionView() {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#166534", marginBottom: "8px" }}>{t.confirmedTitle}</h2>
             <p style={{ fontSize: "14px", color: "#475569", marginBottom: "20px" }}>{t.confirmedDesc}</p>
             <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noreferrer"
+              href="#"
+              onClick={handleManualFallbackClick}
               style={{ display: "inline-block", width: "100%", padding: "12px", backgroundColor: "#06C755", color: "#FFFFFF", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box" }}
             >
               {t.fallbackBtn}
@@ -580,9 +600,8 @@ export function FriendAttributionView() {
 
               <a
                 id="liff-open-official-account-link"
-                href={fallbackUrl}
-                target="_blank"
-                rel="noreferrer"
+                href="#"
+                onClick={handleManualFallbackClick}
                 style={{ display: "block", width: "100%", padding: "10px", backgroundColor: "#F1F5F9", color: "#334155", borderRadius: "8px", textDecoration: "none", fontWeight: 600, fontSize: "14px", boxSizing: "border-box", border: "1px solid #CBD5E1" }}
               >
                 {t.fallbackBtn}

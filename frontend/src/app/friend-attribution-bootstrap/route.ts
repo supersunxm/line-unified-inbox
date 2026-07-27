@@ -12,7 +12,7 @@ export function GET() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LINE Friend Attribution | OPPO Unified Inbox</title>
+  <title>Add LINE Official Account | OPPO Unified Inbox</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -43,7 +43,7 @@ export function GET() {
 
   <div class="card">
     <div class="logo-badge">OPPO</div>
-    <h1 class="title" id="page-title">ระบบระบุที่มาเพื่อน LINE OA</h1>
+    <h1 class="title" id="page-title">เพิ่มเพื่อน LINE Official Account</h1>
 
     <div id="app-content">
       <div class="spinner"></div>
@@ -76,46 +76,47 @@ export function GET() {
     window.oppoBackendOrigin = "${backendOrigin}";
     window.oppoFallbackUrl = "https://line.me/R/ti/p/@oppo_thailand";
     window.currentLocale = "th";
+    let autoRedirectTimer = null;
 
     const translations = {
       th: {
-        pageTitle: "ระบบระบุที่มาเพื่อน LINE OA",
-        loading: "กำลังดาวน์โหลดและยืนยันข้อมูล...",
+        pageTitle: "เพิ่มเพื่อน LINE Official Account",
+        loading: "กำลังโหลด...",
         addFriendBtn: "เพิ่มเพื่อน LINE OA",
-        alreadyFriendTitle: "คุณเป็นเพื่อนกับ LINE OA นี้แล้ว",
-        alreadyFriendDesc: "ขอบคุณที่เป็นเพื่อนกับเรา ระบบได้บันทึกการเข้าร่วมกิจกรรมของคุณแล้ว",
-        confirmedTitle: "ยืนยันการเพิ่มเพื่อนเรียบร้อย",
-        confirmedDesc: "ขอบคุณสำหรับการเพิ่มเพื่อน ระบบได้บันทึกที่มาของเพื่อนเรียบร้อยแล้ว",
+        alreadyFriendTitle: "คุณเป็นเพื่อนกับเราแล้ว",
+        alreadyFriendDesc: "กำลังเปิดหน้า LINE Official Account...",
+        confirmedTitle: "เพิ่มเพื่อนสำเร็จ",
+        confirmedDesc: "กำลังเปิดหน้า LINE Official Account...",
         fallbackBtn: "เปิด LINE Official Account",
-        customerErrorMessage: "ไม่สามารถประมวลผลการระบุที่มาเพื่อนได้ กรุณาลองใหม่อีกครั้ง",
-        liffConfigError: "ระบบระบุที่มายังไม่เปิดใช้งานสำหรับสาขานี้",
-        invalidSessionError: "ลิงก์ระบุที่มาหมดอายุหรือไม่ถูกต้อง"
+        customerErrorMessage: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        liffConfigError: "ระบบยังไม่พร้อมใช้งานในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+        invalidSessionError: "ลิงก์หมดอายุหรือไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง"
       },
       en: {
-        pageTitle: "LINE OA Friend Attribution",
-        loading: "Loading and verifying attribution data...",
+        pageTitle: "Add LINE Official Account",
+        loading: "Loading...",
         addFriendBtn: "Add LINE Official Account",
-        alreadyFriendTitle: "You are already friends with this LINE OA",
-        alreadyFriendDesc: "Thank you for being our friend. Your attribution reference has been recorded.",
-        confirmedTitle: "Friend Addition Confirmed",
-        confirmedDesc: "Thank you for adding us as a friend. Your friend attribution reference is saved.",
+        alreadyFriendTitle: "You are already our friend",
+        alreadyFriendDesc: "Opening LINE Official Account...",
+        confirmedTitle: "Friend Added Successfully",
+        confirmedDesc: "Opening LINE Official Account...",
         fallbackBtn: "Open LINE Official Account",
-        customerErrorMessage: "Unable to process friend attribution. Please try again.",
-        liffConfigError: "Friend attribution is not configured for this store location.",
-        invalidSessionError: "Attribution link is invalid or has expired."
+        customerErrorMessage: "An error occurred. Please try again.",
+        liffConfigError: "System is currently unavailable. Please try again.",
+        invalidSessionError: "Link has expired or is invalid. Please try again."
       },
       zh: {
-        pageTitle: "LINE 官方账号好友来源确认",
-        loading: "กำลังดาวน์โหลดและยืนยันข้อมูล...",
-        addFriendBtn: "添加 LINE 官方账号为好友",
-        alreadyFriendTitle: "您已经是该 LINE 官方账号的好友",
-        alreadyFriendDesc: "感谢您关注我们，您的来源追踪已成功记录。",
-        confirmedTitle: "添加好友确认成功",
-        confirmedDesc: "感谢您添加好友，您的好友来源已成功记录。",
+        pageTitle: "添加 LINE 官方账号",
+        loading: "加载中...",
+        addFriendBtn: "添加 LINE 官方账号",
+        alreadyFriendTitle: "您已经是我们的好友",
+        alreadyFriendDesc: "正在打开 LINE 官方账号...",
+        confirmedTitle: "好友添加成功",
+        confirmedDesc: "正在打开 LINE 官方账号...",
         fallbackBtn: "打开 LINE 官方账号",
-        customerErrorMessage: "无法处理好友来源确认，请重试。",
-        liffConfigError: "该门店尚未配置好友来源确认。",
-        invalidSessionError: "来源链接无效หรือ已过期。"
+        customerErrorMessage: "发生错误，请重试。",
+        liffConfigError: "系统暂不可用，请重试。",
+        invalidSessionError: "链接已过期或无效，请重试。"
       }
     };
 
@@ -202,6 +203,42 @@ export function GET() {
       if (data.bootstrapStatus !== undefined) document.getElementById("diag-bootstrap-status").innerText = data.bootstrapStatus;
     }
 
+    function isValidFallbackUrl(url) {
+      if (!url || typeof url !== "string") return false;
+      try {
+        const p = new URL(url);
+        return (p.protocol === "https:" || p.protocol === "http:") &&
+               (p.hostname.includes("line.me") || p.hostname.includes("line-official-account"));
+      } catch {
+        return false;
+      }
+    }
+
+    function scheduleAutoRedirect(url) {
+      const isDebug = isAttributionDebugEnabled(window.location.search);
+      if (isDebug) return; // Disabled in debug=1 mode
+      if (autoRedirectTimer) return; // Prevent duplicate timers
+      if (!isValidFallbackUrl(url)) return;
+
+      autoRedirectTimer = setTimeout(() => {
+        autoRedirectTimer = null;
+        if (isValidFallbackUrl(url)) {
+          window.location.replace(url);
+        }
+      }, 1000);
+    }
+
+    function handleManualFallbackClick(e) {
+      if (e) e.preventDefault();
+      if (autoRedirectTimer) {
+        clearTimeout(autoRedirectTimer);
+        autoRedirectTimer = null;
+      }
+      if (isValidFallbackUrl(window.oppoFallbackUrl)) {
+        window.location.replace(window.oppoFallbackUrl);
+      }
+    }
+
     function renderError(msgKeyOrText) {
       const t = translations[window.currentLocale] || translations.th;
       const text = t[msgKeyOrText] || msgKeyOrText || t.customerErrorMessage;
@@ -209,7 +246,7 @@ export function GET() {
 
       document.getElementById("app-content").innerHTML = \`
         <p class="error-msg">\${text}</p>
-        <a href="\${window.oppoFallbackUrl}" target="_blank" rel="noreferrer" class="btn-secondary">\${t.fallbackBtn}</a>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${t.fallbackBtn}</a>
       \`;
     }
 
@@ -221,8 +258,10 @@ export function GET() {
         <div class="success-icon">✅</div>
         <h2 style="font-size:16px; font-weight:700; color:#166534; margin:0 0 8px 0;">\${t.alreadyFriendTitle}</h2>
         <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.alreadyFriendDesc}</p>
-        <a href="\${window.oppoFallbackUrl}" target="_blank" rel="noreferrer" class="btn-primary">\${t.fallbackBtn}</a>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
       \`;
+
+      scheduleAutoRedirect(window.oppoFallbackUrl);
     }
 
     function renderPromptAddFriend() {
@@ -231,8 +270,9 @@ export function GET() {
 
       document.getElementById("app-content").innerHTML = \`
         <div style="display:flex; flex-direction:column; gap:10px;">
+          <p style="font-size:14px; color:#475569; margin:0 0 12px 0;">\${t.promptAddFriendDesc}</p>
           <button id="liff-add-friend-btn" class="btn-primary" onclick="handleUserRequestFriendship()">\${t.addFriendBtn}</button>
-          <a href="\${window.oppoFallbackUrl}" target="_blank" rel="noreferrer" class="btn-secondary">\${t.fallbackBtn}</a>
+          <a href="#" onclick="handleManualFallbackClick(event)" class="btn-secondary">\${t.fallbackBtn}</a>
         </div>
       \`;
     }
@@ -245,8 +285,10 @@ export function GET() {
         <div class="success-icon">✅</div>
         <h2 style="font-size:16px; font-weight:700; color:#166534; margin:0 0 8px 0;">\${t.confirmedTitle}</h2>
         <p style="font-size:14px; color:#475569; margin:0 0 20px 0;">\${t.confirmedDesc}</p>
-        <a href="\${window.oppoFallbackUrl}" target="_blank" rel="noreferrer" class="btn-primary">\${t.fallbackBtn}</a>
+        <a href="#" onclick="handleManualFallbackClick(event)" class="btn-primary">\${t.fallbackBtn}</a>
       \`;
+
+      scheduleAutoRedirect(window.oppoFallbackUrl);
     }
 
     async function handleUserRequestFriendship() {
@@ -262,10 +304,10 @@ export function GET() {
             return;
           }
         }
-        window.open(window.oppoFallbackUrl, "_blank");
+        handleManualFallbackClick(null);
       } catch (err) {
         console.error("liff.requestFriendship error:", err);
-        window.open(window.oppoFallbackUrl, "_blank");
+        handleManualFallbackClick(null);
       }
     }
 
@@ -400,7 +442,7 @@ export function GET() {
 
       const bootstrap = await statusRes.json();
 
-      if (bootstrap.fallbackUrl) {
+      if (bootstrap.fallbackUrl && isValidFallbackUrl(bootstrap.fallbackUrl)) {
         window.oppoFallbackUrl = bootstrap.fallbackUrl;
       }
 

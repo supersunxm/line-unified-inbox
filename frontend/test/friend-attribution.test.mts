@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { FRIEND_ATTRIBUTION_TRANSLATIONS } from "../src/app/friend-attribution/friend-attribution-translations.ts";
-import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled } from "../src/app/friend-attribution/friend-attribution-utils.ts";
+import { extractLiffIdFromUrl, extractSessionTokenFromUrl, isAttributionDebugEnabled, isValidFallbackUrl } from "../src/app/friend-attribution/friend-attribution-utils.ts";
 import { pivotLinksByStore, prepareLinkDetailsRows } from "../src/app/friend-source-links/friend-source-links-export.ts";
 import type { FriendSourceLink } from "../src/types/api.ts";
 
@@ -60,7 +60,7 @@ test("Requirement 2 & 5: Payload matching and zero hardcoded store basic IDs", (
   }
 
   // Localized customer error message is non-empty and user-friendly
-  assert.equal(FRIEND_ATTRIBUTION_TRANSLATIONS.th.customerErrorMessage, "ไม่สามารถยืนยันข้อมูลได้ กรุณาปิดหน้านี้แล้วเปิดลิงก์ใหม่อีกครั้ง");
+  assert.equal(FRIEND_ATTRIBUTION_TRANSLATIONS.th.customerErrorMessage, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
 });
 
 test("Scenario 17 & 18: Consent required before identify payload and ID token sent without raw client userId", () => {
@@ -386,12 +386,11 @@ test("Scenario 37: First-stage liff.init, URL lid extraction, router safety, and
 test("Scenario 38: Single-document standard LIFF lifecycle, zero navigation, and token isolation", async () => {
   const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
 
-  // 1. Verify NO manual post-init navigation exists in the application
-  assert.doesNotMatch(bootstrapRoute, /window\.location\.replace/, "Bootstrap MUST NOT contain window.location.replace");
+  // 1. Verify NO subpath handoff navigation exists in the application
+  assert.doesNotMatch(bootstrapRoute, /\/friend-attribution-bootstrap\/app/, "Bootstrap MUST NOT navigate to /friend-attribution-bootstrap/app");
   assert.doesNotMatch(bootstrapRoute, /window\.location\.assign/, "Bootstrap MUST NOT contain window.location.assign");
   assert.doesNotMatch(bootstrapRoute, /router\.push/, "Bootstrap MUST NOT contain router.push");
   assert.doesNotMatch(bootstrapRoute, /router\.replace/, "Bootstrap MUST NOT contain router.replace");
-  assert.doesNotMatch(bootstrapRoute, /\/friend-attribution-bootstrap\/app/, "Bootstrap MUST NOT navigate to /friend-attribution-bootstrap/app");
 
   // 2. Verify liff.init occurs BEFORE any backend API fetch (status/identify/friendship-status)
   const liffInitIdx = bootstrapRoute.indexOf("await liff.init(");
@@ -481,8 +480,7 @@ test("Scenario 40: Anti-cache hardening, route dynamic config, and build marker 
   // 3. Verify Build Marker LIFF-ATTR-V3 is rendered in UI
   assert.match(bootstrapRoute, /LIFF-ATTR-V3/, "Route UI MUST display Build Marker LIFF-ATTR-V3");
 
-  // 4. Verify no secret parameters or navigation introduced
-  assert.doesNotMatch(bootstrapRoute, /window\.location\.replace/, "Must NOT reintroduce manual navigation");
+  // 4. Verify no secret parameters introduced
   assert.doesNotMatch(bootstrapRoute, /secret_key|private_key|auth_password/i, "Must NOT contain secret strings");
 });
 
@@ -543,4 +541,56 @@ test("Scenario 42: Production diagnostic hiding and debug mode (?debug=1) enforc
   // 5. Verify customer-facing error messages remain available
   assert.match(bootstrapRoute, /renderError\(["']invalidSessionError["']\)/, "Customer-facing invalidSessionError must be rendered");
   assert.match(bootstrapRoute, /renderError\(["']customerErrorMessage["']\)/, "Customer-facing customerErrorMessage must be rendered");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// 43. Automatic Redirect & Non-Technical Localized Customer Copy
+// ──────────────────────────────────────────────────────────────────────
+
+test("Scenario 43: Automatic redirect after confirmed friendship and non-technical customer copy", async () => {
+  // 1. Verify fallback URL validation helper
+  assert.equal(isValidFallbackUrl("https://line.me/R/ti/p/@oppo_thailand"), true, "Valid HTTPS LINE OA URL must pass validation");
+  assert.equal(isValidFallbackUrl("https://line-official-account.com/oppo"), true, "Valid line-official-account URL must pass validation");
+  assert.equal(isValidFallbackUrl("http://untrusted-site.com"), false, "Untrusted host must fail validation");
+  assert.equal(isValidFallbackUrl("javascript:alert(1)"), false, "Javascript URI must fail validation");
+  assert.equal(isValidFallbackUrl(null), false, "Null fallback URL must fail validation");
+  assert.equal(isValidFallbackUrl(""), false, "Empty fallback URL must fail validation");
+
+  // 2. Verify non-technical customer copy in translations (TH, EN, ZH)
+  const th = FRIEND_ATTRIBUTION_TRANSLATIONS.th;
+  const en = FRIEND_ATTRIBUTION_TRANSLATIONS.en;
+  const zh = FRIEND_ATTRIBUTION_TRANSLATIONS.zh;
+
+  assert.equal(th.pageTitle, "เพิ่มเพื่อน LINE Official Account");
+  assert.equal(th.alreadyFriendTitle, "คุณเป็นเพื่อนกับเราแล้ว");
+  assert.equal(th.alreadyFriendDesc, "กำลังเปิดหน้า LINE Official Account...");
+  assert.equal(th.confirmedTitle, "เพิ่มเพื่อนสำเร็จ");
+  assert.equal(th.confirmedDesc, "กำลังเปิดหน้า LINE Official Account...");
+  assert.equal(th.fallbackBtn, "เปิด LINE Official Account");
+
+  assert.equal(en.pageTitle, "Add LINE Official Account");
+  assert.equal(en.alreadyFriendTitle, "You are already our friend");
+  assert.equal(en.confirmedTitle, "Friend Added Successfully");
+
+  assert.equal(zh.pageTitle, "添加 LINE 官方账号");
+  assert.equal(zh.alreadyFriendTitle, "您已经是我们的好友");
+  assert.equal(zh.confirmedTitle, "好友添加成功");
+
+  // Verify absence of technical system jargon in TH copy
+  assert.doesNotMatch(th.pageTitle, /ระบุที่มา|tracking|attribution|bootstrap|session|verification/i, "TH title must not contain technical terminology");
+  assert.doesNotMatch(th.confirmedDesc, /ระบุที่มา|tracking|attribution|bootstrap|session|verification/i, "TH confirmation desc must not contain technical terminology");
+
+  // 3. Verify route.ts automatic redirect implementation
+  const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
+
+  assert.match(bootstrapRoute, /function scheduleAutoRedirect/, "Bootstrap route script MUST contain scheduleAutoRedirect function");
+  assert.match(bootstrapRoute, /if\s*\(\s*isDebug\s*\)\s*return;/, "scheduleAutoRedirect MUST disable automatic redirect when debug=1 is active");
+  assert.match(bootstrapRoute, /autoRedirectTimer\s*=\s*setTimeout\(\(\)\s*=>\s*\{[\s\S]*?window\.location\.replace\(url\)/, "scheduleAutoRedirect MUST use setTimeout and window.location.replace");
+  assert.match(bootstrapRoute, /1000\)/, "Automatic redirect delay MUST be 1000ms");
+
+  // 4. Verify View component automatic redirect & manual fallback click
+  const viewCode = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
+  assert.match(viewCode, /if\s*\(\s*step\s*!==\s*["']CONFIRMED["']\s*&&\s*step\s*!==\s*["']ALREADY_FRIEND["']\)\s*return;/, "View auto-redirect useEffect MUST check CONFIRMED and ALREADY_FRIEND steps");
+  assert.match(viewCode, /if\s*\(\s*isDebugMode\s*\)\s*return;/, "View auto-redirect useEffect MUST bypass redirect in debug mode");
+  assert.match(viewCode, /window\.location\.replace\(fallbackUrl\)/, "View MUST use window.location.replace for fallback redirect");
 });
