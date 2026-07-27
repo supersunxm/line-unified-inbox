@@ -380,48 +380,44 @@ test("Scenario 37: First-stage liff.init, URL lid extraction, router safety, and
 });
 
 // ──────────────────────────────────────────────────────────────────────
-// 38. Pre-Hydration Raw HTML Route Handler & Lower-Level Sub-Path Handoff
+// 38. Single-Document Standard LIFF Lifecycle & Zero Navigation
 // ──────────────────────────────────────────────────────────────────────
 
-test("Scenario 38: Pre-hydration raw HTML Route Handler, lower-level sub-path handoff, and zero sibling navigation", async () => {
+test("Scenario 38: Single-document standard LIFF lifecycle, zero navigation, and token isolation", async () => {
   const bootstrapRoute = readFileSync(new URL("../src/app/friend-attribution-bootstrap/route.ts", import.meta.url), "utf8");
-  const subPathPage = readFileSync(new URL("../src/app/friend-attribution-bootstrap/app/page.tsx", import.meta.url), "utf8");
-  const viewFile = readFileSync(new URL("../src/app/friend-attribution/friend-attribution-view.tsx", import.meta.url), "utf8");
 
-  // 1. Verify pre-hydration Route Handler returns raw HTML containing official LIFF SDK script before any React/Next.js bundle
-  assert.match(bootstrapRoute, /<!DOCTYPE html>/, "Route Handler MUST return raw HTML document");
-  assert.match(bootstrapRoute, /https:\/\/static\.line-scdn\.net\/liff\/edge\/2\/sdk\.js/, "Route Handler MUST load official LIFF SDK script tag");
-  assert.doesNotMatch(bootstrapRoute, /_next\/static/, "Raw HTML response MUST NOT load Next.js framework chunks");
+  // 1. Verify NO manual post-init navigation exists in the application
+  assert.doesNotMatch(bootstrapRoute, /window\.location\.replace/, "Bootstrap MUST NOT contain window.location.replace");
+  assert.doesNotMatch(bootstrapRoute, /window\.location\.assign/, "Bootstrap MUST NOT contain window.location.assign");
+  assert.doesNotMatch(bootstrapRoute, /router\.push/, "Bootstrap MUST NOT contain router.push");
+  assert.doesNotMatch(bootstrapRoute, /router\.replace/, "Bootstrap MUST NOT contain router.replace");
+  assert.doesNotMatch(bootstrapRoute, /\/friend-attribution-bootstrap\/app/, "Bootstrap MUST NOT navigate to /friend-attribution-bootstrap/app");
 
-  // 2. Verify pre-hydration liff.init runs BEFORE window.location.replace handoff
-  const routeInitIdx = bootstrapRoute.indexOf("await liff.init(");
-  const routeNavIdx = bootstrapRoute.indexOf("window.location.replace(");
-  assert.ok(routeInitIdx > 0 && routeNavIdx > 0, "Route Handler must contain liff.init and navigation");
-  assert.ok(routeInitIdx < routeNavIdx, "liff.init MUST be called before navigation in raw HTML");
+  // 2. Verify liff.init occurs BEFORE any backend API fetch (status/identify/friendship-status)
+  const liffInitIdx = bootstrapRoute.indexOf("await liff.init(");
+  const statusFetchIdx = bootstrapRoute.indexOf("/api/friend-source-links/attribution-session/status");
+  assert.ok(liffInitIdx > 0 && statusFetchIdx > 0, "Both init and status fetch must exist in bootstrap route");
+  assert.ok(liffInitIdx < statusFetchIdx, "liff.init MUST complete before fetching backend session status");
 
-  // 3. Verify handoff target is a lower-level sub-path (/friend-attribution-bootstrap/app) under the Endpoint URL
-  assert.match(bootstrapRoute, /\/friend-attribution-bootstrap\/app/, "Handoff MUST target lower-level sub-path /friend-attribution-bootstrap/app");
-  assert.doesNotMatch(bootstrapRoute, /\/friend-attribution\?/, "Handoff MUST NOT target sibling path /friend-attribution");
+  // 3. Verify session token is read ONLY AFTER liff.init resolves
+  const readTokenCallIdx = bootstrapRoute.indexOf("const sessionToken = extractSessionTokenFromUrl");
+  assert.ok(readTokenCallIdx > 0, "Reading session token call must exist in script");
+  assert.ok(liffInitIdx < readTokenCallIdx, "Session token MUST be read only after liff.init resolves");
 
-  // 4. Verify lower-level sub-path page renders FriendAttributionView
-  assert.match(subPathPage, /FriendAttributionView/, "Sub-path page must render FriendAttributionView");
-
-  // 5. Verify liff.init in View occurs BEFORE any backend API fetch (getFriendAttributionSessionStatus)
-  const viewInitIdx = viewFile.indexOf("await liff.init(");
-  const backendFetchIdx = viewFile.indexOf("api.getFriendAttributionSessionStatus(");
-  assert.ok(viewInitIdx > 0 && backendFetchIdx > 0, "Both init and backend fetch must exist in view");
-  assert.ok(viewInitIdx < backendFetchIdx, "liff.init MUST complete before calling backend session status endpoint");
-
-  // 6. Banbueng LIFF ID 2010830086-hTniHzlm parameter extraction
+  // 4. Verify Banbueng LIFF ID 2010830086-hTniHzlm parameter extraction
   const banbuengEndpointUrl = "?lid=2010830086-hTniHzlm&liff.state=%3Ftoken%3Dsat_banbueng999";
   const params = new URLSearchParams(banbuengEndpointUrl);
   assert.equal(params.get("lid"), "2010830086-hTniHzlm", "Banbueng endpoint lid parameter must resolve exact LIFF ID");
 
-  // 7. Verify NO liff.login is called when isInClient is true
-  assert.match(viewFile, /if\s*\(\s*isInClient\s*\)\s*\{\s*if\s*\(\s*!hasAccessToken\s*\)/, "When isInClient is true, missing access token MUST error without calling liff.login()");
+  // 5. Verify NO liff.login is called when isInClient is true
+  assert.match(bootstrapRoute, /if\s*\(\s*isInClient\s*\)\s*\{\s*if\s*\(\s*!hasAccessToken\s*\)/, "When isInClient is true, missing access token MUST error without calling liff.login()");
 
-  // 8. Verify safe diagnostic stage output (PRIMARY / SECONDARY) and zero raw token rendering
-  assert.match(viewFile, /Initialization Stage:/, "UI must render Initialization Stage");
-  assert.doesNotMatch(viewFile, /getAccessToken\(\)\s*\}\s*<\/div>/, "UI must NOT display raw access token");
-  assert.doesNotMatch(viewFile, /getIDToken\(\)\s*\}\s*<\/div>/, "UI must NOT display raw ID token");
+  // 6. Verify requestFriendship is user-triggered on click handler
+  assert.match(bootstrapRoute, /id="liff-add-friend-btn"/, "Add Friend button must be rendered for user click");
+  assert.match(bootstrapRoute, /onclick="handleUserRequestFriendship\(\)"/, "requestFriendship must be triggered by user click");
+
+  // 7. Verify safe diagnostic output and zero raw secret rendering
+  assert.match(bootstrapRoute, /Session Bootstrap:/, "Diagnostic panel must display Session Bootstrap");
+  assert.doesNotMatch(bootstrapRoute, /getAccessToken\(\)\s*\}<\/div>/, "UI must NOT display raw access token");
+  assert.doesNotMatch(bootstrapRoute, /getIDToken\(\)\s*\}<\/div>/, "UI must NOT display raw ID token");
 });

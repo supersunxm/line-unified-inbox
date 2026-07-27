@@ -32,11 +32,8 @@ export type LiffDiagnosticInfo = {
   isLoggedIn?: boolean;
   hasAccessToken?: boolean;
   hasIdToken?: boolean;
-  hasLiffStateQuery?: boolean;
-  hasCredentialFragment?: boolean;
-  fragmentContainsAccessTokenKey?: boolean;
-  fragmentContainsIdTokenKey?: boolean;
-  stage?: "PRIMARY" | "SECONDARY";
+  currentPath?: string;
+  bootstrapStatus?: "Success" | "Failed";
   initializedLiffId: string | null;
 };
 
@@ -76,47 +73,6 @@ export function FriendAttributionView() {
 
     async function initializeLiffAndBootstrap() {
       try {
-        // Read pre-init boolean diagnostics from sessionStorage (set by raw HTML pre-hydration route)
-        let preDiag: {
-          hasLiffStateQuery: boolean;
-          hasCredentialFragment: boolean;
-          fragmentContainsAccessTokenKey: boolean;
-          fragmentContainsIdTokenKey: boolean;
-          stage: "PRIMARY" | "SECONDARY";
-        } = {
-          hasLiffStateQuery: false,
-          hasCredentialFragment: false,
-          fragmentContainsAccessTokenKey: false,
-          fragmentContainsIdTokenKey: false,
-          stage: "SECONDARY",
-        };
-
-        try {
-          const rawPre = sessionStorage.getItem("oppo_liff_pre_diag");
-          if (rawPre) {
-            const parsed = JSON.parse(rawPre);
-            preDiag = {
-              hasLiffStateQuery: Boolean(parsed.hasLiffStateQuery),
-              hasCredentialFragment: Boolean(parsed.hasCredentialFragment),
-              fragmentContainsAccessTokenKey: Boolean(parsed.fragmentContainsAccessTokenKey),
-              fragmentContainsIdTokenKey: Boolean(parsed.fragmentContainsIdTokenKey),
-              stage: "PRIMARY",
-            };
-          } else if (typeof window !== "undefined") {
-            const params = new URLSearchParams(window.location.search);
-            const hash = window.location.hash || "";
-            preDiag = {
-              hasLiffStateQuery: Boolean(params.get("liff.state") || params.get("state")),
-              hasCredentialFragment: Boolean(hash),
-              fragmentContainsAccessTokenKey: hash.includes("access_token"),
-              fragmentContainsIdTokenKey: hash.includes("id_token"),
-              stage: "SECONDARY",
-            };
-          }
-        } catch {
-          // Ignore parse errors
-        }
-
         const liffModule = await import("@line/liff");
         const liff = liffModule.default;
 
@@ -136,6 +92,7 @@ export function FriendAttributionView() {
         const hasIdToken = Boolean(typeof liff.getIDToken === "function" && liff.getIDToken());
         const liffVersion = typeof liff.getVersion === "function" ? liff.getVersion() : null;
         const lineVersion = typeof liff.getLineVersion === "function" ? liff.getLineVersion() : null;
+        const currentPath = typeof window !== "undefined" ? window.location.pathname : "N/A";
 
         const currentDiag: LiffDiagnosticInfo = {
           operation: "requestFriendship",
@@ -147,11 +104,8 @@ export function FriendAttributionView() {
           isLoggedIn,
           hasAccessToken,
           hasIdToken,
-          hasLiffStateQuery: preDiag.hasLiffStateQuery,
-          hasCredentialFragment: preDiag.hasCredentialFragment,
-          fragmentContainsAccessTokenKey: preDiag.fragmentContainsAccessTokenKey,
-          fragmentContainsIdTokenKey: preDiag.fragmentContainsIdTokenKey,
-          stage: preDiag.stage,
+          currentPath,
+          bootstrapStatus: "Success",
           initializedLiffId: activeLid,
         };
         setDiagnosticInfo(currentDiag);
@@ -516,16 +470,13 @@ export function FriendAttributionView() {
               >
                 <p style={{ fontWeight: 600, margin: "0 0 4px 0" }}>Diagnostic Info ({diagnosticInfo.code})</p>
                 <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", lineHeight: 1.4 }}>
-                  <div>Code: {diagnosticInfo.code}</div>
-                  <div>Message: {diagnosticInfo.message}</div>
-                  <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
-                  <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
+                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
                   <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
                   <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
                   <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
-                  <div>Initialization Stage: {diagnosticInfo.stage || "SECONDARY"}</div>
-                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
+                  <div>Current Path: {diagnosticInfo.currentPath || "N/A"}</div>
+                  <div>Session Bootstrap: {diagnosticInfo.bootstrapStatus || "Failed"}</div>
                 </div>
               </div>
             )}
@@ -595,16 +546,13 @@ export function FriendAttributionView() {
               >
                 <p style={{ fontWeight: 600, margin: "0 0 4px 0" }}>Diagnostic Info ({diagnosticInfo.code})</p>
                 <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", lineHeight: 1.4 }}>
-                  <div>Code: {diagnosticInfo.code}</div>
-                  <div>Message: {diagnosticInfo.message}</div>
-                  <div>LIFF Version: {diagnosticInfo.liffVersion || "N/A"}</div>
-                  <div>LINE Version: {diagnosticInfo.lineVersion || "N/A"}</div>
+                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
                   <div>In Client: {diagnosticInfo.isInClient ? "Yes" : "No"}</div>
                   <div>Is Logged In: {diagnosticInfo.isLoggedIn ? "Yes" : "No"}</div>
                   <div>Has Access Token: {diagnosticInfo.hasAccessToken ? "Yes" : "No"}</div>
                   <div>Has ID Token: {diagnosticInfo.hasIdToken ? "Yes" : "No"}</div>
-                  <div>Initialization Stage: {diagnosticInfo.stage || "SECONDARY"}</div>
-                  <div>Initialized LIFF ID: {diagnosticInfo.initializedLiffId || "N/A"}</div>
+                  <div>Current Path: {diagnosticInfo.currentPath || "N/A"}</div>
+                  <div>Session Bootstrap: {diagnosticInfo.bootstrapStatus || "Failed"}</div>
                 </div>
               </div>
             )}
