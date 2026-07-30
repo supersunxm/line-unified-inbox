@@ -6,6 +6,7 @@ export const PRODUCT_CATALOG: CatalogEntry[] = [
   ["SMARTPHONE", "Reno Series", "OPPO Reno16 Pro 5G", "MODEL", 120, ["reno 16 pro 5g", "reno16 pro", "reno 16 pro"]],
   ["SMARTPHONE", "Reno Series", "OPPO Reno16", "MODEL", 110, ["reno 16", "reno16", "รีโน 16", "เรโน 16"]],
   ["SMARTPHONE", "A Series", "OPPO A6 Pro 5G", "MODEL", 120, ["oppo a6 pro", "a6 pro", "a 6 pro", "a6pro"]],
+  ["SMARTPHONE", "A Series", "OPPO A6 5G", "MODEL", 110, ["a6 5g"]],
   ["SMARTPHONE", "Find Series", "OPPO Find X9", "MODEL", 120, ["find x9", "findx9"]],
   ["SMARTPHONE", "Find Series", "OPPO Find Series", "FAMILY", 60, ["oppo find", "find series", "find x", "find n", "find flip", "find fold", "รุ่นเรือธง"]],
   ["SMARTPHONE", "Reno Series", "OPPO Reno Series", "FAMILY", 60, ["oppo reno", "reno series", "reno", "รีโน", "เรโน"]],

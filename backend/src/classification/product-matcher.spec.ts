@@ -7,6 +7,26 @@ const models: MatchableModel[] = PRODUCT_CATALOG.map((entry, index) => ({ id: St
 const detect = (text: string) => matchProduct([{ id: "message", text, sentAt: new Date() }], models)?.model.name;
 
 void test("catalog aliases are unique after normalization", () => assert.deepEqual(validateProductCatalog(), []));
+for (const [text, confidence, detectionMethod] of [
+  ["A65G", 0.92, "COMPACT_VARIATION"],
+  ["A6 5G", 0.98, "NORMALIZED_PHRASE"],
+  ["A6-5G", 0.98, "NORMALIZED_PHRASE"],
+  ["A6_5G", 0.98, "NORMALIZED_PHRASE"],
+  ["OPPO A6 5G", 0.98, "NORMALIZED_PHRASE"],
+  ["OPPOA65G", 0.92, "COMPACT_VARIATION"],
+  ["Oppo A6 5g", 0.98, "NORMALIZED_PHRASE"],
+  ["ออปโป้ A6 5G", 0.98, "NORMALIZED_PHRASE"],
+] as const) void test(`detects OPPO A6 5G from ${text}`, () => {
+  const result = matchProduct([{ id: "a6-message", text, sentAt: new Date() }], models);
+  const canonical = models.find(({ name }) => name === "OPPO A6 5G");
+  assert.equal(result?.model.id, canonical?.id);
+  assert.equal(result?.model.name, "OPPO A6 5G");
+  assert.equal(result?.confidence, confidence);
+  assert.equal(result?.detectionMethod, detectionMethod);
+  assert.equal(result?.matchedPhrase, text.toLocaleLowerCase() === "oppo a6 5g" ? "OPPO A6 5G" : "a6 5g");
+  assert.equal(result?.sourceMessageId, "a6-message");
+});
+
 for (const [text, expected] of [
   ["Reno 16", "OPPO Reno16"], ["Reno16", "OPPO Reno16"], ["Oppo a6 pro", "OPPO A6 Pro 5G"],
   ["Reno16/F/8+128มีไหมคะ", "OPPO Reno16"], ["ผ่อน oppo a6 pro ได้ไหม", "OPPO A6 Pro 5G"],
@@ -21,7 +41,13 @@ for (const [text, group] of [
   ["หัวชาร์จ supervooc", "ACCESSORIES"], ["สาย type c", "ACCESSORIES"], ["เคส Reno 16", "ACCESSORIES"], ["power bank", "ACCESSORIES"], ["คีย์บอร์ดแท็บเล็ต", "ACCESSORIES"], ["ปากกา OPPO Pad", "ACCESSORIES"],
 ] as const) void test(`${text} maps to ${group}`, () => assert.equal(matchProduct([{ id: "m", text, sentAt: new Date() }], models)?.model.productSeries?.productGroup, group));
 
-for (const text of ["apple watch ราคา", "notepad ใช้ยังไง", "budget เท่าไร", "bandwidth ช้า", "เครื่องเสีย"]) void test(`avoids false positive: ${text}`, () => assert.equal(detect(text), undefined));
+for (const text of ["A6", "A65", "5G", "A", "เอหก 5G", "12345", "เครื่อง 5G ราคาเท่าไร", "apple watch ราคา", "notepad ใช้ยังไง", "budget เท่าไร", "bandwidth ช้า", "เครื่องเสีย"]) void test(`avoids false positive: ${text}`, () => assert.equal(detect(text), undefined));
+
+for (const [text, expected] of [
+  ["A6 Pro", "OPPO A6 Pro 5G"],
+  ["A6 Pro 5G", "OPPO A6 Pro 5G"],
+  ["OPPO A6 5G", "OPPO A6 5G"],
+] as const) void test(`keeps A6 model distinction for ${text}`, () => assert.equal(detect(text), expected));
 
 void test("an exact older model survives a newer generic product mention", () => {
   const result = matchProduct([{ id: "old", text: "Reno16", sentAt: new Date(1) }, { id: "new", text: "มือถือ oppo", sentAt: new Date(2) }], models);

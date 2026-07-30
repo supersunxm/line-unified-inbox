@@ -3,6 +3,75 @@ import test from "node:test";
 import { PrismaService } from "../prisma.service";
 import { ClassificationService } from "./classification.service";
 
+void test("classification persists the canonical OPPO A6 5G rule match", async () => {
+  const productModel = {
+    id: "oppo-a6-5g",
+    name: "OPPO A6 5G",
+    classificationLevel: "MODEL",
+    priority: 110,
+    aliases: [{ alias: "a6 5g", priority: 0 }],
+    productSeries: { name: "A Series", productGroup: "SMARTPHONE" },
+  };
+  type PersistedProduct = {
+    conversationId: string;
+    productModelId: string;
+    confidence: number;
+    source: string;
+    matchedPhrase: string;
+    detectionMethod: string;
+    sourceMessageId: string;
+  };
+  let persistedProduct: PersistedProduct | undefined;
+  let lookupCount = 0;
+  const conversation = {
+    id: "conversation-a6",
+    prioritySource: "RULE",
+    messages: [{ id: "message-a6", originalText: "A65G", sentAt: new Date("2026-07-30T00:00:00Z") }],
+    products: [],
+    topics: [],
+  };
+  const transactionClient = {
+    conversationProduct: {
+      deleteMany: () => Promise.resolve({ count: 0 }),
+      create: ({ data }: { data: PersistedProduct }) => {
+        persistedProduct = data;
+        return Promise.resolve(data);
+      },
+    },
+    conversationTopic: {
+      deleteMany: () => Promise.resolve({ count: 0 }),
+      createMany: () => Promise.resolve({ count: 0 }),
+    },
+    topic: { upsert: () => Promise.reject(new Error("No topic expected")) },
+    conversation: { update: () => Promise.resolve(conversation) },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    conversation: {
+      findUnique: () => {
+        lookupCount += 1;
+        return Promise.resolve(lookupCount === 1 ? conversation : { id: conversation.id, products: [{ ...persistedProduct, productModel }], topics: [] });
+      },
+    },
+    productModel: { findMany: () => Promise.resolve([productModel]) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<void>) => callback(transactionClient),
+  } as unknown as PrismaService;
+
+  const result = await new ClassificationService(prisma).analyze(conversation.id);
+
+  assert.deepEqual(persistedProduct, {
+    conversationId: conversation.id,
+    productModelId: productModel.id,
+    confidence: 0.92,
+    source: "RULE",
+    matchedPhrase: "a6 5g",
+    detectionMethod: "COMPACT_VARIATION",
+    sourceMessageId: "message-a6",
+  });
+  assert.equal(result?.products[0]?.productModel.id, productModel.id);
+  assert.equal(result?.products[0]?.productModel.name, "OPPO A6 5G");
+});
+
 void test("re-analysis preserves manual product, topic, confidence, and priority", async () => {
   const productCreates: Array<{ productModelId: string }> = [];
   const topicCreates: Array<{ topicId: string }> = [];
