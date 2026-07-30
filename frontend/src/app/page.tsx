@@ -25,6 +25,7 @@ import { useResizablePanes } from "./use-resizable-panes";
 import { ConversationPaginationFooter } from "./conversation-pagination-footer";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
+import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -111,6 +112,7 @@ const translations = {
     conversationsToFollow: "ข้อความที่ควรติดตาม",
     conversations: "บทสนทนา",
     filter: "ตัวกรอง",
+    moreFilters: "กรองเพิ่มเติม",
     storeFilter: "ร้านค้า",
     statusFilter: "สถานะ",
     priorityFilter: "ความสำคัญ",
@@ -365,6 +367,7 @@ const translations = {
     conversationsToFollow: "Conversations to Follow Up",
     conversations: "conversations",
     filter: "Filter",
+    moreFilters: "More filters",
     storeFilter: "Store",
     statusFilter: "Status",
     priorityFilter: "Priority",
@@ -619,6 +622,7 @@ const translations = {
     conversationsToFollow: "需要跟进的消息",
     conversations: "个会话",
     filter: "筛选",
+    moreFilters: "更多筛选",
     storeFilter: "门店",
     statusFilter: "状态",
     priorityFilter: "优先级",
@@ -1728,6 +1732,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     topicFilter !== "all" ||
     lineOaFilter !== "all" ||
     sidebarView === "followUp" || sidebarView === "reminded";
+  const conversationListTitle = getConversationListTitle(sidebarView, statusFilter, {
+    conversations: text.conversationsToFollow,
+    incoming: text.incoming,
+    followUp: text.followUp,
+    reminded: text.reminded,
+    status: (status) => getStatusLabel(language, status as FollowUpStatus),
+  });
 
   const storeMetrics = useMemo(
     () =>
@@ -2568,20 +2579,21 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           <div className="border-b border-slate-200 p-4 shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-semibold">
-                  {text.conversationsToFollow}
+                <h2 data-chat-list-title className="text-base font-semibold">
+                  {conversationListTitle}
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="app-muted mt-0.5 text-sm">
                   {chatTotalCount || filteredConversations.length} {text.searchResults}
                 </p>
               </div>
 
               <button
+                data-chat-filter-button
                 onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
                 aria-expanded={showFilterPanel}
                 className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
               >
-                {text.filter}
+                {text.moreFilters}
               </button>
             </div>
 
@@ -2698,74 +2710,73 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             ) : (
               filteredConversations.map((conversation) => {
                 const isSelected = conversation.id === selectedConversation?.id;
+                const status = conversationStates[conversation.id]?.status;
+                const tags = getConversationListTags({
+                  priority: conversation.priority,
+                  priorityLabel: text.highPriority,
+                  statusLabel: getStatusLabel(language, status),
+                  product: conversation.product,
+                  topic: conversation.topic,
+                });
+                const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
 
                 return (
                   <button
                     key={conversation.id}
+                    data-conversation-row
+                    data-selected={isSelected}
                     onClick={() => {
                       setSelectedConversationId(conversation.id);
                       setShowTranslation(true);
                     }}
-                    className={`app-list-item w-full border-b border-slate-200 p-4 text-left ${
+                    aria-pressed={isSelected}
+                    className={`conversation-list-row app-list-item w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
                       isSelected ? "is-selected" : ""
                     }`}
                   >
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{conversation.customer}</p>
-                        <p className="app-muted text-xs">
-                          {conversation.store}
-                        </p>
-                      </div>
+                    <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight">{conversation.customer}</p>
 
-                      <span className="app-muted whitespace-nowrap text-xs">
-                        {formatRelativeTime(conversation.time, language)}
-                      </span>
-                    </div>
-
-                    <p className="mb-3 line-clamp-2 text-sm text-slate-700">
+                    <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700 dark:text-slate-200">
                       {conversation.translations[language]}
                     </p>
 
-                    <div className="flex flex-wrap gap-2">
-                      <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
-                        {conversation.product}
-                      </span>
+                    <div className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
+                      <span className="min-w-0 truncate">{conversation.store}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
+                    </div>
 
-                      <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700">
-                        {conversation.topic}
-                      </span>
-
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs ${
-                          conversation.priority === "High"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-slate-200 text-slate-700"
-                        }`}
-                      >
-                        {conversation.priority === "High"
-                          ? text.highPriority
-                          : text.normalPriority}
-                      </span>
-
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs ${
-                          conversationStates[conversation.id]?.status === "followUp"
-                            ? "bg-amber-100 text-amber-700"
-                            : conversationStates[conversation.id]?.status === "reminded"
-                              ? "bg-blue-100 text-blue-700"
-                              : conversationStates[conversation.id]?.status === "acknowledged"
-                                ? "bg-purple-100 text-purple-700"
-                                : conversationStates[conversation.id]?.status === "completed"
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {getStatusLabel(
-                          language,
-                          conversationStates[conversation.id]?.status,
-                        )}
-                      </span>
+                    <div className="mt-3.5 flex flex-wrap gap-1.5" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                      {tags.visible.map((tag, index) => (
+                        <span
+                          key={`${tag.kind}-${tag.label}-${index}`}
+                          data-conversation-priority={tag.kind === "priority" ? conversation.priority : undefined}
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            tag.kind === "priority"
+                              ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                              : tag.kind === "status"
+                                ? status === "followUp"
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                                  : status === "reminded"
+                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                                    : status === "acknowledged"
+                                      ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                      : status === "completed"
+                                        ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
+                                        : "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                                : tag.kind === "product"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
+                                  : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                          }`}
+                        >
+                          {tag.label}
+                        </span>
+                      ))}
+                      {tags.hidden.length > 0 && (
+                        <span className="app-chip rounded-full px-2 py-0.5 text-xs" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
+                          +{tags.hidden.length}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );

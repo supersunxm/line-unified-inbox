@@ -468,6 +468,11 @@ body.is-resizing-panes {
   color: var(--foreground);
 }
 
+[data-chat-pane="conversations"] .conversation-list-row.is-selected {
+  background: var(--selected);
+  box-shadow: inset 4px 0 0 var(--focus);
+}
+
 .app-chip {
   background: var(--badge-background);
   color: var(--badge-foreground);

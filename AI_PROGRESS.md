@@ -2,9 +2,11 @@
 
 ## Current task
 
-Completed stabilization of the Phase 1 shell/navigation refactor while preserving the corrected chats layout and semantic theme contrast. The proposed development authentication bypass was removed entirely after confirming that normal local login only required the frontend API fallback and local environment key to consistently use `http://localhost:3001`.
+Completed a focused conversation-list information hierarchy refinement without changing filters, pagination, selection behavior, routing, pane resizing, APIs, authentication, or backend logic. The sole active `/chats` branch uses the dynamic list title, localized additional-filter label, customer/message/store-time hierarchy, and three-tag cap with accessible overflow while omitting normal priority. Selected conversation rows now use a pane-scoped stronger semantic background and four-pixel blue inset accent.
 
-Verification passed: backend TypeScript, zero-warning ESLint, 263/263 tests, and build; frontend TypeScript, zero-warning ESLint, 165/165 tests, and build. Healthy project services responded on ports 3001 and 3000. Real localhost HTTP verification confirmed normal login 201 with a session cookie, `/auth/me` 200, logout 201, `/auth/me` 401 afterward, and the removed development-login route 404. No bypass flags, implementation references, or obsolete API-variable references remain.
+Runtime tracing confirmed `/chats` directly renders `ApplicationWorkspace` from `page.tsx`, there is no duplicate conversation-list branch, and PID 89210 serves port 3000 from this repository's frontend directory. An isolated authenticated headless Chrome session verified the actual rendered DOM rather than inferred source: Incoming, Follow-up, and Reminded each render their matching Thai headings; Incoming renders `กรองเพิ่มเติม`; the visible normal-priority count is zero; high priority remains visible; and the selected row exposes its selected marker and scoped styling class.
+
+Verification passed: frontend TypeScript, zero-warning ESLint, 169/169 tests, and production build. Focused tests cover title selection, exact active-header wiring, exact active-row priority rendering, stable semantic attributes, result-count wiring, three-tag overflow, selected-row state, scoped accent styling, and pagination containment.
 
 ## Completed work
 
