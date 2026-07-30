@@ -145,7 +145,7 @@ test("Pagination architecture in page.tsx enforces layout height lock, filter re
   const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 
   // Viewport height constraint
-  assert.match(pageCode, /className=\{`app-workspace-grid grid h-full max-h-full overflow-hidden/);
+  assert.match(pageCode, /className=\{`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden/);
 
   // Filter auto-reset tracking
   assert.match(pageCode, /targetPage = filtersChanged \? 1 : chatPage/);

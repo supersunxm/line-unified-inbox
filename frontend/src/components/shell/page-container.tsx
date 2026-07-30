@@ -13,7 +13,7 @@ export function PageContainer({
 }: PageContainerProps) {
   if (variant === "full") {
     return (
-      <div className={`w-full h-full min-h-0 flex flex-col ${className}`}>
+      <div className={`w-full h-full min-h-0 flex-1 flex flex-col min-w-0 ${className}`}>
         {children}
       </div>
     );

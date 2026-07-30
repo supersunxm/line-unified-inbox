@@ -1,4 +1,4 @@
-const LOCAL_API_BASE_URL = "http://127.0.0.1:3001";
+const LOCAL_API_BASE_URL = "http://localhost:3001";
 
 export function resolveApiBaseUrl(configuredUrl: string | undefined, appEnvironment: string | undefined) {
   const value = configuredUrl?.trim();

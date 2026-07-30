@@ -42,14 +42,14 @@ export function ContextSidebar({
   const sidebarButtonClass = (view: SidebarView) =>
     `app-nav-item w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
       sidebarView === view
-        ? "is-selected font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300"
-        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+        ? "is-selected font-semibold"
+        : ""
     }`;
 
   return (
-    <aside className="app-surface flex flex-col h-full min-w-0 overflow-y-auto border-r border-slate-200 dark:border-slate-800 p-4">
+    <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-y-auto border-r p-4">
       {/* Overview Status Section */}
-      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+      <p className="app-muted mb-3 text-xs font-semibold uppercase tracking-wider">
         {text.overview || "ภาพรวม"}
       </p>
 
@@ -100,7 +100,7 @@ export function ContextSidebar({
       <div className="my-4 border-t border-slate-200 dark:border-slate-800" />
 
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        <p className="app-muted text-xs font-semibold uppercase tracking-wider">
           {text.stores || "ร้านค้า"}
         </p>
         <button
@@ -118,12 +118,12 @@ export function ContextSidebar({
           onClick={() => setSelectedStore("all")}
           className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
             selectedStore === "all"
-              ? "is-selected font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300"
-              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              ? "is-selected font-semibold"
+              : ""
           }`}
         >
           <span>{text.allStores || "ร้านค้าทั้งหมด"}</span>
-          <span className="app-chip rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+          <span className="app-chip rounded-full px-2 py-0.5 text-xs font-medium">
             {conversationsCount}
           </span>
         </button>
@@ -135,13 +135,13 @@ export function ContextSidebar({
             onClick={() => setSelectedStore(store.id)}
             className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               selectedStore === store.id
-                ? "is-selected font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300"
-                : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                ? "is-selected font-semibold"
+                : ""
             }`}
           >
             <span className="truncate">{getStoreDisplayName(store.name)}</span>
             {store.waiting > 0 && (
-              <span className="app-chip rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+              <span className="app-chip ml-2 rounded-full px-2 py-0.5 text-xs font-medium">
                 {store.waiting}
               </span>
             )}

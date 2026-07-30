@@ -446,7 +446,7 @@ body.is-resizing-panes {
     display: none;
   }
 
-  .chat-resizable-grid > section:last-child {
+  .chat-resizable-grid > [data-chat-pane="detail"] {
     grid-column: 1 / -1;
   }
 }
@@ -457,7 +457,7 @@ body.is-resizing-panes {
     overflow-x: hidden;
   }
 
-  .app-workspace-grid > aside {
+  .chat-resizable-grid > [data-chat-pane="sidebar"] {
     max-height: 18rem;
   }
 }

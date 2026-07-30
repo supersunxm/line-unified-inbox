@@ -39,10 +39,10 @@ export function TopNavigation({
       <div className="flex min-w-0 items-center gap-4 lg:gap-6">
         <div className="min-w-max shrink-0">
           <Link href="/dashboard" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5">
-            <h1 className="text-lg font-bold tracking-tight sm:text-xl text-slate-900 dark:text-slate-50">
+            <h1 className="text-lg font-bold tracking-tight sm:text-xl">
               {text.appName || "OPPO LINE OA Monitor"}
             </h1>
-            <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
+            <p className="app-muted hidden text-xs sm:block">
               {text.appDescription || "ระบบติดตามข้อความจาก LINE OA ของร้านค้า"}
             </p>
           </Link>
@@ -53,11 +53,7 @@ export function TopNavigation({
           <Link
             href="/dashboard"
             aria-current={currentSection === "dashboard" ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              currentSection === "dashboard"
-                ? "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            }`}
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {text.dashboard || "แดชบอร์ด"}
           </Link>
@@ -65,11 +61,7 @@ export function TopNavigation({
           <Link
             href="/chats"
             aria-current={currentSection === "chats" ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              currentSection === "chats"
-                ? "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            }`}
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}
           </Link>
@@ -77,11 +69,7 @@ export function TopNavigation({
           <Link
             href="/stores"
             aria-current={currentSection === "stores" ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              currentSection === "stores"
-                ? "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            }`}
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {text.storeManagement || "จัดการร้านค้า"}
           </Link>
@@ -89,11 +77,7 @@ export function TopNavigation({
           <Link
             href="/follower-insights"
             aria-current={currentSection === "follower-insights" ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              currentSection === "follower-insights"
-                ? "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-800"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            }`}
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}
           </Link>
@@ -102,11 +86,7 @@ export function TopNavigation({
             <Link
               href="/friend-source-links"
               aria-current={currentSection === "friend-source-links" ? "page" : undefined}
-              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                currentSection === "friend-source-links"
-                  ? "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-800"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-              }`}
+              className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               {language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}
             </Link>
@@ -123,7 +103,7 @@ export function TopNavigation({
             type="button"
             onClick={resetPaneSizes}
             aria-label={language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}
-            className="app-button-secondary rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}
           </button>
@@ -136,7 +116,7 @@ export function TopNavigation({
         )}
 
         {authUser && (
-          <span className="hidden xl:inline text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="app-muted hidden xl:inline text-xs font-medium">
             {authUser.displayName} · {authUser.role}
           </span>
         )}
@@ -145,14 +125,14 @@ export function TopNavigation({
           <button
             type="button"
             onClick={() => void logout()}
-            className="app-button-secondary rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
+            className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs font-medium hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
           >
             Logout
           </button>
         )}
 
         {lastUpdatedAt && (
-          <span className="app-header-metadata hidden 2xl:inline text-xs text-slate-400">
+          <span className="app-header-metadata app-muted hidden 2xl:inline text-xs">
             {text.lastUpdated || "อัปเดตล่าสุด"}{" "}
             {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(lastUpdatedAt)}
           </span>
@@ -166,7 +146,7 @@ export function TopNavigation({
             onChange={(e) => setSearchText(e.target.value)}
             placeholder={text.searchPlaceholder || "ค้นหาลูกค้า ร้านค้า หรือข้อความ"}
             aria-label={text.searchPlaceholder || "Search"}
-            className="app-header-search app-input w-48 lg:w-64 h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-slate-100 placeholder-slate-400"
+            className="app-header-search app-input w-48 lg:w-64 h-9 rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
 

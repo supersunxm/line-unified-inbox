@@ -15,6 +15,7 @@ export function ResizableSeparator({ separator, value, minimum, maximum, onResiz
   }
 
   return <div
+    data-chat-separator={separator}
     role="separator"
     aria-label={separator === "sidebar" ? "Resize store sidebar" : "Resize conversation list"}
     aria-orientation="vertical"

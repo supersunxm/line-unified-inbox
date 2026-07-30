@@ -2,7 +2,9 @@
 
 ## Current task
 
-Completed Phase 1 frontend global application shell & navigation integration into the primary application workspace (`frontend/src/app/page.tsx`). All 158 frontend unit tests (including new executable route-tree integration tests in `frontend/test/route-tree-integration.test.mts`), TypeScript compilation (`npx tsc --noEmit`), Next.js production build (`npm run build`), and `git diff --check` pass cleanly with zero warnings or errors.
+Completed stabilization of the Phase 1 shell/navigation refactor while preserving the corrected chats layout and semantic theme contrast. The proposed development authentication bypass was removed entirely after confirming that normal local login only required the frontend API fallback and local environment key to consistently use `http://localhost:3001`.
+
+Verification passed: backend TypeScript, zero-warning ESLint, 263/263 tests, and build; frontend TypeScript, zero-warning ESLint, 165/165 tests, and build. Healthy project services responded on ports 3001 and 3000. Real localhost HTTP verification confirmed normal login 201 with a session cookie, `/auth/me` 200, logout 201, `/auth/me` 401 afterward, and the removed development-login route 404. No bypass flags, implementation references, or obsolete API-variable references remain.
 
 ## Completed work
 

@@ -18,6 +18,7 @@ import { followerInsightsTranslations } from "./follower-insights/follower-insig
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
+import type { SidebarView } from "@/components/shell";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -34,16 +35,6 @@ type FollowUpStatus =
   | "completed"
   | "escalated";
 type Priority = "High" | "Normal";
-type SidebarView =
-  | "dashboard"
-  | "incoming"
-  | "followUp"
-  | "reminded"
-  | "stores"
-  | "customerInsights"
-  | "lineOaManagement"
-  | "systemStatus"
-  | "pilotChecklist";
 type StatusFilter = FollowUpStatus | "all";
 type PriorityFilter = Priority | "all";
 type ActivityHistoryItem = {
@@ -2217,11 +2208,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       apiError={apiError}
       loadApplicationData={loadApplicationData}
     >
+      <PageContainer variant="full">
       <div
         ref={chatContainerRef}
-        className={`app-workspace-grid grid h-full max-h-full overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : ""}`}
+        className={`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : ""}`}
         style={initialSection === "chats" ? { gridTemplateColumns: `${chatPaneWidths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPaneWidths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
-      >        {initialSection === "chats" && (
+      >
+        {initialSection === "chats" && (
           <ContextSidebar
             sidebarView={sidebarView}
             selectSidebarView={selectSidebarView}
@@ -2570,8 +2563,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <FriendSourceLinksView language={language} userRole={authUser.role} />
           </PageContainer>
         ) : (
-          <PageContainer variant="full">
-        <section className="app-surface min-w-0 flex flex-col h-full overflow-hidden border-r">
+        <>
+        <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r">
           <div className="border-b border-slate-200 p-4 shrink-0">
             <div className="flex items-center justify-between">
               <div>
@@ -2720,12 +2713,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">{conversation.customer}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="app-muted text-xs">
                           {conversation.store}
                         </p>
                       </div>
 
-                      <span className="whitespace-nowrap text-xs text-slate-400">
+                      <span className="app-muted whitespace-nowrap text-xs">
                         {formatRelativeTime(conversation.time, language)}
                       </span>
                     </div>
@@ -2798,7 +2791,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
         <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
 
-        <section className="min-w-0 overflow-y-auto p-6">
+        <section data-chat-pane="detail" className="min-w-0 min-h-0 overflow-y-auto p-6">
           {selectedConversation && selectedConversationState ? (
             <div className="mx-auto max-w-4xl">
             <div className="mb-6 flex items-start justify-between">
@@ -3096,9 +3089,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             </div>
           )}
         </section>
-          </PageContainer>
+        </>
         )}
       </div>
+      </PageContainer>
       {storeRemovalPreview && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-6">
           <div role="dialog" aria-modal="true" aria-labelledby="remove-store-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
