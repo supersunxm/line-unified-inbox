@@ -24,6 +24,7 @@
     "auth:status": "tsx --env-file=.env scripts/auth-status.ts",
     "product-catalog:validate": "tsx scripts/product-catalog.ts validate",
     "product-catalog:seed": "tsx --env-file=.env scripts/product-catalog.ts seed",
+    "product-alias:adopt-phase1": "tsx scripts/adopt-product-alias-ownership.ts",
     "classification:backfill-products": "tsx --env-file=.env scripts/backfill-product-classifications.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
     "security:check": "sh scripts/security-check.sh",

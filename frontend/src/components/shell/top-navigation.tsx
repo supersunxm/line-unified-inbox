@@ -75,6 +75,14 @@ export function TopNavigation({
           </Link>
 
           <Link
+            href="/classification-insights"
+            aria-current={currentSection === "classification-insights" ? "page" : undefined}
+            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            {language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}
+          </Link>
+
+          <Link
             href="/follower-insights"
             aria-current={currentSection === "follower-insights" ? "page" : undefined}
             className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

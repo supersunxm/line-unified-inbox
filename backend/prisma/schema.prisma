@@ -41,6 +41,11 @@ enum ProductGroup {
   UNKNOWN
 }
 
+enum ProductAliasSource {
+  CATALOG
+  MANUAL
+}
+
 enum PurchaseIntent {
   LOW
   MEDIUM
@@ -502,6 +507,7 @@ model ProductAlias {
   language        String?
   isActive        Boolean      @default(true)
   priority        Int          @default(0)
+  source          ProductAliasSource @default(MANUAL)
   productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Cascade)
 
   @@index([productModelId, isActive])

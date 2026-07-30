@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { automaticCatalogAliasesForModel, storedProductAliasSafety } from "../src/classification/product-catalog";
 import { matchProduct } from "../src/classification/product-matcher";
 
 async function main() {
@@ -6,7 +7,14 @@ async function main() {
   const sizeArg = process.argv.find((value) => value.startsWith("--batch-size=")); const batchSize = Math.max(1, Number(sizeArg?.split("=")[1] ?? 100));
   let cursor: string | undefined; let processed = 0; let updated = 0; let unchanged = 0; let unknown = 0; let failed = 0; let skippedManual = 0;
   try {
-    const models = await prisma.productModel.findMany({ where: { isActive: true }, include: { aliases: { where: { isActive: true } }, productSeries: true } });
+    const storedModels = await prisma.productModel.findMany({ where: { isActive: true }, include: { aliases: { where: { isActive: true } }, productSeries: true } });
+    const models = storedModels.map((model) => ({
+      ...model,
+      aliases: [
+        ...model.aliases.map((alias) => ({ ...alias, safety: storedProductAliasSafety(model.name, alias.alias, alias.source) })),
+        ...automaticCatalogAliasesForModel(model.name).map(({ alias, safety }) => ({ alias, safety, priority: 0 })),
+      ],
+    }));
     do {
       const rows = await prisma.conversation.findMany({ take: batchSize, ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}), orderBy: { id: "asc" }, include: { messages: { where: { direction: "INBOUND" }, orderBy: { sentAt: "asc" } }, products: true } });
       if (!rows.length) break;

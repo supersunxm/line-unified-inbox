@@ -5,3 +5,7 @@ export function normalizeProductText(value: string): string {
 export function compactProductText(value: string): string {
   return normalizeProductText(value).replace(/\boppo\b/g, "").replace(/\s+/g, "");
 }
+
+export function productAliasSafetyIdentity(value: string): string {
+  return normalizeProductText(value).replace(/\s+/g, "");
+}

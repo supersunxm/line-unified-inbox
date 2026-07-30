@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ProductAliasSource } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { ClassificationService } from "./classification.service";
 
@@ -9,7 +10,7 @@ void test("classification persists the canonical OPPO A6 5G rule match", async (
     name: "OPPO A6 5G",
     classificationLevel: "MODEL",
     priority: 110,
-    aliases: [{ alias: "a6 5g", priority: 0 }],
+    aliases: [{ alias: "a6 5g", priority: 0, source: ProductAliasSource.CATALOG }],
     productSeries: { name: "A Series", productGroup: "SMARTPHONE" },
   };
   type PersistedProduct = {

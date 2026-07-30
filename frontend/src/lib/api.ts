@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -84,6 +84,7 @@ export const api = {
   products: () => request<ProductMetadataResponse>("/metadata/products"),
   topics: () => request<ApiTopic[]>("/metadata/topics"),
   dashboard: () => request<DashboardSummaryResponse>("/dashboard/summary"),
+  classificationInsights: () => request<ClassificationInsightsResponse>("/classification-insights"),
   lineOfficialAccounts: (showArchived = false) => request<LineOfficialAccountResponse[]>(`/line-official-accounts?showArchived=${showArchived}`),
   createLineOfficialAccount: (input: CreateLineOaInput) => request<LineOfficialAccountResponse>("/line-official-accounts", { method: "POST", body: JSON.stringify(input) }),
   updateLineOfficialAccount: (id: string, input: Partial<CreateLineOaInput>) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),

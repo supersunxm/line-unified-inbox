@@ -1,0 +1,377 @@
+[
+  {
+    "id": "2b9fcf34-e105-4af4-b046-1de6d5f87efa",
+    "modelName": "OPPO A6 5G",
+    "normalizedAlias": "a65g"
+  },
+  {
+    "id": "2320d43b-bcf0-4817-97a1-f3d020666ae3",
+    "modelName": "OPPO A6 Pro 5G",
+    "normalizedAlias": "a6pro"
+  },
+  {
+    "id": "2f7d2c0e-1ee8-4e5b-b828-95b019814c6e",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "accessories"
+  },
+  {
+    "id": "f05363b2-2f09-4c60-a40c-417786325368",
+    "modelName": "OPPO Charger",
+    "normalizedAlias": "adapter"
+  },
+  {
+    "id": "59aa1da4-301b-46b9-b1df-9275bd59c089",
+    "modelName": "OPPO Smart Home",
+    "normalizedAlias": "aiot"
+  },
+  {
+    "id": "99c5c11b-8d94-4553-bdc6-d83122021dc1",
+    "modelName": "OPPO A Series",
+    "normalizedAlias": "aseries"
+  },
+  {
+    "id": "7e1d3d3c-e7c8-44bb-8e79-3b1840b8cadf",
+    "modelName": "OPPO Band Series",
+    "normalizedAlias": "band"
+  },
+  {
+    "id": "0d436b97-8d81-424d-b92a-7f31fc4c51d5",
+    "modelName": "OPPO Smart Camera",
+    "normalizedAlias": "camera"
+  },
+  {
+    "id": "a7f79e49-48d0-4f22-aee1-3ab1f4cc7909",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "case"
+  },
+  {
+    "id": "14eba567-c503-4c74-bff9-663bcf9dc0d8",
+    "modelName": "OPPO Smart Camera",
+    "normalizedAlias": "cctv"
+  },
+  {
+    "id": "eb30ce4e-1f2d-4557-b016-efc7d3c2c2e8",
+    "modelName": "OPPO Charger",
+    "normalizedAlias": "charger"
+  },
+  {
+    "id": "1c378eb0-229f-4502-b9a3-80017965ff75",
+    "modelName": "OPPO Earbuds",
+    "normalizedAlias": "earbuds"
+  },
+  {
+    "id": "4e6602e2-4f27-4b53-97bf-2c1dd93f66e2",
+    "modelName": "OPPO Enco Series",
+    "normalizedAlias": "enco"
+  },
+  {
+    "id": "ac3380c6-c62a-41da-9dd4-bdfb92f24268",
+    "modelName": "OPPO Enco Air4",
+    "normalizedAlias": "encoair4"
+  },
+  {
+    "id": "8c3fe31b-e5d9-4a1a-bf04-6508bd4d73d3",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "find"
+  },
+  {
+    "id": "449da962-d000-40cb-90cc-10b008242d05",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "findflip"
+  },
+  {
+    "id": "e58cfda8-f863-4ef4-8ce3-2f51b986a4e3",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "findfold"
+  },
+  {
+    "id": "d07e3d81-f27a-4e69-af3a-3eda71916d28",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "findn"
+  },
+  {
+    "id": "f3cf6e2a-bb23-4876-ab98-29eedc36813b",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "findseries"
+  },
+  {
+    "id": "6d9758f2-9126-4510-bda7-9d7ac408cfc9",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "findx"
+  },
+  {
+    "id": "aac32f6b-1f32-4e7a-9afd-42b20d14a771",
+    "modelName": "OPPO Find X9",
+    "normalizedAlias": "findx9"
+  },
+  {
+    "id": "29e97ed6-4888-4666-a57c-3556133facab",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "keyboard"
+  },
+  {
+    "id": "b5f0bd17-d4ed-49cd-bb6f-44346a43d98d",
+    "modelName": "OPPO K Series",
+    "normalizedAlias": "kseries"
+  },
+  {
+    "id": "10ca3508-300b-4686-b6d8-2ea4d91902a7",
+    "modelName": "OPPO Pad Series",
+    "normalizedAlias": "pad"
+  },
+  {
+    "id": "e747e845-962e-4200-bccf-f6dd5899df0d",
+    "modelName": "OPPO Pad 3",
+    "normalizedAlias": "pad3"
+  },
+  {
+    "id": "e74c010d-94a0-4940-83f7-17a591fb8be3",
+    "modelName": "OPPO Pad Air Series",
+    "normalizedAlias": "padair"
+  },
+  {
+    "id": "f36509b2-990e-4d25-833e-2e624ba290b2",
+    "modelName": "OPPO Smartphone",
+    "normalizedAlias": "phone"
+  },
+  {
+    "id": "76b7a621-e928-4a54-8761-6299451fa5dc",
+    "modelName": "OPPO Reno16",
+    "normalizedAlias": "reno16"
+  },
+  {
+    "id": "f44ca3d0-eb75-402e-9ac3-fa17e8ebc9fe",
+    "modelName": "OPPO Reno16 Pro 5G",
+    "normalizedAlias": "reno16pro"
+  },
+  {
+    "id": "6dcba58b-63a9-459c-b179-3c50780f68ec",
+    "modelName": "OPPO Reno16 Pro 5G",
+    "normalizedAlias": "reno16pro5g"
+  },
+  {
+    "id": "85f3974e-cd32-4fd6-936a-5b3eea811126",
+    "modelName": "OPPO Reno Series",
+    "normalizedAlias": "renoseries"
+  },
+  {
+    "id": "0aef70f4-fe7f-450d-b80b-09ce0d240205",
+    "modelName": "OPPO Router",
+    "normalizedAlias": "router"
+  },
+  {
+    "id": "9d1613c6-3113-463e-9a0b-679076e09466",
+    "modelName": "OPPO Smartphone",
+    "normalizedAlias": "smartphone"
+  },
+  {
+    "id": "e1e2ebbe-cfd3-4169-a68f-64ee7a751f82",
+    "modelName": "OPPO TV",
+    "normalizedAlias": "tv"
+  },
+  {
+    "id": "3c794ebf-e0ea-4068-8bf6-8763c4379b5e",
+    "modelName": "OPPO Service",
+    "normalizedAlias": "warranty"
+  },
+  {
+    "id": "3684aef7-fc44-483e-bbba-c838f2ebda6b",
+    "modelName": "OPPO Watch Series",
+    "normalizedAlias": "watch"
+  },
+  {
+    "id": "5740d323-a818-4b0d-ab73-bf9bf995d1dc",
+    "modelName": "OPPO Watch X2",
+    "normalizedAlias": "watchx2"
+  },
+  {
+    "id": "5f23c909-4b13-4dda-82ab-211e5449da20",
+    "modelName": "OPPO Router",
+    "normalizedAlias": "wifi"
+  },
+  {
+    "id": "015b5143-588a-4a3d-937c-146102938593",
+    "modelName": "OPPO Smart Camera",
+    "normalizedAlias": "กล้อง"
+  },
+  {
+    "id": "86a99e90-9965-46d1-bc79-fb3be2b82f6b",
+    "modelName": "OPPO Service",
+    "normalizedAlias": "เคลม"
+  },
+  {
+    "id": "e4b5aa52-47d8-4c59-a9f6-f50b620daacc",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "เคส"
+  },
+  {
+    "id": "6f6e923a-443a-4e77-9db2-0293897ce90f",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "เคสa6"
+  },
+  {
+    "id": "1638f082-5c51-4a10-a24c-85466d642845",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "เคสreno"
+  },
+  {
+    "id": "b3cfbdd8-5d94-4ba9-a983-e959d1dd3f9b",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "เคสreno16"
+  },
+  {
+    "id": "975be4c8-edbb-4bdb-b688-ec48b33f3015",
+    "modelName": "OPPO Service",
+    "normalizedAlias": "ซ่อม"
+  },
+  {
+    "id": "f9810804-fd26-413e-bc6d-7a4482f49a9c",
+    "modelName": "OPPO Charger",
+    "normalizedAlias": "ที่ชาร์จ"
+  },
+  {
+    "id": "cc276e8d-4bf3-480e-a2a7-245a277bc4bd",
+    "modelName": "OPPO Pad Series",
+    "normalizedAlias": "แท็บเล็ต"
+  },
+  {
+    "id": "25c78bc8-67ad-4453-9fb1-d281e1d04cae",
+    "modelName": "OPPO TV",
+    "normalizedAlias": "โทรทัศน์"
+  },
+  {
+    "id": "28d31775-b904-4dea-b076-391f049346f6",
+    "modelName": "OPPO Smartphone",
+    "normalizedAlias": "โทรศัพท์"
+  },
+  {
+    "id": "7cc372c1-b85b-4dfa-9edd-c9c3859f6332",
+    "modelName": "OPPO Watch Series",
+    "normalizedAlias": "นาฬิกา"
+  },
+  {
+    "id": "c918f43a-3075-4af6-9005-8161a38d92c8",
+    "modelName": "OPPO Smart Home",
+    "normalizedAlias": "บ้านอัจฉริยะ"
+  },
+  {
+    "id": "df6f69a7-fa95-473d-bd8f-cb093440e6a5",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "ปากกา"
+  },
+  {
+    "id": "5047406a-17eb-41ca-b8ab-5b30437acc56",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "ปากกาpad"
+  },
+  {
+    "id": "f4241dc3-bdfd-441a-9f18-50766d734ea6",
+    "modelName": "OPPO Pad Series",
+    "normalizedAlias": "แพด"
+  },
+  {
+    "id": "838fb370-600e-40c9-83c9-ddd4bd2407b4",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "ฟิล์ม"
+  },
+  {
+    "id": "d40a84c1-cf3a-4a05-becd-b4e37e867b27",
+    "modelName": "OPPO Case",
+    "normalizedAlias": "ฟิล์มa6pro"
+  },
+  {
+    "id": "72065f74-95c6-4c35-b738-6c8169e419c0",
+    "modelName": "OPPO Smartphone",
+    "normalizedAlias": "มือถือ"
+  },
+  {
+    "id": "d470d5c0-39e6-4617-8b91-9e73e739f418",
+    "modelName": "OPPO Reno Series",
+    "normalizedAlias": "รีโน"
+  },
+  {
+    "id": "c984b7be-c1fa-4a88-9cc1-4a341b34f881",
+    "modelName": "OPPO Reno16",
+    "normalizedAlias": "รีโน16"
+  },
+  {
+    "id": "64557cfe-f2e3-49fd-979d-a19050de10a6",
+    "modelName": "OPPO A Series",
+    "normalizedAlias": "รุ่นa"
+  },
+  {
+    "id": "1fbdf4a1-b018-4935-942c-d823002592c2",
+    "modelName": "OPPO Find Series",
+    "normalizedAlias": "รุ่นเรือธง"
+  },
+  {
+    "id": "21cda45a-11c8-4cd3-bf1a-60f9a88f9caf",
+    "modelName": "OPPO Reno Series",
+    "normalizedAlias": "เรโน"
+  },
+  {
+    "id": "671a3c38-0ba1-43a7-99b6-7c99bb5ee6c1",
+    "modelName": "OPPO Reno16",
+    "normalizedAlias": "เรโน16"
+  },
+  {
+    "id": "232997ba-cf56-4b90-8fce-65f17d9edb63",
+    "modelName": "OPPO Service",
+    "normalizedAlias": "ศูนย์บริการ"
+  },
+  {
+    "id": "153fc374-10b1-41be-9aa9-9613a5164d3d",
+    "modelName": "OPPO Smartphone",
+    "normalizedAlias": "สมาร์ตโฟน"
+  },
+  {
+    "id": "d01be72c-cdb7-463c-bf72-445a2854767c",
+    "modelName": "OPPO Watch Series",
+    "normalizedAlias": "สมาร์ตวอทช์"
+  },
+  {
+    "id": "2f4c680b-c29a-4b6f-b1c0-e5de8ff828d3",
+    "modelName": "OPPO Charger",
+    "normalizedAlias": "สายชาร์จ"
+  },
+  {
+    "id": "57627faa-c20f-429c-ad8a-a0142f86c6ce",
+    "modelName": "OPPO Band Series",
+    "normalizedAlias": "สายรัดข้อมือ"
+  },
+  {
+    "id": "8bb0b68b-8dae-4235-85df-a9702fdc57cc",
+    "modelName": "OPPO Charger",
+    "normalizedAlias": "หัวชาร์จsupervooc"
+  },
+  {
+    "id": "29014905-ed0f-42aa-a9e2-7264c87876d6",
+    "modelName": "OPPO Earbuds",
+    "normalizedAlias": "หูฟัง"
+  },
+  {
+    "id": "5325aa9c-7ecf-452f-b428-0daee639260f",
+    "modelName": "OPPO Enco Series",
+    "normalizedAlias": "หูฟังenco"
+  },
+  {
+    "id": "59d876b3-303d-4d72-85ac-1fbde3ac83e2",
+    "modelName": "OPPO Accessories",
+    "normalizedAlias": "อุปกรณ์เสริม"
+  },
+  {
+    "id": "3a7edcb8-7c20-4dba-b2cd-e842a49f929c",
+    "modelName": "OPPO A Series",
+    "normalizedAlias": "เอซีรีส์"
+  },
+  {
+    "id": "19dee736-52e9-4a96-a08c-38943be212e5",
+    "modelName": "OPPO Enco Series",
+    "normalizedAlias": "เอ็นโค่"
+  },
+  {
+    "id": "8f9be8a1-a655-4e45-8016-30926e304ea9",
+    "modelName": "OPPO Earbuds",
+    "normalizedAlias": "เอียร์บัด"
+  }
+]

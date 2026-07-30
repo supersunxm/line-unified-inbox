@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { ActivityActionType } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { classifyConversationText } from "./classification-engine";
+import { automaticCatalogAliasesForModel, storedProductAliasSafety } from "./product-catalog";
 import { matchProduct } from "./product-matcher";
 
 @Injectable()
@@ -12,7 +13,14 @@ export class ClassificationService {
     const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, include: { messages: { where: { direction: "INBOUND" }, orderBy: { sentAt: "asc" } }, products: true, topics: true } });
     if (!conversation) throw new NotFoundException("Conversation not found");
     const text = conversation.messages.map(({ originalText }) => originalText).join(" ").toLocaleLowerCase();
-    const models = await this.prisma.productModel.findMany({ where: { isActive: true }, include: { aliases: { where: { isActive: true } }, productSeries: true } });
+    const storedModels = await this.prisma.productModel.findMany({ where: { isActive: true }, include: { aliases: { where: { isActive: true } }, productSeries: true } });
+    const models = storedModels.map((model) => ({
+      ...model,
+      aliases: [
+        ...model.aliases.map((alias) => ({ ...alias, safety: storedProductAliasSafety(model.name, alias.alias, alias.source) })),
+        ...automaticCatalogAliasesForModel(model.name).map(({ alias, safety }) => ({ alias, safety, priority: 0 })),
+      ],
+    }));
     const match = matchProduct(conversation.messages.map((message) => ({ id: message.id, text: message.originalText, sentAt: message.sentAt })), models);
     const suggestion = classifyConversationText(text, Boolean(match));
     const manualProductIds = new Set(conversation.products.filter(({ source }) => source === "MANUAL").map(({ productModelId }) => productModelId));

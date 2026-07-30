@@ -11,8 +11,8 @@ const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "
 const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 const separatorCode = readFileSync(new URL("../src/app/resizable-separator.tsx", import.meta.url), "utf8");
 
-test("TopNavigation renders all 5 primary navigation links with aria-current='page'", () => {
-  for (const route of ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"]) {
+test("TopNavigation renders all 6 primary navigation links with aria-current='page'", () => {
+  for (const route of ["/dashboard", "/chats", "/stores", "/classification-insights", "/follower-insights", "/friend-source-links"]) {
     assert.match(topNavCode, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
   }
   assert.match(topNavCode, /aria-current=\{currentSection ===/);
@@ -43,6 +43,7 @@ test("primaryNavigationState maps active sections correctly", () => {
     dashboardActive: true,
     chatsActive: false,
     storesActive: false,
+    classificationInsightsActive: false,
     followerInsightsActive: false,
     friendSourceLinksActive: false,
     showStoreManagementAction: false,
@@ -51,6 +52,7 @@ test("primaryNavigationState maps active sections correctly", () => {
     dashboardActive: false,
     chatsActive: true,
     storesActive: false,
+    classificationInsightsActive: false,
     followerInsightsActive: false,
     friendSourceLinksActive: false,
     showStoreManagementAction: false,

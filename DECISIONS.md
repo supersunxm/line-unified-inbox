@@ -1,3 +1,20 @@
+# Classification Insights current-state boundary (2026-07-30)
+
+- Phase 1.5 reports only the current persisted classification state. Coverage is based on active-store conversations with at least one inbound text message and is explicitly not an accuracy measurement.
+- The read-only endpoint uses aggregate queries and a 25-row operational review queue. It excludes message content and customer identity while retaining store, LINE OA, intent, priority, topic, and conversation-link context.
+- RULE, MANUAL, and mixed-source conversations are counted distinctly. Product ranking counts unique conversation/model rows, and empty denominators return null percentages or a zero coverage KPI.
+- Historical quality, correction rate, failed classification attempts, and model drift remain out of scope until immutable classification-run and feedback events exist.
+
+# ProductAlias provenance and reconciliation (2026-07-30)
+
+- Alias provenance is explicit: version-controlled aliases use `ProductAliasSource.CATALOG`; operator/database aliases use `ProductAliasSource.MANUAL`.
+- Existing rows migrate conservatively to `MANUAL`. Catalog synchronization never silently converts a manual row, and a same-normalized-key ownership conflict fails before catalog mutation.
+- Reconciliation manages only `CATALOG` rows. Stale catalog aliases are deactivated rather than deleted, restored catalog aliases reactivate, and manual aliases remain untouched.
+- Manual, unknown-source, and catalog-unknown aliases fail closed as `REVIEW_REQUIRED`. Every matcher call path must attach safety metadata; missing safety is never treated as exact-safe.
+- Phase 1 ownership adoption is an explicit, reviewed operation over a version-controlled 75-row manifest. It validates immutable row identity, canonical owner, normalized key, active state, source, safety, and uniqueness before changing only provenance in one transaction.
+- Broad family and generic accessory phrases remain manual and non-matching unless OPPO context is present. In particular, bare `สาย Type-C` and `คีย์บอร์ดแท็บเล็ต` are blocked; their reviewed production rows are excluded from adoption.
+- Runtime-safe aliases may be excluded from persistence when synchronization would create an unapproved new production row. This keeps deterministic brand-qualified matching while constraining the first sync to the single approved `a6pro5g` creation.
+
 ## Frontend Global Application Shell & Navigation (Phase 1)
 
 The frontend application uses a single global application shell (`AppShell`) wrapping every route. Primary top navigation (`TopNavigation`) manages all 5 top-level modules (`/dashboard`, `/chats`, `/stores`, `/follower-insights`, `/friend-source-links`) with neutral/blue active navigation selection (`aria-current="page"`) and semantic design tokens, eliminating green from primary selection states. Layouts are standardized into container primitives (`PageContainer`, `PageHeader`, `SectionHeader`) with 3 specific variants: `readable` (`max-w-7xl`) for reports and insights, `wide` (`max-w-[1440px]`) for Store Management, and `full` (`w-full h-full`) for the Conversations workspace. The contextual sidebar (`ContextSidebar`) is rendered exclusively on `/chats` for status filters and store filter selection, while permanent sidebars are removed from all other pages.
