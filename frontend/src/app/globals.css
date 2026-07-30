@@ -473,6 +473,11 @@ body.is-resizing-panes {
   box-shadow: inset 4px 0 0 var(--focus);
 }
 
+[data-chat-pane="conversations"] .conversation-message-preview {
+  color: var(--foreground);
+  opacity: 1;
+}
+
 .app-chip {
   background: var(--badge-background);
   color: var(--badge-foreground);

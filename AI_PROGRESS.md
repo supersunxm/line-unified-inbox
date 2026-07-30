@@ -2,11 +2,11 @@
 
 ## Current task
 
-Completed a focused conversation-list information hierarchy refinement without changing filters, pagination, selection behavior, routing, pane resizing, APIs, authentication, or backend logic. The sole active `/chats` branch uses the dynamic list title, localized additional-filter label, customer/message/store-time hierarchy, and three-tag cap with accessible overflow while omitting normal priority. Selected conversation rows now use a pane-scoped stronger semantic background and four-pixel blue inset accent.
+Completed focused conversation-list and right-detail hierarchy refinements without changing filters, pagination, selection behavior, routing, pane resizing, APIs, authentication, notes behavior, LINE OA handlers, or backend logic. The detail header now groups customer identity, store/time metadata, profile refresh, priority, follow-up status, and the existing primary LINE OA action. The message viewport is content-friendly with a 420px scroll cap, and product intent, topics, note, and follow-up cards use tighter semantic spacing.
 
 Runtime tracing confirmed `/chats` directly renders `ApplicationWorkspace` from `page.tsx`, there is no duplicate conversation-list branch, and PID 89210 serves port 3000 from this repository's frontend directory. An isolated authenticated headless Chrome session verified the actual rendered DOM rather than inferred source: Incoming, Follow-up, and Reminded each render their matching Thai headings; Incoming renders `กรองเพิ่มเติม`; the visible normal-priority count is zero; high priority remains visible; and the selected row exposes its selected marker and scoped styling class.
 
-Verification passed: frontend TypeScript, zero-warning ESLint, 169/169 tests, and production build. Focused tests cover title selection, exact active-header wiring, exact active-row priority rendering, stable semantic attributes, result-count wiring, three-tag overflow, selected-row state, scoped accent styling, and pagination containment.
+Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, and production build. Focused detail tests cover action hierarchy and unchanged handlers, customer-name prominence, message scroll sizing, message order, date separators, image and translation paths, LINE OA Manager notice, product fields and confidence, topics, and note save behavior. Authenticated rendered-DOM verification confirmed the 700-weight customer name, primary and four secondary actions, 420px automatic-overflow message viewport, date separator, manager notice, complete product card, and editable note field.
 
 ## Completed work
 

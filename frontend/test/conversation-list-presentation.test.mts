@@ -54,6 +54,24 @@ test("only three tags are visible and remaining tags are counted", () => {
   assert.deepEqual(tags.hidden.map(({ label }) => label), ["Price", "Stock"]);
 });
 
+test("message previews stay readable across content and row states while metadata remains quieter", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.match(activeRows, /data-conversation-message-preview/);
+  assert.match(activeRows, /conversation-message-preview mt-2 line-clamp-2 text-sm leading-5/);
+  assert.match(activeRows, /\{conversation\.translations\[language\]\}/);
+  assert.match(activeRows, /data-conversation-metadata className="app-muted/);
+  assert.match(activeRows, /data-selected=\{isSelected\}/);
+  assert.doesNotMatch(activeRows, /conversation-list-row[^"]*opacity-|conversation-message-preview[^"]*opacity-/);
+  assert.match(globalsCode, /\.conversation-message-preview \{\s*color: var\(--foreground\);\s*opacity: 1;/);
+  assert.match(pageCode, /latestMessage\?\.messageType === "IMAGE"[\s\S]*📷 รูปภาพ/);
+  assert.match(pageCode, /latestMessage\?\.originalText \?\? ""/);
+});
+
 test("conversation list retains selected-row state, accurate count, and in-pane pagination", () => {
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");

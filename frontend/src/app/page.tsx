@@ -141,6 +141,7 @@ const translations = {
     showOriginal: "ดูต้นฉบับ",
 
     productInsight: "ข้อมูลสินค้า",
+    productCategory: "ประเภทสินค้า",
     productSeries: "กลุ่มผลิตภัณฑ์",
     productModel: "รุ่นสินค้า",
     customerRelationship: "สถานะความสัมพันธ์กับสินค้า",
@@ -396,6 +397,7 @@ const translations = {
     showOriginal: "Show Original",
 
     productInsight: "Product Insight",
+    productCategory: "Product Category",
     productSeries: "Product Series",
     productModel: "Product Model",
     customerRelationship: "Product Relationship",
@@ -650,6 +652,7 @@ const translations = {
     showOriginal: "查看原文",
 
     productInsight: "产品信息",
+    productCategory: "产品类别",
     productSeries: "产品系列",
     productModel: "产品型号",
     customerRelationship: "客户产品关系",
@@ -2736,11 +2739,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   >
                     <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight">{conversation.customer}</p>
 
-                    <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700 dark:text-slate-200">
+                    <p data-conversation-message-preview className="conversation-message-preview mt-2 line-clamp-2 text-sm leading-5">
                       {conversation.translations[language]}
                     </p>
 
-                    <div className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
+                    <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
                       <span className="min-w-0 truncate">{conversation.store}</span>
                       <span aria-hidden="true">·</span>
                       <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
@@ -2805,75 +2808,71 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         <section data-chat-pane="detail" className="min-w-0 min-h-0 overflow-y-auto p-6">
           {selectedConversation && selectedConversationState ? (
             <div className="mx-auto max-w-4xl">
-            <div className="mb-6 flex items-start justify-between">
-              <div className="flex items-center gap-3">
+            <div data-chat-detail-header className="app-card mb-4 flex flex-wrap items-start justify-between gap-4 p-4">
+              <div className="flex min-w-0 items-start gap-3">
                 {selectedApiConversation?.customer.pictureUrl ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-12 w-12 rounded-full bg-cover bg-center" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 font-semibold text-green-800">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>}
-                <div>
-                <p className="mb-1 text-sm text-slate-500">
-                  {selectedConversation.store}
-                </p>
-
-                <h2 className="text-2xl font-bold">
+                <div className="min-w-0">
+                <h2 data-chat-detail-customer className="truncate text-2xl font-bold tracking-tight">
                   {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  {text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}
-                </p>
-                <button disabled={chatLoading} onClick={() => void refreshProfile()} className="mt-1 text-xs text-blue-700">{text.refreshLineProfile}</button>
-                {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="ml-2 text-xs text-amber-700">{text.profileUnavailable}</span>}
+                <div className="app-muted mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                  <span>{selectedConversation.store}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}</span>
+                  <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="font-medium text-blue-700 hover:underline dark:text-blue-300">{text.refreshLineProfile}</button>
+                  {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
+                    {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
+                  </span>
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                    {followUpStatusLabels[language][selectedConversationState.status]}
+                  </span>
+                </div>
                 </div>
               </div>
 
-              <span
-                className={`rounded-full px-3 py-1 text-sm font-medium ${
-                  selectedConversation.priority === "High"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-slate-200 text-slate-700"
-                }`}
-              >
-                {selectedConversation.priority === "High"
-                  ? text.highPriority
-                  : text.normalPriority}
-              </span>
+              <button data-chat-detail-primary-action type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-primary inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold" aria-label="เปิดใน LINE OA Manager">
+                เปิดใน LINE OA <span aria-hidden="true">↗</span>
+              </button>
             </div>
 
-            <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
-                <p className="text-xs text-slate-500">{chatHistory.total} {text.messagesToday}</p>
+            <div data-chat-message-card className="app-card mb-4 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
+                  data-chat-detail-secondary-action
                   onClick={() => setShowTranslation(!showTranslation)}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                  className="app-button-secondary rounded-lg border px-3 py-2 text-sm font-medium"
                 >
                   🌐{" "}
                   {showTranslation
                     ? text.showOriginal
                     : text.translateMessage}
                 </button>
-                <button type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-secondary inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium" aria-label="เปิดใน LINE OA Manager">
-                  เปิดใน LINE OA <span aria-hidden="true">↗</span>
-                </button>
                 </div>
               </div>
 
-              <div className="max-h-[520px] space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-4">
+              <div data-chat-message-scroll className="max-h-[420px] min-h-0 space-y-3 overflow-y-auto overscroll-contain rounded-xl bg-slate-50 p-4">
                 {chatHistory.hasEarlier && <div className="text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs">{text.loadEarlierMessages}</button></div>}
-                {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                 {chatHistory.items.length === 0 && <p className="py-12 text-center text-sm text-slate-500">{text.noMessages}</p>}
                 <div ref={chatEndRef} />
               </div>
-              <p className="mt-3 text-center text-xs text-slate-400">{text.repliesMayNotAppear}</p>
+              <p data-line-oa-manager-notice className="app-muted mt-2.5 text-center text-xs">{text.repliesMayNotAppear}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between"><h3 className="font-semibold">{text.productInsight}</h3><div className="flex gap-2"><button disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.reanalyzeConversation}</button><button disabled={chatLoading} onClick={() => void editConversationTags()} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.editTags}</button></div></div>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div data-product-intent-card className="app-card p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{text.productInsight}</h3><div className="flex gap-2"><button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs">{text.reanalyzeConversation}</button><button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs">{text.editTags}</button></div></div>
 
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <p className="text-xs text-slate-500">
-                      {text.productSeries}
+                    <p className="app-muted text-xs">
+                      {text.productCategory}
                     </p>
                     <p className="mt-1 font-medium">
                       {selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}
@@ -2881,7 +2880,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500">
+                    <p className="app-muted text-xs">
                       {text.productModel}
                     </p>
                     <p className="mt-1 font-medium">
@@ -2890,7 +2889,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500">
+                    <p className="app-muted text-xs">
                       {text.customerRelationship}
                     </p>
                     <span className="mt-1 inline-block rounded-full bg-purple-100 px-3 py-1 text-sm text-purple-700">
@@ -2901,7 +2900,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
 
                   <div>
-                    <p className="text-xs text-slate-500">
+                    <p className="app-muted text-xs">
                       {text.purchaseIntent}
                     </p>
                     <span className="mt-1 inline-block rounded-full bg-red-100 px-3 py-1 text-sm text-red-700">
@@ -2913,8 +2912,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-4 font-semibold">
+              <div data-topics-note-card className="app-card p-4">
+                <h3 className="mb-3 font-semibold">
                   {text.conversationTopics}
                 </h3>
 
@@ -2931,8 +2930,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
                 </div>
 
-                <div className="mt-6">
-                  <label className="mb-2 block text-xs text-slate-500">
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <label className="app-muted mb-2 block text-xs font-medium">
                     {text.internalNote}
                   </label>
 
@@ -2942,13 +2941,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   onBlur={() => void saveInternalNote()}
   disabled={isMutating}
   placeholder={text.notePlaceholder}
-  className="h-28 w-full resize-none rounded-lg border border-slate-300 p-3 text-sm outline-none focus:border-slate-500"
+  className="app-input h-28 w-full resize-none rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
 />
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="app-card mt-4 p-4">
               <h3 className="mb-4 font-semibold">{text.storeFollowUp}</h3>
 
               <div className="mb-5 grid grid-cols-4 gap-3">
