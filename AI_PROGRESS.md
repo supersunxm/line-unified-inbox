@@ -270,3 +270,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added focused deployment, environment, session, error, health-route, and command regression coverage.
 - Frontend lint, 53 frontend tests, the Railway-configured production build, live `/api/health`, `/login`, and `/dashboard` probes, and full repository verification pass.
 - Next: await user approval before any push or Railway deployment.
+
+# Current task: custom-domain Friend Attribution public links
+
+- Added one isolated Next.js external rewrite from `/f/:shortCode` to the existing backend `/f/:shortCode`, using the already validated frontend API origin.
+- Kept click tracking, attribution session creation, LIFF redirects, status handling, and all backend business logic backend-owned.
+- Added focused rewrite-contract coverage for exact path scope, query preservation, unrelated routes, and absence of frontend redirect/status behavior.
+- Frontend lint, all 182 frontend tests, the production build, and 41 existing backend friend-source/attribution tests pass.
+- Controlled Next.js development and production-mode proxy checks preserved query strings, upstream `302 Location`, `404`, `410`, `User-Agent`, `Referer`, and a supplied `X-Forwarded-For` chain; Railway edge behavior still requires a production smoke test.
+- Next: review the implementation report before any commit, push, or deployment.

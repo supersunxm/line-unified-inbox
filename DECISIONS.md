@@ -159,3 +159,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
     - `FOLLOWER_BACKFILL_MAX_ENQUEUE_PER_CYCLE=10`
     - `FOLLOWER_BACKFILL_POLL_INTERVAL_MS=5000`
     - `FOLLOWER_BACKFILL_API_DELAY_MS=200`
+
+# Friend Attribution custom-domain routing (2026-08-02)
+
+- `lineoppo.click/f/:shortCode` uses a Next.js external rewrite to the existing backend route, while the browser-facing entry URL remains on the frontend domain.
+- The rewrite consumes the existing validated `API_BASE_URL`; it does not introduce another backend-origin setting or duplicate backend redirect/tracking logic.
+- The Railway backend public domain remains active for previously distributed links. Forwarded client IP, referrer, user agent, upstream status, and `Location` require deployment-mode smoke verification and are not assumed from configuration alone.
