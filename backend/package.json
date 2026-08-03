@@ -25,6 +25,8 @@
     "product-catalog:validate": "tsx scripts/product-catalog.ts validate",
     "product-catalog:seed": "tsx --env-file=.env scripts/product-catalog.ts seed",
     "product-alias:adopt-phase1": "tsx scripts/adopt-product-alias-ownership.ts",
+    "translation:benchmark": "tsx scripts/translation-benchmark.ts",
+    "translation:benchmark:generate-google": "tsx scripts/translation-benchmark-generate-google.ts",
     "classification:backfill-products": "tsx --env-file=.env scripts/backfill-product-classifications.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
     "security:check": "sh scripts/security-check.sh",
@@ -33,6 +35,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
+    "@google-cloud/translate": "^9.4.2",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",

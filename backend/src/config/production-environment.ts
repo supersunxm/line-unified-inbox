@@ -1,6 +1,7 @@
 import { readPilotAdminBootstrapConfig } from "../auth/pilot-admin-bootstrap.config";
 
 import { readMediaStorageEnabled } from "../media/media-storage.config";
+import { readMessageTranslationConfig } from "../translation/translation.config";
 
 const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "PILOT_ADMIN_BOOTSTRAP_ENABLED", "EMAIL_PROVIDER", "FRIEND_SOURCE_PUBLIC_BASE_URL", "FRIEND_SOURCE_IP_HASH_KEY"] as const;
 
@@ -9,6 +10,7 @@ function validUrl(value: string, protocols: string[]) {
 }
 
 export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = process.env) {
+  readMessageTranslationConfig(environment);
   if (environment.NODE_ENV !== "production") return;
   const missing = requiredProductionVariables.filter((name) => !environment[name]?.trim());
   if (missing.length) throw new Error(`Missing required production environment variables: ${missing.join(", ")}`);

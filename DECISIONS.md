@@ -187,3 +187,22 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - All five follow-up actions remain directly visible because they are frequent operational controls; their existing handlers and status values are unchanged.
 - Detail responsiveness is based on the detail pane's own container width rather than viewport width, so user-resized sidebar and list panes cannot make the lower workspace unreadable.
 - The externally supplied assistant/mascot is not owned by repository source. The follow-up footer reserves a small lower-right safe area at applicable widths and uses an opaque elevated surface; no selector or behavior is coupled to unknown injected markup.
+
+# Message translation foundation (2026-08-03)
+
+- Manual message translation is isolated in a backend TranslationModule and is disabled unless `MESSAGE_TRANSLATION_ENABLED=true`; absent or false configuration fails closed without querying messages or invoking a provider.
+- The initial endpoint is ADMIN-only and accepts only English or Chinese targets. Existing authentication roles are reused; no new permission or store-access model is introduced.
+- Existing `translatedEnglish` and `translatedChinese` fields are durable cache. A successful manual provider call writes only the requested target column; `originalText`, ingestion behavior, and unrelated message fields remain unchanged.
+- The provider boundary accepts only message text and target language. Google credentials are environment-only, and runtime provider construction requires the feature flag, `TRANSLATION_PROVIDER=google`, project ID, and valid service-account JSON.
+
+# Translation provider benchmark (2026-08-03)
+
+- Provider evaluation remains separate from application runtime: the evaluator and automated runner tests are offline and provider-neutral, while the explicit Google generator is blocked in production and is never run by automated tests. No benchmark path imports Prisma or reads application messages.
+- The initial corpus contains synthetic Thai operational examples for English and Simplified Chinese. Product and technology names are protected by deterministic terminology checks.
+- Reference similarity is diagnostic rather than a quality verdict. Provider readiness requires complete blind human review across adequacy, fluency, terminology, and safety in addition to structural gates.
+- Candidate output files may contain translated content and stay outside source control unless they contain synthetic data only; the CLI emits aggregate scores and case-language keys, not message text.
+- OPPO product and technology glossary terms require verbatim preservation, while retail concepts accept curated target-language equivalents. Missing preservation is reported per case and language rather than silently folded into similarity.
+- Overall automated score is the weighted sum of category-level reference similarity: product inquiry 25%, promotion/payment 25%, service/warranty 20%, stock/pickup 15%, and casual/mixed 15%. It is diagnostic only and is not a readiness gate.
+- Readiness requires structural checks, protected-term checks, and complete human review. Retail-intent mismatch detection is advisory because valid translations may express the same concept outside a finite phrase list.
+- Benchmark cost is an estimate derived from frozen source Unicode character counts for both targets and submission-supplied price-per-million metadata. It has no billing-system or environment-variable integration; missing pricing produces no monetary estimate.
+- Regression snapshots are metadata-only, versioned artifacts with deterministic identifiers derived from provider metadata and one-way candidate digests. They exclude source, reference, candidate translation, and reviewer-note content and can be compared without production data.
