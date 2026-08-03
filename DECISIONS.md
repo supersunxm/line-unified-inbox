@@ -180,3 +180,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - A monotonically increasing request generation plus query-key comparison prevents slower requests from an older filter or store from updating state. Out-of-range responses update the real page state and are refetched at that valid page.
 - Product series, product model, and topic UI values remain human-readable names for URL/local-preference compatibility, while metadata resolves them to stable backend IDs in the authoritative request.
 - Store badges remain global lifetime totals from the existing stores contract. Queue badges remain derived from the loaded page and are not represented as authoritative filtered aggregates; changing badge semantics requires a separate backend aggregation decision.
+
+# Store Chats conversation-detail hierarchy (2026-08-03)
+
+- The detail pane is one bounded vertical workspace: customer identity and primary LINE OA action at the top, a dominant scrollable message history, consolidated Insights/Internal Note/Activity content, and a persistent follow-up footer outside the content scroller.
+- All five follow-up actions remain directly visible because they are frequent operational controls; their existing handlers and status values are unchanged.
+- Detail responsiveness is based on the detail pane's own container width rather than viewport width, so user-resized sidebar and list panes cannot make the lower workspace unreadable.
+- The externally supplied assistant/mascot is not owned by repository source. The follow-up footer reserves a small lower-right safe area at applicable widths and uses an opaque elevated surface; no selector or behavior is coupled to unknown injected markup.

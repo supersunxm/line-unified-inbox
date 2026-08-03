@@ -153,6 +153,7 @@ const translations = {
     conversationTopics: "หัวข้อสนทนา",
     internalNote: "บันทึกภายใน",
     notePlaceholder: "เพิ่มหมายเหตุสำหรับติดตามร้าน...",
+    noteSaveHint: "บันทึกเมื่อออกจากช่องข้อความ",
 
     storeFollowUp: "การติดตามร้านค้า",
     currentStatus: "สถานะปัจจุบัน",
@@ -409,6 +410,7 @@ const translations = {
     conversationTopics: "Conversation Topics",
     internalNote: "Internal Note",
     notePlaceholder: "Add a note for store follow-up...",
+    noteSaveHint: "Saves when you leave the field",
 
     storeFollowUp: "Store Follow-up",
     currentStatus: "Current Status",
@@ -664,6 +666,7 @@ const translations = {
     conversationTopics: "会话主题",
     internalNote: "内部备注",
     notePlaceholder: "添加门店跟进备注……",
+    noteSaveHint: "离开输入框时保存",
 
     storeFollowUp: "门店跟进",
     currentStatus: "当前状态",
@@ -2757,270 +2760,109 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
         <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
 
-        <section data-chat-pane="detail" className="min-w-0 min-h-0 overflow-y-auto p-6">
+        <section data-chat-pane="detail" className="app-surface min-w-0 min-h-0 overflow-hidden">
           {selectedConversation && selectedConversationState ? (
-            <div className="mx-auto max-w-4xl">
-            <div data-chat-detail-header className="app-card mb-4 flex flex-wrap items-start justify-between gap-4 p-4">
-              <div className="flex min-w-0 items-start gap-3">
-                {selectedApiConversation?.customer.pictureUrl ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-12 w-12 rounded-full bg-cover bg-center" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 font-semibold text-green-800">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>}
-                <div className="min-w-0">
-                <h2 data-chat-detail-customer className="truncate text-2xl font-bold tracking-tight">
-                  {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
-                </h2>
-
-                <div className="app-muted mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  <span>{selectedConversation.store}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}</span>
-                  <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="font-medium text-blue-700 hover:underline dark:text-blue-300">{text.refreshLineProfile}</button>
-                  {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
+            <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
+              <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 lg:px-5">
+                <div data-chat-detail-header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    {selectedApiConversation?.customer.pictureUrl ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 font-semibold text-green-800">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <h2 data-chat-detail-customer className="truncate text-xl font-bold tracking-tight">
+                          {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
+                        </h2>
+                        <span className="app-muted truncate text-sm font-medium">{selectedConversation.store}</span>
+                      </div>
+                      <div className="app-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span>{text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}</span>
+                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="rounded font-medium text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300">{text.refreshLineProfile}</button>
+                        {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
+                          {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
+                        </span>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                          {followUpStatusLabels[language][selectedConversationState.status]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button data-chat-detail-primary-action type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="เปิดใน LINE OA Manager">
+                    เปิดใน LINE OA <span aria-hidden="true">↗</span>
+                  </button>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
-                    {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
-                  </span>
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
-                    {followUpStatusLabels[language][selectedConversationState.status]}
-                  </span>
-                </div>
-                </div>
-              </div>
 
-              <button data-chat-detail-primary-action type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-primary inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold" aria-label="เปิดใน LINE OA Manager">
-                เปิดใน LINE OA <span aria-hidden="true">↗</span>
-              </button>
-            </div>
+                <section data-chat-message-card className="border-b border-[var(--border)] py-3" aria-label={text.conversations}>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
+                    <button
+                      data-chat-detail-secondary-action
+                      onClick={() => setShowTranslation(!showTranslation)}
+                      className="app-button-secondary rounded-lg border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      🌐 {showTranslation ? text.showOriginal : text.translateMessage}
+                    </button>
+                  </div>
 
-            <div data-chat-message-card className="app-card mb-4 p-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  data-chat-detail-secondary-action
-                  onClick={() => setShowTranslation(!showTranslation)}
-                  className="app-button-secondary rounded-lg border px-3 py-2 text-sm font-medium"
-                >
-                  🌐{" "}
-                  {showTranslation
-                    ? text.showOriginal
-                    : text.translateMessage}
-                </button>
-                </div>
-              </div>
-
-              <div data-chat-message-scroll className="max-h-[420px] min-h-0 space-y-3 overflow-y-auto overscroll-contain rounded-xl bg-slate-50 p-4">
+                  <div data-chat-message-scroll className="min-h-[clamp(22rem,50vh,34rem)] max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain rounded-lg bg-slate-50 p-3 dark:bg-slate-950/60">
                 {chatHistory.hasEarlier && <div className="text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs">{text.loadEarlierMessages}</button></div>}
                 {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                 {chatHistory.items.length === 0 && <p className="py-12 text-center text-sm text-slate-500">{text.noMessages}</p>}
                 <div ref={chatEndRef} />
-              </div>
-              <p data-line-oa-manager-notice className="app-muted mt-2.5 text-center text-xs">{text.repliesMayNotAppear}</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div data-product-intent-card className="app-card p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{text.productInsight}</h3><div className="flex gap-2"><button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs">{text.reanalyzeConversation}</button><button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs">{text.editTags}</button></div></div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="app-muted text-xs">
-                      {text.productCategory}
-                    </p>
-                    <p className="mt-1 font-medium">
-                      {selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}
-                    </p>
                   </div>
+                  <p data-line-oa-manager-notice className="mt-2 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
+                </section>
 
-                  <div>
-                    <p className="app-muted text-xs">
-                      {text.productModel}
-                    </p>
-                    <p className="mt-1 font-medium">
-                      {selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="app-muted text-xs">
-                      {text.customerRelationship}
-                    </p>
-                    <span className="mt-1 inline-block rounded-full bg-purple-100 px-3 py-1 text-sm text-purple-700">
-                      {selectedConversation.relationship === "Interested"
-                        ? text.interested
-                        : selectedConversation.relationship}
-                    </span>
-                  </div>
-
-                  <div>
-                    <p className="app-muted text-xs">
-                      {text.purchaseIntent}
-                    </p>
-                    <span className="mt-1 inline-block rounded-full bg-red-100 px-3 py-1 text-sm text-red-700">
-                      {selectedConversation.purchaseIntent === "High Intent"
-                        ? text.highIntent
-                        : selectedConversation.purchaseIntent}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div data-topics-note-card className="app-card p-4">
-                <h3 className="mb-3 font-semibold">
-                  {text.conversationTopics}
-                </h3>
-
-                <div className="flex flex-wrap gap-2">
+                <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
+                  <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-semibold">{text.productInsight}</h3>
+                      <div className="flex flex-wrap gap-2">
+                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
+                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                      <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
+                      <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
+                      <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
+                      <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
+                    </dl>
+                    <div className="mt-3 border-t border-[var(--border)] pt-3">
+                      <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
+                      <div className="flex flex-wrap gap-1.5">
                   {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
                     .map(({ topic, source }) => (
                       <span
                         key={topic.id}
-                        className="rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-700"
+                        className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
                       >
                         {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
                       </span>
                     ))}
                   {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
-                </div>
+                      </div>
+                    </div>
+                  </section>
 
-                <div className="mt-4 border-t border-slate-200 pt-4">
-                  <label className="app-muted mb-2 block text-xs font-medium">
-                    {text.internalNote}
-                  </label>
+                  <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
+                    <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
+                    <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                    <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                  </section>
 
-                  <textarea
-  value={selectedConversationState.note}
-  onChange={(event) => updateInternalNote(event.target.value)}
-  onBlur={() => void saveInternalNote()}
-  disabled={isMutating}
-  placeholder={text.notePlaceholder}
-  className="app-input h-28 w-full resize-none rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-/>
-                </div>
-              </div>
-            </div>
-
-            <div className="app-card mt-4 p-4">
-              <h3 className="mb-4 font-semibold">{text.storeFollowUp}</h3>
-
-              <div className="mb-5 grid grid-cols-4 gap-3">
-                <div className="rounded-lg bg-slate-100 p-3">
-                  <p className="text-xs text-slate-500">
-                    {text.currentStatus}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">
-  {
-    followUpStatusLabels[language][
-      selectedConversationState.status
-    ]
-  }
-</p>
-                </div>
-
-                <div className="rounded-lg bg-slate-100 p-3">
-                  <p className="text-xs text-slate-500">
-                    {text.waitingTime}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">
-                    {formatRelativeTime(selectedConversation.time, language)}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-slate-100 p-3">
-                  <p className="text-xs text-slate-500">{text.reminder}</p>
-                  <p className="mt-1 text-sm font-semibold">
-  {selectedConversationState.status === "followUp"
-    ? text.notSent
-    : followUpStatusLabels[language].reminded}
-</p>
-                </div>
-
-                <div className="rounded-lg bg-slate-100 p-3">
-                  <p className="text-xs text-slate-500">
-                    {text.storeManager}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">
-  {selectedConversationState.status === "acknowledged"
-    ? text.managerAcknowledged
-    : selectedConversationState.status === "completed"
-      ? text.actionCompleted
-      : text.notConfirmed}
-</p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-  <button
-    disabled={isMutating}
-    onClick={() => updateFollowUpStatus("followUp")}
-    className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${
-      selectedConversationState.status === "followUp"
-        ? "border-amber-500 bg-amber-100 text-amber-800"
-        : "border-amber-300 bg-white text-amber-700 hover:bg-amber-50"
-    }`}
-  >
-    ↩ {text.returnToFollowUp}
-  </button>
-
-  <button
-    disabled={isMutating}
-    onClick={() => updateFollowUpStatus("reminded")}
-    className={`rounded-lg px-4 py-2.5 text-sm font-medium ${
-      selectedConversationState.status === "reminded"
-        ? "bg-blue-600 text-white"
-        : "bg-slate-900 text-white hover:bg-slate-700"
-    }`}
-  >
-    📣 {text.remindManager}
-  </button>
-
-  <button
-    disabled={isMutating}
-    onClick={() => updateFollowUpStatus("acknowledged")}
-    className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${
-      selectedConversationState.status === "acknowledged"
-        ? "border-blue-600 bg-blue-50 text-blue-700"
-        : "border-slate-300 bg-white hover:bg-slate-50"
-    }`}
-  >
-    ✓ {text.managerAcknowledged}
-  </button>
-
-  <button
-    disabled={isMutating}
-    onClick={() => updateFollowUpStatus("completed")}
-    className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${
-      selectedConversationState.status === "completed"
-        ? "border-green-600 bg-green-600 text-white"
-        : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-    }`}
-  >
-    ✓ {text.actionCompleted}
-  </button>
-
-  <button
-    disabled={isMutating}
-    onClick={() => updateFollowUpStatus("escalated")}
-    className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${
-      selectedConversationState.status === "escalated"
-        ? "border-red-600 bg-red-600 text-white"
-        : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-    }`}
-  >
-    {text.escalate}
-  </button>
-</div>
-            </div>
-
-            <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-4 font-semibold">{text.activityHistory}</h3>
+                  <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
+                    <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
               {selectedConversationState.activityHistory.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {[...selectedConversationState.activityHistory]
                     .reverse()
                     .map((activity) => (
                       <div
                         key={activity.id}
-                        className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
                       >
                         <p className="text-sm">
                           {activity.actionType === "messageReceived" ? (
@@ -3038,7 +2880,25 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               ) : (
                 <p className="text-sm text-slate-500">{text.noActivity}</p>
               )}
-            </div>
+                  </section>
+                </div>
+              </div>
+
+              <section data-store-follow-up-bar className="chat-detail-follow-up app-surface sticky bottom-0 shrink-0 border-t border-[var(--border)] px-3 py-2.5 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] sm:px-4" aria-label={text.storeFollowUp}>
+                <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs lg:grid-cols-4">
+                  <div><span className="app-muted">{text.currentStatus}: </span><strong>{followUpStatusLabels[language][selectedConversationState.status]}</strong></div>
+                  <div><span className="app-muted">{text.waitingTime}: </span><strong>{formatRelativeTime(selectedConversation.time, language)}</strong></div>
+                  <div><span className="app-muted">{text.reminder}: </span><strong>{selectedConversationState.status === "followUp" ? text.notSent : followUpStatusLabels[language].reminded}</strong></div>
+                  <div><span className="app-muted">{text.storeManager}: </span><strong>{selectedConversationState.status === "acknowledged" ? text.managerAcknowledged : selectedConversationState.status === "completed" ? text.actionCompleted : text.notConfirmed}</strong></div>
+                </div>
+                <div data-store-follow-up-actions className="chat-detail-follow-up-actions flex flex-wrap gap-2">
+                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("followUp")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 ${selectedConversationState.status === "followUp" ? "border-amber-500 bg-amber-100 text-amber-800" : "border-amber-300 bg-white text-amber-700 hover:bg-amber-50 dark:bg-slate-950"}`}>↩ {text.returnToFollowUp}</button>
+                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("reminded")} className={`rounded-lg px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${selectedConversationState.status === "reminded" ? "bg-blue-600 text-white" : "bg-slate-900 text-white hover:bg-slate-700"}`}>📣 {text.remindManager}</button>
+                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("acknowledged")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${selectedConversationState.status === "acknowledged" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-300 bg-white hover:bg-slate-50 dark:bg-slate-950"}`}>✓ {text.managerAcknowledged}</button>
+                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("completed")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50 ${selectedConversationState.status === "completed" ? "border-green-600 bg-green-600 text-white" : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-200"}`}>✓ {text.actionCompleted}</button>
+                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("escalated")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 ${selectedConversationState.status === "escalated" ? "border-red-600 bg-red-600 text-white" : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-200"}`}>{text.escalate}</button>
+                </div>
+              </section>
             </div>
           ) : (
             <div className="flex min-h-full items-center justify-center text-center">
