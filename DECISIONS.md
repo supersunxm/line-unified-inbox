@@ -172,3 +172,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Identity, role, Pilot state, language, appearance, logout, and avatar form one profile dropdown. Theme and language state remain owned by their existing providers/workspace state, so consolidation changes presentation rather than behavior.
 - Dashboard, Store Chats, and Store Management remain directly visible at desktop widths. Lower-priority insights links collapse into a More menu below the widest breakpoint, and search becomes icon-triggered below 1024px to avoid horizontal overflow without compressing labels.
 - The compact last-updated control is informational and exposes the complete localized timestamp through its accessible label and tooltip. It does not introduce a new refresh path because the previous header timestamp had no refresh action.
+
+# Store Chats authoritative conversation query (2026-08-03)
+
+- Conversation-list state has one owner: a query snapshot containing every backend-supported filter plus page and page size. Initial loading, filter changes, pagination, retries/manual refreshes, and polling must use the same loader and current snapshot.
+- Supporting-data polling may refresh stores, product/topic metadata, dashboard data, and LINE OA metadata, but must never replace conversation rows, totals, per-row state, notes, or selection.
+- A monotonically increasing request generation plus query-key comparison prevents slower requests from an older filter or store from updating state. Out-of-range responses update the real page state and are refetched at that valid page.
+- Product series, product model, and topic UI values remain human-readable names for URL/local-preference compatibility, while metadata resolves them to stable backend IDs in the authoritative request.
+- Store badges remain global lifetime totals from the existing stores contract. Queue badges remain derived from the loaded page and are not represented as authoritative filtered aggregates; changing badge semantics requires a separate backend aggregation decision.

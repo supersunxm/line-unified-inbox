@@ -96,7 +96,8 @@ test("conversation list retains selected-row state, accurate count, and in-pane 
   assert.doesNotMatch(activeRows, /text\.normalPriority/);
   assert.match(globalsCode, /\[data-chat-pane="conversations"\] \.conversation-list-row\.is-selected/);
   assert.match(globalsCode, /box-shadow: inset 4px 0 0 var\(--focus\)/);
-  assert.match(pageCode, /\{chatTotalCount \|\| filteredConversations\.length\}/);
+  assert.match(pageCode, /\{chatTotalCount\} \{text\.searchResults\}/);
+  assert.doesNotMatch(pageCode, /chatTotalCount \|\| filteredConversations\.length/);
 
   const pagination = pageCode.indexOf("<ConversationPaginationFooter", listStart);
   assert.ok(listStart < pagination && pagination < listEnd);

@@ -27,6 +27,7 @@ import { useResizablePanes } from "./use-resizable-panes";
 import { ConversationPaginationFooter } from "./conversation-pagination-footer";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
+import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
 import type { ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
@@ -1090,6 +1091,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [stores, setStores] = useState<Array<{ id: string; name: string; waiting: number; lineOaCount: number }>>([]);
   const [availableStores, setAvailableStores] = useState<ApiStore[]>([]);
   const [availableProductModels, setAvailableProductModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [availableProductSeries, setAvailableProductSeries] = useState<Array<{ id: string; name: string }>>([]);
   const [availableTopics, setAvailableTopics] = useState<Array<{ id: string; name: string }>>([]);
   const [lineOas, setLineOas] = useState<LineOfficialAccountResponse[]>([]);
   const [showLineOaForm, setShowLineOaForm] = useState(false);
@@ -1182,12 +1184,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   >({});
   const [savedNotes, setSavedNotes] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [supportingDataLoaded, setSupportingDataLoaded] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [dashboardSummary, setDashboardSummary] =
     useState<DashboardSummaryResponse | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const refreshInProgress = useRef(false);
+  const conversationRequestGuard = useRef(new LatestConversationRequestGuard());
   const lineOaSubmissionInFlight = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const newestChatMessageRef = useRef<string | null>(null);
@@ -1206,22 +1210,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     [availableStores],
   );
   const seriesOptions = useMemo(
-    () => [...new Set(conversations.map(({ series }) => series))],
-    [conversations],
+    () => availableProductSeries.map(({ name }) => name),
+    [availableProductSeries],
   );
   const modelOptions = useMemo(
-    () => [...new Set(conversations.map(({ product }) => product))],
-    [conversations],
+    () => availableProductModels.map(({ name }) => name),
+    [availableProductModels],
   );
   const topicOptions = useMemo(
-    () => [
-      ...new Set(conversations.flatMap(({ topic }) => topic.split(" · ").filter(Boolean))),
-    ],
-    [conversations],
+    () => availableTopics.map(({ name }) => name),
+    [availableTopics],
   );
   const priorityOptions = useMemo(
-    () => [...new Set(conversations.map(({ priority }) => priority))],
-    [conversations],
+    () => ["High", "Normal"] as Priority[],
+    [],
   );
   const lineOaOptions = useMemo(
     () => lineOas.map(({ id }) => id),
@@ -1266,146 +1268,121 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     };
   }, [editingLineOaId, masterRetryNonce, searchQuery, selectedMaster, showLineOaForm, text.storeMasterSearchFailed]);
 
-  const prevFilterState = useRef({
-    selectedStore,
-    lineOaFilter,
-    searchText,
-    statusFilter,
-    priorityFilter,
-    seriesFilter,
-    modelFilter,
-    topicFilter,
-    sidebarView,
-    chatPageSize,
+  const activeConversationStatus =
+    sidebarView === "followUp"
+      ? "FOLLOW_UP"
+      : sidebarView === "reminded"
+        ? "REMINDED"
+        : statusFilter !== "all"
+          ? uiToApiStatus[statusFilter]
+          : undefined;
+  const productSeriesId = seriesFilter === "all"
+    ? undefined
+    : availableProductSeries.find(({ name }) => name === seriesFilter)?.id;
+  const productModelId = modelFilter === "all"
+    ? undefined
+    : availableProductModels.find(({ name }) => name === modelFilter)?.id;
+  const topicId = topicFilter === "all"
+    ? undefined
+    : availableTopics.find(({ name }) => name === topicFilter)?.id;
+  const activeConversationQuery = useMemo(
+    () => buildConversationListQuery({
+      page: chatPage,
+      pageSize: chatPageSize,
+      search: initialSection === "chats" ? searchText : "",
+      storeId: initialSection === "chats" ? selectedStore : "all",
+      lineOaId: initialSection === "chats" ? lineOaFilter : "all",
+      followUpStatus: initialSection === "chats" ? activeConversationStatus : undefined,
+      priority: initialSection === "chats" && priorityFilter !== "all"
+        ? priorityFilter === "High" ? "HIGH" : "NORMAL"
+        : undefined,
+      productSeriesId: initialSection === "chats" ? productSeriesId : undefined,
+      productModelId: initialSection === "chats" ? productModelId : undefined,
+      topicId: initialSection === "chats" ? topicId : undefined,
+    }),
+    [activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+  );
+  const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
+  const conversationQueryRef = useRef(activeConversationQuery);
+  useEffect(() => {
+    conversationQueryRef.current = activeConversationQuery;
+  }, [activeConversationQuery]);
+  const conversationFilterShapeKey = JSON.stringify({
+    storeId: activeConversationQuery.storeId,
+    lineOaId: activeConversationQuery.lineOaId,
+    followUpStatus: activeConversationQuery.followUpStatus,
+    search: activeConversationQuery.search,
+    priority: activeConversationQuery.priority,
+    productSeriesId: activeConversationQuery.productSeriesId,
+    productModelId: activeConversationQuery.productModelId,
+    topicId: activeConversationQuery.topicId,
+    pageSize: activeConversationQuery.pageSize,
   });
+  const previousConversationFilterShape = useRef(conversationFilterShapeKey);
+
+  const loadConversations = useCallback(async (query: ConversationListQuery, silent = false) => {
+    const requestGeneration = conversationRequestGuard.current.begin();
+    const requestKey = conversationListQueryKey(query);
+    if (!silent) setIsChatPageLoading(true);
+    setChatPageError(null);
+
+    try {
+      const response = await api.conversations(query);
+      if (
+        !conversationRequestGuard.current.isLatest(requestGeneration) ||
+        requestKey !== conversationListQueryKey(conversationQueryRef.current)
+      ) return;
+
+      const reconciledPage = reconcileConversationPage(response.total, query.page, query.pageSize);
+      setChatTotalCount(response.total);
+      if (reconciledPage !== query.page) {
+        setChatPage(reconciledPage);
+        return;
+      }
+
+      const mapped = response.items.map(mapApiConversation);
+      setConversations(mapped);
+      setConversationStates(Object.fromEntries(response.items.map((item) => [item.id, mapApiConversationState(item)])));
+      setSavedNotes(Object.fromEntries(response.items.map((item) => [item.id, item.notes[0]?.content ?? ""])));
+      setSelectedConversationId((currentId) =>
+        mapped.some(({ id }) => id === currentId) ? currentId : mapped[0]?.id ?? "",
+      );
+      setLastUpdatedAt(new Date());
+    } catch (error) {
+      if (!conversationRequestGuard.current.isLatest(requestGeneration)) return;
+      setChatPageError(error instanceof Error ? error.message : text.connectionError);
+    } finally {
+      if (conversationRequestGuard.current.isLatest(requestGeneration)) {
+        setIsChatPageLoading(false);
+      }
+    }
+  }, [text.connectionError]);
 
   useEffect(() => {
-    const prev = prevFilterState.current;
-    const filtersChanged =
-      prev.selectedStore !== selectedStore ||
-      prev.lineOaFilter !== lineOaFilter ||
-      prev.searchText !== searchText ||
-      prev.statusFilter !== statusFilter ||
-      prev.priorityFilter !== priorityFilter ||
-      prev.seriesFilter !== seriesFilter ||
-      prev.modelFilter !== modelFilter ||
-      prev.topicFilter !== topicFilter ||
-      prev.sidebarView !== sidebarView ||
-      prev.chatPageSize !== chatPageSize;
-
-    prevFilterState.current = {
-      selectedStore,
-      lineOaFilter,
-      searchText,
-      statusFilter,
-      priorityFilter,
-      seriesFilter,
-      modelFilter,
-      topicFilter,
-      sidebarView,
-      chatPageSize,
-    };
-
-    const targetPage = filtersChanged ? 1 : chatPage;
-    if (filtersChanged && chatPage !== 1) {
-      setChatPage(1);
+    if (!authUser) return;
+    if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
+      previousConversationFilterShape.current = conversationFilterShapeKey;
+      if (chatPage !== 1) {
+        const resetPage = window.setTimeout(() => setChatPage(1), 0);
+        return () => window.clearTimeout(resetPage);
+      }
     }
+    void loadConversations(activeConversationQuery);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, loadConversations]);
 
-    if (initialSection !== "chats") return;
-    let isCancelled = false;
-
-    const activeStatus =
-      sidebarView === "followUp"
-        ? "FOLLOW_UP"
-        : sidebarView === "reminded"
-          ? "REMINDED"
-          : statusFilter !== "all"
-            ? uiToApiStatus[statusFilter]
-            : undefined;
-
-    const params: Record<string, string | number | boolean | undefined> = {
-      page: targetPage,
-      pageSize: chatPageSize,
-      search: searchText.trim() || undefined,
-      storeId: selectedStore !== "all" ? selectedStore : undefined,
-      lineOaId: lineOaFilter !== "all" ? lineOaFilter : undefined,
-      followUpStatus: activeStatus,
-      priority: priorityFilter !== "all" ? (priorityFilter === "High" ? "HIGH" : "NORMAL") : undefined,
-    };
-
-    api
-      .conversations(params)
-      .then((res) => {
-        if (!isCancelled) {
-          const mapped = res.items.map(mapApiConversation);
-          setConversations(mapped);
-          setChatTotalCount(res.total);
-          setConversationStates((current) => ({
-            ...current,
-            ...Object.fromEntries(res.items.map((item) => [item.id, mapApiConversationState(item)])),
-          }));
-          setIsChatPageLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!isCancelled) {
-          setChatPageError(err instanceof Error ? err.message : text.connectionError);
-          setIsChatPageLoading(false);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    initialSection,
-    chatPage,
-    chatPageSize,
-    selectedStore,
-    lineOaFilter,
-    searchText,
-    statusFilter,
-    priorityFilter,
-    seriesFilter,
-    modelFilter,
-    topicFilter,
-    sidebarView,
-    text.connectionError,
-  ]);
-
-  const loadApplicationData = useCallback(async (silent = false) => {
+  const loadSupportingData = useCallback(async (silent = false) => {
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
-      const [conversationResponse, storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse] = await Promise.all([
-        api.conversations({ page: chatPage, pageSize: chatPageSize }),
+      const [storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse] = await Promise.all([
         api.stores(showArchivedStores),
         api.products(),
         api.topics(),
         api.dashboard(),
         api.lineOfficialAccounts(showArchivedLineOas),
       ]);
-      const mappedConversations = conversationResponse.items.map(mapApiConversation);
-      setConversations(mappedConversations);
-      setChatTotalCount(conversationResponse.total);
-      setConversationStates(
-        Object.fromEntries(
-          conversationResponse.items.map((item) => [
-            item.id,
-            mapApiConversationState(item),
-          ]),
-        ),
-      );
-      setSavedNotes(
-        Object.fromEntries(
-          conversationResponse.items.map((item) => [
-            item.id,
-            item.notes[0]?.content ?? "",
-          ]),
-        ),
-      );
       setStores(
         storeResponse.filter((store) => !store.archivedAt).map((store) => ({
           id: store.id,
@@ -1415,9 +1392,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         })),
       );
       setAvailableStores(storeResponse);
+      setAvailableProductSeries(productResponse.series.map(({ id, name }) => ({ id, name })));
       setAvailableProductModels(productResponse.series.flatMap(({ models }) => models.map(({ id, name }) => ({ id, name }))));
       setAvailableTopics(topicResponse.map(({ id, name }) => ({ id, name })));
       setLineOas(lineOaResponse);
+      setSupportingDataLoaded(true);
       const webhookInfo = await Promise.all(
         lineOaResponse.map(async (account) => [
           account.id,
@@ -1427,18 +1406,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setWebhookInfoById(Object.fromEntries(webhookInfo));
       setDashboardSummary(dashboardResponse);
       setLastUpdatedAt(new Date());
-      setSelectedConversationId((currentId) =>
-        mappedConversations.some(({ id }) => id === currentId)
-          ? currentId
-          : mappedConversations[0]?.id ?? "",
-      );
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Unable to load data");
     } finally {
       if (!silent) setIsLoading(false);
       refreshInProgress.current = false;
     }
-  }, [chatPage, chatPageSize, showArchivedLineOas, showArchivedStores]);
+  }, [showArchivedLineOas, showArchivedStores]);
+
+  const loadApplicationData = useCallback(async (silent = false) => {
+    await Promise.all([
+      loadSupportingData(silent),
+      loadConversations(conversationQueryRef.current, silent),
+    ]);
+  }, [loadConversations, loadSupportingData]);
 
   const loadSystemStatus = useCallback(async () => {
     try {
@@ -1504,9 +1485,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   useEffect(() => {
     if (!authUser) return;
-    const loadData = window.setTimeout(() => { void loadApplicationData(); void loadSystemStatus(); }, 0);
+    const loadData = window.setTimeout(() => { void loadSupportingData(); void loadSystemStatus(); }, 0);
     return () => window.clearTimeout(loadData);
-  }, [authUser, loadApplicationData, loadSystemStatus]);
+  }, [authUser, loadSupportingData, loadSystemStatus]);
 
   useEffect(() => {
     if (!authUser) return;
@@ -1595,7 +1576,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [toastMessage]);
 
   useEffect(() => {
-    if (!uiPreferencesLoaded || conversations.length === 0) return;
+    if (!uiPreferencesLoaded || !supportingDataLoaded) return;
 
     const validateFilters = window.setTimeout(() => {
       if (selectedStore !== "all" && !storeOptions.includes(selectedStore)) {
@@ -1630,7 +1611,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     return () => window.clearTimeout(validateFilters);
   }, [
     uiPreferencesLoaded,
-    conversations.length,
+    supportingDataLoaded,
     selectedStore,
     statusFilter,
     priorityFilter,
@@ -1646,44 +1627,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     lineOaOptions,
   ]);
 
-  const filteredConversations = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLocaleLowerCase();
-
-    return conversations.filter((conversation) => {
-      const state = conversationStates[conversation.id];
-      if (!state) return false;
-      const matchesSidebar =
-        sidebarView === "followUp"
-          ? state.status === "followUp"
-          : sidebarView === "reminded"
-            ? state.status === "reminded"
-            : true;
-      const searchableText = [
-        conversation.customer,
-        conversation.store,
-        conversation.message,
-        conversation.translations[language],
-        conversation.series,
-        conversation.product,
-        conversation.topic,
-      ]
-        .join(" ")
-        .toLocaleLowerCase();
-
-      return (
-        matchesSidebar &&
-        (!normalizedSearch || searchableText.includes(normalizedSearch)) &&
-        (selectedStore === "all" || conversation.storeId === selectedStore) &&
-        (statusFilter === "all" || state.status === statusFilter) &&
-        (priorityFilter === "all" || conversation.priority === priorityFilter) &&
-        (seriesFilter === "all" || conversation.series === seriesFilter) &&
-        (modelFilter === "all" || conversation.product === modelFilter) &&
-        (topicFilter === "all" ||
-          conversation.topic.split(" · ").includes(topicFilter)) &&
-        (lineOaFilter === "all" || conversation.lineOaId === lineOaFilter)
-      );
-    });
-  }, [conversationStates, conversations, language, lineOaFilter, modelFilter, priorityFilter, searchText, selectedStore, seriesFilter, sidebarView, statusFilter, topicFilter]);
+  const filteredConversations = conversations;
 
   const selectedConversation = useMemo(
     () => filteredConversations.find(({ id }) => id === selectedConversationId) ?? filteredConversations[0],
@@ -2591,7 +2535,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   {conversationListTitle}
                 </h2>
                 <p className="app-muted mt-0.5 text-sm">
-                  {chatTotalCount || filteredConversations.length} {text.searchResults}
+                  {chatTotalCount} {text.searchResults}
                 </p>
               </div>
 
@@ -2799,7 +2743,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <ConversationPaginationFooter
               currentPage={chatPage}
               pageSize={chatPageSize}
-              totalCount={chatTotalCount || filteredConversations.length}
+              totalCount={chatTotalCount}
               loading={isChatPageLoading}
               language={language}
               onPageChange={(newPage) => setChatPage(newPage)}

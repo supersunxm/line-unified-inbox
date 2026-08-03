@@ -289,3 +289,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Frontend lint, all 182 frontend tests, the production build, and 41 existing backend friend-source/attribution tests pass.
 - Controlled Next.js development and production-mode proxy checks preserved query strings, upstream `302 Location`, `404`, `410`, `User-Agent`, `Referer`, and a supplied `X-Forwarded-For` chain; Railway edge behavior still requires a production smoke test.
 - Next: review the implementation report before any commit, push, or deployment.
+
+# Current task: Store Chats authoritative conversation state
+
+- Replaced competing filtered and unfiltered conversation writers with one authoritative query snapshot and one guarded loader used by filter changes, pagination, manual refresh, and 12-second polling.
+- Moved store, LINE OA, queue/status, search, priority, product-series, product-model, topic, page, and page-size filtering into the backend-supported list request; the paginated response is no longer filtered again client-side.
+- Added request-generation protection, real page reconciliation when totals shrink, exact zero-total rendering, selected-conversation containment, and metadata-backed persisted-filter validation that also runs for empty lists.
+- Kept store and queue badge semantics unchanged: store badges remain global lifetime totals and queue badges remain page-local rather than authoritative filtered aggregates.
+- Frontend lint, 192 frontend tests, production build, 4 conversation backend contract tests, and deterministic production-mode browser polling/pagination/store-switch verification pass.
+- Next: review the final diff and implementation report before any commit, push, or deployment.

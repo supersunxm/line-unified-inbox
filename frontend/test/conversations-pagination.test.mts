@@ -148,7 +148,9 @@ test("Pagination architecture in page.tsx enforces layout height lock, filter re
   assert.match(pageCode, /className=\{`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden/);
 
   // Filter auto-reset tracking
-  assert.match(pageCode, /targetPage = filtersChanged \? 1 : chatPage/);
+  assert.match(pageCode, /previousConversationFilterShape\.current !== conversationFilterShapeKey/);
+  assert.match(pageCode, /setChatPage\(1\)/);
+  assert.match(pageCode, /reconcileConversationPage\(response\.total, query\.page, query\.pageSize\)/);
 
   // API conversations method supports query parameters
   assert.match(apiCode, /conversations: \(params\?: Record<string, string \| number \| boolean \| undefined>\) =>/);
