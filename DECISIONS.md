@@ -165,3 +165,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - `lineoppo.click/f/:shortCode` uses a Next.js external rewrite to the existing backend route, while the browser-facing entry URL remains on the frontend domain.
 - The rewrite consumes the existing validated `API_BASE_URL`; it does not introduce another backend-origin setting or duplicate backend redirect/tracking logic.
 - The Railway backend public domain remains active for previously distributed links. Forwarded client IP, referrer, user agent, upstream status, and `Location` require deployment-mode smoke verification and are not assumed from configuration alone.
+
+# Desktop header control ownership (2026-08-03)
+
+- The global header owns only cross-workspace controls: branding, primary navigation, global search, update status, and the profile/settings menu. Page-specific actions must remain in their workspace; Store Chats pane reset therefore lives in the Store Chats overflow menu while retaining the existing callback.
+- Identity, role, Pilot state, language, appearance, logout, and avatar form one profile dropdown. Theme and language state remain owned by their existing providers/workspace state, so consolidation changes presentation rather than behavior.
+- Dashboard, Store Chats, and Store Management remain directly visible at desktop widths. Lower-priority insights links collapse into a More menu below the widest breakpoint, and search becomes icon-triggered below 1024px to avoid horizontal overflow without compressing labels.
+- The compact last-updated control is informational and exposes the complete localized timestamp through its accessible label and tooltip. It does not introduce a new refresh path because the previous header timestamp had no refresh action.

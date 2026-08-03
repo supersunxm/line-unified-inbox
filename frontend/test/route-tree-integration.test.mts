@@ -45,10 +45,11 @@ test("all six top navigation links retain their canonical destinations", () => {
   }
 });
 
-test("TopNavigation contains account controls, search, theme, language, and logout button", () => {
+test("TopNavigation consolidates account, theme, language, and logout controls", () => {
   assert.match(topNavCode, /ThemeControl/);
   assert.match(topNavCode, /setSearchText/);
   assert.match(topNavCode, /changeLanguage/);
   assert.match(topNavCode, /logout/);
   assert.match(topNavCode, /authUser\.displayName/);
+  assert.doesNotMatch(topNavCode, /Notifications|12 unread|🔔/);
 });

@@ -1,15 +1,29 @@
-import React from "react";
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { ThemeControl } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
 
 export type Language = "th" | "en" | "zh";
 
+type TopNavigationText = {
+  apiError?: string;
+  appDescription?: string;
+  appName?: string;
+  dashboard?: string;
+  language?: string;
+  lastUpdated?: string;
+  loadingData?: string;
+  retry?: string;
+  searchPlaceholder?: string;
+  storeManagement?: string;
+};
+
 export interface TopNavigationProps {
   currentSection: PrimarySection;
   authUser: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  text: Record<string, any>;
+  text: TopNavigationText;
   language: Language;
   changeLanguage: (lang: Language) => void;
   searchText: string;
@@ -17,176 +31,246 @@ export interface TopNavigationProps {
   pilotMode?: boolean;
   lastUpdatedAt?: Date | null;
   logout: () => Promise<void> | void;
-  resetPaneSizes?: (() => void) | null;
 }
 
-export function TopNavigation({
-  currentSection,
-  authUser,
-  text,
-  language,
-  changeLanguage,
-  searchText,
-  setSearchText,
-  pilotMode,
-  lastUpdatedAt,
-  logout,
-  resetPaneSizes,
-}: TopNavigationProps) {
+type MenuProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "language" | "logout" | "pilotMode" | "text">;
+
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
+const navLinkClass = `${focusRing} whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors`;
+
+function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, text }: MenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
+  }, [isOpen]);
+
+  if (!authUser) return null;
+
   return (
-    <header className="app-header app-surface sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b px-4 py-2.5 sm:px-6">
-      {/* Left section: App Branding & Primary Navigation */}
-      <div className="flex min-w-0 items-center gap-4 lg:gap-6">
-        <div className="min-w-max shrink-0">
-          <Link href="/dashboard" className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-0.5">
-            <h1 className="text-lg font-bold tracking-tight sm:text-xl">
-              {text.appName || "OPPO LINE OA Monitor"}
-            </h1>
-            <p className="app-muted hidden text-xs sm:block">
-              {text.appDescription || "ระบบติดตามข้อความจาก LINE OA ของร้านค้า"}
-            </p>
-          </Link>
-        </div>
+    <div ref={menuRef} className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Open profile menu for ${authUser.displayName}`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+        className={`${focusRing} flex h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white p-1 pr-2 text-sm shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800`}
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white dark:bg-blue-500" aria-hidden="true">
+          {authUser.displayName.charAt(0).toUpperCase()}
+        </span>
+        <span className="hidden max-w-24 truncate font-semibold 2xl:inline">{authUser.displayName}</span>
+        <span aria-hidden="true" className="text-xs text-slate-500">⌄</span>
+      </button>
 
-        {/* Primary Navigation Links */}
-        <nav aria-label="Primary navigation" className="app-primary-nav flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
-          <Link
-            href="/dashboard"
-            aria-current={currentSection === "dashboard" ? "page" : undefined}
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {text.dashboard || "แดชบอร์ด"}
-          </Link>
+      {isOpen && (
+        <div
+          role="dialog"
+          aria-label="Profile settings"
+          className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border p-3 shadow-xl"
+        >
+          <div className="border-b border-slate-200 px-2 pb-3 dark:border-slate-700">
+            <p className="truncate text-sm font-bold">{authUser.displayName}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs">
+              <span className="app-muted">{authUser.role}</span>
+              <span className={pilotMode ? "rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300" : "app-muted"}>
+                {pilotMode ? "Pilot environment" : "Standard environment"}
+              </span>
+            </div>
+          </div>
 
-          <Link
-            href="/chats"
-            aria-current={currentSection === "chats" ? "page" : undefined}
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}
-          </Link>
+          <div className="space-y-3 px-2 py-3">
+            <label className="block text-xs font-semibold">
+              <span className="mb-1 block app-muted">{text.language || "Language"}</span>
+              <select
+                value={language}
+                onChange={(event) => changeLanguage(event.target.value as Language)}
+                aria-label={text.language || "Language"}
+                className={`${focusRing} app-input h-9 w-full rounded-lg border px-2.5 text-sm`}
+              >
+                <option value="th">🇹🇭 ไทย</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="zh">🇨🇳 中文</option>
+              </select>
+            </label>
+            <div>
+              <p className="mb-1 text-xs font-semibold app-muted">Appearance</p>
+              <ThemeControl />
+            </div>
+          </div>
 
-          <Link
-            href="/stores"
-            aria-current={currentSection === "stores" ? "page" : undefined}
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {text.storeManagement || "จัดการร้านค้า"}
-          </Link>
-
-          <Link
-            href="/classification-insights"
-            aria-current={currentSection === "classification-insights" ? "page" : undefined}
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}
-          </Link>
-
-          <Link
-            href="/follower-insights"
-            aria-current={currentSection === "follower-insights" ? "page" : undefined}
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}
-          </Link>
-
-          {authUser?.role === "ADMIN" && (
-            <Link
-              href="/friend-source-links"
-              aria-current={currentSection === "friend-source-links" ? "page" : undefined}
-              className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              {language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}
-            </Link>
-          )}
-        </nav>
-      </div>
-
-      {/* Right section: Header Controls & User Info */}
-      <div className="app-header-controls flex items-center gap-2 sm:gap-3 shrink-0">
-        <ThemeControl compact />
-
-        {currentSection === "chats" && resetPaneSizes && (
-          <button
-            type="button"
-            onClick={resetPaneSizes}
-            aria-label={language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}
-            className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes"}
-          </button>
-        )}
-
-        {pilotMode && (
-          <span className="rounded-full bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 px-2.5 py-0.5 text-xs font-bold text-amber-800 dark:text-amber-300">
-            Pilot
-          </span>
-        )}
-
-        {authUser && (
-          <span className="app-muted hidden xl:inline text-xs font-medium">
-            {authUser.displayName} · {authUser.role}
-          </span>
-        )}
-
-        {authUser && (
           <button
             type="button"
             onClick={() => void logout()}
-            className="app-button-secondary rounded-lg border px-2.5 py-1.5 text-xs font-medium hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
+            className={`${focusRing} w-full rounded-lg border border-red-200 px-3 py-2 text-left text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/50`}
           >
             Logout
           </button>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
 
+function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigationProps, "searchText" | "setSearchText" | "text">) {
+  const [isOpen, setIsOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const label = text.searchPlaceholder || "Search customers, stores, or messages";
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!searchRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={searchRef} className="relative min-w-0 lg:flex lg:flex-1 lg:justify-end">
+      <label className="relative hidden w-40 lg:block xl:w-48 2xl:w-[clamp(14rem,18vw,22rem)]">
+        <span className="sr-only">{label}</span>
+        <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+        <input
+          type="search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+          placeholder={label}
+          className={`${focusRing} app-header-search app-input h-9 w-full rounded-lg border py-1.5 pl-8 pr-3 text-xs`}
+        />
+      </label>
+
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+        className={`${focusRing} app-button-secondary flex h-9 w-9 items-center justify-center rounded-lg border lg:hidden`}
+      >
+        <span aria-hidden="true">⌕</span>
+      </button>
+
+      {isOpen && (
+        <div className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border p-2 shadow-xl lg:hidden">
+          <label>
+            <span className="sr-only">{label}</span>
+            <input
+              autoFocus
+              type="search"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder={label}
+              className={`${focusRing} app-input h-10 w-full rounded-lg border px-3 text-sm`}
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNavigationProps, "authUser" | "currentSection" | "language">) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("keydown", close);
+    document.addEventListener("pointerdown", closeOutside);
+    return () => {
+      document.removeEventListener("keydown", close);
+      document.removeEventListener("pointerdown", closeOutside);
+    };
+  }, [isOpen]);
+
+  const secondaryActive = ["classification-insights", "follower-insights", "friend-source-links"].includes(currentSection);
+  return (
+    <div ref={menuRef} className="relative 2xl:hidden">
+      <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active" : ""}`}>
+        {language === "th" ? "เพิ่มเติม" : language === "zh" ? "更多" : "More"} <span aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && (
+        <div role="menu" aria-label="More navigation" className="app-surface absolute left-0 top-[calc(100%+0.4rem)] z-50 min-w-56 rounded-xl border p-2 shadow-xl">
+          <Link role="menuitem" href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} block lg:hidden`}>{language === "th" ? "จัดการร้านค้า" : language === "zh" ? "门店管理" : "Store Management"}</Link>
+          <Link role="menuitem" href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
+          <Link role="menuitem" href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
+          {authUser?.role === "ADMIN" && <Link role="menuitem" href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TopNavigation(props: TopNavigationProps) {
+  const { authUser, changeLanguage, currentSection, language, lastUpdatedAt, logout, pilotMode, searchText, setSearchText, text } = props;
+  const updatedLabel = lastUpdatedAt
+    ? `${text.lastUpdated || "Last updated"} ${new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdatedAt)}`
+    : (text.lastUpdated || "Last updated");
+
+  return (
+    <header className="app-header app-surface sticky top-0 z-30 flex min-h-16 min-w-0 items-center gap-3 border-b px-4 py-2.5 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-5">
+        <Link href="/dashboard" className={`${focusRing} min-w-max shrink-0 rounded-lg p-0.5`}>
+          <h1 className="text-base font-bold tracking-tight xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
+          <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
+        </Link>
+
+        <nav aria-label="Primary navigation" className="app-primary-nav flex min-w-0 items-center gap-0.5">
+          <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={navLinkClass}>{text.dashboard || "Dashboard"}</Link>
+          <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
+          <Link href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} hidden lg:block`}>{text.storeManagement || "Stores"}</Link>
+          <div className="hidden items-center gap-0.5 2xl:flex">
+            <Link href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
+            <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
+            {authUser?.role === "ADMIN" && <Link href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
+          </div>
+          <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
+        </nav>
+      </div>
+
+      <div className="app-header-controls flex min-w-0 shrink items-center justify-end gap-2 lg:flex-1">
+        <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
         {lastUpdatedAt && (
-          <span className="app-header-metadata app-muted hidden 2xl:inline text-xs">
-            {text.lastUpdated || "อัปเดตล่าสุด"}{" "}
-            {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(lastUpdatedAt)}
-          </span>
+          <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-9 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold`}>
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="hidden xl:inline">Live</span>
+            <span className="sr-only">{updatedLabel}</span>
+          </button>
         )}
-
-        {/* Global Search Input */}
-        <div className="relative hidden md:block">
-          <input
-            type="text"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder={text.searchPlaceholder || "ค้นหาลูกค้า ร้านค้า หรือข้อความ"}
-            aria-label={text.searchPlaceholder || "Search"}
-            className="app-header-search app-input w-48 lg:w-64 h-9 rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-
-        {/* Language Selector */}
-        <select
-          value={language}
-          onChange={(e) => changeLanguage(e.target.value as Language)}
-          aria-label={text.language || "Language"}
-          className="app-input h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-slate-100"
-        >
-          <option value="th">🇹🇭 ไทย</option>
-          <option value="en">🇬🇧 English</option>
-          <option value="zh">🇨🇳 中文</option>
-        </select>
-
-        {/* Notifications Button */}
-        <button
-          type="button"
-          aria-label="Notifications (12 unread)"
-          className="flex h-9 items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-        >
-          <span>🔔</span>
-          <span>12</span>
-        </button>
-
-        {/* User Avatar */}
-        <div
-          aria-label={authUser?.displayName ? `User avatar for ${authUser.displayName}` : "User avatar"}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 dark:bg-blue-500 text-xs font-bold text-white shadow-sm ring-2 ring-blue-500/20"
-        >
-          {authUser?.displayName ? authUser.displayName.charAt(0).toUpperCase() : "S"}
-        </div>
+        <ProfileMenu authUser={authUser} changeLanguage={changeLanguage} language={language} logout={logout} pilotMode={pilotMode} text={text} />
       </div>
     </header>
   );

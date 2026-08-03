@@ -20,6 +20,7 @@ import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
 import type { SidebarView } from "@/components/shell";
+import { StoreChatsOverflowMenu } from "@/components/chats/store-chats-overflow-menu";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -2218,7 +2219,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       pilotMode={systemStatus?.pilotMode}
       lastUpdatedAt={lastUpdatedAt}
       logout={logout}
-      resetPaneSizes={initialSection === "chats" ? resetChatPanes : null}
       isLoading={isLoading}
       apiError={apiError}
       loadApplicationData={loadApplicationData}
@@ -2595,14 +2595,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 </p>
               </div>
 
-              <button
-                data-chat-filter-button
-                onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
-                aria-expanded={showFilterPanel}
-                className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
-              >
-                {text.moreFilters}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  data-chat-filter-button
+                  onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
+                  aria-expanded={showFilterPanel}
+                  className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
+                >
+                  {text.moreFilters}
+                </button>
+                <StoreChatsOverflowMenu language={language} resetPaneSizes={resetChatPanes} />
+              </div>
             </div>
 
             {showFilterPanel && (
