@@ -206,3 +206,80 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Readiness requires structural checks, protected-term checks, and complete human review. Retail-intent mismatch detection is advisory because valid translations may express the same concept outside a finite phrase list.
 - Benchmark cost is an estimate derived from frozen source Unicode character counts for both targets and submission-supplied price-per-million metadata. It has no billing-system or environment-variable integration; missing pricing produces no monetary estimate.
 - Regression snapshots are metadata-only, versioned artifacts with deterministic identifiers derived from provider metadata and one-way candidate digests. They exclude source, reference, candidate translation, and reviewer-note content and can be compared without production data.
+# Translation pilot safety boundary (2026-08-04)
+
+- A benchmark `APPROVED_FOR_PILOT` decision does not enable application behavior. Runtime translation requires both the existing feature flag and the separate pilot flag, while authorization remains ADMIN-only.
+- Pilot audit events use an explicit metadata whitelist and never accept message text, translated text, LINE identifiers, or customer attributes.
+- The initial limiter is deliberately dependency-free and applies per backend process and acting administrator to uncached provider work. It is sufficient for a tightly controlled pilot but is not a distributed quota; wider rollout requires a shared limiter before horizontal scaling can provide a global limit.
+
+# Translation pilot monitoring (2026-08-04)
+
+- Phase 3A.2 metrics are process-local aggregate telemetry with no database persistence and no per-message or per-user dimensions. This prevents the monitoring layer from becoming a second store of customer or LINE data.
+- Total requests and duration cover active-pilot terminal outcomes. Character averages include only outcomes for which eligible source length is known; cache hits include stored target translations and same-language reuse.
+- Provider failures and persistence failures are distinct. Both count as failed translations, but only failures from the provider invocation increment the provider-failure counter.
+- Metrics reset on restart and are not exposed by an HTTP endpoint in this phase. Durable, distributed, or externally scraped monitoring requires a separately reviewed observability design.
+
+# Translation pilot monitoring access (2026-08-04)
+
+- The process-local metrics snapshot is exposed read-only at `GET /translation/metrics` through the existing authenticated ADMIN boundary. It has no message/store/customer dimensions and returns a fixed numeric aggregate contract.
+- Metrics reset is intentionally internal-only. An HTTP reset route would introduce avoidable operational mutation and requires separate authorization and audit design if ever needed.
+- The endpoint observes only its current backend process. Aggregation across Railway replicas or retention across restarts remains out of scope for the internal pilot.
+
+# Translation pilot user allowlist (2026-08-04)
+
+- Active pilot translation uses defense in depth: global authentication, ADMIN role metadata, both runtime feature flags, and exact user-ID membership in `TRANSLATION_PILOT_ALLOWED_ADMIN_IDS`.
+- A missing or empty allowlist is valid fail-closed configuration that permits no pilot users. It does not fail application startup because operators must still be able to observe health and metrics while pilot access is closed.
+- Allowlist rejection precedes message lookup, metrics, rate limiting, and provider invocation. The denial audit intentionally omits message ID and records only acting user ID, fixed reason, and timestamp.
+
+# Translation pilot daily usage budget (2026-08-04)
+
+- Daily budget usage is process-local and counts Unicode source characters reserved for active-pilot, allowlisted, uncached provider attempts. Cache hits, same-language results, unavailable providers, blocked users, and minute-rate-limit rejections consume no budget.
+- A provider attempt retains its budget reservation even if the provider later fails, because those characters crossed the provider boundary and may represent billable usage. Budget rejection occurs before that boundary and returns HTTP 429.
+- The budget resets by Asia/Bangkok calendar date and on process restart. It is a controlled-pilot guard, not a durable or replica-global billing ledger.
+- The ADMIN metrics endpoint combines translation aggregates with current-process daily usage, configured limit, and exceeded-request count; it still exposes numeric metadata only.
+
+# Translation pilot readiness contract (2026-08-04)
+
+- `GET /translation/readiness` is an authenticated ADMIN-only preflight that projects validated runtime configuration into booleans. It performs no provider request, Prisma access, mutation, or credential parsing beyond startup configuration.
+- A ready result requires the feature and pilot flags, Google provider options, a non-empty allowlist, and positive validated rate and daily-budget limits. Readiness does not itself enable translation or authorize a user.
+- The endpoint never echoes environment values, allowlist membership, provider project details, or credentials. Invalid raw configuration continues to fail startup; valid but incomplete configuration starts safely and reports `ready: false`.
+
+# Translation pilot synthetic smoke test (2026-08-04)
+
+- The pilot smoke test is a non-production CLI, not an application endpoint. It uses a frozen synthetic OPPO retail sentence and directly exercises the provider abstraction without Prisma, webhook, LINE, conversation, or customer-message dependencies.
+- Readiness must pass before provider construction or invocation. Each English and Chinese target has one provider attempt followed by one in-memory cache read, allowing metrics, budget, normalization, and cache behavior to be checked without persistence.
+- Smoke cache is intentionally scoped to one CLI execution and holds synthetic output only. It neither tests nor modifies the application Message cache.
+- Output excludes translated text and errors, credentials, tokens, IDs, and configuration values; only boolean readiness, provider status, targets, latency, character count, and success are printed.
+
+# Translation pilot audit report (2026-08-04)
+
+- `GET /translation/report` is an authenticated ADMIN-only read model over the current process's existing metrics and daily budget. It introduces no new collection, storage, reset, or translation behavior.
+- Operational success includes provider successes and cache hits because both complete the user request. Rate-limited and failed outcomes remain in the total denominator; an idle process reports 100% to avoid a false critical state before pilot traffic.
+- Threshold precedence is deterministic: under 80% success or exhausted budget is CRITICAL; otherwise under 95% success or at least 80% budget use is WARNING; otherwise status is HEALTHY. Exactly 95% is healthy and exactly 80% is warning.
+- The report contract contains fixed labels and aggregate numeric values only, with no message, translation, user, LINE, provider-secret, or customer dimensions.
+
+# Translation pilot feedback signals (2026-08-04)
+
+- Pilot feedback is an internal aggregate service with exactly three supported signals and no per-event records. Its state consists only of positive, terminology-issue, and meaning-issue counters and resets with the process.
+- Recording requires a completed `TRANSLATED` or `CACHED` status. Translation execution never infers sentiment or quality, and unsuccessful or same-language outcomes cannot produce feedback.
+- Phase 3B.1.3 intentionally adds no HTTP submission endpoint or frontend. A future capture surface must preserve the aggregate-only contract and prove post-success association without storing message, translation, user, LINE, or customer dimensions.
+- Existing ADMIN metrics and report endpoints expose the three counters as numeric aggregates; feedback does not affect success rate or HEALTHY/WARNING/CRITICAL status in this phase.
+
+# Translation pilot activation checklist (2026-08-04)
+
+- `GET /translation/pilot-status` is an authenticated ADMIN-only operational projection and has no activation side effect. It separates `active` runtime switches from `ready` completion of every safety check.
+- `active` requires the feature flag, configured Google provider, and pilot flag. `ready` additionally requires a non-empty allowlist, valid rate limit, valid daily budget, and available feedback counters.
+- The checklist returns only booleans plus allowlist cardinality. It never returns admin IDs, configured numeric limits, environment values, provider project metadata, or credentials.
+- Invalid raw rate/budget configuration remains a startup validation failure; service-level checklist tests also preserve a false readiness projection for invalid constructed configuration.
+
+# Controlled translation pilot activation preparation (2026-08-04)
+
+- Pilot `active` status requires a non-empty environment-derived ADMIN allowlist as well as the feature flag, configured Google provider, and pilot flag. This makes missing allowlist configuration visibly inactive rather than merely unready.
+- Allowlist entries remain opaque authenticated user IDs sourced only from `TRANSLATION_PILOT_ALLOWED_ADMIN_IDS`; source code contains no production membership list. Runtime authorization compares the authenticated `User.id` exactly and still rejects before message lookup.
+- Activation and rollback are explicit operator procedures. Application startup and status endpoints validate and report safe state but never write Railway configuration or enable translation automatically.
+
+# Translation pilot production preflight (2026-08-04)
+
+- The Phase 3C.1 preflight is a standalone configuration parser rather than a Nest command. This structurally prevents database initialization and provider construction while checking production activation state.
+- Running under `NODE_ENV=production` requires the exact `--verify-production` argument. The marker grants permission only to inspect configuration; it does not enable translation, mutate variables, contact Google, or start the application.
+- Preflight output is a fixed safe projection: readiness, seven boolean checks, and allowlist cardinality. Parsing failures collapse to a fixed category so malformed credential or environment content cannot leak through CLI errors.
