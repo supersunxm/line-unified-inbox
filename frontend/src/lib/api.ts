@@ -6,6 +6,25 @@ export function messageMediaUrl(messageId: string) {
   return `${API_BASE_URL}/messages/${encodeURIComponent(messageId)}/media`;
 }
 
+export type MessageTranslationResult = {
+  messageId: string;
+  targetLanguage: "en" | "zh";
+  status: "TRANSLATED" | "CACHED" | "SAME_LANGUAGE" | "UNSUPPORTED_MESSAGE" | "UNSUPPORTED_LANGUAGE";
+  translatedText: string;
+  cached: boolean;
+};
+
+export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
+export type MessageTranslationFeedbackResult = {
+  id: string;
+  messageId: string;
+  targetLanguage: "en" | "zh";
+  rating: "HELPFUL" | "INCORRECT";
+  issueCategory: TranslationFeedbackIssueCategory | null;
+  createdAt: string;
+  recorded: boolean;
+};
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
 }
@@ -67,6 +86,22 @@ export const api = {
   },
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
   conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
+  translateMessage: (messageId: string, targetLanguage: "en" | "zh") =>
+    request<MessageTranslationResult>(`/messages/${encodeURIComponent(messageId)}/translations`, {
+      method: "POST",
+      body: JSON.stringify({ targetLanguage }),
+    }),
+  submitTranslationFeedback: (
+    messageId: string,
+    input: {
+      targetLanguage: "en" | "zh";
+      rating: "HELPFUL" | "INCORRECT";
+      issueCategory?: TranslationFeedbackIssueCategory;
+    },
+  ) => request<MessageTranslationFeedbackResult>(`/messages/${encodeURIComponent(messageId)}/translations/feedback`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }),
   reanalyzeConversation: (id: string) => request<ApiConversation>(`/conversations/${id}/reanalyze`, { method: "POST" }),
   updateConversationTags: (id: string, productModelIds: string[], topicIds: string[]) => request<ApiConversation>(`/conversations/${id}/tags`, { method: "PATCH", body: JSON.stringify({ productModelIds, topicIds }) }),
   refreshLineProfile: (id: string) => request<ApiConversation["customer"]>(`/conversations/${id}/refresh-profile`, { method: "POST" }),

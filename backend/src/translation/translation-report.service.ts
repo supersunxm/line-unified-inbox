@@ -21,6 +21,7 @@ export type TranslationPilotReport = {
     positiveFeedbackCount: number;
     terminologyIssueCount: number;
     meaningIssueCount: number;
+    otherIssueCount: number;
   };
   healthIndicators: {
     successRate: number;
@@ -67,6 +68,7 @@ export class TranslationReportService {
         positiveFeedbackCount: feedback.positiveFeedbackCount,
         terminologyIssueCount: feedback.terminologyIssueCount,
         meaningIssueCount: feedback.meaningIssueCount,
+        otherIssueCount: feedback.otherIssueCount,
       },
       healthIndicators: {
         successRate,

@@ -22,6 +22,7 @@ export type TranslationMetricsResponse = {
   positiveFeedbackCount: number;
   terminologyIssueCount: number;
   meaningIssueCount: number;
+  otherIssueCount: number;
 };
 
 @Controller("translation")
@@ -56,6 +57,7 @@ export class TranslationMetricsController {
       positiveFeedbackCount: feedback.positiveFeedbackCount,
       terminologyIssueCount: feedback.terminologyIssueCount,
       meaningIssueCount: feedback.meaningIssueCount,
+      otherIssueCount: feedback.otherIssueCount,
     };
   }
 

@@ -142,6 +142,22 @@ enum UserRole {
   VIEWER
 }
 
+enum TranslationFeedbackRating {
+  HELPFUL
+  INCORRECT
+}
+
+enum TranslationFeedbackIssueCategory {
+  MEANING_ISSUE
+  TERMINOLOGY_ISSUE
+  OTHER
+}
+
+enum TranslationEventStatus {
+  SUCCESS
+  FAILED
+}
+
 enum PilotChecklistStatus {
   NOT_TESTED
   PASSED
@@ -169,6 +185,7 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sessions        Session[]
+  translationFeedback MessageTranslationFeedback[]
 }
 
 model AdminRegistrationOtp {
@@ -428,8 +445,43 @@ model Message {
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   media             MessageMedia?
+  translationFeedback MessageTranslationFeedback[]
 
   @@index([conversationId, sentAt])
+}
+
+model MessageTranslationFeedback {
+  id              String                            @id @default(uuid())
+  messageId       String
+  adminUserId     String
+  targetLanguage  String
+  translationHash String
+  rating          TranslationFeedbackRating
+  issueCategory   TranslationFeedbackIssueCategory?
+  createdAt       DateTime                          @default(now())
+  message         Message                           @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  adminUser       User                              @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@unique([messageId, targetLanguage, adminUserId, translationHash])
+  @@index([messageId, targetLanguage])
+  @@index([createdAt])
+}
+
+model TranslationEvent {
+  id             String                 @id @default(uuid())
+  messageId      String
+  adminId        String
+  targetLanguage String
+  provider       String
+  status         TranslationEventStatus
+  durationMs     Int
+  characterCount Int
+  errorCategory  String?
+  createdAt      DateTime               @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([messageId, createdAt])
 }
 
 model MessageMedia {

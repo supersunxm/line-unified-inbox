@@ -206,6 +206,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Readiness requires structural checks, protected-term checks, and complete human review. Retail-intent mismatch detection is advisory because valid translations may express the same concept outside a finite phrase list.
 - Benchmark cost is an estimate derived from frozen source Unicode character counts for both targets and submission-supplied price-per-million metadata. It has no billing-system or environment-variable integration; missing pricing produces no monetary estimate.
 - Regression snapshots are metadata-only, versioned artifacts with deterministic identifiers derived from provider metadata and one-way candidate digests. They exclude source, reference, candidate translation, and reviewer-note content and can be compared without production data.
+- OPPO terminology rules and placeholder-based normalization live in a reusable translation glossary package, but Phase 2E integrates them only as a benchmark post-processing step between candidate generation and evaluation. It operates on an in-memory copy and does not change Google provider responses, runtime message translation, stored candidates, or application data.
+- Phase 2F human review is supplied as benchmark-file metadata keyed by `<caseId>:<language>`. Reviews are validated and aggregated offline; reviewer aliases and optional notes are not application identities, notes never affect scores, and neither aliases nor notes are persisted in metadata-only snapshots. Provider-decision readiness requires complete review coverage in addition to structural and terminology gates.
+- Phase 2G provider recommendations are derived only from aggregate benchmark results. Structural, protected-term, or intent failures are rejection conditions; incomplete review or an overall human score below 4.0 requires improvement. `APPROVED_FOR_PILOT` is a benchmark recommendation and never enables runtime translation or changes production configuration.
+
 # Translation pilot safety boundary (2026-08-04)
 
 - A benchmark `APPROVED_FOR_PILOT` decision does not enable application behavior. Runtime translation requires both the existing feature flag and the separate pilot flag, while authorization remains ADMIN-only.
@@ -283,3 +287,54 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The Phase 3C.1 preflight is a standalone configuration parser rather than a Nest command. This structurally prevents database initialization and provider construction while checking production activation state.
 - Running under `NODE_ENV=production` requires the exact `--verify-production` argument. The marker grants permission only to inspect configuration; it does not enable translation, mutate variables, contact Google, or start the application.
 - Preflight output is a fixed safe projection: readiness, seven boolean checks, and allowlist cardinality. Parsing failures collapse to a fixed category so malformed credential or environment content cannot leak through CLI errors.
+
+# Consolidated translation pilot readiness check (2026-08-04)
+
+- The consolidated CLI composes existing preflight and runtime-readiness logic instead of creating a second readiness contract. Its provider check is configuration presence only and deliberately does not instantiate or call Google.
+- Metrics readiness is limited to validating the shape of a fresh process-local aggregate snapshot. The command never starts Nest, connects Prisma, reads messages, or mutates application state.
+- The CLI inherits the production verification marker from the existing preflight and exposes only fixed boolean fields or a sanitized error category.
+
+# Store Chats manual translation MVP (2026-08-04)
+
+- Translation remains an explicit per-message ADMIN action limited to inbound TEXT messages. The frontend does not request translation during ingestion, message loading, polling, or conversation selection.
+- The existing credentialed API client owns session handling. Returned English text is displayed in a clearly labeled AI-translation block without replacing the customer message or changing the global original/translated view behavior.
+- Request state is local to each rendered message; successful text is also merged into the current in-memory message record while durable caching remains backend-owned.
+
+# Translation feedback MVP (2026-08-04)
+
+- Feedback is a separate ADMIN-only write after translation success. It does not share the translation endpoint, provider abstraction, rate limit, character budget, or generation flow, so feedback can never trigger another provider request.
+- Durable feedback references the message, administrator, target language, rating, and issue category. A SHA-256 translation fingerprint binds it to the exact stored result without duplicating customer or translated text.
+- The uniqueness boundary includes message, language, admin, and translation fingerprint. Repeat submission for the same result is idempotent, while a future changed translation can receive a new review.
+- Helpful feedback has no issue category; Incorrect requires exactly one of meaning, terminology, or other. The existing process-local counters remain operational telemetry, while PostgreSQL is the durable review source.
+
+# Translation quality analytics MVP (2026-08-04)
+
+- Historical quality reporting reads PostgreSQL rather than process-local pilot metrics, which reset on restart and cannot truthfully represent a standalone CLI period.
+- Each non-null English or Chinese translated field counts as one durable successful translation. Failed and rate-limited attempts remain unavailable historically, so `totalTranslations` equals `successfulTranslations` for this MVP instead of inventing an attempt count.
+- Helpful rate is the percentage of all durable feedback rows rated Helpful, rounded to two decimal places; a zero-feedback population reports zero. The CLI is read-only and has no Google provider dependency.
+
+# Persistent translation event tracking (2026-08-04)
+
+- Translation attempts are stored as metadata-only events with a stable `SUCCESS` or `FAILED` outcome. Cached and same-language responses count as successful requests; unavailable, ineligible, denied, limited, provider-failed, and persistence-failed outcomes count as failures.
+- Message and administrator identifiers are stored as scalar audit dimensions rather than foreign keys so an attempt can still be represented when a supplied message is missing and historical operational evidence is not cascade-deleted with application records.
+- Event persistence is awaited but fail-open: inability to write observability metadata is logged with a fixed category and never changes translation generation, persistence, provider-call count, or the client response.
+- Quality analytics switches to events prospectively. Existing translated fields are not backfilled into synthetic events, avoiding invented timing, administrator, provider, or attempt-status metadata.
+
+# OPPO runtime translation glossary MVP (2026-08-04)
+
+- Glossary enforcement is a decorator over `TranslationProvider`, not logic inside Google Cloud Translation or `TranslationService`. This keeps provider-specific transport isolated and makes the one-provider-call boundary testable.
+- Only seven explicitly approved source terms are protected at runtime. Neutral collision-checked alphanumeric sentinels are restored case-insensitively to canonical spelling after the response; unrelated source and translated text are not normalized. Private-use Unicode markers were rejected after Google altered them in the production smoke test.
+- The broader English/Chinese benchmark glossary remains an evaluation tool and is not automatically applied to runtime retail language, avoiding unreviewed changes to customer meaning.
+- Original message text is never rewritten. The wrapper reports source character count from the original string rather than the placeholder-expanded request.
+
+# OPPO glossary production smoke boundary (2026-08-04)
+
+- The glossary smoke command exercises the raw Google adapter through the same glossary decorator used at runtime, but it does not start Nest or import Prisma. One invocation has exactly one provider attempt and no retry behavior.
+- The fixed synthetic sentence is safe to send externally and covers every runtime-protected term in one request. Output deliberately excludes both source and translated text, even on failure.
+- Automated tests use injected fake providers only. A real provider call is an explicit operator action using environment-only credentials and creates no message, feedback, event, or other application record.
+
+# Translation pilot release readiness automation (2026-08-04)
+
+- Release readiness composes the existing pilot preflight/readiness contract rather than reinterpreting environment values. Production execution therefore retains the explicit `--verify-production` marker.
+- Database readiness requires the existing health-controller query and every migration directory in the current branch to have a successfully finished, non-rolled-back `_prisma_migrations` row. Extra historical applied migrations do not fail the check.
+- Glossary readiness means the checked-in seven-term synthetic validation contract and decorator path are available; the release check deliberately does not execute the real Google smoke test. That remains a separate explicit operator action.

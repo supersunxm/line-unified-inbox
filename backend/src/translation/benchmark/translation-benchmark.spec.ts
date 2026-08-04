@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TRANSLATION_BENCHMARK_CORPUS, TRANSLATION_BENCHMARK_VERSION } from "./translation-benchmark.corpus";
 import { evaluateTranslationBenchmark } from "./translation-benchmark";
-import { TranslationBenchmarkSubmission } from "./translation-benchmark.types";
+import { TranslationBenchmarkReview, TranslationBenchmarkSubmission } from "./translation-benchmark.types";
 import { generateTranslationBenchmarkSubmission, TranslationBenchmarkRunner } from "./translation-benchmark.runner";
 import { glossaryEntriesForSource, OPPO_RETAIL_TRANSLATION_GLOSSARY } from "./oppo-retail-glossary";
 import { TRANSLATION_BENCHMARK_CASE_CATEGORIES, TRANSLATION_BENCHMARK_CATEGORY_WEIGHTS } from "./translation-benchmark.metadata";
@@ -20,6 +20,19 @@ function referenceSubmission(withHumanReview = false): TranslationBenchmarkSubmi
       ...(withHumanReview ? { humanReview: { adequacy: 5, fluency: 5, terminology: 5, safety: 5, reviewerId: "reviewer-a", notes: "Synthetic reference review" } } : {}),
     }))),
   };
+}
+
+function explicitReviews(submission: TranslationBenchmarkSubmission): TranslationBenchmarkReview[] {
+  return submission.candidates.map(({ caseId, targetLanguage }) => ({
+    candidateKey: `${caseId}:${targetLanguage}`,
+    language: targetLanguage,
+    adequacyScore: 4,
+    fluencyScore: 3,
+    terminologyScore: 5,
+    safetyScore: 2,
+    reviewerAlias: "reviewer-a",
+    notes: "Synthetic benchmark review",
+  }));
 }
 
 test("corpus is synthetic, uniquely keyed, Thai source, and covers English and Chinese", () => {
@@ -109,10 +122,59 @@ test("complete valid human review makes a structurally valid submission decision
   assert.equal(report.readinessDecision, "READY_FOR_HUMAN_DECISION");
 });
 
+test("explicit Phase 2F reviews aggregate each dimension and unlock readiness at complete coverage", () => {
+  const submission = referenceSubmission();
+  submission.reviews = explicitReviews(submission);
+  const report = evaluateTranslationBenchmark(submission);
+  assert.equal(report.humanReviewedCount, 30);
+  assert.equal(report.humanReviewPercent, 100);
+  assert.equal(report.averageAdequacy, 4);
+  assert.equal(report.averageFluency, 3);
+  assert.equal(report.averageTerminology, 5);
+  assert.equal(report.averageSafety, 2);
+  assert.equal(report.overallHumanScore, 3.5);
+  assert.equal(report.humanScoreAverage, 3.5);
+  assert.equal(report.readyForProviderDecision, true);
+  assert.equal(report.readinessDecision, "READY_FOR_HUMAN_DECISION");
+});
+
+test("partial human review remains valid input but cannot satisfy readiness coverage", () => {
+  const submission = referenceSubmission();
+  submission.reviews = explicitReviews(submission).slice(0, 1);
+  const report = evaluateTranslationBenchmark(submission);
+  assert.equal(report.humanReviewedCount, 1);
+  assert.equal(report.humanReviewPercent, 3.33);
+  assert.equal(report.requiresHumanReview, true);
+  assert.equal(report.readyForProviderDecision, false);
+  assert.equal(report.readinessDecision, "NOT_READY");
+});
+
+test("review validation rejects invalid scores, aliases, duplicates, unknown keys, and language mismatches", () => {
+  const submission = referenceSubmission();
+  const review = explicitReviews(submission)[0];
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [{ ...review, adequacyScore: 0 }] }), /adequacyScore must be an integer between 1 and 5/);
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [{ ...review, reviewerAlias: " " }] }), /reviewerAlias is required/);
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [{ ...review, reviewerAlias: undefined } as unknown as TranslationBenchmarkReview] }), /reviewerAlias is required/);
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [review, { ...review }] }), /Duplicate review/);
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [{ ...review, candidateKey: "unknown:en" }] }), /Unknown review candidateKey/);
+  assert.throws(() => evaluateTranslationBenchmark({ ...submission, reviews: [{ ...review, language: review.language === "en" ? "zh" : "en" }] }), /does not match candidateKey/);
+});
+
+test("review notes do not affect aggregation or snapshot identity", () => {
+  const first = referenceSubmission();
+  first.reviews = explicitReviews(first);
+  const second = referenceSubmission();
+  second.reviews = explicitReviews(second).map((review) => ({ ...review, notes: "Different optional note" }));
+  const firstReport = evaluateTranslationBenchmark(first);
+  const secondReport = evaluateTranslationBenchmark(second);
+  assert.equal(secondReport.overallHumanScore, firstReport.overallHumanScore);
+  assert.equal(secondReport.snapshotIdentifier, firstReport.snapshotIdentifier);
+});
+
 test("protected glossary detects corrupted OPPO product and technology terms", () => {
   const submission = referenceSubmission(true);
   const product = submission.candidates.find(({ caseId, targetLanguage }) => caseId === "find-x9-ultra-display" && targetLanguage === "en")!;
-  product.translatedText = product.translatedText.replace("Find X9 Ultra", "Find X9 Ultimate").replace("AMOLED", "AMO LED");
+  product.translatedText = product.translatedText.replace("Find X9 Ultra", "Find X9 Ultimate").replace("AMOLED", "display technology");
   const report = evaluateTranslationBenchmark(submission);
   assert.equal(report.protectedTermsPassed, false);
   assert.ok(report.missingProtectedTerms.some(({ candidateKey, term }) => candidateKey === "find-x9-ultra-display:en" && term === "Find X9 Ultra"));
@@ -145,7 +207,7 @@ test("retail intent validation flags possible down-payment and stock mismatches"
 });
 
 test("missing, duplicate, unknown, empty, source-copy, and protected-term failures are reported", () => {
-  const submission = referenceSubmission(true);
+  const submission = referenceSubmission();
   submission.candidates.shift();
   submission.candidates.push({ ...submission.candidates[0] });
   submission.candidates.push({ caseId: "unknown", targetLanguage: "en", translatedText: "unknown" });

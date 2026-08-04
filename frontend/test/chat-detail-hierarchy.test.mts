@@ -24,6 +24,7 @@ test("message viewport dominates the workspace and preserves ordering, media, tr
   assert.match(detail, /const previous = chatHistory\.items\[index - 1\]/);
   assert.match(detail, /data-chat-date-separator/);
   assert.match(detail, /message\.messageType === "IMAGE" \? <MessageImage/);
+  assert.match(detail, /<MessageTranslationAction message=\{message\} userRole=\{authUser\.role\}/);
   assert.match(detail, /showTranslation \? translated \?\? message\.originalText : message\.originalText/);
   assert.match(detail, /data-line-oa-manager-notice[\s\S]*\{text\.repliesMayNotAppear\}/);
 });

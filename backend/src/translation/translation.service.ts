@@ -8,6 +8,7 @@ import { TRANSLATION_RATE_LIMITER, TranslationRateLimiter } from "./translation-
 import { TranslationMetrics, TranslationMetricOutcome } from "./translation-metrics";
 import { TranslationUsageBudget } from "./translation-usage-budget";
 import { TranslationFeedbackService, TranslationFeedbackSignal } from "./translation-feedback";
+import { TranslationEventService } from "./translation-event.service";
 
 export type MessageTranslationStatus = "TRANSLATED" | "CACHED" | "SAME_LANGUAGE" | "UNSUPPORTED_MESSAGE" | "UNSUPPORTED_LANGUAGE";
 
@@ -30,20 +31,22 @@ export class TranslationService {
     private readonly metrics: TranslationMetrics,
     private readonly usageBudget: TranslationUsageBudget,
     private readonly feedback: TranslationFeedbackService,
+    private readonly events: TranslationEventService,
   ) {}
 
   async translateMessage(messageId: string, targetLanguage: TranslationTargetLanguage, actingUserId: string): Promise<MessageTranslationResponse> {
     const startedAt = Date.now();
     if (!this.config.enabled) {
-      this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "FEATURE_DISABLED");
+      await this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "FEATURE_DISABLED");
       throw new ServiceUnavailableException("Message translation is unavailable");
     }
     if (!this.config.pilotMode) {
-      this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "PILOT_DISABLED");
+      await this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "PILOT_DISABLED");
       throw new ServiceUnavailableException("Message translation is unavailable");
     }
     if (!this.config.allowedAdminIds.includes(actingUserId)) {
       this.auditLogger.recordPilotAccessBlocked(actingUserId);
+      await this.recordEvent(messageId, actingUserId, targetLanguage, "FAILED", startedAt, "ADMIN_NOT_ALLOWLISTED");
       throw new ForbiddenException("Message translation pilot access denied");
     }
 
@@ -61,38 +64,38 @@ export class TranslationService {
     });
 
     if (!message || message.direction !== "INBOUND" || message.messageType !== "TEXT" || !message.originalText.trim()) {
-      this.logResult(messageId, actingUserId, targetLanguage, "UNSUPPORTED_MESSAGE", startedAt, "MESSAGE_INELIGIBLE");
+      await this.logResult(messageId, actingUserId, targetLanguage, "UNSUPPORTED_MESSAGE", startedAt, "MESSAGE_INELIGIBLE");
       this.recordMetric("FAILURE", startedAt, message?.originalText ? Array.from(message.originalText).length : undefined);
       throw new UnprocessableEntityException("Message is not eligible for translation");
     }
 
     const cachedText = targetLanguage === "en" ? message.translatedEnglish : message.translatedChinese;
     if (cachedText) {
-      this.logResult(messageId, actingUserId, targetLanguage, "CACHED", startedAt);
+      await this.logResult(messageId, actingUserId, targetLanguage, "CACHED", startedAt, undefined, Array.from(message.originalText).length);
       this.recordMetric("CACHED", startedAt, Array.from(message.originalText).length);
       return { messageId, targetLanguage, status: "CACHED", translatedText: cachedText, cached: true };
     }
 
     if (message.originalLanguage?.toLowerCase() === targetLanguage) {
-      this.logResult(messageId, actingUserId, targetLanguage, "SAME_LANGUAGE", startedAt);
+      await this.logResult(messageId, actingUserId, targetLanguage, "SAME_LANGUAGE", startedAt, undefined, Array.from(message.originalText).length);
       this.recordMetric("CACHED", startedAt, Array.from(message.originalText).length);
       return { messageId, targetLanguage, status: "SAME_LANGUAGE", translatedText: message.originalText, cached: true };
     }
 
     if (!this.provider) {
-      this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "PROVIDER_NOT_CONFIGURED");
+      await this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "PROVIDER_NOT_CONFIGURED", Array.from(message.originalText).length);
       this.recordMetric("FAILURE", startedAt, Array.from(message.originalText).length);
       throw new ServiceUnavailableException("Message translation provider is unavailable");
     }
 
     const characterCount = Array.from(message.originalText).length;
     if (!this.rateLimiter.consume(actingUserId)) {
-      this.logResult(messageId, actingUserId, targetLanguage, "RATE_LIMITED", startedAt, "RATE_LIMIT_EXCEEDED", characterCount);
+      await this.logResult(messageId, actingUserId, targetLanguage, "RATE_LIMITED", startedAt, "RATE_LIMIT_EXCEEDED", characterCount);
       this.recordMetric("RATE_LIMITED", startedAt, characterCount);
       throw new HttpException("Message translation rate limit exceeded", HttpStatus.TOO_MANY_REQUESTS);
     }
     if (!this.usageBudget.consume(characterCount)) {
-      this.logResult(messageId, actingUserId, targetLanguage, "RATE_LIMITED", startedAt, "DAILY_CHARACTER_BUDGET_EXCEEDED", characterCount);
+      await this.logResult(messageId, actingUserId, targetLanguage, "RATE_LIMITED", startedAt, "DAILY_CHARACTER_BUDGET_EXCEEDED", characterCount);
       this.recordMetric("RATE_LIMITED", startedAt, characterCount);
       throw new HttpException("Message translation daily budget exceeded", HttpStatus.TOO_MANY_REQUESTS);
     }
@@ -102,7 +105,7 @@ export class TranslationService {
       result = await this.provider.translate(message.originalText, targetLanguage);
     } catch (error: unknown) {
       const category = error instanceof TranslationProviderError ? error.category : "PROVIDER_REQUEST_FAILED";
-      this.logResult(messageId, actingUserId, targetLanguage, "FAILED", startedAt, category, characterCount);
+      await this.logResult(messageId, actingUserId, targetLanguage, "FAILED", startedAt, category, characterCount);
       this.recordMetric("FAILURE", startedAt, characterCount, true);
       throw new BadGatewayException("Message translation failed");
     }
@@ -113,11 +116,11 @@ export class TranslationService {
         data: targetLanguage === "en" ? { translatedEnglish: result.translatedText } : { translatedChinese: result.translatedText },
         select: { id: true },
       });
-      this.logResult(messageId, actingUserId, targetLanguage, "TRANSLATED", startedAt, undefined, result.characterCount, result.provider);
+      await this.logResult(messageId, actingUserId, targetLanguage, "TRANSLATED", startedAt, undefined, result.characterCount, result.provider);
       this.recordMetric("SUCCESS", startedAt, result.characterCount);
       return { messageId, targetLanguage, status: "TRANSLATED", translatedText: result.translatedText, cached: false };
     } catch {
-      this.logResult(messageId, actingUserId, targetLanguage, "FAILED", startedAt, "PERSISTENCE_FAILED", characterCount, result.provider);
+      await this.logResult(messageId, actingUserId, targetLanguage, "FAILED", startedAt, "PERSISTENCE_FAILED", characterCount, result.provider);
       this.recordMetric("FAILURE", startedAt, characterCount);
       throw new BadGatewayException("Message translation failed");
     }
@@ -127,8 +130,14 @@ export class TranslationService {
     this.feedback.recordAfterSuccessfulTranslation(status, signal);
   }
 
-  private logResult(messageId: string, actingUserId: string, targetLanguage: TranslationTargetLanguage, status: string, startedAt: number, errorCategory?: string, characterCount?: number, provider = this.config.provider) {
-    this.auditLogger.record({ messageId, actingUserId, targetLanguage, provider, status, durationMs: Date.now() - startedAt, ...(characterCount === undefined ? {} : { characterCount }), ...(errorCategory ? { errorCategory } : {}) });
+  private async logResult(messageId: string, actingUserId: string, targetLanguage: TranslationTargetLanguage, status: string, startedAt: number, errorCategory?: string, characterCount?: number, provider = this.config.provider) {
+    const durationMs = Date.now() - startedAt;
+    this.auditLogger.record({ messageId, actingUserId, targetLanguage, provider, status, durationMs, ...(characterCount === undefined ? {} : { characterCount }), ...(errorCategory ? { errorCategory } : {}) });
+    await this.events.record({ messageId, adminId: actingUserId, targetLanguage, provider, status: status === "TRANSLATED" || status === "CACHED" || status === "SAME_LANGUAGE" ? "SUCCESS" : "FAILED", durationMs, characterCount: characterCount ?? 0, ...(errorCategory ? { errorCategory } : {}) });
+  }
+
+  private async recordEvent(messageId: string, actingUserId: string, targetLanguage: TranslationTargetLanguage, status: "SUCCESS" | "FAILED", startedAt: number, errorCategory?: string): Promise<void> {
+    await this.events.record({ messageId, adminId: actingUserId, targetLanguage, provider: this.config.provider, status, durationMs: Date.now() - startedAt, characterCount: 0, ...(errorCategory ? { errorCategory } : {}) });
   }
 
   private recordMetric(outcome: TranslationMetricOutcome, startedAt: number, characterCount?: number, providerFailure = false) {

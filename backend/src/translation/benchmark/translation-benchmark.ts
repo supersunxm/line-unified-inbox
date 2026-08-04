@@ -1,7 +1,9 @@
 import { TRANSLATION_BENCHMARK_CORPUS, TRANSLATION_BENCHMARK_VERSION } from "./translation-benchmark.corpus";
 import { glossaryEntriesForSource, glossaryTargetPreserved } from "./oppo-retail-glossary";
+import { applyTranslationGlossary } from "../glossary/translation-glossary.service";
 import { TRANSLATION_BENCHMARK_CASE_CATEGORIES, TRANSLATION_BENCHMARK_CATEGORY_WEIGHTS, TRANSLATION_BENCHMARK_INTENTS } from "./translation-benchmark.metadata";
-import { TranslationBenchmarkCandidate, TranslationBenchmarkCategory, TranslationBenchmarkReport, TranslationBenchmarkSubmission, TranslationHumanReview } from "./translation-benchmark.types";
+import { TranslationBenchmarkCandidate, TranslationBenchmarkCategory, TranslationBenchmarkReport, TranslationBenchmarkSubmission } from "./translation-benchmark.types";
+import { collectTranslationBenchmarkReviews } from "./translation-benchmark.review";
 
 const targetLanguages = ["en", "zh"] as const;
 
@@ -28,12 +30,6 @@ function diceSimilarity(left: string, right: string) {
   return (2 * overlap) / (leftSet.size + rightSet.size);
 }
 
-function validHumanReview(review: TranslationHumanReview | undefined) {
-  if (!review?.reviewerId.trim()) return false;
-  if (review.notes !== undefined && typeof review.notes !== "string") return false;
-  return [review.adequacy, review.fluency, review.terminology, review.safety].every((score) => Number.isInteger(score) && score >= 1 && score <= 5);
-}
-
 function round(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -49,8 +45,12 @@ function validatePricing(pricing: TranslationBenchmarkSubmission["pricing"]) {
 }
 
 function snapshotIdentifier(submission: TranslationBenchmarkSubmission) {
+  const explicitReviewScores = new Map((submission.reviews ?? []).map((review) => [review.candidateKey.trim(), [review.adequacyScore, review.fluencyScore, review.terminologyScore, review.safetyScore]]));
   const candidateDigests = submission.candidates
-    .map((candidate) => ({ key: candidateKey(candidate), textDigest: createHash("sha256").update(candidate.translatedText).digest("hex"), reviewScores: candidate.humanReview ? [candidate.humanReview.adequacy, candidate.humanReview.fluency, candidate.humanReview.terminology, candidate.humanReview.safety] : null }))
+    .map((candidate) => {
+      const key = candidateKey(candidate);
+      return { key, textDigest: createHash("sha256").update(candidate.translatedText).digest("hex"), reviewScores: explicitReviewScores.get(key) ?? (candidate.humanReview ? [candidate.humanReview.adequacy, candidate.humanReview.fluency, candidate.humanReview.terminology, candidate.humanReview.safety] : null) };
+    })
     .sort((left, right) => left.key.localeCompare(right.key));
   const identity = JSON.stringify({ benchmarkVersion: submission.benchmarkVersion, provider: submission.provider ?? submission.systemName, providerVersion: submission.providerVersion ?? "unspecified", generatedAt: submission.generatedAt, pricing: submission.pricing ?? null, candidateDigests });
   return `translation-${createHash("sha256").update(identity).digest("hex").slice(0, 20)}`;
@@ -75,6 +75,8 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
     if (received.has(key)) duplicateCandidateKeys.add(key);
     else received.set(key, candidate);
   }
+  const expectedReviewLanguages = new Map([...expected].map(([key, { targetLanguage }]) => [key, targetLanguage]));
+  const humanReviews = collectTranslationBenchmarkReviews(submission, expectedReviewLanguages);
 
   let emptyCount = 0;
   let sourceCopyCount = 0;
@@ -83,7 +85,7 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
   let similarityTotal = 0;
   let evaluatedCount = 0;
   let humanReviewedCount = 0;
-  let humanScoreTotal = 0;
+  const humanScoreTotals = { adequacy: 0, fluency: 0, terminology: 0, safety: 0 };
   const missingProtectedTerms: TranslationBenchmarkReport["missingProtectedTerms"] = [];
   const intentMismatches: TranslationBenchmarkReport["intentMismatches"] = [];
   const categoryTotals = new Map<TranslationBenchmarkCategory, { total: number; count: number }>();
@@ -93,10 +95,11 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
     const candidate = received.get(key);
     if (!candidate) continue;
     evaluatedCount += 1;
-    const output = candidate.translatedText.trim();
+    const output = applyTranslationGlossary(candidate.translatedText, definition.targetLanguage).trim();
     if (!output) emptyCount += 1;
     if (output && normalize(output) === normalize(definition.testCase.sourceText)) sourceCopyCount += 1;
-    const similarity = diceSimilarity(output, definition.testCase.references[definition.targetLanguage]);
+    const reference = applyTranslationGlossary(definition.testCase.references[definition.targetLanguage], definition.targetLanguage);
+    const similarity = diceSimilarity(output, reference);
     similarityTotal += similarity;
     const category = TRANSLATION_BENCHMARK_CASE_CATEGORIES[definition.testCase.id];
     if (!category) throw new Error(`Benchmark category is missing for ${definition.testCase.id}`);
@@ -123,10 +126,13 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
     if (intent && !intent.acceptedTargets[definition.targetLanguage].some((term) => normalize(output).includes(normalize(term)))) {
       intentMismatches.push({ candidateKey: key, expectedConcept: intent.concept });
     }
-    if (validHumanReview(candidate.humanReview)) {
+    const humanReview = humanReviews.get(key);
+    if (humanReview) {
       humanReviewedCount += 1;
-      const review = candidate.humanReview!;
-      humanScoreTotal += review.adequacy + review.fluency + review.terminology + review.safety;
+      humanScoreTotals.adequacy += humanReview.adequacyScore;
+      humanScoreTotals.fluency += humanReview.fluencyScore;
+      humanScoreTotals.terminology += humanReview.terminologyScore;
+      humanScoreTotals.safety += humanReview.safetyScore;
     }
   }
 
@@ -144,9 +150,15 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
     return { category, weightPercent, score: round(total.count ? (total.total / total.count) * 100 : 0), candidateCount: total.count };
   });
   const overallScore = round(categoryScores.reduce((total, category) => total + category.score * (category.weightPercent / 100), 0));
-  const readyForProviderDecision = automaticGatesPassed && !requiresHumanReview;
+  const readyForProviderDecision = structuralChecksPassed && allProtectedTermsPassed && humanReviewPercent === 100;
   const estimatedCharacters = TRANSLATION_BENCHMARK_CORPUS.reduce((total, testCase) => total + [...testCase.sourceText].length * targetLanguages.length, 0);
   const estimatedCost = submission.pricing ? { ...submission.pricing, amount: roundCost((estimatedCharacters / 1_000_000) * submission.pricing.costPerMillionCharacters) } : null;
+
+  const averageAdequacy = humanReviewedCount ? round(humanScoreTotals.adequacy / humanReviewedCount) : null;
+  const averageFluency = humanReviewedCount ? round(humanScoreTotals.fluency / humanReviewedCount) : null;
+  const averageTerminology = humanReviewedCount ? round(humanScoreTotals.terminology / humanReviewedCount) : null;
+  const averageSafety = humanReviewedCount ? round(humanScoreTotals.safety / humanReviewedCount) : null;
+  const overallHumanScore = humanReviewedCount ? round((humanScoreTotals.adequacy + humanScoreTotals.fluency + humanScoreTotals.terminology + humanScoreTotals.safety) / (humanReviewedCount * 4)) : null;
 
   return {
     benchmarkVersion: submission.benchmarkVersion,
@@ -179,7 +191,12 @@ export function evaluateTranslationBenchmark(submission: TranslationBenchmarkSub
     unknownCandidateKeys: [...unknownCandidateKeys].sort(),
     humanReviewedCount,
     humanReviewPercent: round(humanReviewPercent),
-    humanScoreAverage: humanReviewedCount ? round(humanScoreTotal / (humanReviewedCount * 4)) : null,
+    humanScoreAverage: overallHumanScore,
+    averageAdequacy,
+    averageFluency,
+    averageTerminology,
+    averageSafety,
+    overallHumanScore,
     requiresHumanReview,
     structuralChecksPassed,
     protectedTermsPassed: allProtectedTermsPassed,

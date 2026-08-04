@@ -15,6 +15,11 @@ export type TranslationBenchmarkSnapshot = {
   languageScores: { en: number; zh: number };
   protectedTermPassPercent: number;
   humanReviewPercent: number;
+  averageAdequacy: number | null;
+  averageFluency: number | null;
+  averageTerminology: number | null;
+  averageSafety: number | null;
+  overallHumanScore: number | null;
   structuralChecksPassed: boolean;
   protectedTermsPassed: boolean;
   readinessDecision: TranslationBenchmarkReport["readinessDecision"];
@@ -54,6 +59,11 @@ export function createTranslationBenchmarkSnapshot(report: TranslationBenchmarkR
     languageScores: report.languageScores,
     protectedTermPassPercent: report.protectedTermPassPercent,
     humanReviewPercent: report.humanReviewPercent,
+    averageAdequacy: report.averageAdequacy,
+    averageFluency: report.averageFluency,
+    averageTerminology: report.averageTerminology,
+    averageSafety: report.averageSafety,
+    overallHumanScore: report.overallHumanScore,
     structuralChecksPassed: report.structuralChecksPassed,
     protectedTermsPassed: report.protectedTermsPassed,
     readinessDecision: report.readinessDecision,

@@ -20,6 +20,17 @@ export type TranslationHumanReview = {
   notes?: string;
 };
 
+export type TranslationBenchmarkReview = {
+  candidateKey: string;
+  language: TranslationTargetLanguage;
+  adequacyScore: number;
+  fluencyScore: number;
+  terminologyScore: number;
+  safetyScore: number;
+  reviewerAlias: string;
+  notes?: string;
+};
+
 export type TranslationBenchmarkCandidate = {
   caseId: string;
   targetLanguage: TranslationTargetLanguage;
@@ -35,6 +46,7 @@ export type TranslationBenchmarkSubmission = {
   providerVersion?: string;
   pricing?: TranslationBenchmarkPricing;
   candidates: TranslationBenchmarkCandidate[];
+  reviews?: TranslationBenchmarkReview[];
 };
 
 export type TranslationBenchmarkPricing = { currency: string; costPerMillionCharacters: number };
@@ -73,6 +85,11 @@ export type TranslationBenchmarkReport = {
   humanReviewedCount: number;
   humanReviewPercent: number;
   humanScoreAverage: number | null;
+  averageAdequacy: number | null;
+  averageFluency: number | null;
+  averageTerminology: number | null;
+  averageSafety: number | null;
+  overallHumanScore: number | null;
   requiresHumanReview: boolean;
   structuralChecksPassed: boolean;
   protectedTermsPassed: boolean;

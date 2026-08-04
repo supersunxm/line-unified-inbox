@@ -21,6 +21,7 @@ test("report aggregates process metrics, feedback signals, and health indicators
   feedback.recordAfterSuccessfulTranslation("TRANSLATED", "POSITIVE");
   feedback.recordAfterSuccessfulTranslation("CACHED", "TERMINOLOGY_ISSUE");
   feedback.recordAfterSuccessfulTranslation("TRANSLATED", "MEANING_ISSUE");
+  feedback.recordAfterSuccessfulTranslation("CACHED", "OTHER");
   assert.deepEqual(report.createReport(), {
     period: { type: "process" },
     status: "HEALTHY",
@@ -37,6 +38,7 @@ test("report aggregates process metrics, feedback signals, and health indicators
       positiveFeedbackCount: 1,
       terminologyIssueCount: 1,
       meaningIssueCount: 1,
+      otherIssueCount: 1,
     },
     healthIndicators: { successRate: 100, averageDurationMs: 80, budgetUtilizationPercent: 50 },
   });

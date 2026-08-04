@@ -15,6 +15,7 @@ import { InMemoryTranslationRateLimiter, TranslationRateLimiter } from "./transl
 import { TranslationMetrics } from "./translation-metrics";
 import { TranslationUsageBudget } from "./translation-usage-budget";
 import { TranslationFeedbackService } from "./translation-feedback";
+import { TranslationEventInput, TranslationEventService } from "./translation-event.service";
 
 const eligibleMessage = {
   id: "message-1",
@@ -54,7 +55,9 @@ function serviceFor(message: typeof eligibleMessage | null, enabled = true, prov
   const metrics = new TranslationMetrics();
   const usageBudget = options.usageBudget ?? new TranslationUsageBudget(config);
   const feedback = new TranslationFeedbackService();
-  return { service: new TranslationService(prisma, config, provider, rateLimiter, auditLogger, metrics, usageBudget, feedback), findCount: () => findCount, updateCount: () => updateCount, updateData: () => updateData, auditEntries, blockedAuditEntries, metrics, usageBudget, feedback };
+  const eventEntries: TranslationEventInput[] = [];
+  const events = { record: async (entry: TranslationEventInput) => { eventEntries.push(entry); } } as TranslationEventService;
+  return { service: new TranslationService(prisma, config, provider, rateLimiter, auditLogger, metrics, usageBudget, feedback, events), findCount: () => findCount, updateCount: () => updateCount, updateData: () => updateData, auditEntries, blockedAuditEntries, metrics, usageBudget, feedback, eventEntries };
 }
 
 test("MESSAGE_TRANSLATION_ENABLED defaults false and accepts only explicit booleans", () => {
@@ -224,7 +227,7 @@ test("translation feedback integrates only after a successful translation status
   const provider: TranslationProvider = { async translate() { return { translatedText: "English translation", characterCount: 16, provider: "google" }; } };
   const { service, feedback } = serviceFor(eligibleMessage, true, provider);
   const result = await service.translateMessage("message-1", "en", "admin-1");
-  assert.deepEqual(feedback.snapshot(), { positiveFeedbackCount: 0, terminologyIssueCount: 0, meaningIssueCount: 0 });
+  assert.deepEqual(feedback.snapshot(), { positiveFeedbackCount: 0, terminologyIssueCount: 0, meaningIssueCount: 0, otherIssueCount: 0 });
   service.recordFeedbackAfterSuccess(result.status, "POSITIVE");
   assert.equal(feedback.snapshot().positiveFeedbackCount, 1);
   assert.throws(() => service.recordFeedbackAfterSuccess("SAME_LANGUAGE", "MEANING_ISSUE"), BadRequestException);
@@ -241,6 +244,27 @@ test("provider failure returns a sanitized error and does not write a translatio
   assert.equal(updateCount(), 0);
   assert.equal(metrics.snapshot().failedTranslations, 1);
   assert.equal(metrics.snapshot().providerFailures, 1);
+});
+
+test("translation attempts persist safe success and failure event metadata", async () => {
+  const provider: TranslationProvider = { async translate() { return { translatedText: "English translation", characterCount: 16, provider: "google" }; } };
+  const successful = serviceFor(eligibleMessage, true, provider);
+  await successful.service.translateMessage("message-1", "en", "admin-1");
+  assert.deepEqual(successful.eventEntries[0], {
+    messageId: "message-1",
+    adminId: "admin-1",
+    targetLanguage: "en",
+    provider: "google",
+    status: "SUCCESS",
+    durationMs: successful.eventEntries[0]?.durationMs,
+    characterCount: 16,
+  });
+
+  const failed = serviceFor(eligibleMessage, true, { async translate() { throw new TranslationProviderError("PROVIDER_REQUEST_FAILED"); } });
+  await assert.rejects(failed.service.translateMessage("message-1", "zh", "admin-1"), BadGatewayException);
+  assert.equal(failed.eventEntries.length, 1);
+  assert.equal(failed.eventEntries[0]?.status, "FAILED");
+  assert.equal(failed.eventEntries[0]?.errorCategory, "PROVIDER_REQUEST_FAILED");
 });
 
 test("rate limiter returns controlled 429 without provider call or persistence", async () => {

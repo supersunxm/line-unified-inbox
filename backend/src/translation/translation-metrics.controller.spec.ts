@@ -59,6 +59,7 @@ test("ADMIN can access aggregate translation pilot metrics", async () => {
     positiveFeedbackCount: 0,
     terminologyIssueCount: 0,
     meaningIssueCount: 0,
+    otherIssueCount: 0,
   });
   assert.ok(Object.values(response).every((value) => typeof value === "number"));
 });
