@@ -47,3 +47,20 @@ test("activity history mapping and rendering recognizes BM_REPLY_STATUS_CHANGED"
   assert.match(pageCode, /activity\.actionType === "bmReplyStatus" && activity\.bmReplyStatus/);
   assert.match(pageCode, /bmReplyStatusChangedTo/);
 });
+
+test("sidebar OVERVIEW section renders bmReplyStatus categories with live store-scoped counts and query integration", () => {
+  const contextSidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
+  assert.match(contextSidebarCode, /selectSidebarView\("notReplied"\)/);
+  assert.match(contextSidebarCode, /selectSidebarView\("notifiedBm"\)/);
+  assert.match(contextSidebarCode, /selectSidebarView\("replied"\)/);
+  assert.match(contextSidebarCode, /notRepliedCount/);
+  assert.match(contextSidebarCode, /notifiedBmCount/);
+  assert.match(contextSidebarCode, /repliedCount/);
+
+  assert.match(pageCode, /bmReplyStatus: initialSection === "chats" \? activeConversationBmReplyStatus : undefined/);
+  assert.match(pageCode, /const scopedConversations = useMemo/);
+  assert.match(pageCode, /NOT_REPLIED/);
+  assert.match(pageCode, /NOTIFIED_BM/);
+  assert.match(pageCode, /REPLIED/);
+});
+

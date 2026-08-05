@@ -2,9 +2,9 @@ import React from "react";
 
 export type SidebarView =
   | "dashboard"
-  | "incoming"
-  | "followUp"
-  | "reminded"
+  | "notReplied"
+  | "notifiedBm"
+  | "replied"
   | "stores"
   | "customerInsights"
   | "lineOaManagement"
@@ -14,9 +14,10 @@ export type SidebarView =
 export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
+  notRepliedCount: number;
+  notifiedBmCount: number;
+  repliedCount: number;
   conversationsCount: number;
-  followUpCount: number;
-  remindedCount: number;
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
@@ -29,9 +30,10 @@ export interface ContextSidebarProps {
 export function ContextSidebar({
   sidebarView,
   selectSidebarView,
+  notRepliedCount,
+  notifiedBmCount,
+  repliedCount,
   conversationsCount,
-  followUpCount,
-  remindedCount,
   selectedStore,
   setSelectedStore,
   clearAllFilters,
@@ -56,42 +58,34 @@ export function ContextSidebar({
       <nav aria-label="Conversation filters" className="space-y-1">
         <button
           type="button"
-          onClick={() => selectSidebarView("dashboard")}
-          className={sidebarButtonClass("dashboard")}
+          onClick={() => selectSidebarView("notReplied")}
+          className={`${sidebarButtonClass("notReplied")} flex items-center justify-between`}
         >
-          📊 {text.dashboard || "แดชบอร์ด"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => selectSidebarView("incoming")}
-          className={`${sidebarButtonClass("incoming")} flex items-center justify-between`}
-        >
-          <span className="truncate">📥 {text.incoming || "ข้อความเข้าใหม่"}</span>
-          <span className="ml-2 rounded-full bg-red-100 dark:bg-red-950/80 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
-            {conversationsCount}
+          <span className="truncate">⚪ {text.notReplied || "ยังไม่ตอบ"}</span>
+          <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            {notRepliedCount}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => selectSidebarView("followUp")}
-          className={`${sidebarButtonClass("followUp")} flex items-center justify-between`}
+          onClick={() => selectSidebarView("notifiedBm")}
+          className={`${sidebarButtonClass("notifiedBm")} flex items-center justify-between`}
         >
-          <span className="truncate">⏰ {text.followUp || "ต้องติดตาม"}</span>
-          <span className="ml-2 rounded-full bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-            {followUpCount}
+          <span className="truncate">🟣 {text.notifiedBm || "แจ้ง BM แล้ว"}</span>
+          <span className="ml-2 rounded-full bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+            {notifiedBmCount}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => selectSidebarView("reminded")}
-          className={`${sidebarButtonClass("reminded")} flex items-center justify-between`}
+          onClick={() => selectSidebarView("replied")}
+          className={`${sidebarButtonClass("replied")} flex items-center justify-between`}
         >
-          <span className="truncate">📣 {text.reminded || "เตือนแล้ว"}</span>
-          <span className="ml-2 rounded-full bg-blue-100 dark:bg-blue-950/80 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-            {remindedCount}
+          <span className="truncate">🟢 {text.replied || "ตอบแล้ว"}</span>
+          <span className="ml-2 rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            {repliedCount}
           </span>
         </button>
       </nav>

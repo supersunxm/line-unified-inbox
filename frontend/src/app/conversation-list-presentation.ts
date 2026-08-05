@@ -1,10 +1,10 @@
-export type ConversationListSection = "dashboard" | "incoming" | "followUp" | "reminded";
+export type ConversationListSection = "dashboard" | "notReplied" | "notifiedBm" | "replied";
 
 type ConversationListLabels = {
   conversations: string;
-  incoming: string;
-  followUp: string;
-  reminded: string;
+  notReplied: string;
+  notifiedBm: string;
+  replied: string;
   status: (value: string) => string;
 };
 
@@ -13,10 +13,10 @@ export function getConversationListTitle(
   statusFilter: string,
   labels: ConversationListLabels,
 ) {
-  if (sidebarView === "followUp") return labels.followUp;
-  if (sidebarView === "reminded") return labels.reminded;
+  if (sidebarView === "notReplied") return labels.notReplied;
+  if (sidebarView === "notifiedBm") return labels.notifiedBm;
+  if (sidebarView === "replied") return labels.replied;
   if (statusFilter !== "all") return labels.status(statusFilter);
-  if (sidebarView === "incoming") return labels.incoming;
   return labels.conversations;
 }
 

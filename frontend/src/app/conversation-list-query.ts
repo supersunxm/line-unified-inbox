@@ -1,4 +1,4 @@
-import type { ApiFollowUpStatus, ApiPriority } from "@/types/api";
+import type { ApiBmReplyStatus, ApiFollowUpStatus, ApiPriority } from "@/types/api";
 
 export type ConversationListQuery = {
   page: number;
@@ -7,6 +7,7 @@ export type ConversationListQuery = {
   storeId?: string;
   lineOaId?: string;
   followUpStatus?: ApiFollowUpStatus;
+  bmReplyStatus?: ApiBmReplyStatus;
   priority?: ApiPriority;
   productSeriesId?: string;
   productModelId?: string;
@@ -20,6 +21,7 @@ export type ConversationListQueryInput = {
   storeId: string;
   lineOaId: string;
   followUpStatus?: ApiFollowUpStatus;
+  bmReplyStatus?: ApiBmReplyStatus;
   priority?: ApiPriority;
   productSeriesId?: string;
   productModelId?: string;
@@ -34,6 +36,7 @@ export function buildConversationListQuery(input: ConversationListQueryInput): C
     storeId: input.storeId === "all" ? undefined : input.storeId,
     lineOaId: input.lineOaId === "all" ? undefined : input.lineOaId,
     followUpStatus: input.followUpStatus,
+    ...(input.bmReplyStatus ? { bmReplyStatus: input.bmReplyStatus } : {}),
     priority: input.priority,
     productSeriesId: input.productSeriesId,
     productModelId: input.productModelId,

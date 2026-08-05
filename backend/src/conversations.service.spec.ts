@@ -345,3 +345,27 @@ void test("AuthGuard rejects VIEWER role and allows ADMIN for PATCH /conversatio
   assert.equal(await adminGuard.canActivate(viewerContext as never), true);
 });
 
+void test("ConversationsService.list supports bmReplyStatus filter", async () => {
+  const { BmReplyStatus } = await import("@prisma/client");
+
+  let capturedWhere: Record<string, unknown> | undefined;
+
+  const prisma = {
+    conversation: {
+      findMany: (args: { where: Record<string, unknown> }) => {
+        capturedWhere = args.where;
+        return Promise.resolve([]);
+      },
+      count: () => Promise.resolve(0),
+    },
+    storeMaster: { findMany: () => Promise.resolve([]) },
+    $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+  await service.list({ bmReplyStatus: BmReplyStatus.NOTIFIED_BM, page: 1, pageSize: 25, sort: "latest-desc" });
+
+  assert.equal(capturedWhere?.bmReplyStatus, BmReplyStatus.NOTIFIED_BM);
+});
+
+

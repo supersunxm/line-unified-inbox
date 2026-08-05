@@ -50,6 +50,7 @@ export class ConversationsService {
       storeId: query.storeId,
       lineOfficialAccountId: query.lineOaId,
       followUpStatus: query.followUpStatus,
+      bmReplyStatus: query.bmReplyStatus,
       priority: query.priority,
       products: query.productModelId
         ? { some: { productModelId: query.productModelId } }

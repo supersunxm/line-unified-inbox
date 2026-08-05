@@ -9,16 +9,16 @@ import {
 
 const labels = {
   conversations: "Conversations",
-  incoming: "Incoming",
-  followUp: "Follow-up",
-  reminded: "Reminded",
+  notReplied: "Not replied",
+  notifiedBm: "BM notified",
+  replied: "Replied",
   status: (value: string) => `Status: ${value}`,
 };
 
 test("conversation list title follows the active sidebar and status filter", () => {
-  assert.equal(getConversationListTitle("incoming", "all", labels), "Incoming");
-  assert.equal(getConversationListTitle("followUp", "all", labels), "Follow-up");
-  assert.equal(getConversationListTitle("reminded", "all", labels), "Reminded");
+  assert.equal(getConversationListTitle("notReplied", "all", labels), "Not replied");
+  assert.equal(getConversationListTitle("notifiedBm", "all", labels), "BM notified");
+  assert.equal(getConversationListTitle("replied", "all", labels), "Replied");
   assert.equal(getConversationListTitle("dashboard", "completed", labels), "Status: completed");
   assert.equal(getConversationListTitle("dashboard", "all", labels), "Conversations");
 });

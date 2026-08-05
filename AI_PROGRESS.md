@@ -1,5 +1,15 @@
 # AI progress
 
+## Current task: Store Chats Sidebar BM Reply Status Categories
+
+- Replaced legacy `Incoming`, `Follow-up`, and `Reminded` filter categories in the Store Chats sidebar OVERVIEW section (`context-sidebar.tsx`) with three `bmReplyStatus`-based categories: `Not Replied` (`NOT_REPLIED`), `Notified BM` (`NOTIFIED_BM`), and `Replied` (`REPLIED`).
+- Added backend `bmReplyStatus` query parameter filtering support to `ConversationQueryDto` (`backend/src/dto.ts`) and Prisma `where` filtering in `ConversationsService.list()` (`backend/src/conversations.service.ts`), while preserving `followUpStatus` filtering, dashboard stats, and update endpoints.
+- Updated `workspace-routing.ts` to parse/format `bmReplyStatus` URL parameter for shareable filter URLs (e.g. `/chats?bmReplyStatus=NOT_REPLIED`).
+- Added live store-scoped count badges for `notRepliedCount`, `notifiedBmCount`, and `repliedCount` on each category, dynamically updating based on `selectedStore` filter (`All Stores` vs specific store).
+- Added multi-language copy for Thai, English, and Chinese across sidebar categories, active filter chips, and conversation list headers.
+- Updated test coverage in `conversations.service.spec.ts`, `shell-navigation.test.mts`, `conversation-list-presentation.test.mts`, `bm-reply-status-presentation.test.mts`, `conversation-state-consistency.test.mts`, and `workspace-routing.test.mts`.
+- Full verification passed: backend ESLint clean, 578/578 backend tests passing, NestJS build clean, frontend ESLint clean, 204/204 frontend tests passing, Next.js production build clean.
+
 ## Current task: BM Reply Status Feature Completion
 
 - Resolved concurrent race condition in `line-webhook.service.ts`: re-read conversation row inside transaction `tx` before checking `bmReplyStatus !== NOT_REPLIED` and creating `BM_REPLY_STATUS_CHANGED` activity history entry.

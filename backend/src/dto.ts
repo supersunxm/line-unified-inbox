@@ -6,6 +6,7 @@ export class ConversationQueryDto {
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() storeId?: string;
   @IsOptional() @IsEnum(FollowUpStatus) followUpStatus?: FollowUpStatus;
+  @IsOptional() @IsEnum(BmReplyStatus) bmReplyStatus?: BmReplyStatus;
   @IsOptional() @IsEnum(Priority) priority?: Priority;
   @IsOptional() @IsString() productSeriesId?: string;
   @IsOptional() @IsString() productModelId?: string;

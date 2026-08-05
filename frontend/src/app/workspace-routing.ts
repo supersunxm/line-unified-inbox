@@ -1,6 +1,7 @@
 export type ChatRouteFilters = {
   store?: string;
   status?: string;
+  bmReplyStatus?: string;
   priority?: string;
   model?: string;
   topic?: string;
@@ -19,9 +20,11 @@ export function buildChatsHref(filters: ChatRouteFilters = {}): string {
 
 export function readChatRouteFilters(search: string): ChatRouteFilters {
   const query = new URLSearchParams(search);
+  const bmReplyStatus = query.get("bmReplyStatus") ?? undefined;
   return {
     store: query.get("storeId") ?? undefined,
     status: query.get("status") ?? undefined,
+    ...(bmReplyStatus ? { bmReplyStatus } : {}),
     priority: query.get("priority") ?? undefined,
     model: query.get("model") ?? undefined,
     topic: query.get("topic") ?? undefined,
