@@ -345,6 +345,35 @@ void test("AuthGuard rejects VIEWER role and allows ADMIN for PATCH /conversatio
   assert.equal(await adminGuard.canActivate(viewerContext as never), true);
 });
 
+void test("AuthGuard requires authentication and allows both VIEWER and ADMIN for GET /conversations/bm-reply-status-summary", async () => {
+  const { ForbiddenException, UnauthorizedException } = await import("@nestjs/common");
+  const { Reflector } = await import("@nestjs/core");
+  const { AuthGuard, AuthUser } = await import("./auth/auth.guard");
+  const { ConversationsController } = await import("./conversations.controller");
+
+  const viewer = { id: "v1", email: "viewer@example.test", displayName: "Viewer", role: "VIEWER", isActive: true } as AuthUser;
+  const admin = { id: "a1", email: "admin@example.test", displayName: "Admin", role: "ADMIN", isActive: true } as AuthUser;
+
+  const getRequest = { method: "GET", path: "/conversations/bm-reply-status-summary", headers: {} };
+  const getContext = {
+    getHandler: () => ConversationsController.prototype.bmReplyStatusSummary,
+    getClass: () => ConversationsController,
+    switchToHttp: () => ({ getRequest: () => getRequest }),
+  };
+
+  // 1. Unauthenticated request throws UnauthorizedException (401)
+  const unauthGuard = new AuthGuard(new Reflector(), { authenticate: async () => null } as never);
+  await assert.rejects(unauthGuard.canActivate(getContext as never), UnauthorizedException);
+
+  // 2. Authenticated VIEWER role can access GET summary for read-only monitoring (200)
+  const viewerGuard = new AuthGuard(new Reflector(), { authenticate: async () => viewer } as never);
+  assert.equal(await viewerGuard.canActivate(getContext as never), true);
+
+  // 3. Authenticated ADMIN role can access GET summary (200)
+  const adminGuard = new AuthGuard(new Reflector(), { authenticate: async () => admin } as never);
+  assert.equal(await adminGuard.canActivate(getContext as never), true);
+});
+
 void test("ConversationsService.list supports bmReplyStatus filter", async () => {
   const { BmReplyStatus } = await import("@prisma/client");
 
@@ -366,6 +395,45 @@ void test("ConversationsService.list supports bmReplyStatus filter", async () =>
   await service.list({ bmReplyStatus: BmReplyStatus.NOTIFIED_BM, page: 1, pageSize: 25, sort: "latest-desc" });
 
   assert.equal(capturedWhere?.bmReplyStatus, BmReplyStatus.NOTIFIED_BM);
+});
+
+void test("ConversationsService.getBmReplyStatusSummary aggregates overall and per-store counts including empty stores", async () => {
+  const { BmReplyStatus } = await import("@prisma/client");
+
+  const prisma = {
+    store: {
+      findMany: () => Promise.resolve([
+        { id: "store-1", name: "Store Alpha" },
+        { id: "store-2", name: "Store Beta" },
+        { id: "store-3", name: "Store Gamma Empty" },
+      ]),
+    },
+    conversation: {
+      groupBy: () => Promise.resolve([
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, _count: { _all: 10 } },
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, _count: { _all: 5 } },
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, _count: { _all: 1 } },
+        { storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, _count: { _all: 20 } },
+        { storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, _count: { _all: 2 } },
+      ]),
+    },
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+  const summary = await service.getBmReplyStatusSummary();
+
+  // 1. Overall aggregation across all stores (10+20=30 NOT_REPLIED, 5 NOTIFIED_BM, 1+2=3 REPLIED)
+  assert.equal(summary.overview.notReplied, 30);
+  assert.equal(summary.overview.notifiedBm, 5);
+  assert.equal(summary.overview.replied, 3);
+
+  // 2. Per-store aggregation
+  assert.deepEqual(summary.stores, [
+    { storeId: "store-1", storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1 },
+    { storeId: "store-2", storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2 },
+    // 3. Empty store handling
+    { storeId: "store-3", storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0 },
+  ]);
 });
 
 

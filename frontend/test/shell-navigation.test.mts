@@ -121,7 +121,7 @@ test("SidebarView is shell-owned and profile controls are consolidated", () => {
   assert.match(topNavCode, /🇬🇧 English/);
   assert.match(topNavCode, /Appearance/);
   assert.match(topNavCode, /Pilot/);
-  assert.match(contextSidebarCode, /\{conversationsCount\}/);
+  assert.match(contextSidebarCode, /overview\.notReplied/);
   assert.match(contextSidebarCode, /ร้านค้าทั้งหมด/);
 });
 

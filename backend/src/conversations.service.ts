@@ -178,4 +178,67 @@ export class ConversationsService {
     });
     return this.get(id);
   }
+
+  async getBmReplyStatusSummary() {
+    const stores = await this.prisma.store.findMany({
+      where: { archivedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+
+    const grouped = await this.prisma.conversation.groupBy({
+      by: ["storeId", "bmReplyStatus"],
+      where: { store: { archivedAt: null } },
+      _count: { _all: true },
+    });
+
+    const overview = {
+      notReplied: 0,
+      notifiedBm: 0,
+      replied: 0,
+    };
+
+    const storeMap = new Map<string, { notReplied: number; notifiedBm: number; replied: number }>();
+    for (const store of stores) {
+      storeMap.set(store.id, { notReplied: 0, notifiedBm: 0, replied: 0 });
+    }
+
+    for (const item of grouped) {
+      const count = item._count._all;
+      if (item.bmReplyStatus === BmReplyStatus.NOT_REPLIED) {
+        overview.notReplied += count;
+      } else if (item.bmReplyStatus === BmReplyStatus.NOTIFIED_BM) {
+        overview.notifiedBm += count;
+      } else if (item.bmReplyStatus === BmReplyStatus.REPLIED) {
+        overview.replied += count;
+      }
+
+      const storeCounts = storeMap.get(item.storeId);
+      if (storeCounts) {
+        if (item.bmReplyStatus === BmReplyStatus.NOT_REPLIED) {
+          storeCounts.notReplied += count;
+        } else if (item.bmReplyStatus === BmReplyStatus.NOTIFIED_BM) {
+          storeCounts.notifiedBm += count;
+        } else if (item.bmReplyStatus === BmReplyStatus.REPLIED) {
+          storeCounts.replied += count;
+        }
+      }
+    }
+
+    const storesList = stores.map((store) => {
+      const counts = storeMap.get(store.id) ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+      return {
+        storeId: store.id,
+        storeName: store.name,
+        notReplied: counts.notReplied,
+        notifiedBm: counts.notifiedBm,
+        replied: counts.replied,
+      };
+    });
+
+    return {
+      overview,
+      stores: storesList,
+    };
+  }
 }

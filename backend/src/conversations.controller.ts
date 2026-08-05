@@ -9,6 +9,7 @@ import { LineProfileService } from "./line-profile.service";
 export class ConversationsController {
   constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService) {}
   @Get() list(@Query() query: ConversationQueryDto) { return this.service.list(query); }
+  @Get("bm-reply-status-summary") bmReplyStatusSummary() { return this.service.getBmReplyStatusSummary(); }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
   @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) { return this.service.updateStatus(id, dto.status); }
   @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) { return this.service.updateBmReplyStatus(id, dto.status); }

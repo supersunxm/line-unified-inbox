@@ -14,10 +14,8 @@ export type SidebarView =
 export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
-  notRepliedCount: number;
-  notifiedBmCount: number;
-  repliedCount: number;
-  conversationsCount: number;
+  overview: { notReplied: number; notifiedBm: number; replied: number };
+  storeBmCounts: Record<string, { notReplied: number; notifiedBm: number; replied: number }>;
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
@@ -30,10 +28,8 @@ export interface ContextSidebarProps {
 export function ContextSidebar({
   sidebarView,
   selectSidebarView,
-  notRepliedCount,
-  notifiedBmCount,
-  repliedCount,
-  conversationsCount,
+  overview,
+  storeBmCounts,
   selectedStore,
   setSelectedStore,
   clearAllFilters,
@@ -63,7 +59,7 @@ export function ContextSidebar({
         >
           <span className="truncate">⚪ {text.notReplied || "ยังไม่ตอบ"}</span>
           <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-            {notRepliedCount}
+            {overview.notReplied}
           </span>
         </button>
 
@@ -74,7 +70,7 @@ export function ContextSidebar({
         >
           <span className="truncate">🟣 {text.notifiedBm || "แจ้ง BM แล้ว"}</span>
           <span className="ml-2 rounded-full bg-purple-100 dark:bg-purple-950/80 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-            {notifiedBmCount}
+            {overview.notifiedBm}
           </span>
         </button>
 
@@ -85,7 +81,7 @@ export function ContextSidebar({
         >
           <span className="truncate">🟢 {text.replied || "ตอบแล้ว"}</span>
           <span className="ml-2 rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            {repliedCount}
+            {overview.replied}
           </span>
         </button>
       </nav>
@@ -116,31 +112,48 @@ export function ContextSidebar({
               : ""
           }`}
         >
-          <span>{text.allStores || "ร้านค้าทั้งหมด"}</span>
-          <span className="app-chip rounded-full px-2 py-0.5 text-xs font-medium">
-            {conversationsCount}
-          </span>
+          <span className="truncate">{text.allStores || "ร้านค้าทั้งหมด"}</span>
+          <div className="ml-2 flex items-center space-x-1 shrink-0">
+            <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
+              {overview.notReplied}
+            </span>
+            <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
+              {overview.notifiedBm}
+            </span>
+            <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
+              {overview.replied}
+            </span>
+          </div>
         </button>
 
-        {stores.map((store) => (
-          <button
-            key={store.id}
-            type="button"
-            onClick={() => setSelectedStore(store.id)}
-            className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              selectedStore === store.id
-                ? "is-selected font-semibold"
-                : ""
-            }`}
-          >
-            <span className="truncate">{getStoreDisplayName(store.name)}</span>
-            {store.waiting > 0 && (
-              <span className="app-chip ml-2 rounded-full px-2 py-0.5 text-xs font-medium">
-                {store.waiting}
-              </span>
-            )}
-          </button>
-        ))}
+        {stores.map((store) => {
+          const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+          return (
+            <button
+              key={store.id}
+              type="button"
+              onClick={() => setSelectedStore(store.id)}
+              className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                selectedStore === store.id
+                  ? "is-selected font-semibold"
+                  : ""
+              }`}
+            >
+              <span className="truncate">{getStoreDisplayName(store.name)}</span>
+              <div className="ml-2 flex items-center space-x-1 shrink-0">
+                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
+                  {counts.notReplied}
+                </span>
+                <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
+                  {counts.notifiedBm}
+                </span>
+                <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
+                  {counts.replied}
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

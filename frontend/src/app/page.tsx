@@ -30,7 +30,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -1239,6 +1239,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [apiError, setApiError] = useState<string | null>(null);
   const [dashboardSummary, setDashboardSummary] =
     useState<DashboardSummaryResponse | null>(null);
+  const [bmSummaryData, setBmSummaryData] = useState<BmReplyStatusSummaryResponse>({
+    overview: { notReplied: 0, notifiedBm: 0, replied: 0 },
+    stores: [],
+  });
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const refreshInProgress = useRef(false);
   const conversationRequestGuard = useRef(new LatestConversationRequestGuard());
@@ -1429,12 +1433,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
-      const [storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse] = await Promise.all([
+      const [storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
         api.stores(showArchivedStores),
         api.products(),
         api.topics(),
         api.dashboard(),
         api.lineOfficialAccounts(showArchivedLineOas),
+        api.bmReplyStatusSummary(),
       ]);
       setStores(
         storeResponse.filter((store) => !store.archivedAt).map((store) => ({
@@ -1449,6 +1454,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setAvailableProductModels(productResponse.series.flatMap(({ models }) => models.map(({ id, name }) => ({ id, name }))));
       setAvailableTopics(topicResponse.map(({ id, name }) => ({ id, name })));
       setLineOas(lineOaResponse);
+      setBmSummaryData(bmSummaryResponse);
       setSupportingDataLoaded(true);
       const webhookInfo = await Promise.all(
         lineOaResponse.map(async (account) => [
@@ -1751,6 +1757,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const followUpCount = Object.values(conversationStates).filter(
     ({ status }) => status === "followUp",
   ).length;
+  const storeBmCounts = useMemo(() => {
+    const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number }> = {};
+    for (const s of bmSummaryData.stores) {
+      countsMap[s.storeId] = { notReplied: s.notReplied, notifiedBm: s.notifiedBm, replied: s.replied };
+    }
+    return countsMap;
+  }, [bmSummaryData.stores]);
   const hasActiveFilters =
     searchText.trim() !== "" || selectedStore !== "all" ||
     statusFilter !== "all" || priorityFilter !== "all" ||
@@ -1906,7 +1919,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         ...currentStates,
         [selectedConversation.id]: mapApiConversationState(response.conversation),
       }));
-      setDashboardSummary(await api.dashboard());
+      const [dashboardRes, bmSummaryRes] = await Promise.all([
+        api.dashboard(),
+        api.bmReplyStatusSummary(),
+      ]);
+      setDashboardSummary(dashboardRes);
+      setBmSummaryData(bmSummaryRes);
     } catch (error) {
       setConversationStates((currentStates) => ({
         ...currentStates,
@@ -2301,10 +2319,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           <ContextSidebar
             sidebarView={sidebarView}
             selectSidebarView={selectSidebarView}
-            notRepliedCount={notRepliedCount}
-            notifiedBmCount={notifiedBmCount}
-            repliedCount={repliedCount}
-            conversationsCount={conversations.length}
+            overview={bmSummaryData.overview}
+            storeBmCounts={storeBmCounts}
             selectedStore={selectedStore}
             setSelectedStore={setSelectedStore}
             clearAllFilters={clearAllFilters}

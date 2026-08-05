@@ -36,6 +36,20 @@ export type ApiConversation = {
 };
 
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
+export type BmReplyStatusSummaryResponse = {
+  overview: {
+    notReplied: number;
+    notifiedBm: number;
+    replied: number;
+  };
+  stores: Array<{
+    storeId: string;
+    storeName: string;
+    notReplied: number;
+    notifiedBm: number;
+    replied: number;
+  }>;
+};
 export type ApiStore = { id: string; name: string; code: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number } };
 export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
 export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };

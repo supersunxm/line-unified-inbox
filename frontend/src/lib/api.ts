@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -84,6 +84,7 @@ export const api = {
     const qStr = query.toString();
     return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`);
   },
+  bmReplyStatusSummary: () => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary"),
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
   conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
   translateMessage: (messageId: string, targetLanguage: "en" | "zh") =>
