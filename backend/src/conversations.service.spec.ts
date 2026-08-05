@@ -374,6 +374,38 @@ void test("AuthGuard requires authentication and allows both VIEWER and ADMIN fo
   assert.equal(await adminGuard.canActivate(getContext as never), true);
 });
 
+void test("ConversationsService getBmReplyStatusSummary and ConversationsController storePrioritySummary compute oldestWaitingMinutes for NOT_REPLIED chats", async () => {
+  const { ConversationsController } = await import("./conversations.controller");
+  const service = new ConversationsService(
+    {
+      store: {
+        findMany: async () => [{ id: "store-1", name: "Store 1" }],
+      },
+      conversation: {
+        groupBy: async (params: { _min?: { latestMessageAt?: boolean } }) => {
+          if (params._min) {
+            return [{ storeId: "store-1", _min: { latestMessageAt: new Date(Date.now() - 150 * 60 * 1000) } }];
+          }
+          return [{ storeId: "store-1", bmReplyStatus: "NOT_REPLIED", _count: { _all: 3 } }];
+        },
+      },
+    } as never,
+    {},
+  );
+
+  const summary = await service.getBmReplyStatusSummary();
+  assert.equal(summary.stores.length, 1);
+  assert.equal(summary.stores[0].storeId, "store-1");
+  assert.equal(summary.stores[0].notReplied, 3);
+  assert.equal((summary.stores[0].oldestWaitingMinutes ?? 0) >= 149, true);
+
+  const controller = new ConversationsController(service, {} as never, {} as never, {} as never);
+  const prioritySummary = await controller.storePrioritySummary();
+  assert.equal(prioritySummary.stores.length, 1);
+  assert.equal(prioritySummary.stores[0].id, "store-1");
+  assert.equal((prioritySummary.stores[0].oldestWaitingMinutes ?? 0) >= 149, true);
+});
+
 void test("ConversationsService.list supports bmReplyStatus filter", async () => {
   const { BmReplyStatus } = await import("@prisma/client");
 
@@ -429,11 +461,9 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
 
   // 2. Per-store aggregation
   assert.deepEqual(summary.stores, [
-    { storeId: "store-1", storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1 },
-    { storeId: "store-2", storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2 },
+    { storeId: "store-1", storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1, oldestWaitingMinutes: 0 },
+    { storeId: "store-2", storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
     // 3. Empty store handling
-    { storeId: "store-3", storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0 },
+    { storeId: "store-3", storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
   ]);
 });
-
-

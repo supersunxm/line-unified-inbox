@@ -28,7 +28,15 @@ type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conv
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly operations: { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> };
+  constructor(private readonly prisma: PrismaService, operations?: unknown) {
+    const defaultOps: { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> } = {
+      getOperationalConversationFilter: () => Promise.resolve({}),
+      getLatestResetAt: () => Promise.resolve(null),
+    };
+    const opsProvided = operations && typeof (operations as { getOperationalConversationFilter?: unknown }).getOperationalConversationFilter === "function";
+    this.operations = opsProvided ? (operations as { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> }) : defaultOps;
+  }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
@@ -186,9 +194,11 @@ export class ConversationsService {
       select: { id: true, name: true },
     });
 
+    const resetFilter = await this.operations.getOperationalConversationFilter();
+
     const grouped = await this.prisma.conversation.groupBy({
       by: ["storeId", "bmReplyStatus"],
-      where: { store: { archivedAt: null } },
+      where: { store: { archivedAt: null }, ...(resetFilter as Prisma.ConversationWhereInput) },
       _count: { _all: true },
     });
 
@@ -225,6 +235,25 @@ export class ConversationsService {
       }
     }
 
+    const oldestUnanswered = await this.prisma.conversation.groupBy({
+      by: ["storeId"],
+      where: {
+        store: { archivedAt: null },
+        bmReplyStatus: BmReplyStatus.NOT_REPLIED,
+        ...(resetFilter as Prisma.ConversationWhereInput),
+      },
+      _min: { latestMessageAt: true },
+    });
+
+    const now = Date.now();
+    const oldestMap = new Map<string, number>();
+    for (const item of oldestUnanswered) {
+      if (item._min && item._min.latestMessageAt) {
+        const elapsedMinutes = Math.max(0, Math.floor((now - new Date(item._min.latestMessageAt).getTime()) / 60000));
+        oldestMap.set(item.storeId, elapsedMinutes);
+      }
+    }
+
     const storesList = stores.map((store) => {
       const counts = storeMap.get(store.id) ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
       return {
@@ -233,6 +262,7 @@ export class ConversationsService {
         notReplied: counts.notReplied,
         notifiedBm: counts.notifiedBm,
         replied: counts.replied,
+        oldestWaitingMinutes: counts.notReplied > 0 ? (oldestMap.get(store.id) ?? 0) : 0,
       };
     });
 

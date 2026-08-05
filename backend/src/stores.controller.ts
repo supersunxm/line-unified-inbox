@@ -1,12 +1,14 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Query } from "@nestjs/common";
 import { PrismaService } from "./prisma.service";
+import { Prisma } from "@prisma/client";
+import { OperationsService } from "./operations/operations.service";
 import { isPermanentDeleteConfirmed } from "./store-removal-policy";
 
 type PermanentDeleteBody = { confirmation?: string };
 
 @Controller("stores")
 export class StoresController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly operations: OperationsService) {}
   @Get() list(@Query("showArchived") showArchived?: string) { return this.prisma.store.findMany({ where: showArchived === "true" ? undefined : { archivedAt: null }, orderBy: { name: "asc" }, include: { _count: { select: { conversations: true, lineOfficialAccounts: true } } } }); }
   @Get(":id") async get(@Param("id") id: string) {
     const store = await this.prisma.store.findUnique({ where: { id }, include: { lineOfficialAccounts: true } });
@@ -15,7 +17,8 @@ export class StoresController {
   }
   @Get(":id/summary") async summary(@Param("id") id: string) {
     const store = await this.get(id);
-    const groups = await this.prisma.conversation.groupBy({ by: ["followUpStatus"], where: { storeId: id }, _count: true });
+    const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
+    const groups = await this.prisma.conversation.groupBy({ by: ["followUpStatus"], where: { storeId: id, ...resetFilter }, _count: true });
     return { store, total: groups.reduce((sum, group) => sum + group._count, 0), byStatus: Object.fromEntries(groups.map((group) => [group.followUpStatus, group._count])) };
   }
   private async deletionPreview(id: string) {
