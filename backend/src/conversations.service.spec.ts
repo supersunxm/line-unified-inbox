@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaService } from "./prisma.service";
 import { ConversationsService } from "./conversations.service";
+import { OperationsService } from "./operations/operations.service";
+
+const noopOperations = {
+  getOperationalConversationFilter: async () => ({}),
+  getLatestResetAt: async () => null,
+} as unknown as OperationsService;
 
 void test("conversation returns only the canonical manager URL and excludes chat and credential fields", async () => {
   const managerUrl = "https://manager.line.biz/account/canonical";
@@ -14,7 +20,7 @@ void test("conversation returns only the canonical manager URL and excludes chat
     messages: [], products: [], topics: [], notes: [], activityHistory: [],
   };
   const prisma = { conversation: { findUnique: () => Promise.resolve(conversation) }, storeMaster: { findMany: () => Promise.resolve([{ externalStoreId: "26197", lineManagerUrl: managerUrl }]) } } as unknown as PrismaService;
-  const result = await new ConversationsService(prisma).get("conversation-1");
+  const result = await new ConversationsService(prisma, noopOperations).get("conversation-1");
   assert.equal(result.resolvedLineOaManagerUrl, managerUrl);
   assert.deepEqual(result.lineOfficialAccount, { id: "oa-1", name: "OA", basicId: "@oa", connectionStatus: "CONNECTED", isActive: true, lastWebhookReceivedAt: conversation.lineOfficialAccount.lastWebhookReceivedAt });
   const json = JSON.stringify(result);
@@ -31,7 +37,7 @@ void test("conversation exposes the connected legacy manager URL fallback", asyn
     messages: [], products: [], topics: [], notes: [], activityHistory: [],
   };
   const prisma = { conversation: { findUnique: () => Promise.resolve(conversation) }, storeMaster: { findMany: () => Promise.resolve([]) } } as unknown as PrismaService;
-  const result = await new ConversationsService(prisma).get("conversation-2");
+  const result = await new ConversationsService(prisma, noopOperations).get("conversation-2");
   assert.equal(result.resolvedLineOaManagerUrl, managerUrl);
 });
 
@@ -59,7 +65,7 @@ void test("100 list rows use one Store Master batch query, cap page size, and lo
     } },
     $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
   } as unknown as PrismaService;
-  const result = await new ConversationsService(prisma).list({ page: 1, pageSize: 1_000, sort: "latest-desc" });
+  const result = await new ConversationsService(prisma, noopOperations).list({ page: 1, pageSize: 1_000, sort: "latest-desc" });
   assert.equal(conversationQueries, 1); assert.equal(storeMasterQueries, 1);
   assert.equal(listArguments.take, 100); assert.equal(result.pageSize, 100);
   const include = listArguments.include as { messages: { take: number }; notes: { take: number }; activityHistory: { take: number } };
@@ -93,7 +99,7 @@ void test("ConversationsService.list supports lineOaId filter, unknown lineOaId,
     $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
 
   // 1. No lineOaId (page 1, size 20)
   await service.list({ page: 1, pageSize: 20, sort: "latest-desc" });
@@ -192,7 +198,7 @@ void test("ConversationsService.updateBmReplyStatus NOT_REPLIED -> NOTIFIED_BM u
     $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
   const result = await service.updateBmReplyStatus("conv-1", BmReplyStatus.NOTIFIED_BM);
 
   assert.equal(result.changed, true);
@@ -253,7 +259,7 @@ void test("ConversationsService.updateBmReplyStatus NOTIFIED_BM -> REPLIED updat
     },
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
   const result = await service.updateBmReplyStatus("conv-2", BmReplyStatus.REPLIED);
 
   assert.equal(transactionCalled, true);
@@ -314,7 +320,7 @@ void test("ConversationsService.updateBmReplyStatus repeating the same status is
     storeMaster: { findMany: () => Promise.resolve([]) },
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
   const result = await service.updateBmReplyStatus("conv-3", BmReplyStatus.NOTIFIED_BM);
 
   assert.equal(result.changed, false);
@@ -390,7 +396,7 @@ void test("ConversationsService getBmReplyStatusSummary and ConversationsControl
         },
       },
     } as never,
-    {},
+    noopOperations,
   );
 
   const summary = await service.getBmReplyStatusSummary();
@@ -423,7 +429,7 @@ void test("ConversationsService.list supports bmReplyStatus filter", async () =>
     $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
   await service.list({ bmReplyStatus: BmReplyStatus.NOTIFIED_BM, page: 1, pageSize: 25, sort: "latest-desc" });
 
   assert.equal(capturedWhere?.bmReplyStatus, BmReplyStatus.NOTIFIED_BM);
@@ -451,7 +457,7 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
     },
   } as unknown as PrismaService;
 
-  const service = new ConversationsService(prisma);
+  const service = new ConversationsService(prisma, noopOperations);
   const summary = await service.getBmReplyStatusSummary();
 
   // 1. Overall aggregation across all stores (10+20=30 NOT_REPLIED, 5 NOTIFIED_BM, 1+2=3 REPLIED)

@@ -15,7 +15,7 @@ import { LineProfileModule } from "./line-profile.module";
 import { StoreMasterModule } from "./store-master/store-master.module";
 import { AuthModule } from "./auth/auth.module";
 import { OperationsController } from "./operations.controller";
-import { OperationsService } from "./operations/operations.service";
+import { OperationsModule } from "./operations/operations.module";
 import { MediaModule } from "./media/media.module";
 import { FollowerInsightsModule } from "./follower-insights/follower-insights.module";
 import { FriendSourceLinksModule } from "./friend-source-links/friend-source-links.module";
@@ -23,8 +23,8 @@ import { ClassificationInsightsModule } from "./classification-insights/classifi
 import { TranslationModule } from "./translation/translation.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule],
+  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
-  providers: [ConversationsService, OperationsService],
+  providers: [ConversationsService],
 })
 export class AppModule {}

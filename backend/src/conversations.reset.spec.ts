@@ -16,7 +16,7 @@ test("getBmReplyStatusSummary merges operational filter into groupBy where", asy
   };
   const resetAt = new Date("2026-08-05T16:00:00Z");
   const fakeOperations: any = { getOperationalConversationFilter: async () => ({ latestMessageAt: { gte: resetAt } }) };
-  const svc = new ConversationsService(fakePrisma, fakeOperations, null as any, null as any);
+  const svc = new ConversationsService(fakePrisma, fakeOperations);
   // Call the method under test
   const result = await svc.getBmReplyStatusSummary();
   // Ensure groupBy was called and where includes latestMessageAt.gte

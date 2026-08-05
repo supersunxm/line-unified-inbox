@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ActivityActionType, BmReplyStatus, FollowUpStatus, Prisma } from "@prisma/client";
 import { ConversationQueryDto, CreateNoteDto } from "./dto";
+import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
@@ -28,15 +29,10 @@ type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conv
 
 @Injectable()
 export class ConversationsService {
-  private readonly operations: { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> };
-  constructor(private readonly prisma: PrismaService, operations?: unknown) {
-    const defaultOps: { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> } = {
-      getOperationalConversationFilter: () => Promise.resolve({}),
-      getLatestResetAt: () => Promise.resolve(null),
-    };
-    const opsProvided = operations && typeof (operations as { getOperationalConversationFilter?: unknown }).getOperationalConversationFilter === "function";
-    this.operations = opsProvided ? (operations as { getOperationalConversationFilter: () => Promise<Record<string, unknown>>; getLatestResetAt?: () => Promise<Date | null> }) : defaultOps;
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly operations: OperationsService,
+  ) {}
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
