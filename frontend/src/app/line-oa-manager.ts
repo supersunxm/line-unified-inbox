@@ -4,7 +4,7 @@ export function validLineOaManagerUrl(value: string | null | undefined): string 
   if (!value) return null;
   try {
     const url = new URL(value);
-    const validManager = url.hostname === "manager.line.biz" && /^\/account\/[^/]+\/?$/u.test(url.pathname);
+    const validManager = (url.hostname === "manager.line.biz" || url.hostname === "chat.line.biz") && /^\/account\/[^/]+\/?$/u.test(url.pathname);
     if (url.protocol !== "https:" || !validManager || url.username || url.password || url.search || url.hash) return null;
     return url.toString();
   } catch { return null; }

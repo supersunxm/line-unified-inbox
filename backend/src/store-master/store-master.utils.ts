@@ -18,7 +18,7 @@ export function normalizeSearchText(value: string): string {
 
 export function isValidManagerUrl(value: string | null): boolean {
   if (!value) return false;
-  try { const url = new URL(value); return url.protocol === "https:" && url.hostname === "manager.line.biz" && !url.username && !url.password && !url.search && !url.hash && /^\/account\/(?!xxx(?:\/|$))[^/]+\/?$/iu.test(url.pathname); } catch { return false; }
+  try { const url = new URL(value); return url.protocol === "https:" && (url.hostname === "manager.line.biz" || url.hostname === "chat.line.biz") && !url.username && !url.password && !url.search && !url.hash && /^\/account\/(?!xxx(?:\/|$))[^/]+\/?$/iu.test(url.pathname); } catch { return false; }
 }
 
 export function isValidLineOaUrl(value: string | null): boolean {
