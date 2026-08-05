@@ -147,4 +147,118 @@ test("filterStoresBySearch filters by store name, account name, and store code w
   assert.deepEqual(sortedBigC.map((s) => s.id), ["28200", "28100"]);
 });
 
+test("sortStoresBySlaPriority uses priorityScore = notReplied × getSlaMultiplier(oldestWaitingMinutes) as primary sort key", async () => {
+  const { sortStoresBySlaPriority, formatWaitingDuration, getSlaRiskVariant, getSlaMultiplier } = await import("../src/components/shell/store-priority-score.ts");
+
+  // Helper formatting tests
+  assert.equal(formatWaitingDuration(15, "en"), "15m");
+  assert.equal(formatWaitingDuration(135, "en"), "2h 15m");
+  assert.equal(formatWaitingDuration(1500, "en"), "1d 1h");
+  assert.equal(getSlaRiskVariant(15), "normal");
+  assert.equal(getSlaRiskVariant(45), "warning");
+  assert.equal(getSlaRiskVariant(150), "danger");
+
+  // getSlaMultiplier table
+  assert.equal(getSlaMultiplier(0), 1,   "0m → ×1");
+  assert.equal(getSlaMultiplier(15), 1,  "15m → ×1");
+  assert.equal(getSlaMultiplier(29), 1,  "29m → ×1");
+  assert.equal(getSlaMultiplier(30), 2,  "30m → ×2");
+  assert.equal(getSlaMultiplier(59), 2,  "59m → ×2");
+  assert.equal(getSlaMultiplier(60), 4,  "60m → ×4");
+  assert.equal(getSlaMultiplier(119), 4, "119m → ×4");
+  assert.equal(getSlaMultiplier(120), 8, "120m → ×8");
+  assert.equal(getSlaMultiplier(239), 8, "239m → ×8");
+  assert.equal(getSlaMultiplier(240), 16, "240m → ×16");
+  assert.equal(getSlaMultiplier(600), 16, "600m → ×16");
+
+  // Existing baseline: Store B (5 chats, 300m) comes BEFORE Store A (50 chats, 10m)
+  // Score: Store A = 50×1=50, Store B = 5×16=80 → Store B first
+  const storesBaseline1 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsBaseline1 = {
+    "store-a": { notReplied: 50, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 10 },
+    "store-b": { notReplied: 5, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 300 },
+  };
+  assert.deepEqual(sortStoresBySlaPriority(storesBaseline1, countsBaseline1).map((s) => s.id), ["store-b", "store-a"]);
+
+  // Existing baseline: Same age (60m) → higher volume comes first
+  // Score: Store A = 50×4=200, Store B = 10×4=40 → Store A first
+  const storesBaseline2 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsBaseline2 = {
+    "store-a": { notReplied: 50, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 60 },
+    "store-b": { notReplied: 10, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 60 },
+  };
+  assert.deepEqual(sortStoresBySlaPriority(storesBaseline2, countsBaseline2).map((s) => s.id), ["store-a", "store-b"]);
+
+  // Existing baseline: Empty stores (0 notReplied) sorted after active stores
+  const storesBaseline3 = [
+    { id: "store-empty", name: "Empty Store" },
+    { id: "store-active", name: "Active Store" },
+  ];
+  const countsBaseline3 = {
+    "store-empty": { notReplied: 0, notifiedBm: 0, replied: 5, oldestWaitingMinutes: 0 },
+    "store-active": { notReplied: 1, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 15 },
+  };
+  assert.deepEqual(sortStoresBySlaPriority(storesBaseline3, countsBaseline3).map((s) => s.id), ["store-active", "store-empty"]);
+
+  // ── Required product scenario Case 1 ────────────────────────────────────────
+  // Store A: notReplied=1, oldestWaitingMinutes=600  → score = 1×16 = 16
+  // Store B: notReplied=50, oldestWaitingMinutes=120 → score = 50×8 = 400
+  // Expected: Store B first (high-volume near-breach beats single ancient chat)
+  const storesP1 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsP1 = {
+    "store-a": { notReplied: 1,  notifiedBm: 0, replied: 0, oldestWaitingMinutes: 600 },
+    "store-b": { notReplied: 50, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 120 },
+  };
+  assert.deepEqual(
+    sortStoresBySlaPriority(storesP1, countsP1).map((s) => s.id),
+    ["store-b", "store-a"],
+    "Scenario A: 50 chats at 2h (score 400) must beat 1 chat at 10h (score 16)",
+  );
+
+  // ── Required product scenario Case 2 ────────────────────────────────────────
+  // Store A: notReplied=30, oldestWaitingMinutes=20  → score = 30×1  = 30
+  // Store B: notReplied=5,  oldestWaitingMinutes=300 → score = 5×16  = 80
+  // Expected: Store B first (severe breach beats pre-SLA high-volume)
+  const storesP2 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsP2 = {
+    "store-a": { notReplied: 30, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 20 },
+    "store-b": { notReplied: 5,  notifiedBm: 0, replied: 0, oldestWaitingMinutes: 300 },
+  };
+  assert.deepEqual(
+    sortStoresBySlaPriority(storesP2, countsP2).map((s) => s.id),
+    ["store-b", "store-a"],
+    "Scenario B: 5 chats at 5h (score 80) must beat 30 chats at 20m (score 30)",
+  );
+
+  // ── Required product scenario Case 3: equal score → oldestWaitingMinutes tie-break ─
+  // Store A: notReplied=8,  oldestWaitingMinutes=60  → score = 8×4  = 32
+  // Store B: notReplied=4,  oldestWaitingMinutes=120 → score = 4×8  = 32  (tie!)
+  // Tie-break by oldestWaitingMinutes DESC → Store B first (120 > 60)
+  const storesP3 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsP3 = {
+    "store-a": { notReplied: 8, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 60 },
+    "store-b": { notReplied: 4, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 120 },
+  };
+  assert.deepEqual(
+    sortStoresBySlaPriority(storesP3, countsP3).map((s) => s.id),
+    ["store-b", "store-a"],
+    "Scenario C: equal score (32) → older waiting time (120m) wins tie-break over 60m",
+  );
+});
+
 
