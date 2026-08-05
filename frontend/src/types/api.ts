@@ -1,11 +1,13 @@
 export type ApiFollowUpStatus = "FOLLOW_UP" | "REMINDED" | "ACKNOWLEDGED" | "COMPLETED" | "ESCALATED";
 export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
+export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 
 export type ApiConversation = {
   id: string;
   latestMessageAt: string;
   priority: ApiPriority;
   followUpStatus: ApiFollowUpStatus;
+  bmReplyStatus: ApiBmReplyStatus;
   productRelationship: string | null;
   purchaseIntent: string | null;
   resolvedLineOaManagerUrl: string | null;
@@ -30,7 +32,7 @@ export type ApiConversation = {
   products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
   notes: Array<{ id: string; content: string; createdAt: string }>;
-  activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; createdAt: string }>;
+  activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; newBmReplyStatus: ApiBmReplyStatus | null; createdAt: string }>;
 };
 
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };

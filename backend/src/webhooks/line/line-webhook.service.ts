@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { ActivityActionType, FollowUpStatus, MessageDirection, MessageType, Prisma, Priority, WebhookProcessingStatus } from "@prisma/client";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma, Priority, WebhookProcessingStatus } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { PrismaService } from "../../prisma.service";
 import { CredentialEncryptionService } from "../../credentials/credential-encryption.service";
@@ -159,12 +159,51 @@ export class LineWebhookService {
     const longitude = message.type === "location" && "longitude" in message ? message.longitude : undefined;
 
     const stored = await this.prisma.$transaction(async (tx) => {
-      const conversation = existing
-        ? await tx.conversation.update({ where: { id: existing.id }, data: { latestMessageAt: sentAt, followUpStatus: FollowUpStatus.FOLLOW_UP } })
-        : await tx.conversation.create({ data: { customerId: customer.id, storeId: oa.storeId, lineOfficialAccountId: oa.id, latestMessageAt: sentAt, priority: Priority.NORMAL, followUpStatus: FollowUpStatus.FOLLOW_UP } });
+      let conversation;
+      let prevBmStatus: BmReplyStatus | null = null;
+      let shouldResetBm = false;
+
+      if (existing) {
+        const currentConv = await tx.conversation.findUnique({ where: { id: existing.id } });
+        if (currentConv) {
+          prevBmStatus = currentConv.bmReplyStatus;
+          shouldResetBm = prevBmStatus !== BmReplyStatus.NOT_REPLIED;
+        }
+        conversation = await tx.conversation.update({
+          where: { id: existing.id },
+          data: {
+            latestMessageAt: sentAt,
+            followUpStatus: FollowUpStatus.FOLLOW_UP,
+            ...(shouldResetBm ? { bmReplyStatus: BmReplyStatus.NOT_REPLIED } : {}),
+          },
+        });
+      } else {
+        conversation = await tx.conversation.create({
+          data: {
+            customerId: customer.id,
+            storeId: oa.storeId,
+            lineOfficialAccountId: oa.id,
+            latestMessageAt: sentAt,
+            priority: Priority.NORMAL,
+            followUpStatus: FollowUpStatus.FOLLOW_UP,
+          },
+        });
+      }
+
       const storedMessage = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: message.id, direction: MessageDirection.INBOUND, messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, originalText: messagePlaceholder(message), sentAt, rawPayload, fileName, latitude, longitude } });
       const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
+      if (shouldResetBm && prevBmStatus) {
+        await tx.activityHistory.create({
+          data: {
+            conversationId: conversation.id,
+            actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+            previousBmReplyStatus: prevBmStatus,
+            newBmReplyStatus: BmReplyStatus.NOT_REPLIED,
+            description: "BM reply status reset by new inbound message",
+          },
+        });
+      }
       return { conversation, mediaId: media?.id };
     });
     const conversation = stored.conversation;

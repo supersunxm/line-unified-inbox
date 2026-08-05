@@ -67,3 +67,114 @@ void test("image webhook creates pending media and invokes image processing with
   assert.equal(imageProcessCount, 1);
   assert.deepEqual(processed, ["media-1", "oa-1", "line-image-1"]);
 });
+
+void test("inbound message on REPLIED conversation resets bmReplyStatus to NOT_REPLIED and records activity without touching followUpStatus logic", async () => {
+  const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
+
+  let updatedData: Record<string, unknown> | undefined;
+  const activityEntries: Array<Record<string, unknown>> = [];
+
+  const existingConv = { id: "conv-10", customerId: "c-1", storeId: "s-1", lineOfficialAccountId: "oa-1", bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED };
+  const transactionClient = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: ({ data }: { data: Record<string, unknown> }) => { updatedData = data; return Promise.resolve({ ...existingConv, ...data }); },
+    },
+    message: { create: () => Promise.resolve({ id: "msg-1" }) },
+    activityHistory: { create: ({ data }: { data: Record<string, unknown> }) => { activityEntries.push(data); return Promise.resolve({}); } },
+  };
+
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "c-1" }) },
+    conversation: { findFirst: () => Promise.resolve(existingConv) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+
+  const classification = { analyze: () => Promise.resolve({}) } as unknown as ClassificationService;
+  const profiles = { refresh: () => Promise.resolve({}) } as unknown as LineProfileService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, classification, profiles, {} as LineImageService);
+
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-bm-1", timestamp: Date.now(), source: { type: "user", userId: "user-1" }, message: { type: "text", id: "msg-1", text: "hello" } }] }, "oa-1");
+
+  assert.equal(updatedData?.bmReplyStatus, BmReplyStatus.NOT_REPLIED);
+  assert.equal(updatedData?.followUpStatus, FollowUpStatus.FOLLOW_UP);
+  const bmChangeActivity = activityEntries.find((a) => a.actionType === ActivityActionType.BM_REPLY_STATUS_CHANGED);
+  assert.ok(bmChangeActivity);
+  assert.equal(bmChangeActivity?.previousBmReplyStatus, BmReplyStatus.REPLIED);
+  assert.equal(bmChangeActivity?.newBmReplyStatus, BmReplyStatus.NOT_REPLIED);
+});
+
+void test("inbound message on NOTIFIED_BM conversation resets bmReplyStatus to NOT_REPLIED", async () => {
+  const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
+
+  let updatedData: Record<string, unknown> | undefined;
+  const activityEntries: Array<Record<string, unknown>> = [];
+
+  const existingConv = { id: "conv-11", customerId: "c-1", storeId: "s-1", lineOfficialAccountId: "oa-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, followUpStatus: FollowUpStatus.FOLLOW_UP };
+  const transactionClient = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: ({ data }: { data: Record<string, unknown> }) => { updatedData = data; return Promise.resolve({ ...existingConv, ...data }); },
+    },
+    message: { create: () => Promise.resolve({ id: "msg-2" }) },
+    activityHistory: { create: ({ data }: { data: Record<string, unknown> }) => { activityEntries.push(data); return Promise.resolve({}); } },
+  };
+
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "c-1" }) },
+    conversation: { findFirst: () => Promise.resolve(existingConv) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+
+  const classification = { analyze: () => Promise.resolve({}) } as unknown as ClassificationService;
+  const profiles = { refresh: () => Promise.resolve({}) } as unknown as LineProfileService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, classification, profiles, {} as LineImageService);
+
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-bm-2", timestamp: Date.now(), source: { type: "user", userId: "user-1" }, message: { type: "text", id: "msg-2", text: "hello 2" } }] }, "oa-1");
+
+  assert.equal(updatedData?.bmReplyStatus, BmReplyStatus.NOT_REPLIED);
+  const bmChangeActivity = activityEntries.find((a) => a.actionType === ActivityActionType.BM_REPLY_STATUS_CHANGED);
+  assert.ok(bmChangeActivity);
+  assert.equal(bmChangeActivity?.previousBmReplyStatus, BmReplyStatus.NOTIFIED_BM);
+  assert.equal(bmChangeActivity?.newBmReplyStatus, BmReplyStatus.NOT_REPLIED);
+});
+
+void test("inbound message on NOT_REPLIED conversation does NOT log redundant BM_REPLY_STATUS_CHANGED activity", async () => {
+  const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
+
+  let updatedData: Record<string, unknown> | undefined;
+  const activityEntries: Array<Record<string, unknown>> = [];
+
+  const existingConv = { id: "conv-12", customerId: "c-1", storeId: "s-1", lineOfficialAccountId: "oa-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, followUpStatus: FollowUpStatus.FOLLOW_UP };
+  const transactionClient = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: ({ data }: { data: Record<string, unknown> }) => { updatedData = data; return Promise.resolve({ ...existingConv, ...data }); },
+    },
+    message: { create: () => Promise.resolve({ id: "msg-3" }) },
+    activityHistory: { create: ({ data }: { data: Record<string, unknown> }) => { activityEntries.push(data); return Promise.resolve({}); } },
+  };
+
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "c-1" }) },
+    conversation: { findFirst: () => Promise.resolve(existingConv) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+
+  const classification = { analyze: () => Promise.resolve({}) } as unknown as ClassificationService;
+  const profiles = { refresh: () => Promise.resolve({}) } as unknown as LineProfileService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, classification, profiles, {} as LineImageService);
+
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-bm-3", timestamp: Date.now(), source: { type: "user", userId: "user-1" }, message: { type: "text", id: "msg-3", text: "hello 3" } }] }, "oa-1");
+
+  assert.equal("bmReplyStatus" in (updatedData ?? {}), false);
+  const bmChangeActivity = activityEntries.find((a) => a.actionType === ActivityActionType.BM_REPLY_STATUS_CHANGED);
+  assert.equal(bmChangeActivity, undefined);
+});
+

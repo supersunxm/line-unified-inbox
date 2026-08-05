@@ -1,4 +1,4 @@
-import { FollowUpStatus, Priority } from "@prisma/client";
+import { BmReplyStatus, FollowUpStatus, Priority } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
 
@@ -17,6 +17,7 @@ export class ConversationQueryDto {
 }
 
 export class UpdateStatusDto { @IsEnum(FollowUpStatus) status!: FollowUpStatus; }
+export class UpdateBmReplyStatusDto { @IsEnum(BmReplyStatus) status!: BmReplyStatus; }
 export class UpdatePriorityDto { @IsEnum(Priority) priority!: Priority; }
 export class CreateNoteDto {
   @IsString() @IsNotEmpty() content!: string;

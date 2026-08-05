@@ -22,6 +22,12 @@ enum FollowUpStatus {
   ESCALATED
 }
 
+enum BmReplyStatus {
+  NOT_REPLIED
+  NOTIFIED_BM
+  REPLIED
+}
+
 enum ProductRelationship {
   INTERESTED
   CURRENT_OWNER
@@ -112,6 +118,7 @@ enum ActivityActionType {
   RETURNED_TO_FOLLOW_UP
   MESSAGE_RECEIVED
   CLASSIFICATION_UPDATED
+  BM_REPLY_STATUS_CHANGED
 }
 
 enum ProfileFetchStatus {
@@ -406,6 +413,7 @@ model Conversation {
   priority              Priority              @default(NORMAL)
   prioritySource        String                @default("SYSTEM")
   followUpStatus        FollowUpStatus        @default(FOLLOW_UP)
+  bmReplyStatus         BmReplyStatus          @default(NOT_REPLIED)
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
   createdAt             DateTime              @default(now())
@@ -424,6 +432,10 @@ model Conversation {
   @@index([priority])
   @@index([storeId])
   @@index([customerId])
+  @@index([storeId, followUpStatus, latestMessageAt(sort: Desc)])
+  @@index([lineOfficialAccountId, followUpStatus, latestMessageAt(sort: Desc)])
+  @@index([lineOfficialAccountId, bmReplyStatus, latestMessageAt(sort: Desc)])
+  @@index([customerId, latestMessageAt(sort: Desc)])
 }
 
 model Message {
@@ -623,6 +635,8 @@ model ActivityHistory {
   actionType     ActivityActionType
   previousStatus FollowUpStatus?
   newStatus      FollowUpStatus?
+  previousBmReplyStatus BmReplyStatus?
+  newBmReplyStatus      BmReplyStatus?
   description    String?
   createdByName  String?
   createdAt      DateTime           @default(now())

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  getBmReplyStatusBadge,
   getConversationListTags,
   getConversationListTitle,
 } from "../src/app/conversation-list-presentation.ts";
@@ -102,3 +103,25 @@ test("conversation list retains selected-row state, accurate count, and in-pane 
   const pagination = pageCode.indexOf("<ConversationPaginationFooter", listStart);
   assert.ok(listStart < pagination && pagination < listEnd);
 });
+
+test("bmReplyStatus badge is rendered per row separately from tag truncation", () => {
+  const badge = getBmReplyStatusBadge("NOTIFIED_BM", {
+    NOT_REPLIED: "ยังไม่ตอบ",
+    NOTIFIED_BM: "แจ้ง BM แล้ว",
+    REPLIED: "ตอบแล้ว",
+  });
+  assert.deepEqual(badge, {
+    kind: "bmReplyStatus",
+    status: "NOTIFIED_BM",
+    label: "แจ้ง BM แล้ว",
+  });
+
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
+  assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus\]/);
+});
+

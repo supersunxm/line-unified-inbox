@@ -30,7 +30,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -44,9 +44,28 @@ type StatusFilter = FollowUpStatus | "all";
 type PriorityFilter = Priority | "all";
 type ActivityHistoryItem = {
   id: string;
-  status: FollowUpStatus;
+  status: FollowUpStatus | null;
+  bmReplyStatus?: ApiBmReplyStatus | null;
   timestamp: string;
-  actionType: "status" | "messageReceived";
+  actionType: "status" | "messageReceived" | "bmReplyStatus";
+};
+
+export const bmReplyStatusLabels: Record<Language, Record<ApiBmReplyStatus, string>> = {
+  th: {
+    NOT_REPLIED: "ยังไม่ตอบ",
+    NOTIFIED_BM: "แจ้ง BM แล้ว",
+    REPLIED: "ตอบแล้ว",
+  },
+  en: {
+    NOT_REPLIED: "Not replied",
+    NOTIFIED_BM: "BM notified",
+    REPLIED: "Replied",
+  },
+  zh: {
+    NOT_REPLIED: "尚未回复",
+    NOTIFIED_BM: "已通知 BM",
+    REPLIED: "已回复",
+  },
 };
 
 type UiPreferences = {
@@ -70,6 +89,7 @@ type StoreMasterSearchState =
 
 type ConversationState = {
   status: FollowUpStatus;
+  bmReplyStatus: ApiBmReplyStatus;
   note: string;
   activityHistory: ActivityHistoryItem[];
 };
@@ -86,6 +106,7 @@ type Conversation = {
   series: string;
   topic: string;
   priority: Priority;
+  bmReplyStatus: ApiBmReplyStatus;
   relationship: string;
   purchaseIntent: string;
   lineOaId: string;
@@ -188,6 +209,8 @@ const translations = {
     returnToFollowUp: "กลับไปติดตาม",
     activityHistory: "ประวัติการดำเนินการ",
     statusChangedTo: "เปลี่ยนสถานะเป็น",
+    bmReplyStatus: "สถานะการตอบ BM",
+    bmReplyStatusChangedTo: "เปลี่ยนสถานะการตอบ BM เป็น",
     noActivity: "ยังไม่มีประวัติ",
     messageReceivedActivity: "ได้รับข้อความลูกค้าใหม่",
     customerImage: "รูปภาพจากลูกค้า",
@@ -445,6 +468,8 @@ const translations = {
     returnToFollowUp: "Return to Follow-up",
     activityHistory: "Activity History",
     statusChangedTo: "Status changed to",
+    bmReplyStatus: "BM Reply Status",
+    bmReplyStatusChangedTo: "BM reply status changed to",
     noActivity: "No activity yet",
     messageReceivedActivity: "New customer message received",
     customerImage: "Image from customer",
@@ -700,6 +725,8 @@ const translations = {
     returnToFollowUp: "返回待跟进",
     activityHistory: "操作记录",
     statusChangedTo: "状态已更改为",
+    bmReplyStatus: "BM 回复状态",
+    bmReplyStatusChangedTo: "BM 回复状态已更改为",
     noActivity: "暂无操作记录",
     messageReceivedActivity: "收到新的客户消息",
     customerImage: "客户发送的图片",
@@ -1037,6 +1064,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
       item.priority === "HIGH" || item.priority === "CRITICAL"
         ? "High"
         : "Normal",
+    bmReplyStatus: item.bmReplyStatus,
     relationship: item.productRelationship ?? "Unknown",
     purchaseIntent: item.purchaseIntent ?? "Unknown",
     lineOaId: item.lineOfficialAccount.id,
@@ -1047,20 +1075,29 @@ function mapApiConversation(item: ApiConversation): Conversation {
 function mapApiConversationState(item: ApiConversation): ConversationState {
   return {
     status: apiToUiStatus[item.followUpStatus],
+    bmReplyStatus: item.bmReplyStatus,
     note: item.notes[0]?.content ?? "",
-    activityHistory: item.activityHistory.flatMap((activity) =>
-      activity.newStatus
-        ? [{
-            id: activity.id,
-            status: apiToUiStatus[activity.newStatus],
-            timestamp: activity.createdAt,
-            actionType:
-              activity.actionType === "MESSAGE_RECEIVED"
-                ? "messageReceived"
-                : "status",
-          }]
-        : [],
-    ),
+    activityHistory: item.activityHistory.flatMap((activity): ActivityHistoryItem[] => {
+      if (activity.actionType === "BM_REPLY_STATUS_CHANGED" && activity.newBmReplyStatus) {
+        return [{
+          id: activity.id,
+          status: activity.newStatus ? apiToUiStatus[activity.newStatus] : null,
+          bmReplyStatus: activity.newBmReplyStatus,
+          timestamp: activity.createdAt,
+          actionType: "bmReplyStatus",
+        }];
+      }
+      if (activity.newStatus) {
+        return [{
+          id: activity.id,
+          status: apiToUiStatus[activity.newStatus],
+          bmReplyStatus: activity.newBmReplyStatus ?? null,
+          timestamp: activity.createdAt,
+          actionType: activity.actionType === "MESSAGE_RECEIVED" ? "messageReceived" : "status",
+        }];
+      }
+      return [];
+    }),
   };
 }
 
@@ -1805,6 +1842,46 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }
 
+  async function updateBmReplyStatus(status: ApiBmReplyStatus) {
+    if (!selectedConversation || isMutating || authUser?.role === "VIEWER") return;
+    const previousState = conversationStates[selectedConversation.id];
+    if (!previousState || previousState.bmReplyStatus === status) return;
+
+    const completesFollowUp = status === "REPLIED" && previousState.status !== "completed";
+    setIsMutating(true);
+    setApiError(null);
+
+    setConversationStates((currentStates) => {
+      const current = currentStates[selectedConversation.id];
+      if (!current) return currentStates;
+      return {
+        ...currentStates,
+        [selectedConversation.id]: {
+          ...current,
+          bmReplyStatus: status,
+          ...(completesFollowUp ? { status: "completed" } : {}),
+        },
+      };
+    });
+
+    try {
+      const response = await api.updateBmReplyStatus(selectedConversation.id, status);
+      setConversationStates((currentStates) => ({
+        ...currentStates,
+        [selectedConversation.id]: mapApiConversationState(response.conversation),
+      }));
+      setDashboardSummary(await api.dashboard());
+    } catch (error) {
+      setConversationStates((currentStates) => ({
+        ...currentStates,
+        [selectedConversation.id]: previousState,
+      }));
+      setApiError(error instanceof Error ? error.message : "BM reply status update failed");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
   function updateInternalNote(note: string) {
     if (!selectedConversation) return;
     setConversationStates((currentStates) => ({
@@ -2519,7 +2596,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <h2 className="mb-4 font-semibold">{text.recentMonitoringActivity}</h2>
-                  <div className="space-y-2">{recentActivity.map((activity) => <button key={activity.id} onClick={() => openMonitoring({ conversationId: activity.conversation.id })} className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><div><p className="text-sm font-medium">{activity.conversation.customer}</p><p className="text-xs text-slate-500">{getStoreDisplayName(activity.conversation.store)} · {activity.actionType === "messageReceived" ? text.messageReceivedActivity : getStatusLabel(language, activity.status)}</p></div><time className="text-xs text-slate-400" dateTime={activity.timestamp}>{formatRelativeTime(activity.timestamp, language)}</time></button>)}</div>
+                  <div className="space-y-2">{recentActivity.map((activity) => <button key={activity.id} onClick={() => openMonitoring({ conversationId: activity.conversation.id })} className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><div><p className="text-sm font-medium">{activity.conversation.customer}</p><p className="text-xs text-slate-500">{getStoreDisplayName(activity.conversation.store)} · {activity.actionType === "messageReceived" ? text.messageReceivedActivity : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? `${text.bmReplyStatusChangedTo} ${bmReplyStatusLabels[language][activity.bmReplyStatus]}` : activity.status ? getStatusLabel(language, activity.status) : ""}</p></div><time className="text-xs text-slate-400" dateTime={activity.timestamp}>{formatRelativeTime(activity.timestamp, language)}</time></button>)}</div>
                   {recentActivity.length === 0 && <p className="text-sm text-slate-500">{text.noActivity}</p>}
                 </div>
               </div>
@@ -2679,6 +2756,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               filteredConversations.map((conversation) => {
                 const isSelected = conversation.id === selectedConversation?.id;
                 const status = conversationStates[conversation.id]?.status;
+                const currentBmReplyStatus = conversationStates[conversation.id]?.bmReplyStatus ?? conversation.bmReplyStatus;
                 const tags = getConversationListTags({
                   priority: conversation.priority,
                   priorityLabel: text.highPriority,
@@ -2715,6 +2793,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="mt-3.5 flex flex-wrap gap-1.5" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                      <span
+                        data-conversation-bm-reply-status={currentBmReplyStatus}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          currentBmReplyStatus === "REPLIED"
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                            : currentBmReplyStatus === "NOTIFIED_BM"
+                              ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}
+                      >
+                        {bmReplyStatusLabels[language][currentBmReplyStatus]}
+                      </span>
                       {tags.visible.map((tag, index) => (
                         <span
                           key={`${tag.kind}-${tag.label}-${index}`}
@@ -2789,13 +2879,31 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="rounded font-medium text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300">{text.refreshLineProfile}</button>
                         {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
                           {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
                         </span>
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                           {followUpStatusLabels[language][selectedConversationState.status]}
                         </span>
+                        <select
+                          data-bm-reply-status-select
+                          aria-label={text.bmReplyStatus}
+                          disabled={isMutating || authUser?.role === "VIEWER"}
+                          value={selectedConversationState.bmReplyStatus}
+                          onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selectedConversationState.bmReplyStatus === "REPLIED"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                              : selectedConversationState.bmReplyStatus === "NOTIFIED_BM"
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
+                          <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
+                          <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -2877,9 +2985,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <p className="text-sm">
                           {activity.actionType === "messageReceived" ? (
                             text.messageReceivedActivity
-                          ) : (
-                            <>{text.statusChangedTo}{" "}<span className="font-semibold">{getStatusLabel(language, activity.status)}</span></>
-                          )}
+                          ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
+                            <>
+                              {text.bmReplyStatusChangedTo}{" "}
+                              <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
+                            </>
+                          ) : activity.status ? (
+                            <>
+                              {text.statusChangedTo}{" "}
+                              <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
+                            </>
+                          ) : null}
                         </p>
                         <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
                           {formatRelativeTime(activity.timestamp, language)}

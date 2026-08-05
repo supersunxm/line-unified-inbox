@@ -53,3 +53,17 @@ export function getConversationListTags(input: ConversationTagInput) {
     hidden: tags.slice(3),
   };
 }
+
+export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
+
+export function getBmReplyStatusBadge(
+  status: ApiBmReplyStatus,
+  labels: Record<ApiBmReplyStatus, string>,
+) {
+  return {
+    kind: "bmReplyStatus" as const,
+    status,
+    label: labels[status] ?? status,
+  };
+}
+

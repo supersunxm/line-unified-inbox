@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { ActivityActionType, FollowUpStatus, Prisma } from "@prisma/client";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, Prisma } from "@prisma/client";
 import { ConversationQueryDto, CreateNoteDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
@@ -117,6 +117,32 @@ export class ConversationsService {
     await this.prisma.$transaction([
       this.prisma.conversation.update({ where: { id }, data: { followUpStatus: status } }),
       this.prisma.activityHistory.create({ data: { conversationId: id, actionType, previousStatus: current.followUpStatus, newStatus: status } }),
+    ]);
+    return { changed: true, conversation: await this.get(id) };
+  }
+
+  async updateBmReplyStatus(id: string, status: BmReplyStatus) {
+    const current = await this.get(id);
+    if (current.bmReplyStatus === status) return { changed: false, conversation: current };
+    const completesFollowUp = status === BmReplyStatus.REPLIED && current.followUpStatus !== FollowUpStatus.COMPLETED;
+    await this.prisma.$transaction([
+      this.prisma.conversation.update({
+        where: { id },
+        data: {
+          bmReplyStatus: status,
+          ...(completesFollowUp ? { followUpStatus: FollowUpStatus.COMPLETED } : {}),
+        },
+      }),
+      this.prisma.activityHistory.create({
+        data: {
+          conversationId: id,
+          actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+          previousBmReplyStatus: current.bmReplyStatus,
+          newBmReplyStatus: status,
+          ...(completesFollowUp ? { previousStatus: current.followUpStatus, newStatus: FollowUpStatus.COMPLETED } : {}),
+          description: "BM reply status changed manually",
+        },
+      }),
     ]);
     return { changed: true, conversation: await this.get(id) };
   }

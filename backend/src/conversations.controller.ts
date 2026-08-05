@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ConversationsService } from "./conversations.service";
-import { ConversationQueryDto, CreateNoteDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
+import { ConversationQueryDto, CreateNoteDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
@@ -11,6 +11,7 @@ export class ConversationsController {
   @Get() list(@Query() query: ConversationQueryDto) { return this.service.list(query); }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
   @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) { return this.service.updateStatus(id, dto.status); }
+  @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) { return this.service.updateBmReplyStatus(id, dto.status); }
   @Patch(":id/priority") priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto) { return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
   @Get(":id/messages") messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30") { return this.service.messages(id, Number(page), Number(pageSize)); }
   @Post(":id/reanalyze") async reanalyze(@Param("id") id: string) { await this.classification.analyze(id, true); return this.service.get(id); }

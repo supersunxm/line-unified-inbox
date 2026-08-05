@@ -122,3 +122,226 @@ void test("ConversationsService.list supports lineOaId filter, unknown lineOaId,
   assert.equal(req4.take, 20);
 });
 
+void test("UpdateBmReplyStatusDto accepts valid enum values and rejects invalid values", async () => {
+  const { validate } = await import("class-validator");
+  const { UpdateBmReplyStatusDto } = await import("./dto");
+  const { BmReplyStatus } = await import("@prisma/client");
+
+  for (const status of [BmReplyStatus.NOT_REPLIED, BmReplyStatus.NOTIFIED_BM, BmReplyStatus.REPLIED]) {
+    const dto = new UpdateBmReplyStatusDto();
+    dto.status = status;
+    const errors = await validate(dto);
+    assert.equal(errors.length, 0, `Expected status ${status} to be valid`);
+  }
+
+  const invalidDto = new UpdateBmReplyStatusDto();
+  (invalidDto as { status: unknown }).status = "INVALID_STATUS";
+  const errors = await validate(invalidDto);
+  assert.equal(errors.length, 1);
+});
+
+void test("ConversationsController registers PATCH /conversations/:id/bm-reply-status route with correct metadata", async () => {
+  const { PATH_METADATA, METHOD_METADATA } = await import("@nestjs/common/constants");
+  const { ConversationsController } = await import("./conversations.controller");
+
+  const path = Reflect.getMetadata(PATH_METADATA, ConversationsController.prototype.bmReplyStatus);
+  const method = Reflect.getMetadata(METHOD_METADATA, ConversationsController.prototype.bmReplyStatus);
+  assert.equal(path, ":id/bm-reply-status");
+  assert.equal(method, 4); // RequestMethod.PATCH is 4
+});
+
+void test("ConversationsService.updateBmReplyStatus NOT_REPLIED -> NOTIFIED_BM updates only BM status and logs activity", async () => {
+  const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
+
+  const existingConv = {
+    id: "conv-1",
+    bmReplyStatus: BmReplyStatus.NOT_REPLIED,
+    followUpStatus: FollowUpStatus.FOLLOW_UP,
+    customerId: "c1",
+    storeId: "s1",
+    lineOfficialAccountId: "oa1",
+    priority: "NORMAL",
+    customer: {},
+    store: {},
+    lineOfficialAccount: {},
+    messages: [],
+    products: [],
+    topics: [],
+    notes: [],
+    activityHistory: [],
+  };
+
+  let updatePayload: Record<string, unknown> | undefined;
+  let activityPayload: Record<string, unknown> | undefined;
+
+  const prisma = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: (args: { data: Record<string, unknown> }) => {
+        updatePayload = args.data;
+        return Promise.resolve({ ...existingConv, ...args.data });
+      },
+    },
+    activityHistory: {
+      create: (args: { data: Record<string, unknown> }) => {
+        activityPayload = args.data;
+        return Promise.resolve({ id: "act-1", ...args.data });
+      },
+    },
+    storeMaster: { findMany: () => Promise.resolve([]) },
+    $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+  const result = await service.updateBmReplyStatus("conv-1", BmReplyStatus.NOTIFIED_BM);
+
+  assert.equal(result.changed, true);
+  assert.deepEqual(updatePayload, { bmReplyStatus: BmReplyStatus.NOTIFIED_BM });
+  assert.deepEqual(activityPayload, {
+    conversationId: "conv-1",
+    actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+    previousBmReplyStatus: BmReplyStatus.NOT_REPLIED,
+    newBmReplyStatus: BmReplyStatus.NOTIFIED_BM,
+    description: "BM reply status changed manually",
+  });
+});
+
+void test("ConversationsService.updateBmReplyStatus NOTIFIED_BM -> REPLIED updates BM status AND sets followUpStatus to COMPLETED in one transaction", async () => {
+  const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
+
+  const existingConv = {
+    id: "conv-2",
+    bmReplyStatus: BmReplyStatus.NOTIFIED_BM,
+    followUpStatus: FollowUpStatus.FOLLOW_UP,
+    customerId: "c1",
+    storeId: "s1",
+    lineOfficialAccountId: "oa1",
+    priority: "NORMAL",
+    customer: {},
+    store: {},
+    lineOfficialAccount: {},
+    messages: [],
+    products: [],
+    topics: [],
+    notes: [],
+    activityHistory: [],
+  };
+
+  let updatePayload: Record<string, unknown> | undefined;
+  let activityPayload: Record<string, unknown> | undefined;
+  let transactionCalled = false;
+
+  const prisma = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: (args: { data: Record<string, unknown> }) => {
+        updatePayload = args.data;
+        return Promise.resolve({ ...existingConv, ...args.data });
+      },
+    },
+    activityHistory: {
+      create: (args: { data: Record<string, unknown> }) => {
+        activityPayload = args.data;
+        return Promise.resolve({ id: "act-2", ...args.data });
+      },
+    },
+    storeMaster: { findMany: () => Promise.resolve([]) },
+    $transaction: (queries: Array<Promise<unknown>>) => {
+      transactionCalled = true;
+      assert.equal(queries.length, 2);
+      return Promise.all(queries);
+    },
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+  const result = await service.updateBmReplyStatus("conv-2", BmReplyStatus.REPLIED);
+
+  assert.equal(transactionCalled, true);
+  assert.equal(result.changed, true);
+  assert.deepEqual(updatePayload, {
+    bmReplyStatus: BmReplyStatus.REPLIED,
+    followUpStatus: FollowUpStatus.COMPLETED,
+  });
+  assert.deepEqual(activityPayload, {
+    conversationId: "conv-2",
+    actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+    previousBmReplyStatus: BmReplyStatus.NOTIFIED_BM,
+    newBmReplyStatus: BmReplyStatus.REPLIED,
+    previousStatus: FollowUpStatus.FOLLOW_UP,
+    newStatus: FollowUpStatus.COMPLETED,
+    description: "BM reply status changed manually",
+  });
+});
+
+void test("ConversationsService.updateBmReplyStatus repeating the same status is a no-op", async () => {
+  const { BmReplyStatus, FollowUpStatus } = await import("@prisma/client");
+
+  const existingConv = {
+    id: "conv-3",
+    bmReplyStatus: BmReplyStatus.NOTIFIED_BM,
+    followUpStatus: FollowUpStatus.FOLLOW_UP,
+    customerId: "c1",
+    storeId: "s1",
+    lineOfficialAccountId: "oa1",
+    priority: "NORMAL",
+    customer: {},
+    store: {},
+    lineOfficialAccount: {},
+    messages: [],
+    products: [],
+    topics: [],
+    notes: [],
+    activityHistory: [],
+  };
+
+  let updateCalled = false;
+  let activityCalled = false;
+
+  const prisma = {
+    conversation: {
+      findUnique: () => Promise.resolve(existingConv),
+      update: () => {
+        updateCalled = true;
+        return Promise.resolve(existingConv);
+      },
+    },
+    activityHistory: {
+      create: () => {
+        activityCalled = true;
+        return Promise.resolve({});
+      },
+    },
+    storeMaster: { findMany: () => Promise.resolve([]) },
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma);
+  const result = await service.updateBmReplyStatus("conv-3", BmReplyStatus.NOTIFIED_BM);
+
+  assert.equal(result.changed, false);
+  assert.equal(updateCalled, false);
+  assert.equal(activityCalled, false);
+});
+
+void test("AuthGuard rejects VIEWER role and allows ADMIN for PATCH /conversations/:id/bm-reply-status", async () => {
+  const { ForbiddenException } = await import("@nestjs/common");
+  const { Reflector } = await import("@nestjs/core");
+  const { AuthGuard, AuthUser } = await import("./auth/auth.guard");
+  const { ConversationsController } = await import("./conversations.controller");
+
+  const viewer = { id: "v1", email: "viewer@example.test", displayName: "Viewer", role: "VIEWER", isActive: true } as AuthUser;
+  const admin = { id: "a1", email: "admin@example.test", displayName: "Admin", role: "ADMIN", isActive: true } as AuthUser;
+
+  const request = { method: "PATCH", path: "/conversations/conv-1/bm-reply-status", headers: {} };
+  const viewerContext = {
+    getHandler: () => ConversationsController.prototype.bmReplyStatus,
+    getClass: () => ConversationsController,
+    switchToHttp: () => ({ getRequest: () => request }),
+  };
+
+  const viewerGuard = new AuthGuard(new Reflector(), { authenticate: async () => viewer } as never);
+  await assert.rejects(viewerGuard.canActivate(viewerContext as never), ForbiddenException);
+
+  const adminGuard = new AuthGuard(new Reflector(), { authenticate: async () => admin } as never);
+  assert.equal(await adminGuard.canActivate(viewerContext as never), true);
+});
+
