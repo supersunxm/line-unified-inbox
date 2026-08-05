@@ -1,4 +1,5 @@
 import React from "react";
+import { sortStoresByPriority } from "./store-priority-sorting";
 
 export type SidebarView =
   | "dashboard"
@@ -25,6 +26,8 @@ export interface ContextSidebarProps {
   getStoreDisplayName: (name: string) => string;
 }
 
+export { sortStoresByPriority };
+
 export function ContextSidebar({
   sidebarView,
   selectSidebarView,
@@ -43,6 +46,11 @@ export function ContextSidebar({
         ? "is-selected font-semibold"
         : ""
     }`;
+
+  // Sort stores by operational priority.
+  // Stores with highest unanswered customer conversations
+  // must appear first because they require immediate action.
+  const sortedStores = sortStoresByPriority(stores, storeBmCounts, getStoreDisplayName);
 
   return (
     <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-y-auto border-r p-4">
@@ -126,7 +134,7 @@ export function ContextSidebar({
           </div>
         </button>
 
-        {stores.map((store) => {
+        {sortedStores.map((store) => {
           const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
           return (
             <button

@@ -65,3 +65,43 @@ test("sidebar OVERVIEW section renders global bmReplyStatus categories and per-s
   assert.match(pageCode, /REPLIED/);
 });
 
+test("sortStoresByPriority prioritizes stores by operational urgency (notReplied -> notifiedBm -> replied -> alphabetical)", async () => {
+  const { sortStoresByPriority } = await import("../src/components/shell/store-priority-sorting.ts");
+
+  // Case 1: Higher notReplied count appears first
+  const storesCase1 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsCase1 = {
+    "store-a": { notReplied: 5, notifiedBm: 0, replied: 0 },
+    "store-b": { notReplied: 20, notifiedBm: 0, replied: 0 },
+  };
+  const sortedCase1 = sortStoresByPriority(storesCase1, countsCase1);
+  assert.deepEqual(sortedCase1.map((s) => s.id), ["store-b", "store-a"]);
+
+  // Case 2: Equal notReplied -> Higher notifiedBm count appears first
+  const storesCase2 = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+  ];
+  const countsCase2 = {
+    "store-a": { notReplied: 10, notifiedBm: 2, replied: 0 },
+    "store-b": { notReplied: 10, notifiedBm: 5, replied: 0 },
+  };
+  const sortedCase2 = sortStoresByPriority(storesCase2, countsCase2);
+  assert.deepEqual(sortedCase2.map((s) => s.id), ["store-b", "store-a"]);
+
+  // Case 3: All counts equal -> Alphabetical by store name
+  const storesCase3 = [
+    { id: "store-z", name: "Zebra Store" },
+    { id: "store-a", name: "Alpha Store" },
+  ];
+  const countsCase3 = {
+    "store-z": { notReplied: 5, notifiedBm: 2, replied: 1 },
+    "store-a": { notReplied: 5, notifiedBm: 2, replied: 1 },
+  };
+  const sortedCase3 = sortStoresByPriority(storesCase3, countsCase3);
+  assert.deepEqual(sortedCase3.map((s) => s.id), ["store-a", "store-z"]);
+});
+
