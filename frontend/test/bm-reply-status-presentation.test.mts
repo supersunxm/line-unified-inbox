@@ -105,3 +105,46 @@ test("sortStoresByPriority prioritizes stores by operational urgency (notReplied
   assert.deepEqual(sortedCase3.map((s) => s.id), ["store-a", "store-z"]);
 });
 
+test("filterStoresBySearch filters by store name, account name, and store code while preserving priority sorting", async () => {
+  const { filterStoresBySearch } = await import("../src/components/shell/store-search.ts");
+  const { sortStoresByPriority } = await import("../src/components/shell/store-priority-sorting.ts");
+
+  const sampleStores = [
+    { id: "27626", name: "OBS Asawann Nongkhai By OPPO", code: "27626", accountName: "OPPO ASAWAN NONGKHAI" },
+    { id: "28100", name: "OBS Big C Chiangrai By IT CITY", code: "28100", accountName: "OPPO CHIANGRAI" },
+    { id: "28200", name: "OBS Big C Kanchanaburi By VTEC", code: "28200", accountName: "OPPO KANCHANABURI" },
+  ];
+
+  // Case 1: Search store name ("Chiangrai")
+  const resultCase1 = filterStoresBySearch(sampleStores, "Chiangrai");
+  assert.equal(resultCase1.length, 1);
+  assert.equal(resultCase1[0].name, "OBS Big C Chiangrai By IT CITY");
+
+  // Case 2: Search store code ("27626")
+  const resultCase2 = filterStoresBySearch(sampleStores, "27626");
+  assert.equal(resultCase2.length, 1);
+  assert.equal(resultCase2[0].name, "OBS Asawann Nongkhai By OPPO");
+
+  // Case 3: Case-insensitive ("chiangrai")
+  const resultCase3 = filterStoresBySearch(sampleStores, "chiangrai");
+  assert.equal(resultCase3.length, 1);
+  assert.equal(resultCase3[0].id, "28100");
+
+  // Case 4: No result ("xyz999")
+  const resultCase4 = filterStoresBySearch(sampleStores, "xyz999");
+  assert.deepEqual(resultCase4, []);
+
+  // Case 5: Priority preserved after search
+  const counts = {
+    "28100": { notReplied: 10, notifiedBm: 0, replied: 0 },
+    "28200": { notReplied: 50, notifiedBm: 0, replied: 0 },
+  };
+  const filteredBigC = filterStoresBySearch(sampleStores, "Big C");
+  const sortedBigC = sortStoresByPriority(filteredBigC, counts);
+
+  assert.equal(sortedBigC.length, 2);
+  // Store 28200 (notReplied 50) must appear before 28100 (notReplied 10)
+  assert.deepEqual(sortedBigC.map((s) => s.id), ["28200", "28100"]);
+});
+
+
