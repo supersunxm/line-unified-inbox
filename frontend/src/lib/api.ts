@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -68,6 +68,7 @@ export const api = {
   me: () => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/me"),
   systemStatus: () => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status"),
   operationalErrors: () => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors"),
+  resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
   pilotChecklist: (lineOaId: string) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`),
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
   health: () => request<{ status: string }>("/health"),
@@ -85,6 +86,7 @@ export const api = {
     return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`);
   },
   bmReplyStatusSummary: () => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary"),
+  storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
   conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
   translateMessage: (messageId: string, targetLanguage: "en" | "zh") =>

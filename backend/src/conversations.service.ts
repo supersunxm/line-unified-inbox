@@ -49,8 +49,10 @@ export class ConversationsService {
 
   async list(query: ConversationQueryDto) {
     const search = query.search?.trim();
+    const resetFilter = await this.operations.getOperationalConversationFilter();
     const where: Prisma.ConversationWhereInput = {
       store: { archivedAt: null },
+      ...resetFilter,
       storeId: query.storeId,
       lineOfficialAccountId: query.lineOaId,
       followUpStatus: query.followUpStatus,

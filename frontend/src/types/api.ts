@@ -48,6 +48,17 @@ export type BmReplyStatusSummaryResponse = {
     notReplied: number;
     notifiedBm: number;
     replied: number;
+    oldestWaitingMinutes?: number;
+  }>;
+};
+export type StorePrioritySummaryResponse = {
+  stores: Array<{
+    id: string;
+    name: string;
+    notReplied: number;
+    notifiedBm: number;
+    replied: number;
+    oldestWaitingMinutes?: number;
   }>;
 };
 export type ApiStore = { id: string; name: string; code: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number } };

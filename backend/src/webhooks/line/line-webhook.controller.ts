@@ -6,6 +6,7 @@ import { LineSignatureService } from "./line-signature.service";
 import { isLineWebhookBody, LineWebhookBody } from "./line-webhook.types";
 import { Public } from "../../auth/auth.decorators";
 
+@Public()
 @Controller("webhook")
 export class LineWebhookController {
   private readonly logger = new Logger(LineWebhookController.name);
@@ -18,7 +19,6 @@ export class LineWebhookController {
   }
 
   @Post(":webhookKey")
-  @Public()
   @HttpCode(200)
   async receiveForOa(@Param("webhookKey") webhookKey: string, @Req() request: RawBodyRequest<Request>, @Headers("x-line-signature") signature: string | undefined, @Body() body: unknown) {
     return this.handle(request, signature, body, webhookKey);

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { sortStoresByPriority } from "./store-priority-sorting";
-import { filterStoresBySearch } from "./store-search";
+import { sortStoresByPriority } from "./store-priority-sorting.ts";
+import { filterStoresBySearch } from "./store-search.ts";
+import { formatWaitingDuration, getSlaRiskVariant, type StoreBmCountsItem } from "./store-priority-score.ts";
 
 export type SidebarView =
   | "dashboard"
@@ -17,7 +18,7 @@ export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
   overview: { notReplied: number; notifiedBm: number; replied: number };
-  storeBmCounts: Record<string, { notReplied: number; notifiedBm: number; replied: number }>;
+  storeBmCounts: Record<string, StoreBmCountsItem>;
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
@@ -50,13 +51,13 @@ export function ContextSidebar({
         : ""
     }`;
 
-  // Filter stores by search keyword, then sort by operational priority.
+  // Filter stores by search keyword, then sort by SLA operational priority.
   const filteredStores = useMemo(() => {
     return filterStoresBySearch(stores, storeSearch, getStoreDisplayName);
   }, [stores, storeSearch, getStoreDisplayName]);
 
-  // Sort stores by operational priority.
-  // Stores with highest unanswered customer conversations
+  // Sort stores by operational priority and SLA aging urgency.
+  // Stores with oldest unanswered customer conversations
   // must appear first because they require immediate action.
   const sortedStores = useMemo(() => {
     return sortStoresByPriority(filteredStores, storeBmCounts, getStoreDisplayName);
@@ -177,30 +178,52 @@ export function ContextSidebar({
           </button>
 
           {sortedStores.map((store) => {
-            const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+            const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 };
+            const waitingMins = counts.notReplied > 0 ? (counts.oldestWaitingMinutes ?? 0) : 0;
+            const riskVariant = getSlaRiskVariant(waitingMins);
+
             return (
               <button
                 key={store.id}
                 type="button"
                 onClick={() => setSelectedStore(store.id)}
-                className={`app-store-row flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`app-store-row flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedStore === store.id
                     ? "is-selected font-semibold"
                     : ""
                 }`}
               >
-                <span className="truncate">{getStoreDisplayName(store.name)}</span>
-                <div className="ml-2 flex items-center space-x-1 shrink-0">
-                  <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
-                    {counts.notReplied}
-                  </span>
-                  <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
-                    {counts.notifiedBm}
-                  </span>
-                  <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
-                    {counts.replied}
-                  </span>
+                <div className="flex w-full items-center justify-between">
+                  <span className="truncate">{getStoreDisplayName(store.name)}</span>
+                  <div className="ml-2 flex items-center space-x-1 shrink-0">
+                    <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
+                      {counts.notReplied}
+                    </span>
+                    <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
+                      {counts.notifiedBm}
+                    </span>
+                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
+                      {counts.replied}
+                    </span>
+                  </div>
                 </div>
+
+                {waitingMins > 0 && (
+                  <div className={`mt-0.5 flex items-center text-[11px] font-medium ${
+                    riskVariant === "danger"
+                      ? "text-red-600 dark:text-red-400 font-semibold"
+                      : riskVariant === "warning"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}>
+                    <span aria-hidden="true" className="mr-1">
+                      {riskVariant === "danger" ? "🔥" : "⏱"}
+                    </span>
+                    <span>
+                      Waiting {formatWaitingDuration(waitingMins)}
+                    </span>
+                  </div>
+                )}
               </button>
             );
           })}

@@ -19,6 +19,7 @@ import { ClassificationInsightsView } from "./classification-insights/classifica
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
+import { DashboardView } from "./dashboard/dashboard-view";
 import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
 import type { SidebarView } from "@/components/shell";
 import { StoreChatsOverflowMenu } from "@/components/chats/store-chats-overflow-menu";
@@ -1236,6 +1237,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [isLoading, setIsLoading] = useState(true);
   const [supportingDataLoaded, setSupportingDataLoaded] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+
   const [apiError, setApiError] = useState<string | null>(null);
   const [dashboardSummary, setDashboardSummary] =
     useState<DashboardSummaryResponse | null>(null);
@@ -1479,6 +1481,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       loadConversations(conversationQueryRef.current, silent),
     ]);
   }, [loadConversations, loadSupportingData]);
+
 
   const loadSystemStatus = useCallback(async () => {
     try {
@@ -1741,26 +1744,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }, [chatHistory.items]);
 
-  const scopedConversations = useMemo(
-    () => conversations.filter((c) => selectedStore === "all" || c.storeId === selectedStore),
-    [conversations, selectedStore],
-  );
-  const notRepliedCount = scopedConversations.filter(
-    (c) => (conversationStates[c.id]?.bmReplyStatus ?? c.bmReplyStatus) === "NOT_REPLIED",
-  ).length;
-  const notifiedBmCount = scopedConversations.filter(
-    (c) => (conversationStates[c.id]?.bmReplyStatus ?? c.bmReplyStatus) === "NOTIFIED_BM",
-  ).length;
-  const repliedCount = scopedConversations.filter(
-    (c) => (conversationStates[c.id]?.bmReplyStatus ?? c.bmReplyStatus) === "REPLIED",
-  ).length;
-  const followUpCount = Object.values(conversationStates).filter(
-    ({ status }) => status === "followUp",
-  ).length;
+
   const storeBmCounts = useMemo(() => {
-    const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number }> = {};
+    const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
-      countsMap[s.storeId] = { notReplied: s.notReplied, notifiedBm: s.notifiedBm, replied: s.replied };
+      countsMap[s.storeId] = {
+        notReplied: s.notReplied,
+        notifiedBm: s.notifiedBm,
+        replied: s.replied,
+        oldestWaitingMinutes: s.oldestWaitingMinutes ?? 0,
+      };
     }
     return countsMap;
   }, [bmSummaryData.stores]);
@@ -1779,85 +1772,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     status: (status) => getStatusLabel(language, status as FollowUpStatus),
   });
 
-  const storeMetrics = useMemo(
-    () =>
-      storeOptions
-        .map((storeId) => {
-          const storeConversations = conversations.filter(
-            (conversation) => conversation.storeId === storeId,
-          );
-          const countStatus = (status: FollowUpStatus) =>
-            storeConversations.filter(
-              (conversation) =>
-                conversationStates[conversation.id]?.status === status,
-            ).length;
-          return {
-            storeId,
-            store: storeConversations[0]?.store ?? availableStores.find(({ id }) => id === storeId)?.name ?? storeId,
-            total: storeConversations.length,
-            followUp: countStatus("followUp"),
-            reminded: countStatus("reminded"),
-            acknowledged: countStatus("acknowledged"),
-            completed: countStatus("completed"),
-            escalated: countStatus("escalated"),
-            priority: storeConversations.some(
-              (conversation) => conversation.priority === "High",
-            )
-              ? ("High" as Priority)
-              : ("Normal" as Priority),
-          };
-        })
-        .sort(
-          (a, b) =>
-            b.escalated - a.escalated ||
-            b.followUp - a.followUp ||
-            b.reminded - a.reminded ||
-            a.store.localeCompare(b.store),
-        ),
-    [availableStores, conversationStates, conversations, storeOptions],
-  );
-
-  const modelMetrics = useMemo(
-    () =>
-      modelOptions
-        .map((model) => ({
-          model,
-          count: conversations.filter(({ product }) => product === model)
-            .length,
-        }))
-        .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
-    [conversations, modelOptions],
-  );
-
-  const topicMetrics = useMemo(
-    () =>
-      topicOptions
-        .map((topic) => ({
-          topic,
-          count: conversations.filter((conversation) =>
-            conversation.topic.split(" · ").includes(topic),
-          ).length,
-        }))
-        .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic)),
-    [conversations, topicOptions],
-  );
-
-  const recentActivity = useMemo(
-    () =>
-      conversations
-        .flatMap((conversation) =>
-          (conversationStates[conversation.id]?.activityHistory ?? []).map((activity) => ({
-            ...activity,
-            conversation,
-          })),
-        )
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        )
-        .slice(0, 10),
-    [conversationStates, conversations],
-  );
 
   async function updateFollowUpStatus(status: FollowUpStatus) {
     if (!selectedConversation) return;
@@ -2583,76 +2497,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           </section>
           </PageContainer>
         ) : initialSection === "dashboard" ? (
-          <PageContainer variant="readable">
+          <PageContainer variant="full">
             <section className="app-content-section col-span-2 overflow-y-auto">
-            <div className="mx-auto max-w-7xl space-y-6">
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-                {([
-                  [text.totalLineOa, lineOas.length, "/stores"],
-                  [text.activeLineOa, lineOas.filter(({ isActive }) => isActive).length, "/stores?status=active"],
-                  [text.connectionIssues, lineOas.filter(({ connectionStatus }) => connectionStatus === "ERROR" || connectionStatus === "NOT_CONFIGURED").length, "/stores?status=error"],
-                  [text.messagesToday, lineOas.reduce((sum, account) => sum + account.messagesReceivedToday, 0), "/chats"],
-                  [text.totalIncoming, dashboardSummary?.totalConversations ?? conversations.length, "/chats"],
-                  [text.followUpRequired, dashboardSummary?.countByStatus.FOLLOW_UP ?? followUpCount, "/chats?status=follow-up"],
-                ] as Array<[string, number, string]>).map(([label, value, href]) => (
-                  <Link key={String(label)} href={href} className="app-card block p-5 transition hover:-translate-y-0.5 hover:shadow-md">
-                    <p className="app-muted text-xs font-medium">{label}</p>
-                    <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-                  </Link>
-                ))}
-              </div>
-
-              <div className="app-card overflow-hidden">
-                <h2 className="border-b border-slate-200 p-5 font-semibold">{text.storeMonitoringOverview}</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs text-slate-500">
-                      <tr>{[text.stores, text.total, text.followUp, text.reminded, text.managerAcknowledged, text.actionCompleted, text.escalate, text.highestPriority, text.action].map((heading) => <th key={heading} className="px-4 py-3 font-medium">{heading}</th>)}</tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {storeMetrics.map((metric) => (
-                        <tr key={metric.storeId}>
-                          <td className="px-4 py-3 font-medium">{getStoreDisplayName(metric.store)}</td>
-                          <td className="px-4 py-3">{metric.total}</td><td className="px-4 py-3">{metric.followUp}</td><td className="px-4 py-3">{metric.reminded}</td><td className="px-4 py-3">{metric.acknowledged}</td><td className="px-4 py-3">{metric.completed}</td><td className={`px-4 py-3 ${metric.escalated ? "font-semibold text-red-700" : ""}`}>{metric.escalated}</td>
-                          <td className="px-4 py-3">{metric.priority === "High" ? text.highPriority : text.normalPriority}</td>
-                          <td className="px-4 py-3"><button onClick={() => openMonitoring({ store: metric.storeId })} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50">{text.openStore}</button></td>
-                        </tr>
-                      ))}
-                      {storeMetrics.length === 0 && (
-                        <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-500">{text.noDashboardData}</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 font-semibold">{text.mostDiscussedModels}</h2>
-                  <div className="space-y-4">{modelMetrics.map(({ model, count }) => { const percentage = Math.round((count / conversations.length) * 100); return <button key={model} onClick={() => openMonitoring({ model })} className="block w-full text-left"><div className="flex justify-between text-sm"><span className="font-medium">{model}</span><span>{count} · {percentage}%</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-green-500" style={{ width: `${percentage}%` }} /></div></button>; })}</div>
-                  {modelMetrics.length === 0 && <p className="text-sm text-slate-500">{text.noDashboardData}</p>}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 font-semibold">{text.topConversationTopics}</h2>
-                  <div className="space-y-3">{topicMetrics.map(({ topic, count }) => { const percentage = Math.round((count / conversations.length) * 100); return <button key={topic} onClick={() => openMonitoring({ topic })} className="flex w-full justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100"><span>{topic}</span><span>{count} · {percentage}%</span></button>; })}</div>
-                  {topicMetrics.length === 0 && <p className="text-sm text-slate-500">{text.noDashboardData}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 font-semibold">{text.storesRequiringAttention}</h2>
-                  <div className="space-y-3">{storeMetrics.filter(({ followUp, reminded, escalated }) => followUp || reminded || escalated).map((metric) => <div key={metric.storeId} className={`flex items-center justify-between rounded-lg border p-3 ${metric.escalated ? "border-red-200 bg-red-50" : "border-slate-200"}`}><div><p className="font-medium">{getStoreDisplayName(metric.store)}</p><p className="mt-1 text-xs text-slate-500">{text.followUp}: {metric.followUp} · {text.reminded}: {metric.reminded} · {text.escalate}: {metric.escalated}</p></div><button onClick={() => openMonitoring({ store: metric.storeId })} className="rounded-md bg-slate-900 px-3 py-1.5 text-xs text-white">{text.openStore}</button></div>)}</div>
-                  {!storeMetrics.some(({ followUp, reminded, escalated }) => followUp || reminded || escalated) && <p className="text-sm text-slate-500">{text.noDashboardData}</p>}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 font-semibold">{text.recentMonitoringActivity}</h2>
-                  <div className="space-y-2">{recentActivity.map((activity) => <button key={activity.id} onClick={() => openMonitoring({ conversationId: activity.conversation.id })} className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><div><p className="text-sm font-medium">{activity.conversation.customer}</p><p className="text-xs text-slate-500">{getStoreDisplayName(activity.conversation.store)} · {activity.actionType === "messageReceived" ? text.messageReceivedActivity : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? `${text.bmReplyStatusChangedTo} ${bmReplyStatusLabels[language][activity.bmReplyStatus]}` : activity.status ? getStatusLabel(language, activity.status) : ""}</p></div><time className="text-xs text-slate-400" dateTime={activity.timestamp}>{formatRelativeTime(activity.timestamp, language)}</time></button>)}</div>
-                  {recentActivity.length === 0 && <p className="text-sm text-slate-500">{text.noActivity}</p>}
-                </div>
-              </div>
-            </div>
-          </section>
+              <DashboardView
+                language={language}
+                lineOas={lineOas}
+                dashboardSummary={dashboardSummary}
+                bmSummaryData={bmSummaryData}
+                getStoreDisplayName={getStoreDisplayName}
+                onOpenStore={(storeId) => openMonitoring({ store: storeId })}
+                lastUpdatedAt={lastUpdatedAt}
+              />
+            </section>
           </PageContainer>
         ) : initialSection === "follower-insights" ? (
           <PageContainer variant="readable">
