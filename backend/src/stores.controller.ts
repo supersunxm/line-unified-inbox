@@ -9,17 +9,86 @@ type PermanentDeleteBody = { confirmation?: string };
 @Controller("stores")
 export class StoresController {
   constructor(private readonly prisma: PrismaService, private readonly operations: OperationsService) {}
-  @Get() list(@Query("showArchived") showArchived?: string) { return this.prisma.store.findMany({ where: showArchived === "true" ? undefined : { archivedAt: null }, orderBy: { name: "asc" }, include: { _count: { select: { conversations: true, lineOfficialAccounts: true } } } }); }
+  @Get() async list(@Query("showArchived") showArchived?: string) {
+    const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
+    const stores = await this.prisma.store.findMany({
+      where: showArchived === "true" ? undefined : { archivedAt: null },
+      orderBy: { name: "asc" },
+      include: { _count: { select: { conversations: true, lineOfficialAccounts: true } } },
+    });
+
+    const operationalGroups = await this.prisma.conversation.groupBy({
+      by: ["storeId", "bmReplyStatus"],
+      where: { store: { archivedAt: null }, ...resetFilter },
+      _count: { _all: true },
+    });
+
+    const storeCountsMap = new Map<string, { total: number; notReplied: number }>();
+    for (const item of operationalGroups) {
+      const current = storeCountsMap.get(item.storeId) ?? { total: 0, notReplied: 0 };
+      const count = item._count._all;
+      current.total += count;
+      if (item.bmReplyStatus === "NOT_REPLIED") {
+        current.notReplied += count;
+      }
+      storeCountsMap.set(item.storeId, current);
+    }
+
+    return stores.map((store) => {
+      const counts = storeCountsMap.get(store.id) ?? { total: 0, notReplied: 0 };
+      return {
+        ...store,
+        _count: {
+          ...store._count,
+          conversations: store._count.conversations, // historical total
+          operationalConversationCount: counts.total, // post-reset operational total (all BM statuses)
+          operationalNotRepliedCount: counts.notReplied, // post-reset NOT_REPLIED waiting count
+        },
+      };
+    });
+  }
+
   @Get(":id") async get(@Param("id") id: string) {
     const store = await this.prisma.store.findUnique({ where: { id }, include: { lineOfficialAccounts: true } });
     if (!store) throw new NotFoundException("Store not found");
     return store;
   }
+
   @Get(":id/summary") async summary(@Param("id") id: string) {
     const store = await this.get(id);
     const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
-    const groups = await this.prisma.conversation.groupBy({ by: ["followUpStatus"], where: { storeId: id, ...resetFilter }, _count: true });
-    return { store, total: groups.reduce((sum, group) => sum + group._count, 0), byStatus: Object.fromEntries(groups.map((group) => [group.followUpStatus, group._count])) };
+
+    const groups = await this.prisma.conversation.groupBy({
+      by: ["bmReplyStatus"],
+      where: { storeId: id, ...resetFilter },
+      _count: { _all: true },
+    });
+
+    let notReplied = 0;
+    let notifiedBm = 0;
+    let replied = 0;
+
+    for (const group of groups) {
+      const count = group._count._all;
+      if (group.bmReplyStatus === "NOT_REPLIED") notReplied = count;
+      else if (group.bmReplyStatus === "NOTIFIED_BM") notifiedBm = count;
+      else if (group.bmReplyStatus === "REPLIED") replied = count;
+    }
+
+    const total = notReplied + notifiedBm + replied;
+
+    return {
+      store,
+      total,
+      notReplied,
+      notifiedBm,
+      replied,
+      byStatus: {
+        NOT_REPLIED: notReplied,
+        NOTIFIED_BM: notifiedBm,
+        REPLIED: replied,
+      },
+    };
   }
   private async deletionPreview(id: string) {
     const store = await this.prisma.store.findUnique({ where: { id }, include: { lineOfficialAccounts: { select: { id: true, isActive: true, archivedAt: true } } } });

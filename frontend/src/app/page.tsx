@@ -1447,7 +1447,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         storeResponse.filter((store) => !store.archivedAt).map((store) => ({
           id: store.id,
           name: store.name,
-          waiting: store._count?.conversations ?? 0,
+          waiting: store._count?.operationalNotRepliedCount ?? 0,
           lineOaCount: store._count?.lineOfficialAccounts ?? 0,
         })),
       );
