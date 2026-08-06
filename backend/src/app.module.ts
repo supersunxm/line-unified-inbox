@@ -22,9 +22,12 @@ import { FriendSourceLinksModule } from "./friend-source-links/friend-source-lin
 import { ClassificationInsightsModule } from "./classification-insights/classification-insights.module";
 import { TranslationModule } from "./translation/translation.module";
 
+import { DashboardAnalyticsService } from "./dashboard-analytics.service";
+import { OperationReportService } from "./operation-report.service";
+
 @Module({
   imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
-  providers: [ConversationsService],
+  providers: [ConversationsService, DashboardAnalyticsService, OperationReportService],
 })
 export class AppModule {}

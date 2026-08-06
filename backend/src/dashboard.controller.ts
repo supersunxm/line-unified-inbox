@@ -1,11 +1,63 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query, Req, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "./prisma.service";
-import { Prisma } from "@prisma/client";
 import { OperationsService } from "./operations/operations.service";
+import { AnalyticsPeriod, DashboardAnalyticsService, UserRolePermission } from "./dashboard-analytics.service";
+import { OperationReportService } from "./operation-report.service";
+import { Prisma } from "@prisma/client";
 
 @Controller("dashboard")
 export class DashboardController {
-  constructor(private readonly prisma: PrismaService, private readonly operations: OperationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly operations: OperationsService,
+    private readonly analytics: DashboardAnalyticsService,
+    private readonly reportService: OperationReportService,
+  ) {}
+
+  @Get("analytics")
+  async getAnalytics(
+    @Query("period") period?: AnalyticsPeriod,
+    @Query("role") role?: UserRolePermission,
+    @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
+    @Query("targetStoreId") targetStoreId?: string,
+    @Req() req?: any,
+  ) {
+    const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const userRole: UserRolePermission = role || req?.user?.role || "HEAD_OFFICE";
+
+    const allowedStoreIds = allowedStoreIdsRaw
+      ? allowedStoreIdsRaw.split(",").map((s) => s.trim())
+      : req?.user?.allowedStoreIds ?? undefined;
+
+    // RBAC Security Enforcement (Phase 4): 403 Forbidden if accessing unauthorized store
+    if (userRole === "STORE_MANAGER" && targetStoreId && allowedStoreIds && !allowedStoreIds.includes(targetStoreId)) {
+      throw new ForbiddenException("Unauthorized: STORE_MANAGER cannot access other stores");
+    }
+
+    if (userRole === "AREA_MANAGER" && targetStoreId && allowedStoreIds && !allowedStoreIds.includes(targetStoreId)) {
+      throw new ForbiddenException("Unauthorized: AREA_MANAGER cannot access stores outside assigned region");
+    }
+
+    return this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds);
+  }
+
+  @Get("report/daily")
+  async getDailyReport(
+    @Query("period") period?: AnalyticsPeriod,
+    @Query("role") role?: UserRolePermission,
+    @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
+    @Req() req?: any,
+  ) {
+    const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const userRole: UserRolePermission = role || req?.user?.role || "HEAD_OFFICE";
+
+    const allowedStoreIds = allowedStoreIdsRaw
+      ? allowedStoreIdsRaw.split(",").map((s) => s.trim())
+      : req?.user?.allowedStoreIds ?? undefined;
+
+    return this.reportService.generateDailyReport(safePeriod, userRole, allowedStoreIds);
+  }
+
   @Get("summary")
   async summary() {
     const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
@@ -13,18 +65,13 @@ export class DashboardController {
     const historicalWhere = { store: { archivedAt: null } } as const;
 
     const [total, byStatus, byPriority, stores, products, topics, recentActivity, storeByStatusGroups, storeByPriorityGroups] = await this.prisma.$transaction([
-      // operational counts
       this.prisma.conversation.count({ where: operationalWhere }),
       this.prisma.conversation.groupBy({ by: ["followUpStatus"], where: operationalWhere, _count: true, orderBy: { followUpStatus: "asc" } }),
       this.prisma.conversation.groupBy({ by: ["priority"], where: operationalWhere, _count: true, orderBy: { priority: "asc" } }),
-      // stores list (no conversations included)
       this.prisma.store.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true } }),
-      // historical analytics (no reset filter)
       this.prisma.conversationProduct.groupBy({ by: ["productModelId"], where: { conversation: historicalWhere }, _count: true, orderBy: { _count: { productModelId: "desc" } } }),
       this.prisma.conversationTopic.groupBy({ by: ["topicId"], where: { conversation: historicalWhere }, _count: true, orderBy: { _count: { topicId: "desc" } } }),
-      // operational recent activity
       this.prisma.activityHistory.findMany({ where: { conversation: operationalWhere }, take: 10, orderBy: { createdAt: "desc" }, include: { conversation: { include: { customer: true, store: true } } } }),
-      // per-store operational groupings used to build storeMonitoring
       this.prisma.conversation.groupBy({ by: ["storeId", "followUpStatus"], where: operationalWhere, _count: true, orderBy: { storeId: "asc" } }),
       this.prisma.conversation.groupBy({ by: ["storeId", "priority"], where: operationalWhere, _count: true, orderBy: { storeId: "asc" } }),
     ]);

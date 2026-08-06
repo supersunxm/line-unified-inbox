@@ -51,6 +51,202 @@ export type BmReplyStatusSummaryResponse = {
     oldestWaitingMinutes?: number;
   }>;
 };
+export type StorePerformanceRow = {
+  rank: number;
+  storeId: string;
+  storeName: string;
+  messages: number;
+  replied: number;
+  bmNotified: number;
+  pending: number;
+  responseRate24h: number;
+  networkAvgResponseRate24h: number;
+  gapVsNetworkAvg: number;
+  avgResponseMinutes: number;
+  followerGrowth: number;
+  performanceScore: number;
+  status: "Excellent" | "Need Attention" | "Improve";
+};
+
+export type BestPracticeStoreDetail = StorePerformanceRow & {
+  reasons: string[];
+};
+
+export type NeedImprovementStoreDetail = StorePerformanceRow & {
+  issues: string[];
+  recommendation: string;
+};
+
+export type NeedActionStoreItem = {
+  storeId: string;
+  storeName: string;
+  pending: number;
+  responseRate: number;
+  messages: number;
+  severity: "HIGH" | "MEDIUM";
+  problem: string;
+  impact: string;
+  recommendedAction: string;
+  status: "OPEN" | "WAITING_BM" | "BM_REPLIED" | "RESOLVED";
+  priorityScore: number;
+  reasons: string[];
+};
+
+export type SlaRiskPredictionItem = {
+  storeId: string;
+  storeName: string;
+  currentWaitingHours: number;
+  expectedBreachHours: number;
+  riskLevel: "HIGH" | "MEDIUM" | "LOW";
+  recommendation: string;
+};
+
+export type AdminActivityLogItem = {
+  timestamp: string;
+  admin: string;
+  action: string;
+  storeName: string;
+  status: string;
+};
+
+export type DataQualityIndicator = {
+  status: "Healthy" | "Warning" | "Critical";
+  conversationCount: number;
+  storeCount: number;
+  lastUpdated: string;
+  warnings: string[];
+};
+
+export type ProductDemandCorrelationItem = {
+  productModelId: string;
+  productName: string;
+  topTopicName: string;
+  count: number;
+  percentage: number;
+};
+
+export type StoreQuickViewData = {
+  storeId: string;
+  storeName: string;
+  messages: number;
+  answered: number;
+  responseRate24h: number;
+  pending: number;
+  topCustomerNeed: string;
+  peakWindow: string;
+  recommendation: string;
+  customerIssues: Array<{ name: string; percentage: number }>;
+  timeline: {
+    customerMessageTime: string;
+    bmNotificationTime: string;
+    storeReplyTime: string;
+    responseTimeMinutes: number;
+  };
+  actionHistory: Array<{ time: string; event: string }>;
+};
+
+export type OperationEfficiencyData = {
+  opened: number;
+  resolved: number;
+  closureRate: number;
+  averageResolutionTime: string;
+};
+
+export type DashboardAnalyticsResponse = {
+  period: "today" | "7d" | "30d";
+  periodStartDate: string;
+  userRolePermissions?: {
+    role: string;
+    isHeadOffice: boolean;
+    canNotifyBm: boolean;
+    canViewAllStores: boolean;
+  };
+  dataQuality: DataQualityIndicator;
+  dailySummary: {
+    networkStatus: "🟢 Healthy" | "⚠️ Attention Required";
+    activeStoresCount: number;
+    totalMessagesToday: number;
+    slaAchievementRate: number;
+    storesNeedAttentionCount: number;
+    lastUpdatedTime: string;
+  };
+  operationEfficiency: OperationEfficiencyData;
+  operationHealth: {
+    responseRate24h: number;
+    count24hReplied: number;
+    totalMessagesToday: number;
+    responseRateDiffYesterday: number;
+    breakdown: {
+      compositeScore: number;
+      responseSlaScore: number;
+      pendingControlScore: number;
+      escalationControlScore: number;
+      growthScore: number;
+    };
+  };
+  actionWorkflowStatus: {
+    open: number;
+    waitingBm: number;
+    bmReplied: number;
+    resolved: number;
+    completionRate: number;
+  };
+  actionStatus: {
+    resolved: number;
+    waitingBm: number;
+    pendingReview: number;
+    completionRate: number;
+  };
+  summaryCards: {
+    messagesToday: number;
+    messagesYesterday: number;
+    messagesDiffPct: number;
+    repliedCount: number;
+    repliedPercentage: number;
+    bmNotifiedCount: number;
+    bmNotifiedPercentage: number;
+    pendingCount: number;
+    responseRate24h: number;
+    responseRateDiffYesterday: number;
+    count24hReplied: number;
+    followerGrowth: {
+      totalFriends: number;
+      addedToday: number;
+      blockedToday: number;
+      netToday: number;
+    };
+  };
+  responseAnalytics: {
+    avgResponseMinutes: number;
+    medianResponseMinutes: number;
+    buckets: {
+      under4h: number;
+      between4and12h: number;
+      between12and24h: number;
+      over24h: number;
+    };
+  };
+  trend7Days: Array<{ date: string; label: string; count: number; replied: number }>;
+  topTopics: Array<{ topicId: string; name: string; count: number; percentage: number }>;
+  topProducts: Array<{ productModelId: string; name: string; count: number; percentage: number }>;
+  customerDemandProductCorrelation: ProductDemandCorrelationItem[];
+  peakHourAnalysis: {
+    peakWindow: string;
+    peakTrafficCount: number;
+    hourlyDistribution: number[];
+    topStores: Array<{ storeId: string; storeName: string; count: number }>;
+    recommendation: string;
+  };
+  needActionQueue: NeedActionStoreItem[];
+  slaRiskPrediction: SlaRiskPredictionItem[];
+  adminActivity: AdminActivityLogItem[];
+  storeQuickViews: Record<string, StoreQuickViewData>;
+  storeRanking: StorePerformanceRow[];
+  bestPracticeStore: BestPracticeStoreDetail | null;
+  needImprovementStore: NeedImprovementStoreDetail | null;
+  operationalInsights: string[];
+};
+
 export type StorePrioritySummaryResponse = {
   stores: Array<{
     id: string;

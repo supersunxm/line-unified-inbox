@@ -44,6 +44,6 @@ test("store priority table and scoring formula are consistent across components"
 
 test("operational reset logic is wired to bmReplyStatusSummary and storePrioritySummary", () => {
   assert.match(pageCode, /api\.bmReplyStatusSummary\(\)/);
-  assert.match(dashboardViewCode, /api\.storePrioritySummary\(\)/);
+  assert.match(dashboardViewCode, /api\.dashboardAnalytics\(/);
 });
 

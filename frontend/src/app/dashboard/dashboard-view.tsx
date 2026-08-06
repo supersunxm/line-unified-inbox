@@ -1,145 +1,107 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import type { BmReplyStatusSummaryResponse, DashboardSummaryResponse, LineOfficialAccountResponse, StorePrioritySummaryResponse } from "@/types/api";
-import { KpiCard } from "./kpi-card";
-import { SlaDonut } from "./sla-donut";
-import { StorePriorityTable } from "./store-priority-table";
+import type { DashboardAnalyticsResponse, LineOfficialAccountResponse } from "@/types/api";
+
+import { DashboardDataQualityCard } from "./dashboard-data-quality";
+import { OperationHealthScoreHero } from "./operation-health-score";
+import { OperationEfficiencyCard } from "./operation-efficiency";
+import { NeedActionQueueCard } from "./need-action-queue";
+import { SlaRiskPredictionCard } from "./sla-risk-prediction";
+import { ActionStatusCard } from "./action-status";
+import { AdminActivityHistoryCard } from "./admin-activity-history";
+import { StoreQuickViewDrawer } from "./store-quick-view-drawer";
+
+import { ExecutiveKpiCards } from "./executive-kpi";
+import { MessageOverviewCard } from "./message-overview";
+import { ResponseRateCard } from "./response-rate-card";
+import { CustomerDemandCard } from "./topic-analysis";
+import { PeakHourAnalysisCard } from "./peak-hour-analysis";
+import { StorePerformanceTable } from "./store-performance-table";
+import { BestPracticeCard } from "./best-practice-card";
+import { ImprovementCard } from "./improvement-card";
+import { FollowerGrowthCard } from "./follower-growth";
+import { OperationalInsightCard } from "./ai-insight-card";
 
 type Language = "th" | "en" | "zh";
 
+// Target workspace route: /stores
 interface DashboardViewProps {
   language: Language;
-  lineOas: LineOfficialAccountResponse[];
-  dashboardSummary: DashboardSummaryResponse | null;
-  bmSummaryData: BmReplyStatusSummaryResponse;
+  lineOas?: LineOfficialAccountResponse[];
+  dashboardSummary?: unknown;
+  bmSummaryData?: unknown;
   getStoreDisplayName: (name: string) => string;
   onOpenStore: (storeId: string) => void;
   lastUpdatedAt: Date | null;
 }
 
-// ─── Derived helpers ─────────────────────────────────────────────────────────
-
-function formatUpdatedAt(date: Date | null): string {
-  if (!date) return "";
-  return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtNum(n: number): string {
-  return n.toLocaleString();
-}
-
-// Build donut slices from store SLA data
-function buildSlaSlices(stores: StorePrioritySummaryResponse["stores"]) {
-  const counts = { s0: 0, s30: 0, s60: 0, s120: 0 };
-  for (const s of stores) {
-    if (s.notReplied === 0) continue;
-    const m = s.oldestWaitingMinutes ?? 0;
-    if (m < 30) counts.s0++;
-    else if (m < 60) counts.s30++;
-    else if (m < 120) counts.s60++;
-    else counts.s120++;
-  }
-  return {
-    slices: [
-      { label: "< 30 min",  count: counts.s0,   color: "bg-emerald-500", strokeColor: "#10b981" },
-      { label: "30–60 min", count: counts.s30,  color: "bg-amber-400",   strokeColor: "#fbbf24" },
-      { label: "1–2 hours", count: counts.s60,  color: "bg-orange-500",  strokeColor: "#f97316" },
-      { label: "> 2 hours", count: counts.s120, color: "bg-red-500",     strokeColor: "#ef4444" },
-    ],
-    total: counts.s0 + counts.s30 + counts.s60 + counts.s120,
-    criticalCount: counts.s120,
-  };
-}
-
-// Derive top/bottom 5 stores by response performance
-function derivePerformanceLists(stores: StorePrioritySummaryResponse["stores"]) {
-  const ranked = [...stores]
-    .filter((s) => s.notReplied + s.notifiedBm + s.replied > 0)
-    .map((s) => {
-      const total = s.notReplied + s.notifiedBm + s.replied;
-      const responseRate = total > 0 ? Math.round((s.replied / total) * 100) : 0;
-      return { ...s, total, responseRate };
-    });
-
-  const top = [...ranked].sort((a, b) => b.responseRate - a.responseRate).slice(0, 5);
-  const bottom = [...ranked].sort((a, b) => a.responseRate - b.responseRate).slice(0, 5);
-  return { top, bottom };
-}
-
-// ─── Period selector ─────────────────────────────────────────────────────────
-
-type Period = "live" | "7d" | "30d";
-const PERIOD_LABELS: Record<Period, string> = { live: "Live", "7d": "7 Days", "30d": "30 Days" };
-
-// ─── Dashboard View ──────────────────────────────────────────────────────────
+type Period = "today" | "7d" | "30d";
+const PERIOD_LABELS: Record<Period, string> = { today: "Today", "7d": "7 Days", "30d": "30 Days" };
 
 export function DashboardView({
   language,
-  lineOas,
-  dashboardSummary,
-  bmSummaryData,
   getStoreDisplayName,
   onOpenStore,
   lastUpdatedAt,
 }: DashboardViewProps) {
-  const [period, setPeriod] = useState<Period>("live");
-  const [priorityData, setPriorityData] = useState<StorePrioritySummaryResponse | null>(null);
-  const [priorityLoading, setPriorityLoading] = useState(true);
+  const [period, setPeriod] = useState<Period>("today");
+  const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
-  const [lastPriorityFetchAt, setLastPriorityFetchAt] = useState<Date | null>(null);
   const [fetchError, setFetchError] = useState(false);
+  const [lastFetchAt, setLastFetchAt] = useState<Date | null>(null);
+
+  const [activeQuickViewStoreId, setActiveQuickViewStoreId] = useState<string | null>(null);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
 
-  const loadPriorityData = useCallback(async () => {
-    setPriorityLoading(true);
+  const loadAnalytics = useCallback(async (p: Period) => {
+    setLoading(true);
     try {
-      const data = await api.storePrioritySummary();
-      setPriorityData(data);
-      setLastPriorityFetchAt(new Date());
+      const data = await api.dashboardAnalytics(p);
+      setAnalytics(data);
+      setLastFetchAt(new Date());
       setFetchError(false);
     } catch {
       setFetchError(true);
     } finally {
-      setPriorityLoading(false);
+      setLoading(false);
       setRefreshCountdown(60);
     }
   }, []);
 
-  // Update `nowTimestamp` every 10s to dynamically evaluate stale threshold
   useEffect(() => {
     const timer = setInterval(() => setNowTimestamp(Date.now()), 10_000);
     return () => clearInterval(timer);
   }, []);
 
-  // Handle visibility change: refresh immediately when operator returns to tab after backgrounding
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchLatestData() {
+    async function fetchLatest() {
       try {
-        const data = await api.storePrioritySummary();
+        const data = await api.dashboardAnalytics(period);
         if (!cancelled) {
-          setPriorityData(data);
-          setLastPriorityFetchAt(new Date());
+          setAnalytics(data);
+          setLastFetchAt(new Date());
           setFetchError(false);
-          setPriorityLoading(false);
+          setLoading(false);
           setRefreshCountdown(60);
         }
       } catch {
         if (!cancelled) {
           setFetchError(true);
-          setPriorityLoading(false);
+          setLoading(false);
         }
       }
     }
 
-    void fetchLatestData();
+    void fetchLatest();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void fetchLatestData();
+        void fetchLatest();
       }
     };
 
@@ -148,7 +110,7 @@ export function DashboardView({
     const interval = setInterval(() => {
       setRefreshCountdown((prev) => {
         if (prev <= 1) {
-          void fetchLatestData();
+          void fetchLatest();
           return 60;
         }
         return prev - 1;
@@ -160,412 +122,248 @@ export function DashboardView({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [period]);
 
+  const handlePeriodChange = (p: Period) => {
+    setPeriod(p);
+  };
 
+  const formattedUpdatedAt = (lastFetchAt || lastUpdatedAt)?.toLocaleTimeString("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  // Data is considered stale if last successful fetch was over 3 minutes ago
-  const effectiveLastUpdate = lastPriorityFetchAt ?? lastUpdatedAt;
+  const effectiveLastUpdate = lastFetchAt || lastUpdatedAt;
   const dataAgeMs = effectiveLastUpdate ? nowTimestamp - effectiveLastUpdate.getTime() : 0;
   const isStaleData = Boolean(effectiveLastUpdate && dataAgeMs > 180_000);
 
-
-
-  // ── KPI values ──────────────────────────────────────────────────────────────
-  const totalWaiting = bmSummaryData.overview.notReplied;
-  const totalNotifiedBm = bmSummaryData.overview.notifiedBm;
-  const totalReplied = bmSummaryData.overview.replied;
-  const totalConversations = totalWaiting + totalNotifiedBm + totalReplied;
-  const slaRate = totalConversations > 0 ? Math.round((totalReplied / totalConversations) * 100) : 0;
-
-  const activeLineOas = lineOas.filter((l) => l.isActive);
-  const errorLineOas = lineOas.filter((l) => l.connectionStatus === "ERROR" || l.connectionStatus === "NOT_CONFIGURED");
-  const messagesNow = lineOas.reduce((s, l) => s + l.messagesReceivedToday, 0);
-
-  // ── SLA donut data ───────────────────────────────────────────────────────────
-  const { slices: slaSlices, total: sliceTotal, criticalCount } = useMemo(
-    () => buildSlaSlices(priorityData?.stores ?? []),
-    [priorityData],
-  );
-
-  // ── Performance lists ────────────────────────────────────────────────────────
-  const { top: topStores, bottom: bottomStores } = useMemo(
-    () => derivePerformanceLists(priorityData?.stores ?? []),
-    [priorityData],
-  );
-
-  const totalLineOaCount = lineOas.length;
-  const activeCount = activeLineOas.length;
-
-  const criticalLabel = language === "th" ? "ร้านรอเกิน 2 ชม." : "stores waiting > 2h";
+  const activeStoreQuickViewData = activeQuickViewStoreId && analytics?.storeQuickViews
+    ? analytics.storeQuickViews[activeQuickViewStoreId]
+    : null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-full bg-[var(--background)] p-4 sm:p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
+      {/* ─── Header Navigation Bar & Daily Summary Header ─────────────────── */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
-            Operations Command Center
-          </h1>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-            <span>{effectiveLastUpdate ? `Updated ${formatUpdatedAt(effectiveLastUpdate)}` : "Loading…"}</span>
-            <span>·</span>
-            <button
-              type="button"
-              onClick={() => void loadPriorityData()}
-              className="inline-flex items-center gap-1 hover:text-[var(--foreground)] transition-colors"
-              title="Click to refresh now"
-            >
-              {priorityLoading ? (
-                <span className="animate-spin">🔄</span>
-              ) : (
-                <span>Auto-refresh in {refreshCountdown}s</span>
-              )}
-            </button>
-            {fetchError && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 font-semibold text-red-400">
-                ⚠️ Connection issue
-              </span>
-            )}
-            {!fetchError && isStaleData && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-400">
-                ⚠️ Data stale ({Math.floor(dataAgeMs / 60_000)}m ago)
-              </span>
-            )}
+          <div className="flex items-center gap-2.5">
+            <span className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-600 text-white tracking-wider uppercase">OPPO</span>
+            <h1 className="text-xl font-extrabold text-[var(--foreground)] tracking-tight">
+              Daily Operation Control Center — Network Operations & Performance
+            </h1>
           </div>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">
+            Production Readiness Edition: Data Trust, SLA Risk Prediction, Action Priority Score, and Operational Accountability.
+          </p>
 
+          {/* Quick Summary Pill Bar */}
+          {analytics?.dailySummary && (
+            <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
+              <span className="px-2.5 py-0.5 font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                Network Status: {analytics.dailySummary.networkStatus}
+              </span>
+              <span className="text-[var(--muted-foreground)] font-medium">•</span>
+              <span className="font-semibold text-[var(--foreground)]">{analytics.dailySummary.activeStoresCount} Stores Active</span>
+              <span className="text-[var(--muted-foreground)] font-medium">•</span>
+              <span className="font-semibold text-[var(--foreground)]">{analytics.dailySummary.totalMessagesToday} Messages Today</span>
+              <span className="text-[var(--muted-foreground)] font-medium">•</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{analytics.dailySummary.slaAchievementRate}% SLA Achievement</span>
+              <span className="text-[var(--muted-foreground)] font-medium">•</span>
+              <span className="font-bold text-rose-600 dark:text-rose-400">{analytics.dailySummary.storesNeedAttentionCount} Stores Need Attention</span>
+            </div>
+          )}
         </div>
 
-        {/* Period selector */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
-            {(["live", "7d", "30d"] as Period[]).map((p) => (
+        <div className="flex items-center gap-3 self-start md:self-center">
+          {/* Period Selector Tabs */}
+          <div className="flex items-center p-1 rounded-lg border border-[var(--border)] bg-[var(--accent)] text-xs">
+            {(["today", "7d", "30d"] as Period[]).map((p) => (
               <button
                 key={p}
                 type="button"
-                onClick={() => setPeriod(p)}
-                className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition-all ${
+                onClick={() => handlePeriodChange(p)}
+                className={`px-3 py-1 rounded-md font-semibold transition-all ${
                   period === p
-                    ? "bg-blue-600 text-white shadow"
-                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                    ? "bg-[var(--surface)] text-emerald-600 dark:text-emerald-400 shadow-sm"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {PERIOD_LABELS[p]}
               </button>
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* ── KPI Row ─────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          label="SLA Breached"
-          value={fmtNum(criticalCount)}
-          subtitle={criticalCount > 0 ? `${criticalCount} stores waiting > 2h` : "Zero breaches"}
-          variant={criticalCount > 5 ? "critical" : criticalCount > 0 ? "warning" : "healthy"}
-          icon={criticalCount > 0 ? "🔥" : "✅"}
-        />
-        <KpiCard
-          label="Unanswered Chats"
-          value={fmtNum(totalWaiting)}
-          subtitle="Awaiting store response"
-          variant={totalWaiting > 50 ? "critical" : totalWaiting > 10 ? "warning" : "healthy"}
-          icon="⏳"
-          onClick={() => onOpenStore("all")}
-        />
-        <KpiCard
-          label="BM Escalated"
-          value={fmtNum(totalNotifiedBm)}
-          subtitle="Pending manager action"
-          variant={totalNotifiedBm > 20 ? "warning" : "neutral"}
-          icon="📣"
-        />
-        <KpiCard
-          label="Response Rate"
-          value={`${slaRate}%`}
-          subtitle={`${fmtNum(totalReplied)} answered today`}
-          variant={slaRate >= 90 ? "healthy" : slaRate >= 70 ? "warning" : "critical"}
-          icon="✓"
-        />
-        <KpiCard
-          label="Messages Today"
-          value={fmtNum(messagesNow)}
-          subtitle={`Across ${activeCount} active OAs`}
-          variant="info"
-          icon="💬"
-        />
-        <KpiCard
-          label="LINE OA Health"
-          value={`${activeCount}/${totalLineOaCount}`}
-          subtitle={errorLineOas.length > 0 ? `${errorLineOas.length} connection errors` : "All accounts healthy"}
-          variant={errorLineOas.length > 0 ? "critical" : "healthy"}
-          icon="📡"
-          href="/stores"
-        />
-      </div>
-
-
-      {/* ── Operational Row ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-
-        {/* Store Priority Ranking — takes 2/3 width */}
-        <div className="lg:col-span-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6 shadow-lg">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-[var(--foreground)]">Store Priority Ranking</h2>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                Sorted by: volume × SLA urgency score
-              </p>
-            </div>
-            {priorityLoading && (
-              <span className="text-xs text-[var(--muted)] animate-pulse">Loading…</span>
-            )}
-          </div>
-          <StorePriorityTable
-            stores={priorityData?.stores ?? []}
-            onOpenStore={onOpenStore}
-            maxRows={10}
-            language={language}
-            getStoreDisplayName={getStoreDisplayName}
-            isLoading={priorityLoading}
-          />
-        </div>
-
-        {/* SLA Distribution Donut — takes 1/3 width */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6 shadow-lg">
-          <div className="mb-5">
-            <h2 className="font-semibold text-[var(--foreground)]">SLA Distribution</h2>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">Stores by oldest waiting time</p>
-          </div>
-          <SlaDonut
-            slices={slaSlices}
-            total={sliceTotal}
-            criticalCount={criticalCount}
-            criticalLabel={criticalLabel}
-            isLoading={priorityLoading}
-          />
-        </div>
-      </div>
-
-
-      {/* ── Overview + Activity Row ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
-        {/* Overview stats */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
-          <h2 className="mb-5 font-semibold text-[var(--foreground)]">BM Response Overview</h2>
-          <div className="space-y-4">
-            {/* NOT_REPLIED bar */}
-            {[
-              { label: "Not Replied", value: totalWaiting, color: "bg-slate-500", max: totalConversations },
-              { label: "BM Notified", value: totalNotifiedBm, color: "bg-purple-500", max: totalConversations },
-              { label: "Replied", value: totalReplied, color: "bg-emerald-500", max: totalConversations },
-            ].map(({ label, value, color, max }) => {
-              const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-              return (
-                <div key={label}>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-[var(--muted)]">{label}</span>
-                    <span className="font-semibold tabular-nums text-[var(--foreground)]">
-                      {fmtNum(value)} <span className="text-[var(--muted)]">({pct}%)</span>
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[var(--hover)]">
-                    <div
-                      className={`h-2 rounded-full ${color} transition-all duration-700`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Per-store BM breakdown top 5 */}
-          {bmSummaryData.stores.length > 0 && (
-            <div className="mt-6">
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Top waiting stores
-              </p>
-              <div className="space-y-1.5">
-                {[...bmSummaryData.stores]
-                  .filter((s) => s.notReplied > 0)
-                  .sort((a, b) => (b.oldestWaitingMinutes ?? 0) - (a.oldestWaitingMinutes ?? 0))
-                  .slice(0, 5)
-                  .map((store) => (
-                    <button
-                      key={store.storeId}
-                      type="button"
-                      onClick={() => onOpenStore(store.storeId)}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs hover:bg-[var(--hover)] transition-colors"
-                    >
-                      <span className="truncate font-medium text-[var(--foreground)]">
-                        {getStoreDisplayName(store.storeName)}
-                      </span>
-                      <div className="ml-2 flex shrink-0 items-center gap-1.5">
-                        <span className="rounded-full bg-slate-700/50 px-2 py-0.5 font-semibold tabular-nums text-[var(--foreground)]">
-                          {store.notReplied}
-                        </span>
-                        {(store.oldestWaitingMinutes ?? 0) > 0 && (
-                          <span className={`text-xs font-semibold ${
-                            (store.oldestWaitingMinutes ?? 0) >= 120 ? "text-red-400" : "text-amber-400"
-                          }`}>
-                            {store.oldestWaitingMinutes}m
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Store Performance */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
-          <h2 className="mb-5 font-semibold text-[var(--foreground)]">Store Performance</h2>
-
-          {/* Best performers */}
-          <div className="mb-5">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-emerald-500">
-              ✓ Top Performing
-            </p>
-            <div className="space-y-2">
-              {topStores.map((store, i) => (
-                <button
-                  key={store.id}
-                  type="button"
-                  onClick={() => onOpenStore(store.id)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-[var(--hover)] transition-colors"
-                >
-                  <span className="w-5 text-center font-bold text-emerald-500">{i + 1}</span>
-                  <span className="flex-1 truncate font-medium text-[var(--foreground)]">
-                    {getStoreDisplayName(store.name).replace(/^OBS\s+/i, "").replace(/\s+By\s+.+$/i, "")}
-                  </span>
-                  <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-400">
-                    {store.responseRate}%
-                  </span>
-                </button>
-              ))}
-              {topStores.length === 0 && (
-                <p className="text-xs text-[var(--muted)]">No data available</p>
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-[var(--border)] pt-5">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-red-400">
-              ⚠ Needs Attention
-            </p>
-            <div className="space-y-2">
-              {bottomStores
-                .filter((s) => s.responseRate < 100)
-                .map((store, i) => (
-                  <button
-                    key={store.id}
-                    type="button"
-                    onClick={() => onOpenStore(store.id)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-[var(--hover)] transition-colors"
-                  >
-                    <span className="w-5 text-center font-bold text-red-400">{i + 1}</span>
-                    <span className="flex-1 truncate font-medium text-[var(--foreground)]">
-                      {getStoreDisplayName(store.name).replace(/^OBS\s+/i, "").replace(/\s+By\s+.+$/i, "")}
-                    </span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${
-                      store.responseRate < 50
-                        ? "bg-red-500/10 text-red-400"
-                        : "bg-amber-500/10 text-amber-400"
-                    }`}>
-                      {store.responseRate}%
-                    </span>
-                  </button>
-                ))}
-              {bottomStores.filter((s) => s.responseRate < 100).length === 0 && (
-                <p className="text-xs text-emerald-400">All stores at 100% response rate 🎉</p>
-              )}
-            </div>
+          {/* Auto Refresh Countdown Controls */}
+          <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] border-l border-[var(--border)] pl-3">
+            <span>Refreshes in {refreshCountdown}s</span>
+            {formattedUpdatedAt && <span>({formattedUpdatedAt})</span>}
+            <button
+              type="button"
+              onClick={() => void loadAnalytics(period)}
+              disabled={loading}
+              className="p-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] text-[var(--foreground)] transition-colors disabled:opacity-50"
+              title="Manual Refresh"
+            >
+              <svg className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* ── Customer Demand Row ─────────────────────────────────────────────── */}
-      {dashboardSummary && (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-lg">
-          <h2 className="mb-5 font-semibold text-[var(--foreground)]">Customer Demand</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-
-            {/* Top products */}
-            <div>
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Top Discussed Products
-              </p>
-              <div className="space-y-3">
-                {(dashboardSummary.mostDiscussedProductModels as Array<{ productModel: { name: string } | null; count: number }>)
-                  .filter((item) => item.productModel)
-                  .slice(0, 6)
-                  .map(({ productModel, count }, i) => {
-                    const total = dashboardSummary.totalConversations || 1;
-                    const pct = Math.round((count / total) * 100);
-                    return (
-                      <div key={i}>
-                        <div className="mb-1 flex justify-between text-xs">
-                          <span className="font-medium text-[var(--foreground)]">{productModel!.name}</span>
-                          <span className="text-[var(--muted)]">{count} · {pct}%</span>
-                        </div>
-                        <div className="h-1.5 w-full rounded-full bg-[var(--hover)]">
-                          <div
-                            className="h-1.5 rounded-full bg-blue-500 transition-all duration-700"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                {(dashboardSummary.mostDiscussedProductModels as unknown[]).length === 0 && (
-                  <p className="text-xs text-[var(--muted)]">No product data yet</p>
-                )}
-              </div>
-            </div>
-
-            {/* Top topics */}
-            <div>
-              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Conversation Topics
-              </p>
-              <div className="space-y-2">
-                {(dashboardSummary.topConversationTopics as Array<{ topic: { name: string } | null; count: number }>)
-                  .filter((item) => item.topic)
-                  .slice(0, 6)
-                  .map(({ topic, count }, i) => {
-                    const total = dashboardSummary.totalConversations || 1;
-                    const pct = Math.round((count / total) * 100);
-                    return (
-                      <div key={i} className="flex items-center justify-between rounded-lg bg-[var(--surface-elevated)] px-3 py-2 text-xs">
-                        <span className="font-medium text-[var(--foreground)]">{topic!.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[var(--muted)]">{count}</span>
-                          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 font-semibold text-blue-400">
-                            {pct}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                {(dashboardSummary.topConversationTopics as unknown[]).length === 0 && (
-                  <p className="text-xs text-[var(--muted)]">No topic data yet</p>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Warnings & Error Banners */}
+      {isStaleData && (
+        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+          <span>⚠️ Data stale ({Math.floor(dataAgeMs / 60000)}m ago)</span>
+          <button type="button" onClick={() => void loadAnalytics(period)} className="underline hover:no-underline">Refresh Now</button>
         </div>
       )}
 
-      {/* ── Footer note ──────────────────────────────────────────────────────── */}
-      <p className="pb-4 text-center text-xs text-[var(--muted)]">
-        SLA score = unanswered customers x urgency multiplier (x1/x2/x4/x8/x16) &middot; Auto-refreshes every 60s
-      </p>
+      {fetchError && (
+        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold text-rose-700 dark:text-rose-400 flex items-center justify-between">
+          <span>⚠️ Connection issue — Failed to connect to analytics service. Retrying in {refreshCountdown}s...</span>
+          <button type="button" onClick={() => void loadAnalytics(period)} className="underline hover:no-underline">Retry Now</button>
+        </div>
+      )}
+
+      {/* Skeleton view */}
+      {loading && !analytics ? (
+        <div className="space-y-6 animate-pulse">
+          <div className="h-32 rounded-2xl bg-[var(--accent)]" />
+          <div className="h-48 rounded-xl bg-[var(--accent)]" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-24 rounded-xl bg-[var(--accent)]" />
+            ))}
+          </div>
+        </div>
+      ) : analytics ? (
+        <>
+          {/* HERO: Operation Health Score & Operation Efficiency KPI */}
+          <section aria-label="Operation Health Score" className="space-y-4">
+            <OperationHealthScoreHero health={analytics.operationHealth} language={language} />
+            <OperationEfficiencyCard efficiency={analytics.operationEfficiency} language={language} />
+          </section>
+
+          {/* ========================================================================= */}
+          {/* SECTION A: TODAY OPERATION (Real-Time Workload & Action Management)      */}
+          {/* ========================================================================= */}
+          <section aria-label="Today Operation Control Center" className="space-y-6 pt-2">
+            <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
+              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-rose-600 text-white uppercase tracking-wider">
+                ⚡ TODAY OPERATION
+              </span>
+              <h2 className="text-base font-extrabold text-[var(--foreground)] tracking-tight">
+                Real-Time Workload Management, SLA Risk Prediction & Intervention Queue
+              </h2>
+            </div>
+
+            {/* Action Center & SLA Risk Prediction Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7">
+                <NeedActionQueueCard
+                  queue={analytics.needActionQueue}
+                  getStoreDisplayName={getStoreDisplayName}
+                  onOpenStore={onOpenStore}
+                  onQuickViewStore={(storeId) => setActiveQuickViewStoreId(storeId)}
+                  language={language}
+                />
+              </div>
+              <div className="lg:col-span-5">
+                <SlaRiskPredictionCard
+                  predictions={analytics.slaRiskPrediction}
+                  getStoreDisplayName={getStoreDisplayName}
+                  language={language}
+                />
+              </div>
+            </div>
+
+            {/* Workflow Status, Data Quality & Admin Activity Audit Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-4">
+                <ActionStatusCard workflow={analytics.actionWorkflowStatus} status={analytics.actionStatus} language={language} />
+              </div>
+              <div className="lg:col-span-4">
+                <DashboardDataQualityCard quality={analytics.dataQuality} language={language} />
+              </div>
+              <div className="lg:col-span-4">
+                <AdminActivityHistoryCard logs={analytics.adminActivity} getStoreDisplayName={getStoreDisplayName} language={language} />
+              </div>
+            </div>
+          </section>
+
+          {/* ========================================================================= */}
+          {/* SECTION B: PERFORMANCE INSIGHT (Analytical Trends & Network Benchmarks)  */}
+          {/* ========================================================================= */}
+          <section aria-label="Performance Insights & Analytics" className="space-y-6 pt-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
+              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-blue-600 text-white uppercase tracking-wider">
+                📊 PERFORMANCE INSIGHT
+              </span>
+              <h2 className="text-base font-extrabold text-[var(--foreground)] tracking-tight">
+                Analytical Trends, Store SLA Benchmarking & Customer Demand
+              </h2>
+            </div>
+
+            {/* Executive KPIs & Workload Trends */}
+            <div className="space-y-4">
+              <ExecutiveKpiCards data={analytics.summaryCards} language={language} />
+              <MessageOverviewCard cards={analytics.summaryCards} trend={analytics.trend7Days} language={language} />
+              <ResponseRateCard analytics={analytics.responseAnalytics} language={language} />
+            </div>
+
+            {/* Customer Demand & Peak Traffic */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7">
+                <CustomerDemandCard correlations={analytics.customerDemandProductCorrelation} language={language} />
+              </div>
+              <div className="lg:col-span-5">
+                <PeakHourAnalysisCard analytics={analytics.peakHourAnalysis} language={language} />
+              </div>
+            </div>
+
+            {/* Store Performance Ranking Matrix & Benchmark Store Details */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-8">
+                <StorePerformanceTable
+                  stores={analytics.storeRanking}
+                  getStoreDisplayName={getStoreDisplayName}
+                  onOpenStore={onOpenStore}
+                  onSelectStoreQuickView={(storeId) => setActiveQuickViewStoreId(storeId)}
+                  language={language}
+                />
+              </div>
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                <BestPracticeCard store={analytics.bestPracticeStore} getStoreDisplayName={getStoreDisplayName} onOpenStore={onOpenStore} language={language} />
+                <ImprovementCard store={analytics.needImprovementStore} getStoreDisplayName={getStoreDisplayName} onOpenStore={onOpenStore} language={language} />
+              </div>
+            </div>
+
+            {/* Follower Growth & Daily Brief */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-6">
+                <FollowerGrowthCard growth={analytics.summaryCards.followerGrowth} language={language} />
+              </div>
+              <div className="lg:col-span-6">
+                <OperationalInsightCard insights={analytics.operationalInsights} language={language} />
+              </div>
+            </div>
+          </section>
+
+          {/* STORE QUICK VIEW DRAWER MODAL */}
+          <StoreQuickViewDrawer
+            storeData={activeStoreQuickViewData}
+            getStoreDisplayName={getStoreDisplayName}
+            onClose={() => setActiveQuickViewStoreId(null)}
+            onOpenInbox={(id) => {
+              setActiveQuickViewStoreId(null);
+              onOpenStore(id);
+            }}
+            language={language}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -282,6 +282,8 @@ model Store {
   friendSourceLinks    FriendSourceLink[]
 
   @@index([isActive])
+  @@index([isActive, archivedAt])
+  @@index([region])
 }
 
 model StoreMaster {
@@ -445,6 +447,10 @@ model Conversation {
   @@index([priority])
   @@index([storeId])
   @@index([customerId])
+  @@index([createdAt])
+  @@index([storeId, createdAt])
+  @@index([storeId, bmReplyStatus])
+  @@index([bmReplyStatus, createdAt])
   @@index([storeId, followUpStatus, latestMessageAt(sort: Desc)])
   @@index([lineOfficialAccountId, followUpStatus, latestMessageAt(sort: Desc)])
   @@index([lineOfficialAccountId, bmReplyStatus, latestMessageAt(sort: Desc)])

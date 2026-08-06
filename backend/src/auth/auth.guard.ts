@@ -14,7 +14,10 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [context.getHandler(), context.getClass()])) return true;
     const request = context.switchToHttp().getRequest<AuthRequest>();
-    const token = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
+    let token = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
+    if (!token && request.headers.authorization?.startsWith("Bearer ")) {
+      token = request.headers.authorization.slice("Bearer ".length).trim();
+    }
     const user = await this.auth.authenticate(token);
     if (!user) throw new UnauthorizedException("Authentication required");
     request.user = user;
