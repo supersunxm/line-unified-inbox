@@ -31,7 +31,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiBmReplyStatus, ApiConversation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -129,6 +129,17 @@ const translations = {
     overview: "ภาพรวม",
     dashboard: "แดชบอร์ด",
     incoming: "ข้อความเข้าใหม่",
+    customerIntelligence: "ข้อมูลเชิงลึกลูกค้า",
+    customerStage: "สถานะลูกค้า",
+    intent: "ความตั้งใจ",
+    interestedProducts: "ผลิตภัณฑ์ที่สนใจ",
+    recommendedActions: "คำแนะนำการดำเนินการ",
+    confidence: "ความมั่นใจ",
+    evidence: "หลักฐาน",
+    loadingCustomerIntelligence: "กำลังโหลดข้อมูลเชิงลึกลูกค้า...",
+    noCustomerIntelligence: "ไม่พบข้อมูลเชิงลึกของลูกค้า",
+    noEvidence: "ไม่มีหลักฐานเพิ่มเติม",
+    none: "ไม่มี",
     followUp: "ต้องติดตาม",
     reminded: "เตือนแล้ว",
     stores: "ร้านค้า",
@@ -194,6 +205,10 @@ const translations = {
     escalate: "ส่งต่อหัวหน้า",
 
     messageReceived: "ข้อความเข้ามาเมื่อ",
+    lineNameHistory: "ประวัติชื่อ LINE",
+    currentLineName: "ชื่อล่าสุดใน LINE",
+    noNameHistory: "ยังไม่มีประวัติชื่อก่อนหน้านี้",
+    nameHistorySource: "ที่มาของข้อมูล",
 
     highPriority: "ความสำคัญสูง",
     normalPriority: "ความสำคัญปกติ",
@@ -380,6 +395,17 @@ const translations = {
     apiError: "ไม่สามารถเชื่อมต่อระบบข้อมูลได้",
     retry: "ลองอีกครั้ง",
     lastUpdated: "อัปเดตล่าสุด",
+    needMoreConversationData: "ต้องการข้อมูลบทสนทนาเพิ่มเติม",
+    aiSalesFollowUp: "ติดตามการขายลูกค้า",
+    aiProductSpecificAction: "แนะนำข้อมูลผลิตภัณฑ์",
+    aiReviewConversation: "ทบทวนบทสนทนาลูกค้า",
+    aiInsightError: "ไม่สามารถโหลดการวิเคราะห์ AI ได้",
+    aiInsightSummary: "สรุปการวิเคราะห์ลูกค้า",
+    recommendedActionsCardSubtext: "ข้อเสนอแนะในการดำเนินการถัดไปเพื่อผลลัพธ์ที่ดีที่สุด",
+    hideEvidenceDetails: "ซ่อนรายละเอียดหลักฐาน",
+    showEvidenceDetails: "แสดงรายละเอียดหลักฐาน",
+    aiRecommendedNextAction: "คำแนะนำการดำเนินการถัดไปโดย AI",
+    noAiInsightAvailable: "ยังไม่มีคำแนะนำเพิ่มเติมในขณะนี้",
   },
 
   en: {
@@ -396,6 +422,17 @@ const translations = {
     stores: "Stores",
     storeManagement: "Store Management",
     customerInsights: "Customer Insights",
+    customerIntelligence: "Customer intelligence",
+    customerStage: "Customer stage",
+    intent: "Intent",
+    interestedProducts: "Interested products",
+    recommendedActions: "Recommended actions",
+    confidence: "Confidence",
+    evidence: "Evidence",
+    loadingCustomerIntelligence: "Loading customer intelligence...",
+    noCustomerIntelligence: "No customer intelligence available",
+    noEvidence: "No evidence available",
+    none: "None",
 
     conversationsToFollow: "Conversations to Follow Up",
     conversations: "conversations",
@@ -456,6 +493,10 @@ const translations = {
     escalate: "Escalate",
 
     messageReceived: "Message received",
+    lineNameHistory: "LINE Name History",
+    currentLineName: "Current LINE Name",
+    noNameHistory: "No previous name history available",
+    nameHistorySource: "Source",
 
     highPriority: "High Priority",
     normalPriority: "Normal Priority",
@@ -642,6 +683,17 @@ const translations = {
     apiError: "Unable to connect to the data service",
     retry: "Retry",
     lastUpdated: "Last updated",
+    needMoreConversationData: "Need more conversation data",
+    aiSalesFollowUp: "Follow up on customer sales lead",
+    aiProductSpecificAction: "Recommend product information for",
+    aiReviewConversation: "Review customer conversation",
+    aiInsightError: "Unable to load AI analysis",
+    aiInsightSummary: "Customer Intelligence Summary",
+    recommendedActionsCardSubtext: "Suggested next actions for optimal follow-up outcome",
+    hideEvidenceDetails: "Hide evidence details",
+    showEvidenceDetails: "Show evidence details",
+    aiRecommendedNextAction: "AI Recommended Next Action",
+    noAiInsightAvailable: "No additional insights available",
   },
 
   zh: {
@@ -658,6 +710,17 @@ const translations = {
     stores: "门店",
     storeManagement: "门店管理",
     customerInsights: "客户洞察",
+    customerIntelligence: "客户情报",
+    customerStage: "客户阶段",
+    intent: "意图",
+    interestedProducts: "感兴趣的产品",
+    recommendedActions: "推荐操作",
+    confidence: "置信度",
+    evidence: "证据",
+    loadingCustomerIntelligence: "正在加载客户情报...",
+    noCustomerIntelligence: "没有可用的客户情报",
+    noEvidence: "没有证据可用",
+    none: "无",
 
     conversationsToFollow: "需要跟进的消息",
     conversations: "个会话",
@@ -717,6 +780,10 @@ const translations = {
     escalate: "升级处理",
 
     messageReceived: "消息收到于",
+    lineNameHistory: "LINE 名称历史",
+    currentLineName: "当前 LINE 名称",
+    noNameHistory: "暂无之前的名称历史",
+    nameHistorySource: "来源",
 
     highPriority: "高优先级",
     normalPriority: "普通优先级",
@@ -902,6 +969,17 @@ const translations = {
     apiError: "无法连接数据服务",
     retry: "重试",
     lastUpdated: "最后更新",
+    needMoreConversationData: "需要更多对话数据",
+    aiSalesFollowUp: "跟进客户销售线索",
+    aiProductSpecificAction: "推荐产品信息",
+    aiReviewConversation: "审查客户对话",
+    aiInsightError: "无法加载 AI 分析数据",
+    aiInsightSummary: "客户分析摘要",
+    recommendedActionsCardSubtext: "建议的下一步操作，以获得最佳跟进效果",
+    hideEvidenceDetails: "隐藏证据详情",
+    showEvidenceDetails: "显示证据详情",
+    aiRecommendedNextAction: "AI 推荐下一步操作",
+    noAiInsightAvailable: "暂无额外分析建议",
   },
 };
 const followUpStatusLabels: Record<
@@ -1227,6 +1305,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [managerLinkMissing, setManagerLinkMissing] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedApiConversation, setSelectedApiConversation] = useState<ApiConversation | null>(null);
+  const [customerNameHistory, setCustomerNameHistory] = useState<{ currentName: string; history: Array<{ id: string; displayName: string; source: string; capturedAt: string }> } | null>(null);
+  const [customerNameHistoryLoading, setCustomerNameHistoryLoading] = useState(false);
+  const [customerNameHistoryError, setCustomerNameHistoryError] = useState<string | null>(null);
+  const [customerIntelligence, setCustomerIntelligence] = useState<ApiCustomerIntelligence | null>(null);
+  const [customerIntelligenceLoading, setCustomerIntelligenceLoading] = useState(false);
+  const [customerIntelligenceError, setCustomerIntelligenceError] = useState<string | null>(null);
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
   const [chatHistory, setChatHistory] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
   const [chatLoading, setChatLoading] = useState(false);
   const [showTranslation, setShowTranslation] = useState(true);
@@ -1234,9 +1319,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     Record<string, ConversationState>
   >({});
   const [savedNotes, setSavedNotes] = useState<Record<string, string>>({});
+  const [openConversationDropdownId, setOpenConversationDropdownId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [supportingDataLoaded, setSupportingDataLoaded] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+
+  useEffect(() => {
+    if (!openConversationDropdownId) return;
+    const handleClickOutside = () => setOpenConversationDropdownId(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, [openConversationDropdownId]);
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [dashboardSummary, setDashboardSummary] =
@@ -1260,6 +1353,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [chatPageError, setChatPageError] = useState<string | null>(null);
   const [hasNewChatsAvailable, setHasNewChatsAvailable] = useState(false);
   const text = translations[language];
+  const aiRecommendedNextAction = useMemo(() => {
+    if (!customerIntelligence) return null;
+    if (customerIntelligence.confidenceScore < 0.5) return text.needMoreConversationData;
+    const normalizedIntents = customerIntelligence.intent.map((value) => value.toLowerCase());
+    const hasPurchaseIntent = normalizedIntents.some((value) => /purchase|sales|intent|interested|buy|journey/.test(value));
+    if (hasPurchaseIntent) return text.aiSalesFollowUp;
+    if (customerIntelligence.interestedProducts.length > 0) {
+      const product = customerIntelligence.interestedProducts[0];
+      return `${text.aiProductSpecificAction} ${product}`;
+    }
+    return text.aiReviewConversation;
+  }, [customerIntelligence, text]);
   const chatsPaginationText = getChatsPaginationText(language);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
@@ -1737,6 +1842,67 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [selectedConversationId]);
 
   useEffect(() => {
+    let active = true;
+    if (!selectedApiConversation) {
+      queueMicrotask(() => {
+        if (active) {
+          setCustomerNameHistory(null);
+          setCustomerNameHistoryError(null);
+        }
+      });
+      return () => { active = false; };
+    }
+
+    const loadHistory = async () => {
+      setCustomerNameHistoryLoading(true);
+      setCustomerNameHistoryError(null);
+      try {
+        const history = await api.customerNameHistory(selectedApiConversation.customer.id);
+        if (active) setCustomerNameHistory(history);
+      } catch (error) {
+        if (active) setCustomerNameHistoryError(error instanceof Error ? error.message : "Unable to load LINE name history");
+      } finally {
+        if (active) setCustomerNameHistoryLoading(false);
+      }
+    };
+    void loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [selectedApiConversation]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedApiConversation) {
+      queueMicrotask(() => {
+        if (active) {
+          setCustomerIntelligence(null);
+          setCustomerIntelligenceError(null);
+        }
+      });
+      return () => { active = false; };
+    }
+
+    const loadIntelligence = async () => {
+      setCustomerIntelligenceLoading(true);
+      setCustomerIntelligenceError(null);
+      try {
+        const intelligence = await api.customerIntelligence(selectedApiConversation.customer.id);
+        if (active) setCustomerIntelligence(intelligence);
+      } catch (error) {
+        if (active) setCustomerIntelligenceError(error instanceof Error ? error.message : "Unable to load customer intelligence");
+      } finally {
+        if (active) setCustomerIntelligenceLoading(false);
+      }
+    };
+
+    void loadIntelligence();
+    return () => {
+      active = false;
+    };
+  }, [selectedApiConversation]);
+
+  useEffect(() => {
     const newestId = chatHistory.items.at(-1)?.id ?? null;
     if (newestId && newestId !== newestChatMessageRef.current) {
       newestChatMessageRef.current = newestId;
@@ -1844,6 +2010,63 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         ...currentStates,
         [selectedConversation.id]: previousState,
       }));
+      setApiError(error instanceof Error ? error.message : "BM reply status update failed");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  async function updateConversationBmReplyStatus(conversationId: string, status: ApiBmReplyStatus) {
+    if (isMutating || authUser?.role === "VIEWER") return;
+    const previousState = conversationStates[conversationId];
+    const currentStatus = previousState?.bmReplyStatus ?? conversations.find((c) => c.id === conversationId)?.bmReplyStatus;
+    if (currentStatus === status) return;
+
+    const completesFollowUp = status === "REPLIED" && previousState?.status !== "completed";
+    setIsMutating(true);
+    setApiError(null);
+
+    setConversationStates((currentStates) => {
+      const current = currentStates[conversationId];
+      if (!current) return currentStates;
+      return {
+        ...currentStates,
+        [conversationId]: {
+          ...current,
+          bmReplyStatus: status,
+          ...(completesFollowUp ? { status: "completed" } : {}),
+        },
+      };
+    });
+
+    try {
+      const response = await api.updateBmReplyStatus(conversationId, status);
+      setConversationStates((currentStates) => ({
+        ...currentStates,
+        [conversationId]: mapApiConversationState(response.conversation),
+      }));
+      const [dashboardRes, bmSummaryRes] = await Promise.all([
+        api.dashboard(),
+        api.bmReplyStatusSummary(),
+      ]);
+      setDashboardSummary(dashboardRes);
+      setBmSummaryData(bmSummaryRes);
+
+      const statusLabel = bmReplyStatusLabels[language][status];
+      setToastMessage(
+        language === "th"
+          ? `อัปเดตสถานะเป็น ‘${statusLabel}’ เรียบร้อย`
+          : language === "zh"
+          ? `已更新状态为 '${statusLabel}'`
+          : `Updated status to '${statusLabel}'`,
+      );
+    } catch (error) {
+      if (previousState) {
+        setConversationStates((currentStates) => ({
+          ...currentStates,
+          [conversationId]: previousState,
+        }));
+      }
       setApiError(error instanceof Error ? error.message : "BM reply status update failed");
     } finally {
       setIsMutating(false);
@@ -2674,20 +2897,113 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
 
                 return (
-                  <button
+                  <div
                     key={conversation.id}
                     data-conversation-row
                     data-selected={isSelected}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => {
                       setSelectedConversationId(conversation.id);
                       setShowTranslation(true);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedConversationId(conversation.id);
+                        setShowTranslation(true);
+                      }
+                    }}
                     aria-pressed={isSelected}
-                    className={`conversation-list-row app-list-item w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                    className={`conversation-list-row app-list-item relative w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer ${
                       isSelected ? "is-selected" : ""
                     }`}
                   >
-                    <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight">{conversation.customer}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1">{conversation.customer}</p>
+
+                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          data-conversation-action-menu
+                          aria-label="Change status"
+                          aria-expanded={openConversationDropdownId === conversation.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenConversationDropdownId((prev) => (prev === conversation.id ? null : conversation.id));
+                          }}
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title={language === "th" ? "เปลี่ยนสถานะ" : language === "zh" ? "更改状态" : "Change Status"}
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                          </svg>
+                        </button>
+
+                        {openConversationDropdownId === conversation.id && (
+                          <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs">
+                            <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                              {language === "th" ? "สถานะการตอบ" : language === "zh" ? "回复状态" : "Status"}
+                            </div>
+                            <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                            <button
+                              type="button"
+                              disabled={authUser?.role === "VIEWER"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenConversationDropdownId(null);
+                                void updateConversationBmReplyStatus(conversation.id, "NOT_REPLIED");
+                              }}
+                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                currentBmReplyStatus === "NOT_REPLIED"
+                                  ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 font-semibold"
+                                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                              }`}
+                            >
+                              <span className="text-slate-400">⚪</span>
+                              <span>{bmReplyStatusLabels[language]["NOT_REPLIED"]}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={authUser?.role === "VIEWER"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenConversationDropdownId(null);
+                                void updateConversationBmReplyStatus(conversation.id, "NOTIFIED_BM");
+                              }}
+                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                currentBmReplyStatus === "NOTIFIED_BM"
+                                  ? "bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-semibold"
+                                  : "text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                              }`}
+                            >
+                              <span>🟣</span>
+                              <span>{bmReplyStatusLabels[language]["NOTIFIED_BM"]}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={authUser?.role === "VIEWER"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenConversationDropdownId(null);
+                                void updateConversationBmReplyStatus(conversation.id, "REPLIED");
+                              }}
+                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                currentBmReplyStatus === "REPLIED"
+                                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-semibold"
+                                  : "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                              }`}
+                            >
+                              <span>🟢</span>
+                              <span>{bmReplyStatusLabels[language]["REPLIED"]}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     <p data-conversation-message-preview className="conversation-message-preview mt-2 line-clamp-2 text-sm leading-5">
                       {conversation.translations[language]}
@@ -2743,7 +3059,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         </span>
                       )}
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -2786,6 +3102,149 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="rounded font-medium text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300">{text.refreshLineProfile}</button>
                         {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
                       </div>
+                      {selectedApiConversation && (
+                        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--foreground)]">
+                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+                            <span>{text.lineNameHistory}</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">{text.currentLineName}</span>
+                          </div>
+                          <div className="mb-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-950/70">
+                            <div className="text-sm font-semibold">{customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}</div>
+                          </div>
+                          {customerNameHistoryLoading ? (
+                            <div className="text-sm text-slate-500">Loading...</div>
+                          ) : customerNameHistoryError ? (
+                            <div className="text-sm text-rose-600 dark:text-rose-400">{customerNameHistoryError}</div>
+                          ) : customerNameHistory?.history.length ? (
+                            <div className="space-y-2">
+                              {customerNameHistory.history.map((entry) => (
+                                <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                                  <div className="mb-1 flex items-center justify-between gap-3 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    <span>{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))}</span>
+                                    <span>{text.nameHistorySource}: {entry.source}</span>
+                                  </div>
+                                  <div className="font-medium">{entry.displayName}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-500">{text.noNameHistory}</div>
+                          )}
+                        </div>
+                      )}
+                      {selectedApiConversation && (
+                        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--foreground)]">
+                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+                            <span>{text.customerIntelligence}</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {customerIntelligence?.confidenceScore != null ? `${Math.round(customerIntelligence.confidenceScore * 100)}%` : "—"}</span>
+                          </div>
+                          {customerIntelligenceLoading ? (
+                            <div className="space-y-3">
+                              <div className="h-4 w-1/3 rounded-full bg-slate-200 dark:bg-slate-800" />
+                              <div className="h-4 rounded-full bg-slate-200 dark:bg-slate-800" />
+                              <div className="grid gap-2">
+                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+                              </div>
+                            </div>
+                          ) : customerIntelligenceError ? (
+                            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">
+                              <div className="font-semibold">{text.aiInsightError}</div>
+                              <p className="mt-1 text-sm">{customerIntelligenceError}</p>
+                            </div>
+                          ) : customerIntelligence ? (
+                            <div className="space-y-4">
+                              <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                                <div className="space-y-2">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.customerIntelligence}</div>
+                                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{text.aiInsightSummary}</div>
+                                </div>
+                                <div className="flex flex-col items-start gap-2 sm:items-end">
+                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200" : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300" : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span>
+                                  <div className="w-full max-w-[12rem] rounded-full bg-slate-200 p-1 dark:bg-slate-800">
+                                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} />
+                                  </div>
+                                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</div>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.intent}</div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {customerIntelligence.intent.length ? (
+                                      customerIntelligence.intent.map((item, index) => (
+                                        <span key={index} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>
+                                      ))
+                                    ) : (
+                                      <span className="text-sm text-slate-500">{text.none}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.interestedProducts}</div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {customerIntelligence.interestedProducts.length ? (
+                                      customerIntelligence.interestedProducts.map((product) => (
+                                        <span key={product} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>
+                                      ))
+                                    ) : (
+                                      <span className="text-sm text-slate-500">{text.none}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.recommendedActions}</p>
+                                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{text.recommendedActionsCardSubtext}</p>
+                                  </div>
+                                </div>
+                                <ul className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                                  {customerIntelligence.recommendedActions.length ? (
+                                    customerIntelligence.recommendedActions.map((action, index) => (
+                                      <li key={index} className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/70">
+                                        <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>
+                                        <span>{action}</span>
+                                      </li>
+                                    ))
+                                  ) : (
+                                    <li className="text-sm text-slate-500">{text.none}</li>
+                                  )}
+                                </ul>
+                              </div>
+
+                              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.evidence}</p>
+                                  <button type="button" onClick={() => setEvidenceExpanded((value) => !value)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200">
+                                    {evidenceExpanded ? text.hideEvidenceDetails : text.showEvidenceDetails}
+                                  </button>
+                                </div>
+                                {customerIntelligence.evidence.length ? (
+                                  <div className={`mt-3 space-y-2 ${evidenceExpanded ? "" : "overflow-hidden text-ellipsis max-h-24"}`}>
+                                    {customerIntelligence.evidence.map((item, index) => (
+                                      <div key={index} className="rounded-2xl bg-white p-3 text-sm text-slate-700 shadow-sm dark:bg-slate-950/80 dark:text-slate-300">{item}</div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="mt-3 text-sm text-slate-500">{text.noEvidence}</p>
+                                )}
+                              </div>
+
+                              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-900 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{text.aiRecommendedNextAction}</div>
+                                <p className="mt-2 leading-6">{aiRecommendedNextAction ?? text.noAiInsightAvailable}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">{text.noCustomerIntelligence}</div>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
                           {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}

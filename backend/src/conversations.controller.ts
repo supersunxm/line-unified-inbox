@@ -24,7 +24,10 @@ export class ConversationsController {
     };
   }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
-  @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) { return this.service.updateStatus(id, dto.status); }
+  @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) {
+    if (dto.bmReplyStatus) return this.service.updateBmReplyStatus(id, dto.bmReplyStatus);
+    return this.service.updateStatus(id, dto.status ?? "FOLLOW_UP");
+  }
   @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) { return this.service.updateBmReplyStatus(id, dto.status); }
   @Patch(":id/priority") priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto) { return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
   @Get(":id/messages") messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30") { return this.service.messages(id, Number(page), Number(pageSize)); }

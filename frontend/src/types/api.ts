@@ -35,6 +35,17 @@ export type ApiConversation = {
   activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; newBmReplyStatus: ApiBmReplyStatus | null; createdAt: string }>;
 };
 
+export type ApiCustomerIntelligence = {
+  customerId: string;
+  profileSummary: string;
+  customerStage: "NEW" | "INTERESTED" | "PURCHASED" | "EXISTING_CUSTOMER" | "UNKNOWN";
+  intent: string[];
+  interestedProducts: string[];
+  recommendedActions: string[];
+  confidenceScore: number;
+  evidence: string[];
+};
+
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
 export type BmReplyStatusSummaryResponse = {
   overview: {

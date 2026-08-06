@@ -17,7 +17,10 @@ export class ConversationQueryDto {
   @IsOptional() @IsIn(["latest-desc", "latest-asc", "priority-desc"]) sort = "latest-desc";
 }
 
-export class UpdateStatusDto { @IsEnum(FollowUpStatus) status!: FollowUpStatus; }
+export class UpdateStatusDto {
+  @IsOptional() @IsEnum(FollowUpStatus) status?: FollowUpStatus;
+  @IsOptional() @IsEnum(BmReplyStatus) bmReplyStatus?: BmReplyStatus;
+}
 export class UpdateBmReplyStatusDto { @IsEnum(BmReplyStatus) status!: BmReplyStatus; }
 export class UpdatePriorityDto { @IsEnum(Priority) priority!: Priority; }
 export class CreateNoteDto {

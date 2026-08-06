@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ActivityController } from "./activity.controller";
 import { ConversationsController } from "./conversations.controller";
 import { ConversationsService } from "./conversations.service";
+import { CustomersController } from "./customers.controller";
 import { DashboardController } from "./dashboard.controller";
 import { HealthController } from "./health.controller";
 import { MetadataController } from "./metadata.controller";
@@ -21,13 +22,14 @@ import { FollowerInsightsModule } from "./follower-insights/follower-insights.mo
 import { FriendSourceLinksModule } from "./friend-source-links/friend-source-links.module";
 import { ClassificationInsightsModule } from "./classification-insights/classification-insights.module";
 import { TranslationModule } from "./translation/translation.module";
+import { CustomerIntelligenceService } from "./customer-intelligence.service";
 
 import { DashboardAnalyticsService } from "./dashboard-analytics.service";
 import { OperationReportService } from "./operation-report.service";
 
 @Module({
   imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule],
-  controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController],
-  providers: [ConversationsService, DashboardAnalyticsService, OperationReportService],
+  controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController],
+  providers: [ConversationsService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService],
 })
 export class AppModule {}
