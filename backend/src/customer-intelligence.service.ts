@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { BmReplyStatus, ProductRelationship, PurchaseIntent, TopicCategory } from "@prisma/client";
+import { BmReplyStatus, CustomerEventType, ProductRelationship, PurchaseIntent, TopicCategory } from "@prisma/client";
 import { PrismaService } from "./prisma.service";
 
 export type CustomerIntelligenceResult = {
@@ -27,7 +27,7 @@ export class CustomerIntelligenceService {
       this.prisma.customer.findUnique({
         where: { id: customerId },
         include: {
-          nameHistory: { orderBy: { capturedAt: "desc" } },
+          events: { orderBy: { createdAt: "desc" } },
           conversations: {
             take: 5,
             orderBy: { latestMessageAt: "desc" },
@@ -48,11 +48,24 @@ export class CustomerIntelligenceService {
             },
           },
         },
-      }),
+      }).catch(() => null),
       this.prisma.conversation.count({ where: { customerId } }),
     ]);
 
-    if (!customer) throw new NotFoundException("Customer not found");
+    if (!customer) {
+      const fallbackCustomer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      if (!fallbackCustomer) throw new NotFoundException("Customer not found");
+      return {
+        customerId,
+        profileSummary: `Customer ${fallbackCustomer.displayName}`,
+        customerStage: "NEW",
+        intent: [],
+        interestedProducts: [],
+        recommendedActions: ["Review customer profile and latest LINE activity"],
+        confidenceScore: 0.35,
+        evidence: ["No detailed historical data available yet"],
+      };
+    }
 
     const recentConversations = customer.conversations;
     const latestConversation = recentConversations[0] ?? null;
@@ -89,9 +102,10 @@ export class CustomerIntelligenceService {
     const evidence: string[] = [];
     const productSet = new Set<string>(latestProducts);
 
-    if (customer.nameHistory.length > 0) {
-      const historyNames = customer.nameHistory.map((history) => history.displayName).filter(Boolean);
-      evidence.push(`Name history includes ${historyNames.length} change(s): ${historyNames.slice(0, 3).join(", ")}`);
+    const nameChangeEvents = (customer.events ?? []).filter((e) => e.type === CustomerEventType.NAME_CHANGED);
+    if (nameChangeEvents.length > 0) {
+      const historyNames = nameChangeEvents.map((e) => e.newValue).filter(Boolean);
+      evidence.push(`Customer behavior signals include ${nameChangeEvents.length} name change(s): ${historyNames.slice(0, 3).join(", ")}`);
     }
 
     if (latestConversation) {
@@ -159,7 +173,7 @@ export class CustomerIntelligenceService {
     const customerStage = this.determineCustomerStage(conversationCount, purchaseIntent, productRelationship, topicCategories);
     const recommendedActions = this.buildRecommendedActions(customerStage, bmReplyStatus, latestStore?.name ?? null, purchaseIntent, latestProducts.length > 0);
     const profileSummary = this.buildProfileSummary(customer, latestConversation, latestStore, latestProducts, topicNames, customerStage);
-    const confidenceScore = this.buildConfidenceScore(latestProducts.length, topicNames.length, intentSet.size, purchaseIntent, productRelationship, bmReplyStatus, customer.nameHistory.length, conversationCount, conversationAge);
+    const confidenceScore = this.buildConfidenceScore(latestProducts.length, topicNames.length, intentSet.size, purchaseIntent, productRelationship, bmReplyStatus, customer.events?.length ?? 0, conversationCount, conversationAge);
 
     return {
       customerId,

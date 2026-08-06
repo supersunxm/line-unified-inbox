@@ -46,6 +46,20 @@ export type ApiCustomerIntelligence = {
   evidence: string[];
 };
 
+export type ApiCustomerEventType = "NAME_CHANGED" | "PRODUCT_INTEREST_DETECTED" | "PURCHASE_INTENT_CHANGED";
+export type ApiCustomerEventSource = "LINE_PROFILE_SYNC" | "BM_MANUAL" | "AI_ANALYSIS";
+
+export type ApiCustomerEvent = {
+  id: string;
+  customerId: string;
+  type: ApiCustomerEventType;
+  source: ApiCustomerEventSource;
+  previousValue: string | null;
+  newValue: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
 export type BmReplyStatusSummaryResponse = {
   overview: {

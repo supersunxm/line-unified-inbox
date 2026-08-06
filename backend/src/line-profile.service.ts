@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { CustomerEventSource, CustomerEventType } from "@prisma/client";
+import { CustomerSignalClassifierService } from "./classification/customer-signal-classifier.service";
 import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
 import { PrismaService } from "./prisma.service";
 
 @Injectable()
 export class LineProfileService {
-  constructor(private readonly prisma: PrismaService, private readonly encryption: CredentialEncryptionService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: CredentialEncryptionService,
+    private readonly signalClassifier: CustomerSignalClassifierService,
+  ) {}
 
   async refresh(customerId: string, lineOfficialAccountId: string, force = false, source = "LINE_PROFILE_REFRESH") {
     const [customer, oa] = await Promise.all([this.prisma.customer.findUnique({ where: { id: customerId } }), this.prisma.lineOfficialAccount.findUnique({ where: { id: lineOfficialAccountId } })]);
@@ -23,7 +29,24 @@ export class LineProfileService {
       const displayName = profile.displayName?.slice(0, 200) || customer.displayName;
       const updated = await this.prisma.customer.update({ where: { id: customerId }, data: { displayName, pictureUrl: profile.pictureUrl?.slice(0, 1000), statusMessage: profile.statusMessage?.slice(0, 500), preferredLanguage: profile.language?.slice(0, 20), profileFetchedAt: new Date(), profileFetchStatus: "SUCCESS", profileFetchError: null } });
       if (updated.displayName !== customer.displayName) {
-        await this.prisma.customerNameHistory.create({ data: { customerId, displayName: updated.displayName, source } });
+        const createdEvent = await this.prisma.customerEvent.create({
+          data: {
+            customerId,
+            type: CustomerEventType.NAME_CHANGED,
+            source: CustomerEventSource.LINE_PROFILE_SYNC,
+            previousValue: customer.displayName,
+            newValue: updated.displayName,
+            metadata: { lineOfficialAccountId, storeId: oa.storeId },
+          },
+        }).catch(() => null);
+
+        await this.prisma.customerNameHistory.create({
+          data: { customerId, displayName: updated.displayName, source },
+        }).catch(() => undefined);
+
+        if (createdEvent) {
+          await this.signalClassifier.classifyEvent(createdEvent).catch(() => null);
+        }
       }
       return updated;
     } catch (error) {

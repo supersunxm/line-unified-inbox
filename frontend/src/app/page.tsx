@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
+import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api } from "@/lib/api";
+import { CustomerSignals } from "./components/customer/customer-signals";
 import { AUTH_UNAUTHORIZED_EVENT, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import type { PrimarySection } from "./primary-navigation";
@@ -1311,6 +1313,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [customerIntelligence, setCustomerIntelligence] = useState<ApiCustomerIntelligence | null>(null);
   const [customerIntelligenceLoading, setCustomerIntelligenceLoading] = useState(false);
   const [customerIntelligenceError, setCustomerIntelligenceError] = useState<string | null>(null);
+  const [customerEvents, setCustomerEvents] = useState<ApiCustomerEvent[] | null>(null);
+  const [customerEventsLoading, setCustomerEventsLoading] = useState(false);
+  const [customerEventsError, setCustomerEventsError] = useState<string | null>(null);
   const [evidenceExpanded, setEvidenceExpanded] = useState(false);
   const [chatHistory, setChatHistory] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
   const [chatLoading, setChatLoading] = useState(false);
@@ -1899,6 +1904,38 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     };
 
     void loadIntelligence();
+    return () => {
+      active = false;
+    };
+  }, [selectedApiConversation]);
+
+  useEffect(() => {
+    let active = true;
+    const customerId = selectedApiConversation?.customer?.id;
+    if (!selectedApiConversation || !customerId || customerId === "undefined" || customerId === "null") {
+      queueMicrotask(() => {
+        if (active) {
+          setCustomerEvents(null);
+          setCustomerEventsError(null);
+        }
+      });
+      return () => { active = false; };
+    }
+
+    const loadEvents = async () => {
+      setCustomerEventsLoading(true);
+      setCustomerEventsError(null);
+      try {
+        const events = await api.customerEvents(customerId);
+        if (active) setCustomerEvents(events);
+      } catch (error) {
+        if (active) setCustomerEventsError(error instanceof Error ? error.message : "Unable to load customer events");
+      } finally {
+        if (active) setCustomerEventsLoading(false);
+      }
+    };
+
+    void loadEvents();
     return () => {
       active = false;
     };
@@ -3132,6 +3169,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           ) : (
                             <div className="text-sm text-slate-500">{text.noNameHistory}</div>
                           )}
+                        </div>
+                      )}
+                      {selectedApiConversation && (
+                        <div className="mt-3">
+                          <CustomerSignals
+                            events={customerEvents}
+                            isLoading={customerEventsLoading}
+                            error={customerEventsError}
+                            language={language}
+                          />
                         </div>
                       )}
                       {selectedApiConversation && (

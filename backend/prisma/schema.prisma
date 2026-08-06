@@ -418,6 +418,75 @@ model Customer {
   updatedAt          DateTime           @updatedAt
   conversations      Conversation[]
   nameHistory        CustomerNameHistory[]
+  events             CustomerEvent[]
+  signals            CustomerSignal[]
+}
+
+enum CustomerEventType {
+  NAME_CHANGED
+  PRODUCT_INTEREST_DETECTED
+  PURCHASE_INTENT_CHANGED
+}
+
+enum CustomerEventSource {
+  LINE_PROFILE_SYNC
+  BM_MANUAL
+  AI_ANALYSIS
+}
+
+model CustomerEvent {
+  id            String              @id @default(uuid())
+  customerId    String
+  type          CustomerEventType
+  source        CustomerEventSource
+  previousValue String?
+  newValue      String?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+
+  customer      Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  signals       CustomerSignal[]
+
+  @@index([customerId, createdAt])
+  @@index([type, createdAt])
+}
+
+enum CustomerSignalType {
+  PRODUCT_INTEREST
+  PURCHASE_INTENT
+  PROMOTION_INTEREST
+  PRICE_INQUIRY
+  STORE_VISIT_INTENT
+  UNKNOWN
+}
+
+enum CustomerSignalSource {
+  NAME_CHANGE
+  MESSAGE_ANALYSIS
+  BM_NOTE
+  AI_ANALYSIS
+}
+
+model CustomerSignal {
+  id              String               @id @default(uuid())
+  customerId      String
+  customerEventId String?
+  signalType      CustomerSignalType
+  source          CustomerSignalSource @default(NAME_CHANGE)
+  productModelId  String?
+  detectedText    String?
+  confidence      Float                @default(0)
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sourceEvent  CustomerEvent? @relation(fields: [customerEventId], references: [id], onDelete: SetNull)
+  productModel ProductModel?  @relation(fields: [productModelId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+  @@index([signalType, createdAt])
+  @@index([productModelId, createdAt])
+  @@index([customerEventId])
 }
 
 model CustomerNameHistory {
@@ -590,6 +659,7 @@ model ProductModel {
   productSeries       ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
   conversations       ConversationProduct[]
   aliases             ProductAlias[]
+  signals             CustomerSignal[]
 
   @@index([isActive])
   @@index([productSeriesId])

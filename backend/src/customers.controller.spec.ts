@@ -13,7 +13,7 @@ describe("CustomersController", () => {
           if (where.id === "cust-1") {
             return {
               displayName: "Test Customer",
-              nameHistory: [{ id: "h1", displayName: "Old Name", source: "LINE", capturedAt: new Date() }],
+              events: [{ id: "h1", newValue: "Old Name", previousValue: "Original Name", source: "LINE_PROFILE_SYNC", createdAt: new Date() }],
             };
           }
           return null;
