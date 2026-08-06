@@ -112,26 +112,26 @@ export function StorePerformanceOverview({
             {needAttentionStores.map((store) => (
               <div
                 key={store.storeId}
-                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-rose-100 dark:border-rose-950 bg-rose-50/40 dark:bg-rose-950/20 text-xs"
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-rose-200/50 dark:border-rose-900/40 bg-[var(--background)] text-xs"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-[var(--foreground)] truncate">
                     {getStoreDisplayName(store.storeName)}
                   </div>
-                  <div className="mt-0.5 text-slate-500 flex gap-2">
-                    <span>Pending: <strong className="text-rose-600">{store.pending}</strong></span>
+                  <div className="mt-0.5 text-[var(--muted-foreground)] flex gap-2">
+                    <span>Pending: <strong className="text-rose-600 dark:text-rose-400">{store.pending}</strong></span>
                     <span>Avg time: <strong>{store.avgResponseMinutes}m</strong></span>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <div className="font-black text-rose-600 text-sm">
+                  <div className="font-black text-rose-600 dark:text-rose-400 text-sm">
                     {Math.round(store.responseRate24h * 100)}% Rate
                   </div>
                   <button
                     type="button"
                     onClick={() => onSelectStoreQuickView(store.storeId)}
-                    className="mt-1 text-[11px] font-bold text-blue-600 hover:underline"
+                    className="mt-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {t.openDrawer} ➔
                   </button>
@@ -151,26 +151,26 @@ export function StorePerformanceOverview({
             {topBestPracticeStores.map((store) => (
               <div
                 key={store.storeId}
-                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-emerald-100 dark:border-emerald-950 bg-emerald-50/40 dark:bg-emerald-950/20 text-xs"
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-emerald-200/50 dark:border-emerald-900/40 bg-[var(--background)] text-xs"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-[var(--foreground)] truncate">
                     {getStoreDisplayName(store.storeName)}
                   </div>
-                  <div className="mt-0.5 text-slate-500 flex gap-2">
-                    <span>Replied: <strong className="text-emerald-600">{store.replied}</strong></span>
+                  <div className="mt-0.5 text-[var(--muted-foreground)] flex gap-2">
+                    <span>Replied: <strong className="text-emerald-600 dark:text-emerald-400">{store.replied}</strong></span>
                     <span>Avg time: <strong>{store.avgResponseMinutes}m</strong></span>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <div className="font-black text-emerald-600 text-sm">
+                  <div className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
                     {Math.round(store.responseRate24h * 100)}% Rate
                   </div>
                   <button
                     type="button"
                     onClick={() => onSelectStoreQuickView(store.storeId)}
-                    className="mt-1 text-[11px] font-bold text-blue-600 hover:underline"
+                    className="mt-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     {t.openDrawer} ➔
                   </button>

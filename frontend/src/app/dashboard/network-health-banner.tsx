@@ -11,7 +11,7 @@ interface NetworkHealthBannerProps {
 
 const statusConfig = {
   CRITICAL: {
-    badgeClass: "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-300",
+    badgeClass: "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300",
     icon: "🔴",
     th: "วิกฤต (Critical)",
     en: "Critical",
@@ -84,13 +84,13 @@ export function NetworkHealthBanner({ health, efficiency, language }: NetworkHea
   return (
     <div
       data-network-health-banner
-      className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 p-5 text-white shadow-xl dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
+      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[var(--foreground)] shadow-sm"
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         {/* Status & Operational Reason (Level 1 Core) */}
         <div className="lg:col-span-8 space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+            <span className="text-xs font-black uppercase tracking-wider text-[var(--muted-foreground)]">
               LEVEL 1 · {t.title}
             </span>
             <span
@@ -102,13 +102,13 @@ export function NetworkHealthBanner({ health, efficiency, language }: NetworkHea
           </div>
 
           <div>
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)]">
               {t.reasonsTitle}
             </h2>
-            <ul className="mt-1.5 space-y-1 text-sm font-medium text-slate-200">
+            <ul className="mt-1.5 space-y-1 text-sm font-medium text-[var(--foreground)]">
               {factors.map((factor, idx) => (
                 <li key={idx} className="flex items-center gap-2">
-                  <span className="text-amber-400">▪</span>
+                  <span className="text-amber-500">▪</span>
                   <span>{factor}</span>
                 </li>
               ))}
@@ -117,25 +117,25 @@ export function NetworkHealthBanner({ health, efficiency, language }: NetworkHea
         </div>
 
         {/* Operational Score & Today's Volume Counters */}
-        <div className="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-slate-800 pt-4 lg:pt-0 lg:pl-6 flex flex-col justify-between h-full space-y-4">
+        <div className="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-[var(--border)] pt-4 lg:pt-0 lg:pl-6 flex flex-col justify-between h-full space-y-4">
           <div className="flex items-baseline justify-between">
-            <span className="text-xs text-slate-400 font-medium">{t.scoreLabel}</span>
+            <span className="text-xs font-semibold text-[var(--muted-foreground)]">{t.scoreLabel}</span>
             <div className="text-right">
-              <span className="text-2xl font-black tracking-tight text-white">{score}</span>
-              <span className="text-xs text-slate-400"> / 100</span>
+              <span className="text-2xl font-black tracking-tight text-[var(--foreground)]">{score}</span>
+              <span className="text-xs text-[var(--muted-foreground)]"> / 100</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-xs">
-            <div className="bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50">
-              <div className="text-slate-400">{t.pendingToday}</div>
-              <div className="text-base font-extrabold text-amber-400 mt-0.5">
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--border)] text-xs">
+            <div className="bg-[var(--background)] p-2.5 rounded-xl border border-[var(--border)]">
+              <div className="text-[var(--muted-foreground)] font-semibold">{t.pendingToday}</div>
+              <div className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">
                 {efficiency.opened}
               </div>
             </div>
-            <div className="bg-slate-800/50 p-2.5 rounded-lg border border-slate-700/50">
-              <div className="text-slate-400">{t.slaRate}</div>
-              <div className="text-base font-extrabold text-emerald-400 mt-0.5">
+            <div className="bg-[var(--background)] p-2.5 rounded-lg border border-[var(--border)]">
+              <div className="text-[var(--muted-foreground)] font-semibold">{t.slaRate}</div>
+              <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {Math.round(efficiency.closureRate * 100)}%
               </div>
             </div>

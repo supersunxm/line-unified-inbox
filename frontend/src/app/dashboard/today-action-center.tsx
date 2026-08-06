@@ -127,7 +127,7 @@ export function TodayActionCenter({
             return (
               <div
                 key={item.storeId}
-                className="rounded-2xl border border-rose-200/70 dark:border-rose-900/50 bg-gradient-to-r from-rose-50/40 via-[var(--surface)] to-[var(--surface)] dark:from-rose-950/20 p-5 shadow-sm space-y-4"
+                className="rounded-2xl border border-rose-200/80 dark:border-rose-900/50 bg-[var(--surface)] p-5 shadow-sm space-y-4"
               >
                 {/* Header: Store Name & Risk Level Badge */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
@@ -137,14 +137,14 @@ export function TodayActionCenter({
                       {getStoreDisplayName(item.storeName || t.unassignedStore)}
                     </h3>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200 text-xs font-bold border border-rose-200 dark:border-rose-800">
+                  <span className="px-3 py-1 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 text-xs font-bold border border-rose-500/30">
                     🔴 {t.highSlaRisk} (SLA Risk: {slaRiskPct}%)
                   </span>
                 </div>
 
                 {/* Structured Information Grid (Store, Problem, Impact, Recommended Action) */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                  <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <div className="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
                     <div className="text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
                       {t.store}
                     </div>
@@ -153,7 +153,7 @@ export function TodayActionCenter({
                     </div>
                   </div>
 
-                  <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <div className="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
                     <div className="text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
                       {t.problem}
                     </div>
@@ -162,7 +162,7 @@ export function TodayActionCenter({
                     </div>
                   </div>
 
-                  <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <div className="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
                     <div className="text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
                       {t.impact}
                     </div>
@@ -171,7 +171,7 @@ export function TodayActionCenter({
                     </div>
                   </div>
 
-                  <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <div className="bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
                     <div className="text-[var(--muted-foreground)] font-semibold uppercase tracking-wider">
                       {t.recommended}
                     </div>
@@ -198,7 +198,7 @@ export function TodayActionCenter({
                     disabled={isNotified}
                     className={`px-4 py-2 rounded-xl font-bold text-xs border transition-colors flex items-center gap-1.5 ${
                       isNotified
-                        ? "bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-900 dark:text-slate-600"
+                        ? "bg-[var(--accent)] text-[var(--muted-foreground)] border-[var(--border)] opacity-60 cursor-not-allowed"
                         : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-sm"
                     }`}
                   >
