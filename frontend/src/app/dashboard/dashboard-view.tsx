@@ -5,10 +5,6 @@ import { api } from "@/lib/api";
 import type { DashboardAnalyticsResponse, LineOfficialAccountResponse } from "@/types/api";
 
 import { DashboardDataQualityCard } from "./dashboard-data-quality";
-import { OperationHealthScoreHero } from "./operation-health-score";
-import { OperationEfficiencyCard } from "./operation-efficiency";
-import { NeedActionQueueCard } from "./need-action-queue";
-import { SlaRiskPredictionCard } from "./sla-risk-prediction";
 import { ActionStatusCard } from "./action-status";
 import { AdminActivityHistoryCard } from "./admin-activity-history";
 import { StoreQuickViewDrawer } from "./store-quick-view-drawer";
@@ -18,11 +14,13 @@ import { MessageOverviewCard } from "./message-overview";
 import { ResponseRateCard } from "./response-rate-card";
 import { CustomerDemandCard } from "./topic-analysis";
 import { PeakHourAnalysisCard } from "./peak-hour-analysis";
-import { StorePerformanceTable } from "./store-performance-table";
-import { BestPracticeCard } from "./best-practice-card";
-import { ImprovementCard } from "./improvement-card";
 import { FollowerGrowthCard } from "./follower-growth";
 import { OperationalInsightCard } from "./ai-insight-card";
+
+import { NetworkHealthBanner } from "./network-health-banner";
+import { TodayActionCenter } from "./today-action-center";
+import { CustomerDemandSignals } from "./customer-demand-signals";
+import { StorePerformanceOverview } from "./store-performance-overview";
 
 type Language = "th" | "en" | "zh";
 
@@ -126,57 +124,38 @@ export function DashboardView({
 
   const handlePeriodChange = (p: Period) => {
     setPeriod(p);
+    void loadAnalytics(p);
   };
 
+  const activeStoreQuickViewData = activeQuickViewStoreId && analytics?.storeQuickViews
+    ? analytics.storeQuickViews[activeQuickViewStoreId] ?? null
+    : null;
+
+  const effectiveLastUpdate = lastFetchAt || lastUpdatedAt;
+  const dataAgeMs = effectiveLastUpdate ? nowTimestamp - effectiveLastUpdate.getTime() : 0;
+  const isStaleData = Boolean(effectiveLastUpdate && dataAgeMs > 180_000);
   const formattedUpdatedAt = (lastFetchAt || lastUpdatedAt)?.toLocaleTimeString("th-TH", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
-  const effectiveLastUpdate = lastFetchAt || lastUpdatedAt;
-  const dataAgeMs = effectiveLastUpdate ? nowTimestamp - effectiveLastUpdate.getTime() : 0;
-  const isStaleData = Boolean(effectiveLastUpdate && dataAgeMs > 180_000);
-
-  const activeStoreQuickViewData = activeQuickViewStoreId && analytics?.storeQuickViews
-    ? analytics.storeQuickViews[activeQuickViewStoreId]
-    : null;
-
   return (
-    <div className="min-h-full bg-[var(--background)] p-4 sm:p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
-      {/* ─── Header Navigation Bar & Daily Summary Header ─────────────────── */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+    <div data-dashboard-view className="space-y-8 p-4 sm:p-6 max-w-[1600px] mx-auto">
+      {/* HEADER CONTROLS */}
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="px-2 py-0.5 text-xs font-bold rounded bg-emerald-600 text-white tracking-wider uppercase">OPPO</span>
-            <h1 className="text-xl font-extrabold text-[var(--foreground)] tracking-tight">
-              Daily Operation Control Center — Network Operations & Performance
-            </h1>
-          </div>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">
-            Production Readiness Edition: Data Trust, SLA Risk Prediction, Action Priority Score, and Operational Accountability.
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--foreground)] flex items-center gap-2">
+            <span>🛡️</span>
+            <span>OPPO Operations Command Center</span>
+          </h1>
+          <p className="text-xs text-[var(--muted-foreground)] font-medium mt-0.5">
+            Real-time Store Operations, Workload Intervention & Customer Demand Intelligence
           </p>
-
-          {/* Quick Summary Pill Bar */}
-          {analytics?.dailySummary && (
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
-              <span className="px-2.5 py-0.5 font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                Network Status: {analytics.dailySummary.networkStatus}
-              </span>
-              <span className="text-[var(--muted-foreground)] font-medium">•</span>
-              <span className="font-semibold text-[var(--foreground)]">{analytics.dailySummary.activeStoresCount} Stores Active</span>
-              <span className="text-[var(--muted-foreground)] font-medium">•</span>
-              <span className="font-semibold text-[var(--foreground)]">{analytics.dailySummary.totalMessagesToday} Messages Today</span>
-              <span className="text-[var(--muted-foreground)] font-medium">•</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{analytics.dailySummary.slaAchievementRate}% SLA Achievement</span>
-              <span className="text-[var(--muted-foreground)] font-medium">•</span>
-              <span className="font-bold text-rose-600 dark:text-rose-400">{analytics.dailySummary.storesNeedAttentionCount} Stores Need Attention</span>
-            </div>
-          )}
         </div>
 
-        <div className="flex items-center gap-3 self-start md:self-center">
-          {/* Period Selector Tabs */}
-          <div className="flex items-center p-1 rounded-lg border border-[var(--border)] bg-[var(--accent)] text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Period selector */}
+          <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-xs">
             {(["today", "7d", "30d"] as Period[]).map((p) => (
               <button
                 key={p}
@@ -184,7 +163,7 @@ export function DashboardView({
                 onClick={() => handlePeriodChange(p)}
                 className={`px-3 py-1 rounded-md font-semibold transition-all ${
                   period === p
-                    ? "bg-[var(--surface)] text-emerald-600 dark:text-emerald-400 shadow-sm"
+                    ? "bg-[var(--background)] text-emerald-600 dark:text-emerald-400 shadow-sm"
                     : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
@@ -239,47 +218,77 @@ export function DashboardView({
           </div>
         </div>
       ) : analytics ? (
-        <>
-          {/* HERO: Operation Health Score & Operation Efficiency KPI */}
-          <section aria-label="Operation Health Score" className="space-y-4">
-            <OperationHealthScoreHero health={analytics.operationHealth} language={language} />
-            <OperationEfficiencyCard efficiency={analytics.operationEfficiency} language={language} />
-          </section>
+        <div className="space-y-8">
+          {/* LEVEL 1: NETWORK HEALTH OVERVIEW */}
+          <NetworkHealthBanner
+            health={analytics.operationHealth}
+            efficiency={analytics.operationEfficiency}
+            language={language}
+          />
 
-          {/* ========================================================================= */}
-          {/* SECTION A: TODAY OPERATION (Real-Time Workload & Action Management)      */}
-          {/* ========================================================================= */}
-          <section aria-label="Today Operation Control Center" className="space-y-6 pt-2">
-            <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
-              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-rose-600 text-white uppercase tracking-wider">
-                ⚡ TODAY OPERATION
+          {/* LEVEL 2: TODAY ACTION CENTER (Full-width workflow area) */}
+          <TodayActionCenter
+            queue={analytics.needActionQueue}
+            predictions={analytics.slaRiskPrediction}
+            getStoreDisplayName={getStoreDisplayName}
+            onOpenStore={onOpenStore}
+            onQuickViewStore={(storeId) => setActiveQuickViewStoreId(storeId)}
+            language={language}
+          />
+
+          {/* LEVEL 3: CUSTOMER SIGNALS & DEMAND */}
+          <CustomerDemandSignals
+            correlations={analytics.customerDemandProductCorrelation}
+            language={language}
+          />
+
+          {/* LEVEL 4: STORE PERFORMANCE OVERVIEW (Need Attention vs Best Practice) */}
+          <StorePerformanceOverview
+            stores={analytics.storeRanking}
+            getStoreDisplayName={getStoreDisplayName}
+            onOpenStore={onOpenStore}
+            onSelectStoreQuickView={(storeId) => setActiveQuickViewStoreId(storeId)}
+            language={language}
+          />
+
+          {/* LEVEL 5: ANALYTICS & TRENDS (Pushed Lower) */}
+          <section aria-label="Analytical Trends & Workload Performance" className="space-y-6 pt-4 border-t border-[var(--border)]">
+            <div className="flex items-center gap-2 pb-2">
+              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-blue-600 text-white uppercase tracking-wider">
+                LEVEL 5 · ANALYTICS
               </span>
               <h2 className="text-base font-extrabold text-[var(--foreground)] tracking-tight">
-                Real-Time Workload Management, SLA Risk Prediction & Intervention Queue
+                📊 Analytical Trends & Peak Traffic Analysis
               </h2>
             </div>
 
-            {/* Action Center & SLA Risk Prediction Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7">
-                <NeedActionQueueCard
-                  queue={analytics.needActionQueue}
-                  getStoreDisplayName={getStoreDisplayName}
-                  onOpenStore={onOpenStore}
-                  onQuickViewStore={(storeId) => setActiveQuickViewStoreId(storeId)}
-                  language={language}
-                />
-              </div>
-              <div className="lg:col-span-5">
-                <SlaRiskPredictionCard
-                  predictions={analytics.slaRiskPrediction}
-                  getStoreDisplayName={getStoreDisplayName}
-                  language={language}
-                />
-              </div>
+            <div className="space-y-4">
+              <ExecutiveKpiCards data={analytics.summaryCards} language={language} />
+              <MessageOverviewCard cards={analytics.summaryCards} trend={analytics.trend7Days} language={language} />
+              <ResponseRateCard analytics={analytics.responseAnalytics} language={language} />
             </div>
 
-            {/* Workflow Status, Data Quality & Admin Activity Audit Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7">
+                <CustomerDemandCard correlations={analytics.customerDemandProductCorrelation} language={language} />
+              </div>
+              <div className="lg:col-span-5">
+                <PeakHourAnalysisCard analytics={analytics.peakHourAnalysis} language={language} />
+              </div>
+            </div>
+          </section>
+
+          {/* LEVEL 6: SYSTEM HEALTH & MAINTENANCE (Bottom Section) */}
+          <section aria-label="System Health & Operational Audit" className="space-y-6 pt-4 border-t border-[var(--border)]">
+            <div className="flex items-center gap-2 pb-2">
+              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-slate-700 text-white uppercase tracking-wider">
+                LEVEL 6 · SYSTEM HEALTH
+              </span>
+              <h2 className="text-base font-extrabold text-[var(--foreground)] tracking-tight">
+                ⚙️ Master Data Quality, Workflow Status & Audit Trail
+              </h2>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-4">
                 <ActionStatusCard workflow={analytics.actionWorkflowStatus} status={analytics.actionStatus} language={language} />
@@ -291,56 +300,7 @@ export function DashboardView({
                 <AdminActivityHistoryCard logs={analytics.adminActivity} getStoreDisplayName={getStoreDisplayName} language={language} />
               </div>
             </div>
-          </section>
 
-          {/* ========================================================================= */}
-          {/* SECTION B: PERFORMANCE INSIGHT (Analytical Trends & Network Benchmarks)  */}
-          {/* ========================================================================= */}
-          <section aria-label="Performance Insights & Analytics" className="space-y-6 pt-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
-              <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-blue-600 text-white uppercase tracking-wider">
-                📊 PERFORMANCE INSIGHT
-              </span>
-              <h2 className="text-base font-extrabold text-[var(--foreground)] tracking-tight">
-                Analytical Trends, Store SLA Benchmarking & Customer Demand
-              </h2>
-            </div>
-
-            {/* Executive KPIs & Workload Trends */}
-            <div className="space-y-4">
-              <ExecutiveKpiCards data={analytics.summaryCards} language={language} />
-              <MessageOverviewCard cards={analytics.summaryCards} trend={analytics.trend7Days} language={language} />
-              <ResponseRateCard analytics={analytics.responseAnalytics} language={language} />
-            </div>
-
-            {/* Customer Demand & Peak Traffic */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7">
-                <CustomerDemandCard correlations={analytics.customerDemandProductCorrelation} language={language} />
-              </div>
-              <div className="lg:col-span-5">
-                <PeakHourAnalysisCard analytics={analytics.peakHourAnalysis} language={language} />
-              </div>
-            </div>
-
-            {/* Store Performance Ranking Matrix & Benchmark Store Details */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-8">
-                <StorePerformanceTable
-                  stores={analytics.storeRanking}
-                  getStoreDisplayName={getStoreDisplayName}
-                  onOpenStore={onOpenStore}
-                  onSelectStoreQuickView={(storeId) => setActiveQuickViewStoreId(storeId)}
-                  language={language}
-                />
-              </div>
-              <div className="lg:col-span-4 flex flex-col gap-4">
-                <BestPracticeCard store={analytics.bestPracticeStore} getStoreDisplayName={getStoreDisplayName} onOpenStore={onOpenStore} language={language} />
-                <ImprovementCard store={analytics.needImprovementStore} getStoreDisplayName={getStoreDisplayName} onOpenStore={onOpenStore} language={language} />
-              </div>
-            </div>
-
-            {/* Follower Growth & Daily Brief */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-6">
                 <FollowerGrowthCard growth={analytics.summaryCards.followerGrowth} language={language} />
@@ -362,7 +322,7 @@ export function DashboardView({
             }}
             language={language}
           />
-        </>
+        </div>
       ) : null}
     </div>
   );
