@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { BmReplyStatus, ProductRelationship, PurchaseIntent, TopicCategory } from "@prisma/client";
 import { PrismaService } from "./prisma.service";
 
@@ -20,6 +20,9 @@ export class CustomerIntelligenceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async analyze(customerId: string): Promise<CustomerIntelligenceResult> {
+    if (!customerId || customerId.trim() === "" || customerId === "undefined" || customerId === "null") {
+      throw new BadRequestException("Invalid customer ID");
+    }
     const [customer, conversationCount] = await Promise.all([
       this.prisma.customer.findUnique({
         where: { id: customerId },

@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param } from "@nestjs/common";
+import { BadRequestException, Controller, Get, NotFoundException, Param } from "@nestjs/common";
 import { PrismaService } from "./prisma.service";
 import { CustomerIntelligenceService } from "./customer-intelligence.service";
 
@@ -8,6 +8,9 @@ export class CustomersController {
 
   @Get(":id/name-history")
   async nameHistory(@Param("id") id: string) {
+    if (!id || id.trim() === "" || id === "undefined" || id === "null") {
+      throw new BadRequestException("Invalid customer ID");
+    }
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       select: {
@@ -26,7 +29,10 @@ export class CustomersController {
   }
 
   @Get(":id/intelligence")
-  async customerIntelligence(@Param(":id") id: string) {
+  async customerIntelligence(@Param("id") id: string) {
+    if (!id || id.trim() === "" || id === "undefined" || id === "null") {
+      throw new BadRequestException("Invalid customer ID");
+    }
     return this.intelligence.analyze(id);
   }
 }

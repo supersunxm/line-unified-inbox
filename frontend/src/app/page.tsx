@@ -1843,7 +1843,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   useEffect(() => {
     let active = true;
-    if (!selectedApiConversation) {
+    const customerId = selectedApiConversation?.customer?.id;
+    if (!selectedApiConversation || !customerId || customerId === "undefined" || customerId === "null") {
       queueMicrotask(() => {
         if (active) {
           setCustomerNameHistory(null);
@@ -1857,7 +1858,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setCustomerNameHistoryLoading(true);
       setCustomerNameHistoryError(null);
       try {
-        const history = await api.customerNameHistory(selectedApiConversation.customer.id);
+        const history = await api.customerNameHistory(customerId);
         if (active) setCustomerNameHistory(history);
       } catch (error) {
         if (active) setCustomerNameHistoryError(error instanceof Error ? error.message : "Unable to load LINE name history");
@@ -1873,7 +1874,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   useEffect(() => {
     let active = true;
-    if (!selectedApiConversation) {
+    const customerId = selectedApiConversation?.customer?.id;
+    if (!selectedApiConversation || !customerId || customerId === "undefined" || customerId === "null") {
       queueMicrotask(() => {
         if (active) {
           setCustomerIntelligence(null);
@@ -1887,7 +1889,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setCustomerIntelligenceLoading(true);
       setCustomerIntelligenceError(null);
       try {
-        const intelligence = await api.customerIntelligence(selectedApiConversation.customer.id);
+        const intelligence = await api.customerIntelligence(customerId);
         if (active) setCustomerIntelligence(intelligence);
       } catch (error) {
         if (active) setCustomerIntelligenceError(error instanceof Error ? error.message : "Unable to load customer intelligence");
