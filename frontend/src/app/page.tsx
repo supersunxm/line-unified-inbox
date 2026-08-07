@@ -3125,303 +3125,266 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         <section data-chat-pane="detail" className="app-surface min-w-0 min-h-0 overflow-hidden">
           {selectedConversation && selectedConversationState ? (
             <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
-              <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 lg:px-5">
-                <div data-chat-detail-header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    {selectedApiConversation?.customer.pictureUrl ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-100 font-semibold text-green-800">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <h2 data-chat-detail-customer className="truncate text-xl font-bold tracking-tight">
-                          {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
-                        </h2>
-                        <span className="app-muted truncate text-sm font-medium">{selectedConversation.store}</span>
-                      </div>
-                      <div className="app-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                        <span>{text.messageReceived} {formatRelativeTime(selectedConversation.time, language)}</span>
-                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void refreshProfile()} className="rounded font-medium text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300">{text.refreshLineProfile}</button>
-                        {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="text-amber-700 dark:text-amber-300">{text.profileUnavailable}</span>}
-                      </div>
-                      {selectedApiConversation && (
-                        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--foreground)]">
-                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                            <span>{text.lineNameHistory}</span>
-                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">{text.currentLineName}</span>
-                          </div>
-                          <div className="mb-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-950/70">
-                            <div className="text-sm font-semibold">{customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}</div>
-                          </div>
-                          {customerNameHistoryLoading ? (
-                            <div className="text-sm text-slate-500">Loading...</div>
-                          ) : customerNameHistoryError ? (
-                            <div className="text-sm text-rose-600 dark:text-rose-400">{customerNameHistoryError}</div>
-                          ) : customerNameHistory?.history.length ? (
-                            <div className="space-y-2">
-                              {customerNameHistory.history.map((entry) => (
-                                <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950">
-                                  <div className="mb-1 flex items-center justify-between gap-3 text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                    <span>{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))}</span>
-                                    <span>{text.nameHistorySource}: {entry.source}</span>
-                                  </div>
-                                  <div className="font-medium">{entry.displayName}</div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-slate-500">{text.noNameHistory}</div>
-                          )}
-                        </div>
-                      )}
-                      {selectedApiConversation && (
-                        <div className="mt-3">
-                          <CustomerSignals
-                            events={customerEvents}
-                            isLoading={customerEventsLoading}
-                            error={customerEventsError}
-                            language={language}
-                          />
-                        </div>
-                      )}
-                      {selectedApiConversation && (
-                        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--foreground)]">
-                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                            <span>{text.customerIntelligence}</span>
-                            <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {customerIntelligence?.confidenceScore != null ? `${Math.round(customerIntelligence.confidenceScore * 100)}%` : "—"}</span>
-                          </div>
-                          {customerIntelligenceLoading ? (
-                            <div className="space-y-3">
-                              <div className="h-4 w-1/3 rounded-full bg-slate-200 dark:bg-slate-800" />
-                              <div className="h-4 rounded-full bg-slate-200 dark:bg-slate-800" />
-                              <div className="grid gap-2">
-                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
-                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
-                                <div className="h-10 rounded-2xl bg-slate-200 dark:bg-slate-800" />
-                              </div>
-                            </div>
-                          ) : customerIntelligenceError ? (
-                            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">
-                              <div className="font-semibold">{text.aiInsightError}</div>
-                              <p className="mt-1 text-sm">{customerIntelligenceError}</p>
-                            </div>
-                          ) : customerIntelligence ? (
-                            <div className="space-y-4">
-                              <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                                <div className="space-y-2">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.customerIntelligence}</div>
-                                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{text.aiInsightSummary}</div>
-                                </div>
-                                <div className="flex flex-col items-start gap-2 sm:items-end">
-                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200" : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300" : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span>
-                                  <div className="w-full max-w-[12rem] rounded-full bg-slate-200 p-1 dark:bg-slate-800">
-                                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} />
-                                  </div>
-                                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</div>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.intent}</div>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    {customerIntelligence.intent.length ? (
-                                      customerIntelligence.intent.map((item, index) => (
-                                        <span key={index} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>
-                                      ))
-                                    ) : (
-                                      <span className="text-sm text-slate-500">{text.none}</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.interestedProducts}</div>
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    {customerIntelligence.interestedProducts.length ? (
-                                      customerIntelligence.interestedProducts.map((product) => (
-                                        <span key={product} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>
-                                      ))
-                                    ) : (
-                                      <span className="text-sm text-slate-500">{text.none}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.recommendedActions}</p>
-                                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{text.recommendedActionsCardSubtext}</p>
-                                  </div>
-                                </div>
-                                <ul className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                                  {customerIntelligence.recommendedActions.length ? (
-                                    customerIntelligence.recommendedActions.map((action, index) => (
-                                      <li key={index} className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/70">
-                                        <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>
-                                        <span>{action}</span>
-                                      </li>
-                                    ))
-                                  ) : (
-                                    <li className="text-sm text-slate-500">{text.none}</li>
-                                  )}
-                                </ul>
-                              </div>
-
-                              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70">
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{text.evidence}</p>
-                                  <button type="button" onClick={() => setEvidenceExpanded((value) => !value)} className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200">
-                                    {evidenceExpanded ? text.hideEvidenceDetails : text.showEvidenceDetails}
-                                  </button>
-                                </div>
-                                {customerIntelligence.evidence.length ? (
-                                  <div className={`mt-3 space-y-2 ${evidenceExpanded ? "" : "overflow-hidden text-ellipsis max-h-24"}`}>
-                                    {customerIntelligence.evidence.map((item, index) => (
-                                      <div key={index} className="rounded-2xl bg-white p-3 text-sm text-slate-700 shadow-sm dark:bg-slate-950/80 dark:text-slate-300">{item}</div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="mt-3 text-sm text-slate-500">{text.noEvidence}</p>
-                                )}
-                              </div>
-
-                              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-900 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{text.aiRecommendedNextAction}</div>
-                                <p className="mt-2 leading-6">{aiRecommendedNextAction ?? text.noAiInsightAvailable}</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">{text.noCustomerIntelligence}</div>
-                          )}
-                        </div>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
-                          {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
+              {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
+              <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  {selectedApiConversation?.customer.pictureUrl
+                    ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center ring-2 ring-white shadow-sm" />
+                    : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 font-bold text-white shadow-sm">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
+                  }
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight">
+                        {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
+                      </h2>
+                      <span className="app-muted shrink-0 text-xs font-medium">{selectedConversation.store}</span>
+                      {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-300">{text.profileUnavailable}</span>}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {customerIntelligence && (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                          : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                          : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>
+                          {customerIntelligence.customerStage.replaceAll("_", " ")}
                         </span>
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
-                          {followUpStatusLabels[language][selectedConversationState.status]}
-                        </span>
-                        <select
-                          data-bm-reply-status-select
-                          aria-label={text.bmReplyStatus}
-                          disabled={isMutating || authUser?.role === "VIEWER"}
-                          value={selectedConversationState.bmReplyStatus}
-                          onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${
-                            selectedConversationState.bmReplyStatus === "REPLIED"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                              : selectedConversationState.bmReplyStatus === "NOTIFIED_BM"
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          }`}
-                        >
-                          <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
-                          <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
-                          <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
-                        </select>
-                      </div>
+                      )}
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                        {followUpStatusLabels[language][selectedConversationState.status]}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
+                        {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
+                      </span>
+                      <select
+                        data-bm-reply-status-select
+                        aria-label={text.bmReplyStatus}
+                        disabled={isMutating || authUser?.role === "VIEWER"}
+                        value={selectedConversationState.bmReplyStatus}
+                        onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
+                        className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${
+                          selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                          : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                      >
+                        <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
+                        <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
+                        <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
+                      </select>
+                      <span className="app-muted text-[11px]">{formatRelativeTime(selectedConversation.time, language)}</span>
                     </div>
                   </div>
-                  <button data-chat-detail-primary-action type="button" onClick={() => void openSelectedConversationInLineOa()} className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="เปิดใน LINE OA Manager">
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    data-chat-detail-secondary-action
+                    disabled={chatLoading}
+                    onClick={() => void refreshProfile()}
+                    title={text.refreshLineProfile}
+                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    ↻
+                  </button>
+                  <button
+                    data-chat-detail-primary-action
+                    type="button"
+                    onClick={() => void openSelectedConversationInLineOa()}
+                    className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label="เปิดใน LINE OA Manager"
+                  >
                     เปิดใน LINE OA <span aria-hidden="true">↗</span>
                   </button>
                 </div>
+              </header>
 
-                <section data-chat-message-card className="border-b border-[var(--border)] py-3" aria-label={text.conversations}>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
-                    <button
-                      data-chat-detail-secondary-action
-                      onClick={() => setShowTranslation(!showTranslation)}
-                      className="app-button-secondary rounded-lg border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    >
-                      🌐 {showTranslation ? text.showOriginal : text.translateMessage}
-                    </button>
-                  </div>
-
-                  <div data-chat-message-scroll className="min-h-[clamp(22rem,50vh,34rem)] max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain rounded-lg bg-slate-50 p-3 dark:bg-slate-950/60">
-                {chatHistory.hasEarlier && <div className="text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs">{text.loadEarlierMessages}</button></div>}
-                {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mr-2 mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[75%] rounded-2xl px-4 py-2 ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-bl-sm bg-white shadow-sm" : "rounded-br-sm bg-green-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className="mt-1 text-right text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
-                {chatHistory.items.length === 0 && <p className="py-12 text-center text-sm text-slate-500">{text.noMessages}</p>}
-                <div ref={chatEndRef} />
-                  </div>
-                  <p data-line-oa-manager-notice className="mt-2 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
-                </section>
-
-                <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
-                  <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="font-semibold">{text.productInsight}</h3>
-                      <div className="flex flex-wrap gap-2">
-                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
-                        <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
-                      </div>
-                    </div>
-                    <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                      <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
-                      <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
-                      <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
-                      <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
-                    </dl>
-                    <div className="mt-3 border-t border-[var(--border)] pt-3">
-                      <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                  {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
-                    .map(({ topic, source }) => (
-                      <span
-                        key={topic.id}
-                        className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
-                      >
-                        {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
-                      </span>
-                    ))}
-                  {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
-                      </div>
-                    </div>
-                  </section>
-
-                  <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
-                    <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
-                    <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
-                    <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
-                  </section>
-
-                  <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
-                    <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
-              {selectedConversationState.activityHistory.length > 0 ? (
-                <div className="space-y-2">
-                  {[...selectedConversationState.activityHistory]
-                    .reverse()
-                    .map((activity) => (
-                      <div
-                        key={activity.id}
-                        className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
-                      >
-                        <p className="text-sm">
-                          {activity.actionType === "messageReceived" ? (
-                            text.messageReceivedActivity
-                          ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
-                            <>
-                              {text.bmReplyStatusChangedTo}{" "}
-                              <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
-                            </>
-                          ) : activity.status ? (
-                            <>
-                              {text.statusChangedTo}{" "}
-                              <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
-                            </>
-                          ) : null}
-                        </p>
-                        <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
-                          {formatRelativeTime(activity.timestamp, language)}
-                        </time>
-                      </div>
-                    ))}
+              {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
+                  <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
+                  <button
+                    data-chat-detail-secondary-action
+                    onClick={() => setShowTranslation(!showTranslation)}
+                    className="app-button-secondary rounded-lg border px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    🌐 {showTranslation ? text.showOriginal : text.translateMessage}
+                  </button>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-500">{text.noActivity}</p>
+                <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
+                  {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">{text.loadEarlierMessages}</button></div>}
+                  {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" : "rounded-2xl rounded-br-sm bg-green-100 px-4 py-2.5 dark:bg-green-900/60"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                  {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
+                  <div ref={chatEndRef} />
+                </div>
+                <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] px-4 py-2 text-xs text-blue-800 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
+              </div>
+
+              {/* ── 3. AI INTENT CONTEXT CHIPS ──────────────────────── */}
+              {customerIntelligence && (customerIntelligence.intent.length > 0 || customerIntelligence.interestedProducts.length > 0) && (
+                <div data-chat-intent-chips className="shrink-0 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)] px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Context:</span>
+                    {customerIntelligence.intent.map((item, i) => (
+                      <span key={i} className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">{item}</span>
+                    ))}
+                    {customerIntelligence.interestedProducts.map((product, i) => (
+                      <span key={`p${i}`} className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">📱 {product}</span>
+                    ))}
+                  </div>
+                </div>
               )}
-                  </section>
+
+              {/* ── 4. INFORMATION PANELS + LOWER SECTIONS ─────────── */}
+              <div data-chat-detail-scroll className="min-h-0 shrink-0 overflow-y-auto" style={{ maxHeight: "clamp(14rem, 30vh, 22rem)" }}>
+                <div className="px-3 py-3 sm:px-4">
+
+                  {/* 4a. 2-column info grid: Customer Profile | AI Intelligence */}
+                  <div className="grid grid-cols-2 gap-3 border-b border-[var(--border)] pb-3">
+                    {/* Customer Profile column */}
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer Profile</p>
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex justify-between gap-2"><span className="text-slate-500">Name</span><span className="truncate text-right font-medium">{selectedApiConversation?.customer.displayName ?? selectedConversation.customer}</span></div>
+                          <div className="flex justify-between gap-2"><span className="text-slate-500">Store</span><span className="truncate text-right font-medium">{selectedConversation.store}</span></div>
+                          {customerIntelligence && <div className="flex justify-between gap-2"><span className="text-slate-500">Stage</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span></div>}
+                          <div className="flex justify-between gap-2"><span className="text-slate-500">Waiting</span><span className="font-medium">{formatRelativeTime(selectedConversation.time, language)}</span></div>
+                        </div>
+                      </div>
+                      {selectedApiConversation && (
+                        <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Behavior Signals</p>
+                          <CustomerSignals events={customerEvents} isLoading={customerEventsLoading} error={customerEventsError} language={language} />
+                        </div>
+                      )}
+                    </div>
+                    {/* AI Intelligence column */}
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{text.customerIntelligence}</p>
+                        {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
+                      </div>
+                      {customerIntelligenceLoading ? (
+                        <div className="space-y-2">
+                          <div className="h-3 w-1/2 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
+                          <div className="h-3 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
+                          <div className="h-8 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+                        </div>
+                      ) : customerIntelligenceError ? (
+                        <p className="text-xs text-rose-600 dark:text-rose-400">{customerIntelligenceError}</p>
+                      ) : customerIntelligence ? (
+                        <div className="space-y-2 text-xs">
+                          <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} /></div>
+                          {customerIntelligence.intent.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.intent}</p><div className="flex flex-wrap gap-1">{customerIntelligence.intent.map((item, i) => <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>)}</div></div>}
+                          {customerIntelligence.interestedProducts.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.interestedProducts}</p><div className="flex flex-wrap gap-1">{customerIntelligence.interestedProducts.map((product, i) => <span key={i} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>)}</div></div>}
+                          {aiRecommendedNextAction && <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-900 dark:bg-blue-950/60"><p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-300">{text.aiRecommendedNextAction}</p><p className="mt-1 text-[11px] text-slate-800 dark:text-blue-100 leading-relaxed">{aiRecommendedNextAction}</p></div>}
+                          {customerIntelligence.recommendedActions.length > 0 && <ul className="space-y-1">{customerIntelligence.recommendedActions.slice(0, 3).map((action, i) => <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-700 dark:text-slate-300"><span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[8px] text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>{action}</li>)}</ul>}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500">{text.noCustomerIntelligence}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4b. Name History — collapsible */}
+                  {selectedApiConversation && (
+                    <details className="group border-b border-[var(--border)] py-2">
+                      <summary className="flex cursor-pointer items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 list-none">
+                        <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+                        {text.lineNameHistory} — {customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}
+                      </summary>
+                      <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
+                        {customerNameHistoryLoading ? <p className="text-slate-500">Loading...</p>
+                          : customerNameHistoryError ? <p className="text-rose-600">{customerNameHistoryError}</p>
+                          : customerNameHistory?.history.length ? (
+                            <div className="space-y-1.5">
+                              {customerNameHistory.history.map((entry) => (
+                                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
+                                  <span className="font-medium">{entry.displayName}</span>
+                                  <span className="shrink-0 text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))} · {entry.source}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : <p className="text-slate-500">{text.noNameHistory}</p>}
+                      </div>
+                    </details>
+                  )}
+
+                  <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
+                    <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-semibold">{text.productInsight}</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
+                          <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
+                        </div>
+                      </div>
+                      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                        <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
+                        <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
+                        <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
+                        <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
+                      </dl>
+                      <div className="mt-3 border-t border-[var(--border)] pt-3">
+                        <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
+                        <div className="flex flex-wrap gap-1.5">
+                    {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
+                      .map(({ topic, source }) => (
+                        <span
+                          key={topic.id}
+                          className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
+                        >
+                          {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
+                        </span>
+                      ))}
+                    {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
+                        </div>
+                      </div>
+                    </section>
+
+                    <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
+                      <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
+                      <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                      <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                    </section>
+
+                    <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
+                      <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
+                {selectedConversationState.activityHistory.length > 0 ? (
+                  <div className="space-y-2">
+                    {[...selectedConversationState.activityHistory]
+                      .reverse()
+                      .map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
+                        >
+                          <p className="text-sm">
+                            {activity.actionType === "messageReceived" ? (
+                              text.messageReceivedActivity
+                            ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
+                              <>
+                                {text.bmReplyStatusChangedTo}{" "}
+                                <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
+                              </>
+                            ) : activity.status ? (
+                              <>
+                                {text.statusChangedTo}{" "}
+                                <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
+                              </>
+                            ) : null}
+                          </p>
+                          <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
+                            {formatRelativeTime(activity.timestamp, language)}
+                          </time>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">{text.noActivity}</p>
+                )}
+                    </section>
+                  </div>
                 </div>
               </div>
 
