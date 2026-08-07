@@ -5,6 +5,7 @@ import { formatWaitingDuration, getSlaRiskVariant, type StoreBmCountsItem } from
 
 export type SidebarView =
   | "dashboard"
+  | "all"
   | "notReplied"
   | "notifiedBm"
   | "replied"
@@ -68,6 +69,8 @@ export function ContextSidebar({
     clearAllFilters();
   };
 
+  const totalOverviewCount = (overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0);
+
   return (
     <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-y-auto border-r p-4">
       {/* Overview Status Section */}
@@ -76,6 +79,17 @@ export function ContextSidebar({
       </p>
 
       <nav aria-label="Conversation filters" className="space-y-1">
+        <button
+          type="button"
+          onClick={() => selectSidebarView("all")}
+          className={`${sidebarButtonClass("all")} flex items-center justify-between`}
+        >
+          <span className="truncate">🌐 {text.all || "ทั้งหมด"}</span>
+          <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            {totalOverviewCount}
+          </span>
+        </button>
+
         <button
           type="button"
           onClick={() => selectSidebarView("notReplied")}

@@ -16,6 +16,7 @@ export function getConversationListTitle(
   if (sidebarView === "notReplied") return labels.notReplied;
   if (sidebarView === "notifiedBm") return labels.notifiedBm;
   if (sidebarView === "replied") return labels.replied;
+  if (sidebarView === "all") return labels.conversations;
   if (statusFilter !== "all") return labels.status(statusFilter);
   return labels.conversations;
 }

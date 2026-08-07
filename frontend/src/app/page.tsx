@@ -1023,7 +1023,7 @@ const statusOptions: FollowUpStatus[] = [
 const defaultUiPreferences: UiPreferences = {
   language: "th",
   searchText: "",
-  sidebarView: "dashboard",
+  sidebarView: "all",
   store: "all",
   status: "all",
   priority: "all",
@@ -1050,9 +1050,10 @@ function isLanguage(value: unknown): value is Language {
 function isSidebarView(value: unknown): value is SidebarView {
   return (
     value === "dashboard" ||
-    value === "incoming" ||
-    value === "followUp" ||
-    value === "reminded" ||
+    value === "all" ||
+    value === "notReplied" ||
+    value === "notifiedBm" ||
+    value === "replied" ||
     value === "stores" ||
     value === "customerInsights" ||
     value === "lineOaManagement" ||
@@ -1293,7 +1294,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     return status === "active" || status === "error" ? status : "all";
   });
   const [sidebarView, setSidebarView] = useState<SidebarView>(
-    initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "notReplied" : "dashboard",
+    initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "all" : "dashboard",
   );
   const [selectedStore, setSelectedStore] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -1699,7 +1700,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ? "notifiedBm"
           : route.bmReplyStatus === "REPLIED"
             ? "replied"
-            : "notReplied",
+            : route.bmReplyStatus === "NOT_REPLIED"
+              ? "notReplied"
+              : "all",
       );
       setStatusFilter("all");
       setPriorityFilter(route.priority?.toLowerCase() === "high" ? "High" : "all");
@@ -1968,7 +1971,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     seriesFilter !== "all" || modelFilter !== "all" ||
     topicFilter !== "all" ||
     lineOaFilter !== "all" ||
-    sidebarView === "notifiedBm" || sidebarView === "replied";
+    (sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied");
   const conversationListTitle = getConversationListTitle(sidebarView, statusFilter, {
     conversations: text.conversationsToFollow,
     notReplied: text.notReplied,
@@ -2012,7 +2015,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   async function updateBmReplyStatus(status: ApiBmReplyStatus) {
     if (!selectedConversation || isMutating || authUser?.role === "VIEWER") return;
-    const previousState = conversationStates[selectedConversation.id];
+    const conversationId = selectedConversation.id;
+    const previousState = conversationStates[conversationId];
     if (!previousState || previousState.bmReplyStatus === status) return;
 
     const completesFollowUp = status === "REPLIED" && previousState.status !== "completed";
@@ -2020,11 +2024,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setApiError(null);
 
     setConversationStates((currentStates) => {
-      const current = currentStates[selectedConversation.id];
+      const current = currentStates[conversationId];
       if (!current) return currentStates;
       return {
         ...currentStates,
-        [selectedConversation.id]: {
+        [conversationId]: {
           ...current,
           bmReplyStatus: status,
           ...(completesFollowUp ? { status: "completed" } : {}),
@@ -2032,11 +2036,23 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       };
     });
 
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              bmReplyStatus: status,
+              ...(completesFollowUp ? { status: "completed" } : {}),
+            }
+          : c
+      )
+    );
+
     try {
       const response = await api.updateBmReplyStatus(selectedConversation.id, status);
       setConversationStates((currentStates) => ({
         ...currentStates,
-        [selectedConversation.id]: mapApiConversationState(response.conversation),
+        [conversationId]: mapApiConversationState(response.conversation),
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
@@ -2044,10 +2060,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
+
+      if (sidebarView !== "all") {
+        void loadConversations(activeConversationQuery, true);
+      }
     } catch (error) {
       setConversationStates((currentStates) => ({
         ...currentStates,
-        [selectedConversation.id]: previousState,
+        [conversationId]: previousState,
       }));
       setApiError(error instanceof Error ? error.message : "BM reply status update failed");
     } finally {
@@ -2078,6 +2098,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       };
     });
 
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              bmReplyStatus: status,
+              ...(completesFollowUp ? { status: "completed" } : {}),
+            }
+          : c
+      )
+    );
+
     try {
       const response = await api.updateBmReplyStatus(conversationId, status);
       setConversationStates((currentStates) => ({
@@ -2099,6 +2131,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ? `已更新状态为 '${statusLabel}'`
           : `Updated status to '${statusLabel}'`,
       );
+
+      if (sidebarView !== "all") {
+        void loadConversations(activeConversationQuery, true);
+      }
     } catch (error) {
       if (previousState) {
         setConversationStates((currentStates) => ({
@@ -2184,7 +2220,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setModelFilter("all");
     setTopicFilter("all");
     setLineOaFilter("all");
-    setSidebarView("notReplied");
+    setSidebarView("all");
   }
 
   function openMonitoring(filters: {
@@ -2875,7 +2911,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
                 {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
                 {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                {(sidebarView === "notifiedBm" || sidebarView === "replied") && <button onClick={() => setSidebarView("notReplied")} className="app-chip rounded-full px-2 py-1 text-xs">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : "REPLIED"]} ×</button>}
+                {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
                 <button onClick={clearAllFilters} className="text-xs font-medium text-red-700 hover:underline">{text.clearAll}</button>
               </div>
             )}
