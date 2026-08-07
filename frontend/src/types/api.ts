@@ -637,3 +637,165 @@ export type FriendAttributionSessionStatusResult = {
   fallbackUrl?: string;
   liffId?: string | null;
 };
+
+export interface AIRootCauseDiagnosis {
+  primaryCause: string;
+  contributingFactors: string[];
+  evidence: string[];
+  category: "WORKLOAD_SURGE" | "RESPONSE_CAPACITY" | "BM_ESCALATION_DELAY" | "PRODUCT_INQUIRY_COMPLEXITY" | "STORE_OPERATION_ISSUE";
+}
+
+export interface AIRootCauseInsight {
+  id: string;
+  storeId: string;
+  storeName: string;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM";
+  problem: string;
+  problemAge: string;
+  diagnosis: AIRootCauseDiagnosis;
+  confidence: number;
+  recommendation: string;
+  expectedImpact: string;
+  createdAt: string;
+}
+
+export interface AIRootCauseSummary {
+  summary: string;
+  confidence: number;
+  totalAffectedStores: number;
+  insights: AIRootCauseInsight[];
+}
+
+export type ExecutiveStatus = "HEALTHY" | "ATTENTION" | "CRITICAL";
+
+export interface ExecutiveCriticalIssue {
+  storeName: string;
+  issue: string;
+  impact: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export interface ExecutiveRecommendedDecision {
+  action: string;
+  owner: string;
+  deadline: string;
+  expectedImpact: string;
+}
+
+export interface ExecutiveDailyBrief {
+  date: string;
+  overallStatus: ExecutiveStatus;
+  headline: string;
+  keyHighlights: string[];
+  criticalIssues: ExecutiveCriticalIssue[];
+  rootCauseSummary: string;
+  recommendedDecisions: ExecutiveRecommendedDecision[];
+  metrics: {
+    totalMessages: number;
+    slaRate: number;
+    pending: number;
+    riskStores: number;
+  };
+  generatedAt: string;
+}
+
+export type BIQueryIntent =
+  | "sla_analysis"
+  | "root_cause"
+  | "store_risk"
+  | "bm_performance"
+  | "customer_demand"
+  | "operation_recommendation";
+
+export interface BIEvidenceItem {
+  metric: string;
+  value: string;
+  explanation: string;
+}
+
+export interface BIAnswer {
+  question: string;
+  intent: BIQueryIntent;
+  summary: string;
+  evidence: BIEvidenceItem[];
+  affectedStores: string[];
+  recommendation: string;
+  confidence: number;
+  generatedAt: string;
+}
+
+export type ActionType =
+  | "NOTIFY_BM"
+  | "ASSIGN_SUPPORT"
+  | "ESCALATE_MANAGER"
+  | "CREATE_TASK"
+  | "FOLLOW_UP";
+
+export type ActionStatus = "PENDING_APPROVAL" | "APPROVED" | "EXECUTING" | "COMPLETED";
+
+export interface OperationalActionTask {
+  id: string;
+  storeId: string;
+  storeName: string;
+  problem: string;
+  rootCause: string;
+  actionType: ActionType;
+  recommendedAction: string;
+  owner: string;
+  deadline: string;
+  priority: "CRITICAL" | "HIGH" | "MEDIUM";
+  status: ActionStatus;
+  expectedImpact: string;
+  createdAt: string;
+}
+
+export interface ActionImpactResultDto {
+  id: string;
+  taskId: string;
+  storeId: string;
+  storeName: string;
+  actionTitle: string;
+  beforeMetrics: {
+    slaRate: number;
+    pendingCount: number;
+    responseTimeMinutes: number;
+  };
+  afterMetrics: {
+    slaRate: number;
+    pendingCount: number;
+    responseTimeMinutes: number;
+  };
+  impactScore: number;
+  effectiveness: "SUCCESS" | "PARTIAL" | "FAILED";
+  improvementSummary: string;
+  learnedPattern: string;
+  evaluatedAt: string;
+}
+
+export interface ImpactSummary {
+  totalEvaluated: number;
+  successRatePct: number;
+  avgSlaRecoveryPct: number;
+  topSuccessfulActions: ActionImpactResultDto[];
+  learnedPatterns: string[];
+}
+
+export interface OperationalMemoryCaseDto {
+  id: string;
+  storeId: string;
+  storeName: string;
+  problemPattern: string;
+  rootCauseCategory: string;
+  successfulAction: string;
+  confidence: number;
+  timesApplied: number;
+  avgSlaLiftPct: number;
+  lastAppliedAt: string;
+}
+
+export interface OperationalMemorySummary {
+  totalStoredCases: number;
+  avgConfidencePct: number;
+  topSlaLiftCase: string;
+  cases: OperationalMemoryCaseDto[];
+}

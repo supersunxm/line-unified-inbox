@@ -26,10 +26,18 @@ import { CustomerIntelligenceService } from "./customer-intelligence.service";
 
 import { DashboardAnalyticsService } from "./dashboard-analytics.service";
 import { OperationReportService } from "./operation-report.service";
+import { RootCauseService } from "./ai/root-cause.service";
+import { RecommendationService } from "./ai/recommendation.service";
+import { ExecutiveBriefModule } from "./ai/executive-brief/executive-brief.module";
+import { BiAssistantModule } from "./ai/bi-assistant/bi-assistant.module";
+import { ActionAgentModule } from "./ai/action-agent/action-agent.module";
+import { ImpactEngineModule } from "./ai/impact-engine/impact-engine.module";
+import { AiTelemetryModule } from "./ai/telemetry/ai-telemetry.module";
+import { OperationalMemoryModule } from "./ai/memory/operational-memory.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule],
+  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController],
-  providers: [ConversationsService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService],
+  providers: [ConversationsService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService],
 })
 export class AppModule {}

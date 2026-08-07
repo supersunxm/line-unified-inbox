@@ -1,135 +1,98 @@
 "use client";
 
 import React from "react";
-import type { SlaRiskPredictionItem } from "@/types/api";
+import type { DashboardAnalyticsResponse, SlaRiskPredictionItem } from "@/types/api";
+import { transformStoreRiskMatrixProps } from "./dashboard-transformers";
+import { StoreRiskScatterMatrix } from "./store-risk-scatter-matrix";
 
 interface SlaRiskPredictionProps {
   predictions: SlaRiskPredictionItem[];
+  analytics?: DashboardAnalyticsResponse;
   getStoreDisplayName: (name: string) => string;
+  onOpenStore?: (storeId: string) => void;
   onNotifyBm?: (storeId: string, storeName: string) => void;
+  onSelectStoreQuickView?: (storeId: string) => void;
   language: "th" | "en" | "zh";
 }
 
 const LABELS = {
   th: {
-    title: "⚠️ พยากรณ์ความเสี่ยงผิดเป้า 24H SLA (SLA Risk Prediction)",
-    subtitle: "คาดการณ์สาขาที่มีโอกาสเกิด SLA Breach ภายใน 24 ชั่วโมง",
-    waiting: "รอการตอบกลับแล้ว:",
-    expectedBreach: "คาดว่าจะผิด SLA ภายใน:",
-    risk: "ระดับความเสี่ยง:",
-    recommendation: "ข้อแนะนำ:",
-    notifyNow: "Notify BM Now",
-    hours: "ชั่วโมง",
-    noBreachRisk: "ไม่มีสาขาที่มีความเสี่ยงผิดเป้า SLA ในขณะนี้",
-    notifyAlert: "ส่งการแจ้งเตือนไปยังผู้จัดการสาขา (BM) เรียบร้อยแล้ว",
+    title: "เมทริกซ์วิเคราะห์ความเสี่ยงสาขาและแผงปฏิบัติการด่วน",
+    subtitle: "วิเคราะห์ความสัมพันธ์ระหว่างปริมาณข้อความกับอัตราตอบตาม SLA 24 ชม.",
   },
   en: {
-    title: "⚠️ SLA Risk Prediction",
-    subtitle: "Predicting conversations likely to breach 24H SLA target",
-    waiting: "Waiting:",
-    expectedBreach: "Expected breach:",
-    risk: "Risk:",
-    recommendation: "Recommendation:",
-    notifyNow: "Notify BM Now",
-    hours: "hours",
-    noBreachRisk: "No stores currently predicted to breach 24H SLA target.",
-    notifyAlert: "Notification dispatched to Store Branch Manager (BM).",
+    title: "Store Risk Scatter Matrix & Critical Intervention Panel",
+    subtitle: "4-Quadrant SLA & Message Volume Analysis (Bubble size = Pending)",
   },
   zh: {
-    title: "⚠️ SLA 违约风险预测 (SLA Risk Prediction)",
-    subtitle: "预测可能超过 24 小时 SLA 的门店会话",
-    waiting: "已等待:",
-    expectedBreach: "预计违约:",
-    risk: "风险等级:",
-    recommendation: "建议:",
-    notifyNow: "Notify BM Now",
-    hours: "小时",
-    noBreachRisk: "当前没有门店被预测为 SLA 违约风险。",
-    notifyAlert: "已成功通知门店分店经理 (BM)。",
+    title: "门店风险散点图阵与紧急干预面板",
+    subtitle: "消息量与 24 小时 SLA 回复率相关性分析",
   },
 };
 
 export function SlaRiskPredictionCard({
   predictions,
+  analytics,
   getStoreDisplayName,
+  onOpenStore,
   onNotifyBm,
+  onSelectStoreQuickView,
   language,
 }: SlaRiskPredictionProps) {
   const t = LABELS[language] ?? LABELS.en;
 
-  const handleNotify = (storeId: string, name: string) => {
-    if (onNotifyBm) {
-      onNotifyBm(storeId, name);
-    } else {
-      alert(`${t.notifyAlert} (${getStoreDisplayName(name)})`);
-    }
+  const fullAnalytics: DashboardAnalyticsResponse = analytics ?? {
+    slaRiskPrediction: predictions,
+    operationHealth: { responseRate24h: 0.8, count24hReplied: 0, totalMessagesToday: 0, responseRateDiffYesterday: 0, breakdown: { compositeScore: 0.8, responseSlaScore: 0.8, pendingControlScore: 0.8, escalationControlScore: 0.8, growthScore: 0.8 } },
+    operationEfficiency: { opened: 0, resolved: 0, closureRate: 0.8, averageResolutionTime: "12m" },
+    period: "today",
+    periodStartDate: new Date().toISOString(),
+    dataQuality: { status: "Healthy", conversationCount: 100, storeCount: 10, lastUpdated: new Date().toISOString(), warnings: [] },
+    dailySummary: { networkStatus: "🟢 Healthy", activeStoresCount: 10, totalMessagesToday: 0, slaAchievementRate: 80, storesNeedAttentionCount: 0, lastUpdatedTime: "" },
+    actionWorkflowStatus: { open: 0, waitingBm: 0, bmReplied: 0, resolved: 0, completionRate: 100 },
+    actionStatus: { resolved: 0, waitingBm: 0, pendingReview: 0, completionRate: 100 },
+    summaryCards: { messagesToday: 0, messagesYesterday: 0, messagesDiffPct: 0, repliedCount: 0, repliedPercentage: 0, bmNotifiedCount: 0, bmNotifiedPercentage: 0, pendingCount: 0, responseRate24h: 0.8, responseRateDiffYesterday: 0, count24hReplied: 0, followerGrowth: { totalFriends: 0, addedToday: 0, blockedToday: 0, netToday: 0 } },
+    responseAnalytics: { avgResponseMinutes: 10, medianResponseMinutes: 5, buckets: { under4h: 10, between4and12h: 0, between12and24h: 0, over24h: 0 } },
+    trend7Days: [],
+    topTopics: [],
+    topProducts: [],
+    customerDemandProductCorrelation: [],
+    peakHourAnalysis: { peakWindow: "18:00 - 20:00", peakTrafficCount: 40, hourlyDistribution: Array(24).fill(0), topStores: [], recommendation: "" },
+    needActionQueue: [],
+    adminActivity: [],
+    storeQuickViews: {},
+    storeRanking: (predictions || []).map((p) => ({
+      rank: 1,
+      storeId: p.storeId,
+      storeName: p.storeName,
+      messages: Math.max(10, Math.round((p.currentWaitingHours || 1) * 5)),
+      replied: 2,
+      bmNotified: 1,
+      pending: 3,
+      responseRate24h: p.riskLevel === "HIGH" ? 0.3 : 0.7,
+      networkAvgResponseRate24h: 0.8,
+      gapVsNetworkAvg: -0.2,
+      avgResponseMinutes: Math.round((p.currentWaitingHours || 1) * 60),
+      followerGrowth: 0,
+      performanceScore: 50,
+      status: "Need Attention" as const,
+    })),
+    bestPracticeStore: null,
+    needImprovementStore: null,
+    operationalInsights: [],
   };
 
+  const points = transformStoreRiskMatrixProps(fullAnalytics);
+
   return (
-    <div className="app-card p-5 rounded-xl border border-amber-300 dark:border-amber-800/60 bg-[var(--surface)] shadow-sm space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 text-[10px] font-black rounded bg-amber-600 text-white uppercase tracking-wider">
-            EARLY WARNING
-          </span>
-          <h3 className="text-sm font-bold text-[var(--foreground)]">{t.title}</h3>
-        </div>
-        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{t.subtitle}</p>
-      </div>
-
-      <div className="space-y-3">
-        {!predictions || predictions.length === 0 ? (
-          <div className="py-6 text-center text-xs text-[var(--muted-foreground)] border border-dashed border-[var(--border)] rounded-lg">
-            {t.noBreachRisk}
-          </div>
-        ) : (
-          predictions.map((p) => (
-            <div
-              key={p.storeId}
-              className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            >
-              <div className="space-y-1 text-xs">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-extrabold text-[var(--foreground)]">{getStoreDisplayName(p.storeName)}</h4>
-                  <span
-                    className={`px-2 py-0.5 text-[10px] font-extrabold rounded ${
-                      p.riskLevel === "HIGH"
-                        ? "bg-rose-600 text-white"
-                        : p.riskLevel === "MEDIUM"
-                        ? "bg-amber-600 text-white"
-                        : "bg-emerald-600 text-white"
-                    }`}
-                  >
-                    {p.riskLevel} RISK
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 text-[var(--muted-foreground)] pt-0.5">
-                  <span>
-                    {t.waiting} <strong className="text-[var(--foreground)]">{p.currentWaitingHours} {t.hours}</strong>
-                  </span>
-                  <span>•</span>
-                  <span>
-                    {t.expectedBreach} <strong className="text-rose-600 dark:text-rose-400 font-extrabold">in {p.expectedBreachHours} {t.hours}</strong>
-                  </span>
-                </div>
-
-                <p className="text-amber-800 dark:text-amber-300 font-semibold pt-0.5">
-                  {t.recommendation} {p.recommendation}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleNotify(p.storeId, p.storeName)}
-                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors shrink-0 self-end sm:self-center"
-              >
-                {t.notifyNow}
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    <StoreRiskScatterMatrix
+      points={points}
+      getStoreDisplayName={getStoreDisplayName}
+      onOpenStore={(id) => onOpenStore?.(id)}
+      onSelectStoreQuickView={(id) => onSelectStoreQuickView?.(id)}
+      onNotifyBm={onNotifyBm}
+      title={t.title}
+      subtitle={t.subtitle}
+    />
   );
 }

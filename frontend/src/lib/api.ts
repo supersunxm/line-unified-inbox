@@ -184,4 +184,27 @@ export const api = {
     request<{ success: boolean; lineOaId: string }>(`/friend-source-links/attribution-configs/${encodeURIComponent(lineOaId)}`, {
       method: "DELETE",
     }),
+  getRootCauseInsights: (period?: string) =>
+    request<import("@/types/api").AIRootCauseSummary>(`/dashboard/root-cause-insights?period=${encodeURIComponent(period || "today")}`),
+  getExecutiveDailyBrief: (period?: string) =>
+    request<import("@/types/api").ExecutiveDailyBrief>(`/dashboard/executive-daily-brief?period=${encodeURIComponent(period || "today")}`),
+  queryBiAssistant: (question: string, period?: string) =>
+    request<import("@/types/api").BIAnswer>(`/dashboard/bi-assistant/query?period=${encodeURIComponent(period || "today")}`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+  getOperationalActions: (period?: string) =>
+    request<import("@/types/api").OperationalActionTask[]>(`/dashboard/actions?period=${encodeURIComponent(period || "today")}`),
+  approveOperationalAction: (id: string) =>
+    request<import("@/types/api").OperationalActionTask>(`/dashboard/actions/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+  completeOperationalAction: (id: string) =>
+    request<import("@/types/api").OperationalActionTask>(`/dashboard/actions/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+    }),
+  getActionImpact: (period?: string) =>
+    request<import("@/types/api").ImpactSummary>(`/dashboard/action-impact?period=${encodeURIComponent(period || "today")}`),
+  getOperationalMemory: (period?: string) =>
+    request<import("@/types/api").OperationalMemorySummary>(`/dashboard/operational-memory?period=${encodeURIComponent(period || "today")}`),
 };

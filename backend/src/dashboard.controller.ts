@@ -3,7 +3,7 @@ import { PrismaService } from "./prisma.service";
 import { OperationsService } from "./operations/operations.service";
 import { AnalyticsPeriod, DashboardAnalyticsService, UserRolePermission } from "./dashboard-analytics.service";
 import { OperationReportService } from "./operation-report.service";
-import { Prisma } from "@prisma/client";
+import { RootCauseService } from "./ai/root-cause.service";
 
 @Controller("dashboard")
 export class DashboardController {
@@ -12,6 +12,7 @@ export class DashboardController {
     private readonly operations: OperationsService,
     private readonly analytics: DashboardAnalyticsService,
     private readonly reportService: OperationReportService,
+    private readonly rootCauseService: RootCauseService,
   ) {}
 
   @Get("analytics")
@@ -41,6 +42,23 @@ export class DashboardController {
     return this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds);
   }
 
+  @Get("root-cause-insights")
+  async getRootCauseInsights(
+    @Query("period") period?: AnalyticsPeriod,
+    @Query("role") role?: UserRolePermission,
+    @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
+    @Req() req?: any,
+  ) {
+    const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const userRole: UserRolePermission = role || req?.user?.role || "HEAD_OFFICE";
+
+    const allowedStoreIds = allowedStoreIdsRaw
+      ? allowedStoreIdsRaw.split(",").map((s) => s.trim())
+      : req?.user?.allowedStoreIds ?? undefined;
+
+    return this.rootCauseService.generateRootCauseInsights(safePeriod, userRole, allowedStoreIds);
+  }
+
   @Get("report/daily")
   async getDailyReport(
     @Query("period") period?: AnalyticsPeriod,
@@ -56,58 +74,5 @@ export class DashboardController {
       : req?.user?.allowedStoreIds ?? undefined;
 
     return this.reportService.generateDailyReport(safePeriod, userRole, allowedStoreIds);
-  }
-
-  @Get("summary")
-  async summary() {
-    const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
-    const operationalWhere = { store: { archivedAt: null }, ...resetFilter };
-    const historicalWhere = { store: { archivedAt: null } } as const;
-
-    const [total, byStatus, byPriority, stores, products, topics, recentActivity, storeByStatusGroups, storeByPriorityGroups] = await this.prisma.$transaction([
-      this.prisma.conversation.count({ where: operationalWhere }),
-      this.prisma.conversation.groupBy({ by: ["followUpStatus"], where: operationalWhere, _count: true, orderBy: { followUpStatus: "asc" } }),
-      this.prisma.conversation.groupBy({ by: ["priority"], where: operationalWhere, _count: true, orderBy: { priority: "asc" } }),
-      this.prisma.store.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true } }),
-      this.prisma.conversationProduct.groupBy({ by: ["productModelId"], where: { conversation: historicalWhere }, _count: true, orderBy: { _count: { productModelId: "desc" } } }),
-      this.prisma.conversationTopic.groupBy({ by: ["topicId"], where: { conversation: historicalWhere }, _count: true, orderBy: { _count: { topicId: "desc" } } }),
-      this.prisma.activityHistory.findMany({ where: { conversation: operationalWhere }, take: 10, orderBy: { createdAt: "desc" }, include: { conversation: { include: { customer: true, store: true } } } }),
-      this.prisma.conversation.groupBy({ by: ["storeId", "followUpStatus"], where: operationalWhere, _count: true, orderBy: { storeId: "asc" } }),
-      this.prisma.conversation.groupBy({ by: ["storeId", "priority"], where: operationalWhere, _count: true, orderBy: { storeId: "asc" } }),
-    ]);
-    const productRecords = await this.prisma.productModel.findMany({ where: { id: { in: products.map((item) => item.productModelId) } } });
-    const topicRecords = await this.prisma.topic.findMany({ where: { id: { in: topics.map((item) => item.topicId) } } });
-
-    const byStatusMap = new Map<string, Record<string, number>>();
-    for (const g of storeByStatusGroups) {
-      const m = byStatusMap.get(g.storeId) ?? {};
-      const count = (g._count as unknown as number) ?? 0;
-      m[g.followUpStatus] = count;
-      byStatusMap.set(g.storeId, m);
-    }
-    const byPriorityMap = new Map<string, Record<string, number>>();
-    for (const g of storeByPriorityGroups) {
-      const m = byPriorityMap.get(g.storeId) ?? {};
-      const pcount = (g._count as unknown as number) ?? 0;
-      m[g.priority] = pcount;
-      byPriorityMap.set(g.storeId, m);
-    }
-
-    const storeMonitoring = stores.map((store) => {
-      const statusCounts = byStatusMap.get(store.id) ?? {};
-      const priorityCounts = byPriorityMap.get(store.id) ?? {};
-      const highestPriority = priorityCounts.CRITICAL ? "CRITICAL" : priorityCounts.HIGH ? "HIGH" : priorityCounts.NORMAL ? "NORMAL" : "LOW";
-      return { store: { id: store.id, name: store.name }, total: Object.values(statusCounts).reduce((s, v) => s + v, 0), byStatus: Object.fromEntries(["FOLLOW_UP", "REMINDED", "ACKNOWLEDGED", "COMPLETED", "ESCALATED"].map((status) => [status, statusCounts[status] ?? 0])), highestPriority };
-    });
-    return {
-      totalConversations: total,
-      countByStatus: Object.fromEntries(byStatus.map((item) => [item.followUpStatus, item._count])),
-      countByPriority: Object.fromEntries(byPriority.map((item) => [item.priority, item._count])),
-      storeMonitoring,
-      mostDiscussedProductModels: products.map((item) => ({ productModel: productRecords.find((record) => record.id === item.productModelId), count: item._count })),
-      topConversationTopics: topics.map((item) => ({ topic: topicRecords.find((record) => record.id === item.topicId), count: item._count })),
-      storesRequiringAttention: storeMonitoring.filter((item) => item.byStatus.FOLLOW_UP || item.byStatus.REMINDED || item.byStatus.ESCALATED),
-      recentActivity,
-    };
   }
 }

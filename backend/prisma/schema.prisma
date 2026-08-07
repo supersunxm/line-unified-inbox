@@ -893,3 +893,60 @@ model FriendAttributionConfig {
 
   @@index([isEnabled])
 }
+
+model OperationalActionTask {
+  id                String   @id @default(uuid())
+  storeId           String
+  storeName         String
+  problem           String
+  rootCause         String
+  actionType        String
+  recommendedAction String
+  owner             String
+  deadline          String
+  priority          String   @default("HIGH")
+  status            String   @default("PENDING_APPROVAL")
+  expectedImpact    String
+  createdAt         DateTime @default(now())
+
+  @@index([storeId, status])
+  @@index([createdAt])
+}
+
+model ActionImpactResult {
+  id                 String   @id @default(uuid())
+  taskId             String
+  storeId            String
+  storeName          String
+  beforeSla          Float
+  afterSla           Float
+  beforePending      Int
+  afterPending       Int
+  beforeResponseTime Float
+  afterResponseTime  Float
+  impactScore        Float
+  effectiveness      String
+  improvementSummary String
+  learnedPattern     String
+  evaluatedAt        DateTime @default(now())
+
+  @@index([storeId])
+  @@index([effectiveness])
+  @@index([evaluatedAt])
+}
+
+model OperationalMemoryCase {
+  id                String   @id @default(uuid())
+  storeId           String
+  storeName         String
+  problemPattern    String
+  rootCauseCategory String
+  successfulAction  String
+  confidence        Float
+  timesApplied      Int      @default(1)
+  avgSlaLiftPct     Float
+  lastAppliedAt     DateTime @default(now())
+
+  @@index([storeId])
+  @@index([rootCauseCategory])
+}
