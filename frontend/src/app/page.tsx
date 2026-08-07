@@ -3158,7 +3158,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
         <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
 
-        <section data-chat-pane="detail" className="app-surface min-w-0 min-h-0 overflow-hidden">
+        <section data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col">
           {selectedConversation && selectedConversationState ? (
             <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
               {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
