@@ -9,17 +9,42 @@ export class StoreMasterService {
 
   async importCsv(csv: string, source = "GOOGLE_SHEET") {
     const parsed = parseStoreMasterCsv(csv);
-    const duplicateNames = new Set(parsed.map((row) => row.normalizedAccountName).filter((name, index, all) => name && all.indexOf(name) !== index));
     const existingMasters = await this.prisma.storeMaster.findMany({ where: { isActive: true }, orderBy: { createdAt: "asc" } });
-    const masterByExternalId = new Map<string, string>();
+    const masterByExternalId = new Map<string, typeof existingMasters[0]>();
+    const masterBySourceRow = new Map<number, typeof existingMasters[0]>();
     for (const m of existingMasters) {
-      if (m.externalStoreId && !masterByExternalId.has(m.externalStoreId)) masterByExternalId.set(m.externalStoreId, m.id);
+      if (m.externalStoreId && !masterByExternalId.has(m.externalStoreId)) masterByExternalId.set(m.externalStoreId, m);
+      if (m.sourceRowNumber && !masterBySourceRow.has(m.sourceRowNumber)) masterBySourceRow.set(m.sourceRowNumber, m);
     }
+    const duplicateNames = new Set(parsed.map((row) => row.normalizedAccountName).filter((name, index, all) => name && name !== "ref" && all.indexOf(name) !== index));
     await this.prisma.$transaction(async (tx) => {
       for (const row of parsed) {
         const { sourceRowNumber, ...values } = row;
-        const data = { ...values, region: row.region ?? regionFromProvince(row.province), dataQualityStatus: duplicateNames.has(row.normalizedAccountName) && row.dataQualityStatus === "COMPLETE" ? "DUPLICATE_ACCOUNT_NAME" as const : row.dataQualityStatus, isActive: true, sourceUpdatedAt: new Date() };
-        const stableId = row.externalStoreId ? masterByExternalId.get(row.externalStoreId) : null;
+        const stableId = row.externalStoreId ? masterByExternalId.get(row.externalStoreId)?.id : null;
+        const existingRow = stableId ? masterByExternalId.get(row.externalStoreId!) : masterBySourceRow.get(sourceRowNumber);
+
+        let storeName = row.storeName;
+        let accountName = row.accountName;
+        let normalizedAccountName = row.normalizedAccountName;
+
+        if ((storeName === "#REF!" || !storeName) && existingRow?.storeName && existingRow.storeName !== "#REF!") {
+          storeName = existingRow.storeName;
+        }
+        if ((accountName === "#REF!" || !accountName)) {
+          if (existingRow?.accountName && existingRow.accountName !== "#REF!") {
+            accountName = existingRow.accountName;
+            normalizedAccountName = existingRow.normalizedAccountName;
+          } else if (storeName && storeName !== "#REF!") {
+            accountName = storeName;
+            normalizedAccountName = normalizeSearchText(storeName);
+          }
+        }
+
+        const incomplete = !storeName || storeName === "#REF!" || !accountName || accountName === "#REF!";
+        const dataQualityStatus = incomplete ? "INCOMPLETE" : !row.externalStoreId ? "MISSING_STORE_ID" : !isValidManagerUrl(row.lineManagerUrl) ? "INVALID_MANAGER_URL" : duplicateNames.has(normalizedAccountName) ? "DUPLICATE_ACCOUNT_NAME" : "COMPLETE";
+
+        const data = { ...values, storeName, accountName, normalizedAccountName, region: row.region ?? regionFromProvince(row.province), dataQualityStatus: dataQualityStatus as StoreMasterDataQualityStatus, isActive: true, sourceUpdatedAt: new Date() };
+
         if (stableId) { await tx.storeMaster.update({ where: { id: stableId }, data }); continue; }
         await tx.storeMaster.upsert({ where: { source_sourceRowNumber: { source, sourceRowNumber } }, create: { ...data, source, sourceRowNumber }, update: data });
       }
