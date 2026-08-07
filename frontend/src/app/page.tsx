@@ -33,7 +33,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardSummaryResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -1338,7 +1338,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [dashboardSummary, setDashboardSummary] =
-    useState<DashboardSummaryResponse | null>(null);
+    useState<DashboardAnalyticsResponse | null>(null);
   const [bmSummaryData, setBmSummaryData] = useState<BmReplyStatusSummaryResponse>({
     overview: { notReplied: 0, notifiedBm: 0, replied: 0 },
     stores: [],

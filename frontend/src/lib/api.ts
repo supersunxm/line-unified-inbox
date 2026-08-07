@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, DashboardSummaryResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -125,7 +125,7 @@ export const api = {
   restoreStore: (id: string) => request<StoreRemovalResult>(`/stores/${id}/restore`, { method: "POST" }),
   products: () => request<ProductMetadataResponse>("/metadata/products"),
   topics: () => request<ApiTopic[]>("/metadata/topics"),
-  dashboard: () => request<DashboardSummaryResponse>("/dashboard/summary"),
+  dashboard: () => request<DashboardAnalyticsResponse>("/dashboard/analytics"),
   dashboardAnalytics: (period: "today" | "7d" | "30d" = "today") => request<DashboardAnalyticsResponse>(`/dashboard/analytics?period=${period}`),
   classificationInsights: () => request<ClassificationInsightsResponse>("/classification-insights"),
   lineOfficialAccounts: (showArchived = false) => request<LineOfficialAccountResponse[]>(`/line-official-accounts?showArchived=${showArchived}`),
