@@ -28,7 +28,10 @@ export class ConversationsController {
     if (dto.bmReplyStatus) return this.service.updateBmReplyStatus(id, dto.bmReplyStatus);
     return this.service.updateStatus(id, dto.status ?? "FOLLOW_UP");
   }
-  @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) { return this.service.updateBmReplyStatus(id, dto.status); }
+  @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) {
+    const targetStatus = dto.status ?? dto.bmReplyStatus ?? "NOT_REPLIED";
+    return this.service.updateBmReplyStatus(id, targetStatus);
+  }
   @Patch(":id/priority") priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto) { return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
   @Get(":id/messages") messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30") { return this.service.messages(id, Number(page), Number(pageSize)); }
   @Post(":id/reanalyze") async reanalyze(@Param("id") id: string) { await this.classification.analyze(id, true); return this.service.get(id); }
