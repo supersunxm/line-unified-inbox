@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ActivityActionType, BmReplyStatus, FollowUpStatus, Prisma } from "@prisma/client";
-import { ConversationQueryDto, CreateNoteDto } from "./dto";
+import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
@@ -152,6 +152,49 @@ export class ConversationsService {
       }),
     ]);
     return { changed: true, conversation: await this.get(id) };
+  }
+
+  async bulkUpdateBmReplyStatus(dto: BulkUpdateBmReplyStatusDto, actingAdmin?: string) {
+    const { storeId, status, fromStatuses } = dto;
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new NotFoundException("Store not found");
+
+    const resetFilter = await this.operations.getOperationalConversationFilter();
+
+    const where: Prisma.ConversationWhereInput = {
+      storeId,
+      store: { archivedAt: null },
+      ...(resetFilter as Prisma.ConversationWhereInput),
+      ...(fromStatuses && fromStatuses.length > 0
+        ? { bmReplyStatus: { in: fromStatuses } }
+        : {}),
+    };
+
+    const completesFollowUp = status === BmReplyStatus.REPLIED;
+    const result = await this.prisma.conversation.updateMany({
+      where,
+      data: {
+        bmReplyStatus: status,
+        ...(completesFollowUp ? { followUpStatus: FollowUpStatus.COMPLETED } : {}),
+      },
+    });
+
+    const auditEntry = {
+      event: "BULK_BM_REPLY_STATUS_UPDATED",
+      actingAdmin: actingAdmin || "admin",
+      storeId,
+      storeName: store.name,
+      previousStatusScope: fromStatuses && fromStatuses.length > 0 ? fromStatuses : ["ALL"],
+      targetStatus: status,
+      affectedCount: result.count,
+      timestamp: new Date().toISOString(),
+    };
+    Logger.log(JSON.stringify(auditEntry), "ConversationsService");
+
+    return {
+      updated: result.count,
+      status,
+    };
   }
 
   async addNote(id: string, dto: CreateNoteDto) {

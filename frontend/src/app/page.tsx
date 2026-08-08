@@ -1331,6 +1331,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [isLoading, setIsLoading] = useState(true);
   const [supportingDataLoaded, setSupportingDataLoaded] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const [bulkConfirmState, setBulkConfirmState] = useState<{
+    storeId: string;
+    storeName: string;
+    targetStatus: ApiBmReplyStatus;
+    fromStatuses?: ApiBmReplyStatus[];
+    affectedCount: number;
+  } | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkSuccessToast, setBulkSuccessToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!openConversationDropdownId) return;
@@ -2150,6 +2159,49 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }
 
+  const handleExecuteBulkUpdate = useCallback(async () => {
+    if (!bulkConfirmState) return;
+    setIsBulkUpdating(true);
+    try {
+      const res = await api.bulkUpdateBmReplyStatus({
+        storeId: bulkConfirmState.storeId,
+        status: bulkConfirmState.targetStatus,
+        fromStatuses: bulkConfirmState.fromStatuses,
+      });
+      const targetLabel = bmReplyStatusLabels[language][bulkConfirmState.targetStatus];
+      const successMsg =
+        language === "th"
+          ? `อัปเดต ${res.updated} การสนทนาของ ${bulkConfirmState.storeName} เป็น "${targetLabel}" เรียบร้อยแล้ว`
+          : language === "zh"
+          ? `已成功将 ${bulkConfirmState.storeName} 的 ${res.updated} 条对话更新为 "${targetLabel}"`
+          : `Successfully updated ${res.updated} conversations for ${bulkConfirmState.storeName} to "${targetLabel}"`;
+      setBulkSuccessToast(successMsg);
+      setTimeout(() => setBulkSuccessToast(null), 4000);
+      setBulkConfirmState(null);
+
+      // Reconcile in place without full page reload
+      const [bmSummaryRes, storeRes] = await Promise.all([
+        api.bmReplyStatusSummary(),
+        api.stores(showArchivedStores),
+        loadConversations(conversationQueryRef.current, true),
+      ]);
+      setBmSummaryData(bmSummaryRes);
+      setStores(
+        storeRes.filter((store) => !store.archivedAt).map((store) => ({
+          id: store.id,
+          name: store.name,
+          waiting: store._count?.operationalNotRepliedCount ?? 0,
+          lineOaCount: store._count?.lineOfficialAccounts ?? 0,
+        })),
+      );
+      setAvailableStores(storeRes);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update bulk status");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  }, [bulkConfirmState, language, loadConversations, showArchivedStores]);
+
   function updateInternalNote(note: string) {
     if (!selectedConversation) return;
     setConversationStates((currentStates) => ({
@@ -2541,6 +2593,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             stores={stores}
             text={text}
             getStoreDisplayName={getStoreDisplayName}
+            onRequestBulkUpdate={(req) => setBulkConfirmState(req)}
           />
         )}
 
@@ -2837,6 +2890,74 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </div>
 
               <div className="flex items-center gap-2">
+                {selectedStore !== "all" && (
+                  <div className="flex items-center gap-1.5">
+                    {sidebarView === "notReplied" && (storeBmCounts[selectedStore]?.notReplied ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const storeObj = availableStores.find((s) => s.id === selectedStore);
+                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                          setBulkConfirmState({
+                            storeId: selectedStore,
+                            storeName: sName,
+                            targetStatus: "REPLIED",
+                            fromStatuses: ["NOT_REPLIED"],
+                            affectedCount: storeBmCounts[selectedStore]?.notReplied ?? 0,
+                          });
+                        }}
+                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                        title="Mark all matching as replied"
+                      >
+                        <span>✓</span>
+                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notReplied ?? 0})</span>
+                      </button>
+                    )}
+                    {sidebarView === "notifiedBm" && (storeBmCounts[selectedStore]?.notifiedBm ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const storeObj = availableStores.find((s) => s.id === selectedStore);
+                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                          setBulkConfirmState({
+                            storeId: selectedStore,
+                            storeName: sName,
+                            targetStatus: "REPLIED",
+                            fromStatuses: ["NOTIFIED_BM"],
+                            affectedCount: storeBmCounts[selectedStore]?.notifiedBm ?? 0,
+                          });
+                        }}
+                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                        title="Mark all notified BM as replied"
+                      >
+                        <span>✓</span>
+                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notifiedBm ?? 0})</span>
+                      </button>
+                    )}
+                    {sidebarView === "all" && ((storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const storeObj = availableStores.find((s) => s.id === selectedStore);
+                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                          const pendingCount = (storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0);
+                          setBulkConfirmState({
+                            storeId: selectedStore,
+                            storeName: sName,
+                            targetStatus: "REPLIED",
+                            fromStatuses: ["NOT_REPLIED", "NOTIFIED_BM"],
+                            affectedCount: pendingCount,
+                          });
+                        }}
+                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                        title="Mark pending conversations as replied"
+                      >
+                        <span>✓</span>
+                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "待办全部标记为已回复" : "Mark all as replied"} ({(storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)})</span>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <button
                   data-chat-filter-button
                   onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
@@ -2918,6 +3039,22 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </div>
             )}
           </div>
+
+            {bulkSuccessToast && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">✓</span>
+                  <span>{bulkSuccessToast}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBulkSuccessToast(null)}
+                  className="text-emerald-600 hover:text-emerald-900 font-bold ml-2"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
           {hasNewChatsAvailable && (
             <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-xs text-blue-700 shrink-0">
@@ -3452,6 +3589,88 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             {!permanentDeleteStep ? <div className="mt-4 space-y-2 text-sm"><p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">{text.permanentDeleteDescription}</p><p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">{text.archiveDescription}</p></div> : <div className="mt-4"><p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{text.irreversibleWarning}</p><label className="mt-3 block text-sm">{text.typeStoreName}<input autoFocus value={permanentDeleteConfirmation} onChange={(event) => setPermanentDeleteConfirmation(event.target.value)} className="mt-1 w-full rounded-lg border border-red-300 p-2" /></label></div>}
             {storeRemovalMessage && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{storeRemovalMessage}</p>}
             <div className="mt-6 flex flex-wrap justify-end gap-3"><button disabled={storeRemovalLoading} onClick={() => { setStoreRemovalPreview(null); setPermanentDeleteStep(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button>{!permanentDeleteStep ? <><button disabled={storeRemovalLoading} onClick={() => setPermanentDeleteStep(true)} className="rounded-lg bg-red-700 px-4 py-2 text-sm text-white">{text.deletePermanently}</button><button disabled={storeRemovalLoading} onClick={() => void archiveSelectedStore()} className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white">{text.archiveStore}</button></> : <button disabled={storeRemovalLoading || permanentDeleteConfirmation !== storeRemovalPreview.storeName} onClick={() => void deleteStorePermanently()} className="rounded-lg bg-red-700 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50">{storeRemovalLoading ? text.loadingData : text.deletePermanently}</button>}</div>
+          </div>
+        </div>
+      )}
+      {bulkConfirmState && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-confirm-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-base">
+                ⚡
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="bulk-confirm-title" className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                  {language === "th"
+                    ? "ยืนยันการเปลี่ยนสถานะการตอบ"
+                    : language === "zh"
+                    ? "确认更新BM回复状态"
+                    : "Confirm BM Reply Status Update"}
+                </h3>
+                <p className="text-xs text-slate-500 truncate">
+                  {bulkConfirmState.storeName}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 text-sm text-slate-700 dark:text-slate-300">
+              <p>
+                {language === "th" ? (
+                  <>
+                    เปลี่ยนสถานะ <strong>{bulkConfirmState.affectedCount}</strong> การสนทนาของ{" "}
+                    <strong>{bulkConfirmState.storeName}</strong> เป็น{" "}
+                    <strong className="text-blue-600 dark:text-blue-400">
+                      &ldquo;{bmReplyStatusLabels[language][bulkConfirmState.targetStatus]}&rdquo;
+                    </strong>{" "}
+                    หรือไม่?
+                  </>
+                ) : language === "zh" ? (
+                  <>
+                    确定将 <strong>{bulkConfirmState.storeName}</strong> 的{" "}
+                    <strong>{bulkConfirmState.affectedCount}</strong> 条对话状态更新为{" "}
+                    <strong className="text-blue-600 dark:text-blue-400">
+                      &ldquo;{bmReplyStatusLabels[language][bulkConfirmState.targetStatus]}&rdquo;
+                    </strong>{" "}
+                    吗？
+                  </>
+                ) : (
+                  <>
+                    Update <strong>{bulkConfirmState.affectedCount}</strong> conversations for{" "}
+                    <strong>{bulkConfirmState.storeName}</strong> to{" "}
+                    <strong className="text-blue-600 dark:text-blue-400">
+                      &ldquo;{bmReplyStatusLabels[language][bulkConfirmState.targetStatus]}&rdquo;
+                    </strong>?
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isBulkUpdating}
+                onClick={() => setBulkConfirmState(null)}
+                className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={isBulkUpdating || bulkConfirmState.affectedCount === 0}
+                onClick={() => void handleExecuteBulkUpdate()}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isBulkUpdating && (
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                <span>{language === "th" ? "ยืนยัน" : language === "zh" ? "确认" : "Confirm"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

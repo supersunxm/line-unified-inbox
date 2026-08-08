@@ -113,6 +113,11 @@ export const api = {
   customerIntelligence: (customerId: string) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`),
   updateStatus: (id: string, status: ApiFollowUpStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   updateBmReplyStatus: (id: string, status: ApiBmReplyStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/bm-reply-status`, { method: "PATCH", body: JSON.stringify({ status, bmReplyStatus: status }) }),
+  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }) =>
+    request<{ updated: number; status: ApiBmReplyStatus }>("/conversations/bm-reply-status/bulk", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   updatePriority: (id: string, priority: ApiPriority) => request<ApiConversation>(`/conversations/${id}/priority`, { method: "PATCH", body: JSON.stringify({ priority }) }),
   notes: (id: string) => request<ApiConversation["notes"]>(`/conversations/${id}/notes`),
   addNote: (id: string, content: string) => request<ApiConversation["notes"][number]>(`/conversations/${id}/notes`, { method: "POST", body: JSON.stringify({ content, createdByName: "OPPO LINE OA Specialist" }) }),

@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { ConversationsService } from "./conversations.service";
-import { ConversationQueryDto, CreateNoteDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
+import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
@@ -22,6 +22,11 @@ export class ConversationsController {
         oldestWaitingMinutes: s.oldestWaitingMinutes,
       })),
     };
+  }
+  @Patch("bm-reply-status/bulk")
+  bulkBmReplyStatus(@Body() dto: BulkUpdateBmReplyStatusDto, @Req() req?: any) {
+    const actingAdmin = req?.user?.displayName || req?.user?.email || "ADMIN";
+    return this.service.bulkUpdateBmReplyStatus(dto, actingAdmin);
   }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
   @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) {

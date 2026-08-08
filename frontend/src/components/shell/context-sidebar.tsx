@@ -15,6 +15,14 @@ export type SidebarView =
   | "systemStatus"
   | "pilotChecklist";
 
+export interface BulkUpdateRequest {
+  storeId: string;
+  storeName: string;
+  targetStatus: "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
+  fromStatuses?: Array<"NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED">;
+  affectedCount: number;
+}
+
 export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
@@ -27,6 +35,7 @@ export interface ContextSidebarProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   text: Record<string, any>;
   getStoreDisplayName: (name: string) => string;
+  onRequestBulkUpdate?: (request: BulkUpdateRequest) => void;
 }
 
 export const STORE_LIST_PAGE_SIZE = 60;
@@ -44,9 +53,11 @@ export function ContextSidebar({
   stores,
   text,
   getStoreDisplayName,
+  onRequestBulkUpdate,
 }: ContextSidebarProps) {
   const [storeSearch, setStoreSearch] = useState("");
   const [storePage, setStorePage] = useState(1);
+  const [activeMenuStoreId, setActiveMenuStoreId] = useState<string | null>(null);
 
   const sidebarButtonClass = (view: SidebarView) =>
     `app-nav-item w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
@@ -61,8 +72,6 @@ export function ContextSidebar({
   }, [stores, storeSearch, getStoreDisplayName]);
 
   // Sort stores by operational priority and SLA aging urgency.
-  // Stores with oldest unanswered customer conversations
-  // must appear first because they require immediate action.
   const sortedStores = useMemo(() => {
     return sortStoresByPriority(filteredStores, storeBmCounts, getStoreDisplayName);
   }, [filteredStores, storeBmCounts, getStoreDisplayName]);
@@ -207,50 +216,138 @@ export function ContextSidebar({
             const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 };
             const waitingMins = counts.notReplied > 0 ? (counts.oldestWaitingMinutes ?? 0) : 0;
             const riskVariant = getSlaRiskVariant(waitingMins);
+            const pendingCount = counts.notReplied + counts.notifiedBm;
+            const isMenuOpen = activeMenuStoreId === store.id;
 
             return (
-              <button
-                key={store.id}
-                type="button"
-                onClick={() => setSelectedStore(store.id)}
-                className={`app-store-row flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  selectedStore === store.id
-                    ? "is-selected font-semibold"
-                    : ""
-                }`}
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="truncate">{getStoreDisplayName(store.name)}</span>
-                  <div className="ml-2 flex items-center space-x-1 shrink-0">
-                    <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
-                      {counts.notReplied}
-                    </span>
-                    <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
-                      {counts.notifiedBm}
-                    </span>
-                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
-                      {counts.replied}
-                    </span>
+              <div key={store.id} className="relative group">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStore(store.id)}
+                  className={`app-store-row flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    selectedStore === store.id
+                      ? "is-selected font-semibold"
+                      : ""
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <span className="truncate pr-1">{getStoreDisplayName(store.name)}</span>
+                    <div className="ml-2 flex items-center space-x-1 shrink-0">
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Not Replied">
+                        {counts.notReplied}
+                      </span>
+                      <span className="rounded-full bg-purple-100 dark:bg-purple-950/80 px-1.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Notified BM">
+                        {counts.notifiedBm}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" title="Replied">
+                        {counts.replied}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {waitingMins > 0 && (
-                  <div className={`mt-0.5 flex items-center text-[11px] font-medium ${
-                    riskVariant === "danger"
-                      ? "text-red-600 dark:text-red-400 font-semibold"
-                      : riskVariant === "warning"
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-slate-500 dark:text-slate-400"
-                  }`}>
-                    <span aria-hidden="true" className="mr-1">
-                      {riskVariant === "danger" ? "🔥" : "⏱"}
-                    </span>
-                    <span>
-                      Waiting {formatWaitingDuration(waitingMins)}
-                    </span>
+                  {waitingMins > 0 && (
+                    <div className={`mt-0.5 flex items-center text-[11px] font-medium ${
+                      riskVariant === "danger"
+                        ? "text-red-600 dark:text-red-400 font-semibold"
+                        : riskVariant === "warning"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-slate-500 dark:text-slate-400"
+                    }`}>
+                      <span aria-hidden="true" className="mr-1">
+                        {riskVariant === "danger" ? "🔥" : "⏱"}
+                      </span>
+                      <span>
+                        Waiting {formatWaitingDuration(waitingMins)}
+                      </span>
+                    </div>
+                  )}
+                </button>
+
+                {onRequestBulkUpdate && (
+                  <div className="absolute right-1 top-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuStoreId(isMenuOpen ? null : store.id);
+                      }}
+                      title="Store bulk actions"
+                      aria-label={`Bulk actions for ${getStoreDisplayName(store.name)}`}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 shadow-sm"
+                    >
+                      ⋯
+                    </button>
+
+                    {isMenuOpen && (
+                      <div
+                        className="absolute right-0 top-full mt-1 z-30 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 shadow-lg text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300 truncate">
+                          {getStoreDisplayName(store.name)}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={pendingCount === 0}
+                          onClick={() => {
+                            setActiveMenuStoreId(null);
+                            onRequestBulkUpdate({
+                              storeId: store.id,
+                              storeName: getStoreDisplayName(store.name),
+                              targetStatus: "REPLIED",
+                              fromStatuses: ["NOT_REPLIED", "NOTIFIED_BM"],
+                              affectedCount: pendingCount,
+                            });
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                        >
+                          <span>🟢 ตอบแล้วทั้งหมด</span>
+                          <span className="font-semibold">({pendingCount})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={counts.notReplied === 0}
+                          onClick={() => {
+                            setActiveMenuStoreId(null);
+                            onRequestBulkUpdate({
+                              storeId: store.id,
+                              storeName: getStoreDisplayName(store.name),
+                              targetStatus: "NOTIFIED_BM",
+                              fromStatuses: ["NOT_REPLIED"],
+                              affectedCount: counts.notReplied,
+                            });
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-purple-50 dark:hover:bg-purple-950/50 text-purple-700 dark:text-purple-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                        >
+                          <span>🟣 แจ้ง BM ทั้งหมด</span>
+                          <span className="font-semibold">({counts.notReplied})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={counts.notifiedBm + counts.replied === 0}
+                          onClick={() => {
+                            setActiveMenuStoreId(null);
+                            onRequestBulkUpdate({
+                              storeId: store.id,
+                              storeName: getStoreDisplayName(store.name),
+                              targetStatus: "NOT_REPLIED",
+                              fromStatuses: ["NOTIFIED_BM", "REPLIED"],
+                              affectedCount: counts.notifiedBm + counts.replied,
+                            });
+                          }}
+                          className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                        >
+                          <span>⚪ รีเซ็ตเป็นยังไม่ตอบ</span>
+                          <span className="font-semibold">({counts.notifiedBm + counts.replied})</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
 
