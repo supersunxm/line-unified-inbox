@@ -483,9 +483,10 @@ export function transformExecutiveDecisionHeaderProps(
   const health = analytics.operationHealth;
   const riskStores = analytics.slaRiskPrediction?.length || 0;
 
+  const rawHealth = health?.breakdown?.compositeScore ?? health?.responseRate24h ?? 80;
   const compositeScore = Math.min(
     100,
-    Math.max(0, Math.round((health?.breakdown?.compositeScore ?? health?.responseRate24h ?? 0.8) * 100))
+    Math.max(0, Math.round(rawHealth <= 1 && rawHealth > 0 ? rawHealth * 100 : rawHealth))
   );
 
   const networkStatusKey: "CRITICAL" | "WARNING" | "GOOD" =
@@ -704,9 +705,10 @@ export function transformNetworkHealthProps(
   const efficiency = analytics.operationEfficiency;
   const cards = analytics.summaryCards;
   const slaRiskCount = analytics.slaRiskPrediction?.length ?? 0;
+  const rawHealth = health?.breakdown?.compositeScore ?? health?.responseRate24h ?? 80;
   const compositeScore = Math.min(
     100,
-    Math.max(0, Math.round((health?.breakdown?.compositeScore ?? health?.responseRate24h ?? 0.8) * 100))
+    Math.max(0, Math.round(rawHealth <= 1 && rawHealth > 0 ? rawHealth * 100 : rawHealth))
   );
 
   const statusKey: "CRITICAL" | "WARNING" | "GOOD" =

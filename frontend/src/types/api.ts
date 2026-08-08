@@ -270,6 +270,13 @@ export type DashboardAnalyticsResponse = {
   bestPracticeStore: BestPracticeStoreDetail | null;
   needImprovementStore: NeedImprovementStoreDetail | null;
   operationalInsights: string[];
+  storeFollowersRanking?: {
+    top10: Array<{ storeId: string; storeName: string; followers: number }>;
+    bottom10: Array<{ storeId: string; storeName: string; followers: number }>;
+    top10Average: number;
+    bottom10Average: number;
+    ratio: number;
+  };
 };
 
 export type StorePrioritySummaryResponse = {

@@ -106,28 +106,40 @@ export type StoreQuickViewData = {
   actionHistory: Array<{ time: string; event: string }>;
 };
 
+function toBangkokDateString(d: Date | string | number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(d));
+}
+
+function getBangkokMidnightUtc(date: Date = new Date()): Date {
+  const bangkokIso = toBangkokDateString(date);
+  const [y, m, d] = bangkokIso.split("-").map(Number);
+  // 00:00:00 Bangkok time (UTC+7) is 17:00:00 UTC previous day
+  return new Date(Date.UTC(y, m - 1, d, -7, 0, 0, 0));
+}
+
 @Injectable()
 export class DashboardAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private getPeriodStartDate(period: AnalyticsPeriod): Date {
-    const now = new Date();
+    const bangkokMidnightToday = getBangkokMidnightUtc();
     if (period === "7d") {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      d.setHours(0, 0, 0, 0);
+      const d = new Date(bangkokMidnightToday);
+      d.setUTCDate(d.getUTCDate() - 6);
       return d;
     }
     if (period === "30d") {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 30);
-      d.setHours(0, 0, 0, 0);
+      const d = new Date(bangkokMidnightToday);
+      d.setUTCDate(d.getUTCDate() - 29);
       return d;
     }
     // "today"
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-    return today;
+    return bangkokMidnightToday;
   }
 
   async getAnalytics(
@@ -138,9 +150,9 @@ export class DashboardAnalyticsService {
     const startDate = this.getPeriodStartDate(period);
     const now = new Date();
 
-    // Yesterday start/end dates for comparison
+    // Yesterday start/end dates for comparison (Bangkok calendar day)
     const yesterdayStart = new Date(startDate);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    yesterdayStart.setUTCDate(yesterdayStart.getUTCDate() - 1);
     const yesterdayEnd = new Date(startDate);
 
     // Permission-based store filter (RBAC enforcement at DB level)
@@ -389,15 +401,30 @@ export class DashboardAnalyticsService {
       }
     }
 
-    // 5. 7-Day Message Trend
+    // 5. 7-Day Message Trend (7 calendar days, oldest to newest, zero-filled for missing days)
+    const bangkokToday = getBangkokMidnightUtc();
+    const sevenDaysAgo = new Date(bangkokToday);
+    sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 6);
+
+    const trendConvs = await this.prisma.conversation.findMany({
+      where: {
+        storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
+        createdAt: { gte: sevenDaysAgo },
+      },
+      select: {
+        createdAt: true,
+        bmReplyStatus: true,
+      },
+    });
+
     const trend7Days: Array<{ date: string; label: string; count: number; replied: number }> = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const d = new Date(bangkokToday);
+      d.setUTCDate(d.getUTCDate() - i);
+      const dateStr = toBangkokDateString(d);
+      const label = d.toLocaleDateString("en-US", { timeZone: "Asia/Bangkok", month: "short", day: "numeric" });
 
-      const dayConvs = conversations.filter((c) => new Date(c.createdAt).toISOString().slice(0, 10) === dateStr);
+      const dayConvs = trendConvs.filter((c) => toBangkokDateString(c.createdAt) === dateStr);
       trend7Days.push({
         date: dateStr,
         label,
@@ -704,13 +731,58 @@ export class DashboardAnalyticsService {
         }
       : null;
 
-    // Follower Insights Summary
+    // Follower Insights Summary & Store Followers Ranking (Top 10 vs Bottom 10)
     const latestFollowerSnapshot = await this.prisma.lineOaFollowerSnapshot.findFirst({
       orderBy: { snapshotDate: "desc" },
     });
 
+    const storeFollowerAccounts = await this.prisma.lineOfficialAccount.findMany({
+      where: {
+        isActive: true,
+        archivedAt: null,
+        store: { archivedAt: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        store: { select: { id: true, name: true } },
+        followerSnapshots: {
+          where: { followers: { not: null } },
+          orderBy: { snapshotDate: "desc" },
+          take: 1,
+          select: { followers: true, snapshotDate: true },
+        },
+      },
+    });
+
+    const storeFollowersMap = new Map<string, { storeId: string; storeName: string; followers: number }>();
+    for (const oa of storeFollowerAccounts) {
+      if (oa.store && oa.followerSnapshots.length > 0 && typeof oa.followerSnapshots[0].followers === "number") {
+        const existing = storeFollowersMap.get(oa.store.id) ?? {
+          storeId: oa.store.id,
+          storeName: oa.store.name,
+          followers: 0,
+        };
+        existing.followers += oa.followerSnapshots[0].followers;
+        storeFollowersMap.set(oa.store.id, existing);
+      }
+    }
+
+    const validStoreFollowers = Array.from(storeFollowersMap.values())
+      .filter((s) => s.followers > 0)
+      .sort((a, b) => b.followers - a.followers);
+
+    const top10Followers = validStoreFollowers.slice(0, 10);
+    const bottom10Followers = [...validStoreFollowers].reverse().slice(0, 10).sort((a, b) => b.followers - a.followers);
+
+    const top10Average = top10Followers.length > 0 ? Math.round(top10Followers.reduce((s, x) => s + x.followers, 0) / top10Followers.length) : 0;
+    const bottom10Average = bottom10Followers.length > 0 ? Math.round(bottom10Followers.reduce((s, x) => s + x.followers, 0) / bottom10Followers.length) : 0;
+    const followerRatio = bottom10Average > 0 ? +(top10Average / bottom10Average).toFixed(1) : 0;
+
+    const totalFollowersCount = validStoreFollowers.reduce((s, x) => s + x.followers, 0) || ((latestFollowerSnapshot as any)?.followersCount ?? latestFollowerSnapshot?.followers ?? 0);
+
     const followerGrowth = {
-      totalFriends: (latestFollowerSnapshot as any)?.followersCount ?? latestFollowerSnapshot?.followers ?? 0,
+      totalFriends: totalFollowersCount,
       addedToday: latestFollowerSnapshot?.targetedReaches ?? 0,
       blockedToday: latestFollowerSnapshot?.blocks ?? 0,
       netToday: (latestFollowerSnapshot?.targetedReaches ?? 0) - (latestFollowerSnapshot?.blocks ?? 0),
@@ -721,12 +793,18 @@ export class DashboardAnalyticsService {
     const escalationControlScore = Math.max(0, 100 - bmNotifiedCount * 4);
     const growthScore = 85;
 
-    const compositeHealthScore = +(
-      0.5 * overallResponseRate24h +
-      0.3 * pendingControlScore +
-      0.15 * escalationControlScore +
-      0.05 * growthScore
-    ).toFixed(1);
+    const compositeHealthScore = Math.min(
+      100,
+      Math.max(
+        0,
+        +(
+          0.5 * overallResponseRate24h +
+          0.3 * pendingControlScore +
+          0.15 * escalationControlScore +
+          0.05 * growthScore
+        ).toFixed(1),
+      ),
+    );
 
     const operationHealthBreakdown = {
       compositeScore: compositeHealthScore,
@@ -841,6 +919,13 @@ export class DashboardAnalyticsService {
       bestPracticeStore,
       needImprovementStore,
       operationalInsights,
+      storeFollowersRanking: {
+        top10: top10Followers,
+        bottom10: bottom10Followers,
+        top10Average,
+        bottom10Average,
+        ratio: followerRatio,
+      },
     };
   }
 }

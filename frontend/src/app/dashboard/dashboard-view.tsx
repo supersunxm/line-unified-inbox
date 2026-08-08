@@ -2,42 +2,20 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import type { DashboardAnalyticsResponse, LineOfficialAccountResponse, AIRootCauseSummary, ExecutiveDailyBrief, OperationalActionTask, ImpactSummary, OperationalMemorySummary } from "@/types/api";
+import type { DashboardAnalyticsResponse, LineOfficialAccountResponse } from "@/types/api";
 
 import { DashboardDataQualityCard } from "./dashboard-data-quality";
 import { ActionStatusCard } from "./action-status";
 import { AdminActivityHistoryCard } from "./admin-activity-history";
 import { StoreQuickViewDrawer } from "./store-quick-view-drawer";
 
-import { ExecutiveKpiCards } from "./executive-kpi";
 import { MessageOverviewCard } from "./message-overview";
 import { ResponseRateCard } from "./response-rate-card";
 import { CustomerDemandCard } from "./topic-analysis";
 import { PeakHourAnalysisCard } from "./peak-hour-analysis";
 import { FollowerGrowthCard } from "./follower-growth";
-import { OperationalInsightCard } from "./ai-insight-card";
 
-import { ExecutiveSummaryBanner } from "./executive-summary-banner";
-import { OperationalPulse } from "./operational-pulse";
-import { AiRootCauseAnalysisPanel } from "./ai-root-cause-analysis";
-import { AiExecutiveDailyBrief } from "./ai-executive-daily-brief";
-import { AiBiAssistantPanel } from "./ai-bi-assistant";
-import { AiActionCenterPanel } from "./ai-action-center";
-import { AiImpactDashboardPanel } from "./ai-impact-dashboard";
-import { AiOperationalMemoryPanel } from "./ai-operational-memory";
-import {
-  transformExecutiveDecisionHeaderProps,
-  transformOperationalPulseProps,
-  transformAiRootCauseProps,
-  transformExecutiveDailyBriefProps,
-  transformBiAssistantProps,
-  transformActionAgentProps,
-  transformImpactEngineProps,
-  transformOperationalMemoryProps,
-} from "./dashboard-transformers";
-import { NetworkHealthBanner } from "./network-health-banner";
-import { SlaRiskPredictionCard } from "./sla-risk-prediction";
-import { TodayActionCenter } from "./today-action-center";
+import { ExecutiveHero } from "./executive-hero";
 import { CustomerDemandSignals } from "./customer-demand-signals";
 import { StorePerformanceOverview } from "./store-performance-overview";
 
@@ -65,11 +43,6 @@ export function DashboardView({
 }: DashboardViewProps) {
   const [period, setPeriod] = useState<Period>("today");
   const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null);
-  const [rcaSummary, setRcaSummary] = useState<AIRootCauseSummary | null>(null);
-  const [executiveBrief, setExecutiveBrief] = useState<ExecutiveDailyBrief | null>(null);
-  const [actionTasks, setActionTasks] = useState<OperationalActionTask[] | null>(null);
-  const [impactData, setImpactData] = useState<ImpactSummary | null>(null);
-  const [memoryData, setMemoryData] = useState<OperationalMemorySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
   const [fetchError, setFetchError] = useState(false);
@@ -81,20 +54,8 @@ export function DashboardView({
   const loadAnalytics = useCallback(async (p: Period) => {
     setLoading(true);
     try {
-      const [data, rcaData, briefData, actionsData, impactRes, memoryRes] = await Promise.all([
-        api.dashboardAnalytics(p),
-        api.getRootCauseInsights(p).catch(() => null),
-        api.getExecutiveDailyBrief(p).catch(() => null),
-        api.getOperationalActions(p).catch(() => null),
-        api.getActionImpact(p).catch(() => null),
-        api.getOperationalMemory(p).catch(() => null),
-      ]);
+      const data = await api.dashboardAnalytics(p);
       setAnalytics(data);
-      if (rcaData) setRcaSummary(rcaData);
-      if (briefData) setExecutiveBrief(briefData);
-      if (actionsData) setActionTasks(actionsData);
-      if (impactRes) setImpactData(impactRes);
-      if (memoryRes) setMemoryData(memoryRes);
       setLastFetchAt(new Date());
       setFetchError(false);
     } catch {
@@ -115,21 +76,9 @@ export function DashboardView({
 
     async function fetchLatest() {
       try {
-        const [data, rcaData, briefData, actionsData, impactRes, memoryRes] = await Promise.all([
-          api.dashboardAnalytics(period),
-          api.getRootCauseInsights(period).catch(() => null),
-          api.getExecutiveDailyBrief(period).catch(() => null),
-          api.getOperationalActions(period).catch(() => null),
-          api.getActionImpact(period).catch(() => null),
-          api.getOperationalMemory(period).catch(() => null),
-        ]);
+        const data = await api.dashboardAnalytics(period);
         if (!cancelled) {
           setAnalytics(data);
-          if (rcaData) setRcaSummary(rcaData);
-          if (briefData) setExecutiveBrief(briefData);
-          if (actionsData) setActionTasks(actionsData);
-          if (impactRes) setImpactData(impactRes);
-          if (memoryRes) setMemoryData(memoryRes);
           setLastFetchAt(new Date());
           setFetchError(false);
           setLoading(false);
@@ -183,21 +132,6 @@ export function DashboardView({
 
   const dataAgeMs = effectiveLastUpdate ? nowTimestamp - effectiveLastUpdate.getTime() : 0;
   const isStaleData = Boolean(effectiveLastUpdate && dataAgeMs > 180_000);
-
-  const decisionHeaderProps = analytics
-    ? transformExecutiveDecisionHeaderProps(analytics, language)
-    : null;
-
-  const operationalPulseProps = analytics
-    ? transformOperationalPulseProps(analytics)
-    : null;
-
-  const rcaProps = transformAiRootCauseProps(rcaSummary, analytics, language);
-  const briefProps = transformExecutiveDailyBriefProps(executiveBrief, analytics, language);
-  const biInitialAnswer = transformBiAssistantProps(analytics, language);
-  const preparedActionTasks = transformActionAgentProps(actionTasks, analytics, language);
-  const preparedImpactSummary = transformImpactEngineProps(impactData, analytics, language);
-  const preparedMemorySummary = transformOperationalMemoryProps(memoryData, analytics, language);
 
   return (
     <div className="space-y-8 min-h-screen text-[var(--foreground)] pb-16">
@@ -264,97 +198,38 @@ export function DashboardView({
       {/* Skeleton view */}
       {loading && !analytics ? (
         <div className="space-y-6 animate-pulse">
-          <div className="h-32 rounded-2xl bg-[var(--accent)]" />
-          <div className="h-16 rounded-xl bg-[var(--accent)]" />
-          <div className="h-48 rounded-xl bg-[var(--accent)]" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-24 rounded-xl bg-[var(--accent)]" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-28 rounded-xl bg-[var(--accent)]" />
             ))}
           </div>
-        </div>
-      ) : analytics && decisionHeaderProps && operationalPulseProps ? (
-        <div className="space-y-10">
-          {/* LEVEL 1: EXECUTIVE DECISION HEADER (Situation, Priority, Timestamp, AI Focus) */}
-          <ExecutiveSummaryBanner header={decisionHeaderProps} />
-
-          {/* LEVEL 2: OPERATIONAL PULSE STRIP (Live Network Operating Rhythm) */}
-          <OperationalPulse pulse={operationalPulseProps} />
-
-          {/* LEVEL 3: RISK CONTROL CENTER & NETWORK GAUGE */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5">
-              <NetworkHealthBanner
-                analytics={analytics}
-                health={analytics.operationHealth}
-                efficiency={analytics.operationEfficiency}
-                language={language}
-              />
-            </div>
-            <div className="lg:col-span-7">
-              <SlaRiskPredictionCard
-                analytics={analytics}
-                predictions={analytics.slaRiskPrediction}
-                getStoreDisplayName={getStoreDisplayName}
-                onOpenStore={onOpenStore}
-                onSelectStoreQuickView={(storeId) => setActiveQuickViewStoreId(storeId)}
-                language={language}
-              />
-            </div>
+            <div className="lg:col-span-7 h-56 rounded-xl bg-[var(--accent)]" />
+            <div className="lg:col-span-5 h-56 rounded-xl bg-[var(--accent)]" />
           </div>
-
-          {/* LEVEL 4: AI ROOT CAUSE ANALYSIS ENGINE */}
-          <AiRootCauseAnalysisPanel data={rcaProps} language={language} />
-
-          {/* LEVEL 5: AI EXECUTIVE DAILY BRIEF */}
-          <AiExecutiveDailyBrief data={briefProps} language={language} />
-
-          {/* LEVEL 6: NATURAL LANGUAGE AI BI ASSISTANT */}
-          <AiBiAssistantPanel initialAnswer={biInitialAnswer} period={period} language={language} />
-
-          {/* LEVEL 7: AI ACTION CENTER & WORKFLOW AUTOMATION */}
-          <AiActionCenterPanel initialTasks={preparedActionTasks} onOpenStore={onOpenStore} language={language} />
-
-          {/* LEVEL 8: AI IMPACT MEASUREMENT & LEARNING ENGINE */}
-          <AiImpactDashboardPanel summary={preparedImpactSummary} language={language} />
-
-          {/* LEVEL 9: ⭐ AI OPERATIONAL MEMORY LAYER */}
-          <AiOperationalMemoryPanel summary={preparedMemorySummary} language={language} />
-
-          {/* LEVEL 10: 5-STEP AI EXECUTIVE ACTION WORKFLOW */}
-          <OperationalInsightCard
+        </div>
+      ) : analytics ? (
+        <div className="space-y-10">
+          {/* ─────────────────────────────────────────────────────────
+              STREAMLINED EXECUTIVE HERO OVERVIEW (LEVELS 1–4)
+          ───────────────────────────────────────────────────────── */}
+          <ExecutiveHero
             analytics={analytics}
-            insights={analytics.operationalInsights}
             language={language}
-            onExecuteWorkflow={() => {
-              void loadAnalytics(period);
-            }}
-          />
-
-          {/* LEVEL 11: EXECUTIVE KPI SNAPSHOT STRIP */}
-          <ExecutiveKpiCards
-            analytics={analytics}
-            data={analytics.summaryCards}
-            language={language}
-          />
-
-          {/* LEVEL 12: TODAY ACTION CENTER (Full-width workflow intervention area) */}
-          <TodayActionCenter
-            queue={analytics.needActionQueue}
-            predictions={analytics.slaRiskPrediction}
             getStoreDisplayName={getStoreDisplayName}
-            onOpenStore={onOpenStore}
-            onQuickViewStore={(storeId) => setActiveQuickViewStoreId(storeId)}
-            language={language}
           />
 
-          {/* LEVEL 13: CUSTOMER DEMAND SIGNALS */}
+          {/* ─────────────────────────────────────────────────────────
+              PRESERVED DEEPER SECTIONS BELOW HERO
+          ───────────────────────────────────────────────────────── */}
+
+          {/* CUSTOMER DEMAND SIGNALS */}
           <CustomerDemandSignals
             correlations={analytics.customerDemandProductCorrelation}
             language={language}
           />
 
-          {/* LEVEL 14: STORE PERFORMANCE OVERVIEW (Top 5 Best vs Top 5 Need Improvement) */}
+          {/* STORE PERFORMANCE OVERVIEW */}
           <StorePerformanceOverview
             stores={analytics.storeRanking}
             getStoreDisplayName={getStoreDisplayName}
@@ -363,7 +238,7 @@ export function DashboardView({
             language={language}
           />
 
-          {/* LEVEL 15: ANALYTICS DETAIL (Message volume, SLA breakdown, Peak hour, Topics) */}
+          {/* ANALYTICS DETAIL (Message volume, SLA breakdown, Peak hour, Topics) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <MessageOverviewCard cards={analytics.summaryCards} trend={analytics.trend7Days} language={language} />
             <ResponseRateCard analytics={analytics.responseAnalytics} language={language} />
@@ -373,7 +248,7 @@ export function DashboardView({
             <ActionStatusCard workflow={analytics.actionWorkflowStatus} status={analytics.actionStatus} language={language} />
           </div>
 
-          {/* LEVEL 16: DATA QUALITY & AUDIT LOG */}
+          {/* DATA QUALITY & AUDIT LOG */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DashboardDataQualityCard quality={analytics.dataQuality} language={language} />
             <AdminActivityHistoryCard logs={analytics.adminActivity} getStoreDisplayName={getStoreDisplayName} language={language} />

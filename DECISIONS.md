@@ -1,3 +1,10 @@
+# Dashboard Executive Overview Architecture and Data Correctness (2026-08-08)
+
+- **Information Architecture & Executive Scanning**: Rebuilt the executive overview into a 4-level visual hierarchy allowing managerial situation awareness within 5–10 seconds: (1) 5-card KPI row (Messages Today, Pending, SLA Achievement, Stores Critical, Followers), (2) 60/40 Operational Trend (7-day volume trend + reconciled BM reply status donut), (3) Top 10 vs Bottom 10 store follower ranking, and (4) Follower distribution summary with ratio gap and proportional comparison bar.
+- **Data Correctness & Unit Safety**: Health Score is strictly bounded in `[0, 100]` with unit normalization preventing 100x over-multiplication. Reply rate / SLA percentages guard against zero denominators with finite rounding. 7-Day Trend queries a dedicated 7-day conversation window (`gte: sevenDaysAgo`) regardless of active period ("today", "7d", "30d") to ensure complete 7 calendar-day buckets in Asia/Bangkok date alignment without missing past-day values.
+- **Duplicated Hero Store List Removal**: Removed redundant store-by-store queue panels from dashboard presentation (`TodayActionCenter`, `AiRootCauseAnalysisPanel`, `AiActionCenterPanel`, `AiImpactDashboardPanel`, `AiOperationalMemoryPanel`, `AiExecutiveDailyBrief`, `AiBiAssistantPanel`, `OperationalInsightCard`) while retaining all underlying Phase 3 AI services, backend endpoints, and Prisma models intact.
+- **Store Follower Ranking Provenance**: Follower rankings derive exclusively from real `LineOaFollowerSnapshot` records associated with active, non-archived stores, without placeholder or fabricated follower metrics.
+
 # Classification Insights current-state boundary (2026-07-30)
 
 - Phase 1.5 reports only the current persisted classification state. Coverage is based on active-store conversations with at least one inbound text message and is explicitly not an accuracy measurement.
