@@ -29,6 +29,8 @@ export interface ContextSidebarProps {
   getStoreDisplayName: (name: string) => string;
 }
 
+export const STORE_LIST_PAGE_SIZE = 60;
+
 export { sortStoresByPriority, filterStoresBySearch };
 
 export function ContextSidebar({
@@ -44,6 +46,7 @@ export function ContextSidebar({
   getStoreDisplayName,
 }: ContextSidebarProps) {
   const [storeSearch, setStoreSearch] = useState("");
+  const [storePage, setStorePage] = useState(1);
 
   const sidebarButtonClass = (view: SidebarView) =>
     `app-nav-item w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
@@ -64,8 +67,14 @@ export function ContextSidebar({
     return sortStoresByPriority(filteredStores, storeBmCounts, getStoreDisplayName);
   }, [filteredStores, storeBmCounts, getStoreDisplayName]);
 
+  const totalStorePages = Math.max(1, Math.ceil(sortedStores.length / STORE_LIST_PAGE_SIZE));
+  const safeStorePage = Math.max(1, Math.min(storePage, totalStorePages));
+  const startIndex = (safeStorePage - 1) * STORE_LIST_PAGE_SIZE;
+  const visibleStores = sortedStores.slice(startIndex, startIndex + STORE_LIST_PAGE_SIZE);
+
   const handleClearAll = () => {
     setStoreSearch("");
+    setStorePage(1);
     clearAllFilters();
   };
 
@@ -150,7 +159,10 @@ export function ContextSidebar({
           <input
             type="search"
             value={storeSearch}
-            onChange={(e) => setStoreSearch(e.target.value)}
+            onChange={(e) => {
+              setStoreSearch(e.target.value);
+              setStorePage(1);
+            }}
             placeholder={text.searchStoresPlaceholder || "Search stores..."}
             className="app-input h-8 w-full rounded-lg border py-1 pl-8 pr-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           />
@@ -191,7 +203,7 @@ export function ContextSidebar({
             </div>
           </button>
 
-          {sortedStores.map((store) => {
+          {visibleStores.map((store) => {
             const counts = storeBmCounts[store.id] ?? { notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 };
             const waitingMins = counts.notReplied > 0 ? (counts.oldestWaitingMinutes ?? 0) : 0;
             const riskVariant = getSlaRiskVariant(waitingMins);
@@ -241,6 +253,32 @@ export function ContextSidebar({
               </button>
             );
           })}
+
+          {totalStorePages > 1 && (
+            <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-2 text-xs text-slate-500">
+              <button
+                type="button"
+                disabled={safeStorePage <= 1}
+                onClick={() => setStorePage((p) => Math.max(1, p - 1))}
+                className="rounded px-2 py-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700"
+                aria-label="Previous stores page"
+              >
+                ‹
+              </button>
+              <span className="text-[11px] font-medium">
+                {safeStorePage} / {totalStorePages} ({sortedStores.length})
+              </span>
+              <button
+                type="button"
+                disabled={safeStorePage >= totalStorePages}
+                onClick={() => setStorePage((p) => Math.min(totalStorePages, p + 1))}
+                className="rounded px-2 py-1 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700"
+                aria-label="Next stores page"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       )}
     </aside>

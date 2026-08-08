@@ -50,15 +50,14 @@ test("insights consolidate product intent and topics while the internal note rem
   assert.match(detail, /text\.noteSaveHint/);
 });
 
-test("Store Follow-up is a persistent pane footer and all existing status handlers remain visible", () => {
+test("Store Follow-up bottom panel is removed from Chat Detail while shared status handlers remain intact", () => {
   assert.match(detail, /data-chat-detail-workspace className="flex h-full min-h-0 flex-col"/);
   assert.match(detail, /data-chat-detail-scroll className="min-h-0.*overflow-y-auto/);
-  assert.match(detail, /data-store-follow-up-bar[^>]*sticky bottom-0/);
-  assert.match(detail, /data-store-follow-up-bar[\s\S]*shrink-0[\s\S]*aria-label=\{text\.storeFollowUp\}/);
+  assert.doesNotMatch(detail, /data-store-follow-up-bar/);
+  assert.doesNotMatch(detail, /data-store-follow-up-actions/);
   for (const status of ["followUp", "reminded", "acknowledged", "completed", "escalated"]) {
-    assert.match(detail, new RegExp(`updateFollowUpStatus\\("${status}"\\)`));
+    assert.match(pageCode, new RegExp(`"${status}"|status === "${status}"`));
   }
-  assert.doesNotMatch(detail, /data-store-follow-up-actions[\s\S]{0,1000}aria-haspopup/);
 });
 
 test("detail pane uses container-responsive consolidation and reserves the assistant corner", () => {

@@ -139,15 +139,53 @@ test("Every locale (en, th, zh) exposes identical pagination translation key set
   assert.deepEqual(zhKeys, enKeys, "Chinese pagination keys must match English keys");
 });
 
+test("Store sidebar pagination: 603 stores produces 11 pages at 60 per page", () => {
+  const storePage1 = calculatePaginationBounds(603, 1, 60);
+  assert.equal(storePage1.safePage, 1);
+  assert.equal(storePage1.totalPages, 11);
+  assert.equal(storePage1.startRecord, 1);
+  assert.equal(storePage1.endRecord, 60);
+  assert.equal(storePage1.endRecord - storePage1.startRecord + 1, 60);
+
+  const storePage11 = calculatePaginationBounds(603, 11, 60);
+  assert.equal(storePage11.safePage, 11);
+  assert.equal(storePage11.totalPages, 11);
+  assert.equal(storePage11.startRecord, 601);
+  assert.equal(storePage11.endRecord, 603);
+  assert.equal(storePage11.endRecord - storePage11.startRecord + 1, 3);
+});
+
+test("Conversation pagination: 669 conversations produces 17 pages at 40 per page", () => {
+  const convPage1 = calculatePaginationBounds(669, 1, 40);
+  assert.equal(convPage1.safePage, 1);
+  assert.equal(convPage1.totalPages, 17);
+  assert.equal(convPage1.startRecord, 1);
+  assert.equal(convPage1.endRecord, 40);
+
+  const convPage17 = calculatePaginationBounds(669, 17, 40);
+  assert.equal(convPage17.safePage, 17);
+  assert.equal(convPage17.totalPages, 17);
+  assert.equal(convPage17.startRecord, 641);
+  assert.equal(convPage17.endRecord, 669);
+  assert.equal(convPage17.endRecord - convPage17.startRecord + 1, 29);
+});
+
 test("Pagination architecture in page.tsx enforces layout height lock, filter reset to page 1, and accessible footer", () => {
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const sidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
   const footerCode = readFileSync(new URL("../src/app/conversation-pagination-footer.tsx", import.meta.url), "utf8");
   const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 
   // Viewport height constraint
   assert.match(pageCode, /className=\{`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden/);
 
-  // Filter auto-reset tracking
+  // Store page constants & store pagination in sidebar
+  assert.match(sidebarCode, /STORE_LIST_PAGE_SIZE = 60/);
+  assert.match(sidebarCode, /setStorePage\(1\)/);
+  assert.match(sidebarCode, /visibleStores\.map/);
+
+  // Conversation constants & filter auto-reset tracking
+  assert.match(pageCode, /CONVERSATION_PAGE_SIZE = 40/);
   assert.match(pageCode, /previousConversationFilterShape\.current !== conversationFilterShapeKey/);
   assert.match(pageCode, /setChatPage\(1\)/);
   assert.match(pageCode, /reconcileConversationPage\(response\.total, query\.page, query\.pageSize\)/);

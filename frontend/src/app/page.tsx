@@ -71,6 +71,8 @@ export const bmReplyStatusLabels: Record<Language, Record<ApiBmReplyStatus, stri
   },
 };
 
+export const CONVERSATION_PAGE_SIZE = 40;
+
 type UiPreferences = {
   language: Language;
   searchText: string;
@@ -1353,7 +1355,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const chatRouteHydrated = useRef(false);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const [chatPage, setChatPage] = useState(1);
-  const [chatPageSize, setChatPageSize] = useState(20);
+  const [chatPageSize, setChatPageSize] = useState(CONVERSATION_PAGE_SIZE);
   const [chatTotalCount, setChatTotalCount] = useState(0);
   const [isChatPageLoading, setIsChatPageLoading] = useState(false);
   const [chatPageError, setChatPageError] = useState<string | null>(null);
@@ -3423,22 +3425,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
                 </div>
               </div>
-
-              <section data-store-follow-up-bar className="chat-detail-follow-up app-surface sticky bottom-0 shrink-0 border-t border-[var(--border)] px-3 py-2.5 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] sm:px-4" aria-label={text.storeFollowUp}>
-                <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs lg:grid-cols-4">
-                  <div><span className="app-muted">{text.currentStatus}: </span><strong>{followUpStatusLabels[language][selectedConversationState.status]}</strong></div>
-                  <div><span className="app-muted">{text.waitingTime}: </span><strong>{formatRelativeTime(selectedConversation.time, language)}</strong></div>
-                  <div><span className="app-muted">{text.reminder}: </span><strong>{selectedConversationState.status === "followUp" ? text.notSent : followUpStatusLabels[language].reminded}</strong></div>
-                  <div><span className="app-muted">{text.storeManager}: </span><strong>{selectedConversationState.status === "acknowledged" ? text.managerAcknowledged : selectedConversationState.status === "completed" ? text.actionCompleted : text.notConfirmed}</strong></div>
-                </div>
-                <div data-store-follow-up-actions className="chat-detail-follow-up-actions flex flex-wrap gap-2">
-                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("followUp")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 ${selectedConversationState.status === "followUp" ? "border-amber-500 bg-amber-100 text-amber-800" : "border-amber-300 bg-white text-amber-700 hover:bg-amber-50 dark:bg-slate-950"}`}>↩ {text.returnToFollowUp}</button>
-                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("reminded")} className={`rounded-lg px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${selectedConversationState.status === "reminded" ? "bg-blue-600 text-white" : "bg-slate-900 text-white hover:bg-slate-700"}`}>📣 {text.remindManager}</button>
-                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("acknowledged")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${selectedConversationState.status === "acknowledged" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-300 bg-white hover:bg-slate-50 dark:bg-slate-950"}`}>✓ {text.managerAcknowledged}</button>
-                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("completed")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50 ${selectedConversationState.status === "completed" ? "border-green-600 bg-green-600 text-white" : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-200"}`}>✓ {text.actionCompleted}</button>
-                  <button disabled={isMutating} onClick={() => updateFollowUpStatus("escalated")} className={`rounded-lg border px-3 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 ${selectedConversationState.status === "escalated" ? "border-red-600 bg-red-600 text-white" : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-200"}`}>{text.escalate}</button>
-                </div>
-              </section>
             </div>
           ) : (
             <div className="flex min-h-full items-center justify-center text-center">
