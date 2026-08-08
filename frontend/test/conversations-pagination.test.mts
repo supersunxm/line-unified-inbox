@@ -155,7 +155,7 @@ test("Store sidebar pagination: 603 stores produces 11 pages at 60 per page", ()
   assert.equal(storePage11.endRecord - storePage11.startRecord + 1, 3);
 });
 
-test("Conversation pagination: 669 conversations produces 17 pages at 40 per page", () => {
+test("Conversation pagination: 669 conversations produces 17 pages at 40 per page and 23 pages at 30 per page", () => {
   const convPage1 = calculatePaginationBounds(669, 1, 40);
   assert.equal(convPage1.safePage, 1);
   assert.equal(convPage1.totalPages, 17);
@@ -168,6 +168,12 @@ test("Conversation pagination: 669 conversations produces 17 pages at 40 per pag
   assert.equal(convPage17.startRecord, 641);
   assert.equal(convPage17.endRecord, 669);
   assert.equal(convPage17.endRecord - convPage17.startRecord + 1, 29);
+
+  const convPage30 = calculatePaginationBounds(669, 1, 30);
+  assert.equal(convPage30.safePage, 1);
+  assert.equal(convPage30.totalPages, 23);
+  assert.equal(convPage30.startRecord, 1);
+  assert.equal(convPage30.endRecord, 30);
 });
 
 test("Pagination architecture in page.tsx enforces layout height lock, filter reset to page 1, and accessible footer", () => {
@@ -193,7 +199,8 @@ test("Pagination architecture in page.tsx enforces layout height lock, filter re
   // API conversations method supports query parameters
   assert.match(apiCode, /conversations: \(params\?: Record<string, string \| number \| boolean \| undefined>\) =>/);
 
-  // Pagination Footer Accessibility
+  // Pagination Footer Accessibility & Page Size Options (10, 20, 30, 40)
+  assert.match(footerCode, /<option value=\{10\}>10<\/option>\s*<option value=\{20\}>20<\/option>\s*<option value=\{30\}>30<\/option>\s*<option value=\{40\}>40<\/option>/);
   assert.match(footerCode, /aria-label=\{t\.itemsPerPage\}/);
   assert.match(footerCode, /aria-label=\{t\.previous\}/);
   assert.match(footerCode, /aria-label=\{t\.next\}/);
