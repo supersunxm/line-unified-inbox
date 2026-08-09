@@ -61,6 +61,11 @@ export type ApiCustomerEvent = {
 };
 
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
+export type SendConversationMessageResponse = {
+  message: ApiConversation["messages"][number];
+  bmReplyStatus: "REPLIED";
+  duplicate: boolean;
+};
 export type BmReplyStatusSummaryResponse = {
   overview: {
     notReplied: number;
@@ -973,5 +978,4 @@ export type ProductReviewQueueResponse = {
   pageSize: number;
   total: number;
 };
-
 

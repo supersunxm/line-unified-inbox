@@ -1,6 +1,6 @@
 import { BmReplyStatus, FollowUpStatus, Priority } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from "class-validator";
 
 export class ConversationQueryDto {
   @IsOptional() @IsString() search?: string;
@@ -34,4 +34,9 @@ export class UpdatePriorityDto { @IsEnum(Priority) priority!: Priority; }
 export class CreateNoteDto {
   @IsString() @IsNotEmpty() content!: string;
   @IsOptional() @IsString() createdByName?: string;
+}
+
+export class SendConversationMessageDto {
+  @IsString() @IsNotEmpty() @MaxLength(5000) text!: string;
+  @IsUUID("4") idempotencyKey!: string;
 }

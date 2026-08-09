@@ -1136,7 +1136,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
   const product = item.products[0]?.productModel;
   const messageLanguage =
     latestMessage?.originalLanguage === "zh" ? "zh" :
-    latestMessage?.originalLanguage === "en" ? "en" : "th";
+      latestMessage?.originalLanguage === "en" ? "en" : "th";
   return {
     id: item.id,
     customer: item.customer.displayName,
@@ -1322,6 +1322,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [evidenceExpanded, setEvidenceExpanded] = useState(false);
   const [chatHistory, setChatHistory] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
   const [chatLoading, setChatLoading] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
   const [showTranslation, setShowTranslation] = useState(true);
   const [conversationStates, setConversationStates] = useState<
     Record<string, ConversationState>
@@ -1361,6 +1364,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const lineOaSubmissionInFlight = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const newestChatMessageRef = useRef<string | null>(null);
+  const replyIdempotencyKeyRef = useRef<string | null>(null);
   const chatRouteHydrated = useRef(false);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const [chatPage, setChatPage] = useState(1);
@@ -2051,10 +2055,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              bmReplyStatus: status,
-              ...(completesFollowUp ? { status: "completed" } : {}),
-            }
+            ...c,
+            bmReplyStatus: status,
+            ...(completesFollowUp ? { status: "completed" } : {}),
+          }
           : c
       )
     );
@@ -2113,10 +2117,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       prev.map((c) =>
         c.id === conversationId
           ? {
-              ...c,
-              bmReplyStatus: status,
-              ...(completesFollowUp ? { status: "completed" } : {}),
-            }
+            ...c,
+            bmReplyStatus: status,
+            ...(completesFollowUp ? { status: "completed" } : {}),
+          }
           : c
       )
     );
@@ -2139,8 +2143,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         language === "th"
           ? `อัปเดตสถานะเป็น ‘${statusLabel}’ เรียบร้อย`
           : language === "zh"
-          ? `已更新状态为 '${statusLabel}'`
-          : `Updated status to '${statusLabel}'`,
+            ? `已更新状态为 '${statusLabel}'`
+            : `Updated status to '${statusLabel}'`,
       );
 
       if (sidebarView !== "all") {
@@ -2173,8 +2177,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         language === "th"
           ? `อัปเดต ${res.updated} การสนทนาของ ${bulkConfirmState.storeName} เป็น "${targetLabel}" เรียบร้อยแล้ว`
           : language === "zh"
-          ? `已成功将 ${bulkConfirmState.storeName} 的 ${res.updated} 条对话更新为 "${targetLabel}"`
-          : `Successfully updated ${res.updated} conversations for ${bulkConfirmState.storeName} to "${targetLabel}"`;
+            ? `已成功将 ${bulkConfirmState.storeName} 的 ${res.updated} 条对话更新为 "${targetLabel}"`
+            : `Successfully updated ${res.updated} conversations for ${bulkConfirmState.storeName} to "${targetLabel}"`;
       setBulkSuccessToast(successMsg);
       setTimeout(() => setBulkSuccessToast(null), 4000);
       setBulkConfirmState(null);
@@ -2462,6 +2466,33 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     finally { setChatLoading(false); }
   }
 
+  async function sendReply() {
+    const conversationId = selectedConversationId;
+    const textToSend = replyText.trim();
+    if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN") return;
+    const idempotencyKey = replyIdempotencyKeyRef.current ?? crypto.randomUUID();
+    replyIdempotencyKeyRef.current = idempotencyKey;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      const result = await api.sendConversationMessage(conversationId, textToSend, idempotencyKey);
+      setChatHistory((current) => current.items.some(({ id }) => id === result.message.id)
+        ? current
+        : { ...current, items: [...current.items, result.message], total: current.total + 1 });
+      setConversationStates((current) => current[conversationId]
+        ? { ...current, [conversationId]: { ...current[conversationId], bmReplyStatus: "REPLIED", status: "completed" } }
+        : current);
+      setReplyText("");
+      replyIdempotencyKeyRef.current = null;
+      await loadApplicationData(true);
+      window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+    } catch (error) {
+      setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setReplySending(false);
+    }
+  }
+
   function updateMessageEnglishTranslation(messageId: string, translatedText: string) {
     setChatHistory((current) => ({
       ...current,
@@ -2576,1007 +2607,1032 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       loadApplicationData={loadApplicationData}
     >
       <PageContainer variant="full">
-      <div
-        ref={chatContainerRef}
-        className={`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : ""}`}
-        style={initialSection === "chats" ? { gridTemplateColumns: `${chatPaneWidths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPaneWidths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
-      >
-        {initialSection === "chats" && (
-          <ContextSidebar
-            sidebarView={sidebarView}
-            selectSidebarView={selectSidebarView}
-            overview={bmSummaryData.overview}
-            storeBmCounts={storeBmCounts}
-            selectedStore={selectedStore}
-            setSelectedStore={setSelectedStore}
-            clearAllFilters={clearAllFilters}
-            stores={stores}
-            text={text}
-            getStoreDisplayName={getStoreDisplayName}
-            onRequestBulkUpdate={(req) => setBulkConfirmState(req)}
-          />
-        )}
-
-        {initialSection === "chats" && <ResizableSeparator separator="sidebar" value={chatPaneWidths.sidebar} minimum={CHAT_PANE_LIMITS.sidebar.min} maximum={CHAT_PANE_LIMITS.sidebar.max} onResize={resizeChatPanes} />}
-
-        {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
-          <PageContainer variant="full">
-            <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
-          </PageContainer>
-        ) : initialSection === "chats" && sidebarView === "systemStatus" ? (
-          <PageContainer variant="full">
-            <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
-          </PageContainer>
-        ) : initialSection === "stores" ? (
-          <PageContainer variant="wide">
-            <section className="app-content-section col-span-2 overflow-y-auto">
-            <div className="mx-auto max-w-7xl space-y-6">
-              <div className="flex items-start justify-between">
-                <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
-                <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label><button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
-              </div>
-
-              <div className="app-card p-4">
-                <label className="app-muted block text-xs font-medium">{text.searchFilter}
-                  <input value={storeManagementSearch} onChange={(event) => setStoreManagementSearch(event.target.value)} placeholder={text.searchAccountName} className="app-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm" />
-                </label>
-              </div>
-
-              {showArchivedStores && <div className="app-card p-5"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="app-filter-panel flex items-center justify-between rounded-xl px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-xs">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="app-muted text-sm">{text.noStoresFound}</p>}</div></div>}
-
-              {lineOaError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaError}</div>}
-
-              {managementWebhookInfo && !managementWebhookInfo.webhookUrlConfigured && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-                  <h3 className="font-semibold">{text.publicWebhookSetupTitle}</h3>
-                  <p className="mt-1 text-amber-800">{text.publicWebhookRequired}</p>
-                  <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div><dt className="text-xs font-medium text-amber-700">{text.backendPortLabel}</dt><dd className="font-mono">{managementWebhookInfo.backendPort}</dd></div>
-                    <div><dt className="text-xs font-medium text-amber-700">{text.expectedWebhookPath}</dt><dd className="font-mono">{managementWebhookInfo.webhookPath}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-xs font-medium text-amber-700">{text.tunnelExample}</dt><dd><code className="rounded bg-amber-100 px-2 py-1">ngrok http {managementWebhookInfo.backendPort}</code></dd></div>
-                  </dl>
-                  <ol className="mt-3 list-inside list-decimal space-y-1 text-amber-800"><li>{text.setWebhookEnvironment}</li><li>{text.restartBackend}</li></ol>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                {[
-                  [text.totalLineOa, lineOas.length],
-                  [text.activeLineOa, lineOas.filter((item) => item.isActive).length],
-                  [text.connectionIssues, lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length],
-                  [text.messagesToday, lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0)],
-                ].map(([label, value]) => <div key={String(label)} className="app-card p-5"><p className="app-muted text-xs font-medium">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
-              </div>
-
-              <div className="app-card overflow-hidden">
-                {visibleLineOas.length === 0 ? <div className="p-16 text-center text-slate-500">{text.noLineOa}</div> : (
-                  <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr>{[text.lineOaManagement, text.stores, text.connectionStatus, text.webhookUrl, text.lastWebhook, text.messagesToday, text.action].map((heading) => <th key={heading} className="px-3 py-3 font-medium">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
-                    {visibleLineOas.map((account) => <tr key={account.id} className={!account.isActive ? "opacity-60" : ""}>
-                      <td className="px-3 py-4 font-medium">{account.name}</td><td className="px-3 py-4"><span className="block font-medium">{getStoreDisplayName(account.store.name)}</span>{account.store.accountName && <span className="block text-xs text-slate-500">{account.store.accountName}</span>}<span className="block text-xs text-slate-500">{[account.store.province, account.store.region, account.store.lineId].filter(Boolean).join(" · ") || "—"}</span><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${account.store.dataSource === "MASTER" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>{account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}</span></td>
-                      <td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs ${account.connectionStatus === "CONNECTED" ? "bg-green-100 text-green-700" : account.connectionStatus === "READY" ? "bg-blue-100 text-blue-700" : account.connectionStatus === "ERROR" ? "bg-red-100 text-red-700" : account.connectionStatus === "DISABLED" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{connectionLabel(account.connectionStatus)}</span><span className={`mt-2 block text-xs ${account.credentialsHealthy ? "text-green-700" : "text-red-700"}`}>{account.credentialsHealthy ? text.credentialsReady : account.hasChannelSecret ? text.credentialDecryptionFailed : text.reenterChannelSecret}</span></td>
-                      <td className="max-w-52 px-3 py-4 text-xs">{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ? <span className="block truncate" title={webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ?? undefined}>{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl}</span> : <span className="text-amber-700" title={text.publicWebhookRequired}>{text.webhookNotConfigured}</span>}</td><td className="px-3 py-4 text-xs">{account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}</td><td className="px-3 py-4 text-center">{account.messagesReceivedToday}</td>
-                      <td className="px-3 py-4"><div className="flex min-w-44 flex-wrap gap-1.5"><button onClick={() => openMonitoring({ lineOaId: account.id })} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.viewConversations}</button>{account.store.lineManagerUrl ? <a href={account.store.lineManagerUrl} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineManager} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineManager}</button>}{account.store.lineOaLink ? <a href={account.store.lineOaLink} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineOa} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineOa}</button>}<button disabled={lineOaSubmitting} onClick={() => void testLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.testConnection}</button><button disabled={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl} title={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl ? text.publicWebhookRequired : undefined} onClick={() => void copyWebhookUrl(account.id, account.webhookUrl)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">{text.copyWebhook}</button><button onClick={() => editLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.edit}</button><button disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{account.isActive ? text.disable : text.activate}</button><button disabled={lineOaSubmitting} onClick={() => void regenerateWebhookUrl(account)} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800">{text.regenerateWebhook}</button>{account.archivedAt ? <button onClick={() => void restoreLineOa(account)} className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.restoreLineOa}</button> : <button onClick={() => void removeLineOa(account)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">{text.removeLineOa}</button>}</div>{connectionTest?.id === account.id && <p className="mt-2 text-xs text-slate-500">{connectionTestMessage(connectionTest.result)}</p>}</td>
-                    </tr>)}
-                  </tbody></table></div>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-5"><h3 className="font-semibold text-blue-900">{text.setupInstructions}</h3><ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-blue-800">{text.setupSteps.map((step) => <li key={step}>{step}</li>)}</ol></div>
-            </div>
-
-            {showLineOaForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{editingLineOaId ? text.edit : text.connectLineOa}</h3><button onClick={() => setShowLineOaForm(false)} className="text-xl text-slate-400">×</button></div>
-              {lineOaError && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{lineOaError}</p>}
-              <div className="mt-5 grid grid-cols-2 gap-4">
-                {!editingLineOaId && <div className="relative col-span-2"><label className="text-sm font-medium">{text.searchAccountName}<input role="combobox" aria-expanded={masterResults.length > 0} aria-controls="store-master-results" aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined} value={searchQuery} onKeyDown={handleMasterSearchKey} onChange={(event) => { const nextQuery = event.target.value; setSearchQuery(nextQuery); setSelectedMaster(null); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1); setLineOaForm(clearStoreMasterSelection); }} placeholder={text.selectStore} className="app-input mt-1 w-full rounded-lg border p-2" /></label>
-                  {masterSearchState.status === "loading" && <p className="mt-1 text-xs text-slate-500">{text.searchingStoreMaster}</p>}{masterSearchState.status === "error" && <div className="mt-1 flex items-center gap-2 text-xs text-red-600"><span>{masterSearchState.message}</span><button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-red-200 px-2 py-1 font-medium">{text.retry}</button></div>}
-                  {masterSearchState.status === "success" && masterSearchState.query.length > 0 && masterSearchState.suggestions.length === 0 && <div className="app-muted mt-1 text-xs"><p>{text.noMatchingAccount}</p><p>{text.manualFallbackHint}</p></div>}
-                  {masterResults.length > 0 && <div id="store-master-results" role="listbox" className="app-surface absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border shadow-xl">{masterResults.length > 1 && <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800">{text.multipleMatches}</p>}{masterResults.map((item, index) => <button id={`master-result-${index}`} role="option" aria-selected={index === masterActiveIndex} key={item.id} type="button" onMouseEnter={() => setMasterActiveIndex(index)} onClick={() => selectMasterRecord(item)} className={`app-list-item block w-full border-b px-3 py-3 text-left last:border-0 ${index === masterActiveIndex ? "is-selected" : ""}`}><strong className="block text-sm">{item.accountName}</strong><span className="app-muted block text-xs">{item.storeName}</span><span className="app-muted mt-1 block text-xs">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>{item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{text.systemSuggested}</span>}</button>)}</div>}
-                </div>}
-                {selectedMaster && synchronizedMaster && <section className="store-master-sync-card col-span-2 p-4 text-sm" aria-labelledby="store-master-sync-title"><div className="flex items-center justify-between gap-3"><h4 id="store-master-sync-title" className="font-semibold">{text.syncedStoreMasterTitle}</h4><span className="app-chip rounded-full px-2 py-1 text-xs">{text.masterFile}</span></div><dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 text-xs sm:grid-cols-2"><div><dt className="store-master-sync-label">{text.storeIdLabel}</dt><dd>{synchronizedMaster.storeId}</dd></div><div><dt className="store-master-sync-label">{text.storeName}</dt><dd>{synchronizedMaster.storeName}</dd></div><div><dt className="store-master-sync-label">{text.accountName}</dt><dd>{synchronizedMaster.accountName}</dd></div><div><dt className="store-master-sync-label">{text.lineIdLabel}</dt><dd>{synchronizedMaster.lineId}</dd></div><div><dt className="store-master-sync-label">{text.province}</dt><dd>{synchronizedMaster.province}</dd></div><div><dt className="store-master-sync-label">{text.region}</dt><dd>{synchronizedMaster.region}</dd></div><div><dt className="store-master-sync-label">{text.openLineOa}</dt><dd>{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div><div><dt className="store-master-sync-label">{text.openLineManager}</dt><dd>{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div></dl>{selectedMaster.existingStore && <p className="mt-3 rounded bg-blue-50 p-2 text-blue-800">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}{selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-amber-700">{text.incompleteMasterData}</p>}</section>}
-                <p className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{text.rotateCredentialsWarning}</p>
-                <label className="col-span-2 text-sm">{text.lineOaName} *<input value={lineOaForm.name} onChange={(event) => setLineOaForm((form) => ({ ...form, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
-                <label className="text-sm">{text.channelSecret} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelSecret} onChange={(event) => setLineOaForm((form) => ({ ...form, channelSecret: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.accessToken} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelAccessToken} onChange={(event) => setLineOaForm((form) => ({ ...form, channelAccessToken: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
-                <button type="button" onClick={() => setShowCredentials((shown) => !shown)} className="col-span-2 text-left text-sm text-blue-700">{showCredentials ? text.hideSecret : text.showSecret}</button>
-                <button type="button" onClick={() => setShowAdvancedLineOa((shown) => !shown)} className="col-span-2 rounded-lg border border-slate-300 px-3 py-2 text-left text-sm font-medium">{showAdvancedLineOa ? "▾" : "▸"} {text.advancedSettings}</button>
-                {showAdvancedLineOa && <><label className="col-span-2 text-sm">{text.stores}<select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2"><option value="">{text.autoCreateStore}</option>{availableStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="text-sm">{text.region}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.area}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.basicId}<input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.channelId}<input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} />{text.activeStatus}</label></>}
-              </div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowLineOaForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button><button disabled={lineOaSubmitting} onClick={() => void submitLineOa()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{lineOaSubmitting ? text.loadingData : text.saveConnection}</button></div>
-            </div></div>}
-            {createdLineOa && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
-                <div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl">
-                  <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-                    <h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3>
-                    <p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p>
-                  </div>
-                  <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p>
-                    <button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
-                      {text.copyWebhook}
-                    </button>
-                  </div>
-
-                  {/* Automatic Background Backfill Status */}
-                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-slate-800">
-                    <h4 className="font-semibold text-sm text-blue-900 flex items-center gap-2">
-                      <svg className="h-4 w-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      {followerInsightsTranslations[language]?.backfillStatusQueued || "Connected successfully. Historical follower data is being fetched."}
-                    </h4>
-
-                    {backfillJob ? (
-                      <div className="mt-2 text-xs space-y-1">
-                        <p className="font-medium text-slate-700">
-                          {backfillJob.status === "COMPLETED"
-                            ? followerInsightsTranslations[language]?.backfillStatusCompleted
-                            : backfillJob.status === "COMPLETED_WITH_ERRORS"
-                            ? followerInsightsTranslations[language]?.backfillStatusPartial
-                            : backfillJob.status === "FAILED"
-                            ? followerInsightsTranslations[language]?.backfillStatusFailed
-                            : followerInsightsTranslations[language]?.backfillStatusQueued}
-                        </p>
-                        <p className="text-slate-500 font-mono">
-                          Range: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | Days: {backfillJob.totalDays} | Succeeded: {backfillJob.succeeded} | Skipped: {backfillJob.skipped} | Failed: {backfillJob.failed}
-                        </p>
-                        {backfillResult && (
-                          <p className="mt-1 text-xs font-semibold text-green-700">
-                            ✓ {backfillResult.succeeded ?? 0} dates updated.
-                          </p>
-                        )}
-                        {(backfillJob.status === "FAILED" || backfillJob.status === "COMPLETED_WITH_ERRORS") && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void api.followerInsightsRetryJob(createdLineOa.account.id);
-                            }}
-                            className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
-                          >
-                            {followerInsightsTranslations[language]?.backfillStatusFailed || "Historical backfill failed. Click to retry."}
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-xs text-slate-600">
-                        {followerInsightsTranslations[language]?.backfillStatusQueued}
-                      </p>
-                    )}
-                  </div>
-
-                  <ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">
-                    {text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}
-                  </ol>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
-                      {text.close}
-                    </button>
-                    <button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
-                      {text.goToLineOaManagement}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Backfill Confirmation Dialog */}
-            {backfillModalOpen && createdLineOa && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-6">
-                <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {language === "th" ? "ดึงข้อมูลประวัติผู้ติดตามย้อนหลัง" : language === "zh" ? "补全历史关注者数据" : "Backfill historical follower data"}
-                  </h3>
-                  <p className="mt-1 text-xs font-medium text-slate-600">
-                    {createdLineOa.account.name}
-                  </p>
-
-                  <div className="mt-4 space-y-3 text-xs">
-                    <div>
-                      <label className="font-medium text-slate-700">
-                        {language === "th" ? "วันเริ่มต้น" : language === "zh" ? "开始日期" : "Start Date"}
-                      </label>
-                      <input
-                        type="date"
-                        value={backfillDateFrom}
-                        onChange={(e) => setBackfillDateFrom(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="font-medium text-slate-700">
-                        {language === "th" ? "วันสิ้นสุด" : language === "zh" ? "结束日期" : "End Date"}
-                      </label>
-                      <input
-                        type="date"
-                        value={backfillDateTo}
-                        onChange={(e) => setBackfillDateTo(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-300 p-2"
-                      />
-                    </div>
-
-                    <div className="rounded-lg bg-slate-100 p-3 text-slate-700 font-medium">
-                      {language === "th"
-                        ? `ประมาณการเรียก LINE API: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} วัน สำหรับบัญชี ${createdLineOa.account.name}`
-                        : language === "zh"
-                        ? `预估 LINE API 调用：账号 ${createdLineOa.account.name} 共 ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} 天`
-                        : `Estimated LINE API calls: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} dates for account ${createdLineOa.account.name}`}
-                    </div>
-
-                    {backfillError && (
-                      <div className="rounded-lg bg-rose-50 p-2 text-rose-700 border border-rose-200">
-                        {backfillError}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      type="button"
-                      disabled={backfillLoading}
-                      onClick={() => setBackfillModalOpen(false)}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={backfillLoading}
-                      onClick={async () => {
-                        setBackfillLoading(true);
-                        setBackfillError(null);
-                        try {
-                          const res = await api.followerInsightsBackfill({
-                            dateFrom: backfillDateFrom,
-                            dateTo: backfillDateTo,
-                            lineOaId: createdLineOa.account.id,
-                          });
-                          setBackfillResult(res);
-                          setBackfillModalOpen(false);
-                        } catch (err) {
-                          setBackfillError(err instanceof Error ? err.message : "Backfill failed");
-                        } finally {
-                          setBackfillLoading(false);
-                        }
-                      }}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      {backfillLoading
-                        ? (language === "th" ? "กำลังดึงข้อมูล..." : "Backfilling...")
-                        : (language === "th" ? "ยืนยันการดึงข้อมูลย้อนหลัง" : language === "zh" ? "确认补全历史数据" : "Confirm Historical Backfill")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-          </PageContainer>
-        ) : initialSection === "dashboard" ? (
-          <PageContainer variant="full">
-            <section className="app-content-section col-span-2 overflow-y-auto">
-              <DashboardView
-                language={language}
-                lineOas={lineOas}
-                dashboardSummary={dashboardSummary}
-                bmSummaryData={bmSummaryData}
-                getStoreDisplayName={getStoreDisplayName}
-                onOpenStore={(storeId) => openMonitoring({ store: storeId })}
-                lastUpdatedAt={lastUpdatedAt}
-              />
-            </section>
-          </PageContainer>
-        ) : initialSection === "follower-insights" ? (
-          <PageContainer variant="readable">
-            <FollowerInsightsView language={language} />
-          </PageContainer>
-        ) : initialSection === "classification-insights" ? (
-          <PageContainer variant="readable">
-            <ClassificationInsightsView language={language} />
-          </PageContainer>
-        ) : initialSection === "friend-source-links" ? (
-          <PageContainer variant="readable">
-            <FriendSourceLinksView language={language} userRole={authUser.role} />
-          </PageContainer>
-        ) : (
-        <>
-        <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r">
-          <div className="border-b border-slate-200 p-4 shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 data-chat-list-title className="text-base font-semibold">
-                  {conversationListTitle}
-                </h2>
-                <p className="app-muted mt-0.5 text-sm">
-                  {chatTotalCount} {text.searchResults}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {selectedStore !== "all" && (
-                  <div className="flex items-center gap-1.5">
-                    {sidebarView === "notReplied" && (storeBmCounts[selectedStore]?.notReplied ?? 0) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const storeObj = availableStores.find((s) => s.id === selectedStore);
-                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
-                          setBulkConfirmState({
-                            storeId: selectedStore,
-                            storeName: sName,
-                            targetStatus: "REPLIED",
-                            fromStatuses: ["NOT_REPLIED"],
-                            affectedCount: storeBmCounts[selectedStore]?.notReplied ?? 0,
-                          });
-                        }}
-                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
-                        title="Mark all matching as replied"
-                      >
-                        <span>✓</span>
-                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notReplied ?? 0})</span>
-                      </button>
-                    )}
-                    {sidebarView === "notifiedBm" && (storeBmCounts[selectedStore]?.notifiedBm ?? 0) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const storeObj = availableStores.find((s) => s.id === selectedStore);
-                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
-                          setBulkConfirmState({
-                            storeId: selectedStore,
-                            storeName: sName,
-                            targetStatus: "REPLIED",
-                            fromStatuses: ["NOTIFIED_BM"],
-                            affectedCount: storeBmCounts[selectedStore]?.notifiedBm ?? 0,
-                          });
-                        }}
-                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
-                        title="Mark all notified BM as replied"
-                      >
-                        <span>✓</span>
-                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notifiedBm ?? 0})</span>
-                      </button>
-                    )}
-                    {sidebarView === "all" && ((storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const storeObj = availableStores.find((s) => s.id === selectedStore);
-                          const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
-                          const pendingCount = (storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0);
-                          setBulkConfirmState({
-                            storeId: selectedStore,
-                            storeName: sName,
-                            targetStatus: "REPLIED",
-                            fromStatuses: ["NOT_REPLIED", "NOTIFIED_BM"],
-                            affectedCount: pendingCount,
-                          });
-                        }}
-                        className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
-                        title="Mark pending conversations as replied"
-                      >
-                        <span>✓</span>
-                        <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "待办全部标记为已回复" : "Mark all as replied"} ({(storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)})</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-                <button
-                  data-chat-filter-button
-                  onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
-                  aria-expanded={showFilterPanel}
-                  className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
-                >
-                  {text.moreFilters}
-                </button>
-                <StoreChatsOverflowMenu language={language} resetPaneSizes={resetChatPanes} />
-              </div>
-            </div>
-
-            {showFilterPanel && (
-              <div className="app-filter-panel mt-4 grid grid-cols-2 gap-3 rounded-lg p-3">
-                <label className="app-muted text-xs">
-                  {text.storeFilter}
-                  <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allStores}</option>
-                    {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted text-xs">
-                  {text.statusFilter}
-                  <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allStatuses}</option>
-                    {statusOptions.map((status) => <option key={status} value={status}>{getStatusLabel(language, status)}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted text-xs">
-                  {text.priorityFilter}
-                  <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allPriorities}</option>
-                    {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority === "High" ? text.highPriority : text.normalPriority}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted text-xs">
-                  {text.seriesFilter}
-                  <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allSeries}</option>
-                    {seriesOptions.map((series) => <option key={series} value={series}>{series}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted col-span-2 text-xs">
-                  {text.modelFilter}
-                  <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allModels}</option>
-                    {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted col-span-2 text-xs">
-                  {text.topicFilter}
-                  <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allTopics}</option>
-                    {topicOptions.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
-                  </select>
-                </label>
-                <label className="app-muted col-span-2 text-xs">
-                  {text.lineOaManagement}
-                  <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
-                    <option value="all">{text.allLineOa}</option>
-                    {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                  </select>
-                </label>
-              </div>
-            )}
-
-            {hasActiveFilters && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-full px-2 py-1 text-xs">{text.searchFilter}: {searchText.trim()} ×</button>}
-                {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
-                {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
-                {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
-                {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.seriesFilter}: {seriesFilter} ×</button>}
-                {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
-                {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
-                {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
-                <button onClick={clearAllFilters} className="text-xs font-medium text-red-700 hover:underline">{text.clearAll}</button>
-              </div>
-            )}
-          </div>
-
-            {bulkSuccessToast && (
-              <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">✓</span>
-                  <span>{bulkSuccessToast}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setBulkSuccessToast(null)}
-                  className="text-emerald-600 hover:text-emerald-900 font-bold ml-2"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-
-          {hasNewChatsAvailable && (
-            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-xs text-blue-700 shrink-0">
-              <span>{chatsPaginationText.newChatsAvailable}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setHasNewChatsAvailable(false);
-                  setChatPage(1);
-                }}
-                className="font-semibold underline hover:text-blue-900 focus:outline-none"
-              >
-                {chatsPaginationText.refreshPage1}
-              </button>
-            </div>
+        <div
+          ref={chatContainerRef}
+          className={`app-workspace-grid grid h-full min-h-0 max-h-full min-w-0 overflow-hidden ${initialSection === "chats" ? "chat-resizable-grid" : ""}`}
+          style={initialSection === "chats" ? { gridTemplateColumns: `${chatPaneWidths.sidebar}px ${CHAT_PANE_LIMITS.separatorWidth}px ${chatPaneWidths.conversations}px ${CHAT_PANE_LIMITS.separatorWidth}px minmax(${CHAT_PANE_LIMITS.detailMin}px, 1fr)` } : undefined}
+        >
+          {initialSection === "chats" && (
+            <ContextSidebar
+              sidebarView={sidebarView}
+              selectSidebarView={selectSidebarView}
+              overview={bmSummaryData.overview}
+              storeBmCounts={storeBmCounts}
+              selectedStore={selectedStore}
+              setSelectedStore={setSelectedStore}
+              clearAllFilters={clearAllFilters}
+              stores={stores}
+              text={text}
+              getStoreDisplayName={getStoreDisplayName}
+              onRequestBulkUpdate={(req) => setBulkConfirmState(req)}
+            />
           )}
 
-          <div className="flex-1 overflow-y-auto">
-            {isChatPageLoading ? (
-              <ConversationRowSkeleton count={chatPageSize} />
-            ) : chatPageError ? (
-              <div className="p-8 text-center text-sm text-red-600">
-                <p>{chatsPaginationText.failedToLoadConversations}: {chatPageError}</p>
-                <button
-                  type="button"
-                  onClick={() => setIsChatPageLoading((v) => !v)}
-                  className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  {text.retry}
-                </button>
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="app-empty-state px-6 py-16 text-center">
-                <p className="font-semibold">{text.noConversationsFound}</p>
-                <p className="mt-2 text-sm">{text.noResultsExplanation}</p>
-                {hasActiveFilters && (
-                  <button onClick={clearAllFilters} className="app-button-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium">
-                    {text.clearFilter}
-                  </button>
-                )}
-              </div>
-            ) : (
-              filteredConversations.map((conversation) => {
-                const isSelected = conversation.id === selectedConversation?.id;
-                const status = conversationStates[conversation.id]?.status;
-                const currentBmReplyStatus = conversationStates[conversation.id]?.bmReplyStatus ?? conversation.bmReplyStatus;
-                const tags = getConversationListTags({
-                  priority: conversation.priority,
-                  priorityLabel: text.highPriority,
-                  statusLabel: getStatusLabel(language, status),
-                  product: conversation.product,
-                  topic: conversation.topic,
-                });
-                const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
+          {initialSection === "chats" && <ResizableSeparator separator="sidebar" value={chatPaneWidths.sidebar} minimum={CHAT_PANE_LIMITS.sidebar.min} maximum={CHAT_PANE_LIMITS.sidebar.max} onResize={resizeChatPanes} />}
 
-                return (
-                  <div
-                    key={conversation.id}
-                    data-conversation-row
-                    data-selected={isSelected}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      setSelectedConversationId(conversation.id);
-                      setShowTranslation(true);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedConversationId(conversation.id);
-                        setShowTranslation(true);
-                      }
-                    }}
-                    aria-pressed={isSelected}
-                    className={`conversation-list-row app-list-item relative w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer ${
-                      isSelected ? "is-selected" : ""
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1">{conversation.customer}</p>
+          {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
+            <PageContainer variant="full">
+              <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
+            </PageContainer>
+          ) : initialSection === "chats" && sidebarView === "systemStatus" ? (
+            <PageContainer variant="full">
+              <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
+            </PageContainer>
+          ) : initialSection === "stores" ? (
+            <PageContainer variant="wide">
+              <section className="app-content-section col-span-2 overflow-y-auto">
+                <div className="mx-auto max-w-7xl space-y-6">
+                  <div className="flex items-start justify-between">
+                    <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
+                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label><button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
+                  </div>
 
-                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          data-conversation-action-menu
-                          aria-label="Change status"
-                          aria-expanded={openConversationDropdownId === conversation.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenConversationDropdownId((prev) => (prev === conversation.id ? null : conversation.id));
-                          }}
-                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                          title={language === "th" ? "เปลี่ยนสถานะ" : language === "zh" ? "更改状态" : "Change Status"}
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                          </svg>
+                  <div className="app-card p-4">
+                    <label className="app-muted block text-xs font-medium">{text.searchFilter}
+                      <input value={storeManagementSearch} onChange={(event) => setStoreManagementSearch(event.target.value)} placeholder={text.searchAccountName} className="app-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm" />
+                    </label>
+                  </div>
+
+                  {showArchivedStores && <div className="app-card p-5"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="app-filter-panel flex items-center justify-between rounded-xl px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-xs">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="app-muted text-sm">{text.noStoresFound}</p>}</div></div>}
+
+                  {lineOaError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaError}</div>}
+
+                  {managementWebhookInfo && !managementWebhookInfo.webhookUrlConfigured && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+                      <h3 className="font-semibold">{text.publicWebhookSetupTitle}</h3>
+                      <p className="mt-1 text-amber-800">{text.publicWebhookRequired}</p>
+                      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div><dt className="text-xs font-medium text-amber-700">{text.backendPortLabel}</dt><dd className="font-mono">{managementWebhookInfo.backendPort}</dd></div>
+                        <div><dt className="text-xs font-medium text-amber-700">{text.expectedWebhookPath}</dt><dd className="font-mono">{managementWebhookInfo.webhookPath}</dd></div>
+                        <div className="sm:col-span-2"><dt className="text-xs font-medium text-amber-700">{text.tunnelExample}</dt><dd><code className="rounded bg-amber-100 px-2 py-1">ngrok http {managementWebhookInfo.backendPort}</code></dd></div>
+                      </dl>
+                      <ol className="mt-3 list-inside list-decimal space-y-1 text-amber-800"><li>{text.setWebhookEnvironment}</li><li>{text.restartBackend}</li></ol>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    {[
+                      [text.totalLineOa, lineOas.length],
+                      [text.activeLineOa, lineOas.filter((item) => item.isActive).length],
+                      [text.connectionIssues, lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length],
+                      [text.messagesToday, lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0)],
+                    ].map(([label, value]) => <div key={String(label)} className="app-card p-5"><p className="app-muted text-xs font-medium">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
+                  </div>
+
+                  <div className="app-card overflow-hidden">
+                    {visibleLineOas.length === 0 ? <div className="p-16 text-center text-slate-500">{text.noLineOa}</div> : (
+                      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr>{[text.lineOaManagement, text.stores, text.connectionStatus, text.webhookUrl, text.lastWebhook, text.messagesToday, text.action].map((heading) => <th key={heading} className="px-3 py-3 font-medium">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
+                        {visibleLineOas.map((account) => <tr key={account.id} className={!account.isActive ? "opacity-60" : ""}>
+                          <td className="px-3 py-4 font-medium">{account.name}</td><td className="px-3 py-4"><span className="block font-medium">{getStoreDisplayName(account.store.name)}</span>{account.store.accountName && <span className="block text-xs text-slate-500">{account.store.accountName}</span>}<span className="block text-xs text-slate-500">{[account.store.province, account.store.region, account.store.lineId].filter(Boolean).join(" · ") || "—"}</span><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${account.store.dataSource === "MASTER" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>{account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}</span></td>
+                          <td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs ${account.connectionStatus === "CONNECTED" ? "bg-green-100 text-green-700" : account.connectionStatus === "READY" ? "bg-blue-100 text-blue-700" : account.connectionStatus === "ERROR" ? "bg-red-100 text-red-700" : account.connectionStatus === "DISABLED" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{connectionLabel(account.connectionStatus)}</span><span className={`mt-2 block text-xs ${account.credentialsHealthy ? "text-green-700" : "text-red-700"}`}>{account.credentialsHealthy ? text.credentialsReady : account.hasChannelSecret ? text.credentialDecryptionFailed : text.reenterChannelSecret}</span></td>
+                          <td className="max-w-52 px-3 py-4 text-xs">{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ? <span className="block truncate" title={webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ?? undefined}>{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl}</span> : <span className="text-amber-700" title={text.publicWebhookRequired}>{text.webhookNotConfigured}</span>}</td><td className="px-3 py-4 text-xs">{account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}</td><td className="px-3 py-4 text-center">{account.messagesReceivedToday}</td>
+                          <td className="px-3 py-4"><div className="flex min-w-44 flex-wrap gap-1.5"><button onClick={() => openMonitoring({ lineOaId: account.id })} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.viewConversations}</button>{account.store.lineManagerUrl ? <a href={account.store.lineManagerUrl} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineManager} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineManager}</button>}{account.store.lineOaLink ? <a href={account.store.lineOaLink} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineOa} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineOa}</button>}<button disabled={lineOaSubmitting} onClick={() => void testLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.testConnection}</button><button disabled={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl} title={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl ? text.publicWebhookRequired : undefined} onClick={() => void copyWebhookUrl(account.id, account.webhookUrl)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">{text.copyWebhook}</button><button onClick={() => editLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.edit}</button><button disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{account.isActive ? text.disable : text.activate}</button><button disabled={lineOaSubmitting} onClick={() => void regenerateWebhookUrl(account)} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800">{text.regenerateWebhook}</button>{account.archivedAt ? <button onClick={() => void restoreLineOa(account)} className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.restoreLineOa}</button> : <button onClick={() => void removeLineOa(account)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">{text.removeLineOa}</button>}</div>{connectionTest?.id === account.id && <p className="mt-2 text-xs text-slate-500">{connectionTestMessage(connectionTest.result)}</p>}</td>
+                        </tr>)}
+                      </tbody></table></div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-5"><h3 className="font-semibold text-blue-900">{text.setupInstructions}</h3><ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-blue-800">{text.setupSteps.map((step) => <li key={step}>{step}</li>)}</ol></div>
+                </div>
+
+                {showLineOaForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{editingLineOaId ? text.edit : text.connectLineOa}</h3><button onClick={() => setShowLineOaForm(false)} className="text-xl text-slate-400">×</button></div>
+                  {lineOaError && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{lineOaError}</p>}
+                  <div className="mt-5 grid grid-cols-2 gap-4">
+                    {!editingLineOaId && <div className="relative col-span-2"><label className="text-sm font-medium">{text.searchAccountName}<input role="combobox" aria-expanded={masterResults.length > 0} aria-controls="store-master-results" aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined} value={searchQuery} onKeyDown={handleMasterSearchKey} onChange={(event) => { const nextQuery = event.target.value; setSearchQuery(nextQuery); setSelectedMaster(null); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1); setLineOaForm(clearStoreMasterSelection); }} placeholder={text.selectStore} className="app-input mt-1 w-full rounded-lg border p-2" /></label>
+                      {masterSearchState.status === "loading" && <p className="mt-1 text-xs text-slate-500">{text.searchingStoreMaster}</p>}{masterSearchState.status === "error" && <div className="mt-1 flex items-center gap-2 text-xs text-red-600"><span>{masterSearchState.message}</span><button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-red-200 px-2 py-1 font-medium">{text.retry}</button></div>}
+                      {masterSearchState.status === "success" && masterSearchState.query.length > 0 && masterSearchState.suggestions.length === 0 && <div className="app-muted mt-1 text-xs"><p>{text.noMatchingAccount}</p><p>{text.manualFallbackHint}</p></div>}
+                      {masterResults.length > 0 && <div id="store-master-results" role="listbox" className="app-surface absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border shadow-xl">{masterResults.length > 1 && <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800">{text.multipleMatches}</p>}{masterResults.map((item, index) => <button id={`master-result-${index}`} role="option" aria-selected={index === masterActiveIndex} key={item.id} type="button" onMouseEnter={() => setMasterActiveIndex(index)} onClick={() => selectMasterRecord(item)} className={`app-list-item block w-full border-b px-3 py-3 text-left last:border-0 ${index === masterActiveIndex ? "is-selected" : ""}`}><strong className="block text-sm">{item.accountName}</strong><span className="app-muted block text-xs">{item.storeName}</span><span className="app-muted mt-1 block text-xs">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>{item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{text.systemSuggested}</span>}</button>)}</div>}
+                    </div>}
+                    {selectedMaster && synchronizedMaster && <section className="store-master-sync-card col-span-2 p-4 text-sm" aria-labelledby="store-master-sync-title"><div className="flex items-center justify-between gap-3"><h4 id="store-master-sync-title" className="font-semibold">{text.syncedStoreMasterTitle}</h4><span className="app-chip rounded-full px-2 py-1 text-xs">{text.masterFile}</span></div><dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 text-xs sm:grid-cols-2"><div><dt className="store-master-sync-label">{text.storeIdLabel}</dt><dd>{synchronizedMaster.storeId}</dd></div><div><dt className="store-master-sync-label">{text.storeName}</dt><dd>{synchronizedMaster.storeName}</dd></div><div><dt className="store-master-sync-label">{text.accountName}</dt><dd>{synchronizedMaster.accountName}</dd></div><div><dt className="store-master-sync-label">{text.lineIdLabel}</dt><dd>{synchronizedMaster.lineId}</dd></div><div><dt className="store-master-sync-label">{text.province}</dt><dd>{synchronizedMaster.province}</dd></div><div><dt className="store-master-sync-label">{text.region}</dt><dd>{synchronizedMaster.region}</dd></div><div><dt className="store-master-sync-label">{text.openLineOa}</dt><dd>{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div><div><dt className="store-master-sync-label">{text.openLineManager}</dt><dd>{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div></dl>{selectedMaster.existingStore && <p className="mt-3 rounded bg-blue-50 p-2 text-blue-800">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}{selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-amber-700">{text.incompleteMasterData}</p>}</section>}
+                    <p className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{text.rotateCredentialsWarning}</p>
+                    <label className="col-span-2 text-sm">{text.lineOaName} *<input value={lineOaForm.name} onChange={(event) => setLineOaForm((form) => ({ ...form, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
+                    <label className="text-sm">{text.channelSecret} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelSecret} onChange={(event) => setLineOaForm((form) => ({ ...form, channelSecret: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.accessToken} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelAccessToken} onChange={(event) => setLineOaForm((form) => ({ ...form, channelAccessToken: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
+                    <button type="button" onClick={() => setShowCredentials((shown) => !shown)} className="col-span-2 text-left text-sm text-blue-700">{showCredentials ? text.hideSecret : text.showSecret}</button>
+                    <button type="button" onClick={() => setShowAdvancedLineOa((shown) => !shown)} className="col-span-2 rounded-lg border border-slate-300 px-3 py-2 text-left text-sm font-medium">{showAdvancedLineOa ? "▾" : "▸"} {text.advancedSettings}</button>
+                    {showAdvancedLineOa && <><label className="col-span-2 text-sm">{text.stores}<select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2"><option value="">{text.autoCreateStore}</option>{availableStores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label className="text-sm">{text.region}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.area}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.basicId}<input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.channelId}<input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} />{text.activeStatus}</label></>}
+                  </div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowLineOaForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button><button disabled={lineOaSubmitting} onClick={() => void submitLineOa()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{lineOaSubmitting ? text.loadingData : text.saveConnection}</button></div>
+                </div></div>}
+                {createdLineOa && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
+                    <div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl">
+                      <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                        <h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3>
+                        <p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p>
+                      </div>
+                      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p>
+                        <button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
+                          {text.copyWebhook}
                         </button>
+                      </div>
 
-                        {openConversationDropdownId === conversation.id && (
-                          <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs">
-                            <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                              {language === "th" ? "สถานะการตอบ" : language === "zh" ? "回复状态" : "Status"}
-                            </div>
-                            <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                      {/* Automatic Background Backfill Status */}
+                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-slate-800">
+                        <h4 className="font-semibold text-sm text-blue-900 flex items-center gap-2">
+                          <svg className="h-4 w-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          {followerInsightsTranslations[language]?.backfillStatusQueued || "Connected successfully. Historical follower data is being fetched."}
+                        </h4>
 
-                            <button
-                              type="button"
-                              disabled={authUser?.role === "VIEWER"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenConversationDropdownId(null);
-                                void updateConversationBmReplyStatus(conversation.id, "NOT_REPLIED");
-                              }}
-                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
-                                currentBmReplyStatus === "NOT_REPLIED"
-                                  ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 font-semibold"
-                                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                              }`}
-                            >
-                              <span className="text-slate-400">⚪</span>
-                              <span>{bmReplyStatusLabels[language]["NOT_REPLIED"]}</span>
-                            </button>
+                        {backfillJob ? (
+                          <div className="mt-2 text-xs space-y-1">
+                            <p className="font-medium text-slate-700">
+                              {backfillJob.status === "COMPLETED"
+                                ? followerInsightsTranslations[language]?.backfillStatusCompleted
+                                : backfillJob.status === "COMPLETED_WITH_ERRORS"
+                                  ? followerInsightsTranslations[language]?.backfillStatusPartial
+                                  : backfillJob.status === "FAILED"
+                                    ? followerInsightsTranslations[language]?.backfillStatusFailed
+                                    : followerInsightsTranslations[language]?.backfillStatusQueued}
+                            </p>
+                            <p className="text-slate-500 font-mono">
+                              Range: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | Days: {backfillJob.totalDays} | Succeeded: {backfillJob.succeeded} | Skipped: {backfillJob.skipped} | Failed: {backfillJob.failed}
+                            </p>
+                            {backfillResult && (
+                              <p className="mt-1 text-xs font-semibold text-green-700">
+                                ✓ {backfillResult.succeeded ?? 0} dates updated.
+                              </p>
+                            )}
+                            {(backfillJob.status === "FAILED" || backfillJob.status === "COMPLETED_WITH_ERRORS") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void api.followerInsightsRetryJob(createdLineOa.account.id);
+                                }}
+                                className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
+                              >
+                                {followerInsightsTranslations[language]?.backfillStatusFailed || "Historical backfill failed. Click to retry."}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-600">
+                            {followerInsightsTranslations[language]?.backfillStatusQueued}
+                          </p>
+                        )}
+                      </div>
 
-                            <button
-                              type="button"
-                              disabled={authUser?.role === "VIEWER"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenConversationDropdownId(null);
-                                void updateConversationBmReplyStatus(conversation.id, "NOTIFIED_BM");
-                              }}
-                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
-                                currentBmReplyStatus === "NOTIFIED_BM"
-                                  ? "bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-semibold"
-                                  : "text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                              }`}
-                            >
-                              <span>🟣</span>
-                              <span>{bmReplyStatusLabels[language]["NOTIFIED_BM"]}</span>
-                            </button>
+                      <ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">
+                        {text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}
+                      </ol>
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
+                          {text.close}
+                        </button>
+                        <button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
+                          {text.goToLineOaManagement}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                            <button
-                              type="button"
-                              disabled={authUser?.role === "VIEWER"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenConversationDropdownId(null);
-                                void updateConversationBmReplyStatus(conversation.id, "REPLIED");
-                              }}
-                              className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${
-                                currentBmReplyStatus === "REPLIED"
-                                  ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-semibold"
-                                  : "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                              }`}
-                            >
-                              <span>🟢</span>
-                              <span>{bmReplyStatusLabels[language]["REPLIED"]}</span>
-                            </button>
+                {/* Backfill Confirmation Dialog */}
+                {backfillModalOpen && createdLineOa && (
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-6">
+                    <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                      <h3 className="text-lg font-bold text-slate-900">
+                        {language === "th" ? "ดึงข้อมูลประวัติผู้ติดตามย้อนหลัง" : language === "zh" ? "补全历史关注者数据" : "Backfill historical follower data"}
+                      </h3>
+                      <p className="mt-1 text-xs font-medium text-slate-600">
+                        {createdLineOa.account.name}
+                      </p>
+
+                      <div className="mt-4 space-y-3 text-xs">
+                        <div>
+                          <label className="font-medium text-slate-700">
+                            {language === "th" ? "วันเริ่มต้น" : language === "zh" ? "开始日期" : "Start Date"}
+                          </label>
+                          <input
+                            type="date"
+                            value={backfillDateFrom}
+                            onChange={(e) => setBackfillDateFrom(e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-medium text-slate-700">
+                            {language === "th" ? "วันสิ้นสุด" : language === "zh" ? "结束日期" : "End Date"}
+                          </label>
+                          <input
+                            type="date"
+                            value={backfillDateTo}
+                            onChange={(e) => setBackfillDateTo(e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                          />
+                        </div>
+
+                        <div className="rounded-lg bg-slate-100 p-3 text-slate-700 font-medium">
+                          {language === "th"
+                            ? `ประมาณการเรียก LINE API: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} วัน สำหรับบัญชี ${createdLineOa.account.name}`
+                            : language === "zh"
+                              ? `预估 LINE API 调用：账号 ${createdLineOa.account.name} 共 ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} 天`
+                              : `Estimated LINE API calls: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} dates for account ${createdLineOa.account.name}`}
+                        </div>
+
+                        {backfillError && (
+                          <div className="rounded-lg bg-rose-50 p-2 text-rose-700 border border-rose-200">
+                            {backfillError}
                           </div>
                         )}
                       </div>
-                    </div>
 
-                    <p data-conversation-message-preview className="conversation-message-preview mt-2 line-clamp-2 text-sm leading-5">
-                      {conversation.translations[language]}
-                    </p>
-
-                    <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
-                      <span className="min-w-0 truncate">{conversation.store}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
-                    </div>
-
-                    <div className="mt-3.5 flex flex-wrap gap-1.5" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
-                      <span
-                        data-conversation-bm-reply-status={currentBmReplyStatus}
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          currentBmReplyStatus === "REPLIED"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                            : currentBmReplyStatus === "NOTIFIED_BM"
-                              ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        }`}
-                      >
-                        {bmReplyStatusLabels[language][currentBmReplyStatus]}
-                      </span>
-                      {tags.visible.map((tag, index) => (
-                        <span
-                          key={`${tag.kind}-${tag.label}-${index}`}
-                          data-conversation-priority={tag.kind === "priority" ? conversation.priority : undefined}
-                          className={`rounded-full px-2 py-0.5 text-xs ${
-                            tag.kind === "priority"
-                              ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
-                              : tag.kind === "status"
-                                ? status === "followUp"
-                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
-                                  : status === "reminded"
-                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                                    : status === "acknowledged"
-                                      ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                      : status === "completed"
-                                        ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
-                                        : "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
-                                : tag.kind === "product"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
-                                  : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                          }`}
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          disabled={backfillLoading}
+                          onClick={() => setBackfillModalOpen(false)}
+                          className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
-                          {tag.label}
-                        </span>
-                      ))}
-                      {tags.hidden.length > 0 && (
-                        <span className="app-chip rounded-full px-2 py-0.5 text-xs" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
-                          +{tags.hidden.length}
-                        </span>
-                      )}
+                          {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={backfillLoading}
+                          onClick={async () => {
+                            setBackfillLoading(true);
+                            setBackfillError(null);
+                            try {
+                              const res = await api.followerInsightsBackfill({
+                                dateFrom: backfillDateFrom,
+                                dateTo: backfillDateTo,
+                                lineOaId: createdLineOa.account.id,
+                              });
+                              setBackfillResult(res);
+                              setBackfillModalOpen(false);
+                            } catch (err) {
+                              setBackfillError(err instanceof Error ? err.message : "Backfill failed");
+                            } finally {
+                              setBackfillLoading(false);
+                            }
+                          }}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                        >
+                          {backfillLoading
+                            ? (language === "th" ? "กำลังดึงข้อมูล..." : "Backfilling...")
+                            : (language === "th" ? "ยืนยันการดึงข้อมูลย้อนหลัง" : language === "zh" ? "确认补全历史数据" : "Confirm Historical Backfill")}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="shrink-0">
-            <ConversationPaginationFooter
-              currentPage={chatPage}
-              pageSize={chatPageSize}
-              totalCount={chatTotalCount}
-              loading={isChatPageLoading}
-              language={language}
-              onPageChange={(newPage) => setChatPage(newPage)}
-              onPageSizeChange={(newSize) => {
-                setChatPageSize(newSize);
-                setChatPage(1);
-              }}
-            />
-          </div>
-        </section>
-
-        <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
-
-        <section data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col">
-          {selectedConversation && selectedConversationState ? (
-            <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
-              {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
-              <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  {selectedApiConversation?.customer.pictureUrl
-                    ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center ring-2 ring-white shadow-sm" />
-                    : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 font-bold text-white shadow-sm">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
-                  }
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight">
-                        {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
+                )}
+              </section>
+            </PageContainer>
+          ) : initialSection === "dashboard" ? (
+            <PageContainer variant="full">
+              <section className="app-content-section col-span-2 overflow-y-auto">
+                <DashboardView
+                  language={language}
+                  lineOas={lineOas}
+                  dashboardSummary={dashboardSummary}
+                  bmSummaryData={bmSummaryData}
+                  getStoreDisplayName={getStoreDisplayName}
+                  onOpenStore={(storeId) => openMonitoring({ store: storeId })}
+                  lastUpdatedAt={lastUpdatedAt}
+                />
+              </section>
+            </PageContainer>
+          ) : initialSection === "follower-insights" ? (
+            <PageContainer variant="readable">
+              <FollowerInsightsView language={language} />
+            </PageContainer>
+          ) : initialSection === "classification-insights" ? (
+            <PageContainer variant="readable">
+              <ClassificationInsightsView language={language} />
+            </PageContainer>
+          ) : initialSection === "friend-source-links" ? (
+            <PageContainer variant="readable">
+              <FriendSourceLinksView language={language} userRole={authUser.role} />
+            </PageContainer>
+          ) : (
+            <>
+              <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r">
+                <div className="border-b border-slate-200 p-4 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 data-chat-list-title className="text-base font-semibold">
+                        {conversationListTitle}
                       </h2>
-                      <span className="app-muted shrink-0 text-xs font-medium">{selectedConversation.store}</span>
-                      {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-300">{text.profileUnavailable}</span>}
+                      <p className="app-muted mt-0.5 text-sm">
+                        {chatTotalCount} {text.searchResults}
+                      </p>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      {customerIntelligence && (
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                          customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                          : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                          : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>
-                          {customerIntelligence.customerStage.replaceAll("_", " ")}
-                        </span>
+
+                    <div className="flex items-center gap-2">
+                      {selectedStore !== "all" && (
+                        <div className="flex items-center gap-1.5">
+                          {sidebarView === "notReplied" && (storeBmCounts[selectedStore]?.notReplied ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const storeObj = availableStores.find((s) => s.id === selectedStore);
+                                const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                                setBulkConfirmState({
+                                  storeId: selectedStore,
+                                  storeName: sName,
+                                  targetStatus: "REPLIED",
+                                  fromStatuses: ["NOT_REPLIED"],
+                                  affectedCount: storeBmCounts[selectedStore]?.notReplied ?? 0,
+                                });
+                              }}
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              title="Mark all matching as replied"
+                            >
+                              <span>✓</span>
+                              <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notReplied ?? 0})</span>
+                            </button>
+                          )}
+                          {sidebarView === "notifiedBm" && (storeBmCounts[selectedStore]?.notifiedBm ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const storeObj = availableStores.find((s) => s.id === selectedStore);
+                                const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                                setBulkConfirmState({
+                                  storeId: selectedStore,
+                                  storeName: sName,
+                                  targetStatus: "REPLIED",
+                                  fromStatuses: ["NOTIFIED_BM"],
+                                  affectedCount: storeBmCounts[selectedStore]?.notifiedBm ?? 0,
+                                });
+                              }}
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              title="Mark all notified BM as replied"
+                            >
+                              <span>✓</span>
+                              <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"} ({storeBmCounts[selectedStore]?.notifiedBm ?? 0})</span>
+                            </button>
+                          )}
+                          {sidebarView === "all" && ((storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const storeObj = availableStores.find((s) => s.id === selectedStore);
+                                const sName = storeObj ? getStoreDisplayName(storeObj.name) : selectedStore;
+                                const pendingCount = (storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0);
+                                setBulkConfirmState({
+                                  storeId: selectedStore,
+                                  storeName: sName,
+                                  targetStatus: "REPLIED",
+                                  fromStatuses: ["NOT_REPLIED", "NOTIFIED_BM"],
+                                  affectedCount: pendingCount,
+                                });
+                              }}
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              title="Mark pending conversations as replied"
+                            >
+                              <span>✓</span>
+                              <span>{language === "th" ? "ตอบแล้วทั้งหมด" : language === "zh" ? "待办全部标记为已回复" : "Mark all as replied"} ({(storeBmCounts[selectedStore]?.notReplied ?? 0) + (storeBmCounts[selectedStore]?.notifiedBm ?? 0)})</span>
+                            </button>
+                          )}
+                        </div>
                       )}
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
-                        {followUpStatusLabels[language][selectedConversationState.status]}
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
-                        {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
-                      </span>
-                      <select
-                        data-bm-reply-status-select
-                        aria-label={text.bmReplyStatus}
-                        disabled={isMutating || authUser?.role === "VIEWER"}
-                        value={selectedConversationState.bmReplyStatus}
-                        onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                        className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${
-                          selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                          : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                      <button
+                        data-chat-filter-button
+                        onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
+                        aria-expanded={showFilterPanel}
+                        className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
                       >
-                        <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
-                        <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
-                        <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
-                      </select>
-                      <span className="app-muted text-[11px]">{formatRelativeTime(selectedConversation.time, language)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    data-chat-detail-secondary-action
-                    disabled={chatLoading}
-                    onClick={() => void refreshProfile()}
-                    title={text.refreshLineProfile}
-                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    ↻
-                  </button>
-                  <button
-                    data-chat-detail-primary-action
-                    type="button"
-                    onClick={() => void openSelectedConversationInLineOa()}
-                    className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    aria-label="เปิดใน LINE OA Manager"
-                  >
-                    เปิดใน LINE OA <span aria-hidden="true">↗</span>
-                  </button>
-                </div>
-              </header>
-
-              {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
-              <div className="flex min-h-0 shrink-0 flex-col">
-                <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
-                  <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
-                  <button
-                    data-chat-detail-secondary-action
-                    onClick={() => setShowTranslation(!showTranslation)}
-                    className="app-button-secondary rounded-lg border px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    🌐 {showTranslation ? text.showOriginal : text.translateMessage}
-                  </button>
-                </div>
-                <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
-                  {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">{text.loadEarlierMessages}</button></div>}
-                  {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" : "rounded-2xl rounded-br-sm bg-green-100 px-4 py-2.5 dark:bg-green-900/60"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
-                  {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
-                  <div ref={chatEndRef} />
-                </div>
-                <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] px-4 py-2 text-xs text-blue-800 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
-              </div>
-
-              {/* ── 3. AI INTENT CONTEXT CHIPS ──────────────────────── */}
-              {customerIntelligence && (customerIntelligence.intent.length > 0 || customerIntelligence.interestedProducts.length > 0) && (
-                <div data-chat-intent-chips className="shrink-0 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)] px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Context:</span>
-                    {customerIntelligence.intent.map((item, i) => (
-                      <span key={i} className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">{item}</span>
-                    ))}
-                    {customerIntelligence.interestedProducts.map((product, i) => (
-                      <span key={`p${i}`} className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">📱 {product}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── 4. INFORMATION PANELS + LOWER SECTIONS ─────────── */}
-              <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
-                <div className="px-3 py-3 sm:px-4">
-
-                  {/* 4a. 2-column info grid: Customer Profile | AI Intelligence */}
-                  <div className="grid grid-cols-2 gap-3 border-b border-[var(--border)] pb-3">
-                    {/* Customer Profile column */}
-                    <div className="space-y-3">
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
-                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer Profile</p>
-                        <div className="space-y-1.5 text-xs">
-                          <div className="flex justify-between gap-2"><span className="text-slate-500">Name</span><span className="truncate text-right font-medium">{selectedApiConversation?.customer.displayName ?? selectedConversation.customer}</span></div>
-                          <div className="flex justify-between gap-2"><span className="text-slate-500">Store</span><span className="truncate text-right font-medium">{selectedConversation.store}</span></div>
-                          {customerIntelligence && <div className="flex justify-between gap-2"><span className="text-slate-500">Stage</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span></div>}
-                          <div className="flex justify-between gap-2"><span className="text-slate-500">Waiting</span><span className="font-medium">{formatRelativeTime(selectedConversation.time, language)}</span></div>
-                        </div>
-                      </div>
-                      {selectedApiConversation && (
-                        <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Behavior Signals</p>
-                          <CustomerSignals events={customerEvents} isLoading={customerEventsLoading} error={customerEventsError} language={language} />
-                        </div>
-                      )}
-                    </div>
-                    {/* AI Intelligence column */}
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{text.customerIntelligence}</p>
-                        {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
-                      </div>
-                      {customerIntelligenceLoading ? (
-                        <div className="space-y-2">
-                          <div className="h-3 w-1/2 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
-                          <div className="h-3 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
-                          <div className="h-8 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
-                        </div>
-                      ) : customerIntelligenceError ? (
-                        <p className="text-xs text-rose-600 dark:text-rose-400">{customerIntelligenceError}</p>
-                      ) : customerIntelligence ? (
-                        <div className="space-y-2 text-xs">
-                          <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} /></div>
-                          {customerIntelligence.intent.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.intent}</p><div className="flex flex-wrap gap-1">{customerIntelligence.intent.map((item, i) => <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>)}</div></div>}
-                          {customerIntelligence.interestedProducts.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.interestedProducts}</p><div className="flex flex-wrap gap-1">{customerIntelligence.interestedProducts.map((product, i) => <span key={i} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>)}</div></div>}
-                          {aiRecommendedNextAction && <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-900 dark:bg-blue-950/60"><p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-300">{text.aiRecommendedNextAction}</p><p className="mt-1 text-[11px] text-slate-800 dark:text-blue-100 leading-relaxed">{aiRecommendedNextAction}</p></div>}
-                          {customerIntelligence.recommendedActions.length > 0 && <ul className="space-y-1">{customerIntelligence.recommendedActions.slice(0, 3).map((action, i) => <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-700 dark:text-slate-300"><span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[8px] text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>{action}</li>)}</ul>}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500">{text.noCustomerIntelligence}</p>
-                      )}
+                        {text.moreFilters}
+                      </button>
+                      <StoreChatsOverflowMenu language={language} resetPaneSizes={resetChatPanes} />
                     </div>
                   </div>
 
-                  {/* 4b. Name History — collapsible */}
-                  {selectedApiConversation && (
-                    <details className="group border-b border-[var(--border)] py-2">
-                      <summary className="flex cursor-pointer items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 list-none">
-                        <span className="inline-block transition-transform group-open:rotate-90">▶</span>
-                        {text.lineNameHistory} — {customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}
-                      </summary>
-                      <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
-                        {customerNameHistoryLoading ? <p className="text-slate-500">Loading...</p>
-                          : customerNameHistoryError ? <p className="text-rose-600">{customerNameHistoryError}</p>
-                          : customerNameHistory?.history.length ? (
-                            <div className="space-y-1.5">
-                              {customerNameHistory.history.map((entry) => (
-                                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
-                                  <span className="font-medium">{entry.displayName}</span>
-                                  <span className="shrink-0 text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))} · {entry.source}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : <p className="text-slate-500">{text.noNameHistory}</p>}
-                      </div>
-                    </details>
+                  {showFilterPanel && (
+                    <div className="app-filter-panel mt-4 grid grid-cols-2 gap-3 rounded-lg p-3">
+                      <label className="app-muted text-xs">
+                        {text.storeFilter}
+                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allStores}</option>
+                          {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted text-xs">
+                        {text.statusFilter}
+                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allStatuses}</option>
+                          {statusOptions.map((status) => <option key={status} value={status}>{getStatusLabel(language, status)}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted text-xs">
+                        {text.priorityFilter}
+                        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allPriorities}</option>
+                          {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority === "High" ? text.highPriority : text.normalPriority}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted text-xs">
+                        {text.seriesFilter}
+                        <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allSeries}</option>
+                          {seriesOptions.map((series) => <option key={series} value={series}>{series}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted col-span-2 text-xs">
+                        {text.modelFilter}
+                        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allModels}</option>
+                          {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted col-span-2 text-xs">
+                        {text.topicFilter}
+                        <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allTopics}</option>
+                          {topicOptions.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
+                        </select>
+                      </label>
+                      <label className="app-muted col-span-2 text-xs">
+                        {text.lineOaManagement}
+                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                          <option value="all">{text.allLineOa}</option>
+                          {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
                   )}
 
-                  <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
-                    <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="font-semibold">{text.productInsight}</h3>
-                        <div className="flex flex-wrap gap-2">
-                          <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
-                          <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
-                        </div>
-                      </div>
-                      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                        <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
-                        <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
-                        <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
-                        <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
-                      </dl>
-                      <div className="mt-3 border-t border-[var(--border)] pt-3">
-                        <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
-                        <div className="flex flex-wrap gap-1.5">
-                    {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
-                      .map(({ topic, source }) => (
-                        <span
-                          key={topic.id}
-                          className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
-                        >
-                          {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
-                        </span>
-                      ))}
-                    {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
-                        </div>
-                      </div>
-                    </section>
+                  {hasActiveFilters && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-full px-2 py-1 text-xs">{text.searchFilter}: {searchText.trim()} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
+                      {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
+                      {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.seriesFilter}: {seriesFilter} ×</button>}
+                      {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
+                      {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
+                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
+                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      <button onClick={clearAllFilters} className="text-xs font-medium text-red-700 hover:underline">{text.clearAll}</button>
+                    </div>
+                  )}
+                </div>
 
-                    <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
-                      <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
-                      <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
-                      <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
-                    </section>
+                {bulkSuccessToast && (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">✓</span>
+                      <span>{bulkSuccessToast}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBulkSuccessToast(null)}
+                      className="text-emerald-600 hover:text-emerald-900 font-bold ml-2"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
 
-                    <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
-                      <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
-                {selectedConversationState.activityHistory.length > 0 ? (
-                  <div className="space-y-2">
-                    {[...selectedConversationState.activityHistory]
-                      .reverse()
-                      .map((activity) => (
+                {hasNewChatsAvailable && (
+                  <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-xs text-blue-700 shrink-0">
+                    <span>{chatsPaginationText.newChatsAvailable}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasNewChatsAvailable(false);
+                        setChatPage(1);
+                      }}
+                      className="font-semibold underline hover:text-blue-900 focus:outline-none"
+                    >
+                      {chatsPaginationText.refreshPage1}
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-y-auto">
+                  {isChatPageLoading ? (
+                    <ConversationRowSkeleton count={chatPageSize} />
+                  ) : chatPageError ? (
+                    <div className="p-8 text-center text-sm text-red-600">
+                      <p>{chatsPaginationText.failedToLoadConversations}: {chatPageError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsChatPageLoading((v) => !v)}
+                        className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      >
+                        {text.retry}
+                      </button>
+                    </div>
+                  ) : filteredConversations.length === 0 ? (
+                    <div className="app-empty-state px-6 py-16 text-center">
+                      <p className="font-semibold">{text.noConversationsFound}</p>
+                      <p className="mt-2 text-sm">{text.noResultsExplanation}</p>
+                      {hasActiveFilters && (
+                        <button onClick={clearAllFilters} className="app-button-primary mt-4 rounded-lg px-4 py-2 text-sm font-medium">
+                          {text.clearFilter}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredConversations.map((conversation) => {
+                      const isSelected = conversation.id === selectedConversation?.id;
+                      const status = conversationStates[conversation.id]?.status;
+                      const currentBmReplyStatus = conversationStates[conversation.id]?.bmReplyStatus ?? conversation.bmReplyStatus;
+                      const tags = getConversationListTags({
+                        priority: conversation.priority,
+                        priorityLabel: text.highPriority,
+                        statusLabel: getStatusLabel(language, status),
+                        product: conversation.product,
+                        topic: conversation.topic,
+                      });
+                      const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
+
+                      return (
                         <div
-                          key={activity.id}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
+                          key={conversation.id}
+                          data-conversation-row
+                          data-selected={isSelected}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedConversationId(conversation.id);
+                            setShowTranslation(true);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedConversationId(conversation.id);
+                              setShowTranslation(true);
+                            }
+                          }}
+                          aria-pressed={isSelected}
+                          className={`conversation-list-row app-list-item relative w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer ${isSelected ? "is-selected" : ""
+                            }`}
                         >
-                          <p className="text-sm">
-                            {activity.actionType === "messageReceived" ? (
-                              text.messageReceivedActivity
-                            ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
-                              <>
-                                {text.bmReplyStatusChangedTo}{" "}
-                                <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
-                              </>
-                            ) : activity.status ? (
-                              <>
-                                {text.statusChangedTo}{" "}
-                                <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
-                              </>
-                            ) : null}
+                          <div className="flex items-start justify-between gap-2">
+                            <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1">{conversation.customer}</p>
+
+                            <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                data-conversation-action-menu
+                                aria-label="Change status"
+                                aria-expanded={openConversationDropdownId === conversation.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenConversationDropdownId((prev) => (prev === conversation.id ? null : conversation.id));
+                                }}
+                                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                title={language === "th" ? "เปลี่ยนสถานะ" : language === "zh" ? "更改状态" : "Change Status"}
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                                </svg>
+                              </button>
+
+                              {openConversationDropdownId === conversation.id && (
+                                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs">
+                                  <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                    {language === "th" ? "สถานะการตอบ" : language === "zh" ? "回复状态" : "Status"}
+                                  </div>
+                                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                  <button
+                                    type="button"
+                                    disabled={authUser?.role === "VIEWER"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenConversationDropdownId(null);
+                                      void updateConversationBmReplyStatus(conversation.id, "NOT_REPLIED");
+                                    }}
+                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "NOT_REPLIED"
+                                        ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 font-semibold"
+                                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                      }`}
+                                  >
+                                    <span className="text-slate-400">⚪</span>
+                                    <span>{bmReplyStatusLabels[language]["NOT_REPLIED"]}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={authUser?.role === "VIEWER"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenConversationDropdownId(null);
+                                      void updateConversationBmReplyStatus(conversation.id, "NOTIFIED_BM");
+                                    }}
+                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "NOTIFIED_BM"
+                                        ? "bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-semibold"
+                                        : "text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                                      }`}
+                                  >
+                                    <span>🟣</span>
+                                    <span>{bmReplyStatusLabels[language]["NOTIFIED_BM"]}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={authUser?.role === "VIEWER"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenConversationDropdownId(null);
+                                      void updateConversationBmReplyStatus(conversation.id, "REPLIED");
+                                    }}
+                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "REPLIED"
+                                        ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-semibold"
+                                        : "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                      }`}
+                                  >
+                                    <span>🟢</span>
+                                    <span>{bmReplyStatusLabels[language]["REPLIED"]}</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <p data-conversation-message-preview className="conversation-message-preview mt-2 line-clamp-2 text-sm leading-5">
+                            {conversation.translations[language]}
                           </p>
-                          <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
-                            {formatRelativeTime(activity.timestamp, language)}
-                          </time>
+
+                          <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
+                            <span className="min-w-0 truncate">{conversation.store}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
+                          </div>
+
+                          <div className="mt-3.5 flex flex-wrap gap-1.5" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                            <span
+                              data-conversation-bm-reply-status={currentBmReplyStatus}
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${currentBmReplyStatus === "REPLIED"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                                  : currentBmReplyStatus === "NOTIFIED_BM"
+                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                }`}
+                            >
+                              {bmReplyStatusLabels[language][currentBmReplyStatus]}
+                            </span>
+                            {tags.visible.map((tag, index) => (
+                              <span
+                                key={`${tag.kind}-${tag.label}-${index}`}
+                                data-conversation-priority={tag.kind === "priority" ? conversation.priority : undefined}
+                                className={`rounded-full px-2 py-0.5 text-xs ${tag.kind === "priority"
+                                    ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                                    : tag.kind === "status"
+                                      ? status === "followUp"
+                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
+                                        : status === "reminded"
+                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                                          : status === "acknowledged"
+                                            ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                            : status === "completed"
+                                              ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
+                                              : "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                                      : tag.kind === "product"
+                                        ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
+                                        : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                                  }`}
+                              >
+                                {tag.label}
+                              </span>
+                            ))}
+                            {tags.hidden.length > 0 && (
+                              <span className="app-chip rounded-full px-2 py-0.5 text-xs" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
+                                +{tags.hidden.length}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      ))}
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="shrink-0">
+                  <ConversationPaginationFooter
+                    currentPage={chatPage}
+                    pageSize={chatPageSize}
+                    totalCount={chatTotalCount}
+                    loading={isChatPageLoading}
+                    language={language}
+                    onPageChange={(newPage) => setChatPage(newPage)}
+                    onPageSizeChange={(newSize) => {
+                      setChatPageSize(newSize);
+                      setChatPage(1);
+                    }}
+                  />
+                </div>
+              </section>
+
+              <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
+
+              <section data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col">
+                {selectedConversation && selectedConversationState ? (
+                  <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
+                    {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
+                    <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        {selectedApiConversation?.customer.pictureUrl
+                          ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center ring-2 ring-white shadow-sm" />
+                          : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 font-bold text-white shadow-sm">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
+                        }
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight">
+                              {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
+                            </h2>
+                            <span className="app-muted shrink-0 text-xs font-medium">{selectedConversation.store}</span>
+                            {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-300">{text.profileUnavailable}</span>}
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {customerIntelligence && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                                  : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
+                                    : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                      : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>
+                                {customerIntelligence.customerStage.replaceAll("_", " ")}
+                              </span>
+                            )}
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                              {followUpStatusLabels[language][selectedConversationState.status]}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
+                              {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
+                            </span>
+                            <select
+                              data-bm-reply-status-select
+                              aria-label={text.bmReplyStatus}
+                              disabled={isMutating || authUser?.role === "VIEWER"}
+                              value={selectedConversationState.bmReplyStatus}
+                              onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
+                              className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                            >
+                              <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
+                              <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
+                              <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
+                            </select>
+                            <span className="app-muted text-[11px]">{formatRelativeTime(selectedConversation.time, language)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          data-chat-detail-secondary-action
+                          disabled={chatLoading}
+                          onClick={() => void refreshProfile()}
+                          title={text.refreshLineProfile}
+                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                          ↻
+                        </button>
+                        <button
+                          data-chat-detail-primary-action
+                          type="button"
+                          onClick={() => void openSelectedConversationInLineOa()}
+                          className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label="เปิดใน LINE OA Manager"
+                        >
+                          เปิดใน LINE OA <span aria-hidden="true">↗</span>
+                        </button>
+                      </div>
+                    </header>
+
+                    {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
+                    <div className="flex min-h-0 shrink-0 flex-col">
+                      <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
+                        <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
+                        <button
+                          data-chat-detail-secondary-action
+                          onClick={() => setShowTranslation(!showTranslation)}
+                          className="app-button-secondary rounded-lg border px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          🌐 {showTranslation ? text.showOriginal : text.translateMessage}
+                        </button>
+                      </div>
+                      <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
+                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">{text.loadEarlierMessages}</button></div>}
+                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" : "rounded-2xl rounded-br-sm bg-green-100 px-4 py-2.5 dark:bg-green-900/60"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                        {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
+                        <div ref={chatEndRef} />
+                      </div>
+                      <div data-chat-reply-composer className="shrink-0 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                        <div className="flex items-end gap-2">
+                          <textarea
+                            value={replyText}
+                            disabled={replySending || authUser.role === "VIEWER"}
+                            maxLength={5000}
+                            rows={2}
+                            aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
+                            placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
+                            onChange={(event) => {
+                              setReplyText(event.target.value);
+                              setReplyError(null);
+                              replyIdempotencyKeyRef.current = null;
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                void sendReply();
+                              }
+                            }}
+                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                          <button
+                            type="button"
+                            disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
+                            onClick={() => void sendReply()}
+                            className="app-button-primary h-11 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {replySending ? "กำลังส่ง..." : "ส่ง"}
+                          </button>
+                        </div>
+                        {replyError && <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-300">{replyError}</p>}
+                        <p className="app-muted mt-1 text-right text-[10px]">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                      </div>
+                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] px-4 py-2 text-xs text-blue-800 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
+                    </div>
+
+                    {/* ── 3. AI INTENT CONTEXT CHIPS ──────────────────────── */}
+                    {customerIntelligence && (customerIntelligence.intent.length > 0 || customerIntelligence.interestedProducts.length > 0) && (
+                      <div data-chat-intent-chips className="shrink-0 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)] px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Context:</span>
+                          {customerIntelligence.intent.map((item, i) => (
+                            <span key={i} className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">{item}</span>
+                          ))}
+                          {customerIntelligence.interestedProducts.map((product, i) => (
+                            <span key={`p${i}`} className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">📱 {product}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── 4. INFORMATION PANELS + LOWER SECTIONS ─────────── */}
+                    <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
+                      <div className="px-3 py-3 sm:px-4">
+
+                        {/* 4a. 2-column info grid: Customer Profile | AI Intelligence */}
+                        <div className="grid grid-cols-2 gap-3 border-b border-[var(--border)] pb-3">
+                          {/* Customer Profile column */}
+                          <div className="space-y-3">
+                            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer Profile</p>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between gap-2"><span className="text-slate-500">Name</span><span className="truncate text-right font-medium">{selectedApiConversation?.customer.displayName ?? selectedConversation.customer}</span></div>
+                                <div className="flex justify-between gap-2"><span className="text-slate-500">Store</span><span className="truncate text-right font-medium">{selectedConversation.store}</span></div>
+                                {customerIntelligence && <div className="flex justify-between gap-2"><span className="text-slate-500">Stage</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span></div>}
+                                <div className="flex justify-between gap-2"><span className="text-slate-500">Waiting</span><span className="font-medium">{formatRelativeTime(selectedConversation.time, language)}</span></div>
+                              </div>
+                            </div>
+                            {selectedApiConversation && (
+                              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Behavior Signals</p>
+                                <CustomerSignals events={customerEvents} isLoading={customerEventsLoading} error={customerEventsError} language={language} />
+                              </div>
+                            )}
+                          </div>
+                          {/* AI Intelligence column */}
+                          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{text.customerIntelligence}</p>
+                              {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
+                            </div>
+                            {customerIntelligenceLoading ? (
+                              <div className="space-y-2">
+                                <div className="h-3 w-1/2 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
+                                <div className="h-3 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
+                                <div className="h-8 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+                              </div>
+                            ) : customerIntelligenceError ? (
+                              <p className="text-xs text-rose-600 dark:text-rose-400">{customerIntelligenceError}</p>
+                            ) : customerIntelligence ? (
+                              <div className="space-y-2 text-xs">
+                                <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} /></div>
+                                {customerIntelligence.intent.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.intent}</p><div className="flex flex-wrap gap-1">{customerIntelligence.intent.map((item, i) => <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>)}</div></div>}
+                                {customerIntelligence.interestedProducts.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.interestedProducts}</p><div className="flex flex-wrap gap-1">{customerIntelligence.interestedProducts.map((product, i) => <span key={i} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>)}</div></div>}
+                                {aiRecommendedNextAction && <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-900 dark:bg-blue-950/60"><p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-300">{text.aiRecommendedNextAction}</p><p className="mt-1 text-[11px] text-slate-800 dark:text-blue-100 leading-relaxed">{aiRecommendedNextAction}</p></div>}
+                                {customerIntelligence.recommendedActions.length > 0 && <ul className="space-y-1">{customerIntelligence.recommendedActions.slice(0, 3).map((action, i) => <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-700 dark:text-slate-300"><span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[8px] text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>{action}</li>)}</ul>}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500">{text.noCustomerIntelligence}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 4b. Name History — collapsible */}
+                        {selectedApiConversation && (
+                          <details className="group border-b border-[var(--border)] py-2">
+                            <summary className="flex cursor-pointer items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 list-none">
+                              <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+                              {text.lineNameHistory} — {customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}
+                            </summary>
+                            <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
+                              {customerNameHistoryLoading ? <p className="text-slate-500">Loading...</p>
+                                : customerNameHistoryError ? <p className="text-rose-600">{customerNameHistoryError}</p>
+                                  : customerNameHistory?.history.length ? (
+                                    <div className="space-y-1.5">
+                                      {customerNameHistory.history.map((entry) => (
+                                        <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
+                                          <span className="font-medium">{entry.displayName}</span>
+                                          <span className="shrink-0 text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))} · {entry.source}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : <p className="text-slate-500">{text.noNameHistory}</p>}
+                            </div>
+                          </details>
+                        )}
+
+                        <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
+                          <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                              <h3 className="font-semibold">{text.productInsight}</h3>
+                              <div className="flex flex-wrap gap-2">
+                                <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
+                                <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
+                              </div>
+                            </div>
+                            <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                              <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
+                              <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
+                              <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
+                              <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
+                            </dl>
+                            <div className="mt-3 border-t border-[var(--border)] pt-3">
+                              <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
+                                  .map(({ topic, source }) => (
+                                    <span
+                                      key={topic.id}
+                                      className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
+                                    >
+                                      {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
+                                    </span>
+                                  ))}
+                                {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
+                              </div>
+                            </div>
+                          </section>
+
+                          <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
+                            <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
+                            <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                            <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                          </section>
+
+                          <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
+                            <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
+                            {selectedConversationState.activityHistory.length > 0 ? (
+                              <div className="space-y-2">
+                                {[...selectedConversationState.activityHistory]
+                                  .reverse()
+                                  .map((activity) => (
+                                    <div
+                                      key={activity.id}
+                                      className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
+                                    >
+                                      <p className="text-sm">
+                                        {activity.actionType === "messageReceived" ? (
+                                          text.messageReceivedActivity
+                                        ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
+                                          <>
+                                            {text.bmReplyStatusChangedTo}{" "}
+                                            <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
+                                          </>
+                                        ) : activity.status ? (
+                                          <>
+                                            {text.statusChangedTo}{" "}
+                                            <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
+                                          </>
+                                        ) : null}
+                                      </p>
+                                      <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
+                                        {formatRelativeTime(activity.timestamp, language)}
+                                      </time>
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-500">{text.noActivity}</p>
+                            )}
+                          </section>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">{text.noActivity}</p>
-                )}
-                    </section>
+                  <div className="flex min-h-full items-center justify-center text-center">
+                    <div>
+                      <p className="font-semibold">{text.noConversationsFound}</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {text.noResultsExplanation}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex min-h-full items-center justify-center text-center">
-              <div>
-                <p className="font-semibold">{text.noConversationsFound}</p>
-                <p className="mt-2 text-sm text-slate-500">
-                  {text.noResultsExplanation}
-                </p>
-              </div>
-            </div>
+                )}
+              </section>
+            </>
           )}
-        </section>
-        </>
-        )}
-      </div>
+        </div>
       </PageContainer>
       {storeRemovalPreview && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-6">
@@ -3609,8 +3665,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   {language === "th"
                     ? "ยืนยันการเปลี่ยนสถานะการตอบ"
                     : language === "zh"
-                    ? "确认更新BM回复状态"
-                    : "Confirm BM Reply Status Update"}
+                      ? "确认更新BM回复状态"
+                      : "Confirm BM Reply Status Update"}
                 </h3>
                 <p className="text-xs text-slate-500 truncate">
                   {bulkConfirmState.storeName}

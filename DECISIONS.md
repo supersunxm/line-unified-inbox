@@ -375,3 +375,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Release readiness composes the existing pilot preflight/readiness contract rather than reinterpreting environment values. Production execution therefore retains the explicit `--verify-production` marker.
 - Database readiness requires the existing health-controller query and every migration directory in the current branch to have a successfully finished, non-rolled-back `_prisma_migrations` row. Extra historical applied migrations do not fail the check.
 - Glossary readiness means the checked-in seven-term synthetic validation contract and decorator path are available; the release check deliberately does not execute the real Google smoke test. That remains a separate explicit operator action.
+
+# Two-way LINE OA outbound messaging (2026-08-09)
+
+- Operator replies use `POST /v2/bot/message/push`, never webhook `replyToken`, because inbox replies can occur after reply-token expiry and must resolve the Channel Access Token belonging to the conversation's `lineOfficialAccountId`.
+- Outbound text reuses the existing `Message` model and `OUTBOUND` direction. The application retry UUID is sent as `X-Line-Retry-Key` and stored as the unique outbound external-message key, allowing a retry after timeout or post-LINE database failure to reconcile without a duplicate customer message or a new idempotency table.
+- A LINE 409 containing `x-line-accepted-request-id` is accepted as successful redelivery evidence, consistent with LINE's 24-hour retry-key contract. The frontend retains the same UUID after failure and replaces it only when the operator edits the draft or a send succeeds.
+- LINE acceptance is the ordering boundary: message persistence, BM `REPLIED`, follow-up `COMPLETED`, and activity history occur together afterward in one transaction. Any definite LINE rejection writes nothing. A persistence failure explicitly tells the client to retry the same request.
+- The existing activity enum has no outbound-message action and adding one would require an unnecessary migration. `STATUS_CHANGED` is reused with an explicit outbound LINE description, operator name, store ID, and OA ID; credentials and message text are excluded from audit metadata.
+- Only `ADMIN` can send. This preserves the global guard's established read-only `VIEWER` policy; there is no separate user-to-store authorization model in the current schema to extend.

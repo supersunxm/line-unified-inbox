@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -48,7 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     let message = `API request failed (${response.status})`;
-    try { const body = await response.json() as { message?: string | string[] }; if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message; } catch {}
+    try { const body = await response.json() as { message?: string | string[] }; if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message; } catch { }
     const error = new ApiError(message, response.status);
     if (response.status === 401 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
@@ -89,6 +89,11 @@ export const api = {
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
   conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
+  sendConversationMessage: (id: string, text: string, idempotencyKey: string) =>
+    request<SendConversationMessageResponse>(`/conversations/${encodeURIComponent(id)}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text, idempotencyKey }),
+    }),
   translateMessage: (messageId: string, targetLanguage: "en" | "zh") =>
     request<MessageTranslationResult>(`/messages/${encodeURIComponent(messageId)}/translations`, {
       method: "POST",

@@ -3,11 +3,72 @@ import test from "node:test";
 import { PrismaService } from "./prisma.service";
 import { ConversationsService } from "./conversations.service";
 import { OperationsService } from "./operations/operations.service";
+import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
+import { LineMessagingService } from "./line-messaging/line-messaging.service";
+import { BadGatewayException } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 
 const noopOperations = {
   getOperationalConversationFilter: async () => ({}),
   getLatestResetAt: async () => null,
 } as unknown as OperationsService;
+
+void test("sendMessage resolves the conversation OA token, persists outbound text, marks REPLIED, and audits only after LINE accepts", async () => {
+  const writes: string[] = [];
+  const conversation = {
+    id: "conversation-send", customerId: "customer-send", storeId: "store-send", lineOfficialAccountId: "oa-send",
+    latestMessageAt: new Date(), priority: "NORMAL", prioritySource: "SYSTEM", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
+    productRelationship: null, purchaseIntent: null, createdAt: new Date(), updatedAt: new Date(),
+    customer: { id: "customer-send", lineUserId: "Ucorrect-customer" },
+    store: { id: "store-send", name: "Safe Store" },
+    lineOfficialAccount: { id: "oa-send", isActive: true, archivedAt: null, encryptedChannelAccessToken: "encrypted-correct-token" },
+  };
+  const persisted = { id: "outbound-1", conversationId: conversation.id, externalMessageId: "outbound:123e4567-e89b-42d3-a456-426614174000", direction: "OUTBOUND", messageType: "TEXT", originalText: "สวัสดีครับ", sentAt: new Date() };
+  const prisma = {
+    conversation: { findUnique: ({ where }: { where: { id?: string } }) => Promise.resolve(where.id ? conversation : null) },
+    message: { findUnique: () => Promise.resolve(null) },
+    $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      message: { create: () => { writes.push("message"); return Promise.resolve(persisted); } },
+      conversation: { update: ({ data }: { data: { bmReplyStatus: string } }) => { writes.push(`status:${data.bmReplyStatus}`); return Promise.resolve(conversation); } },
+      activityHistory: { create: ({ data }: { data: { description: string; createdByName: string } }) => { writes.push(`audit:${data.createdByName}:${data.description}`); return Promise.resolve({}); } },
+    }),
+  } as unknown as PrismaService;
+  const encryption = { decrypt: (value: string) => { assert.equal(value, "encrypted-correct-token"); return "correct-oa-token"; } } as CredentialEncryptionService;
+  const line = { pushText: (input: { accessToken: string; lineUserId: string; retryKey: string }) => {
+    assert.equal(input.accessToken, "correct-oa-token");
+    assert.equal(input.lineUserId, "Ucorrect-customer");
+    assert.equal(input.retryKey, "123e4567-e89b-42d3-a456-426614174000");
+    assert.deepEqual(writes, []);
+    return Promise.resolve({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-message", duplicateAccepted: false });
+  } } as LineMessagingService;
+  const service = new ConversationsService(prisma, noopOperations, encryption, line);
+  const result = await service.sendMessage(conversation.id, { text: "  สวัสดีครับ  ", idempotencyKey: "123e4567-e89b-42d3-a456-426614174000" }, { id: "admin", email: "admin@example.com", displayName: "Operator", role: UserRole.ADMIN, isActive: true });
+  assert.equal(result.message.direction, "OUTBOUND");
+  assert.equal(result.message.originalText, "สวัสดีครับ");
+  assert.equal(result.bmReplyStatus, "REPLIED");
+  assert.deepEqual(writes.map((value) => value.split(":")[0]), ["message", "status", "audit"]);
+  assert.equal(writes.join(" ").includes("correct-oa-token"), false);
+});
+
+void test("sendMessage does not persist or mark REPLIED when LINE rejects the push", async () => {
+  let transactionCalled = false;
+  const prisma = {
+    message: { findUnique: () => Promise.resolve(null) },
+    conversation: { findUnique: () => Promise.resolve({
+      id: "conversation-fail", customer: { lineUserId: "Ucustomer" }, store: { id: "store" }, storeId: "store",
+      lineOfficialAccountId: "oa", lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" },
+    }) },
+    $transaction: () => { transactionCalled = true; throw new Error("must not persist"); },
+  } as unknown as PrismaService;
+  const service = new ConversationsService(
+    prisma,
+    noopOperations,
+    { decrypt: () => "token" } as CredentialEncryptionService,
+    { pushText: () => Promise.reject(new BadGatewayException("LINE ปฏิเสธการส่งข้อความ")) },
+  );
+  await assert.rejects(() => service.sendMessage("conversation-fail", { text: "hello", idempotencyKey: "123e4567-e89b-42d3-a456-426614174000" }, { id: "admin", email: "admin@example.com", displayName: "Operator", role: UserRole.ADMIN, isActive: true }), /LINE ปฏิเสธ/);
+  assert.equal(transactionCalled, false);
+});
 
 void test("conversation returns only the canonical manager URL and excludes chat and credential fields", async () => {
   const managerUrl = "https://manager.line.biz/account/canonical";
@@ -58,11 +119,13 @@ void test("100 list rows use one Store Master batch query, cap page size, and lo
       findMany: (args: Record<string, unknown>) => { conversationQueries += 1; listArguments = args; return Promise.resolve(conversations); },
       count: () => Promise.resolve(100),
     },
-    storeMaster: { findMany: ({ where }: { where: { externalStoreId: { in: string[] } } }) => {
-      storeMasterQueries += 1;
-      assert.deepEqual(where.externalStoreId.in, ["STORE-A", "STORE-B"]);
-      return Promise.resolve([{ externalStoreId: "STORE-A", lineManagerUrl: "https://manager.line.biz/account/a" }]);
-    } },
+    storeMaster: {
+      findMany: ({ where }: { where: { externalStoreId: { in: string[] } } }) => {
+        storeMasterQueries += 1;
+        assert.deepEqual(where.externalStoreId.in, ["STORE-A", "STORE-B"]);
+        return Promise.resolve([{ externalStoreId: "STORE-A", lineManagerUrl: "https://manager.line.biz/account/a" }]);
+      }
+    },
     $transaction: (queries: Array<Promise<unknown>>) => Promise.all(queries),
   } as unknown as PrismaService;
   const result = await new ConversationsService(prisma, noopOperations).list({ page: 1, pageSize: 1_000, sort: "latest-desc" });

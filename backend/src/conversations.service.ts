@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { ActivityActionType, BmReplyStatus, FollowUpStatus, Prisma } from "@prisma/client";
-import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto } from "./dto";
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
+import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
+import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
+import { LineMessagingService } from "./line-messaging/line-messaging.service";
+import type { AuthUser } from "./auth/auth.guard";
 
 const conversationBaseInclude = {
   customer: true,
@@ -32,7 +35,9 @@ export class ConversationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly operations: OperationsService,
-  ) {}
+    private readonly encryption: CredentialEncryptionService = undefined as unknown as CredentialEncryptionService,
+    private readonly lineMessaging: LineMessagingService = undefined as unknown as LineMessagingService,
+  ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
@@ -120,7 +125,7 @@ export class ConversationsService {
     if (current.followUpStatus === status) return { changed: false, conversation: current };
     const actionType = status === "FOLLOW_UP" ? ActivityActionType.RETURNED_TO_FOLLOW_UP :
       status === "REMINDED" ? ActivityActionType.REMINDER_SENT : status === "ACKNOWLEDGED" ? ActivityActionType.MANAGER_ACKNOWLEDGED :
-      status === "COMPLETED" ? ActivityActionType.CONVERSATION_COMPLETED : ActivityActionType.ESCALATED;
+        status === "COMPLETED" ? ActivityActionType.CONVERSATION_COMPLETED : ActivityActionType.ESCALATED;
     await this.prisma.$transaction([
       this.prisma.conversation.update({ where: { id }, data: { followUpStatus: status } }),
       this.prisma.activityHistory.create({ data: { conversationId: id, actionType, previousStatus: current.followUpStatus, newStatus: status } }),
@@ -217,6 +222,83 @@ export class ConversationsService {
     return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
+  async sendMessage(id: string, dto: SendConversationMessageDto, operator: AuthUser) {
+    const text = dto.text.trim();
+    if (!text) throw new BadRequestException("กรุณาพิมพ์ข้อความ");
+    if (text.length > 5000) throw new BadRequestException("ข้อความต้องไม่เกิน 5,000 ตัวอักษร");
+
+    const dedupeExternalId = `outbound:${dto.idempotencyKey}`;
+    const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
+    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+      include: { customer: true, lineOfficialAccount: true, store: true },
+    });
+    if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
+    if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
+    const oa = conversation.lineOfficialAccount;
+    if (!oa || oa.archivedAt || !oa.isActive) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
+    if (!oa.encryptedChannelAccessToken) throw new BadRequestException("ไม่พบ Channel Access Token ของร้านนี้");
+
+    let accessToken: string;
+    try { accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken); }
+    catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
+
+    const lineResult = await this.lineMessaging.pushText({
+      accessToken,
+      lineUserId: conversation.customer.lineUserId,
+      text,
+      retryKey: dto.idempotencyKey,
+    });
+    const sentAt = new Date();
+    try {
+      const message = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.message.create({
+          data: {
+            conversationId: conversation.id,
+            externalMessageId: dedupeExternalId,
+            direction: MessageDirection.OUTBOUND,
+            messageType: MessageType.TEXT,
+            originalText: text,
+            sentAt,
+            rawPayload: {
+              provider: "LINE",
+              providerMessageId: lineResult.externalMessageId,
+              requestId: lineResult.requestId,
+              acceptedRequestId: lineResult.acceptedRequestId,
+            },
+          },
+        });
+        await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
+        });
+        await tx.activityHistory.create({
+          data: {
+            conversationId: conversation.id,
+            actionType: ActivityActionType.STATUS_CHANGED,
+            previousStatus: conversation.followUpStatus,
+            newStatus: FollowUpStatus.COMPLETED,
+            previousBmReplyStatus: conversation.bmReplyStatus,
+            newBmReplyStatus: BmReplyStatus.REPLIED,
+            createdByName: operator.displayName,
+            description: `Customer message sent via LINE; storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
+          },
+        });
+        return created;
+      });
+      return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
+        if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+      }
+      Logger.error(`LINE accepted outbound message but persistence failed for conversation ${conversation.id}`, undefined, "ConversationsService");
+      throw new InternalServerErrorException("LINE รับข้อความแล้ว แต่บันทึกประวัติไม่สำเร็จ กรุณาลองส่งคำขอเดิมอีกครั้ง");
+    }
+  }
+
   async updateManualTags(id: string, productModelIds: string[], topicIds: string[]) {
     await this.get(id);
     await this.prisma.$transaction(async (tx) => {
@@ -261,8 +343,6 @@ export class ConversationsService {
         });
         const priorNames = priorRuleProducts.map((p) => p.productModel.name).join(", ");
         const newNames = newModels.map((m) => m.name).join(", ");
-        const matchedPhrase = priorRuleProducts[0]?.matchedPhrase ?? "";
-
         if (priorNames !== newNames) {
           const prior = priorRuleProducts[0];
           const phrase = prior?.matchedPhrase ? `phrase: "${prior.matchedPhrase}"` : "";
