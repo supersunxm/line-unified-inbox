@@ -394,7 +394,7 @@ export type LineOfficialAccountResponse = {
   channelId: string | null;
   maskedChannelId: string | null;
   destinationId: string | null;
-  store: { id: string; name: string; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
+  store: { id: string; name: string; code: string | null; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
   connectionStatus: LineOaConnectionStatus;
   isActive: boolean;
   lastWebhookReceivedAt: string | null;
@@ -408,6 +408,8 @@ export type LineOfficialAccountResponse = {
   archivedAt: string | null;
   webhookUrl: string | null;
   webhookConfigured: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type LineOaCredentialHealth = {
@@ -978,4 +980,3 @@ export type ProductReviewQueueResponse = {
   pageSize: number;
   total: number;
 };
-

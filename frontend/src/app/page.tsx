@@ -267,6 +267,9 @@ const translations = {
     pilotChecklist: "รายการตรวจสอบ Pilot",
     lineOaDescription: "เชื่อมต่อและตรวจสอบบัญชี LINE Official Account ของแต่ละร้าน",
     connectLineOa: "เชื่อมต่อ LINE OA",
+    exportCsv: "ดาวน์โหลด CSV",
+    exportingCsv: "กำลังสร้าง CSV...",
+    exportCsvFailed: "ดาวน์โหลด CSV ไม่สำเร็จ กรุณาลองอีกครั้ง",
     lineOaAdded: "เพิ่มร้านสำเร็จ",
     pasteWebhookInstruction: "นำ URL นี้ไปวางใน LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "การตั้งค่าขั้นสูง (ไม่บังคับ)",
@@ -555,6 +558,9 @@ const translations = {
     pilotChecklist: "Pilot Checklist",
     lineOaDescription: "Connect and monitor each store’s LINE Official Account",
     connectLineOa: "Connect LINE OA",
+    exportCsv: "Export CSV",
+    exportingCsv: "Generating CSV...",
+    exportCsvFailed: "CSV download failed. Please try again.",
     lineOaAdded: "LINE OA added successfully",
     pasteWebhookInstruction: "Paste this URL into LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "Advanced settings (optional)",
@@ -841,6 +847,9 @@ const translations = {
     pilotChecklist: "Pilot 检查清单",
     lineOaDescription: "连接并监控各门店的 LINE Official Account",
     connectLineOa: "连接 LINE OA",
+    exportCsv: "下载 CSV",
+    exportingCsv: "正在生成 CSV...",
+    exportCsvFailed: "CSV 下载失败，请重试。",
     lineOaAdded: "LINE OA 添加成功",
     pasteWebhookInstruction: "请将此 URL 粘贴到 LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "高级设置（可选）",
@@ -1278,6 +1287,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [lineOaSubmitting, setLineOaSubmitting] = useState(false);
   const [editingLineOaId, setEditingLineOaId] = useState<string | null>(null);
   const [lineOaError, setLineOaError] = useState<string | null>(null);
+  const [lineOaExporting, setLineOaExporting] = useState(false);
+  const [lineOaExportError, setLineOaExportError] = useState<string | null>(null);
   const [connectionTest, setConnectionTest] = useState<{ id: string; result: LineOaTestResult } | null>(null);
   const [showArchivedLineOas, setShowArchivedLineOas] = useState(false);
   const [showArchivedStores, setShowArchivedStores] = useState(false);
@@ -2381,6 +2392,31 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     finally { setLineOaSubmitting(false); }
   }
 
+  async function exportLineOaCsv() {
+    if (lineOaExporting || authUser?.role !== "ADMIN") return;
+    setLineOaExporting(true);
+    setLineOaExportError(null);
+    try {
+      const { blob, filename } = await api.exportLineOfficialAccounts({
+        search: storeManagementSearch,
+        status: storeRouteStatus === "error" ? "issues" : storeRouteStatus,
+        showArchived: showArchivedLineOas,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setLineOaExportError(error instanceof Error ? error.message : text.exportCsvFailed);
+    } finally {
+      setLineOaExporting(false);
+    }
+  }
+
   async function copyWebhookUrl(accountId: string, returnedUrl?: string | null) {
     const url = returnedUrl ?? webhookInfoById[accountId]?.webhookUrl;
     if (!url) { setLineOaError(text.webhookNotConfigured); return; }
@@ -2644,7 +2680,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 <div className="mx-auto max-w-7xl space-y-6">
                   <div className="flex items-start justify-between">
                     <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
-                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label><button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
+                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label>{authUser.role === "ADMIN" && <button type="button" disabled={lineOaExporting} onClick={() => void exportLineOaCsv()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}</button>}<button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
                   </div>
 
                   <div className="app-card p-4">
@@ -2656,6 +2692,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   {showArchivedStores && <div className="app-card p-5"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="app-filter-panel flex items-center justify-between rounded-xl px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-xs">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="app-muted text-sm">{text.noStoresFound}</p>}</div></div>}
 
                   {lineOaError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaError}</div>}
+                  {lineOaExportError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaExportError}</div>}
 
                   {managementWebhookInfo && !managementWebhookInfo.webhookUrlConfigured && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">

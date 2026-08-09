@@ -58,6 +58,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function download(path: string) {
+  let response: Response;
+  try { response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" }); }
+  catch { throw new ApiError("Unable to reach the data service.", 0); }
+  if (!response.ok) {
+    let message = `API request failed (${response.status})`;
+    try { const body = await response.json() as { message?: string }; if (body.message) message = body.message; } catch { /* CSV error response is not guaranteed to be JSON. */ }
+    if (response.status === 401 && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+    throw new ApiError(message, response.status);
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "line-oa-management.csv";
+  return { blob: await response.blob(), filename };
+}
+
 export const api = {
   login: (identifier: string, password: string) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) }),
   setupStatus: () => request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>("/auth/setup-status"),
@@ -181,6 +196,13 @@ export const api = {
       body: JSON.stringify({ phrase }),
     }),
   lineOfficialAccounts: (showArchived = false) => request<LineOfficialAccountResponse[]>(`/line-official-accounts?showArchived=${showArchived}`),
+  exportLineOfficialAccounts: (params: { search?: string; status?: "all" | "active" | "issues"; showArchived?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params.search?.trim()) query.set("search", params.search.trim());
+    if (params.status && params.status !== "all") query.set("status", params.status);
+    if (params.showArchived) query.set("showArchived", "true");
+    return download(`/line-official-accounts/export.csv?${query.toString()}`);
+  },
   createLineOfficialAccount: (input: CreateLineOaInput) => request<LineOfficialAccountResponse>("/line-official-accounts", { method: "POST", body: JSON.stringify(input) }),
   updateLineOfficialAccount: (id: string, input: Partial<CreateLineOaInput>) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   setLineOfficialAccountStatus: (id: string, isActive: boolean) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),

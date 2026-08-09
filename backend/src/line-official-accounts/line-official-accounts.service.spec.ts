@@ -28,6 +28,42 @@ void test("normal LINE OA edit does not change the persisted webhook key", async
   assert.equal(Object.hasOwn(updates[0].data, "webhookKey"), false);
 });
 
+void test("CSV export uses the complete safe list, applies filters, escapes RFC fields, and includes an Excel UTF-8 BOM", async () => {
+  const { service } = fixture();
+  let showArchivedArgument: boolean | null = null;
+  const rows = [
+    {
+      id: "oa-1", name: "บัญชี, \"ทดสอบ\"\nสาขา", basicId: "@safe", channelId: "12345", connectionStatus: "CONNECTED", isActive: true,
+      webhookUrl: "https://backend.example.com/webhook/safe", webhookConfigured: true, lastWebhookReceivedAt: new Date("2026-08-09T10:00:00Z"),
+      messagesReceivedToday: 3, createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-08-09T10:00:00Z"),
+      store: { name: "ร้านไทย", code: "LOCAL-001", accountName: "OPPO TEST", externalStoreId: "S001", province: "กรุงเทพฯ", region: "Central", lineManagerUrl: "https://manager.line.biz/account/safe", lineOaLink: "https://page.line.me/safe" },
+      encryptedChannelSecret: "must-never-export-secret", encryptedChannelAccessToken: "must-never-export-token",
+    },
+    {
+      id: "oa-2", name: "Other OA", basicId: null, channelId: null, connectionStatus: "ERROR", isActive: false,
+      webhookUrl: null, webhookConfigured: false, lastWebhookReceivedAt: null, messagesReceivedToday: 0,
+      createdAt: new Date("2026-01-02T00:00:00Z"), updatedAt: new Date("2026-01-02T00:00:00Z"),
+      store: { name: "Other Store", code: "LOCAL-002", accountName: null, externalStoreId: null, province: null, region: null, lineManagerUrl: null, lineOaLink: null },
+    },
+  ];
+  (service as unknown as { list: (showArchived: boolean) => Promise<typeof rows> }).list = (showArchived) => {
+    showArchivedArgument = showArchived;
+    return Promise.resolve(rows);
+  };
+
+  const result = await service.exportCsv({ search: "test", status: "active", showArchived: "true" });
+  assert.equal(showArchivedArgument, true);
+  assert.equal(result.rowCount, 1);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  assert.equal(result.filename, `line-oa-management-${today}.csv`);
+  assert.equal(result.csv.startsWith("\uFEFF\"LINE OA Account Name\""), true);
+  assert.equal(result.csv.includes('"บัญชี, ""ทดสอบ""\nสาขา"'), true);
+  assert.equal(result.csv.includes("ร้านไทย"), true);
+  assert.equal(result.csv.includes("must-never-export-secret"), false);
+  assert.equal(result.csv.includes("must-never-export-token"), false);
+  assert.equal(result.csv.split("\r\n").length, 3);
+});
+
 void test("explicit regeneration persists a new key and invalidates the previous key", async () => {
   const { service, updates } = fixture();
   await service.regenerateWebhook("oa-1");

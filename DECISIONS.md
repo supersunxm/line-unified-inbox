@@ -384,3 +384,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - LINE acceptance is the ordering boundary: message persistence, BM `REPLIED`, follow-up `COMPLETED`, and activity history occur together afterward in one transaction. Any definite LINE rejection writes nothing. A persistence failure explicitly tells the client to retry the same request.
 - The existing activity enum has no outbound-message action and adding one would require an unnecessary migration. `STATUS_CHANGED` is reused with an explicit outbound LINE description, operator name, store ID, and OA ID; credentials and message text are excluded from audit metadata.
 - Only `ADMIN` can send. This preserves the global guard's established read-only `VIEWER` policy; there is no separate user-to-store authorization model in the current schema to extend.
+
+# LINE OA Management CSV export (2026-08-09)
+
+- CSV generation is a dedicated ADMIN-only backend endpoint rather than frontend pagination. It reuses the existing safe LINE OA projection, so the export and management table share calculated status, canonical webhook URL, Store Master URLs, and batched message counts.
+- Search and status filtering occur server-side after one complete safe projection because connection status is partly calculated from credential/configuration health. The current population is small and database access remains batched without per-OA queries.
+- The schema is an explicit 17-column allowlist. Secret-bearing fields cannot enter the CSV through generic object serialization; even fields beginning with spreadsheet formula characters are neutralized before RFC quoting.
+- CSV uses UTF-8 BOM and CRLF for Microsoft Excel compatibility, while all timestamps and the filename date use `Asia/Bangkok`. `Content-Disposition` and `X-Export-Row-Count` are CORS-exposed so the cross-origin frontend can preserve the server filename and operationally verify counts.

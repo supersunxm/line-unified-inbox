@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
-import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto, UpdateLineOaStatusDto } from "./line-official-account.dto";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from "@nestjs/common";
+import type { Response } from "express";
+import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto, UpdateLineOaStatusDto } from "./line-official-account.dto";
 import { LineOfficialAccountsService } from "./line-official-accounts.service";
 import { Roles } from "../auth/auth.decorators";
 
@@ -7,6 +8,14 @@ import { Roles } from "../auth/auth.decorators";
 export class LineOfficialAccountsController {
   constructor(private readonly service: LineOfficialAccountsService) {}
   @Get() list(@Query("showArchived") showArchived?: string) { return this.service.list(showArchived === "true"); }
+  @Roles("ADMIN")
+  @Get("export.csv") async exportCsv(@Query() query: ExportLineOfficialAccountsDto, @Res() response: Response) {
+    const result = await this.service.exportCsv(query);
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    response.setHeader("X-Export-Row-Count", String(result.rowCount));
+    response.send(result.csv);
+  }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
   @Get(":id/credential-health") credentialHealth(@Param("id") id: string) { return this.service.credentialHealth(id); }
   @Post() create(@Body() dto: CreateLineOfficialAccountDto) { return this.service.create(dto); }

@@ -10,7 +10,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableShutdownHooks();
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
-  app.enableCors({ origin: frontendUrl, credentials: true });
+  app.enableCors({ origin: frontendUrl, credentials: true, exposedHeaders: ["Content-Disposition", "X-Export-Row-Count"] });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );

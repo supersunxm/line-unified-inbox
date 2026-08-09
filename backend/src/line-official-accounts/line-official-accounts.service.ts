@@ -3,7 +3,7 @@ import { LineOaConnectionStatus, Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
-import { CreateLineOfficialAccountDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
+import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
@@ -69,7 +69,7 @@ export class LineOfficialAccountsService {
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
-      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, name: item.store.name, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
+      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, name: item.store.name, code: item.store.code, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
       connectionStatus: this.calculatedStatus(item), isActive: item.isActive, lastWebhookReceivedAt: item.lastWebhookReceivedAt,
       lastConnectionTestAt: item.lastConnectionTestAt, lastConnectionError: item.lastConnectionError,
       hasChannelSecret: Boolean(item.encryptedChannelSecret), hasChannelAccessToken: Boolean(item.encryptedChannelAccessToken),
@@ -93,6 +93,49 @@ export class LineOfficialAccountsService {
     const messagesByOa = new Map<string, number>();
     for (const conversation of conversationCounts) messagesByOa.set(conversation.lineOfficialAccountId, (messagesByOa.get(conversation.lineOfficialAccountId) ?? 0) + conversation._count.messages);
     return items.map((item) => this.safe(item, latestManagerUrls, messagesByOa.get(item.id) ?? 0));
+  }
+
+  async exportCsv(query: ExportLineOfficialAccountsDto) {
+    const allItems = await this.list(query.showArchived === "true");
+    const search = query.search?.trim().toLocaleLowerCase() ?? "";
+    const items = allItems.filter((item) => {
+      const matchesStatus = query.status === "all" || (query.status === "active"
+        ? item.isActive
+        : item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED");
+      const matchesSearch = !search || [item.name, item.store.name, item.store.accountName]
+        .some((value) => value?.toLocaleLowerCase().includes(search));
+      return matchesStatus && matchesSearch;
+    });
+    const columns = [
+      "LINE OA Account Name", "Store Name", "Store Code / External Store ID", "Province", "Region",
+      "LINE OA Basic ID", "LINE OA Account ID", "Connection Status", "Enabled / Disabled", "Webhook URL",
+      "Webhook Status", "Last Webhook Activity", "Messages Today", "LINE Manager URL", "LINE OA URL", "Created At", "Updated At",
+    ];
+    const rows = items.map((item) => [
+      item.name, item.store.name, item.store.externalStoreId ?? item.store.code, item.store.province, item.store.region,
+      item.basicId, item.channelId, item.connectionStatus, item.isActive ? "Enabled" : "Disabled", item.webhookUrl,
+      item.webhookConfigured ? "Configured" : "Not configured", this.formatBangkokDate(item.lastWebhookReceivedAt),
+      item.messagesReceivedToday, item.store.lineManagerUrl, item.store.lineOaLink, this.formatBangkokDate(item.createdAt), this.formatBangkokDate(item.updatedAt),
+    ]);
+    const csv = `\uFEFF${[columns, ...rows].map((row) => row.map((value) => this.csvCell(value)).join(",")).join("\r\n")}\r\n`;
+    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    return { csv, filename: `line-oa-management-${date}.csv`, rowCount: rows.length };
+  }
+
+  private csvCell(value: string | number | Date | null | undefined) {
+    let text = value === null || value === undefined ? "" : String(value);
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
+  private formatBangkokDate(value: Date | null | undefined) {
+    if (!value) return "";
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(value);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+    return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}:${part("second")}`;
   }
   async get(id: string) {
     const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: safeInclude });

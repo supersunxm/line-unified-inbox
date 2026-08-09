@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested } from "class-validator";
 
 export class CreateStoreDto {
   @IsString() @IsNotEmpty() name!: string;
@@ -32,3 +32,9 @@ export class UpdateLineOfficialAccountDto {
 }
 
 export class UpdateLineOaStatusDto { @IsBoolean() isActive!: boolean; }
+
+export class ExportLineOfficialAccountsDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsIn(["all", "active", "issues"]) status: "all" | "active" | "issues" = "all";
+  @IsOptional() @IsIn(["true", "false"]) showArchived = "false";
+}
