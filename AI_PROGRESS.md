@@ -1,6 +1,17 @@
 # AI progress
 
-## Current task: Smart Product Review Queue & Ultra-Fast Operations Workflow
+## Current task: Chat Detail Message Viewport Height Fix (/chats)
+
+- **Chat Detail Vertical Hierarchy Restructured (`frontend/src/app/page.tsx`)**:
+  - Replaced unbounded `flex-1` expansion on the chat message wrapper and `data-chat-message-scroll` with a bounded responsive clamp: `h-[clamp(320px,48vh,540px)] min-h-0 space-y-2 overflow-y-auto`.
+  - Replaced constrained `shrink-0` with `style={{ maxHeight: "clamp(14rem, 30vh, 22rem)" }}` on `data-chat-detail-scroll` with `min-h-0 flex-1 overflow-y-auto`.
+  - Customer Profile, AI Intelligence, and Product Insights panels now appear cleanly right below the message viewport without excessive dark void when there are only 1-2 messages.
+  - Independent scrolling preserved for store sidebar, conversation list, message history, and lower information panels with complete shell viewport lock.
+- **Verification**:
+  - Frontend unit tests: 229/229 passing.
+  - Next.js production build: clean (`npm run build`).
+
+## Previous task: Smart Product Review Queue & Ultra-Fast Operations Workflow
 
 - **Deterministic Review Classification (`product-review-queue.service.ts`)**:
   - Implemented deterministic priority categorizer:

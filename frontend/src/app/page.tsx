@@ -3374,7 +3374,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               </header>
 
               {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex min-h-0 shrink-0 flex-col">
                 <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
                   <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
                   <button
@@ -3385,7 +3385,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     🌐 {showTranslation ? text.showOriginal : text.translateMessage}
                   </button>
                 </div>
-                <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
+                <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
                   {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">{text.loadEarlierMessages}</button></div>}
                   {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" : "rounded-2xl rounded-br-sm bg-green-100 px-4 py-2.5 dark:bg-green-900/60"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                   {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
@@ -3410,7 +3410,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               )}
 
               {/* ── 4. INFORMATION PANELS + LOWER SECTIONS ─────────── */}
-              <div data-chat-detail-scroll className="min-h-0 shrink-0 overflow-y-auto" style={{ maxHeight: "clamp(14rem, 30vh, 22rem)" }}>
+              <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
                 <div className="px-3 py-3 sm:px-4">
 
                   {/* 4a. 2-column info grid: Customer Profile | AI Intelligence */}
