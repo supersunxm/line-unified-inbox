@@ -66,7 +66,7 @@ void test("classification persists the canonical OPPO A6 5G rule match", async (
     confidence: 0.92,
     source: "RULE",
     matchedPhrase: "a6 5g",
-    detectionMethod: "COMPACT_VARIATION",
+    detectionMethod: "COMPACT_ALIAS",
     sourceMessageId: "message-a6",
   });
   assert.equal(result?.products[0]?.productModel.id, productModel.id);

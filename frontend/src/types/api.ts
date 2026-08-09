@@ -806,3 +806,115 @@ export interface OperationalMemorySummary {
   topSlaLiftCase: string;
   cases: OperationalMemoryCaseDto[];
 }
+
+export type AggregatedCorrectionPattern = {
+  phrase: string;
+  predictedModel: string;
+  correctedModel: string;
+  correctionCount: number;
+  affectedConversations: string[];
+  firstSeen: string;
+  lastSeen: string;
+  sampleTexts: string[];
+  storeNames?: string[];
+  detectionMethods?: string[];
+};
+
+export type AliasPreparedPayload = {
+  model: string;
+  alias: string;
+  language: string;
+  safety: "SAFE_EXACT";
+};
+
+export type AliasRecommendationStatus = "SUGGESTED" | "APPROVED" | "REJECTED";
+
+export type AliasRecommendation = {
+  phrase: string;
+  recommendedModel: string;
+  corrections: number;
+  totalPhraseCorrections: number;
+  dominancePct: number;
+  collisionRisk: "NONE" | "LOW" | "MEDIUM" | "HIGH";
+  riskReason?: string;
+  recommendation: "ADD_ALIAS" | "REVIEW" | "IGNORE";
+  status: AliasRecommendationStatus;
+  statusReason: string;
+  firstSeen: string;
+  lastSeen: string;
+  affectedConversationsCount: number;
+  sampleTexts?: string[];
+  preparedPayload?: AliasPreparedPayload;
+};
+
+export type ProductCorrectionInsightResponse = {
+  generatedAt: string;
+  totalManualCorrections: number;
+  uniqueCorrectedConversations: number;
+  mostCorrectedProducts: Array<{ productModel: string; corrections: number }>;
+  mostProblematicPredictedProducts: Array<{ productModel: string; corrections: number }>;
+  mostProblematicPhrases: Array<{ phrase: string; corrections: number; topCorrectedModel: string }>;
+  correctionPatterns: AggregatedCorrectionPattern[];
+  aliasRecommendations: AliasRecommendation[];
+  dataSufficiency: {
+    hasSufficientData: boolean;
+    currentSamples: number;
+    minimumRequired: number;
+    message: string;
+  };
+};
+
+export type ApproveAliasResponse = {
+  success: boolean;
+  phrase: string;
+  model: string;
+  status: "APPROVED";
+  normalizedAlias: string;
+  affectedConversationsCount: number;
+};
+
+export type RejectAliasResponse = {
+  success: boolean;
+  phrase: string;
+  model: string;
+  status: "REJECTED";
+  reason: string;
+};
+
+export type TargetedReanalysisResponse = {
+  phrase: string;
+  scanned: number;
+  changed: number;
+  unchanged: number;
+  manualProtected: number;
+  failed: number;
+};
+
+export type ModelAccuracyDetail = {
+  productModel: string;
+  ruleTagged: number;
+  manualTagged: number;
+  manualConfirmations: number;
+  manualCorrections: number;
+  correctionRate: number | null;
+  estimatedAccuracy: number | null;
+  primaryDetectionMethod: string | null;
+  topProblematicPhrases: string[];
+};
+
+export type NetworkAccuracyReport = {
+  generatedAt: string;
+  totalConversations: number;
+  conversationsWithProductSignals: number;
+  ruleClassificationsCount: number;
+  manualClassificationsCount: number;
+  unclassifiedCount: number;
+  manualCorrectionsCount: number;
+  overallCorrectionRate: number | null;
+  hasSufficientData: boolean;
+  sufficiencyMessage: string;
+  perModel: ModelAccuracyDetail[];
+  flaggedModels: ModelAccuracyDetail[];
+  topProblematicPhrases: Array<{ phrase: string; predictedModel: string; correctedModel: string; count: number }>;
+};
+

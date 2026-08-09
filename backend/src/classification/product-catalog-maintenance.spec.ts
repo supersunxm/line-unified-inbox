@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { ProductAliasSource, ProductGroup, PrismaClient } from "@prisma/client";
 import { catalogAlias } from "./product-alias";
-import { CatalogEntry, PRODUCT_CATALOG } from "./product-catalog";
+import { CatalogEntry, PRODUCT_CATALOG, synchronizableCatalogAliases } from "./product-catalog";
+import { compactProductText } from "./product-normalization";
 import { seedProductCatalog } from "./product-catalog-maintenance";
 import { ProductAliasAdoptionEntry } from "./product-alias-adoption";
 
@@ -146,14 +147,19 @@ void test("Phase 1 first sync creates only a6pro5g, preserves ten MANUAL aliases
   }));
   const state = createPrismaMock([...adoptedRows, ...manualRows]);
 
+  const expectedTotal = new Set([
+    ...PRODUCT_CATALOG.flatMap((e) => synchronizableCatalogAliases(e).map((a) => compactProductText(a.alias))),
+    ...manualRows.map((r) => r.normalizedAlias),
+  ]).size;
+
   await seedProductCatalog(state.prisma, PRODUCT_CATALOG);
-  assert.equal(state.aliases.length, 86);
+  assert.equal(state.aliases.length, expectedTotal);
   assert.equal(state.aliases.find(({ normalizedAlias }) => normalizedAlias === "a6pro5g")?.source, ProductAliasSource.CATALOG);
   assert.equal(manualRows.every(({ id }) => state.aliases.find((row) => row.id === id)?.source === ProductAliasSource.MANUAL), true);
   assert.equal(adoptedRows.every(({ id }) => state.aliases.find((row) => row.id === id)?.isActive), true);
   assert.equal(state.getDeleteCalls(), 0);
 
   await seedProductCatalog(state.prisma, PRODUCT_CATALOG);
-  assert.equal(state.aliases.length, 86);
+  assert.equal(state.aliases.length, expectedTotal);
   assert.equal(state.getDeleteCalls(), 0);
 });

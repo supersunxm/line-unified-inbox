@@ -1,14 +1,16 @@
 import { isAutoMatchSafety, ProductAliasSafety } from "./product-alias";
 import { compactProductText, normalizeProductText } from "./product-normalization";
 
-export type MatchableModel = { id: string; name: string; classificationLevel: string; priority: number; aliases: Array<{ alias: string; priority: number; safety: ProductAliasSafety }>; productSeries?: { name: string; productGroup: string } };
+export type SemanticDetectionMethod = "EXACT_ALIAS" | "PHONETIC_ALIAS" | "COMPACT_ALIAS" | "SERIES_MATCH" | "MANUAL_OVERRIDE";
+
+export type MatchableModel = { id: string; name: string; classificationLevel: string; priority: number; aliases: Array<{ alias: string; priority: number; safety: ProductAliasSafety; language?: string }>; productSeries?: { name: string; productGroup: string } };
 export type ProductMessage = { id: string; text: string; sentAt: Date };
-export type ProductMatch = { model: MatchableModel; confidence: number; matchedPhrase: string; detectionMethod: string; sourceMessageId: string };
+export type ProductMatch = { model: MatchableModel; confidence: number; matchedPhrase: string; detectionMethod: SemanticDetectionMethod; sourceMessageId: string };
 
 type MatchMethod = "NORMALIZED_PHRASE" | "COMPACT_VARIATION";
 type MatchSpan = { method: MatchMethod; endTokenIndex: number };
 
-const protectedModelSuffixes = new Set(["pro", "ultra", "lite", "air", "se", "neo", "max", "plus", "5g"]);
+const protectedModelSuffixes = new Set(["pro", "ultra", "lite", "air", "se", "neo", "max", "plus", "5g", "mini", "zoom", "zoom5g"]);
 const allowedModelContinuations = new Set(["price", "ราคา", "color", "colour", "stock", "available", "availability", "with", "for", "please", "f"]);
 const brandContextRequiredGroups = new Set(["TV", "SMART_HOME_AIOT"]);
 const thaiOppoTokens = new Set(["ออปโป้", "ออปโป"]);
@@ -53,9 +55,7 @@ function hasUnsupportedSuffix(textTokens: string[], span: MatchSpan, model: Matc
   if (model.classificationLevel !== "MODEL") return false;
   const suffix = textTokens[span.endTokenIndex + 1];
   if (!suffix || productTokens(model.name).includes(suffix)) return false;
-  if (protectedModelSuffixes.has(suffix)) return true;
-  if (/^\d+(?:gb|tb)?$/.test(suffix) || /^\d+gb$/.test(suffix) || allowedModelContinuations.has(suffix)) return false;
-  return /^[a-z][a-z0-9]*$/.test(suffix);
+  return protectedModelSuffixes.has(suffix);
 }
 
 function phraseMatches(text: string, candidate: string, safety: ProductAliasSafety, model: MatchableModel): MatchMethod | undefined {
@@ -68,16 +68,44 @@ function phraseMatches(text: string, candidate: string, safety: ProductAliasSafe
   return span.method;
 }
 
+/**
+ * Maps an internal match method + alias metadata → semantic detection method label.
+ * Stored in ConversationProduct.detectionMethod.
+ *
+ * COMPACT_VARIATION (any alias)                      → COMPACT_ALIAS
+ * NORMALIZED_PHRASE + FAMILY or GENERIC level        → SERIES_MATCH
+ * NORMALIZED_PHRASE + Thai language alias (lang=th)  → PHONETIC_ALIAS
+ * NORMALIZED_PHRASE + MODEL level + non-Thai alias   → EXACT_ALIAS
+ */
+export function toSemanticMethod(
+  internalMethod: MatchMethod,
+  classificationLevel: string,
+  aliasLanguage: string | undefined,
+): SemanticDetectionMethod {
+  if (internalMethod === "COMPACT_VARIATION") return "COMPACT_ALIAS";
+  if (classificationLevel === "FAMILY" || classificationLevel === "GENERIC") return "SERIES_MATCH";
+  if (aliasLanguage === "th") return "PHONETIC_ALIAS";
+  return "EXACT_ALIAS";
+}
+
 export function matchProduct(messages: ProductMessage[], models: MatchableModel[]): ProductMatch | undefined {
   const candidates: Array<ProductMatch & { score: number; sentAt: number }> = [];
-  for (const message of messages) for (const model of models) for (const alias of [{ alias: model.name, priority: 0, safety: "SAFE_EXACT" as const }, ...model.aliases]) {
-    const method = phraseMatches(message.text, alias.alias, alias.safety, model); if (!method) continue;
-    const levelScore = model.classificationLevel === "MODEL" ? 300 : model.classificationLevel === "FAMILY" ? 200 : 100;
-    const requestedAccessory = model.productSeries?.productGroup === "ACCESSORIES" ? 300 : 0;
-    candidates.push({ model, confidence: method === "NORMALIZED_PHRASE" ? 0.98 : 0.92, matchedPhrase: alias.alias, detectionMethod: method, sourceMessageId: message.id, score: levelScore + requestedAccessory, sentAt: message.sentAt?.getTime() ?? 0 });
+  for (const message of messages) {
+    if (!message.text?.trim()) continue;
+    for (const model of models) {
+      for (const alias of [{ alias: model.name, priority: 0, safety: "SAFE_EXACT" as const, language: undefined }, ...model.aliases]) {
+        const method = phraseMatches(message.text, alias.alias, alias.safety, model);
+        if (!method) continue;
+        const levelScore = model.classificationLevel === "MODEL" ? 300 : model.classificationLevel === "FAMILY" ? 200 : 100;
+        const accessoryScore = model.productSeries?.productGroup === "ACCESSORIES" ? 150 : 0;
+        const semanticMethod = toSemanticMethod(method, model.classificationLevel, alias.language);
+        candidates.push({ model, confidence: method === "NORMALIZED_PHRASE" ? 0.98 : 0.92, matchedPhrase: alias.alias, detectionMethod: semanticMethod, sourceMessageId: message.id, score: levelScore + accessoryScore, sentAt: message.sentAt?.getTime() ?? 0 });
+      }
+    }
   }
   candidates.sort((a, b) => b.score - a.score || b.sentAt - a.sentAt || b.model.priority - a.model.priority);
   const winner = candidates[0];
   if (!winner) return undefined;
   return { model: winner.model, confidence: winner.confidence, matchedPhrase: winner.matchedPhrase, detectionMethod: winner.detectionMethod, sourceMessageId: winner.sourceMessageId };
 }
+

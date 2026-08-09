@@ -1,6 +1,39 @@
 # AI progress
 
-## Current task: OPPO LINE OA Executive Dashboard Hero & Data Correctness Overhaul
+## Current task: Product Feedback Loop & Human-in-the-Loop Learning
+
+- **Manual Correction Metadata Capture (`conversations.service.ts`)**: Enhanced `updateManualTags` to capture structured metadata (`priorNames`, `newNames`, `matchedPhrase`, `detectionMethod`, `sourceMessageId`) into `ActivityHistory` (`CLASSIFICATION_UPDATED`) and cleanly remove superseded `RULE` tags upon human override.
+- **ProductCorrectionInsightService (`product-correction-insight.service.ts`)**:
+  - Extracts structured correction events from existing `ActivityHistory`, `Conversation`, `Message`, and `ConversationProduct` tables without any new Prisma schema tables.
+  - Aggregates correction patterns by phrase, predicted model, and corrected model with timestamps, occurrence counts, and sample texts.
+  - Builds alias recommendations using strict safety criteria: `correctionCount >= 3`, `dominancePct >= 80%`, not already an active alias, not blocked / review-required, and zero collision with conflicting model series keywords.
+  - Prepares structured approval payloads (`{ model, alias, language, safety: "SAFE_EXACT" }`) for safe human review without automatic source-code mutation.
+- **Enhanced ProductAccuracyService (`product-accuracy.service.ts`)**:
+  - Added overall correction rate, per-model manual confirmations, manual corrections, model-level correction rates, and problematic phrases.
+  - Guarded with `minimumCorrectionsForReliability = 10`, preventing fabricated accuracy percentages on small samples.
+- **Admin Insight API (`product-intelligence.controller.ts`)**: Exposed `GET /product-intelligence/corrections` and `GET /product-intelligence/accuracy` with optional `?storeId=` parameter.
+- **Frontend Admin View (`classification-insights-view.tsx`)**: Added lightweight Product Intelligence Health metrics, Top Correction Patterns table, and Alias Recommendations panel in Classification Insights.
+- **Full Safety Test Suite**: 8/8 scenarios passing in `product-correction-insight.service.spec.ts` (625/625 total backend classification specs, 229/229 frontend tests).
+
+## Previous task: Product Intelligence Production Integration & Real-World Validation
+
+- **Catalog Reproducibility & Idempotency (`scripts/bootstrap-product-catalog.ts`)**: Made product catalog bootstrap completely reproducible and self-healing from code alone. Safely adopts matching MANUAL aliases to CATALOG source by normalized key, seeds all 102 catalog aliases, preserves 15 non-catalog/blocked manual aliases, and verified 100% idempotency (0 insertions/updates on subsequent runs).
+- **Golden Evaluation Benchmark (`product-golden-evaluation-cases.ts` & `product-golden-evaluation.spec.ts`)**: Built an independent 184-case benchmark strictly defined according to business meaning (covering Reno16, Reno16 Pro, Find X9, A6 5G, A6 Pro, Pad 3, Watch X2, Enco Air4, device-with-accessory queries, and 48 false-positive/competitor test cases). Achieved **184/184 tests passed (100.0% Exact Product Accuracy, 0% False Positive Rate, 0% False Negative Rate)**.
+- **Matcher Refinements (`product-matcher.ts` & `product-normalization.ts`)**:
+  - Refined `hasUnsupportedSuffix` to block only `protectedModelSuffixes` (pro, ultra, lite, air, se, neo, max, plus, 5g, mini, zoom), allowing general English words (e.g. `trade`, `wifi`, `review`, `discount`) to follow model names without blocking matches.
+  - Added Thai commercial and conversational particle boundary separation in `normalizeProductText` so unspaced Thai queries (e.g. `รีโน16โปรเท่าไหร่`, `มีโปรผ่อน reno16`) tokenize cleanly.
+  - Set candidate scoring so specific device `MODEL` (300) > `ACCESSORIES` (250) > `FAMILY` (200) > `GENERIC` (100). When customers inquire about `"เคส Reno16"` or `"เคส Reno16 Pro"`, the Phone Model wins as the product and accessory intent is classified by Topic rules.
+- **Safe Bulk Re-Analysis Capability (`scripts/reanalyze-products.ts` & `npm run product:reanalyze`)**: Implemented safe, batched re-analysis with `--dry-run` support, complete `MANUAL` tag protection (MANUAL always wins over RULE), detailed difference preview, and structured JSON reporting.
+- **Manual Correction Feedback & Accuracy Tracking (`conversations.service.ts` & `product-accuracy.service.ts`)**: `updateManualTags` logs manual overrides into `ActivityHistory` (`CLASSIFICATION_UPDATED`), cleans up superseded RULE tags, and enables `ProductAccuracyService` to compute real-world precision and identify top problematic matched phrases.
+- **All Verification Checks Passed**:
+  - Backend TypeScript build: clean (`nest build && prisma generate`)
+  - Full backend test suite: 617/617 classification tests passing
+  - Frontend test suite: 229/229 passing
+  - Golden benchmark: 184/184 passing (100.0% accuracy)
+  - Phase 7 exact scenarios: 10/10 passing (100.0%)
+  - Re-analysis dry-run: clean execution on live DB (8 detected changes, 0 errors, 0 mutations)
+
+## Previous task: OPPO LINE OA Executive Dashboard Hero & Data Correctness Overhaul
 
 - Fixed Health Score calculation in `backend/src/dashboard-analytics.service.ts` and `frontend/src/app/dashboard/dashboard-transformers.ts`: clamped strictly to `[0, 100]` with `Math.min(100, Math.max(0, score))` and eliminated 100x multiplication unit mismatch.
 - Re-architected 7-day message trend aggregation in `backend/src/dashboard-analytics.service.ts` to query 7 calendar days (`gte: sevenDaysAgo`) regardless of active period ("today", "7d", "30d"), producing 7 consecutive Bangkok date buckets (`trend7Days`), zero-filled for missing days.

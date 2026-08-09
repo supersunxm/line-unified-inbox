@@ -220,10 +220,66 @@ export class ConversationsService {
   async updateManualTags(id: string, productModelIds: string[], topicIds: string[]) {
     await this.get(id);
     await this.prisma.$transaction(async (tx) => {
+      // Find prior RULE products to detect corrections
+      const priorRuleProducts = await tx.conversationProduct.findMany({
+        where: { conversationId: id, source: "RULE" },
+        include: { productModel: true },
+      });
+
+      const uniqueModelIds = [...new Set(productModelIds)];
+      const uniqueTopicIds = [...new Set(topicIds)];
+
       await tx.conversationProduct.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
       await tx.conversationTopic.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
-      for (const productModelId of [...new Set(productModelIds)]) await tx.conversationProduct.upsert({ where: { conversationId_productModelId: { conversationId: id, productModelId } }, update: { source: "MANUAL", confidence: 1 }, create: { conversationId: id, productModelId, source: "MANUAL", confidence: 1 } });
-      for (const topicId of [...new Set(topicIds)]) await tx.conversationTopic.upsert({ where: { conversationId_topicId: { conversationId: id, topicId } }, update: { source: "MANUAL", confidence: 1 }, create: { conversationId: id, topicId, source: "MANUAL", confidence: 1 } });
+
+      // If user is setting manual tags, clean up old RULE product tags
+      if (uniqueModelIds.length > 0) {
+        await tx.conversationProduct.deleteMany({ where: { conversationId: id, source: "RULE" } });
+      }
+
+      for (const productModelId of uniqueModelIds) {
+        await tx.conversationProduct.upsert({
+          where: { conversationId_productModelId: { conversationId: id, productModelId } },
+          update: { source: "MANUAL", confidence: 1 },
+          create: { conversationId: id, productModelId, source: "MANUAL", confidence: 1 },
+        });
+      }
+
+      for (const topicId of uniqueTopicIds) {
+        await tx.conversationTopic.upsert({
+          where: { conversationId_topicId: { conversationId: id, topicId } },
+          update: { source: "MANUAL", confidence: 1 },
+          create: { conversationId: id, topicId, source: "MANUAL", confidence: 1 },
+        });
+      }
+
+      // If there were prior RULE predictions and now a manual model is assigned, log correction
+      if (priorRuleProducts.length > 0 && uniqueModelIds.length > 0) {
+        const newModels = await tx.productModel.findMany({
+          where: { id: { in: uniqueModelIds } },
+          select: { name: true },
+        });
+        const priorNames = priorRuleProducts.map((p) => p.productModel.name).join(", ");
+        const newNames = newModels.map((m) => m.name).join(", ");
+        const matchedPhrase = priorRuleProducts[0]?.matchedPhrase ?? "";
+
+        if (priorNames !== newNames) {
+          const prior = priorRuleProducts[0];
+          const phrase = prior?.matchedPhrase ? `phrase: "${prior.matchedPhrase}"` : "";
+          const method = prior?.detectionMethod ? `method: "${prior.detectionMethod}"` : "";
+          const srcMsg = prior?.sourceMessageId ? `sourceMessageId: "${prior.sourceMessageId}"` : "";
+          const metaParts = [phrase, method, srcMsg].filter(Boolean).join(", ");
+
+          await tx.activityHistory.create({
+            data: {
+              conversationId: id,
+              actionType: ActivityActionType.CLASSIFICATION_UPDATED,
+              description: `Manual product correction: ${priorNames} → ${newNames}${metaParts ? ` (${metaParts})` : ""}`,
+              createdByName: "OPPO LINE OA Specialist",
+            },
+          });
+        }
+      }
     });
     return this.get(id);
   }
