@@ -7,6 +7,9 @@ import type {
   ClassificationInsightsResponse,
   ProductCorrectionInsightResponse,
   NetworkAccuracyReport,
+  ProductReviewQueueResponse,
+  ProductReviewQueueItem,
+  ProductMetadataResponse,
   AliasRecommendation,
   TargetedReanalysisResponse,
 } from "@/types/api";
@@ -35,8 +38,22 @@ export function ClassificationInsightsView({ language }: { language: Classificat
   const [data, setData] = useState<ClassificationInsightsResponse | null>(null);
   const [correctionsData, setCorrectionsData] = useState<ProductCorrectionInsightResponse | null>(null);
   const [accuracyData, setAccuracyData] = useState<NetworkAccuracyReport | null>(null);
+  const [reviewQueueData, setReviewQueueData] = useState<ProductReviewQueueResponse | null>(null);
+  const [productMetadata, setProductMetadata] = useState<ProductMetadataResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Review Queue Filter State
+  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
+  const [selectedReason, setSelectedReason] = useState<string>("ALL_NEEDS_REVIEW");
+  const [reviewItems, setReviewItems] = useState<ProductReviewQueueItem[]>([]);
+  const [selectedQueueIndex, setSelectedQueueIndex] = useState<number>(0);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  // Correction Modal State
+  const [correctingItem, setCorrectingItem] = useState<ProductReviewQueueItem | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [savingCorrection, setSavingCorrection] = useState(false);
 
   // Approval modal state
   const [pendingApproval, setPendingApproval] = useState<AliasRecommendation | null>(null);
@@ -57,29 +74,183 @@ export function ClassificationInsightsView({ language }: { language: Classificat
     methods?: string[];
   } | null>(null);
 
+  const loadReviewQueue = useCallback(async (storeId?: string, reason?: string) => {
+    try {
+      const q = await api.productReviewQueue({
+        storeId: storeId || undefined,
+        reason: reason || undefined,
+        pageSize: 50,
+      });
+      setReviewQueueData(q);
+      setReviewItems(q.items);
+      setSelectedQueueIndex(0);
+    } catch (err) {
+      console.error("Failed to load review queue:", err);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [insights, corrections, accuracy] = await Promise.all([
+      const [insights, corrections, accuracy, queue, meta] = await Promise.all([
         api.classificationInsights(),
         api.productCorrections().catch(() => null),
         api.productAccuracy().catch(() => null),
+        api.productReviewQueue({ storeId: selectedStoreId || undefined, reason: selectedReason, pageSize: 50 }).catch(() => null),
+        api.products().catch(() => null),
       ]);
       setData(insights);
       setCorrectionsData(corrections);
       setAccuracyData(accuracy);
+      if (queue) {
+        setReviewQueueData(queue);
+        setReviewItems(queue.items);
+      }
+      setProductMetadata(meta);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : text.error);
     } finally {
       setLoading(false);
     }
-  }, [text.error]);
+  }, [selectedStoreId, selectedReason, text.error]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const handleStoreChange = (storeId: string) => {
+    setSelectedStoreId(storeId);
+    void loadReviewQueue(storeId, selectedReason);
+  };
+
+  const handleReasonChange = (reason: string) => {
+    setSelectedReason(reason);
+    void loadReviewQueue(selectedStoreId, reason);
+  };
+
+  // Fast Review Actions (Optimistic 3-5 sec execution)
+  const handleConfirmReview = async (item: ProductReviewQueueItem) => {
+    // Optimistic removal
+    setReviewItems((prev) => prev.filter((i) => i.conversationId !== item.conversationId));
+    if (reviewQueueData) {
+      setReviewQueueData({
+        ...reviewQueueData,
+        summary: {
+          ...reviewQueueData.summary,
+          totalNeedsReview: Math.max(0, reviewQueueData.summary.totalNeedsReview - 1),
+          confirmedCount: reviewQueueData.summary.confirmedCount + 1,
+          reviewedTotal: reviewQueueData.summary.reviewedTotal + 1,
+        },
+      });
+    }
+    setActionMessage(text.actionSuccessConfirmed);
+    window.setTimeout(() => setActionMessage(null), 3000);
+
+    try {
+      await api.confirmProductReview(item.conversationId);
+    } catch (err) {
+      console.error("Confirm review failed:", err);
+      void loadReviewQueue(selectedStoreId, selectedReason);
+    }
+  };
+
+  const handleNoProductReview = async (item: ProductReviewQueueItem) => {
+    setReviewItems((prev) => prev.filter((i) => i.conversationId !== item.conversationId));
+    if (reviewQueueData) {
+      setReviewQueueData({
+        ...reviewQueueData,
+        summary: {
+          ...reviewQueueData.summary,
+          totalNeedsReview: Math.max(0, reviewQueueData.summary.totalNeedsReview - 1),
+          noProductCount: reviewQueueData.summary.noProductCount + 1,
+          reviewedTotal: reviewQueueData.summary.reviewedTotal + 1,
+        },
+      });
+    }
+    setActionMessage(text.actionSuccessNoProduct);
+    window.setTimeout(() => setActionMessage(null), 3000);
+
+    try {
+      await api.confirmNoProductReview(item.conversationId);
+    } catch (err) {
+      console.error("No product review failed:", err);
+      void loadReviewQueue(selectedStoreId, selectedReason);
+    }
+  };
+
+  const handleOpenCorrection = (item: ProductReviewQueueItem) => {
+    setCorrectingItem(item);
+    setSelectedModelId(item.predictedProducts[0]?.productModelId ?? "");
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!correctingItem || !selectedModelId) return;
+    setSavingCorrection(true);
+    const item = correctingItem;
+
+    // Optimistic removal
+    setReviewItems((prev) => prev.filter((i) => i.conversationId !== item.conversationId));
+    if (reviewQueueData) {
+      setReviewQueueData({
+        ...reviewQueueData,
+        summary: {
+          ...reviewQueueData.summary,
+          totalNeedsReview: Math.max(0, reviewQueueData.summary.totalNeedsReview - 1),
+          correctedCount: reviewQueueData.summary.correctedCount + 1,
+          reviewedTotal: reviewQueueData.summary.reviewedTotal + 1,
+        },
+      });
+    }
+    setCorrectingItem(null);
+    setActionMessage(text.actionSuccessCorrected);
+    window.setTimeout(() => setActionMessage(null), 3000);
+
+    try {
+      await api.correctProductReview(item.conversationId, selectedModelId);
+      // Reload insights to update correction patterns
+      const [insights, corrections] = await Promise.all([
+        api.classificationInsights(),
+        api.productCorrections().catch(() => null),
+      ]);
+      setData(insights);
+      setCorrectionsData(corrections);
+    } catch (err) {
+      console.error("Correction failed:", err);
+      void loadReviewQueue(selectedStoreId, selectedReason);
+    } finally {
+      setSavingCorrection(false);
+    }
+  };
+
+  // Keyboard Shortcuts (C = Confirm, E = Edit, N = No Product)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input or modal is open
+      if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) return;
+      if (pendingApproval || activeEvidence || correctingItem) return;
+      if (reviewItems.length === 0) return;
+
+      const currentItem = reviewItems[Math.min(selectedQueueIndex, reviewItems.length - 1)];
+      if (!currentItem) return;
+
+      const key = e.key.toLowerCase();
+      if (key === "c") {
+        e.preventDefault();
+        void handleConfirmReview(currentItem);
+      } else if (key === "e") {
+        e.preventDefault();
+        handleOpenCorrection(currentItem);
+      } else if (key === "n") {
+        e.preventDefault();
+        void handleNoProductReview(currentItem);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewItems, selectedQueueIndex, pendingApproval, activeEvidence, correctingItem]);
 
   const handleApprove = async () => {
     if (!pendingApproval) return;
@@ -139,6 +310,11 @@ export function ClassificationInsightsView({ language }: { language: Classificat
   const number = new Intl.NumberFormat(language);
   const maximumFunnel = Math.max(1, ...data.funnel.map(({ count }) => count));
 
+  // Extract unique stores for selector
+  const storeList = data.reviewQueue
+    ? Array.from(new Map(data.reviewQueue.map((item) => [item.store.id, item.store.name])).entries())
+    : [];
+
   return (
     <section data-classification-insights className="space-y-6">
       <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
@@ -150,6 +326,13 @@ export function ClassificationInsightsView({ language }: { language: Classificat
           {text.generatedAt}: <time dateTime={data.generatedAt}>{formatDate(data.generatedAt, language)}</time>
         </p>
       </header>
+
+      {/* Action Success Toast Banner */}
+      {actionMessage && (
+        <div role="status" className="fixed bottom-6 right-6 z-50 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg animate-bounce">
+          {actionMessage}
+        </div>
+      )}
 
       {/* Post-Approval Alert & Targeted Re-analysis Prompt */}
       {approvalSuccess && (
@@ -186,6 +369,231 @@ export function ClassificationInsightsView({ language }: { language: Classificat
               {text.reanalysisComplete} {text.scanned}: {reanalysisResult.scanned} · {text.changed}: {reanalysisResult.changed} · {text.manualProtected}: {reanalysisResult.manualProtected}
             </div>
           )}
+        </div>
+      )}
+
+      {/* SMART PRODUCT REVIEW QUEUE SECTION */}
+      {reviewQueueData && (
+        <section data-smart-product-review-queue className="app-card overflow-hidden space-y-4 p-5">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center border-b pb-4">
+            <div>
+              <h2 className="font-semibold text-lg">{text.smartReviewQueueTitle}</h2>
+              <p className="app-muted text-xs mt-0.5">{text.shortcutHelp}</p>
+            </div>
+            {/* Store Filter Selector */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="store-filter" className="app-muted text-xs font-medium">{text.filterByStore}:</label>
+              <select
+                id="store-filter"
+                value={selectedStoreId}
+                onChange={(e) => handleStoreChange(e.target.value)}
+                className="rounded-lg border bg-background px-3 py-1.5 text-xs font-medium"
+              >
+                <option value="">{text.allStores}</option>
+                {storeList.map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Queue Summary KPIs */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+            <MetricCard label={text.needsReview} value={number.format(reviewQueueData.summary.totalNeedsReview)} />
+            <MetricCard label={text.unclassified} value={number.format(reviewQueueData.summary.unclassified)} />
+            <MetricCard label={text.ambiguous} value={number.format(reviewQueueData.summary.ambiguous)} />
+            <MetricCard label={text.lowConfidence} value={number.format(reviewQueueData.summary.lowConfidence)} />
+            <MetricCard label={text.seriesOnly} value={number.format(reviewQueueData.summary.seriesOnly)} />
+            <MetricCard label={text.reviewedTotal} value={number.format(reviewQueueData.summary.reviewedTotal)} />
+            <MetricCard
+              label={text.humanAccuracy}
+              value={reviewQueueData.summary.observedAccuracyPct !== null ? `${reviewQueueData.summary.observedAccuracyPct}%` : "—"}
+              subtext={reviewQueueData.summary.hasSufficientData ? "Verified sample >= 10" : "Insufficient reviewed samples"}
+            />
+          </div>
+
+          {/* Review Reason Filter Pills */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {[
+              { key: "ALL_NEEDS_REVIEW", label: `${text.allNeedsReview} (${reviewQueueData.summary.totalNeedsReview})` },
+              { key: "UNCLASSIFIED", label: `${text.unclassified} (${reviewQueueData.summary.unclassified})` },
+              { key: "AMBIGUOUS", label: `${text.ambiguous} (${reviewQueueData.summary.ambiguous})` },
+              { key: "LOW_CONFIDENCE", label: `${text.lowConfidence} (${reviewQueueData.summary.lowConfidence})` },
+              { key: "SERIES_ONLY", label: `${text.seriesOnly} (${reviewQueueData.summary.seriesOnly})` },
+              { key: "RECENTLY_CORRECTED", label: `${text.recentlyCorrected} (${reviewQueueData.summary.recentlyCorrected})` },
+            ].map((pill) => (
+              <button
+                key={pill.key}
+                type="button"
+                onClick={() => handleReasonChange(pill.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  selectedReason === pill.key
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                }`}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Review Queue Items Table */}
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-left text-sm">
+              <thead className="app-filter-panel">
+                <tr>
+                  {[text.customer, text.store, text.latestInboundMessage, text.predictedProduct, text.reviewReason, text.action].map((label) => (
+                    <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {reviewItems.map((item, idx) => {
+                  const isFirst = idx === selectedQueueIndex;
+                  const reasonBadgeClass =
+                    item.reviewReason === "UNCLASSIFIED"
+                      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                      : item.reviewReason === "AMBIGUOUS"
+                      ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                      : item.reviewReason === "LOW_CONFIDENCE"
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                      : item.reviewReason === "SERIES_ONLY"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                      : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
+
+                  const predictedName = item.predictedProducts.map((p) => p.productModelName).join(", ") || "—";
+                  const primaryPred = item.predictedProducts[0];
+
+                  return (
+                    <tr
+                      key={item.conversationId}
+                      className={`transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30 ${
+                        isFirst ? "bg-blue-50/30 dark:bg-blue-950/20" : ""
+                      }`}
+                      onClick={() => setSelectedQueueIndex(idx)}
+                    >
+                      <td className="px-4 py-3 font-medium text-xs">{item.customerName}</td>
+                      <td className="app-muted px-4 py-3 text-xs">{item.storeName}</td>
+                      <td className="px-4 py-3 max-w-xs truncate text-xs italic font-sans" title={item.latestInboundText}>
+                        &ldquo;{item.latestInboundText || "—"}&rdquo;
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs">
+                          <p className="font-semibold text-foreground">{predictedName}</p>
+                          {primaryPred && primaryPred.detectionMethod && (
+                            <p className="app-muted font-mono text-[10px]">
+                              {primaryPred.detectionMethod} {primaryPred.confidence !== null ? `(${Math.round(primaryPred.confidence * 100)}%)` : ""}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${reasonBadgeClass}`}>
+                          {text.reviewReasons[item.reviewReason] ?? item.reviewReason}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {item.predictedProducts.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => void handleConfirmReview(item)}
+                              title="Confirm current prediction (C)"
+                              className="app-button-primary rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                            >
+                              {text.confirm}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCorrection(item)}
+                            title="Select correct product model (E)"
+                            className="app-button-secondary rounded border px-2.5 py-1 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            {text.correctProduct}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleNoProductReview(item)}
+                            title="Confirm no product in this chat (N)"
+                            className="app-button-secondary rounded border px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
+                          >
+                            {text.noProductAction}
+                          </button>
+                          <Link
+                            href={`/chats?conversationId=${encodeURIComponent(item.conversationId)}`}
+                            className="app-button-secondary rounded border px-2 py-1 text-xs app-muted"
+                          >
+                            {text.openChat}
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {reviewItems.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="app-muted px-4 py-12 text-center text-sm">
+                      ✓ {text.noItemsInQueue}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Correct Product Selection Modal */}
+      {correctingItem && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="app-card w-full max-w-md overflow-hidden border shadow-xl">
+            <header className="flex items-center justify-between border-b p-5 font-semibold text-lg">
+              <span>{text.selectModelModalTitle}</span>
+              <button type="button" onClick={() => setCorrectingItem(null)} className="app-muted hover:text-foreground text-sm font-bold">✕</button>
+            </header>
+            <div className="p-5 space-y-4 text-sm">
+              <div className="rounded border bg-slate-50/50 p-3 text-xs dark:bg-slate-900/50 space-y-1">
+                <p className="app-muted">{text.latestInboundMessage}:</p>
+                <p className="italic font-semibold text-foreground">&ldquo;{correctingItem.latestInboundText}&rdquo;</p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="model-select" className="text-xs font-medium app-muted">{text.targetProduct}:</label>
+                <select
+                  id="model-select"
+                  value={selectedModelId}
+                  onChange={(e) => setSelectedModelId(e.target.value)}
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-medium"
+                >
+                  <option value="">-- Choose Product Model --</option>
+                  {productMetadata?.series.flatMap((s) =>
+                    s.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({s.name})
+                      </option>
+                    )),
+                  )}
+                </select>
+              </div>
+            </div>
+            <footer className="flex justify-end gap-3 border-t p-4">
+              <button
+                type="button"
+                onClick={() => setCorrectingItem(null)}
+                className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-medium"
+              >
+                {text.cancel}
+              </button>
+              <button
+                type="button"
+                disabled={!selectedModelId || savingCorrection}
+                onClick={() => void handleSaveCorrection()}
+                className="app-button-primary rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingCorrection ? "Saving..." : text.saveCorrection}
+              </button>
+            </footer>
+          </div>
         </div>
       )}
 

@@ -1,19 +1,33 @@
 # AI progress
 
-## Current task: Product Feedback Loop & Human-in-the-Loop Learning
+## Current task: Smart Product Review Queue & Ultra-Fast Operations Workflow
 
-- **Manual Correction Metadata Capture (`conversations.service.ts`)**: Enhanced `updateManualTags` to capture structured metadata (`priorNames`, `newNames`, `matchedPhrase`, `detectionMethod`, `sourceMessageId`) into `ActivityHistory` (`CLASSIFICATION_UPDATED`) and cleanly remove superseded `RULE` tags upon human override.
-- **ProductCorrectionInsightService (`product-correction-insight.service.ts`)**:
-  - Extracts structured correction events from existing `ActivityHistory`, `Conversation`, `Message`, and `ConversationProduct` tables without any new Prisma schema tables.
-  - Aggregates correction patterns by phrase, predicted model, and corrected model with timestamps, occurrence counts, and sample texts.
-  - Builds alias recommendations using strict safety criteria: `correctionCount >= 3`, `dominancePct >= 80%`, not already an active alias, not blocked / review-required, and zero collision with conflicting model series keywords.
-  - Prepares structured approval payloads (`{ model, alias, language, safety: "SAFE_EXACT" }`) for safe human review without automatic source-code mutation.
-- **Enhanced ProductAccuracyService (`product-accuracy.service.ts`)**:
-  - Added overall correction rate, per-model manual confirmations, manual corrections, model-level correction rates, and problematic phrases.
-  - Guarded with `minimumCorrectionsForReliability = 10`, preventing fabricated accuracy percentages on small samples.
-- **Admin Insight API (`product-intelligence.controller.ts`)**: Exposed `GET /product-intelligence/corrections` and `GET /product-intelligence/accuracy` with optional `?storeId=` parameter.
-- **Frontend Admin View (`classification-insights-view.tsx`)**: Added lightweight Product Intelligence Health metrics, Top Correction Patterns table, and Alias Recommendations panel in Classification Insights.
-- **Full Safety Test Suite**: 8/8 scenarios passing in `product-correction-insight.service.spec.ts` (625/625 total backend classification specs, 229/229 frontend tests).
+- **Deterministic Review Classification (`product-review-queue.service.ts`)**:
+  - Implemented deterministic priority categorizer:
+    - **P0 UNCLASSIFIED**: Meaningful inbound customer text but 0 product tags and no previous human confirmation.
+    - **P1 AMBIGUOUS / CONFLICT**: Multiple competing product models or conflict detected on conversation.
+    - **P2 LOW CONFIDENCE**: Confidence $< 0.85$ or `COMPACT_ALIAS` match.
+    - **P3 SERIES ONLY**: Model matches generic/family series (e.g. `OPPO Reno Series`, `OPPO Pad Series`, `OPPO Smartphone`).
+    - **P4 RECENTLY REVIEWED**: Conversation already verified by human (MANUAL tag or "No product confirmed" in ActivityHistory). Excluded from default queue.
+    - **P5 GOOD**: Specific, high-confidence single model prediction. Excluded from default queue.
+- **Fast Human Actions (3-5 Second Workflow)**:
+  - **Action A (Confirm)**: `POST /product-intelligence/review-queue/confirm` sets current RULE tags to `MANUAL` (permanently protected) and logs `Product tag confirmed: [modelNames]` in `ActivityHistory`.
+  - **Action B (Correct)**: `POST /product-intelligence/review-queue/correct` removes old tags, creates new `MANUAL` tag, and logs structured correction metadata into `ActivityHistory` feeding `ProductCorrectionInsightService`.
+  - **Action C (No Product)**: `POST /product-intelligence/review-queue/no-product` removes all product tags and logs `No product confirmed: human verified no product mentioned` into `ActivityHistory`.
+  - **Zero Database Migrations**: Derived entirely from existing `ConversationProduct`, `ActivityHistory`, `Conversation`, and `Message` tables.
+- **Review Queue Controller & Service (`product-intelligence.controller.ts` & `product-review-queue.service.ts`)**:
+  - `GET /product-intelligence/review-queue` with store, reason, productModel filters, pagination, and operational metrics (`totalNeedsReview`, `unclassified`, `lowConfidence`, `ambiguous`, `seriesOnly`, `reviewedTotal`, `confirmedCount`, `correctedCount`, `noProductCount`, `observedAccuracyPct`, `hasSufficientData`).
+- **Interactive Operations UI (`classification-insights-view.tsx` & `classification-insights-translations.ts`)**:
+  - Filter by Store dropdown (All Stores + active store list).
+  - Review reason filter pills with live count badges.
+  - Interactive table with immediate optimistic removal, auto-focus next item, fast action buttons, and keyboard shortcuts (`C` = Confirm, `E` = Edit/Correct, `N` = No Product).
+  - Product Model selection modal powered by live `api.products()` metadata.
+- **Full Verification**:
+  - Unit tests: 2/2 in `product-review-queue.service.spec.ts` passing.
+  - Backend test suite: 628/628 passed.
+  - Frontend test suite: 229/229 passed.
+  - Backend & frontend production builds: 100% clean.
+  - Live production database audit: correctly categorized 6 real conversations requiring human review without errors.
 
 ## Previous task: Product Intelligence Production Integration & Real-World Validation
 

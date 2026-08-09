@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ClassificationInsightsResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -135,6 +135,31 @@ export const api = {
   classificationInsights: () => request<ClassificationInsightsResponse>("/classification-insights"),
   productCorrections: (storeId?: string) => request<ProductCorrectionInsightResponse>(`/product-intelligence/corrections${storeId ? `?storeId=${storeId}` : ""}`),
   productAccuracy: (storeId?: string) => request<NetworkAccuracyReport>(`/product-intelligence/accuracy${storeId ? `?storeId=${storeId}` : ""}`),
+  productReviewQueue: (params?: { storeId?: string; reason?: string; productModelId?: string; page?: number; pageSize?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.storeId) query.append("storeId", params.storeId);
+    if (params?.reason) query.append("reason", params.reason);
+    if (params?.productModelId) query.append("productModelId", params.productModelId);
+    if (params?.page) query.append("page", String(params.page));
+    if (params?.pageSize) query.append("pageSize", String(params.pageSize));
+    const qs = query.toString();
+    return request<ProductReviewQueueResponse>(`/product-intelligence/review-queue${qs ? `?${qs}` : ""}`);
+  },
+  confirmProductReview: (conversationId: string, createdByName?: string) =>
+    request<{ success: boolean; conversationId: string; action: string }>("/product-intelligence/review-queue/confirm", {
+      method: "POST",
+      body: JSON.stringify({ conversationId, createdByName }),
+    }),
+  correctProductReview: (conversationId: string, productModelId: string, createdByName?: string) =>
+    request<{ success: boolean; conversationId: string; action: string }>("/product-intelligence/review-queue/correct", {
+      method: "POST",
+      body: JSON.stringify({ conversationId, productModelId, createdByName }),
+    }),
+  confirmNoProductReview: (conversationId: string, createdByName?: string) =>
+    request<{ success: boolean; conversationId: string; action: string }>("/product-intelligence/review-queue/no-product", {
+      method: "POST",
+      body: JSON.stringify({ conversationId, createdByName }),
+    }),
   approveProductAlias: (phrase: string, modelName: string, createdByName?: string) =>
     request<ApproveAliasResponse>("/product-intelligence/aliases/approve", {
       method: "POST",

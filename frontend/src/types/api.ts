@@ -918,3 +918,60 @@ export type NetworkAccuracyReport = {
   topProblematicPhrases: Array<{ phrase: string; predictedModel: string; correctedModel: string; count: number }>;
 };
 
+export type ProductReviewReason =
+  | "UNCLASSIFIED"
+  | "AMBIGUOUS"
+  | "LOW_CONFIDENCE"
+  | "SERIES_ONLY"
+  | "RECENTLY_CORRECTED"
+  | "GOOD";
+
+export type ProductReviewPriority = "P0" | "P1" | "P2" | "P3" | "P4" | "P5";
+
+export type PredictedProductDetail = {
+  productModelId: string;
+  productModelName: string;
+  confidence: number | null;
+  source: string;
+  detectionMethod: string | null;
+  matchedPhrase: string | null;
+};
+
+export type ProductReviewQueueItem = {
+  conversationId: string;
+  customerName: string;
+  storeId: string;
+  storeName: string;
+  latestInboundText: string;
+  predictedProducts: PredictedProductDetail[];
+  reviewReason: ProductReviewReason;
+  reviewPriority: ProductReviewPriority;
+  createdAt: string;
+  latestMessageAt: string | null;
+};
+
+export type ProductReviewQueueSummary = {
+  totalNeedsReview: number;
+  unclassified: number;
+  lowConfidence: number;
+  ambiguous: number;
+  seriesOnly: number;
+  recentlyCorrected: number;
+  good: number;
+  reviewedTotal: number;
+  confirmedCount: number;
+  correctedCount: number;
+  noProductCount: number;
+  observedAccuracyPct: number | null;
+  hasSufficientData: boolean;
+};
+
+export type ProductReviewQueueResponse = {
+  summary: ProductReviewQueueSummary;
+  items: ProductReviewQueueItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+

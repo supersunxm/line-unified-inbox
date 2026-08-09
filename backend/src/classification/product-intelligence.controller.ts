@@ -7,6 +7,13 @@ import {
   TargetedReanalysisResponse,
 } from "./product-correction-insight.service";
 import { ProductAccuracyService, NetworkAccuracyReport } from "./product-accuracy.service";
+import {
+  ProductReviewQueueService,
+  ProductReviewQueueResponse,
+  ConfirmProductReviewDto,
+  CorrectProductReviewDto,
+  NoProductReviewDto,
+} from "./product-review-queue.service";
 
 export type ApproveAliasDto = {
   phrase: string;
@@ -30,6 +37,7 @@ export class ProductIntelligenceController {
   constructor(
     private readonly correctionInsightService: ProductCorrectionInsightService,
     private readonly accuracyService: ProductAccuracyService,
+    private readonly reviewQueueService: ProductReviewQueueService,
   ) {}
 
   @Get("corrections")
@@ -44,6 +52,44 @@ export class ProductIntelligenceController {
     @Query("storeId") storeId?: string,
   ): Promise<NetworkAccuracyReport> {
     return this.accuracyService.generateReport(storeId);
+  }
+
+  @Get("review-queue")
+  getReviewQueue(
+    @Query("storeId") storeId?: string,
+    @Query("reason") reason?: string,
+    @Query("productModelId") productModelId?: string,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+  ): Promise<ProductReviewQueueResponse> {
+    return this.reviewQueueService.getReviewQueue({
+      storeId,
+      reason,
+      productModelId,
+      page,
+      pageSize,
+    });
+  }
+
+  @Post("review-queue/confirm")
+  confirmReview(
+    @Body() dto: ConfirmProductReviewDto,
+  ) {
+    return this.reviewQueueService.confirmProduct(dto);
+  }
+
+  @Post("review-queue/correct")
+  correctReview(
+    @Body() dto: CorrectProductReviewDto,
+  ) {
+    return this.reviewQueueService.correctProduct(dto);
+  }
+
+  @Post("review-queue/no-product")
+  confirmNoProduct(
+    @Body() dto: NoProductReviewDto,
+  ) {
+    return this.reviewQueueService.confirmNoProduct(dto);
   }
 
   @Post("aliases/approve")

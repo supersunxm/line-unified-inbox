@@ -1,3 +1,19 @@
+# Smart Product Review Queue & Fast Human Operations (2026-08-09)
+
+- **Deterministic Review Classification Hierarchy**: Conversations with inbound text are classified into 6 mutually-exclusive priority tiers without running ML models:
+  - `P0 UNCLASSIFIED`: Inbound text present but 0 product tags.
+  - `P1 AMBIGUOUS / CONFLICT`: Multiple product models attached to conversation.
+  - `P2 LOW CONFIDENCE`: Single RULE product with confidence $< 0.85$ or `COMPACT_ALIAS` match.
+  - `P3 SERIES ONLY`: Generic/family series tag (`OPPO Reno Series`, `OPPO Pad Series`, etc.).
+  - `P4 RECENTLY REVIEWED`: Conversation verified by human (`MANUAL` tag or "No product confirmed" in `ActivityHistory`). Excluded from default review queue.
+  - `P5 GOOD`: Specific high-confidence model prediction. Excluded from default review queue.
+- **Three Fast Human Actions**:
+  - **Confirm (C)**: Converts existing RULE prediction to `MANUAL` (permanently protected) and logs `Product tag confirmed: [model]` in `ActivityHistory`.
+  - **Correct (E)**: Replaces tag with selected `ProductModel` (`source: MANUAL`) and logs structured correction metadata into `ActivityHistory` feeding `ProductCorrectionInsightService`.
+  - **No Product (N)**: Removes all product tags and logs `No product confirmed` in `ActivityHistory` to distinguish deliberate no-product state from unclassified state.
+- **Zero Database Migrations**: Derived entirely from existing `ConversationProduct`, `ActivityHistory`, `Conversation`, and `Message` tables.
+- **Ultra-Fast Operations UX**: Single-item review time designed for 3–5 seconds using keyboard shortcuts (`C`, `E`, `N`), optimistic item removal, per-store filtering, and live counter updates without full page reloads.
+
 # Product Feedback Loop & Human-in-the-Loop Learning (2026-08-09)
 
 - **Zero Schema Change Correction Extraction**: Reconstructs complete structured correction events (`predictedModel`, `correctedModel`, `matchedPhrase`, `detectionMethod`, `sourceMessageId`, `sampleText`, `correctedAt`, `actorName`) entirely from existing `ActivityHistory`, `ConversationProduct`, `Message`, and `ProductModel` tables without adding new database tables.
