@@ -75,7 +75,11 @@ export class GoogleDriveMediaStorage implements MediaStorage {
     const metadata = JSON.stringify({ name: objectKey, parents: [this.folderId] });
     const multipart = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`), body, Buffer.from(`\r\n--${boundary}--`)]);
     const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType,size", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` }, body: multipart });
-    if (!response.ok) throw new Error(`Google Drive upload failed (${response.status})`);
+    if (!response.ok) {
+      const detail = await safeGoogleError(response);
+      console.warn(`[MediaStorage] Google Drive upload failed (${response.status})${detail ? `: ${detail}` : ""}`);
+      throw new Error(`Google Drive upload failed (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
     const file = await response.json() as { id?: string; mimeType?: string; size?: string };
     if (!file.id) throw new Error("Google Drive upload returned no file ID");
     return { provider: "google-drive", fileId: file.id, mimeType: file.mimeType ?? contentType, size: Number(file.size ?? body.length) };

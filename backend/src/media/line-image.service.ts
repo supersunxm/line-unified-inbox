@@ -33,6 +33,7 @@ export class LineImageService {
       try {
         response = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(providerMessageId)}/content`, { headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(timeoutMs) });
       } catch { throw new MediaProcessingError("LINE_NETWORK_ERROR", "LINE image download failed or timed out"); }
+      console.log(`[MediaStorage] LINE image download status=${response.status} contentType=${response.headers.get("content-type") ?? "unknown"} contentLength=${response.headers.get("content-length") ?? "unknown"}`);
       if (!response.ok) throw new MediaProcessingError(`LINE_HTTP_${response.status}`, `LINE image download returned HTTP ${response.status}`);
       const mimeType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() ?? "";
       const extension = supportedTypes.get(mimeType);
