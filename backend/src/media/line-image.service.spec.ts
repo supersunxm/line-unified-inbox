@@ -6,7 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { LineImageService } from "./line-image.service";
 import { MediaStorageService } from "./media-storage";
 
-type MediaUpdate = { processingStatus: string; mimeType?: string; objectKey?: string; fileSize?: number; errorCode?: string };
+type MediaUpdate = { processingStatus: string; mimeType?: string; objectKey?: string | null; fileSize?: number; provider?: string; fileId?: string; errorCode?: string };
 
 async function runImage(response: Response, maxBytes = "1024") {
   const previousFetch = global.fetch;
@@ -28,7 +28,7 @@ async function runImage(response: Response, maxBytes = "1024") {
     messageMedia: { update: ({ data }: { data: MediaUpdate }) => { update = data; return Promise.resolve({}); } },
   } as unknown as PrismaService;
   const encryption = { decrypt: () => "oa-specific-token" } as unknown as CredentialEncryptionService;
-  const storage = { put: (key: string, body: Buffer, mimeType: string) => { stored = { key, body, mimeType }; return Promise.resolve(); } } as unknown as MediaStorageService;
+  const storage = { put: (key: string, body: Buffer, mimeType: string) => { stored = { key, body, mimeType }; return Promise.resolve({ provider: "s3", fileId: key, mimeType, size: body.length }); } } as unknown as MediaStorageService;
   try {
     await new LineImageService(prisma, encryption, storage).process("media-1", "oa-1", "line-message-1", new Date("2026-07-20T00:00:00Z"));
     return { authorization, requestedUrl, update, stored };
@@ -46,6 +46,9 @@ void test("image download uses the exact OA token and stores supported content",
   assert.equal(result.update?.processingStatus, "READY");
   assert.equal(result.update?.mimeType, "image/png");
   assert.equal(result.update?.fileSize, 5);
+  assert.equal(result.update?.provider, "s3");
+  assert.equal(result.update?.fileId, result.stored?.key);
+  assert.equal(result.update?.objectKey, result.stored?.key);
   assert.match(result.stored?.key ?? "", /^line-media\/oa-1\/2026\/07\/line-message-1\.png$/);
   assert.equal(JSON.stringify(result).includes("oa-specific-token"), true);
 });

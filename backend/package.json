@@ -37,7 +37,7 @@
     "classification:backfill-products": "tsx --env-file=.env scripts/backfill-product-classifications.ts",
     "product:reanalyze": "tsx --env-file=.env scripts/reanalyze-products.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
-    "media:google-drive:oauth": "tsx scripts/google-drive-oauth-setup.ts",
+    "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
     "security:check": "sh scripts/security-check.sh",
     "db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'",
     "db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
