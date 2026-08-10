@@ -13,6 +13,7 @@ export interface MediaStorage {
   put(objectKey: string, body: Buffer, contentType: string): Promise<StoredMediaReference>;
   get(fileId: string): Promise<StoredMedia>;
   health?(): Promise<MediaStorageHealth>;
+  writeTest?(): Promise<{ status: number; reason?: string; message?: string }>;
 }
 
 function safeLocalPath(root: string, objectKey: string) {
@@ -105,14 +106,32 @@ export class GoogleDriveMediaStorage implements MediaStorage {
       return { provider: "google_drive", enabled: true, folderAccessible: true };
     } catch (error) { return { provider: "google_drive", enabled: true, folderAccessible: false, reason: error instanceof Error ? error.message : "Google Drive health check failed" }; }
   }
+  async writeTest() {
+    const token = await this.accessToken();
+    const boundary = `storage-test-${Date.now()}`;
+    const metadata = JSON.stringify({ name: "storage-test.txt", parents: [this.folderId] });
+    const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: text/plain\r\n\r\nstorage test\r\n--${boundary}--`)]);
+    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` }, body });
+    const detail = response.ok ? undefined : await safeGoogleErrorDetails(response);
+    if (response.ok) {
+      const file = await response.json() as { id?: string };
+      if (file.id) await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?supportsAllDrives=true`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
+    }
+    return { status: response.status, ...detail };
+  }
 }
 
 async function safeGoogleError(response: Response) {
+  const detail = await safeGoogleErrorDetails(response);
+  return detail ? [detail.reason, detail.message].filter(Boolean).join(": ") : undefined;
+}
+
+async function safeGoogleErrorDetails(response: Response) {
   try {
     const body = await response.json() as { error?: { message?: string }; error_description?: string };
     const reasons = Array.isArray((body.error as { errors?: Array<{ reason?: string }> } | undefined)?.errors) ? (body.error as { errors: Array<{ reason?: string }> }).errors.map(({ reason }) => reason).filter(Boolean).join(",") : "";
     const message = (body.error?.message ?? body.error_description ?? "").slice(0, 240).replace(/[\r\n]+/g, " ");
-    return [reasons, message].filter(Boolean).join(": ") || undefined;
+    return { ...(reasons ? { reason: reasons } : {}), ...(message ? { message } : {}) };
   } catch { return undefined; }
 }
 
@@ -142,4 +161,5 @@ export class MediaStorageService implements MediaStorage {
   put(objectKey: string, body: Buffer, contentType: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.put(objectKey, body, contentType); }
   get(fileId: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.get(fileId); }
   health() { return this.storage?.health ? this.storage.health() : Promise.resolve({ provider: "disabled", enabled: false, folderAccessible: false }); }
+  writeTest() { return this.storage?.writeTest ? this.storage.writeTest() : Promise.resolve({ status: 0, message: "Media storage is disabled" }); }
 }

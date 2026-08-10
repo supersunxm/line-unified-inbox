@@ -2,6 +2,7 @@ import { Controller, Get } from "@nestjs/common";
 import { Public } from "./auth/auth.decorators";
 import { PrismaService } from "./prisma.service";
 import { MediaStorageService } from "./media/media-storage";
+import { Roles } from "./auth/auth.decorators";
 
 @Controller("health")
 export class HealthController {
@@ -29,6 +30,10 @@ export class HealthController {
   @Public()
   @Get("storage")
   storage() { return this.media.health(); }
+
+  @Roles("ADMIN")
+  @Get("storage/write-test")
+  storageWriteTest() { return this.media.writeTest(); }
 
   @Public()
   @Get("readiness")
