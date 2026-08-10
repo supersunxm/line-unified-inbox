@@ -59,7 +59,7 @@ export class GoogleDriveMediaStorage implements MediaStorage {
     const enc = (value: string) => Buffer.from(value).toString("base64url");
     const now = Math.floor(Date.now() / 1000);
     const header = enc(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    const payload = enc(JSON.stringify({ iss: this.clientEmail, scope: "https://www.googleapis.com/auth/drive.file", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
+    const payload = enc(JSON.stringify({ iss: this.clientEmail, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
     const signer = createSign("RSA-SHA256"); signer.update(`${header}.${payload}`); signer.end();
     const assertion = `${header}.${payload}.${signer.sign(this.privateKey, "base64url")}`;
     const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
@@ -90,12 +90,24 @@ export class GoogleDriveMediaStorage implements MediaStorage {
     try {
       const token = await this.accessToken();
       const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(this.folderId)}?fields=id,mimeType`, { headers: { authorization: `Bearer ${token}` } });
-      if (!response.ok) return { provider: "google_drive", enabled: true, folderAccessible: false, reason: `Google Drive folder check failed (${response.status})` };
+      if (!response.ok) {
+        const apiError = await safeGoogleError(response);
+        const reason = `Google Drive folder check failed (${response.status})${apiError ? `: ${apiError}` : ""}`;
+        console.warn(`[MediaStorage] ${reason}`);
+        return { provider: "google_drive", enabled: true, folderAccessible: false, reason };
+      }
       const file = await response.json() as { id?: string; mimeType?: string };
       if (file.id !== this.folderId || file.mimeType !== "application/vnd.google-apps.folder") return { provider: "google_drive", enabled: true, folderAccessible: false, reason: "Configured Drive ID is not an accessible folder" };
       return { provider: "google_drive", enabled: true, folderAccessible: true };
     } catch (error) { return { provider: "google_drive", enabled: true, folderAccessible: false, reason: error instanceof Error ? error.message : "Google Drive health check failed" }; }
   }
+}
+
+async function safeGoogleError(response: Response) {
+  try {
+    const body = await response.json() as { error?: { message?: string }; error_description?: string };
+    return (body.error?.message ?? body.error_description ?? "").slice(0, 240).replace(/[\r\n]+/g, " ") || undefined;
+  } catch { return undefined; }
 }
 
 @Injectable()
