@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Injectable } from "@nestjs/common";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
@@ -49,6 +49,14 @@ export class S3MediaStorage implements MediaStorage {
     const response = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
     if (!response.Body) throw new Error("Stored media body is unavailable");
     return { body: Buffer.from(await response.Body.transformToByteArray()), contentType: response.ContentType };
+  }
+  async health() {
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return { provider: "s3", enabled: true, folderAccessible: true };
+    } catch (error) {
+      return { provider: "s3", enabled: true, folderAccessible: false, reason: error instanceof Error ? error.message.slice(0, 240) : "S3 bucket health check failed" };
+    }
   }
 }
 
