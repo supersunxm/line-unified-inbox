@@ -25,13 +25,19 @@ export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = p
   if (environment.PILOT_MODE !== "true" && environment.PILOT_MODE !== "false") throw new Error("PILOT_MODE must be true or false");
   if (environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "true" && environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "false") throw new Error("PILOT_ADMIN_BOOTSTRAP_ENABLED must be true or false");
   if (readMediaStorageEnabled(environment)) {
-    if (!environment.MEDIA_STORAGE_DRIVER?.trim()) throw new Error("Media storage is enabled but configuration is invalid: MEDIA_STORAGE_DRIVER is required and must be s3");
-    if (environment.MEDIA_STORAGE_DRIVER.trim().toLowerCase() !== "s3") throw new Error("Media storage is enabled but configuration is invalid: MEDIA_STORAGE_DRIVER must be s3 in production");
-    const requiredS3 = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
-    const missingS3 = requiredS3.filter((name) => !environment[name]?.trim());
-    if (missingS3.length) throw new Error(`Media storage is enabled but required S3 variables are missing: ${missingS3.join(", ")}`);
-    const placeholders = requiredS3.filter((name) => /(test|fake|example|placeholder|changeme|your[-_])/i.test(environment[name]!.trim()));
-    if (placeholders.length) throw new Error(`Media storage S3 variables contain placeholder values: ${placeholders.join(", ")}`);
+    const mediaDriver = environment.GOOGLE_DRIVE_ENABLED === "true" ? "google-drive" : environment.MEDIA_STORAGE_DRIVER?.trim().toLowerCase();
+    if (!mediaDriver) throw new Error("Media storage is enabled but a storage driver is required");
+    if (mediaDriver === "google-drive") {
+      const missingDrive = ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_DRIVE_FOLDER_ID"].filter((name) => !environment[name]?.trim());
+      if (missingDrive.length) throw new Error(`Media storage Google Drive variables are missing: ${missingDrive.join(", ")}`);
+    } else if (mediaDriver !== "s3") throw new Error("Media storage is enabled but MEDIA_STORAGE_DRIVER must be s3 or Google Drive must be enabled");
+    if (mediaDriver === "s3") {
+      const requiredS3 = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
+      const missingS3 = requiredS3.filter((name) => !environment[name]?.trim());
+      if (missingS3.length) throw new Error(`Media storage is enabled but required S3 variables are missing: ${missingS3.join(", ")}`);
+      const placeholders = requiredS3.filter((name) => /(test|fake|example|placeholder|changeme|your[-_])/i.test(environment[name]!.trim()));
+      if (placeholders.length) throw new Error(`Media storage S3 variables contain placeholder values: ${placeholders.join(", ")}`);
+    }
   }
   readPilotAdminBootstrapConfig(environment);
   const emailProvider = environment.EMAIL_PROVIDER!.trim().toLowerCase();

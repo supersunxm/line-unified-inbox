@@ -12,8 +12,8 @@ export class MediaController {
   @Get(":messageId/media")
   async get(@Param("messageId") messageId: string, @Res() response: Response) {
     const media = await this.prisma.messageMedia.findUnique({ where: { messageId }, include: { message: { select: { conversation: { select: { lineOfficialAccountId: true } } } } } });
-    if (!media || media.processingStatus !== "READY" || !media.objectKey || !media.mimeType) throw new NotFoundException("Message media is unavailable");
-    const stored = await this.storage.get(media.objectKey);
+    if (!media || media.processingStatus !== "READY" || (!media.objectKey && !media.fileId) || !media.mimeType) throw new NotFoundException("Message media is unavailable");
+    const stored = await this.storage.get(media.fileId ?? media.objectKey!);
     response.setHeader("Content-Type", media.mimeType);
     response.setHeader("Content-Length", String(stored.body.length));
     response.setHeader("Cache-Control", "private, max-age=3600");

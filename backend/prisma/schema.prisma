@@ -604,6 +604,8 @@ model MessageMedia {
   mediaType         MessageType
   mimeType          String?
   objectKey         String?
+  provider          String?
+  fileId            String?
   fileSize          Int?
   processingStatus  MediaProcessingStatus @default(PENDING)
   errorCode         String?

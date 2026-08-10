@@ -41,8 +41,8 @@ export class LineImageService {
       if (Number.isFinite(declaredSize) && declaredSize > maxBytes) throw new MediaProcessingError("MEDIA_TOO_LARGE", "LINE image exceeds the configured size limit");
       const body = await readLimitedBody(response, maxBytes);
       const objectKey = objectKeyFor(lineOaId, occurredAt, providerMessageId, extension);
-      await this.storage.put(objectKey, body, mimeType);
-      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "READY", mimeType, objectKey, fileSize: body.length, errorCode: null, errorMessage: null } });
+      const stored = await this.storage.put(objectKey, body, mimeType) ?? { provider: "legacy", fileId: objectKey, mimeType, size: body.length };
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "READY", mimeType: stored.mimeType, objectKey: stored.provider === "google-drive" ? null : objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, errorCode: null, errorMessage: null } });
     } catch (error) {
       const code = error instanceof MediaProcessingError ? error.code : "STORAGE_ERROR";
       const message = error instanceof Error ? error.message.slice(0, 300) : "Image processing failed";
