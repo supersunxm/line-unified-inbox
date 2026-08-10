@@ -29,7 +29,7 @@ export class HealthController {
 
   @Public()
   @Get("storage")
-  storage() { return this.media.health(); }
+  async storage() { return { ...(await this.media.health()), debug: this.media.diagnostics() }; }
 
   @Roles("ADMIN")
   @Get("storage/write-test")

@@ -2,6 +2,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { Injectable } from "@nestjs/common";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+import { hostname } from "node:os";
 import { readMediaStorageEnabled } from "./media-storage.config";
 
 export type StoredMedia = { body: Buffer; contentType?: string };
@@ -135,6 +136,7 @@ async function safeGoogleErrorDetails(response: Response) {
 export class MediaStorageService implements MediaStorage {
   private readonly storage?: MediaStorage;
   constructor() {
+    console.log("[MEDIA DEBUG] Instance identity", { hostname: hostname(), pid: process.pid });
     console.log("[MEDIA DEBUG] Runtime environment:", {
       MEDIA_STORAGE_ENABLED: process.env.MEDIA_STORAGE_ENABLED,
       MEDIA_STORAGE_DRIVER: process.env.MEDIA_STORAGE_DRIVER,
@@ -172,4 +174,13 @@ export class MediaStorageService implements MediaStorage {
   get(fileId: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.get(fileId); }
   health() { return this.storage?.health ? this.storage.health() : Promise.resolve({ provider: "disabled", enabled: false, folderAccessible: false }); }
   writeTest() { return this.storage?.writeTest ? this.storage.writeTest() : Promise.resolve({ status: 0, message: "Media storage is disabled" }); }
+  diagnostics() {
+    return {
+      hostname: hostname(),
+      pid: process.pid,
+      MEDIA_STORAGE_ENABLED: process.env.MEDIA_STORAGE_ENABLED,
+      MEDIA_STORAGE_DRIVER: process.env.MEDIA_STORAGE_DRIVER,
+      driverExists: Boolean(this.storage),
+    };
+  }
 }
