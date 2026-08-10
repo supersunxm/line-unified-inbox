@@ -8,8 +8,15 @@ import { AuthService } from "./auth.service";
 @Injectable()
 export class SetupService {
   constructor(private readonly prisma: PrismaService, private readonly email: EmailService, private readonly passwords: PasswordService, private readonly auth: AuthService) {}
+  private statusCache: { value: { firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }; expiresAt: number } | null = null;
   normalize(email: string) { return email.trim().toLowerCase(); }
-  async status() { const activeAdmins = await this.prisma.user.count({ where: { role: "ADMIN", isActive: true } }); return { firstAdminRequired: activeAdmins === 0, registrationAvailable: activeAdmins === 0, emailProviderConfigured: this.email.configured(), emailProviderMode: this.email.mode() }; }
+  async status() {
+    if (this.statusCache && this.statusCache.expiresAt > Date.now()) return this.statusCache.value;
+    const activeAdmins = await this.prisma.user.count({ where: { role: "ADMIN", isActive: true } });
+    const value = { firstAdminRequired: activeAdmins === 0, registrationAvailable: activeAdmins === 0, emailProviderConfigured: this.email.configured(), emailProviderMode: this.email.mode() };
+    this.statusCache = { value, expiresAt: Date.now() + 30_000 };
+    return value;
+  }
   private hash(id: string, code: string) { return createHash("sha256").update(`${id}:${code}`).digest(); }
   private mask(email: string) { const [name, domain] = email.split("@"); return `${name.slice(0, Math.min(2, name.length))}***@${domain}`; }
   private validatePassword(password: string) { if (password.length < 12 || ["password1234", "123456789012", "qwerty123456"].includes(password.toLowerCase())) throw new BadRequestException("Use a stronger password with at least 12 characters"); }
@@ -37,6 +44,7 @@ export class SetupService {
       await tx.user.create({ data: { email: normalizedEmail, normalizedEmail, displayName: displayName.trim(), passwordHash, role: "ADMIN", isActive: true, emailVerifiedAt } });
       await tx.adminRegistrationOtp.updateMany({ where: { normalizedEmail, purpose: "FIRST_ADMIN_REGISTRATION", consumedAt: null }, data: { consumedAt: emailVerifiedAt } });
     });
+    this.statusCache = null;
     return this.auth.login(normalizedEmail, password);
   }
   async resend(challengeId: string, language: EmailLanguage) {
