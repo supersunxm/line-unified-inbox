@@ -1,10 +1,11 @@
 import { Controller, Get } from "@nestjs/common";
 import { Public } from "./auth/auth.decorators";
 import { PrismaService } from "./prisma.service";
+import { MediaStorageService } from "./media/media-storage";
 
 @Controller("health")
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly media: MediaStorageService) {}
 
   @Public()
   @Get()
@@ -24,6 +25,10 @@ export class HealthController {
       version: "1.0.0",
     };
   }
+
+  @Public()
+  @Get("storage")
+  storage() { return this.media.health(); }
 
   @Public()
   @Get("readiness")

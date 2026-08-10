@@ -7,10 +7,12 @@ import { readMediaStorageEnabled } from "./media-storage.config";
 
 export type StoredMedia = { body: Buffer; contentType?: string };
 export type StoredMediaReference = { provider: string; fileId: string; mimeType: string; size: number };
+export type MediaStorageHealth = { provider: string; enabled: boolean; folderAccessible: boolean; reason?: string };
 
 export interface MediaStorage {
   put(objectKey: string, body: Buffer, contentType: string): Promise<StoredMediaReference>;
   get(fileId: string): Promise<StoredMedia>;
+  health?(): Promise<MediaStorageHealth>;
 }
 
 function safeLocalPath(root: string, objectKey: string) {
@@ -84,6 +86,16 @@ export class GoogleDriveMediaStorage implements MediaStorage {
     if (!response.ok) throw new Error(`Google Drive download failed (${response.status})`);
     return { body: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get("content-type") ?? undefined };
   }
+  async health() {
+    try {
+      const token = await this.accessToken();
+      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(this.folderId)}?fields=id,mimeType`, { headers: { authorization: `Bearer ${token}` } });
+      if (!response.ok) return { provider: "google_drive", enabled: true, folderAccessible: false, reason: `Google Drive folder check failed (${response.status})` };
+      const file = await response.json() as { id?: string; mimeType?: string };
+      if (file.id !== this.folderId || file.mimeType !== "application/vnd.google-apps.folder") return { provider: "google_drive", enabled: true, folderAccessible: false, reason: "Configured Drive ID is not an accessible folder" };
+      return { provider: "google_drive", enabled: true, folderAccessible: true };
+    } catch (error) { return { provider: "google_drive", enabled: true, folderAccessible: false, reason: error instanceof Error ? error.message : "Google Drive health check failed" }; }
+  }
 }
 
 @Injectable()
@@ -111,4 +123,5 @@ export class MediaStorageService implements MediaStorage {
   }
   put(objectKey: string, body: Buffer, contentType: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.put(objectKey, body, contentType); }
   get(fileId: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.get(fileId); }
+  health() { return this.storage?.health ? this.storage.health() : Promise.resolve({ provider: "disabled", enabled: false, folderAccessible: false }); }
 }

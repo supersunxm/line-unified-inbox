@@ -26,7 +26,7 @@ export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = p
   if (environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "true" && environment.PILOT_ADMIN_BOOTSTRAP_ENABLED !== "false") throw new Error("PILOT_ADMIN_BOOTSTRAP_ENABLED must be true or false");
   if (readMediaStorageEnabled(environment)) {
     const mediaDriver = environment.GOOGLE_DRIVE_ENABLED === "true" ? "google-drive" : environment.MEDIA_STORAGE_DRIVER?.trim().toLowerCase();
-    if (!mediaDriver) throw new Error("Media storage is enabled but a storage driver is required");
+    if (!mediaDriver) throw new Error("Media storage is enabled but MEDIA_STORAGE_DRIVER is required unless GOOGLE_DRIVE_ENABLED=true");
     if (mediaDriver === "google-drive") {
       const missingDrive = ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_DRIVE_FOLDER_ID"].filter((name) => !environment[name]?.trim());
       if (missingDrive.length) throw new Error(`Media storage Google Drive variables are missing: ${missingDrive.join(", ")}`);
