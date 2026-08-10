@@ -3,10 +3,15 @@ import { Public } from "./auth/auth.decorators";
 import { PrismaService } from "./prisma.service";
 import { MediaStorageService } from "./media/media-storage";
 import { Roles } from "./auth/auth.decorators";
+import { hostname } from "node:os";
 
 @Controller("health")
 export class HealthController {
   constructor(private readonly prisma: PrismaService, private readonly media: MediaStorageService) {}
+
+  private instance() {
+    return { hostname: hostname(), pid: process.pid, RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA, NODE_ENV: process.env.NODE_ENV };
+  }
 
   @Public()
   @Get()
@@ -29,7 +34,11 @@ export class HealthController {
 
   @Public()
   @Get("storage")
-  async storage() { return { ...(await this.media.health()), debug: this.media.diagnostics() }; }
+  async storage() { return { ...(await this.media.health()), debug: { ...this.media.diagnostics(), ...this.instance() } }; }
+
+  @Public()
+  @Get("instance")
+  instanceInfo() { return this.instance(); }
 
   @Roles("ADMIN")
   @Get("storage/write-test")
