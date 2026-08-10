@@ -37,6 +37,10 @@ void test("enabled production media requires the s3 driver", () => {
 void test("enabled production media reports missing S3 configuration together", () => {
   assert.throws(() => validateProductionEnvironment({ ...valid, MEDIA_STORAGE_ENABLED: "true", MEDIA_STORAGE_DRIVER: "s3" }), /S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY/);
 });
+void test("enabled Google Drive media requires OAuth refresh-token configuration", () => {
+  assert.throws(() => validateProductionEnvironment({ ...valid, MEDIA_STORAGE_ENABLED: "true", GOOGLE_DRIVE_ENABLED: "true" }), /GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_DRIVE_FOLDER_ID/);
+  assert.doesNotThrow(() => validateProductionEnvironment({ ...valid, MEDIA_STORAGE_ENABLED: "true", GOOGLE_DRIVE_ENABLED: "true", GOOGLE_CLIENT_ID: "client-id", GOOGLE_CLIENT_SECRET: "client-secret", GOOGLE_REFRESH_TOKEN: "refresh-token", GOOGLE_DRIVE_FOLDER_ID: "folder-id" }));
+});
 void test("enabled production media accepts complete non-placeholder S3 configuration", () => {
   assert.doesNotThrow(() => validateProductionEnvironment({ ...valid, MEDIA_STORAGE_ENABLED: "true", MEDIA_STORAGE_DRIVER: "s3", S3_REGION: "ap-southeast-1", S3_BUCKET: "oppo-pilot-media-9821", S3_ACCESS_KEY_ID: "AKIA7Q6M2N8R4V1C9Z3P", S3_SECRET_ACCESS_KEY: "n7VQ2rM9xK4pL8sC6wT1yB5dF3hJ0uG2aE9zX7q" }));
 });

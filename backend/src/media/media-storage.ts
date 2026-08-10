@@ -2,7 +2,6 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { Injectable } from "@nestjs/common";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
-import { createSign } from "node:crypto";
 import { readMediaStorageEnabled } from "./media-storage.config";
 
 export type StoredMedia = { body: Buffer; contentType?: string };
@@ -54,17 +53,14 @@ export class S3MediaStorage implements MediaStorage {
 
 export class GoogleDriveMediaStorage implements MediaStorage {
   private token: { value: string; expiresAt: number } | null = null;
-  constructor(private readonly clientEmail: string, private readonly privateKey: string, private readonly folderId: string) {}
+  constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly refreshToken: string, private readonly folderId: string) {}
   private async accessToken() {
     if (this.token && this.token.expiresAt > Date.now() + 60_000) return this.token.value;
-    const enc = (value: string) => Buffer.from(value).toString("base64url");
-    const now = Math.floor(Date.now() / 1000);
-    const header = enc(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    const payload = enc(JSON.stringify({ iss: this.clientEmail, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
-    const signer = createSign("RSA-SHA256"); signer.update(`${header}.${payload}`); signer.end();
-    const assertion = `${header}.${payload}.${signer.sign(this.privateKey, "base64url")}`;
-    const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }) });
-    if (!response.ok) throw new Error(`Google Drive authentication failed (${response.status})`);
+    const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", client_id: this.clientId, client_secret: this.clientSecret, refresh_token: this.refreshToken }) });
+    if (!response.ok) {
+      const detail = await safeGoogleError(response);
+      throw new Error(`Google Drive authentication failed (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
     const body = await response.json() as { access_token?: string; expires_in?: number };
     if (!body.access_token) throw new Error("Google Drive authentication returned no access token");
     this.token = { value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 };
@@ -146,10 +142,10 @@ export class MediaStorageService implements MediaStorage {
       return;
     }
     if (driver === "google-drive") {
-      const required = ["GOOGLE_SERVICE_ACCOUNT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_DRIVE_FOLDER_ID"] as const;
+      const required = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "GOOGLE_DRIVE_FOLDER_ID"] as const;
       const missing = required.filter((key) => !process.env[key]?.trim());
       if (missing.length) throw new Error(`Missing Google Drive storage variables: ${missing.join(", ")}`);
-      this.storage = new GoogleDriveMediaStorage(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!, process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n"), process.env.GOOGLE_DRIVE_FOLDER_ID!);
+      this.storage = new GoogleDriveMediaStorage(process.env.GOOGLE_CLIENT_ID!, process.env.GOOGLE_CLIENT_SECRET!, process.env.GOOGLE_REFRESH_TOKEN!, process.env.GOOGLE_DRIVE_FOLDER_ID!);
       return;
     }
     if (driver !== "s3") throw new Error("MEDIA_STORAGE_DRIVER must be local, s3, or google-drive");
