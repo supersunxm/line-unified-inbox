@@ -135,7 +135,16 @@ async function safeGoogleErrorDetails(response: Response) {
 export class MediaStorageService implements MediaStorage {
   private readonly storage?: MediaStorage;
   constructor() {
-    if (!readMediaStorageEnabled()) return;
+    console.log("[MEDIA DEBUG] Runtime environment:", {
+      MEDIA_STORAGE_ENABLED: process.env.MEDIA_STORAGE_ENABLED,
+      MEDIA_STORAGE_DRIVER: process.env.MEDIA_STORAGE_DRIVER,
+      GOOGLE_DRIVE_ENABLED: process.env.GOOGLE_DRIVE_ENABLED,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+    if (!readMediaStorageEnabled()) {
+      console.log("[MEDIA DEBUG] Storage disabled because readMediaStorageEnabled returned false");
+      return;
+    }
     const driver = (process.env.GOOGLE_DRIVE_ENABLED?.trim().toLowerCase() === "true" ? "google-drive" : process.env.MEDIA_STORAGE_DRIVER ?? "local").trim().toLowerCase();
     if (driver === "local") {
       this.storage = new LocalMediaStorage(process.env.MEDIA_LOCAL_DIRECTORY?.trim() || resolve(process.cwd(), ".media"));
@@ -152,6 +161,11 @@ export class MediaStorageService implements MediaStorage {
     const required = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
     const missing = required.filter((key) => !process.env[key]?.trim());
     if (missing.length) throw new Error(`Missing S3 media storage variables: ${missing.join(", ")}`);
+    console.log("[MEDIA DEBUG] Initializing S3 storage", {
+      bucket: process.env.S3_BUCKET,
+      endpoint: process.env.S3_ENDPOINT,
+      region: process.env.S3_REGION,
+    });
     this.storage = new S3MediaStorage(process.env.S3_BUCKET!, { endpoint: process.env.S3_ENDPOINT?.trim() || undefined, region: process.env.S3_REGION!, accessKeyId: process.env.S3_ACCESS_KEY_ID!, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY! });
   }
   put(objectKey: string, body: Buffer, contentType: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.put(objectKey, body, contentType); }
