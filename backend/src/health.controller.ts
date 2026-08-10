@@ -4,13 +4,23 @@ import { PrismaService } from "./prisma.service";
 import { MediaStorageService } from "./media/media-storage";
 import { Roles } from "./auth/auth.decorators";
 import { hostname } from "node:os";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 @Controller("health")
 export class HealthController {
   constructor(private readonly prisma: PrismaService, private readonly media: MediaStorageService) {}
 
   private instance() {
-    return { hostname: hostname(), pid: process.pid, RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA, NODE_ENV: process.env.NODE_ENV };
+    const packageJson = JSON.parse(readFileSync(resolve(__dirname, "../package.json"), "utf8")) as { version?: string };
+    return {
+      hostname: process.env.RAILWAY_REPLICA_ID || hostname(),
+      pid: process.pid,
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.SOURCE_COMMIT || "unknown",
+      buildTime: process.env.BUILD_TIME || "unknown",
+      version: packageJson.version || "unknown",
+      NODE_ENV: process.env.NODE_ENV,
+    };
   }
 
   @Public()
