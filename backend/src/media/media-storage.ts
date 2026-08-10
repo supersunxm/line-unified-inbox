@@ -39,7 +39,13 @@ export class LocalMediaStorage implements MediaStorage {
 export class S3MediaStorage implements MediaStorage {
   private readonly client: S3Client;
   constructor(private readonly bucket: string, configuration: { endpoint?: string; region: string; accessKeyId: string; secretAccessKey: string }) {
-    this.client = new S3Client({ endpoint: configuration.endpoint, region: configuration.region, forcePathStyle: Boolean(configuration.endpoint), credentials: { accessKeyId: configuration.accessKeyId, secretAccessKey: configuration.secretAccessKey } });
+    console.log("[MEDIA DEBUG] R2 S3 configuration", {
+      endpoint: JSON.stringify(configuration.endpoint),
+      region: JSON.stringify(configuration.region),
+      bucket: JSON.stringify(bucket),
+      forcePathStyle: false,
+    });
+    this.client = new S3Client({ endpoint: configuration.endpoint, region: configuration.region, forcePathStyle: false, credentials: { accessKeyId: configuration.accessKeyId, secretAccessKey: configuration.secretAccessKey } });
   }
   async put(objectKey: string, body: Buffer, contentType: string) {
     await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, Body: body, ContentType: contentType }));
