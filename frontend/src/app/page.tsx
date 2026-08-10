@@ -270,6 +270,10 @@ const translations = {
     exportCsv: "ดาวน์โหลด CSV",
     exportingCsv: "กำลังสร้าง CSV...",
     exportCsvFailed: "ดาวน์โหลด CSV ไม่สำเร็จ กรุณาลองอีกครั้ง",
+    syncMasterFile: "↻ Sync Master File",
+    syncingMasterFile: "กำลัง Sync...",
+    syncMasterSuccess: "Sync สำเร็จ",
+    syncMasterFailed: "Sync Master File ไม่สำเร็จ",
     lineOaAdded: "เพิ่มร้านสำเร็จ",
     pasteWebhookInstruction: "นำ URL นี้ไปวางใน LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "การตั้งค่าขั้นสูง (ไม่บังคับ)",
@@ -561,6 +565,10 @@ const translations = {
     exportCsv: "Export CSV",
     exportingCsv: "Generating CSV...",
     exportCsvFailed: "CSV download failed. Please try again.",
+    syncMasterFile: "↻ Sync Master File",
+    syncingMasterFile: "Syncing...",
+    syncMasterSuccess: "Sync succeeded",
+    syncMasterFailed: "Master File sync failed",
     lineOaAdded: "LINE OA added successfully",
     pasteWebhookInstruction: "Paste this URL into LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "Advanced settings (optional)",
@@ -850,6 +858,10 @@ const translations = {
     exportCsv: "下载 CSV",
     exportingCsv: "正在生成 CSV...",
     exportCsvFailed: "CSV 下载失败，请重试。",
+    syncMasterFile: "↻ 同步 Master File",
+    syncingMasterFile: "正在同步...",
+    syncMasterSuccess: "同步成功",
+    syncMasterFailed: "Master File 同步失败",
     lineOaAdded: "LINE OA 添加成功",
     pasteWebhookInstruction: "请将此 URL 粘贴到 LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "高级设置（可选）",
@@ -1289,6 +1301,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [lineOaError, setLineOaError] = useState<string | null>(null);
   const [lineOaExporting, setLineOaExporting] = useState(false);
   const [lineOaExportError, setLineOaExportError] = useState<string | null>(null);
+  const [masterSyncing, setMasterSyncing] = useState(false);
   const [connectionTest, setConnectionTest] = useState<{ id: string; result: LineOaTestResult } | null>(null);
   const [showArchivedLineOas, setShowArchivedLineOas] = useState(false);
   const [showArchivedStores, setShowArchivedStores] = useState(false);
@@ -2417,6 +2430,19 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }
 
+  async function syncMasterFile() {
+    if (masterSyncing || authUser?.role !== "ADMIN") return;
+    setMasterSyncing(true);
+    setLineOaError(null);
+    try {
+      const result = await api.syncStoreMaster();
+      await loadApplicationData(true);
+      setToastMessage(`${text.syncMasterSuccess} · Google Sheet: ${result.source.rows} ร้าน · Updated: ${result.connectedOaSync.updated} · Unchanged: ${result.connectedOaSync.unchanged} · Warnings: ${result.validation.incomplete} · Connected OA Updated: ${result.connectedOaSync.updated}`);
+    } catch (error) {
+      setLineOaError(`${text.syncMasterFailed}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally { setMasterSyncing(false); }
+  }
+
   async function copyWebhookUrl(accountId: string, returnedUrl?: string | null) {
     const url = returnedUrl ?? webhookInfoById[accountId]?.webhookUrl;
     if (!url) { setLineOaError(text.webhookNotConfigured); return; }
@@ -2680,7 +2706,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 <div className="mx-auto max-w-7xl space-y-6">
                   <div className="flex items-start justify-between">
                     <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
-                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label>{authUser.role === "ADMIN" && <button type="button" disabled={lineOaExporting} onClick={() => void exportLineOaCsv()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}</button>}<button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
+                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label>{authUser.role === "ADMIN" && <><button type="button" disabled={masterSyncing} onClick={() => void syncMasterFile()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{masterSyncing ? text.syncingMasterFile : text.syncMasterFile}</button><button type="button" disabled={lineOaExporting} onClick={() => void exportLineOaCsv()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}</button></>}<button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
                   </div>
 
                   <div className="app-card p-4">

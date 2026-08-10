@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { StoreMasterDataQualityStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { isValidManagerUrl, normalizeSearchText, parseStoreMasterCsv, regionFromProvince, similarity } from "./store-master.utils";
+import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
 
 @Injectable()
 export class StoreMasterService {
@@ -62,6 +63,31 @@ export class StoreMasterService {
       const response = await fetch(`https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv`); if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`); csv = await response.text();
     }
     return this.importCsv(csv);
+  }
+
+  async syncFromGoogleSheet() {
+    const configured = process.env.STORE_MASTER_GOOGLE_SHEET_URL?.trim();
+    if (!configured) throw new Error("STORE_MASTER_GOOGLE_SHEET_URL is not configured");
+    const match = configured.match(/\/spreadsheets\/d\/([^/]+)/u);
+    if (!match) throw new Error("Invalid Google Sheets URL");
+    const configuredGid = configured.match(/[?&#]gid=(\d+)/u)?.[1];
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv${configuredGid ? `&gid=${configuredGid}` : ""}`;
+    const response = await fetch(exportUrl);
+    if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`);
+    const csv = await response.text();
+    const parsed = parseStoreMasterCsv(csv);
+    const validation = this.validationForRows(parsed);
+    if (validation.total === 0) throw new Error("Google Sheet returned no Store Master rows; no data was changed");
+    if (validation.invalidManagerUrls > 0) throw new Error(`Google Sheet validation failed: ${validation.invalidManagerUrls} invalid manager URL(s); no data was changed`);
+    const imported = await this.importCsv(csv, "GOOGLE_SHEET");
+    const connectedOaSync = await syncConnectedLineOaMetadata(this.prisma, false);
+    return { source: { type: "GOOGLE_SHEET", sheetName: process.env.STORE_MASTER_GOOGLE_SHEET_TAB?.trim() || "LINE OA", fetchedAt: new Date().toISOString(), rows: parsed.length }, validation, import: { validation: imported, failed: 0 }, connectedOaSync };
+  }
+
+  private validationForRows(items: ReturnType<typeof parseStoreMasterCsv>) {
+    const duplicate = (values: Array<string | null>) => { const counts = new Map<string, number>(); for (const value of values.filter((v): v is string => Boolean(v))) counts.set(value, (counts.get(value) ?? 0) + 1); return [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count, 0); };
+    const complete = items.filter((item) => item.storeName && item.storeName !== "#REF!" && item.accountName && item.accountName !== "#REF!" && item.externalStoreId && isValidManagerUrl(item.lineManagerUrl)).length;
+    return { total: items.length, complete, incomplete: items.length - complete, missingStoreId: items.filter((item) => !item.externalStoreId).length, invalidManagerUrls: items.filter((item) => Boolean(item.lineManagerUrl) && !isValidManagerUrl(item.lineManagerUrl)).length, duplicateAccountNames: duplicate(items.map((item) => item.normalizedAccountName)), missingProvince: items.filter((item) => !item.province).length, missingRegion: items.filter((item) => !item.region).length, duplicateLineIds: duplicate(items.map((item) => item.lineId)), duplicateExternalStoreIds: duplicate(items.map((item) => item.externalStoreId)) };
   }
 
   async search(query: string, limit = 10) {

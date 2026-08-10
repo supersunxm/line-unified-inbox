@@ -14,6 +14,13 @@ export type MessageTranslationResult = {
   cached: boolean;
 };
 
+export type StoreMasterSyncResult = {
+  source: { type: string; sheetName: string; fetchedAt: string; rows: number };
+  validation: { total: number; complete: number; incomplete: number; invalidManagerUrls: number; duplicateAccountNames: number; duplicateLineIds: number; duplicateExternalStoreIds: number };
+  import: { validation: { total: number }; failed: number };
+  connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
+};
+
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {
   id: string;
@@ -88,6 +95,7 @@ export const api = {
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
   health: () => request<{ status: string }>("/health"),
   searchStoreMaster: (query: string, limit = 10) => request<StoreMasterSuggestion[]>(`/store-master/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  syncStoreMaster: () => request<StoreMasterSyncResult>("/store-master/sync", { method: "POST" }),
   conversations: (params?: Record<string, string | number | boolean | undefined>) => {
     const query = new URLSearchParams();
     if (params) {
