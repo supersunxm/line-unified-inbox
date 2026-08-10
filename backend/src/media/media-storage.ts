@@ -74,7 +74,7 @@ export class GoogleDriveMediaStorage implements MediaStorage {
     const boundary = `media-${Date.now()}`;
     const metadata = JSON.stringify({ name: objectKey, parents: [this.folderId] });
     const multipart = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`), body, Buffer.from(`\r\n--${boundary}--`)]);
-    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,mimeType,size", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` }, body: multipart });
+    const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,mimeType,size", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": `multipart/related; boundary=${boundary}` }, body: multipart });
     if (!response.ok) {
       const detail = await safeGoogleError(response);
       console.warn(`[MediaStorage] Google Drive upload failed (${response.status})${detail ? `: ${detail}` : ""}`);
@@ -110,7 +110,9 @@ export class GoogleDriveMediaStorage implements MediaStorage {
 async function safeGoogleError(response: Response) {
   try {
     const body = await response.json() as { error?: { message?: string }; error_description?: string };
-    return (body.error?.message ?? body.error_description ?? "").slice(0, 240).replace(/[\r\n]+/g, " ") || undefined;
+    const reasons = Array.isArray((body.error as { errors?: Array<{ reason?: string }> } | undefined)?.errors) ? (body.error as { errors: Array<{ reason?: string }> }).errors.map(({ reason }) => reason).filter(Boolean).join(",") : "";
+    const message = (body.error?.message ?? body.error_description ?? "").slice(0, 240).replace(/[\r\n]+/g, " ");
+    return [reasons, message].filter(Boolean).join(": ") || undefined;
   } catch { return undefined; }
 }
 
