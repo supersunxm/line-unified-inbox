@@ -18,3 +18,10 @@
 - Mobile inbox, conversation detail, reply, and pull-to-refresh
 - FCM device registration plus conversation deep links
 - Profile and logout
+
+## Production hardening
+
+- API requests preflight connectivity and expose retryable offline/transport failures without logging user messages, OTPs, or tokens.
+- The app clears secure storage on `SESSION_EXPIRED`, checks the account again when resumed, and accepts FCM open events from foreground/background launches.
+- Inbox uses the existing page/total contract for incremental loading. The conversation model accepts a future `nextCursor`; the current backend detail endpoint returns the latest 50 messages and does not yet publish a cursor.
+- Outbound replies retain a stable idempotency key while sending. Failed sends remain visible and can be retried.

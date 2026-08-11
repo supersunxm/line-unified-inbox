@@ -391,6 +391,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Search and status filtering occur server-side after one complete safe projection because connection status is partly calculated from credential/configuration health. The current population is small and database access remains batched without per-OA queries.
 - The schema is an explicit 17-column allowlist. Secret-bearing fields cannot enter the CSV through generic object serialization; even fields beginning with spreadsheet formula characters are neutralized before RFC quoting.
 - CSV uses UTF-8 BOM and CRLF for Microsoft Excel compatibility, while all timestamps and the filename date use `Asia/Bangkok`. `Content-Disposition` and `X-Export-Row-Count` are CORS-exposed so the cross-origin frontend can preserve the server filename and operationally verify counts.
+# Android production resilience
+
+- Client diagnostics are limited to lifecycle events and HTTP status/code categories; they never include OTPs, bearer tokens, message text, or customer identifiers.
+- Outbound retries reuse their idempotency key so an uncertain network failure cannot intentionally create duplicate LINE replies.
+- Inbox pagination uses the available page/total API; chat exposes a nullable cursor hook pending a backend cursor contract rather than issuing unsupported queries.
+
 # Android client foundation
 
 - The Android MVP is a standalone Flutter project so it cannot affect the existing Next.js web inbox build or deployment.

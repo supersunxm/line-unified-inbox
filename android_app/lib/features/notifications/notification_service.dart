@@ -4,6 +4,11 @@ import '../../core/network/api_client.dart';
 
 typedef ConversationDeepLink = void Function(String conversationId, String? notificationId);
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
 class NotificationService {
   NotificationService(this._api);
   final ApiClient _api;

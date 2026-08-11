@@ -1,5 +1,12 @@
 # AI progress
 
+## Current task: Phase 3A Android Production Hardening
+
+- Added offline-aware API preflight/transport errors, sanitized diagnostics, session-expiry cleanup, and lifecycle refresh on app resume.
+- Added incremental inbox pagination, client-ready message cursor field, and visible sending/failed/retry message states using stable idempotency keys.
+- FCM now registers a background handler and preserves deep-link opening behavior for terminated/background app launches.
+- Validation blocker remains unchanged: Flutter/Dart SDK is not installed and package hosts cannot resolve, so analyze/tests/debug APK cannot run here. XML and git diff checks pass.
+
 ## Current task: Android Mobile MVP Foundation
 
 - Added isolated Flutter project under `android_app/` with feature-based authentication, inbox, chat, profile, notification, and core network/storage layers.
