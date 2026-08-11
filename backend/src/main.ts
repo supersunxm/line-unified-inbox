@@ -6,6 +6,7 @@ import { validateProductionEnvironment } from "./config/production-environment";
 import { hostname } from "node:os";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { MobileApiExceptionFilter } from "./mobile/mobile-api-exception.filter";
 
 async function bootstrap() {
   validateProductionEnvironment();
@@ -25,6 +26,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
+  app.useGlobalFilters(new MobileApiExceptionFilter());
   const port = Number(process.env.PORT || "3001");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port number");
   await app.listen(port, "0.0.0.0");

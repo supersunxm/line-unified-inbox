@@ -6,7 +6,23 @@ import { AuthService } from "./auth.service";
 import { IS_PUBLIC, REQUIRED_ROLES } from "./auth.decorators";
 import { StoreAccessService } from "./store-access.service";
 
-export type AuthUser = { id: string; email: string; displayName: string; role: UserRole; isActive: boolean };
+export type AuthUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  isActive: boolean;
+  status?: string;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeId?: string | null;
+  position?: string | null;
+  memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }>;
+  stores?: Array<{ id: string; name: string; code: string | null }>;
+  profile?: { firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; phone?: string | null };
+  permissions?: { platformRole: UserRole; membershipRoles: string[]; canAccessAllStores: boolean; canReply: boolean };
+};
 export type AuthRequest = Request & { user?: AuthUser };
 
 @Injectable()

@@ -1,5 +1,12 @@
 # AI progress
 
+## Current task: Phase 2D Android Mobile API Contract
+
+- Added public `GET /mobile/config` for minimum app version and maintenance state, plus documented Android OTP/bearer, inbox/reply, and FCM deep-link flows in `backend/docs/MOBILE_API.md`.
+- Extended `/auth/me` additively with profile, assigned stores, membership roles, and derived permissions.
+- Added stable mobile-only error envelopes: `SESSION_EXPIRED` (401), `ACCESS_DENIED` (403), and `RESOURCE_NOT_FOUND` (404); web API error behavior remains unchanged.
+- Verification: Prisma validation and backend build passed; 11 focused mobile/auth contract tests passed.
+
 ## Current task: Phase 2C FCM Push Provider Integration
 
 - Added Firebase Admin-based FCM provider using backend-only `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, and `FCM_PRIVATE_KEY` configuration. Credentials and FCM tokens are never returned or logged.

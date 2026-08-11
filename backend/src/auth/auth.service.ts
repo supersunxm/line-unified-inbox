@@ -10,6 +10,7 @@ export class AuthService {
   constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService) {}
   private tokenHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
   private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; status?: string; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
+    const memberships = user.memberships?.map((membership) => ({ id: membership.id, storeId: membership.storeId, role: membership.role, store: membership.store })) ?? [];
     return {
       id: user.id,
       email: user.email,
@@ -22,7 +23,15 @@ export class AuthService {
       lastName: user.lastName,
       employeeId: user.employeeId,
       position: user.position,
-      memberships: user.memberships?.map((membership) => ({ id: membership.id, role: membership.role, store: membership.store })) ?? [],
+      memberships,
+      stores: memberships.map((membership) => membership.store),
+      profile: { firstName: user.firstName, lastName: user.lastName, employeeId: user.employeeId, position: user.position, phone: user.phone },
+      permissions: {
+        platformRole: user.role,
+        membershipRoles: [...new Set(memberships.map((membership) => membership.role))],
+        canAccessAllStores: user.role === "ADMIN",
+        canReply: user.role === "ADMIN" || memberships.length > 0,
+      },
     };
   }
   private userInclude = { memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { id: true, storeId: true, role: true, store: { select: { id: true, name: true, code: true } } } } } as const;

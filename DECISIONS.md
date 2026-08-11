@@ -391,6 +391,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Search and status filtering occur server-side after one complete safe projection because connection status is partly calculated from credential/configuration health. The current population is small and database access remains batched without per-OA queries.
 - The schema is an explicit 17-column allowlist. Secret-bearing fields cannot enter the CSV through generic object serialization; even fields beginning with spreadsheet formula characters are neutralized before RFC quoting.
 - CSV uses UTF-8 BOM and CRLF for Microsoft Excel compatibility, while all timestamps and the filename date use `Asia/Bangkok`. `Content-Disposition` and `X-Export-Row-Count` are CORS-exposed so the cross-origin frontend can preserve the server filename and operationally verify counts.
+# Android API contract
+
+- `/mobile/config` is public and exposes only app-version and maintenance information. Operational/configuration credentials are excluded.
+- `/auth/me` is extended rather than replaced to retain web compatibility while giving Android a single profile, store, role, and permission bootstrap response.
+- Standardized error codes apply only to `/mobile/*` and `/auth/mobile/*`, avoiding an incompatible error-shape change for existing web clients.
+
 # FCM provider and outbox delivery
 
 - FCM service-account configuration stays in environment variables only. The provider sends a generic notification body plus conversation/message/notification IDs; no customer message content is included.
