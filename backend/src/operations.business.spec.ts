@@ -36,7 +36,7 @@ test("business: sidebar operational count scenario and historical preservation",
   };
 
   const svc = new ConversationsService(fakePrisma, fakeOperations);
-  const controller = new ConversationsController(svc, null as any, null as any, null as any);
+  const controller = new ConversationsController(svc, null as any, null as any, null as any, null as any);
 
   // Before reset: expect 100 notReplied
   currentReset = null;
@@ -51,8 +51,8 @@ test("business: sidebar operational count scenario and historical preservation",
   // Historical fetch: conversation A (15:59) should still be retrievable via controller.get
   const historicalConv = { id: "conv-A", latestMessageAt: new Date("2026-08-05T15:59:00Z"), bmReplyStatus: "NOT_REPLIED" };
   const fakeServiceForController: any = { get: async (id: string) => historicalConv };
-  const controller2 = new ConversationsController(fakeServiceForController, null as any, null as any, null as any);
-  const fetched = await controller2.get("conv-A");
+  const controller2 = new ConversationsController(fakeServiceForController, null as any, null as any, null as any, { assertConversationAccess: async () => undefined } as any);
+  const fetched = await controller2.get("conv-A", { user: { id: "admin" } } as any);
   assert.equal((fetched as any).id, "conv-A", "historical conversation should still be fetchable");
 });
 
@@ -75,7 +75,7 @@ test("business: store-priority-summary consistency across sidebar, dashboard, an
   let currentReset: Date | null = null;
   const fakeOperations: any = { getOperationalConversationFilter: async () => (currentReset ? { latestMessageAt: { gte: currentReset } } : {}) };
   const svc = new ConversationsService(fakePrisma, fakeOperations);
-  const controller = new ConversationsController(svc, null as any, null as any, null as any);
+  const controller = new ConversationsController(svc, null as any, null as any, null as any, null as any);
 
   currentReset = null;
   const before = await svc.getBmReplyStatusSummary();

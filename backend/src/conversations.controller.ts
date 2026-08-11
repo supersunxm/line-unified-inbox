@@ -4,14 +4,17 @@ import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendCo
 import { PrismaService } from "./prisma.service";
 import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
-import { Roles } from "./auth/auth.decorators";
-import { UserRole } from "@prisma/client";
 import type { AuthRequest } from "./auth/auth.guard";
+import { StoreAccessService } from "./auth/store-access.service";
 
 @Controller("conversations")
 export class ConversationsController {
-  constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService) { }
-  @Get() list(@Query() query: ConversationQueryDto) { return this.service.list(query); }
+  constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly storeAccess: StoreAccessService) { }
+  @Get() async list(@Query() query: ConversationQueryDto, @Req() req: AuthRequest) {
+    const storeIds = await this.storeAccess.accessibleStoreIds(req.user!);
+    if (query.storeId) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
+    return this.service.list(query, storeIds);
+  }
   @Get("bm-reply-status-summary") bmReplyStatusSummary() { return this.service.getBmReplyStatusSummary(); }
   @Get("store-priority-summary") async storePrioritySummary() {
     const summary = await this.service.getBmReplyStatusSummary();
@@ -27,29 +30,32 @@ export class ConversationsController {
     };
   }
   @Patch("bm-reply-status/bulk")
-  bulkBmReplyStatus(@Body() dto: BulkUpdateBmReplyStatusDto, @Req() req?: AuthRequest) {
-    const actingAdmin = req?.user?.displayName || req?.user?.email || "ADMIN";
+  async bulkBmReplyStatus(@Body() dto: BulkUpdateBmReplyStatusDto, @Req() req: AuthRequest) {
+    await this.storeAccess.assertStoreAccess(req.user!, dto.storeId);
+    const actingAdmin = req.user?.displayName || req.user?.email || "ADMIN";
     return this.service.bulkUpdateBmReplyStatus(dto, actingAdmin);
   }
-  @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
-  @Patch(":id/status") status(@Param("id") id: string, @Body() dto: UpdateStatusDto) {
+  @Get(":id") async get(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.get(id); }
+  @Patch(":id/status") async status(@Param("id") id: string, @Body() dto: UpdateStatusDto, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
     if (dto.bmReplyStatus) return this.service.updateBmReplyStatus(id, dto.bmReplyStatus);
     return this.service.updateStatus(id, dto.status ?? "FOLLOW_UP");
   }
-  @Patch(":id/bm-reply-status") bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto) {
+  @Patch(":id/bm-reply-status") async bmReplyStatus(@Param("id") id: string, @Body() dto: UpdateBmReplyStatusDto, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
     const targetStatus = dto.status ?? dto.bmReplyStatus ?? "NOT_REPLIED";
     return this.service.updateBmReplyStatus(id, targetStatus);
   }
-  @Patch(":id/priority") priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto) { return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
-  @Get(":id/messages") messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30") { return this.service.messages(id, Number(page), Number(pageSize)); }
-  @Roles(UserRole.ADMIN)
-  @Post(":id/messages") sendMessage(@Param("id") id: string, @Body() dto: SendConversationMessageDto, @Req() req: AuthRequest) {
+  @Patch(":id/priority") async priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
+  @Get(":id/messages") async messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30", @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.messages(id, Number(page), Number(pageSize)); }
+  @Post(":id/messages") async sendMessage(@Param("id") id: string, @Body() dto: SendConversationMessageDto, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
     return this.service.sendMessage(id, dto, req.user!);
   }
-  @Post(":id/reanalyze") async reanalyze(@Param("id") id: string) { await this.classification.analyze(id, true); return this.service.get(id); }
-  @Post(":id/refresh-profile") async refreshProfile(@Param("id") id: string) { const conversation = await this.service.get(id); return this.profiles.refresh(conversation.customerId, conversation.lineOfficialAccountId, true); }
-  @Patch(":id/tags") tags(@Param("id") id: string, @Body() body: { productModelIds?: string[]; topicIds?: string[] }) { return this.service.updateManualTags(id, body.productModelIds ?? [], body.topicIds ?? []); }
-  @Get(":id/notes") notes(@Param("id") id: string) { return this.prisma.internalNote.findMany({ where: { conversationId: id }, orderBy: { createdAt: "desc" } }); }
-  @Post(":id/notes") addNote(@Param("id") id: string, @Body() dto: CreateNoteDto) { return this.service.addNote(id, dto); }
-  @Get(":id/activity") activity(@Param("id") id: string) { return this.prisma.activityHistory.findMany({ where: { conversationId: id }, orderBy: { createdAt: "desc" } }); }
+  @Post(":id/reanalyze") async reanalyze(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); await this.classification.analyze(id, true); return this.service.get(id); }
+  @Post(":id/refresh-profile") async refreshProfile(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); const conversation = await this.service.get(id); return this.profiles.refresh(conversation.customerId, conversation.lineOfficialAccountId, true); }
+  @Patch(":id/tags") async tags(@Param("id") id: string, @Body() body: { productModelIds?: string[]; topicIds?: string[] }, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.updateManualTags(id, body.productModelIds ?? [], body.topicIds ?? []); }
+  @Get(":id/notes") async notes(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.prisma.internalNote.findMany({ where: { conversationId: id }, orderBy: { createdAt: "desc" } }); }
+  @Post(":id/notes") async addNote(@Param("id") id: string, @Body() dto: CreateNoteDto, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.addNote(id, dto); }
+  @Get(":id/activity") async activity(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.prisma.activityHistory.findMany({ where: { conversationId: id }, orderBy: { createdAt: "desc" } }); }
 }

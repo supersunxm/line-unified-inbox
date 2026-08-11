@@ -31,7 +31,8 @@ import { ConversationsController } from "./conversations.controller";
 test("historical conversation fetch returns conversation regardless of reset", async () => {
   const expected = { id: "c-old", latestMessageAt: new Date("2020-01-01T00:00:00Z") };
   const fakeService: any = { get: async (id: string) => expected };
-  const controller = new ConversationsController(fakeService, null as any, null as any, null as any);
-  const got = await controller.get("c-old");
+  const storeAccess = { assertConversationAccess: async () => undefined } as any;
+  const controller = new ConversationsController(fakeService, null as any, null as any, null as any, storeAccess);
+  const got = await controller.get("c-old", { user: { id: "admin" } } as any);
   assert.deepEqual(got, expected);
 });

@@ -52,13 +52,16 @@ export class ConversationsService {
     return { ...safe, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
-  async list(query: ConversationQueryDto) {
+  async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null) {
     const search = query.search?.trim();
+    const storeFilter = accessibleStoreIds === null
+      ? query.storeId
+      : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
     const where: Prisma.ConversationWhereInput = {
       store: { archivedAt: null },
       ...resetFilter,
-      storeId: query.storeId,
+      storeId: storeFilter,
       lineOfficialAccountId: query.lineOaId,
       followUpStatus: query.followUpStatus,
       bmReplyStatus: query.bmReplyStatus,
