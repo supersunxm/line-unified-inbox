@@ -1,5 +1,12 @@
 # AI progress
 
+## Current task: Phase 2C FCM Push Provider Integration
+
+- Added Firebase Admin-based FCM provider using backend-only `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, and `FCM_PRIVATE_KEY` configuration. Credentials and FCM tokens are never returned or logged.
+- Added a background notification-outbox worker: it claims `PENDING` rows, dispatches via the existing dispatcher, records `SENT`/`FAILED`, and retries failed rows up to three total attempts.
+- FCM invalid registration-token responses deactivate the affected encrypted `DeviceToken`, preventing future delivery attempts.
+- Verification: Prisma validation and backend build passed; 17 focused FCM/notification/webhook tests passed.
+
 ## Current task: Phase 2B Mobile Conversation API Layer
 
 - Added mobile-only conversation list, detail, and reply APIs. Store and LINE OA ownership are resolved from the authenticated user's database membership and the target conversation; clients cannot supply either identifier.

@@ -15,8 +15,8 @@ export interface PushNotificationProvider {
 export class NotificationDispatcher {
   constructor(private readonly prisma: PrismaService) {}
 
-  async send(notification: DispatchableNotification, provider: PushNotificationProvider) {
-    await this.prisma.pushNotification.update({ where: { id: notification.id }, data: { status: PushNotificationStatus.PROCESSING, attemptCount: { increment: 1 }, lastError: null } });
+  async send(notification: DispatchableNotification, provider: PushNotificationProvider, alreadyClaimed = false) {
+    if (!alreadyClaimed) await this.prisma.pushNotification.update({ where: { id: notification.id }, data: { status: PushNotificationStatus.PROCESSING, attemptCount: { increment: 1 }, lastError: null } });
     try {
       await provider.send(notification);
       await this.prisma.pushNotification.update({ where: { id: notification.id }, data: { status: PushNotificationStatus.SENT, sentAt: new Date() } });
