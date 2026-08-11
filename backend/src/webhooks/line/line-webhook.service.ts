@@ -9,6 +9,7 @@ import { ClassificationService } from "../../classification/classification.servi
 import { LineProfileService } from "../../line-profile.service";
 import { LineImageService } from "../../media/line-image.service";
 import { getFriendAttributionHashSecret, hashLineUserId } from "../../friend-source-links/friend-attribution.config";
+import { NotificationEnqueueService } from "../../notifications/notification-enqueue.service";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -26,7 +27,7 @@ export type LineCredentialResolution = {
 @Injectable()
 export class LineWebhookService {
   private readonly logger = new Logger(LineWebhookService.name);
-  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService, private readonly notifications?: NotificationEnqueueService) {}
 
   async accept(payload: LineWebhookBody, resolvedOaId: string) {
     const results: boolean[] = [];
@@ -191,6 +192,7 @@ export class LineWebhookService {
       }
 
       const storedMessage = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: message.id, direction: MessageDirection.INBOUND, messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, originalText: messagePlaceholder(message), sentAt, rawPayload, fileName, latitude, longitude } });
+      if (this.notifications) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id });
       const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
       if (shouldResetBm && prevBmStatus) {

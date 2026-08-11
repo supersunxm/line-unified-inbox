@@ -8,6 +8,27 @@ import { LineWebhookConfig } from "./line-webhook.config";
 import { LineWebhookService } from "./line-webhook.service";
 import { LineImageService } from "../../media/line-image.service";
 import { Prisma } from "@prisma/client";
+import { NotificationEnqueueService } from "../../notifications/notification-enqueue.service";
+
+void test("inbound customer messages enqueue notifications only after the message is persisted", async () => {
+  const sequence: string[] = [];
+  const transactionClient = {
+    conversation: { create: () => Promise.resolve({ id: "conversation-1", storeId: "store-1", followUpStatus: "FOLLOW_UP" }) },
+    message: { create: () => { sequence.push("message"); return Promise.resolve({ id: "message-1" }); } },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "customer-1" }) },
+    conversation: { findFirst: () => Promise.resolve(null) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+  const notifications = { enqueueInboundMessage: async (_tx: unknown, input: { storeId: string; conversationId: string; messageId: string }) => { sequence.push("notification"); assert.deepEqual(input, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1" }); } } as unknown as NotificationEnqueueService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, { analyze: () => Promise.resolve({}) } as ClassificationService, { refresh: () => Promise.resolve({}) } as unknown as LineProfileService, {} as LineImageService, notifications);
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-notify", timestamp: Date.now(), source: { type: "user", userId: "line-user-1" }, message: { type: "text", id: "line-message-1", text: "hello" } }] }, "oa-1");
+  assert.deepEqual(sequence, ["message", "notification"]);
+});
 
 void test("profile fetch rejection cannot block inbound customer text storage", async () => {
   let storedText: string | undefined;
@@ -177,4 +198,3 @@ void test("inbound message on NOT_REPLIED conversation does NOT log redundant BM
   const bmChangeActivity = activityEntries.find((a) => a.actionType === ActivityActionType.BM_REPLY_STATUS_CHANGED);
   assert.equal(bmChangeActivity, undefined);
 });
-

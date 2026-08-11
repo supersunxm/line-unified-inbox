@@ -1,12 +1,13 @@
-import { HttpException, HttpStatus, Injectable, UnauthorizedException } from "@nestjs/common";
-import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { MobileOtpPurpose, Prisma } from "@prisma/client";
 
 type OtpClient = Pick<Prisma.TransactionClient, "otpChallenge">;
+export const OTP_CODE_GENERATOR = Symbol("OTP_CODE_GENERATOR");
 
 @Injectable()
 export class OtpChallengeService {
-  constructor(private readonly codeGenerator: () => string = () => randomInt(0, 1_000_000).toString().padStart(6, "0")) {}
+  constructor(@Inject(OTP_CODE_GENERATOR) private readonly codeGenerator: () => string) {}
 
   private hash(id: string, code: string) {
     const key = process.env.OTP_HASH_SECRET || process.env.LINE_CREDENTIAL_ENCRYPTION_KEY || "development-otp-hash-secret";

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { randomInt } from "node:crypto";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
 import { AuthService } from "./auth.service";
@@ -14,6 +15,7 @@ import { RegistrationService } from "./registration.service";
 import { RegistrationController } from "./registration.controller";
 import { AdminRegistrationController } from "./admin-registration.controller";
 import { MobileAuthService } from "./mobile-auth.service";
+import { OTP_CODE_GENERATOR } from "./otp-challenge.service";
 
-@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
+@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
 export class AuthModule {}

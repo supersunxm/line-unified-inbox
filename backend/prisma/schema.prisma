@@ -186,7 +186,8 @@ enum DevicePlatform {
 }
 
 enum PushNotificationStatus {
-  QUEUED
+  PENDING
+  PROCESSING
   SENT
   FAILED
 }
@@ -382,7 +383,9 @@ model OtpChallenge {
 model DeviceToken {
   id           String         @id @default(uuid())
   userId       String
+  // The token value is encrypted before persistence. tokenHash supports secure lookup and deduplication.
   token        String         @unique
+  tokenHash    String?        @unique
   platform     DevicePlatform
   appVersion   String?
   deviceIdHash String?
@@ -403,7 +406,7 @@ model PushNotification {
   messageId      String
   type           String
   payload        Json
-  status         PushNotificationStatus @default(QUEUED)
+  status         PushNotificationStatus @default(PENDING)
   attemptCount   Int                    @default(0)
   lastError      String?
   sentAt         DateTime?
@@ -413,6 +416,7 @@ model PushNotification {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, messageId])
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([conversationId, createdAt])

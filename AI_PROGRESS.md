@@ -1,5 +1,12 @@
 # AI progress
 
+## Current task: Phase 2A Mobile Push Notification Backend Foundation
+
+- Added authenticated device-token registration, unregistration, and last-seen APIs. New registrations encrypt push tokens and retain only a SHA-256 lookup hash for token matching/deduplication.
+- Added `PENDING → PROCESSING → SENT | FAILED` notification-outbox lifecycle, a future-provider `NotificationDispatcher`, and transactional notification enqueueing after inbound LINE message persistence.
+- Eligibility is database-resolved: only active users with active membership in the conversation store and at least one active device token receive an outbox record. The `(userId, messageId)` uniqueness constraint prevents webhook-retry duplicates.
+- Verification: Prisma validation and backend build passed; 18 focused notification/webhook/auth tests passed. Application module initialization and all new routes registered successfully; local health was blocked because the Docker/PostgreSQL daemon is not running.
+
 ## Current task: Chat Detail Message Viewport Height Fix (/chats)
 
 - **Chat Detail Vertical Hierarchy Restructured (`frontend/src/app/page.tsx`)**:
