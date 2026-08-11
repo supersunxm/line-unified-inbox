@@ -40,9 +40,11 @@ void test("STORE_MANAGER and STAFF can access only their active store", async ()
   await assert.rejects(() => staffService.assertConversationAccess(staff, "other"), ForbiddenException);
 });
 
-void test("inactive users, suspended memberships, and inactive stores are forbidden", async () => {
+void test("inactive users, pending or rejected memberships, and inactive stores are forbidden", async () => {
   await assert.rejects(() => serviceFor({ isActive: false, status: "ACTIVE", memberships: [] }).accessibleStoreIds(manager), ForbiddenException);
+  await assert.rejects(() => serviceFor({ isActive: true, status: "ACTIVE", memberships: [{ storeId: "store-a", status: "PENDING_APPROVAL", store: { isActive: true, archivedAt: null } }] }).accessibleStoreIds(manager), ForbiddenException);
   await assert.rejects(() => serviceFor({ isActive: true, status: "ACTIVE", memberships: [{ storeId: "store-a", status: "SUSPENDED", store: { isActive: true, archivedAt: null } }] }).accessibleStoreIds(manager), ForbiddenException);
+  await assert.rejects(() => serviceFor({ isActive: true, status: "ACTIVE", memberships: [{ storeId: "store-a", status: "REJECTED", store: { isActive: true, archivedAt: null } }] }).accessibleStoreIds(manager), ForbiddenException);
   await assert.rejects(() => serviceFor({ isActive: true, status: "ACTIVE", memberships: [{ storeId: "store-a", status: "ACTIVE", store: { isActive: false, archivedAt: null } }] }).accessibleStoreIds(manager), ForbiddenException);
 });
 

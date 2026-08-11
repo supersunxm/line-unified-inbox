@@ -9,6 +9,10 @@ import { EmailModule } from "../email/email.module";
 import { DevAdminService } from "./dev-admin.service";
 import { PilotAdminBootstrapService } from "./pilot-admin-bootstrap.service";
 import { StoreAccessService } from "./store-access.service";
+import { OtpChallengeService } from "./otp-challenge.service";
+import { RegistrationService } from "./registration.service";
+import { RegistrationController } from "./registration.controller";
+import { AdminRegistrationController } from "./admin-registration.controller";
 
-@Module({ imports: [EmailModule], controllers: [AuthController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
+@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, OtpChallengeService, RegistrationService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
 export class AuthModule {}
