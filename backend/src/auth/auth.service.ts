@@ -12,7 +12,7 @@ export class AuthService {
   async login(email: string, password: string) {
     const identifier = email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({ where: { OR: [{ normalizedEmail: identifier }, { username: identifier }] } });
-    if (!user || !user.isActive || !(await this.passwords.verify(password, user.passwordHash))) { this.logger.warn(JSON.stringify({ event: "login_failure", reason: "invalid_credentials" })); throw new UnauthorizedException("Invalid email or password"); }
+    if (!user || !user.isActive || !user.passwordHash || !(await this.passwords.verify(password, user.passwordHash))) { this.logger.warn(JSON.stringify({ event: "login_failure", reason: "invalid_credentials" })); throw new UnauthorizedException("Invalid email or password"); }
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
     await this.prisma.$transaction([this.prisma.session.create({ data: { tokenHash: this.tokenHash(token), userId: user.id, expiresAt } }), this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })]);

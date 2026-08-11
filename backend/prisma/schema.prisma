@@ -149,6 +149,48 @@ enum UserRole {
   VIEWER
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum StoreMembershipRole {
+  STORE_MANAGER
+  STAFF
+}
+
+enum MembershipStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum RegistrationRequestStatus {
+  OTP_PENDING
+  PENDING_APPROVAL
+  COMPLETED
+  REJECTED
+  EXPIRED
+}
+
+enum MobileOtpPurpose {
+  BM_STAFF_REGISTRATION
+  BM_STAFF_LOGIN
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+enum PushNotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
 enum TranslationFeedbackRating {
   HELPFUL
   INCORRECT
@@ -179,21 +221,37 @@ enum OtpPurpose {
 }
 
 model User {
-  id              String    @id @default(uuid())
-  username        String?   @unique
-  email           String    @unique
-  normalizedEmail String    @unique
-  displayName     String
-  passwordHash    String
-  role            UserRole  @default(VIEWER)
-  isActive        Boolean   @default(true)
-  emailVerifiedAt DateTime?
-  lastLoginAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  sessions        Session[]
-  translationFeedback MessageTranslationFeedback[]
-  operationalSessions OperationalSession[]
+  id                   String                       @id @default(uuid())
+  username             String?                      @unique
+  email                String                       @unique
+  normalizedEmail      String                       @unique
+  displayName          String
+  passwordHash         String?
+  role                 UserRole                     @default(VIEWER)
+  status               UserStatus                   @default(ACTIVE)
+  isActive             Boolean                      @default(true)
+  phone                String?                      @unique
+  firstName            String?
+  lastName             String?
+  employeeId           String?
+  position             String?
+  emailVerifiedAt      DateTime?
+  phoneVerifiedAt      DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  sessions             Session[]
+  memberships          UserStoreMembership[]        @relation("UserMemberships")
+  approvedMemberships  UserStoreMembership[]        @relation("MembershipApprover")
+  registrationRequests RegistrationRequest[]        @relation("CreatedRegistrationUser")
+  otpChallenges        OtpChallenge[]
+  deviceTokens         DeviceToken[]
+  pushNotifications    PushNotification[]
+  translationFeedback  MessageTranslationFeedback[]
+  operationalSessions  OperationalSession[]
+
+  @@index([status])
+  @@index([employeeId])
 }
 
 model AdminRegistrationOtp {
@@ -241,6 +299,120 @@ model Session {
   @@index([expiresAt])
 }
 
+model UserStoreMembership {
+  id           String              @id @default(uuid())
+  userId       String
+  storeId      String
+  role         StoreMembershipRole
+  status       MembershipStatus    @default(PENDING_APPROVAL)
+  isPrimary    Boolean             @default(true)
+  approvedAt   DateTime?
+  approvedById String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user       User  @relation("UserMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  store      Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  approvedBy User? @relation("MembershipApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, storeId])
+  @@index([storeId, status])
+  @@index([userId, status])
+}
+
+model RegistrationRequest {
+  id              String                    @id @default(uuid())
+  storeId         String
+  email           String
+  normalizedEmail String
+  phone           String
+  firstName       String
+  lastName        String
+  employeeId      String
+  position        String
+  requestedRole   StoreMembershipRole       @default(STAFF)
+  status          RegistrationRequestStatus @default(OTP_PENDING)
+  otpVerifiedAt   DateTime?
+  expiresAt       DateTime
+  createdUserId   String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  createdUser   User?          @relation("CreatedRegistrationUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+  otpChallenges OtpChallenge[]
+
+  @@index([phone, status])
+  @@index([normalizedEmail, status])
+  @@index([employeeId, storeId])
+  @@index([expiresAt])
+}
+
+model OtpChallenge {
+  id                String           @id @default(uuid())
+  registrationId    String?
+  userId            String?
+  normalizedPhone   String
+  purpose           MobileOtpPurpose
+  codeHash          String
+  expiresAt         DateTime
+  attempts          Int              @default(0)
+  maxAttempts       Int              @default(5)
+  resendAvailableAt DateTime
+  verifiedAt        DateTime?
+  consumedAt        DateTime?
+  createdAt         DateTime         @default(now())
+
+  registration RegistrationRequest? @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  user         User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedPhone, purpose])
+  @@index([registrationId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
+model DeviceToken {
+  id           String         @id @default(uuid())
+  userId       String
+  token        String         @unique
+  platform     DevicePlatform
+  appVersion   String?
+  deviceIdHash String?
+  isActive     Boolean        @default(true)
+  lastSeenAt   DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+}
+
+model PushNotification {
+  id             String                 @id @default(uuid())
+  userId         String
+  conversationId String
+  messageId      String
+  type           String
+  payload        Json
+  status         PushNotificationStatus @default(QUEUED)
+  attemptCount   Int                    @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime               @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([messageId])
+}
+
 model OperationalError {
   id        String   @id @default(uuid())
   feature   String
@@ -280,6 +452,8 @@ model Store {
   lineOfficialAccounts LineOfficialAccount[]
   conversations        Conversation[]
   friendSourceLinks    FriendSourceLink[]
+  memberships          UserStoreMembership[]
+  registrationRequests RegistrationRequest[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -324,26 +498,26 @@ enum BackfillJobStatus {
 }
 
 model LineOfficialAccount {
-  id                          String                   @id @default(uuid())
-  webhookKey                  String                   @unique
+  id                          String                             @id @default(uuid())
+  webhookKey                  String                             @unique
   name                        String
-  basicId                     String?                  @unique
-  channelId                   String?                  @unique
-  destinationId               String?                  @unique
+  basicId                     String?                            @unique
+  channelId                   String?                            @unique
+  destinationId               String?                            @unique
   encryptedChannelSecret      String?
   encryptedChannelAccessToken String?
   lineChatWorkspaceUrl        String?
-  connectionStatus            LineOaConnectionStatus   @default(NOT_CONFIGURED)
+  connectionStatus            LineOaConnectionStatus             @default(NOT_CONFIGURED)
   lastWebhookReceivedAt       DateTime?
   lastConnectionTestAt        DateTime?
   lastConnectionError         String?
   storeId                     String
-  isActive                    Boolean                  @default(true)
+  isActive                    Boolean                            @default(true)
   archivedAt                  DateTime?
-  createdAt                   DateTime                 @default(now())
-  updatedAt                   DateTime                 @updatedAt
+  createdAt                   DateTime                           @default(now())
+  updatedAt                   DateTime                           @updatedAt
   lastBackfillReconciledAt    DateTime?
-  store                       Store                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store                       Store                              @relation(fields: [storeId], references: [id], onDelete: Restrict)
   conversations               Conversation[]
   webhookEvents               WebhookEvent[]
   pilotChecklist              PilotChecklistItem[]
@@ -359,28 +533,28 @@ model LineOfficialAccount {
 }
 
 model LineOaBackfillJob {
-  id              String            @id @default(uuid())
-  lineOaId        String
-  workerId        String?
-  status          BackfillJobStatus @default(QUEUED)
-  dateFrom        String
-  dateTo          String
-  totalDays       Int               @default(0)
-  requested       Int               @default(0)
-  succeeded       Int               @default(0)
-  skipped         Int               @default(0)
-  unready         Int               @default(0)
-  failed          Int               @default(0)
-  attempts        Int               @default(0)
-  maxAttempts     Int               @default(3)
-  errorMessage    String?
-  claimedAt       DateTime?
-  heartbeatAt     DateTime?
-  nextAttemptAt   DateTime?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id            String            @id @default(uuid())
+  lineOaId      String
+  workerId      String?
+  status        BackfillJobStatus @default(QUEUED)
+  dateFrom      String
+  dateTo        String
+  totalDays     Int               @default(0)
+  requested     Int               @default(0)
+  succeeded     Int               @default(0)
+  skipped       Int               @default(0)
+  unready       Int               @default(0)
+  failed        Int               @default(0)
+  attempts      Int               @default(0)
+  maxAttempts   Int               @default(3)
+  errorMessage  String?
+  claimedAt     DateTime?
+  heartbeatAt   DateTime?
+  nextAttemptAt DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   lineOfficialAccount LineOfficialAccount @relation(fields: [lineOaId], references: [id], onDelete: Cascade)
 
@@ -405,17 +579,17 @@ model PilotChecklistItem {
 }
 
 model Customer {
-  id                 String             @id @default(uuid())
-  lineUserId         String?            @unique
+  id                 String                @id @default(uuid())
+  lineUserId         String?               @unique
   displayName        String
   pictureUrl         String?
   statusMessage      String?
   preferredLanguage  String?
   profileFetchedAt   DateTime?
-  profileFetchStatus ProfileFetchStatus @default(NOT_REQUESTED)
+  profileFetchStatus ProfileFetchStatus    @default(NOT_REQUESTED)
   profileFetchError  String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
   conversations      Conversation[]
   nameHistory        CustomerNameHistory[]
   events             CustomerEvent[]
@@ -444,8 +618,8 @@ model CustomerEvent {
   metadata      Json?
   createdAt     DateTime            @default(now())
 
-  customer      Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  signals       CustomerSignal[]
+  customer Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  signals  CustomerSignal[]
 
   @@index([customerId, createdAt])
   @@index([type, createdAt])
@@ -496,7 +670,7 @@ model CustomerNameHistory {
   source      String
   capturedAt  DateTime @default(now())
 
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, capturedAt])
 }
@@ -510,7 +684,7 @@ model Conversation {
   priority              Priority              @default(NORMAL)
   prioritySource        String                @default("SYSTEM")
   followUpStatus        FollowUpStatus        @default(FOLLOW_UP)
-  bmReplyStatus         BmReplyStatus          @default(NOT_REPLIED)
+  bmReplyStatus         BmReplyStatus         @default(NOT_REPLIED)
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
   createdAt             DateTime              @default(now())
@@ -523,6 +697,7 @@ model Conversation {
   topics                ConversationTopic[]
   notes                 InternalNote[]
   activityHistory       ActivityHistory[]
+  pushNotifications     PushNotification[]
 
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -540,25 +715,26 @@ model Conversation {
 }
 
 model Message {
-  id                String           @id @default(uuid())
-  conversationId    String
-  externalMessageId String?          @unique
-  direction         MessageDirection
-  messageType       MessageType      @default(TEXT)
-  originalText      String
-  originalLanguage  String?
-  translatedThai    String?
-  translatedEnglish String?
-  translatedChinese String?
-  rawPayload        Json?
-  fileName          String?
-  latitude          Float?
-  longitude         Float?
-  sentAt            DateTime
-  createdAt         DateTime         @default(now())
-  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  media             MessageMedia?
+  id                  String                       @id @default(uuid())
+  conversationId      String
+  externalMessageId   String?                      @unique
+  direction           MessageDirection
+  messageType         MessageType                  @default(TEXT)
+  originalText        String
+  originalLanguage    String?
+  translatedThai      String?
+  translatedEnglish   String?
+  translatedChinese   String?
+  rawPayload          Json?
+  fileName            String?
+  latitude            Float?
+  longitude           Float?
+  sentAt              DateTime
+  createdAt           DateTime                     @default(now())
+  conversation        Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  media               MessageMedia?
   translationFeedback MessageTranslationFeedback[]
+  pushNotifications   PushNotification[]
 
   @@index([conversationId, sentAt])
 }
@@ -668,15 +844,15 @@ model ProductModel {
 }
 
 model ProductAlias {
-  id              String       @id @default(uuid())
+  id              String             @id @default(uuid())
   productModelId  String
   alias           String
-  normalizedAlias String       @unique
+  normalizedAlias String             @unique
   language        String?
-  isActive        Boolean      @default(true)
-  priority        Int          @default(0)
+  isActive        Boolean            @default(true)
+  priority        Int                @default(0)
   source          ProductAliasSource @default(MANUAL)
-  productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Cascade)
+  productModel    ProductModel       @relation(fields: [productModelId], references: [id], onDelete: Cascade)
 
   @@index([productModelId, isActive])
 }
@@ -734,17 +910,17 @@ model InternalNote {
 }
 
 model ActivityHistory {
-  id             String             @id @default(uuid())
-  conversationId String
-  actionType     ActivityActionType
-  previousStatus FollowUpStatus?
-  newStatus      FollowUpStatus?
+  id                    String             @id @default(uuid())
+  conversationId        String
+  actionType            ActivityActionType
+  previousStatus        FollowUpStatus?
+  newStatus             FollowUpStatus?
   previousBmReplyStatus BmReplyStatus?
   newBmReplyStatus      BmReplyStatus?
-  description    String?
-  createdByName  String?
-  createdAt      DateTime           @default(now())
-  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  description           String?
+  createdByName         String?
+  createdAt             DateTime           @default(now())
+  conversation          Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@index([createdAt])
