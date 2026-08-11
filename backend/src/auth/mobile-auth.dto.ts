@@ -1,4 +1,9 @@
-import { IsString, Length } from "class-validator";
+import { IsEmail, IsString, Length, MinLength } from "class-validator";
+
+export class MobilePasswordLoginDto {
+  @IsEmail() email!: string;
+  @IsString() @MinLength(1) password!: string;
+}
 
 export class MobileSendOtpDto {
   @IsString() phone!: string;

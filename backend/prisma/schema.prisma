@@ -151,6 +151,7 @@ enum UserRole {
 
 enum UserStatus {
   ACTIVE
+  PENDING_APPROVAL
   SUSPENDED
   REJECTED
 }
@@ -170,6 +171,7 @@ enum MembershipStatus {
 enum RegistrationRequestStatus {
   OTP_PENDING
   PENDING_APPROVAL
+  APPROVED
   COMPLETED
   REJECTED
   EXPIRED
@@ -255,6 +257,8 @@ model User {
   pushNotifications    PushNotification[]
   translationFeedback  MessageTranslationFeedback[]
   operationalSessions  OperationalSession[]
+  auditLogsAsActor     AuditLog[]                 @relation("AuditActor")
+  auditLogsAsTarget    AuditLog[]                 @relation("AuditTargetUser")
 
   @@index([status])
   @@index([employeeId])
@@ -332,11 +336,12 @@ model RegistrationRequest {
   storeId         String
   email           String
   normalizedEmail String
-  phone           String
-  firstName       String
-  lastName        String
-  employeeId      String
-  position        String
+  passwordHash    String?
+  phone           String?
+  firstName       String?
+  lastName        String?
+  employeeId      String?
+  position        String?
   requestedRole   StoreMembershipRole       @default(STAFF)
   status          RegistrationRequestStatus @default(OTP_PENDING)
   otpVerifiedAt   DateTime?
@@ -347,12 +352,45 @@ model RegistrationRequest {
 
   store         Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
   createdUser   User?          @relation("CreatedRegistrationUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+  auditLogs     AuditLog[]
   otpChallenges OtpChallenge[]
 
   @@index([phone, status])
   @@index([normalizedEmail, status])
   @@index([employeeId, storeId])
   @@index([expiresAt])
+}
+
+model AuthRateLimitBucket {
+  id          String   @id @default(uuid())
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart])
+  @@index([updatedAt])
+}
+
+model AuditLog {
+  id                     String   @id @default(uuid())
+  actorUserId            String?
+  action                 String
+  targetUserId           String?
+  targetRegistrationId   String?
+  metadata               Json?
+  ipAddress              String?
+  userAgent              String?
+  createdAt              DateTime @default(now())
+
+  actorUser              User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser             User? @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetRegistration     RegistrationRequest? @relation(fields: [targetRegistrationId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
 }
 
 model OtpChallenge {

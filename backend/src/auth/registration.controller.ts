@@ -1,12 +1,12 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, Req } from "@nestjs/common";
+import { Request } from "express";
 import { Public } from "./auth.decorators";
-import { CreateRegistrationRequestDto, VerifyRegistrationOtpDto } from "./registration.dto";
+import { CreateRegistrationRequestDto } from "./registration.dto";
 import { RegistrationService } from "./registration.service";
 
 @Controller("registration")
 export class RegistrationController {
   constructor(private readonly registration: RegistrationService) {}
-  @Public() @Get("stores") stores() { return this.registration.stores(); }
-  @Public() @Post("request") request(@Body() dto: CreateRegistrationRequestDto) { return this.registration.request(dto); }
-  @Public() @Post(":id/verify-otp") verify(@Param("id") id: string, @Body() dto: VerifyRegistrationOtpDto) { return this.registration.verify(id, dto.otp); }
+  @Public() @Get("stores") async stores() { return { stores: await this.registration.stores() }; }
+  @Public() @Post("request") request(@Body() dto: CreateRegistrationRequestDto, @Req() request: Request) { return this.registration.request(dto, request.ip); }
 }

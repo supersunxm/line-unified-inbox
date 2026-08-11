@@ -6,7 +6,8 @@ import { Public } from "./auth.decorators";
 import { AuthRequest } from "./auth.guard";
 import { SetupService } from "./setup.service";
 import { sessionCookieOptions } from "./session-cookie";
-import { MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
+import { MobilePasswordLoginDto, MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
+import { SessionType } from "@prisma/client";
 import { MobileAuthService } from "./mobile-auth.service";
 
 class LoginDto { @IsString() @IsNotEmpty() identifier!: string; @IsString() @IsNotEmpty() password!: string; }
@@ -24,16 +25,20 @@ export class AuthController {
     const result = await this.setup.verify(dto.challengeId, dto.email, dto.displayName, dto.password, dto.otp);
     response.cookie("oppo_session", result.token, { ...sessionCookieOptions(), expires: result.expiresAt }); return result.user;
   }
-  @Public() @Post("login") async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.auth.login(dto.identifier, dto.password);
+  @Public() @Post("login") async login(@Body() dto: LoginDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const result = await this.auth.login(dto.identifier, dto.password, SessionType.WEB, request.ip, request.get("user-agent"));
     response.cookie("oppo_session", result.token, { ...sessionCookieOptions(), expires: result.expiresAt });
     return result.user;
+  }
+  @Public() @Post("mobile/login") async mobileLogin(@Body() dto: MobilePasswordLoginDto, @Req() request: Request) {
+    const result = await this.auth.login(dto.email, dto.password, SessionType.MOBILE, request.ip, request.get("user-agent"));
+    return { accessToken: result.token, expiresAt: result.expiresAt };
   }
   @Public() @Post("mobile/send-otp") mobileSendOtp(@Body() dto: MobileSendOtpDto) { return this.mobile.sendOtp(dto.phone); }
   @Public() @Post("mobile/verify-otp") mobileVerifyOtp(@Body() dto: MobileVerifyOtpDto) { return this.mobile.verifyOtp(dto.challengeId, dto.otp); }
   @Post("logout") async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const token = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
-    await this.auth.logout(token); response.clearCookie("oppo_session", sessionCookieOptions()); return { success: true };
+    await this.auth.logout(token, request.ip, request.get("user-agent")); response.clearCookie("oppo_session", sessionCookieOptions()); return { success: true };
   }
   @Get("me") me(@Req() request: AuthRequest) { return request.user; }
   @Public() @Post("mobile/logout") async mobileLogout(@Req() request: Request) {

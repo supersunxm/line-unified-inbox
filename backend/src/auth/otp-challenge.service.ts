@@ -33,7 +33,7 @@ export class OtpChallengeService {
     if (otpDebugEnabled) {
       console.log("[OTP_DEBUG]", { phone: input.normalizedPhone, challengeId: savedChallenge.id, otp: code, expiresAt: savedChallenge.expiresAt.toISOString(), purpose: input.purpose });
     }
-    return savedChallenge;
+    return { challenge: savedChallenge, code };
   }
 
   async verify(client: OtpClient, challenge: { id: string; codeHash: string; expiresAt: Date; attempts: number; maxAttempts: number; consumedAt: Date | null }, code: string) {

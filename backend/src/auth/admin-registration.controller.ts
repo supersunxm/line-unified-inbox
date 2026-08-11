@@ -7,7 +7,7 @@ import { RegistrationService } from "./registration.service";
 @Roles("ADMIN")
 export class AdminRegistrationController {
   constructor(private readonly registration: RegistrationService) {}
-  @Get("pending") pending() { return this.registration.pending(); }
-  @Patch(":id/approve") approve(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.approve(id, request.user!.id); }
-  @Patch(":id/reject") reject(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reject(id, request.user!.id); }
+  @Get("pending") async pending() { return { registrations: await this.registration.pending() }; }
+  @Patch(":id/approve") approve(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.approve(id, request.user!.id, request.ip, request.get("user-agent")); }
+  @Patch(":id/reject") reject(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reject(id, request.user!.id, request.ip, request.get("user-agent")); }
 }
