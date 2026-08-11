@@ -21,6 +21,15 @@ export type StoreMasterSyncResult = {
   connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
 };
 
+export type PendingRegistration = {
+  id: string;
+  name: string;
+  email: string;
+  store: { id: string; name: string; code: string | null };
+  role: "STAFF" | "STORE_MANAGER";
+  createdAt: string;
+};
+
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {
   id: string;
@@ -88,6 +97,9 @@ export const api = {
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
   me: () => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/me"),
+  getPendingRegistrations: () => request<{ registrations: PendingRegistration[] }>("/admin/registrations/pending"),
+  approveRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
+  rejectRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
   systemStatus: () => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status"),
   operationalErrors: () => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors"),
   resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
