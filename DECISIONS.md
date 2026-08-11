@@ -391,6 +391,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Search and status filtering occur server-side after one complete safe projection because connection status is partly calculated from credential/configuration health. The current population is small and database access remains batched without per-OA queries.
 - The schema is an explicit 17-column allowlist. Secret-bearing fields cannot enter the CSV through generic object serialization; even fields beginning with spreadsheet formula characters are neutralized before RFC quoting.
 - CSV uses UTF-8 BOM and CRLF for Microsoft Excel compatibility, while all timestamps and the filename date use `Asia/Bangkok`. `Content-Disposition` and `X-Export-Row-Count` are CORS-exposed so the cross-origin frontend can preserve the server filename and operationally verify counts.
+# Android client foundation
+
+- The Android MVP is a standalone Flutter project so it cannot affect the existing Next.js web inbox build or deployment.
+- Access tokens use platform secure storage only; OTP values remain widget-memory input and are never persisted.
+- The backend origin is supplied at build time with `API_BASE_URL`; FCM client configuration uses ignored Firebase project files. No backend service-account credentials exist in the Android repository.
+
 # Android API contract
 
 - `/mobile/config` is public and exposes only app-version and maintenance information. Operational/configuration credentials are excluded.
