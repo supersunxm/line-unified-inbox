@@ -1,4 +1,4 @@
-export type PrimarySection = "dashboard" | "chats" | "stores" | "classification-insights" | "follower-insights" | "friend-source-links";
+export type PrimarySection = "dashboard" | "chats" | "stores" | "admin-registrations" | "classification-insights" | "follower-insights" | "friend-source-links";
 
 export function primaryNavigationState(section: PrimarySection) {
   return {

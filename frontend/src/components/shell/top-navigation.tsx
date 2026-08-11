@@ -252,6 +252,7 @@ export function TopNavigation(props: TopNavigationProps) {
           <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={navLinkClass}>{text.dashboard || "Dashboard"}</Link>
           <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
           <Link href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} hidden lg:block`}>{text.storeManagement || "Stores"}</Link>
+          {authUser?.role === "ADMIN" && <Link href="/admin/registrations" aria-current={currentSection === "admin-registrations" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "อนุมัติ BM" : language === "zh" ? "BM 审批" : "BM Approval"}</Link>}
           <div className="hidden items-center gap-0.5 2xl:flex">
             <Link href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
             <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
