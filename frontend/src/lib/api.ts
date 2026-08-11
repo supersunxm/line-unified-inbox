@@ -97,7 +97,10 @@ export const api = {
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
   me: () => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/me"),
-  getPendingRegistrations: () => request<{ registrations: PendingRegistration[] }>("/admin/registrations/pending"),
+  getPendingRegistrations: async () => {
+    const response = await request<{ registrations?: PendingRegistration[] } | PendingRegistration[]>("/admin/registrations/pending");
+    return Array.isArray(response) ? response : response.registrations ?? [];
+  },
   approveRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
   rejectRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
   systemStatus: () => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status"),

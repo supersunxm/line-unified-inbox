@@ -18,8 +18,7 @@ export default function AdminRegistrationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.getPendingRegistrations();
-      setRegistrations(response.registrations);
+      setRegistrations(await api.getPendingRegistrations());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load pending registrations.");
     } finally {
@@ -104,7 +103,7 @@ export default function AdminRegistrationsPage() {
                   <tr><th className="px-5 py-3">Name</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Store</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Created</th><th className="px-5 py-3 text-right">Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {registrations.map((registration) => <tr key={registration.id} className="align-middle"><td className="px-5 py-4 font-semibold">{registration.name}</td><td className="px-5 py-4">{registration.email}</td><td className="px-5 py-4">{registration.store.name}</td><td className="px-5 py-4">{registration.role.replaceAll("_", " ")}</td><td className="px-5 py-4 whitespace-nowrap">{new Date(registration.createdAt).toLocaleString()}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" disabled={actingId !== null} onClick={() => void act(registration, "reject")} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Reject</button><button type="button" disabled={actingId !== null} onClick={() => void act(registration, "approve")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Approve</button></div></td></tr>)}
+                  {registrations.map((registration) => { const createdAt = new Date(registration.createdAt); return <tr key={registration.id} className="align-middle"><td className="px-5 py-4 font-semibold">{registration.name || "—"}</td><td className="px-5 py-4">{registration.email || "—"}</td><td className="px-5 py-4">{registration.store?.name || "—"}</td><td className="px-5 py-4">{registration.role?.replaceAll("_", " ") || "—"}</td><td className="px-5 py-4 whitespace-nowrap">{Number.isNaN(createdAt.getTime()) ? "—" : createdAt.toLocaleString()}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" disabled={actingId !== null} onClick={() => void act(registration, "reject")} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-50">Reject</button><button type="button" disabled={actingId !== null} onClick={() => void act(registration, "approve")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Approve</button></div></td></tr>; })}
                 </tbody>
               </table>
             </div>
