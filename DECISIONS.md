@@ -1,3 +1,7 @@
+# OTP generator dependency injection
+
+- Function-typed constructor dependencies are never resolved by Nest through reflected runtime metadata. `OtpChallengeService` injects the explicit `OTP_CODE_GENERATOR` symbol, and AuthModule supplies the generator through a `useValue` provider. This keeps OTP generation testable without treating JavaScript's `Function` constructor as a provider.
+
 # Smart Product Review Queue & Fast Human Operations (2026-08-09)
 
 - **Deterministic Review Classification Hierarchy**: Conversations with inbound text are classified into 6 mutually-exclusive priority tiers without running ML models:

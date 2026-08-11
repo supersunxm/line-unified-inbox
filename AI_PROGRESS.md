@@ -1,5 +1,11 @@
 # AI progress
 
+## Current task: Production OTP dependency-injection crash recovery
+
+- Identified the registration-flow bootstrap failure: a constructor parameter typed as `() => string` emitted runtime metadata as `Function`, which Nest cannot resolve as a provider.
+- The current AuthModule resolves the generator with the explicit `OTP_CODE_GENERATOR` token and a registered `useValue` provider. Added a focused metadata/provider regression test.
+- Verification: backend build, lint, and targeted OTP DI tests pass. Local production startup reaches AuthModule initialization without `UnknownDependenciesException`; it cannot finish locally because PostgreSQL at `localhost:5432` is unavailable.
+
 ## Current task: Phase 3A Android Production Hardening
 
 - Added offline-aware API preflight/transport errors, sanitized diagnostics, session-expiry cleanup, and lifecycle refresh on app resume.
