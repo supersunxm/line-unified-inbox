@@ -410,6 +410,8 @@ model PushNotification {
   attemptCount   Int                    @default(0)
   lastError      String?
   sentAt         DateTime?
+  readAt         DateTime?
+  openedAt       DateTime?
   createdAt      DateTime               @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -419,6 +421,7 @@ model PushNotification {
   @@unique([userId, messageId])
   @@index([status, createdAt])
   @@index([userId, createdAt])
+  @@index([userId, readAt])
   @@index([conversationId, createdAt])
   @@index([messageId])
 }

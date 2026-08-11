@@ -391,6 +391,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Search and status filtering occur server-side after one complete safe projection because connection status is partly calculated from credential/configuration health. The current population is small and database access remains batched without per-OA queries.
 - The schema is an explicit 17-column allowlist. Secret-bearing fields cannot enter the CSV through generic object serialization; even fields beginning with spreadsheet formula characters are neutralized before RFC quoting.
 - CSV uses UTF-8 BOM and CRLF for Microsoft Excel compatibility, while all timestamps and the filename date use `Asia/Bangkok`. `Content-Disposition` and `X-Export-Row-Count` are CORS-exposed so the cross-origin frontend can preserve the server filename and operationally verify counts.
+# Mobile conversation API boundary
+
+- Mobile conversation endpoints never accept a store ID or LINE OA ID. Store access is resolved through `StoreAccessService`, and outbound replies use the pre-existing conversation-derived LINE OA service.
+- Notification delivery status and user read/open state are independent. Badge counts are calculated only from the authenticated user's notifications with `readAt = NULL`.
+
 # Mobile push foundation
 
 - Push tokens are encrypted with the existing backend credential-encryption service and addressed by a SHA-256 lookup hash; neither token values nor payload content are returned by the API.

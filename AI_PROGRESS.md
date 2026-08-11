@@ -1,5 +1,12 @@
 # AI progress
 
+## Current task: Phase 2B Mobile Conversation API Layer
+
+- Added mobile-only conversation list, detail, and reply APIs. Store and LINE OA ownership are resolved from the authenticated user's database membership and the target conversation; clients cannot supply either identifier.
+- Added per-user mobile notification read/open APIs and unread badge counts. Conversation list/detail unread counts use the same notification state.
+- Added additive `PushNotification.readAt` and `openedAt` fields with an index for badge queries.
+- Verification: Prisma validation and backend build passed; 17 focused mobile/notification/webhook tests passed. Module startup completed and registered application routes; local health remains blocked because local PostgreSQL/Docker is unavailable.
+
 ## Current task: Phase 2A Mobile Push Notification Backend Foundation
 
 - Added authenticated device-token registration, unregistration, and last-seen APIs. New registrations encrypt push tokens and retain only a SHA-256 lookup hash for token matching/deduplication.
