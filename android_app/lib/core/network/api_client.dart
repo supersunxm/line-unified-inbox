@@ -39,7 +39,7 @@ class ApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
       SafeLogger.networkFailure(statusCode: error.statusCode, code: error.code);
-      if (error.sessionExpired) await _onSessionExpired?.call();
+      if (authenticated && error.sessionExpired) await _onSessionExpired?.call();
       throw error;
     }
     return decoded;

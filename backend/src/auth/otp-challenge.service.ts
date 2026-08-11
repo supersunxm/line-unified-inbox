@@ -28,7 +28,12 @@ export class OtpChallengeService {
         resendAvailableAt: new Date(now + 60_000),
       },
     });
-    return client.otpChallenge.update({ where: { id: challenge.id }, data: { codeHash: this.hash(challenge.id, code) } });
+    const savedChallenge = await client.otpChallenge.update({ where: { id: challenge.id }, data: { codeHash: this.hash(challenge.id, code) } });
+    const otpDebugEnabled = process.env.NODE_ENV !== "production" && process.env.RAILWAY_ENVIRONMENT_NAME !== "production" && process.env.RAILWAY_ENVIRONMENT !== "production" && process.env.OTP_DEBUG === "true";
+    if (otpDebugEnabled) {
+      console.log("[OTP_DEBUG]", { phone: input.normalizedPhone, challengeId: savedChallenge.id, otp: code, expiresAt: savedChallenge.expiresAt.toISOString(), purpose: input.purpose });
+    }
+    return savedChallenge;
   }
 
   async verify(client: OtpClient, challenge: { id: string; codeHash: string; expiresAt: Date; attempts: number; maxAttempts: number; consumedAt: Date | null }, code: string) {
