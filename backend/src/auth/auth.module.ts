@@ -13,6 +13,7 @@ import { OtpChallengeService } from "./otp-challenge.service";
 import { RegistrationService } from "./registration.service";
 import { RegistrationController } from "./registration.controller";
 import { AdminRegistrationController } from "./admin-registration.controller";
+import { MobileAuthService } from "./mobile-auth.service";
 
-@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, OtpChallengeService, RegistrationService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
+@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController], providers: [PasswordService, AuthService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService] })
 export class AuthModule {}

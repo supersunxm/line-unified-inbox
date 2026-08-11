@@ -191,6 +191,11 @@ enum PushNotificationStatus {
   FAILED
 }
 
+enum SessionType {
+  WEB
+  MOBILE
+}
+
 enum TranslationFeedbackRating {
   HELPFUL
   INCORRECT
@@ -288,12 +293,13 @@ model EmailDeliveryEvent {
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String      @id @default(uuid())
+  tokenHash   String      @unique
+  userId      String
+  sessionType SessionType @default(WEB)
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])

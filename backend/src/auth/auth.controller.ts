@@ -6,6 +6,8 @@ import { Public } from "./auth.decorators";
 import { AuthRequest } from "./auth.guard";
 import { SetupService } from "./setup.service";
 import { sessionCookieOptions } from "./session-cookie";
+import { MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
+import { MobileAuthService } from "./mobile-auth.service";
 
 class LoginDto { @IsString() @IsNotEmpty() identifier!: string; @IsString() @IsNotEmpty() password!: string; }
 class SetupRequestDto { @IsString() @IsNotEmpty() displayName!: string; @IsEmail() email!: string; @IsString() @MinLength(12) password!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
@@ -14,7 +16,7 @@ class ResendDto { @IsString() challengeId!: string; @IsIn(["th", "en", "zh"]) la
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService, private readonly setup: SetupService) {}
+  constructor(private readonly auth: AuthService, private readonly setup: SetupService, private readonly mobile: MobileAuthService) {}
   @Public() @Get("setup-status") setupStatus() { return this.setup.status(); }
   @Public() @Post("setup/request-otp") requestOtp(@Body() dto: SetupRequestDto) { return this.setup.requestOtp(dto.displayName, dto.email, dto.password, dto.language); }
   @Public() @Post("setup/resend-otp") resendOtp(@Body() dto: ResendDto) { return this.setup.resend(dto.challengeId, dto.language); }
@@ -27,9 +29,16 @@ export class AuthController {
     response.cookie("oppo_session", result.token, { ...sessionCookieOptions(), expires: result.expiresAt });
     return result.user;
   }
+  @Public() @Post("mobile/send-otp") mobileSendOtp(@Body() dto: MobileSendOtpDto) { return this.mobile.sendOtp(dto.phone); }
+  @Public() @Post("mobile/verify-otp") mobileVerifyOtp(@Body() dto: MobileVerifyOtpDto) { return this.mobile.verifyOtp(dto.challengeId, dto.otp); }
   @Post("logout") async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const token = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
     await this.auth.logout(token); response.clearCookie("oppo_session", sessionCookieOptions()); return { success: true };
   }
   @Get("me") me(@Req() request: AuthRequest) { return request.user; }
+  @Public() @Post("mobile/logout") async mobileLogout(@Req() request: Request) {
+    const token = request.headers.authorization?.startsWith("Bearer ") ? request.headers.authorization.slice("Bearer ".length).trim() : undefined;
+    await this.auth.logoutMobile(token);
+    return { success: true };
+  }
 }
