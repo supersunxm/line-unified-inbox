@@ -108,7 +108,7 @@ CREATE INDEX "MassMessageStoreDelivery_status_idx" ON "MassMessageStoreDelivery"
 CREATE UNIQUE INDEX "MassMessageStoreDelivery_campaignId_storeId_key" ON "MassMessageStoreDelivery"("campaignId", "storeId");
 
 -- CreateIndex
-CREATE INDEX "MassMessageBatch_storeDeliveryId_batchIndex_idx" ON "MassMessageBatch"("storeDeliveryId", "batchIndex");
+CREATE UNIQUE INDEX "MassMessageBatch_storeDeliveryId_batchIndex_key" ON "MassMessageBatch"("storeDeliveryId", "batchIndex");
 
 -- CreateIndex
 CREATE INDEX "MassMessageBatch_status_idx" ON "MassMessageBatch"("status");

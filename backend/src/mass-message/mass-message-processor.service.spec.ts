@@ -60,6 +60,7 @@ void test("processCampaign splits 1001 users into 3 batches (500 + 500 + 1) and 
         createdBatches.push(record);
         return record;
       },
+      updateMany: async () => ({ count: 1 }),
       update: async (args: any) => args,
     },
     $transaction: async (promises: any[]) => Promise.all(promises),
@@ -150,6 +151,7 @@ void test("processCampaign reuses the same retryKey during retries for a transie
     massMessageBatch: {
       findMany: async () => [],
       create: async (args: any) => ({ id: "batch-1", ...args.data }),
+      updateMany: async () => ({ count: 1 }),
       update: async () => ({}),
     },
     $transaction: async (promises: any[]) => Promise.all(promises),
@@ -228,6 +230,7 @@ void test("processCampaign fails immediately on non-retryable 401 unauthorized w
     massMessageBatch: {
       findMany: async () => [],
       create: async (args: any) => ({ id: "batch-1", ...args.data }),
+      updateMany: async () => ({ count: 1 }),
       update: async () => ({}),
     },
     $transaction: async (promises: any[]) => Promise.all(promises),
@@ -330,6 +333,7 @@ void test("recoverUnfinishedCampaigns discovers PENDING/RUNNING campaigns and re
     },
     massMessageBatch: {
       findMany: async () => existingBatches,
+      updateMany: async () => ({ count: 1 }),
       update: async (args: any) => args,
     },
   } as any;
@@ -367,4 +371,108 @@ void test("recoverUnfinishedCampaigns discovers PENDING/RUNNING campaigns and re
   // Must use the existing persisted retryKey from Batch 1
   assert.equal(sentBatches[0].retryKey, "stable-retry-key-1");
   assert.equal(sentBatches[0].accessToken, "tok-resumed");
+});
+
+void test("Multi-instance safety: two concurrent worker instances processing the same campaign send exactly 1 multicast", async () => {
+  const sentMulticasts: any[] = [];
+  const batchesInDb = new Map<string, any>();
+
+  const mockCampaign = {
+    id: "campaign-multi-instance",
+    status: MassMessageCampaignStatus.RUNNING,
+    audienceType: "ALL_KNOWN",
+    messagePayload: { messages: [{ type: "text", text: "Hello Concurrent" }] },
+    storeDeliveries: [
+      {
+        id: "del-multi",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        status: MassMessageStoreDeliveryStatus.RUNNING,
+        skipReason: null,
+        lineOfficialAccount: {
+          id: "oa-1",
+          name: "OA 1",
+          encryptedChannelAccessToken: "enc-tok-1",
+          isActive: true,
+          archivedAt: null,
+        },
+      },
+    ],
+  };
+
+  const prisma = {
+    massMessageCampaign: {
+      findUnique: async () => mockCampaign,
+      update: async () => mockCampaign,
+    },
+    massMessageStoreDelivery: {
+      update: async () => ({}),
+      findMany: async () => [
+        {
+          status: MassMessageStoreDeliveryStatus.SUCCESS,
+          recipientCount: 3,
+          processedCount: 3,
+          successCount: 3,
+          failedCount: 0,
+        },
+      ],
+    },
+    massMessageBatch: {
+      findMany: async () => Array.from(new Set(batchesInDb.values())),
+      findUnique: async ({ where }: any) => batchesInDb.get(where.id),
+      create: async (args: any) => {
+        const key = `${args.data.storeDeliveryId}-${args.data.batchIndex}`;
+        if (batchesInDb.has(key)) {
+          const err: any = new Error("Unique constraint failed");
+          err.code = "P2002";
+          throw err;
+        }
+        const record = { id: `batch-1`, ...args.data };
+        batchesInDb.set(key, record);
+        batchesInDb.set(record.id, record);
+        return record;
+      },
+      updateMany: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (batch && (args.where.status === batch.status || args.where.status?.in?.includes(batch.status))) {
+          batch.status = args.data.status;
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+      update: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (batch) Object.assign(batch, args.data);
+        return batch;
+      },
+    },
+    $transaction: async (promises: any[]) => Promise.all(promises),
+  } as any;
+
+  const encryption = { decrypt: () => "token-multi" } as any;
+
+  const lineMessaging = {
+    multicast: async (input: any) => {
+      sentMulticasts.push(input);
+      return { requestId: "req-multi", acceptedRequestId: null, duplicateAccepted: false };
+    },
+  } as any;
+
+  const scopeService = {
+    resolveRecipientsForOa: async () => ["U1", "U2", "U3"],
+  } as any;
+
+  // Create two separate processor instances (simulating 2 backend replicas)
+  const worker1 = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+  const worker2 = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+
+  // Both workers process the campaign concurrently
+  await Promise.all([
+    worker1.processCampaign("campaign-multi-instance"),
+    worker2.processCampaign("campaign-multi-instance"),
+  ]);
+
+  // CRITICAL INVARIANT: Exactly 1 multicast call is executed across both workers!
+  assert.equal(sentMulticasts.length, 1);
+  assert.equal(sentMulticasts[0].to.length, 3);
 });

@@ -1313,7 +1313,7 @@ model MassMessageBatch {
 
   storeDelivery     MassMessageStoreDelivery @relation(fields: [storeDeliveryId], references: [id], onDelete: Cascade)
 
-  @@index([storeDeliveryId, batchIndex])
+  @@unique([storeDeliveryId, batchIndex])
   @@index([status])
   @@index([retryKey])
 }

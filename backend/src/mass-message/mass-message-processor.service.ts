@@ -48,6 +48,17 @@ export class MassMessageProcessorService implements OnModuleInit {
       this.logger.log(
         `Discovered ${unfinished.length} unfinished campaigns on startup; resuming recovery...`,
       );
+      const unfinishedIds = unfinished.map((c) => c.id);
+      await this.prisma.massMessageBatch.updateMany({
+        where: {
+          status: MassMessageBatchStatus.RUNNING,
+          storeDelivery: { campaignId: { in: unfinishedIds } },
+        },
+        data: {
+          status: MassMessageBatchStatus.PENDING,
+        },
+      });
+
       for (const c of unfinished) {
         void this.processCampaign(c.id).catch((err) => {
           this.logger.error(`Recovery failed for campaign ${c.id}`, err);
@@ -253,19 +264,34 @@ export class MassMessageProcessorService implements OnModuleInit {
       batchRecords = existingBatches;
     } else {
       // Create batch records with stable UUID retryKeys
-      batchRecords = await this.prisma.$transaction(
-        chunks.map((chunk, index) =>
-          this.prisma.massMessageBatch.create({
-            data: {
-              storeDeliveryId: delivery.id,
-              batchIndex: index,
-              retryKey: randomUUID(),
-              recipientCount: chunk.length,
-              status: MassMessageBatchStatus.PENDING,
-            },
-          }),
-        ),
-      );
+      try {
+        batchRecords = await this.prisma.$transaction(
+          chunks.map((chunk, index) =>
+            this.prisma.massMessageBatch.create({
+              data: {
+                storeDeliveryId: delivery.id,
+                batchIndex: index,
+                retryKey: randomUUID(),
+                recipientCount: chunk.length,
+                status: MassMessageBatchStatus.PENDING,
+              },
+            }),
+          ),
+        );
+      } catch (err: any) {
+        // If another concurrent worker created the batches in parallel, load them
+        if (
+          err?.code === "P2002" ||
+          err?.message?.includes("Unique constraint")
+        ) {
+          batchRecords = await this.prisma.massMessageBatch.findMany({
+            where: { storeDeliveryId: delivery.id },
+            orderBy: { batchIndex: "asc" },
+          });
+        } else {
+          throw err;
+        }
+      }
     }
 
     let storeSuccessCount = 0;
@@ -285,14 +311,32 @@ export class MassMessageProcessorService implements OnModuleInit {
         continue;
       }
 
-      const batchStartedAt = new Date();
-      await this.prisma.massMessageBatch.update({
-        where: { id: batch.id },
+      // Atomic claim: only one worker can claim a PENDING batch
+      const claimed = await this.prisma.massMessageBatch.updateMany({
+        where: {
+          id: batch.id,
+          status: MassMessageBatchStatus.PENDING,
+        },
         data: {
           status: MassMessageBatchStatus.RUNNING,
-          startedAt: batchStartedAt,
+          startedAt: new Date(),
         },
       });
+
+      if (claimed.count === 0) {
+        const currentBatch = await this.prisma.massMessageBatch.findUnique({
+          where: { id: batch.id },
+          select: { status: true, recipientCount: true },
+        });
+        if (currentBatch?.status === MassMessageBatchStatus.SUCCESS) {
+          storeSuccessCount += currentBatch.recipientCount;
+          storeProcessedCount += currentBatch.recipientCount;
+        } else if (currentBatch?.status === MassMessageBatchStatus.FAILED) {
+          storeFailedCount += currentBatch.recipientCount;
+          storeProcessedCount += currentBatch.recipientCount;
+        }
+        continue;
+      }
 
       let attempt = 0;
       let batchSuccess = false;
