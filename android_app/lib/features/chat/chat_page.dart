@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -11,9 +12,10 @@ class PendingReply { PendingReply(this.text, this.key, this.state); final String
 class PendingImage { PendingImage(this.bytes, this.filename, this.key); final Uint8List bytes; final String filename; final String key; ReplyState state = ReplyState.sending; }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.conversationId, required this.repository});
+  const ChatPage({super.key, required this.conversationId, required this.repository, this.events});
   final String conversationId;
   final ConversationRepository repository;
+  final Stream<Map<String, dynamic>>? events;
   @override State<ChatPage> createState() => _ChatPageState();
 }
 
@@ -29,9 +31,10 @@ class _ChatPageState extends State<ChatPage> {
   bool _loadingOlder = false;
   String? _error;
   bool _didInitialScroll = false;
+  StreamSubscription<Map<String, dynamic>>? _eventsSubscription;
 
-  @override void initState() { super.initState(); _load(); }
-  @override void dispose() { _text.dispose(); _scroll.dispose(); super.dispose(); }
+  @override void initState() { super.initState(); _eventsSubscription = widget.events?.listen((event) { if (mounted && (event['type'] == 'connected' || event['conversationId'] == widget.conversationId)) _load(); }); _load(); }
+  @override void dispose() { _eventsSubscription?.cancel(); _text.dispose(); _scroll.dispose(); super.dispose(); }
   void _load() { setState(() { _detail = null; _future = widget.repository.detail(widget.conversationId); _didInitialScroll = false; }); }
   Future<void> _loadOlder() async {
     final detail = _detail; final cursor = detail?.nextCursor;

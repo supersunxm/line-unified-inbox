@@ -41,9 +41,10 @@ import { MobileNotificationsController } from "./mobile/mobile-notifications.con
 import { MobileNotificationsService } from "./mobile/mobile-notifications.service";
 import { MobileConfigController } from "./mobile/mobile-config.controller";
 import { MobileConfigService } from "./mobile/mobile-config.service";
+import { RealtimeModule } from "./realtime/realtime.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule],
+  imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController],
   providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService],
 })

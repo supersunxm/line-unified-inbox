@@ -20,6 +20,7 @@ class ApiClient {
   Future<Map<String, dynamic>> get(String path, {Map<String, String>? query, bool authenticated = true}) => _request('GET', path, query: query, authenticated: authenticated);
   Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('POST', path, body: body, authenticated: authenticated);
   Future<Map<String, dynamic>> patch(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('PATCH', path, body: body, authenticated: authenticated);
+  Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('DELETE', path, body: body, authenticated: authenticated);
 
   Future<Uint8List> getBytes(String path, {bool authenticated = true}) async {
     if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');

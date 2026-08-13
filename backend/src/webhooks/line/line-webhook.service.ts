@@ -10,6 +10,7 @@ import { LineProfileService } from "../../line-profile.service";
 import { LineImageService } from "../../media/line-image.service";
 import { getFriendAttributionHashSecret, hashLineUserId } from "../../friend-source-links/friend-attribution.config";
 import { NotificationEnqueueService } from "../../notifications/notification-enqueue.service";
+import { RealtimeEventService } from "../../realtime/realtime-event.service";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -27,7 +28,7 @@ export type LineCredentialResolution = {
 @Injectable()
 export class LineWebhookService {
   private readonly logger = new Logger(LineWebhookService.name);
-  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService, private readonly notifications?: NotificationEnqueueService) {}
+  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService, private readonly notifications?: NotificationEnqueueService, private readonly realtime?: RealtimeEventService) {}
 
   async accept(payload: LineWebhookBody, resolvedOaId: string) {
     const results: boolean[] = [];
@@ -206,10 +207,24 @@ export class LineWebhookService {
           },
         });
       }
-      return { conversation, mediaId: media?.id };
+      return { conversation, messageId: storedMessage.id, mediaId: media?.id };
     });
     const conversation = stored.conversation;
-    if (message.type === "image" && stored.mediaId) await this.images.process(stored.mediaId, oa.id, message.id, sentAt);
+    this.realtime?.publish({
+      type: "message.created",
+      version: 1,
+      conversationId: conversation.id,
+      storeId: conversation.storeId,
+      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: stored.mediaId ? { processingStatus: "PENDING" } : null },
+      conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
+    });
+    if (message.type === "image" && stored.mediaId) {
+      await this.images.process(stored.mediaId, oa.id, message.id, sentAt);
+      if (this.realtime) {
+        const media = await this.prisma.messageMedia.findUnique({ where: { id: stored.mediaId }, select: { processingStatus: true } });
+        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: "IMAGE", text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED" } } });
+      }
+    }
     if (message.type === "text") {
       try { await this.classification.analyze(conversation.id); }
       catch { this.logger.error(`Automatic classification failed for conversation ${conversation.id}`); }
