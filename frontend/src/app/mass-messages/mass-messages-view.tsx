@@ -239,13 +239,14 @@ export function MassMessagesView({
       return;
     }
 
-    // Format validation
+    // Format validation: JPEG and PNG only
     const ext = file.name.split(".").pop()?.toLowerCase();
-    const validExtensions = ["jpg", "jpeg", "png", "webp"];
-    const validMimes = ["image/jpeg", "image/png", "image/webp"];
+    const validExtensions = ["jpg", "jpeg", "png"];
+    const validMimes = ["image/jpeg", "image/png"];
     if (
       (!file.type && !validExtensions.includes(ext || "")) ||
-      (file.type && !validMimes.includes(file.type) && !validExtensions.includes(ext || ""))
+      (file.type && !validMimes.includes(file.type)) ||
+      (ext && !validExtensions.includes(ext))
     ) {
       setImageUploadError(t.imageInvalidFormat);
       return;
@@ -626,7 +627,7 @@ export function MassMessagesView({
                     <input
                       type="file"
                       ref={fileInputRef}
-                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                       onChange={(e) => void handleFileSelect(e)}
                       className="hidden"
                     />

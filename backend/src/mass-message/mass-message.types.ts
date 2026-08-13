@@ -33,6 +33,8 @@ export type MassMessageImageMessageItem = {
   type: "image";
   originalContentUrl: string;
   previewImageUrl: string;
+  originalObjectKey?: string;
+  previewObjectKey?: string;
 };
 
 export type MassMessageItem =
@@ -50,8 +52,11 @@ export type MassMessageCreateInput = {
 export type MassMessageUploadImageResult = {
   url: string;
   previewUrl: string;
+  originalObjectKey: string;
+  previewObjectKey: string;
   mimeType: string;
   fileSize: number;
+  previewSize: number;
 };
 
 export type StorePreviewResult = {

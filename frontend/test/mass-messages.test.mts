@@ -94,12 +94,22 @@ test("Campaign progress polling monitors status and displays terminal banners", 
 
 test("Mass Message Image Support: Upload UI, file input constraints, replace, and remove", () => {
   assert.match(viewCode, /api\.uploadMassMessageImage/);
-  assert.match(viewCode, /accept="\.jpg,\.jpeg,\.png,\.webp,image\/jpeg,image\/png,image\/webp"/);
+  assert.match(viewCode, /accept="\.jpg,\.jpeg,\.png,image\/jpeg,image\/png"/);
   assert.match(viewCode, /handleFileSelect/);
   assert.match(viewCode, /handleReplaceImage/);
   assert.match(viewCode, /handleRemoveImage/);
   assert.match(viewCode, /10 \* 1024 \* 1024/); // 10MB limit
   assert.match(viewCode, /isUploadingImage/);
+
+  // Translations
+  const th = getMassMessagesText("th");
+  const en = getMassMessagesText("en");
+  const zh = getMassMessagesText("zh");
+  assert.equal(th.imageUploadHelper, "รองรับ JPG และ PNG สูงสุด 10 MB");
+  assert.equal(en.imageUploadHelper, "JPG or PNG, max 10 MB");
+  assert.equal(zh.imageUploadHelper, "支持 JPG 和 PNG，最大 10 MB");
+  assert.match(th.imageInvalidFormat, /JPG และ PNG/);
+  assert.match(en.imageInvalidFormat, /JPG and PNG/);
 });
 
 test("Mass Message Image Support: Live Preview handles text-only, image-only, and text+image", () => {

@@ -256,59 +256,86 @@ void test("createAndSend rejects invalid UUID or invalid messages array", async 
   );
 });
 
-void test("uploadImage validates file size, magic bytes, and stores to media storage", async () => {
-  let storedKey = "";
-  let storedContentType = "";
+void test("uploadImage validates file size, magic bytes, preview generation <= 1MB, and rejects WebP, GIF, PDF", async () => {
+  const sharp = (await import("sharp")).default;
+  const storedKeys: string[] = [];
+  const storedMimes: string[] = [];
+  const storedBuffers: Buffer[] = [];
+
   const mediaStorage = {
     put: async (key: string, body: Buffer, mime: string) => {
-      storedKey = key;
-      storedContentType = mime;
+      storedKeys.push(key);
+      storedMimes.push(mime);
+      storedBuffers.push(body);
       return { provider: "s3", fileId: key, mimeType: mime, size: body.length };
     },
   } as any;
 
   const service = new MassMessageService({} as any, {} as any, {} as any, mediaStorage);
 
-  // 1. Valid JPEG
-  const jpegBuffer = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100)]);
+  // 1. Valid JPEG accepted -> original and preview stored, preview <= 1MB
+  const jpegBuffer = await sharp({
+    create: { width: 200, height: 200, channels: 3, background: { r: 255, g: 100, b: 50 } },
+  })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
   const jpegResult = await service.uploadImage({ buffer: jpegBuffer, mimetype: "image/jpeg" }, adminUser);
   assert.equal(jpegResult.mimeType, "image/jpeg");
   assert.equal(jpegResult.fileSize, jpegBuffer.length);
+  assert.ok(jpegResult.previewSize <= 1024 * 1024, "Preview size must be <= 1 MB");
   assert.match(jpegResult.url, /^https?:\/\//);
-  assert.match(storedKey, /^line-media\/outbound\/mass-message\/.*\.jpg$/);
+  assert.match(jpegResult.previewUrl, /^https?:\/\//);
+  assert.match(jpegResult.originalObjectKey, /^line-media\/outbound\/mass-message\/.*-original\.jpg$/);
+  assert.match(jpegResult.previewObjectKey, /^line-media\/outbound\/mass-message\/.*-preview\.jpg$/);
 
-  // 2. Valid PNG
-  const pngBuffer = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(100)]);
+  // 2. Valid PNG accepted -> original and preview stored, preview <= 1MB
+  const pngBuffer = await sharp({
+    create: { width: 200, height: 200, channels: 4, background: { r: 50, g: 200, b: 100, alpha: 1 } },
+  })
+    .png()
+    .toBuffer();
+
   const pngResult = await service.uploadImage({ buffer: pngBuffer, mimetype: "image/png" }, adminUser);
   assert.equal(pngResult.mimeType, "image/png");
-  assert.match(storedKey, /^line-media\/outbound\/mass-message\/.*\.png$/);
+  assert.equal(pngResult.fileSize, pngBuffer.length);
+  assert.ok(pngResult.previewSize <= 1024 * 1024, "Preview size must be <= 1 MB");
+  assert.match(pngResult.originalObjectKey, /^line-media\/outbound\/mass-message\/.*-original\.png$/);
 
-  // 3. Valid WebP
-  const webpBuffer = Buffer.concat([
-    Buffer.from("RIFF"),
-    Buffer.from([0x20, 0x00, 0x00, 0x00]),
-    Buffer.from("WEBP"),
-    Buffer.alloc(20),
-  ]);
-  const webpResult = await service.uploadImage({ buffer: webpBuffer, mimetype: "image/webp" }, adminUser);
-  assert.equal(webpResult.mimeType, "image/webp");
-  assert.match(storedKey, /^line-media\/outbound\/mass-message\/.*\.webp$/);
+  // 3. WebP rejected -> must throw BadRequestException
+  const webpBuffer = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } },
+  })
+    .webp()
+    .toBuffer();
 
-  // 4. Oversized image (>10MB)
+  await assert.rejects(
+    () => service.uploadImage({ buffer: webpBuffer, mimetype: "image/webp" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 4. GIF rejected -> must throw BadRequestException
+  const gifBuffer = Buffer.from("GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;");
+  await assert.rejects(
+    () => service.uploadImage({ buffer: gifBuffer, mimetype: "image/gif" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 5. PDF rejected
+  const pdfBuffer = Buffer.from("%PDF-1.7 header");
+  await assert.rejects(
+    () => service.uploadImage({ buffer: pdfBuffer, mimetype: "application/pdf" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 6. Oversized image (>10MB)
   const oversizedBuffer = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(11 * 1024 * 1024)]);
   await assert.rejects(
     () => service.uploadImage({ buffer: oversizedBuffer, mimetype: "image/jpeg" }, adminUser),
     /Image exceeds the 10 MB limit/,
   );
 
-  // 5. Unsupported file type (PDF)
-  const pdfBuffer = Buffer.from("%PDF-1.7 header");
-  await assert.rejects(
-    () => service.uploadImage({ buffer: pdfBuffer, mimetype: "application/pdf" }, adminUser),
-    /Unsupported image format/,
-  );
-
-  // 6. Mismatched declared MIME vs content
+  // 7. Mismatched declared MIME vs content
   await assert.rejects(
     () => service.uploadImage({ buffer: pngBuffer, mimetype: "image/jpeg" }, adminUser),
     /Image content does not match its declared MIME type/,

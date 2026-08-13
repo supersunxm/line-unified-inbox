@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import {
   BadRequestException,
   ConflictException,
@@ -35,7 +36,6 @@ const UUID_REGEX =
 const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
-  "image/webp": "webp",
 };
 
 @Injectable()
@@ -63,7 +63,7 @@ export class MassMessageService {
 
     const mime = detectImageMime(file.buffer);
     if (!mime || !IMAGE_EXTENSIONS[mime]) {
-      throw new BadRequestException("Unsupported image format. Allowed formats: JPEG, PNG, WebP.");
+      throw new BadRequestException("Unsupported image format. Allowed formats: JPEG, PNG.");
     }
 
     const declaredMime = (file.mimetype ?? "").split(";", 1)[0].trim().toLowerCase();
@@ -75,16 +75,74 @@ export class MassMessageService {
       throw new ServiceUnavailableException("Media storage is unavailable");
     }
 
-    const objectKey = `line-media/outbound/mass-message/${randomUUID()}.${IMAGE_EXTENSIONS[mime]}`;
-    const stored = await this.media.put(objectKey, file.buffer, mime);
+    const ext = IMAGE_EXTENSIONS[mime];
+    const fileId = randomUUID();
+    const originalObjectKey = `line-media/outbound/mass-message/${fileId}-original.${ext}`;
 
-    const publicUrl = createMediaPublicUrl(objectKey);
+    // Store original image
+    await this.media.put(originalObjectKey, file.buffer, mime);
+
+    // Generate preview image <= 1MB (JPEG or PNG) for LINE Messaging API
+    let previewBuffer: Buffer;
+    let previewMime: string = mime;
+    let previewExt: string = ext;
+
+    try {
+      if (mime === "image/jpeg") {
+        previewBuffer = await sharp(file.buffer)
+          .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80, progressive: true })
+          .toBuffer();
+
+        if (previewBuffer.length > 1024 * 1024) {
+          previewBuffer = await sharp(file.buffer)
+            .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 60 })
+            .toBuffer();
+        }
+      } else {
+        // PNG
+        previewBuffer = await sharp(file.buffer)
+          .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+          .png({ compressionLevel: 8 })
+          .toBuffer();
+
+        if (previewBuffer.length > 1024 * 1024) {
+          previewBuffer = await sharp(file.buffer)
+            .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          previewMime = "image/jpeg";
+          previewExt = "jpg";
+        }
+      }
+    } catch (err) {
+      this.logger.error("Failed to generate preview image with sharp", err);
+      if (file.buffer.length <= 1024 * 1024) {
+        previewBuffer = file.buffer;
+      } else {
+        throw new BadRequestException("Failed to generate valid preview image for LINE");
+      }
+    }
+
+    if (previewBuffer.length > 1024 * 1024) {
+      throw new BadRequestException("Preview image exceeds 1 MB limit for LINE Messaging API");
+    }
+
+    const previewObjectKey = `line-media/outbound/mass-message/${fileId}-preview.${previewExt}`;
+    await this.media.put(previewObjectKey, previewBuffer, previewMime);
+
+    const originalContentUrl = createMediaPublicUrl(originalObjectKey);
+    const previewImageUrl = createMediaPublicUrl(previewObjectKey);
 
     return {
-      url: publicUrl,
-      previewUrl: publicUrl,
+      url: originalContentUrl,
+      previewUrl: previewImageUrl,
+      originalObjectKey,
+      previewObjectKey,
       mimeType: mime,
       fileSize: file.buffer.length,
+      previewSize: previewBuffer.length,
     };
   }
 
@@ -142,6 +200,8 @@ export class MassMessageService {
           type: "image",
           originalContentUrl: item.originalContentUrl.trim(),
           previewImageUrl: item.previewImageUrl.trim(),
+          ...(typeof item.originalObjectKey === "string" ? { originalObjectKey: item.originalObjectKey.trim() } : {}),
+          ...(typeof item.previewObjectKey === "string" ? { previewObjectKey: item.previewObjectKey.trim() } : {}),
         });
       } else {
         throw new BadRequestException(`Unsupported message type: ${String(item.type)}`);

@@ -9,6 +9,10 @@ import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { LineMessagingService } from "../line-messaging/line-messaging.service";
 import { MassMessageScopeService } from "./mass-message-scope.service";
+import {
+  createMediaPublicUrl,
+  extractMediaObjectKey,
+} from "../media/media-public-url";
 
 const MAX_CONCURRENT_STORES = 5;
 const MULTICAST_BATCH_SIZE = 500;
@@ -293,6 +297,31 @@ export class MassMessageProcessorService implements OnModuleInit {
     let storeFailedCount = 0;
     let storeProcessedCount = 0;
 
+    const preparedMessages = messages.map((m: any) => {
+      if (m?.type === "image") {
+        const originalKey =
+          m.originalObjectKey ||
+          (typeof m.originalContentUrl === "string"
+            ? extractMediaObjectKey(m.originalContentUrl)
+            : null);
+        const previewKey =
+          m.previewObjectKey ||
+          (typeof m.previewImageUrl === "string"
+            ? extractMediaObjectKey(m.previewImageUrl)
+            : null);
+        return {
+          type: "image",
+          originalContentUrl: originalKey
+            ? createMediaPublicUrl(originalKey)
+            : m.originalContentUrl,
+          previewImageUrl: previewKey
+            ? createMediaPublicUrl(previewKey)
+            : m.previewImageUrl,
+        };
+      }
+      return m;
+    });
+
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const batch = batchRecords[i];
@@ -356,7 +385,7 @@ export class MassMessageProcessorService implements OnModuleInit {
           const result = await this.lineMessaging.multicast({
             accessToken,
             to: chunk,
-            messages,
+            messages: preparedMessages,
             retryKey: batch.retryKey, // REUSE identical retry key across attempts & restarts!
           });
 
