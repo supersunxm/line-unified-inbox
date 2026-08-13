@@ -57,3 +57,84 @@ void test("pushImage sends original and preview URLs with the retry key", async 
     assert.deepEqual(JSON.parse(request?.body as string), { to: "Ucustomer", messages: [{ type: "image", originalContentUrl: "https://backend.example.com/messages/media/public?a", previewImageUrl: "https://backend.example.com/messages/media/public?a" }] });
   } finally { globalThis.fetch = originalFetch; }
 });
+
+void test("multicast sends to array of users and passes X-Line-Retry-Key and authorization", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  let requestUrl = "";
+  let requestInit: RequestInit | undefined;
+  globalThis.fetch = async (url, init) => {
+    requestUrl = String(url);
+    requestInit = init;
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "x-line-request-id": "multi-req-123" },
+    });
+  };
+
+  const users = ["U1", "U2", "U3"];
+  const messages = [{ type: "text", text: "Promotion text" }];
+  const result = await new LineMessagingService().multicast({
+    accessToken: "test-channel-token",
+    to: users,
+    messages,
+    retryKey: "retry-uuid-1",
+  });
+
+  assert.equal(requestUrl, "https://api.line.me/v2/bot/message/multicast");
+  assert.equal(new Headers(requestInit?.headers).get("Authorization"), "Bearer test-channel-token");
+  assert.equal(new Headers(requestInit?.headers).get("X-Line-Retry-Key"), "retry-uuid-1");
+  assert.deepEqual(JSON.parse(requestInit?.body as string), { to: users, messages });
+  assert.equal(result.requestId, "multi-req-123");
+  assert.equal(result.duplicateAccepted, false);
+});
+
+void test("multicast validates recipients between 1 and 500 and messages between 1 and 5", async () => {
+  const service = new LineMessagingService();
+
+  // 0 users
+  await assert.rejects(
+    () => service.multicast({ accessToken: "tok", to: [], messages: [{ type: "text", text: "hi" }], retryKey: "r1" }),
+    /Multicast recipients must be between 1 and 500 users/,
+  );
+
+  // 501 users
+  const tooManyUsers = Array.from({ length: 501 }, (_, i) => `U${i}`);
+  await assert.rejects(
+    () => service.multicast({ accessToken: "tok", to: tooManyUsers, messages: [{ type: "text", text: "hi" }], retryKey: "r1" }),
+    /Multicast recipients must be between 1 and 500 users/,
+  );
+
+  // 0 messages
+  await assert.rejects(
+    () => service.multicast({ accessToken: "tok", to: ["U1"], messages: [], retryKey: "r1" }),
+    /Multicast messages must be between 1 and 5 message objects/,
+  );
+
+  // 6 messages
+  const tooManyMessages = Array.from({ length: 6 }, () => ({ type: "text", text: "hi" }));
+  await assert.rejects(
+    () => service.multicast({ accessToken: "tok", to: ["U1"], messages: tooManyMessages, retryKey: "r1" }),
+    /Multicast messages must be between 1 and 5 message objects/,
+  );
+});
+
+void test("multicast treats LINE 409 with acceptedRequestId as idempotent success", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response("Conflict", {
+    status: 409,
+    headers: { "x-line-request-id": "req-999", "x-line-accepted-request-id": "accepted-999" },
+  });
+
+  const result = await new LineMessagingService().multicast({
+    accessToken: "tok",
+    to: ["U1"],
+    messages: [{ type: "text", text: "hi" }],
+    retryKey: "r-duplicate",
+  });
+
+  assert.equal(result.duplicateAccepted, true);
+  assert.equal(result.acceptedRequestId, "accepted-999");
+});
+
