@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,8 +7,11 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
@@ -22,6 +26,18 @@ import type {
 @Roles(UserRole.ADMIN)
 export class MassMessageController {
   constructor(private readonly service: MassMessageService) {}
+
+  @Post("upload-image")
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadImage(
+    @UploadedFile() file: { buffer: Buffer; mimetype?: string; size?: number } | undefined,
+    @Req() req: AuthRequest,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException("Image file is required");
+    }
+    return this.service.uploadImage(file, req.user!);
+  }
 
   @Post("preview")
   async preview(

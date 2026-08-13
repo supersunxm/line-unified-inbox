@@ -240,19 +240,187 @@ void test("createAndSend rejects invalid UUID or invalid messages array", async 
     /messages must be a non-empty array of message objects/,
   );
 
-  // More than 5 messages
-  const sixMessages = Array.from({ length: 6 }, () => ({ type: "text", text: "msg" }));
+  // More than 2 messages (V1.1 limit: 1 text + 1 image)
+  const threeMessages = Array.from({ length: 3 }, () => ({ type: "text", text: "msg" }));
   await assert.rejects(
     () =>
       service.createAndSend(
         {
           campaignRequestId: "a0000000-0000-4000-8000-000000000004",
           storeSelection: { mode: MassMessageStoreMode.ALL },
-          messages: sixMessages,
+          messages: threeMessages,
         },
         adminUser,
       ),
-    /LINE allows at most 5 message objects per multicast request/,
+    /Mass Message allows at most 2 message objects/,
+  );
+});
+
+void test("uploadImage validates file size, magic bytes, preview generation <= 1MB, and rejects WebP, GIF, PDF", async () => {
+  const sharp = (await import("sharp")).default;
+  const storedKeys: string[] = [];
+  const storedMimes: string[] = [];
+  const storedBuffers: Buffer[] = [];
+
+  const mediaStorage = {
+    put: async (key: string, body: Buffer, mime: string) => {
+      storedKeys.push(key);
+      storedMimes.push(mime);
+      storedBuffers.push(body);
+      return { provider: "s3", fileId: key, mimeType: mime, size: body.length };
+    },
+  } as any;
+
+  const service = new MassMessageService({} as any, {} as any, {} as any, mediaStorage);
+
+  // 1. Valid JPEG accepted -> original and preview stored, preview <= 1MB
+  const jpegBuffer = await sharp({
+    create: { width: 200, height: 200, channels: 3, background: { r: 255, g: 100, b: 50 } },
+  })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  const jpegResult = await service.uploadImage({ buffer: jpegBuffer, mimetype: "image/jpeg" }, adminUser);
+  assert.equal(jpegResult.mimeType, "image/jpeg");
+  assert.equal(jpegResult.fileSize, jpegBuffer.length);
+  assert.ok(jpegResult.previewSize <= 1024 * 1024, "Preview size must be <= 1 MB");
+  assert.match(jpegResult.url, /^https?:\/\//);
+  assert.match(jpegResult.previewUrl, /^https?:\/\//);
+  assert.match(jpegResult.originalObjectKey, /^line-media\/outbound\/mass-message\/.*-original\.jpg$/);
+  assert.match(jpegResult.previewObjectKey, /^line-media\/outbound\/mass-message\/.*-preview\.jpg$/);
+
+  // 2. Valid PNG accepted -> original and preview stored, preview <= 1MB
+  const pngBuffer = await sharp({
+    create: { width: 200, height: 200, channels: 4, background: { r: 50, g: 200, b: 100, alpha: 1 } },
+  })
+    .png()
+    .toBuffer();
+
+  const pngResult = await service.uploadImage({ buffer: pngBuffer, mimetype: "image/png" }, adminUser);
+  assert.equal(pngResult.mimeType, "image/png");
+  assert.equal(pngResult.fileSize, pngBuffer.length);
+  assert.ok(pngResult.previewSize <= 1024 * 1024, "Preview size must be <= 1 MB");
+  assert.match(pngResult.originalObjectKey, /^line-media\/outbound\/mass-message\/.*-original\.png$/);
+
+  // 3. WebP rejected -> must throw BadRequestException
+  const webpBuffer = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } },
+  })
+    .webp()
+    .toBuffer();
+
+  await assert.rejects(
+    () => service.uploadImage({ buffer: webpBuffer, mimetype: "image/webp" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 4. GIF rejected -> must throw BadRequestException
+  const gifBuffer = Buffer.from("GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;");
+  await assert.rejects(
+    () => service.uploadImage({ buffer: gifBuffer, mimetype: "image/gif" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 5. PDF rejected
+  const pdfBuffer = Buffer.from("%PDF-1.7 header");
+  await assert.rejects(
+    () => service.uploadImage({ buffer: pdfBuffer, mimetype: "application/pdf" }, adminUser),
+    /Unsupported image format\. Allowed formats: JPEG, PNG\./,
+  );
+
+  // 6. Oversized image (>10MB)
+  const oversizedBuffer = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(11 * 1024 * 1024)]);
+  await assert.rejects(
+    () => service.uploadImage({ buffer: oversizedBuffer, mimetype: "image/jpeg" }, adminUser),
+    /Image exceeds the 10 MB limit/,
+  );
+
+  // 7. Mismatched declared MIME vs content
+  await assert.rejects(
+    () => service.uploadImage({ buffer: pngBuffer, mimetype: "image/jpeg" }, adminUser),
+    /Image content does not match its declared MIME type/,
+  );
+});
+
+void test("validateMessages enforces text-only, image-only, text+image combinations", () => {
+  const service = new MassMessageService({} as any, {} as any, {} as any);
+
+  // Text only -> valid
+  const textOnly = service.validateMessages([{ type: "text", text: "Hello customer" }]);
+  assert.deepEqual(textOnly, [{ type: "text", text: "Hello customer" }]);
+
+  // Image only -> valid
+  const imageOnly = service.validateMessages([
+    {
+      type: "image",
+      originalContentUrl: "https://example.com/img.jpg",
+      previewImageUrl: "https://example.com/preview.jpg",
+    },
+  ]);
+  assert.deepEqual(imageOnly, [
+    {
+      type: "image",
+      originalContentUrl: "https://example.com/img.jpg",
+      previewImageUrl: "https://example.com/preview.jpg",
+    },
+  ]);
+
+  // Text + Image -> valid
+  const textAndImage = service.validateMessages([
+    { type: "text", text: "Promo banner" },
+    {
+      type: "image",
+      originalContentUrl: "https://example.com/promo.png",
+      previewImageUrl: "https://example.com/promo.png",
+    },
+  ]);
+  assert.equal(textAndImage.length, 2);
+
+  // Multiple texts (>1) -> rejected
+  assert.throws(
+    () =>
+      service.validateMessages([
+        { type: "text", text: "First" },
+        { type: "text", text: "Second" },
+      ]),
+    /Mass Message allows at most 1 text message/,
+  );
+
+  // Multiple images (>1) -> rejected
+  assert.throws(
+    () =>
+      service.validateMessages([
+        {
+          type: "image",
+          originalContentUrl: "https://example.com/1.jpg",
+          previewImageUrl: "https://example.com/1.jpg",
+        },
+        {
+          type: "image",
+          originalContentUrl: "https://example.com/2.jpg",
+          previewImageUrl: "https://example.com/2.jpg",
+        },
+      ]),
+    /Mass Message allows at most 1 image message/,
+  );
+
+  // Non-HTTPS image URL -> rejected
+  assert.throws(
+    () =>
+      service.validateMessages([
+        {
+          type: "image",
+          originalContentUrl: "http://insecure.com/1.jpg",
+          previewImageUrl: "https://insecure.com/1.jpg",
+        },
+      ]),
+    /Image originalContentUrl must be a valid HTTPS URL/,
+  );
+
+  // Empty text -> rejected
+  assert.throws(
+    () => service.validateMessages([{ type: "text", text: "   " }]),
+    /Text message content cannot be empty/,
   );
 });
 

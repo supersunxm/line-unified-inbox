@@ -75,3 +75,29 @@ void test("MassMessageController createAndSend forwards parameters to service", 
   assert.deepEqual(calledWith.input, body);
   assert.equal(calledWith.user.id, "admin-1");
 });
+
+void test("MassMessageController uploadImage forwards file to service", async () => {
+  let uploadedFile: any = null;
+  const mockService = {
+    uploadImage: async (file: any, user: AuthUser) => {
+      uploadedFile = file;
+      return {
+        url: "https://lineoppo.click/media/outbound/img.jpg",
+        previewUrl: "https://lineoppo.click/media/outbound/img.jpg",
+        mimeType: "image/jpeg",
+        fileSize: 1024,
+      };
+    },
+  } as any;
+
+  const controller = new MassMessageController(mockService);
+  const req = { user: adminUser } as AuthRequest;
+  const mockFile = { buffer: Buffer.from("data"), mimetype: "image/jpeg", size: 1024 };
+
+  const result = await controller.uploadImage(mockFile, req);
+  assert.equal(result.mimeType, "image/jpeg");
+  assert.deepEqual(uploadedFile, mockFile);
+
+  // Missing file rejection
+  await assert.rejects(() => controller.uploadImage(undefined, req), /Image file is required/);
+});

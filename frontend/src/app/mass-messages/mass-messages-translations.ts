@@ -29,12 +29,23 @@ export type MassMessagesText = {
   audienceReplied: string;
   audienceRepliedDesc: string;
 
-  // Section 3: Message
+  // Section 3: Message & Media
   sectionMessageTitle: string;
   messagePlaceholder: string;
   characterCount: (current: number, max: number) => string;
   messagePreviewTitle: string;
   messagePreviewSubtitle: string;
+  messagePreviewEmptyPlaceholder: string;
+  attachImageButton: string;
+  replaceImageButton: string;
+  removeImageButton: string;
+  imageUploadHelper: string;
+  uploadingImage: string;
+  imageUploadFailed: string;
+  imageTooLarge: string;
+  imageInvalidFormat: string;
+  imageAttachedBadge: string;
+  imagePreviewAlt: string;
 
   // Section 4: Preview & Summary
   sectionSummaryTitle: string;
@@ -58,6 +69,7 @@ export type MassMessagesText = {
   zeroRecipientsAlert: string;
   zeroEligibleStoresAlert: string;
   emptyMessageAlert: string;
+  emptyContentAlert: string;
 
   // Review & Confirm
   reviewAndSendButton: string;
@@ -66,6 +78,12 @@ export type MassMessagesText = {
   confirmModalQuotaWarning: string;
   confirmModalConfirmButton: string;
   confirmModalCancelButton: string;
+  confirmContentSummaryTitle: string;
+  confirmTextMessageLabel: string;
+  confirmImageLabel: string;
+  confirmNoTextMessage: string;
+  confirmNoImage: string;
+  confirmImageAttached: string;
   sendingInProgress: string;
 
   // Progress View
@@ -140,6 +158,17 @@ export const translations: Record<Language, MassMessagesText> = {
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} ตัวอักษร`,
     messagePreviewTitle: "ตัวอย่างข้อความ",
     messagePreviewSubtitle: "มุมมองลูกค้าในแอป LINE",
+    messagePreviewEmptyPlaceholder: "พิมพ์ข้อความหรือแนบรูปภาพเพื่อดูตัวอย่าง...",
+    attachImageButton: "แนบรูปภาพ",
+    replaceImageButton: "เปลี่ยนรูป",
+    removeImageButton: "ลบรูป",
+    imageUploadHelper: "รองรับ JPG และ PNG สูงสุด 10 MB",
+    uploadingImage: "กำลังอัปโหลดรูปภาพ...",
+    imageUploadFailed: "อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+    imageTooLarge: "ขนาดรูปภาพเกิน 10 MB",
+    imageInvalidFormat: "รูปแบบไฟล์ไม่ถูกต้อง รองรับเฉพาะ JPG และ PNG",
+    imageAttachedBadge: "แนบรูปภาพแล้ว",
+    imagePreviewAlt: "รูปภาพที่ต้องการส่ง",
 
     sectionSummaryTitle: "4. ตรวจสอบข้อมูลก่อนส่ง",
     storeCountLabel: "ร้านค้าทั้งหมดที่ประเมิน",
@@ -160,6 +189,7 @@ export const translations: Record<Language, MassMessagesText> = {
     zeroRecipientsAlert: "ไม่มีลูกค้าในกลุ่มเป้าหมายที่เลือก ไม่สามารถส่งข้อความได้",
     zeroEligibleStoresAlert: "ไม่มีร้านค้าที่พร้อมส่งข้อความ โปรดตรวจสอบการเชื่อมต่อ LINE OA",
     emptyMessageAlert: "โปรดกรอกข้อความก่อนดำเนินการส่ง",
+    emptyContentAlert: "โปรดกรอกข้อความหรือแนบรูปภาพอย่างน้อย 1 รายการก่อนส่ง",
 
     reviewAndSendButton: "ตรวจสอบและส่งข้อความ",
     confirmModalTitle: "ยืนยันการส่งข้อความ?",
@@ -169,6 +199,12 @@ export const translations: Record<Language, MassMessagesText> = {
       "การส่งแบบหลายคนอาจใช้ Messaging API quota ของแต่ละ LINE OA และไม่สามารถเรียกคืนข้อความที่ส่งไปแล้วได้",
     confirmModalConfirmButton: "ยืนยันและส่งข้อความ",
     confirmModalCancelButton: "ยกเลิก",
+    confirmContentSummaryTitle: "เนื้อหาที่ส่ง",
+    confirmTextMessageLabel: "ข้อความตัวอักษร",
+    confirmImageLabel: "รูปภาพแนบ",
+    confirmNoTextMessage: "(ไม่มีข้อความตัวอักษร)",
+    confirmNoImage: "(ไม่ได้แนบรูปภาพ)",
+    confirmImageAttached: "แนบรูปภาพ 1 รูป",
     sendingInProgress: "กำลังสร้างและส่งแคมเปญ...",
 
     campaignProgressTitle: "สถานะการส่งข้อความ",
@@ -240,6 +276,17 @@ export const translations: Record<Language, MassMessagesText> = {
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} characters`,
     messagePreviewTitle: "Message Preview",
     messagePreviewSubtitle: "Customer view in LINE app",
+    messagePreviewEmptyPlaceholder: "Enter text or attach an image to see live preview...",
+    attachImageButton: "Attach Image",
+    replaceImageButton: "Replace Image",
+    removeImageButton: "Remove",
+    imageUploadHelper: "JPG or PNG, max 10 MB",
+    uploadingImage: "Uploading image...",
+    imageUploadFailed: "Failed to upload image. Please try again.",
+    imageTooLarge: "Image exceeds 10 MB limit",
+    imageInvalidFormat: "Invalid format. Only JPG and PNG are supported.",
+    imageAttachedBadge: "Image Attached",
+    imagePreviewAlt: "Attached broadcast image",
 
     sectionSummaryTitle: "4. Review & Confirm Scope",
     storeCountLabel: "Total Stores Evaluated",
@@ -260,6 +307,7 @@ export const translations: Record<Language, MassMessagesText> = {
     zeroRecipientsAlert: "No recipients match the selected criteria. Cannot send message.",
     zeroEligibleStoresAlert: "No stores are ready to send messages. Please verify LINE OA connections.",
     emptyMessageAlert: "Please enter a message before sending.",
+    emptyContentAlert: "Please enter text or attach an image before sending.",
 
     reviewAndSendButton: "Review and Send",
     confirmModalTitle: "Confirm Mass Message Send?",
@@ -269,6 +317,12 @@ export const translations: Record<Language, MassMessagesText> = {
       "Multicast messaging consumes Messaging API quota for each LINE OA and sent messages cannot be revoked.",
     confirmModalConfirmButton: "Confirm & Send Campaign",
     confirmModalCancelButton: "Cancel",
+    confirmContentSummaryTitle: "Campaign Content",
+    confirmTextMessageLabel: "Text Message",
+    confirmImageLabel: "Image Attachment",
+    confirmNoTextMessage: "(No text message)",
+    confirmNoImage: "(No image attached)",
+    confirmImageAttached: "1 image attached",
     sendingInProgress: "Creating and dispatching campaign...",
 
     campaignProgressTitle: "Campaign Delivery Progress",
@@ -340,6 +394,17 @@ export const translations: Record<Language, MassMessagesText> = {
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} 字符`,
     messagePreviewTitle: "消息预览",
     messagePreviewSubtitle: "LINE 客户端接收视图",
+    messagePreviewEmptyPlaceholder: "输入文字或上传图片以查看预览...",
+    attachImageButton: "上传图片",
+    replaceImageButton: "更换图片",
+    removeImageButton: "删除图片",
+    imageUploadHelper: "支持 JPG 和 PNG，最大 10 MB",
+    uploadingImage: "正在上传图片...",
+    imageUploadFailed: "图片上传失败，请重试",
+    imageTooLarge: "图片大小超过 10 MB 限制",
+    imageInvalidFormat: "格式不受支持，仅支持 JPG 和 PNG",
+    imageAttachedBadge: "已附加图片",
+    imagePreviewAlt: "附加的群发图片",
 
     sectionSummaryTitle: "4. 发送前核对",
     storeCountLabel: "评估门店总数",
@@ -360,6 +425,7 @@ export const translations: Record<Language, MassMessagesText> = {
     zeroRecipientsAlert: "所选条件无匹配客户，无法发送。",
     zeroEligibleStoresAlert: "没有可发送消息的门店，请检查 LINE OA 连接。",
     emptyMessageAlert: "请先输入消息内容。",
+    emptyContentAlert: "请至少输入文字或上传 1 张图片后再发送。",
 
     reviewAndSendButton: "核对并发送",
     confirmModalTitle: "确认发送群发消息？",
@@ -369,6 +435,12 @@ export const translations: Record<Language, MassMessagesText> = {
       "多播群发会消耗各 LINE OA 的 Messaging API 额度，发送后无法撤回。",
     confirmModalConfirmButton: "确认并发送",
     confirmModalCancelButton: "取消",
+    confirmContentSummaryTitle: "发送内容",
+    confirmTextMessageLabel: "文本消息",
+    confirmImageLabel: "附加图片",
+    confirmNoTextMessage: "(无文本消息)",
+    confirmNoImage: "(未附加图片)",
+    confirmImageAttached: "已附加 1 张图片",
     sendingInProgress: "正在创建并分发任务...",
 
     campaignProgressTitle: "发送进度监控",

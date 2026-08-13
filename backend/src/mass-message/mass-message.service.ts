@@ -1,13 +1,19 @@
+import sharp from "sharp";
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import type { AuthUser } from "../auth/auth.guard";
+import { MediaStorageService } from "../media/media-storage";
+import { createMediaPublicUrl } from "../media/media-public-url";
+import { detectImageMime } from "../conversations.service";
 import { MassMessageScopeService } from "./mass-message-scope.service";
 import { MassMessageProcessorService } from "./mass-message-processor.service";
 import {
@@ -15,15 +21,22 @@ import {
   MassMessageCampaignDetail,
   MassMessageCampaignStatus,
   MassMessageCreateInput,
+  MassMessageItem,
   MassMessagePreviewInput,
   MassMessagePreviewResult,
   MassMessageStoreDeliveryStatus,
   MassMessageStoreMode,
+  MassMessageUploadImageResult,
   StoreDeliveryDetail,
 } from "./mass-message.types";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+};
 
 @Injectable()
 export class MassMessageService {
@@ -33,7 +46,182 @@ export class MassMessageService {
     private readonly prisma: PrismaService,
     private readonly scopeService: MassMessageScopeService,
     private readonly processor: MassMessageProcessorService,
+    private readonly media: MediaStorageService = undefined as unknown as MediaStorageService,
   ) {}
+
+  async uploadImage(
+    file: { buffer: Buffer; mimetype?: string; size?: number },
+    user: AuthUser,
+  ): Promise<MassMessageUploadImageResult> {
+    if (!file?.buffer || !file.buffer.length) {
+      throw new BadRequestException("Image file is required and cannot be empty");
+    }
+
+    if (file.buffer.length > 10 * 1024 * 1024) {
+      throw new BadRequestException("Image exceeds the 10 MB limit");
+    }
+
+    const mime = detectImageMime(file.buffer);
+    if (!mime || !IMAGE_EXTENSIONS[mime]) {
+      throw new BadRequestException("Unsupported image format. Allowed formats: JPEG, PNG.");
+    }
+
+    const declaredMime = (file.mimetype ?? "").split(";", 1)[0].trim().toLowerCase();
+    if (declaredMime && declaredMime !== "application/octet-stream" && declaredMime !== mime) {
+      throw new BadRequestException("Image content does not match its declared MIME type");
+    }
+
+    if (!this.media) {
+      throw new ServiceUnavailableException("Media storage is unavailable");
+    }
+
+    const ext = IMAGE_EXTENSIONS[mime];
+    const fileId = randomUUID();
+    const originalObjectKey = `line-media/outbound/mass-message/${fileId}-original.${ext}`;
+
+    // Store original image
+    await this.media.put(originalObjectKey, file.buffer, mime);
+
+    // Generate preview image <= 1MB (JPEG or PNG) for LINE Messaging API
+    let previewBuffer: Buffer;
+    let previewMime: string = mime;
+    let previewExt: string = ext;
+
+    try {
+      if (mime === "image/jpeg") {
+        previewBuffer = await sharp(file.buffer)
+          .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80, progressive: true })
+          .toBuffer();
+
+        if (previewBuffer.length > 1024 * 1024) {
+          previewBuffer = await sharp(file.buffer)
+            .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 60 })
+            .toBuffer();
+        }
+      } else {
+        // PNG
+        previewBuffer = await sharp(file.buffer)
+          .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+          .png({ compressionLevel: 8 })
+          .toBuffer();
+
+        if (previewBuffer.length > 1024 * 1024) {
+          previewBuffer = await sharp(file.buffer)
+            .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          previewMime = "image/jpeg";
+          previewExt = "jpg";
+        }
+      }
+    } catch (err) {
+      this.logger.error("Failed to generate preview image with sharp", err);
+      if (file.buffer.length <= 1024 * 1024) {
+        previewBuffer = file.buffer;
+      } else {
+        throw new BadRequestException("Failed to generate valid preview image for LINE");
+      }
+    }
+
+    if (previewBuffer.length > 1024 * 1024) {
+      throw new BadRequestException("Preview image exceeds 1 MB limit for LINE Messaging API");
+    }
+
+    const previewObjectKey = `line-media/outbound/mass-message/${fileId}-preview.${previewExt}`;
+    await this.media.put(previewObjectKey, previewBuffer, previewMime);
+
+    const originalContentUrl = createMediaPublicUrl(originalObjectKey);
+    const previewImageUrl = createMediaPublicUrl(previewObjectKey);
+
+    return {
+      url: originalContentUrl,
+      previewUrl: previewImageUrl,
+      originalObjectKey,
+      previewObjectKey,
+      mimeType: mime,
+      fileSize: file.buffer.length,
+      previewSize: previewBuffer.length,
+    };
+  }
+
+  validateMessages(messages: unknown[]): MassMessageItem[] {
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      throw new BadRequestException("messages must be a non-empty array of message objects");
+    }
+
+    if (messages.length > 2) {
+      throw new BadRequestException("Mass Message allows at most 2 message objects (1 text and 1 image)");
+    }
+
+    let textCount = 0;
+    let imageCount = 0;
+    const sanitized: MassMessageItem[] = [];
+
+    for (const raw of messages) {
+      if (!raw || typeof raw !== "object") {
+        throw new BadRequestException("Invalid message payload object");
+      }
+
+      const item = raw as Record<string, unknown>;
+      if (item.type === "text") {
+        textCount++;
+        if (typeof item.text !== "string" || !item.text.trim()) {
+          throw new BadRequestException("Text message content cannot be empty");
+        }
+        if (item.text.length > 5000) {
+          throw new BadRequestException("Text message exceeds 5,000 character limit");
+        }
+        sanitized.push({
+          type: "text",
+          text: item.text.trim(),
+        });
+      } else if (item.type === "image") {
+        imageCount++;
+        if (
+          typeof item.originalContentUrl !== "string" ||
+          !item.originalContentUrl.trim() ||
+          !item.originalContentUrl.startsWith("https://")
+        ) {
+          throw new BadRequestException("Image originalContentUrl must be a valid HTTPS URL");
+        }
+        if (
+          typeof item.previewImageUrl !== "string" ||
+          !item.previewImageUrl.trim() ||
+          !item.previewImageUrl.startsWith("https://")
+        ) {
+          throw new BadRequestException("Image previewImageUrl must be a valid HTTPS URL");
+        }
+        if (item.originalContentUrl.length > 2000 || item.previewImageUrl.length > 2000) {
+          throw new BadRequestException("Image URL exceeds 2,000 character limit");
+        }
+        sanitized.push({
+          type: "image",
+          originalContentUrl: item.originalContentUrl.trim(),
+          previewImageUrl: item.previewImageUrl.trim(),
+          ...(typeof item.originalObjectKey === "string" ? { originalObjectKey: item.originalObjectKey.trim() } : {}),
+          ...(typeof item.previewObjectKey === "string" ? { previewObjectKey: item.previewObjectKey.trim() } : {}),
+        });
+      } else {
+        throw new BadRequestException(`Unsupported message type: ${String(item.type)}`);
+      }
+    }
+
+    if (textCount > 1) {
+      throw new BadRequestException("Mass Message allows at most 1 text message");
+    }
+
+    if (imageCount > 1) {
+      throw new BadRequestException("Mass Message allows at most 1 image message");
+    }
+
+    if (textCount === 0 && imageCount === 0) {
+      throw new BadRequestException("Campaign must contain at least one sendable message (text or image)");
+    }
+
+    return sanitized;
+  }
 
   async preview(
     input: MassMessagePreviewInput,
@@ -88,13 +276,7 @@ export class MassMessageService {
       throw new BadRequestException("campaignRequestId must be a valid UUID");
     }
 
-    if (!input.messages || !Array.isArray(input.messages) || input.messages.length === 0) {
-      throw new BadRequestException("messages must be a non-empty array of message objects");
-    }
-
-    if (input.messages.length > 5) {
-      throw new BadRequestException("LINE allows at most 5 message objects per multicast request");
-    }
+    const validatedMessages = this.validateMessages(input.messages);
 
     // Check existing campaign for idempotency
     const existing = await this.prisma.massMessageCampaign.findUnique({
@@ -141,7 +323,7 @@ export class MassMessageService {
             audienceType,
             storeMode: input.storeSelection.mode,
             selectedStoreIds: input.storeSelection.storeIds ?? [],
-            messagePayload: { messages: input.messages } as unknown as Prisma.InputJsonValue,
+            messagePayload: { messages: validatedMessages } as unknown as Prisma.InputJsonValue,
             status: MassMessageCampaignStatus.PENDING,
             createdById: user.id,
             storeCount: scopes.length,

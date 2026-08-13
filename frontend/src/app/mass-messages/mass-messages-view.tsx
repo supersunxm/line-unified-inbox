@@ -52,6 +52,15 @@ export function MassMessagesView({
   const [audienceType, setAudienceType] = useState<MassMessageAudienceType>("ALL_KNOWN");
   const [messageText, setMessageText] = useState("");
   const [campaignTitle, setCampaignTitle] = useState("");
+  const [attachedImage, setAttachedImage] = useState<{
+    url: string;
+    previewUrl: string;
+    name: string;
+    size: number;
+  } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Preview State
   const [preview, setPreview] = useState<MassMessagePreviewResult | null>(null);
@@ -194,6 +203,9 @@ export function MassMessagesView({
     setActiveCampaignRequestId(null);
     setMessageText("");
     setCampaignTitle("");
+    setAttachedImage(null);
+    setIsUploadingImage(false);
+    setImageUploadError(null);
     setSendError(null);
   };
 
@@ -213,9 +225,66 @@ export function MassMessagesView({
     );
   };
 
+  // Image Upload Handlers
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so re-selecting same file triggers onChange
+    e.target.value = "";
+
+    // Size validation: 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      setImageUploadError(t.imageTooLarge);
+      return;
+    }
+
+    // Format validation: JPEG and PNG only
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const validExtensions = ["jpg", "jpeg", "png"];
+    const validMimes = ["image/jpeg", "image/png"];
+    if (
+      (!file.type && !validExtensions.includes(ext || "")) ||
+      (file.type && !validMimes.includes(file.type)) ||
+      (ext && !validExtensions.includes(ext))
+    ) {
+      setImageUploadError(t.imageInvalidFormat);
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setImageUploadError(null);
+
+    try {
+      const res = await api.uploadMassMessageImage(file);
+      setAttachedImage({
+        url: res.url,
+        previewUrl: res.previewUrl || res.url,
+        name: file.name,
+        size: file.size,
+      });
+    } catch (err: any) {
+      console.error("Image upload failed", err);
+      setImageUploadError(err?.message || t.imageUploadFailed);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setAttachedImage(null);
+    setImageUploadError(null);
+  };
+
+  const handleReplaceImage = () => {
+    fileInputRef.current?.click();
+  };
+
+  const hasContent = Boolean(messageText.trim() || attachedImage);
+
   // Open confirmation modal
   const handleOpenConfirm = () => {
-    if (!messageText.trim()) return;
+    if (!hasContent) return;
     if (!preview || preview.eligibleStoreCount === 0 || preview.estimatedRecipientCount === 0) return;
     setSendError(null);
     // Generate stable request ID for this submission attempt
@@ -225,9 +294,26 @@ export function MassMessagesView({
 
   // Execute campaign creation
   const handleConfirmSend = async () => {
-    if (sending || !activeCampaignRequestId) return;
+    if (sending || !activeCampaignRequestId || !hasContent) return;
     setSending(true);
     setSendError(null);
+
+    const messages: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+    > = [];
+
+    if (messageText.trim()) {
+      messages.push({ type: "text", text: messageText.trim() });
+    }
+    if (attachedImage) {
+      messages.push({
+        type: "image",
+        originalContentUrl: attachedImage.url,
+        previewImageUrl: attachedImage.previewUrl,
+      });
+    }
+
     try {
       const created = await api.createMassMessage({
         campaignRequestId: activeCampaignRequestId,
@@ -237,7 +323,7 @@ export function MassMessagesView({
           storeIds: storeMode === "ALL" ? undefined : selectedStoreIds,
         },
         audienceType,
-        messages: [{ type: "text", text: messageText.trim() }],
+        messages,
       });
 
       setShowConfirmModal(false);
@@ -518,7 +604,7 @@ export function MassMessagesView({
                   </span>
                 </div>
 
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 space-y-3">
                   <input
                     type="text"
                     value={campaignTitle}
@@ -528,13 +614,95 @@ export function MassMessagesView({
                   />
 
                   <textarea
-                    rows={5}
+                    rows={4}
                     value={messageText}
                     maxLength={MAX_MESSAGE_LENGTH}
                     onChange={(e) => setMessageText(e.target.value)}
                     placeholder={t.messagePlaceholder}
                     className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:outline-none resize-y"
                   />
+
+                  {/* Image Attachment Section */}
+                  <div className="pt-1">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                      onChange={(e) => void handleFileSelect(e)}
+                      className="hidden"
+                    />
+
+                    {attachedImage ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 p-3">
+                        <img
+                          src={attachedImage.previewUrl || attachedImage.url}
+                          alt={attachedImage.name}
+                          className="h-14 w-14 rounded-md object-cover border border-emerald-500/30 bg-white dark:bg-slate-950 flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                              {t.imageAttachedBadge}
+                            </span>
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {attachedImage.size > 1024 * 1024
+                                ? `${(attachedImage.size / (1024 * 1024)).toFixed(2)} MB`
+                                : `${(attachedImage.size / 1024).toFixed(1)} KB`}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs font-medium text-slate-900 dark:text-slate-100">
+                            {attachedImage.name}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleReplaceImage}
+                            className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            {t.replaceImageButton}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="rounded-md border border-red-200 dark:border-red-900/50 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                          >
+                            {t.removeImageButton}
+                          </button>
+                        </div>
+                      </div>
+                    ) : isUploadingImage ? (
+                      <div className="flex items-center justify-center gap-2.5 rounded-lg border border-dashed border-emerald-500/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                        <svg className="h-4 w-4 animate-spin text-emerald-600" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span>{t.uploadingImage}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 p-3 bg-slate-50/50 dark:bg-slate-950/40">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs"
+                        >
+                          <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span>{t.attachImageButton}</span>
+                        </button>
+                        <span className="text-[11px] text-slate-400">
+                          {t.imageUploadHelper}
+                        </span>
+                      </div>
+                    )}
+
+                    {imageUploadError && (
+                      <div className="mt-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30 p-2.5 text-xs text-red-600 dark:text-red-400">
+                        {imageUploadError}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -651,14 +819,27 @@ export function MassMessagesView({
                   <span className="text-[11px] text-slate-400">{t.messagePreviewSubtitle}</span>
                 </div>
 
-                <div className="mt-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/60 p-4 min-h-[120px] flex flex-col justify-end">
-                  {messageText.trim() ? (
-                    <div className="self-start max-w-[85%] rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 p-3 text-xs text-slate-900 dark:text-slate-100 shadow-xs whitespace-pre-wrap break-words border border-slate-200/50 dark:border-slate-700/50">
-                      {messageText}
+                <div className="mt-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/60 p-4 min-h-[140px] flex flex-col justify-end gap-2.5">
+                  {hasContent ? (
+                    <div className="flex flex-col items-start gap-2 max-w-[85%]">
+                      {attachedImage && (
+                        <div className="overflow-hidden rounded-2xl rounded-tl-xs border border-slate-200/60 dark:border-slate-700/60 shadow-xs bg-white dark:bg-slate-800">
+                          <img
+                            src={attachedImage.previewUrl || attachedImage.url}
+                            alt={t.imagePreviewAlt}
+                            className="max-h-56 w-auto max-w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      {messageText.trim() && (
+                        <div className="rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 p-3 text-xs text-slate-900 dark:text-slate-100 shadow-xs whitespace-pre-wrap break-words border border-slate-200/50 dark:border-slate-700/50">
+                          {messageText}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <p className="text-center text-xs text-slate-400 italic">
-                      {t.messagePlaceholder}
+                    <p className="text-center text-xs text-slate-400 italic py-6">
+                      {t.messagePreviewEmptyPlaceholder}
                     </p>
                   )}
                 </div>
@@ -669,7 +850,8 @@ export function MassMessagesView({
                 <button
                   type="button"
                   disabled={
-                    !messageText.trim() ||
+                    !hasContent ||
+                    isUploadingImage ||
                     !preview ||
                     preview.eligibleStoreCount === 0 ||
                     preview.estimatedRecipientCount === 0 ||
@@ -697,7 +879,17 @@ export function MassMessagesView({
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
                     <div>
-                      <span className="text-[11px] font-mono text-slate-400">ID: {activeCampaign.id}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-slate-400">ID: {activeCampaign.id}</span>
+                        {activeCampaign.messagePayload?.messages?.some((m: any) => m.type === "image") && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>{t.imageAttachedBadge}</span>
+                          </span>
+                        )}
+                      </div>
                       <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                         {activeCampaign.title || t.campaignProgressTitle}
                       </h2>
@@ -941,7 +1133,14 @@ export function MassMessagesView({
                           })}
                         </td>
                         <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">
-                          {item.title || "Mass Message"}
+                          <div className="flex items-center gap-1.5">
+                            <span>{item.title || "Mass Message"}</span>
+                            {item.messagePayload?.messages?.some((m: any) => m.type === "image") && (
+                              <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold" title="Image attached">
+                                IMG
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 text-slate-500">{item.audienceType}</td>
                         <td className="p-3 text-right font-mono">{item.storeCount}</td>
@@ -1004,6 +1203,38 @@ export function MassMessagesView({
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {t.confirmModalDesc(preview.estimatedRecipientCount, preview.eligibleStoreCount)}
             </p>
+
+            {/* Campaign Content Summary */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-2 text-xs">
+              <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] uppercase tracking-wider">
+                {t.confirmContentSummaryTitle}
+              </span>
+              
+              <div className="space-y-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-slate-500 text-[11px]">{t.confirmTextMessageLabel}:</span>
+                  <span className="text-right text-slate-800 dark:text-slate-200 font-medium line-clamp-2 max-w-[220px]">
+                    {messageText.trim() ? messageText.trim() : <span className="text-slate-400 italic">{t.confirmNoTextMessage}</span>}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500 text-[11px]">{t.confirmImageLabel}:</span>
+                  <span className="text-right text-slate-800 dark:text-slate-200 font-medium truncate max-w-[220px]">
+                    {attachedImage ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>{t.confirmImageAttached} ({attachedImage.name})</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic">{t.confirmNoImage}</span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/40 p-3 text-[11px] text-amber-800 dark:text-amber-300">
               {t.confirmModalQuotaWarning}

@@ -1038,6 +1038,28 @@ export type MassMessagePreviewResult = {
   stores: StorePreviewResult[];
 };
 
+export type MassMessageTextMessageItem = {
+  type: "text";
+  text: string;
+};
+
+export type MassMessageImageMessageItem = {
+  type: "image";
+  originalContentUrl: string;
+  previewImageUrl: string;
+};
+
+export type MassMessageItem =
+  | MassMessageTextMessageItem
+  | MassMessageImageMessageItem;
+
+export type MassMessageUploadImageResult = {
+  url: string;
+  previewUrl: string;
+  mimeType: string;
+  fileSize: number;
+};
+
 export type MassMessageCreateInput = {
   campaignRequestId: string;
   title?: string;
@@ -1046,7 +1068,7 @@ export type MassMessageCreateInput = {
     storeIds?: string[];
   };
   audienceType?: MassMessageAudienceType;
-  messages: Array<{ type: "text"; text: string }>;
+  messages: Array<MassMessageItem>;
 };
 
 export type StoreDeliveryDetail = {
