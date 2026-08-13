@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../config/app_config.dart';
 import '../storage/token_store.dart';
 import 'api_exception.dart';
@@ -44,18 +45,33 @@ class ApiClient {
     return response.bodyBytes;
   }
 
-  Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, required Uint8List bytes, required String idempotencyKey}) async {
+  Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, String? mimeType, required Uint8List bytes, required String idempotencyKey}) async {
     if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
     final request = http.MultipartRequest('POST', AppConfig.uri(path));
     final token = await _tokens.read();
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields['idempotencyKey'] = idempotencyKey;
-    request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+    request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: _imageMediaType(mimeType, filename)));
     late http.Response response;
     try { response = await http.Response.fromStream(await request.send()); } catch (_) { throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
     Map<String, dynamic> decoded = <String, dynamic>{}; try { decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>; } catch (_) { throw ApiException(response.statusCode, 'INVALID_RESPONSE', 'Service returned an invalid response'); }
     if (response.statusCode < 200 || response.statusCode >= 300) throw ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
     return decoded;
+  }
+
+  MediaType? _imageMediaType(String? mimeType, String filename) {
+    final supplied = mimeType?.toLowerCase().split(';').first.trim();
+    const supported = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'};
+    final value = supplied != null && supported.contains(supplied) ? supplied : switch (filename.toLowerCase().split('.').last) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      _ => null,
+    };
+    if (value == null) return null;
+    final parts = value.split('/');
+    return MediaType(parts[0], parts[1]);
   }
 
   Future<Map<String, dynamic>> _request(String method, String path, {Map<String, String>? query, Map<String, dynamic>? body, bool authenticated = true}) async {

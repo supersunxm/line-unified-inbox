@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaService } from "./prisma.service";
-import { ConversationsService } from "./conversations.service";
+import { ConversationsService, detectImageMime } from "./conversations.service";
 import { OperationsService } from "./operations/operations.service";
 import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
 import { LineMessagingService } from "./line-messaging/line-messaging.service";
@@ -12,6 +12,36 @@ const noopOperations = {
   getOperationalConversationFilter: async () => ({}),
   getLatestResetAt: async () => null,
 } as unknown as OperationsService;
+
+void test("detectImageMime accepts supported signatures independently of multipart MIME", () => {
+  assert.equal(detectImageMime(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), "image/png");
+  assert.equal(detectImageMime(Buffer.from([0xff, 0xd8, 0xff])), "image/jpeg");
+  assert.equal(detectImageMime(Buffer.from("GIF89a")), "image/gif");
+  assert.equal(detectImageMime(Buffer.from("RIFFxxxxWEBP")), "image/webp");
+  assert.equal(detectImageMime(Buffer.from("%PDF-1.7")), null);
+});
+
+void test("sendImage accepts a valid PNG with generic multipart MIME", async () => {
+  let storedMime: string | undefined;
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const conversation = { id: "conversation-generic", storeId: "store", customer: { lineUserId: "Ucustomer" }, lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" } };
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => conversation },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "message-generic", ...data }) },
+      messageMedia: { create: async ({ data }: { data: Record<string, unknown> }) => { storedMime = data.mimeType as string; return data; } },
+      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data },
+    }),
+  } as unknown as PrismaService;
+  const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, { pushImage: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-image", duplicateAccepted: false }) } as unknown as LineMessagingService, { put: async (_key: string, _body: Buffer, mime: string) => ({ provider: "s3", fileId: "key", mimeType: mime, size: png.length }) } as never);
+  await service.sendImage(conversation.id, { buffer: png, mimetype: "application/octet-stream", size: png.length }, "123e4567-e89b-42d3-a456-426614174001", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
+  assert.equal(storedMime, "image/png");
+  await assert.rejects(() => service.sendImage(conversation.id, { buffer: png, mimetype: "image/jpeg", size: png.length }, "123e4567-e89b-42d3-a456-426614174002", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true }), /does not match/);
+  await assert.rejects(() => service.sendImage(conversation.id, { buffer: Buffer.from("not an image"), mimetype: "image/png", size: 12 }, "123e4567-e89b-42d3-a456-426614174003", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true }), /Unsupported image type/);
+  const oversized = Buffer.concat([png, Buffer.alloc(10 * 1024 * 1024)]);
+  await assert.rejects(() => service.sendImage(conversation.id, { buffer: oversized, mimetype: "image/png", size: oversized.length }, "123e4567-e89b-42d3-a456-426614174004", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true }), /10 MB/);
+});
 
 void test("sendMessage resolves the conversation OA token, persists outbound text, marks REPLIED, and audits only after LINE accepts", async () => {
   const writes: string[] = [];

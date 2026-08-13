@@ -36,6 +36,6 @@ class ConversationRepository {
   Future<ConversationDetail> detail(String id, {int limit = 50, String? before}) async => ConversationDetail.fromJson(await _api.get('/mobile/conversations/$id', query: {'limit': '$limit', if (before != null) 'before': before}));
   Future<void> reply(String id, String text, String idempotencyKey) async { await _api.post('/mobile/conversations/$id/messages', body: {'text': text, 'idempotencyKey': idempotencyKey}); }
   Future<Uint8List> media(String url) => _api.getBytes(url);
-  Future<Map<String, dynamic>> sendImage(String id, Uint8List bytes, String filename, String idempotencyKey) => _api.postMultipart('/mobile/conversations/$id/images', field: 'image', filename: filename, bytes: bytes, idempotencyKey: idempotencyKey);
+  Future<Map<String, dynamic>> sendImage(String id, Uint8List bytes, String filename, String idempotencyKey, {String? mimeType}) => _api.postMultipart('/mobile/conversations/$id/images', field: 'image', filename: filename, mimeType: mimeType, bytes: bytes, idempotencyKey: idempotencyKey);
   Future<void> markOpened(String notificationId) async { await _api.patch('/mobile/notifications/$notificationId/opened'); }
 }
