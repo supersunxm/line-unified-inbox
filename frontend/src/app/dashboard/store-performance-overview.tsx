@@ -17,8 +17,8 @@ const LABELS = {
     sectionTitle: "Store Performance",
     title: "ประสิทธิภาพการดำเนินงานรายสาขา",
     subtitle: "เปรียบเทียบสาขาที่มีผลการดำเนินงานยอดเยี่ยมและสาขาที่ต้องการการดูแล",
-    topStoresTitle: "สาขาต้นแบบยอดเยี่ยม (Top Performers)",
-    attentionStoresTitle: "สาขาที่ต้องให้ความสนใจ (Need Attention)",
+    topStoresTitle: "สาขาต้นแบบยอดเยี่ยม",
+    attentionStoresTitle: "สาขาที่ต้องได้รับการดูแล",
     viewAllStores: "ดูตารางสาขาทั้งหมด",
     hideAllStores: "ซ่อนตารางสาขาทั้งหมด",
     storeName: "สาขา",
@@ -47,8 +47,8 @@ const LABELS = {
     sectionTitle: "门店运营绩效",
     title: "各门店运营效率概览",
     subtitle: "表现优秀门店与需重点关注门店对比",
-    topStoresTitle: "优秀标杆门店 (Top Performers)",
-    attentionStoresTitle: "需关注门店 (Need Attention)",
+    topStoresTitle: "优秀标杆门店",
+    attentionStoresTitle: "需关注门店",
     viewAllStores: "查看完整门店表格",
     hideAllStores: "隐藏完整门店表格",
     storeName: "门店",
@@ -105,7 +105,7 @@ export function StorePerformanceOverview({
         <button
           type="button"
           onClick={() => setShowFullTable((prev) => !prev)}
-          className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-all font-tabular"
+          className="px-3.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-colors duration-150 font-tabular"
         >
           {showFullTable ? `▲ ${t.hideAllStores}` : `▼ ${t.viewAllStores}`}
         </button>
@@ -114,10 +114,10 @@ export function StorePerformanceOverview({
       {/* 2-Column: Top Performers vs Stores Requiring Attention */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 font-tabular">
         {/* Top Performers */}
-        <div className="app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+        <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
+          <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {t.topStoresTitle}
               </h3>
@@ -131,15 +131,15 @@ export function StorePerformanceOverview({
             {topBestPracticeStores.map((store, idx) => (
               <div
                 key={store.storeId}
-                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors text-xs"
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150 text-xs"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     #{idx + 1} {getStoreDisplayName(store.storeName)}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-500 flex gap-2">
-                    <span>{t.replied}: <strong className="text-emerald-600 dark:text-emerald-400">{store.replied}</strong></span>
-                    <span>•</span>
+                    <span>{t.replied}: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">{store.replied}</strong></span>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
                     <span>{t.avgTime}: <strong>{store.avgResponseMinutes || 15}m</strong></span>
                   </div>
                 </div>
@@ -151,7 +151,7 @@ export function StorePerformanceOverview({
                   <button
                     type="button"
                     onClick={() => onSelectStoreQuickView(store.storeId)}
-                    className="text-[11px] font-medium text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    className="text-[11px] font-medium text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                   >
                     {t.details} ➔
                   </button>
@@ -162,10 +162,10 @@ export function StorePerformanceOverview({
         </div>
 
         {/* Stores Requiring Attention */}
-        <div className="app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+        <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs space-y-3">
+          <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                 {t.attentionStoresTitle}
               </h3>
@@ -179,15 +179,15 @@ export function StorePerformanceOverview({
             {needAttentionStores.map((store, idx) => (
               <div
                 key={store.storeId}
-                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors text-xs"
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150 text-xs"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     #{idx + 1} {getStoreDisplayName(store.storeName)}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-500 flex gap-2">
-                    <span>{t.pending}: <strong className="text-rose-600 dark:text-rose-400">{store.pending}</strong></span>
-                    <span>•</span>
+                    <span>{t.pending}: <strong className="text-rose-600 dark:text-rose-400 font-semibold">{store.pending}</strong></span>
+                    <span className="text-slate-300 dark:text-slate-700">•</span>
                     <span>{t.avgTime}: <strong>{store.avgResponseMinutes || 45}m</strong></span>
                   </div>
                 </div>
@@ -203,7 +203,7 @@ export function StorePerformanceOverview({
                   <button
                     type="button"
                     onClick={() => onSelectStoreQuickView(store.storeId)}
-                    className="text-[11px] font-medium text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    className="text-[11px] font-medium text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                   >
                     {t.details} ➔
                   </button>
@@ -229,4 +229,5 @@ export function StorePerformanceOverview({
     </section>
   );
 }
+
 

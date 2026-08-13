@@ -272,7 +272,7 @@ export function DashboardView({
   return (
     <div className="space-y-8 min-h-screen text-[var(--foreground)] pb-20">
       {/* ── HEADER & GLOBAL DATE FILTER ──────────────────────────────── */}
-      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800/80 pb-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-2xs" />
@@ -296,7 +296,7 @@ export function DashboardView({
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Global Date Presets */}
-          <div className="relative flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs shadow-2xs font-tabular">
+          <div className="relative flex items-center gap-1 bg-slate-100/90 dark:bg-slate-900/90 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800/80 text-xs shadow-2xs font-tabular">
             <button
               type="button"
               onClick={() => handlePeriodChange("today")}

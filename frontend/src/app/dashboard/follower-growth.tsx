@@ -36,24 +36,26 @@ export function FollowerGrowthCard({ growth, language }: FollowerGrowthProps) {
   const t = LABELS[language] ?? LABELS.en;
 
   return (
-    <div className="app-card p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-      <h3 className="text-sm font-semibold text-[var(--foreground)]">{t.title}</h3>
+    <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs font-tabular">
+      <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{t.title}</h3>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-center">
-        <div className="p-3 rounded-lg bg-[var(--accent)] border border-[var(--border)]">
-          <span className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider block">{t.totalFriends}</span>
-          <span className="text-lg font-bold text-[var(--foreground)] mt-1 block">{growth.totalFriends.toLocaleString()}</span>
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wide block">{t.totalFriends}</span>
+          <span className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1 block">{growth.totalFriends.toLocaleString()}</span>
         </div>
-        <div className="p-3 rounded-lg bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
-          <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">{t.addedToday}</span>
+        <div className="p-3 rounded-xl bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
+          <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase tracking-wide block">{t.addedToday}</span>
           <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">+{growth.addedToday}</span>
         </div>
-        <div className="p-3 rounded-lg bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40">
-          <span className="text-[10px] text-rose-800 dark:text-rose-300 uppercase tracking-wider block">{t.blockedToday}</span>
+        <div className="p-3 rounded-xl bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40">
+          <span className="text-[10px] text-rose-800 dark:text-rose-300 uppercase tracking-wide block">{t.blockedToday}</span>
           <span className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-1 block">-{growth.blockedToday}</span>
         </div>
-        <div className="p-3 rounded-lg bg-teal-50/40 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-900/40">
-          <span className="text-[10px] text-teal-800 dark:text-teal-300 uppercase tracking-wider block">{t.netGrowth}</span>
+        <div className="p-3 rounded-xl bg-teal-50/40 dark:bg-teal-950/20 border border-teal-200/60 dark:border-teal-900/40">
+          <span className="text-[10px] text-teal-800 dark:text-teal-300 uppercase tracking-wide block">{t.netGrowth}</span>
           <span className="text-lg font-bold text-teal-600 dark:text-teal-400 mt-1 block">+{growth.netToday}</span>
         </div>
       </div>
