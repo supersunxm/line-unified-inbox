@@ -260,6 +260,7 @@ model User {
   sentMessages         Message[]                    @relation("MessageSender")
   auditLogsAsActor     AuditLog[]                   @relation("AuditActor")
   auditLogsAsTarget    AuditLog[]                   @relation("AuditTargetUser")
+  massMessageCampaigns MassMessageCampaign[]        @relation("CreatedMassMessageCampaigns")
 
   @@index([status])
   @@index([employeeId])
@@ -506,6 +507,7 @@ model Store {
   friendSourceLinks    FriendSourceLink[]
   memberships          UserStoreMembership[]
   registrationRequests RegistrationRequest[]
+  massMessageStoreDeliveries MassMessageStoreDelivery[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -579,6 +581,7 @@ model LineOfficialAccount {
   attributionSessions         FriendAttributionSession[]
   unmatchedFollows            FriendAttributionUnmatchedFollow[]
   friendAttributionConfig     FriendAttributionConfig?
+  massMessageStoreDeliveries  MassMessageStoreDelivery[]
 
   @@index([storeId, isActive])
   @@index([isActive, lastBackfillReconciledAt])
@@ -1183,4 +1186,134 @@ model OperationalMemoryCase {
 
   @@index([storeId])
   @@index([rootCauseCategory])
+}
+
+enum MassMessageAudienceType {
+  ALL_KNOWN
+  NOT_REPLIED
+  NOTIFIED_BM
+  REPLIED
+  SELECTED_USERS
+}
+
+enum MassMessageStoreMode {
+  SINGLE
+  MULTIPLE
+  ALL
+}
+
+enum MassMessageCampaignStatus {
+  DRAFT
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum MassMessageStoreDeliveryStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum MassMessageBatchStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model MassMessageCampaign {
+  id                      String                    @id @default(uuid())
+  campaignRequestId       String                    @unique
+  title                   String?
+  audienceType            MassMessageAudienceType   @default(ALL_KNOWN)
+  storeMode               MassMessageStoreMode      @default(SINGLE)
+  selectedStoreIds        String[]                  @default([])
+  messagePayload          Json
+  status                  MassMessageCampaignStatus @default(PENDING)
+  createdById             String?
+  createdBy               User?                     @relation("CreatedMassMessageCampaigns", fields: [createdById], references: [id], onDelete: SetNull)
+
+  storeCount              Int                       @default(0)
+  eligibleStoreCount      Int                       @default(0)
+  skippedStoreCount       Int                       @default(0)
+
+  estimatedRecipientCount Int                       @default(0)
+  processedRecipientCount Int                       @default(0)
+  successRecipientCount   Int                       @default(0)
+  failedRecipientCount    Int                       @default(0)
+
+  errorMessage            String?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  storeDeliveries         MassMessageStoreDelivery[]
+
+  @@index([status, createdAt])
+  @@index([createdById])
+  @@index([campaignRequestId])
+}
+
+model MassMessageStoreDelivery {
+  id                    String                         @id @default(uuid())
+  campaignId            String
+  storeId               String
+  lineOfficialAccountId String?
+  status                MassMessageStoreDeliveryStatus @default(PENDING)
+
+  recipientCount        Int                            @default(0)
+  processedCount        Int                            @default(0)
+  successCount          Int                            @default(0)
+  failedCount           Int                            @default(0)
+
+  skipReason            String?
+  errorCode             String?
+  errorMessage          String?
+
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+
+  campaign              MassMessageCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  store                 Store                          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount   LineOfficialAccount?           @relation(fields: [lineOfficialAccountId], references: [id], onDelete: SetNull)
+  batches               MassMessageBatch[]
+
+  @@unique([campaignId, storeId])
+  @@index([campaignId, status])
+  @@index([storeId])
+  @@index([status])
+}
+
+model MassMessageBatch {
+  id                String                 @id @default(uuid())
+  storeDeliveryId   String
+  batchIndex        Int
+  retryKey          String
+  recipientCount    Int                    @default(0)
+  status            MassMessageBatchStatus @default(PENDING)
+  lineRequestId     String?
+  acceptedRequestId String?
+  externalMessageId String?
+  attemptCount      Int                    @default(0)
+  errorMessage      String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  storeDelivery     MassMessageStoreDelivery @relation(fields: [storeDeliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([storeDeliveryId, batchIndex])
+  @@index([status])
+  @@index([retryKey])
 }
