@@ -328,18 +328,19 @@ export class ConversationsService {
     if (!conversation.lineOfficialAccount?.isActive || conversation.lineOfficialAccount.archivedAt || !conversation.lineOfficialAccount.encryptedChannelAccessToken) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
     let accessToken: string; try { accessToken = this.encryption.decrypt(conversation.lineOfficialAccount.encryptedChannelAccessToken); } catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
     const objectKey = `line-media/outbound/${conversation.id}/${idempotencyKey}.${extensions[mime]}`;
-    await this.media.put(objectKey, file.buffer, mime);
+    const stored = await this.media.put(objectKey, file.buffer, mime);
+    if (stored.provider !== "s3") throw new ServiceUnavailableException("Outbound image delivery requires S3-compatible media storage");
     try {
       const imageUrl = createMediaPublicUrl(objectKey);
       const lineResult = await this.lineMessaging.pushImage({ accessToken, lineUserId: conversation.customer.lineUserId, originalContentUrl: imageUrl, previewImageUrl: imageUrl, retryKey: idempotencyKey });
       const sentAt = new Date();
       const created = await this.prisma.$transaction(async (tx) => {
         const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
-        await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: mime, objectKey, provider: "s3", fileId: objectKey, fileSize: file.buffer.length, processingStatus: "READY" } });
+        await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: stored.mimeType, objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
         await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
         return message;
       });
-      return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: mime, fileSize: file.buffer.length } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
+      return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
       throw error;
