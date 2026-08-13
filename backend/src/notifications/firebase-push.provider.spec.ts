@@ -10,7 +10,7 @@ void test("Firebase provider sends a minimal deep-link payload to active encrypt
   const provider = new FirebasePushProvider(prisma as never, { decrypt: () => "fcm-token-1" } as never);
   (provider as unknown as { messaging: { sendEachForMulticast: (input: unknown) => Promise<unknown> } }).messaging = { sendEachForMulticast: async (input) => { request = input; return { responses: [{ success: true }] }; } };
   await provider.send(notification);
-  assert.deepEqual(request, { tokens: ["fcm-token-1"], notification: { title: "New customer message", body: "Tap to open the conversation" }, data: { conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1" } });
+  assert.deepEqual(request, { tokens: ["fcm-token-1"], notification: { title: "New customer message", body: "Tap to open the conversation" }, data: { conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1" }, android: { priority: "high", notification: { channelId: "line_oa_messages" } } });
 });
 
 void test("Firebase provider deactivates invalid registration tokens", async () => {

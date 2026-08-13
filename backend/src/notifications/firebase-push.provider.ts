@@ -6,8 +6,9 @@ import { PrismaService } from "../prisma.service";
 import type { DispatchableNotification, PushNotificationProvider } from "./notification-dispatcher.service";
 
 type FcmResponse = { success: boolean; error?: { code?: string } };
-type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; notification: { title: string; body: string }; data: Record<string, string> }): Promise<{ responses: FcmResponse[] }> };
+type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; notification: { title: string; body: string }; data: Record<string, string>; android: { priority: "high"; notification: { channelId: string } } }): Promise<{ responses: FcmResponse[] }> };
 const invalidTokenCodes = new Set(["messaging/invalid-registration-token", "messaging/registration-token-not-registered"]);
+export const ANDROID_NOTIFICATION_CHANNEL_ID = "line_oa_messages";
 
 @Injectable()
 export class FirebasePushProvider implements PushNotificationProvider {
@@ -40,6 +41,7 @@ export class FirebasePushProvider implements PushNotificationProvider {
       tokens: usable.map((device) => device.token),
       notification: { title: "New customer message", body: "Tap to open the conversation" },
       data: { conversationId: notification.conversationId, messageId: notification.messageId, notificationId: notification.id },
+      android: { priority: "high", notification: { channelId: ANDROID_NOTIFICATION_CHANNEL_ID } },
     });
     let accepted = 0;
     await Promise.all(response.responses.map(async (result, index) => {
