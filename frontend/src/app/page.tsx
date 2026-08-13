@@ -2971,14 +2971,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             </PageContainer>
           ) : (
             <>
-              <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r">
-                <div className="border-b border-slate-200 p-4 shrink-0">
+              <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r border-slate-200 dark:border-slate-800">
+                <div className="border-b border-slate-200 dark:border-slate-800 p-3.5 shrink-0">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 data-chat-list-title className="text-base font-semibold">
                         {conversationListTitle}
                       </h2>
-                      <p className="app-muted mt-0.5 text-sm">
+                      <p className="app-muted mt-0.5 text-sm font-tabular">
                         {chatTotalCount} {text.searchResults}
                       </p>
                     </div>
@@ -3000,7 +3000,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   affectedCount: storeBmCounts[selectedStore]?.notReplied ?? 0,
                                 });
                               }}
-                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-2xs transition-colors"
                               title="Mark all matching as replied"
                             >
                               <span>✓</span>
@@ -3021,7 +3021,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   affectedCount: storeBmCounts[selectedStore]?.notifiedBm ?? 0,
                                 });
                               }}
-                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-2xs transition-colors"
                               title="Mark all notified BM as replied"
                             >
                               <span>✓</span>
@@ -3043,7 +3043,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   affectedCount: pendingCount,
                                 });
                               }}
-                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-sm transition-colors"
+                              className="rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 text-xs font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center gap-1 shadow-2xs transition-colors"
                               title="Mark pending conversations as replied"
                             >
                               <span>✓</span>
@@ -3056,7 +3056,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         data-chat-filter-button
                         onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
                         aria-expanded={showFilterPanel}
-                        className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
+                        className="app-button-secondary rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-xs font-medium"
                       >
                         {text.moreFilters}
                       </button>
@@ -3065,52 +3065,52 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
 
                   {showFilterPanel && (
-                    <div className="app-filter-panel mt-4 grid grid-cols-2 gap-3 rounded-lg p-3">
+                    <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-2xs">
                       <label className="app-muted text-xs">
                         {text.storeFilter}
-                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allStores}</option>
                           {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
                         </select>
                       </label>
                       <label className="app-muted text-xs">
                         {text.statusFilter}
-                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allStatuses}</option>
                           {statusOptions.map((status) => <option key={status} value={status}>{getStatusLabel(language, status)}</option>)}
                         </select>
                       </label>
                       <label className="app-muted text-xs">
                         {text.priorityFilter}
-                        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allPriorities}</option>
                           {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority === "High" ? text.highPriority : text.normalPriority}</option>)}
                         </select>
                       </label>
                       <label className="app-muted text-xs">
                         {text.seriesFilter}
-                        <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allSeries}</option>
                           {seriesOptions.map((series) => <option key={series} value={series}>{series}</option>)}
                         </select>
                       </label>
                       <label className="app-muted col-span-2 text-xs">
                         {text.modelFilter}
-                        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allModels}</option>
                           {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
                         </select>
                       </label>
                       <label className="app-muted col-span-2 text-xs">
                         {text.topicFilter}
-                        <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allTopics}</option>
                           {topicOptions.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
                         </select>
                       </label>
                       <label className="app-muted col-span-2 text-xs">
                         {text.lineOaManagement}
-                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-2 text-sm">
+                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
                           <option value="all">{text.allLineOa}</option>
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
@@ -3119,17 +3119,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   )}
 
                   {hasActiveFilters && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-full px-2 py-1 text-xs">{text.searchFilter}: {searchText.trim()} ×</button>}
-                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
-                      {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
-                      {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
-                      {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.seriesFilter}: {seriesFilter} ×</button>}
-                      {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.modelFilter}: {modelFilter} ×</button>}
-                      {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.topicFilter}: {topicFilter} ×</button>}
-                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-full px-2 py-1 text-xs">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
-                      <button onClick={clearAllFilters} className="text-xs font-medium text-red-700 hover:underline">{text.clearAll}</button>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
+                      {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
+                      {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}
+                      {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
+                      {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
+                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
+                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      <button onClick={clearAllFilters} className="text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline">{text.clearAll}</button>
                     </div>
                   )}
                 </div>
@@ -3223,11 +3223,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             }
                           }}
                           aria-pressed={isSelected}
-                          className={`conversation-list-row app-list-item relative w-full border-b border-slate-200 px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer ${isSelected ? "is-selected" : ""
+                          className={`conversation-list-row app-list-item relative w-full border-b border-slate-100 dark:border-slate-800/80 px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40 cursor-pointer ${isSelected ? "is-selected" : ""
                             }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1">{conversation.customer}</p>
+                            <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1 text-slate-900 dark:text-slate-100">{conversation.customer}</p>
 
                             <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
@@ -3242,14 +3242,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 title={language === "th" ? "เปลี่ยนสถานะ" : language === "zh" ? "更改状态" : "Change Status"}
                               >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                                 </svg>
                               </button>
 
                               {openConversationDropdownId === conversation.id && (
-                                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs">
-                                  <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs backdrop-blur-md">
+                                  <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                                     {language === "th" ? "สถานะการตอบ" : language === "zh" ? "回复状态" : "Status"}
                                   </div>
                                   <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
@@ -3267,7 +3267,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                         : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                                       }`}
                                   >
-                                    <span className="text-slate-400">⚪</span>
+                                    <span className="text-slate-400 text-xs">⚪</span>
                                     <span>{bmReplyStatusLabels[language]["NOT_REPLIED"]}</span>
                                   </button>
 
@@ -3284,7 +3284,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                         : "text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
                                       }`}
                                   >
-                                    <span>🟣</span>
+                                    <span className="text-xs">🟣</span>
                                     <span>{bmReplyStatusLabels[language]["NOTIFIED_BM"]}</span>
                                   </button>
 
@@ -3301,7 +3301,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                         : "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                       }`}
                                   >
-                                    <span>🟢</span>
+                                    <span className="text-xs">🟢</span>
                                     <span>{bmReplyStatusLabels[language]["REPLIED"]}</span>
                                   </button>
                                 </div>
@@ -3313,13 +3313,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             {conversation.translations[language]}
                           </p>
 
-                          <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs">
+                          <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs font-tabular">
                             <span className="min-w-0 truncate">{conversation.store}</span>
                             <span aria-hidden="true">·</span>
                             <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
                           </div>
 
-                          <div className="mt-3.5 flex flex-wrap gap-1.5" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                          <div className="mt-3.5 flex flex-wrap gap-1.5 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
                             <span
                               data-conversation-bm-reply-status={currentBmReplyStatus}
                               className={`rounded-full px-2 py-0.5 text-xs font-medium ${currentBmReplyStatus === "REPLIED"
@@ -3389,11 +3389,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 {selectedConversation && selectedConversationState ? (
                   <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
                     {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
-                    <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                    <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-2.5">
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         {selectedApiConversation?.customer.pictureUrl
-                          ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-11 w-11 shrink-0 rounded-full bg-cover bg-center ring-2 ring-white shadow-sm" />
-                          : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-600 font-bold text-white shadow-sm">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
+                          ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-9 w-9 shrink-0 rounded-full bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xs" />
+                          : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-xs text-white shadow-2xs">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
                         }
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -3403,19 +3403,19 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             <span className="app-muted shrink-0 text-xs font-medium">{selectedConversation.store}</span>
                             {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-300">{text.profileUnavailable}</span>}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
                             {customerIntelligence && (
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                                    : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                      : "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"}`}>
+                              <span className={`inline-flex items-center rounded-md px-1.5 py-0.2 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40"
+                                  : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40"
+                                    : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                      : "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40"}`}>
                                 {customerIntelligence.customerStage.replaceAll("_", " ")}
                               </span>
                             )}
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                            <span className="rounded-md bg-amber-50 px-1.5 py-0.2 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200/60 dark:border-amber-900/40">
                               {followUpStatusLabels[language][selectedConversationState.status]}
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${selectedConversation.priority === "High" ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200" : "app-chip"}`}>
+                            <span className={`rounded-md px-1.5 py-0.2 text-[10px] font-medium ${selectedConversation.priority === "High" ? "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200 border border-red-200/60 dark:border-red-900/40" : "app-chip"}`}>
                               {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
                             </span>
                             <select
@@ -3424,15 +3424,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               disabled={isMutating || authUser?.role === "VIEWER"}
                               value={selectedConversationState.bmReplyStatus}
                               onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                              className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                              className={`rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-0.2 text-[10px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60 ${selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                    : "bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
                             >
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
                               <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
-                            <span className="app-muted text-[11px]">{formatRelativeTime(selectedConversation.time, language)}</span>
+                            <span className="app-muted text-[10px]">{formatRelativeTime(selectedConversation.time, language)}</span>
                           </div>
                         </div>
                       </div>
@@ -3442,7 +3442,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           disabled={chatLoading}
                           onClick={() => void refreshProfile()}
                           title={text.refreshLineProfile}
-                          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                         >
                           ↻
                         </button>
@@ -3461,18 +3461,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
                     <div className="flex min-h-0 shrink-0 flex-col">
                       <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
-                        <p className="app-muted text-xs">{chatHistory.total} {text.messagesToday}</p>
+                        <p className="app-muted text-xs font-tabular">{chatHistory.total} {text.messagesToday}</p>
                         <button
                           data-chat-detail-secondary-action
                           onClick={() => setShowTranslation(!showTranslation)}
-                          className="app-button-secondary rounded-lg border px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="app-button-secondary rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                         >
                           🌐 {showTranslation ? text.showOriginal : text.translateMessage}
                         </button>
                       </div>
-                      <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-3 dark:bg-slate-950/60">
-                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900">{text.loadEarlierMessages}</button></div>}
-                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 bg-cover bg-center text-xs">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400" : inbound ? "rounded-2xl rounded-bl-sm bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" : "rounded-2xl rounded-br-sm bg-green-100 px-4 py-2.5 dark:bg-green-900/60"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                      <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-slate-50/70 px-4 py-3 dark:bg-slate-950/60">
+                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 shadow-2xs">{text.loadEarlierMessages}</button></div>}
+                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400 font-tabular">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 bg-cover bg-center text-xs font-medium">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400 font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-white border border-slate-200/80 px-4 py-2.5 shadow-2xs dark:bg-slate-900 dark:border-slate-800 text-slate-900 dark:text-slate-100" : "rounded-2xl rounded-br-xs bg-emerald-50/90 border border-emerald-200/60 px-4 py-2.5 dark:bg-emerald-950/40 dark:border-emerald-800/50 text-slate-900 dark:text-slate-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 font-tabular ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                         {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
                         <div ref={chatEndRef} />
                       </div>
@@ -3496,7 +3496,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 void sendReply();
                               }
                             }}
-                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                           />
                           <button
                             type="button"
@@ -3508,9 +3508,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           </button>
                         </div>
                         {replyError && <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-300">{replyError}</p>}
-                        <p className="app-muted mt-1 text-right text-[10px]">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                        <p className="app-muted mt-1 text-right text-[10px] font-tabular">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
                       </div>
-                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] px-4 py-2 text-xs text-blue-800 dark:text-blue-200"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
+                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] bg-slate-50/50 dark:bg-slate-900/40 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-400"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                     </div>
 
                     {/* ── 3. AI INTENT CONTEXT CHIPS ──────────────────────── */}
@@ -3536,9 +3536,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <div className="grid grid-cols-2 gap-3 border-b border-[var(--border)] pb-3">
                           {/* Customer Profile column */}
                           <div className="space-y-3">
-                            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
                               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer Profile</p>
-                              <div className="space-y-1.5 text-xs">
+                              <div className="space-y-1.5 text-xs font-tabular">
                                 <div className="flex justify-between gap-2"><span className="text-slate-500">Name</span><span className="truncate text-right font-medium">{selectedApiConversation?.customer.displayName ?? selectedConversation.customer}</span></div>
                                 <div className="flex justify-between gap-2"><span className="text-slate-500">Store</span><span className="truncate text-right font-medium">{selectedConversation.store}</span></div>
                                 {customerIntelligence && <div className="flex justify-between gap-2"><span className="text-slate-500">Stage</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span></div>}
@@ -3546,17 +3546,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               </div>
                             </div>
                             {selectedApiConversation && (
-                              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
                                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Behavior Signals</p>
                                 <CustomerSignals events={customerEvents} isLoading={customerEventsLoading} error={customerEventsError} language={language} />
                               </div>
                             )}
                           </div>
                           {/* AI Intelligence column */}
-                          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{text.customerIntelligence}</p>
-                              {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
+                              {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300 font-tabular">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
                             </div>
                             {customerIntelligenceLoading ? (
                               <div className="space-y-2">
@@ -3591,7 +3591,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               {customerNameHistoryLoading ? <p className="text-slate-500">Loading...</p>
                                 : customerNameHistoryError ? <p className="text-rose-600">{customerNameHistoryError}</p>
                                   : customerNameHistory?.history.length ? (
-                                    <div className="space-y-1.5">
+                                    <div className="space-y-1.5 font-tabular">
                                       {customerNameHistory.history.map((entry) => (
                                         <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
                                           <span className="font-medium">{entry.displayName}</span>
@@ -3615,7 +3615,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             </div>
                             <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                               <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
-                              <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
+                              <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium font-tabular">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
                               <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
                               <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
                             </dl>

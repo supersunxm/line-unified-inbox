@@ -35,8 +35,8 @@ export interface TopNavigationProps {
 
 type MenuProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "language" | "logout" | "pilotMode" | "text">;
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
-const navLinkClass = `${focusRing} whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors`;
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-1";
+const navLinkClass = `${focusRing} whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-120`;
 
 function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, text }: MenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -73,39 +73,39 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className={`${focusRing} flex h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white p-1 pr-2 text-sm shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800`}
+        className={`${focusRing} flex h-8 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-xs shadow-xs transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800`}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white dark:bg-blue-500" aria-hidden="true">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white dark:bg-emerald-600 shadow-xs" aria-hidden="true">
           {authUser.displayName.charAt(0).toUpperCase()}
         </span>
-        <span className="hidden max-w-24 truncate font-semibold 2xl:inline">{authUser.displayName}</span>
-        <span aria-hidden="true" className="text-xs text-slate-500">⌄</span>
+        <span className="hidden max-w-28 truncate font-medium text-slate-700 dark:text-slate-200 2xl:inline">{authUser.displayName}</span>
+        <span aria-hidden="true" className="text-[10px] text-slate-400">⌄</span>
       </button>
 
       {isOpen && (
         <div
           role="dialog"
           aria-label="Profile settings"
-          className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border p-3 shadow-xl"
+          className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-xl backdrop-blur-md"
         >
-          <div className="border-b border-slate-200 px-2 pb-3 dark:border-slate-700">
-            <p className="truncate text-sm font-bold">{authUser.displayName}</p>
+          <div className="border-b border-slate-100 dark:border-slate-800 px-2 pb-3">
+            <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{authUser.displayName}</p>
             <div className="mt-1 flex items-center gap-2 text-xs">
-              <span className="app-muted">{authUser.role}</span>
-              <span className={pilotMode ? "rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300" : "app-muted"}>
+              <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">{authUser.role}</span>
+              <span className={pilotMode ? "rounded-full border border-amber-300/80 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/80 dark:text-amber-300" : "app-muted text-[10px]"}>
                 {pilotMode ? "Pilot environment" : "Standard environment"}
               </span>
             </div>
           </div>
 
           <div className="space-y-3 px-2 py-3">
-            <label className="block text-xs font-semibold">
+            <label className="block text-xs font-medium">
               <span className="mb-1 block app-muted">{text.language || "Language"}</span>
               <select
                 value={language}
                 onChange={(event) => changeLanguage(event.target.value as Language)}
                 aria-label={text.language || "Language"}
-                className={`${focusRing} app-input h-9 w-full rounded-lg border px-2.5 text-sm`}
+                className={`${focusRing} app-input h-8 w-full rounded-lg border px-2.5 text-xs`}
               >
                 <option value="th">🇹🇭 ไทย</option>
                 <option value="en">🇬🇧 English</option>
@@ -113,7 +113,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
               </select>
             </label>
             <div>
-              <p className="mb-1 text-xs font-semibold app-muted">Appearance</p>
+              <p className="mb-1 text-xs font-medium app-muted">Appearance</p>
               <ThemeControl />
             </div>
           </div>
@@ -121,7 +121,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
           <button
             type="button"
             onClick={() => void logout()}
-            className={`${focusRing} w-full rounded-lg border border-red-200 px-3 py-2 text-left text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/50`}
+            className={`${focusRing} w-full rounded-lg border border-red-200/80 px-3 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/50`}
           >
             Logout
           </button>
@@ -156,13 +156,13 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
     <div ref={searchRef} className="relative min-w-0 lg:flex lg:flex-1 lg:justify-end">
       <label className="relative hidden w-40 lg:block xl:w-48 2xl:w-[clamp(14rem,18vw,22rem)]">
         <span className="sr-only">{label}</span>
-        <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+        <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">⌕</span>
         <input
           type="search"
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
           placeholder={label}
-          className={`${focusRing} app-header-search app-input h-9 w-full rounded-lg border py-1.5 pl-8 pr-3 text-xs`}
+          className={`${focusRing} app-header-search app-input h-8 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 py-1 pl-7 pr-3 text-xs`}
         />
       </label>
 
@@ -172,13 +172,13 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
         title={label}
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className={`${focusRing} app-button-secondary flex h-9 w-9 items-center justify-center rounded-lg border lg:hidden`}
+        className={`${focusRing} app-button-secondary flex h-8 w-8 items-center justify-center rounded-lg border lg:hidden text-xs`}
       >
         <span aria-hidden="true">⌕</span>
       </button>
 
       {isOpen && (
-        <div className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border p-2 shadow-xl lg:hidden">
+        <div className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-slate-200 dark:border-slate-800 p-2 shadow-xl backdrop-blur-md lg:hidden">
           <label>
             <span className="sr-only">{label}</span>
             <input
@@ -187,7 +187,7 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
               placeholder={label}
-              className={`${focusRing} app-input h-10 w-full rounded-lg border px-3 text-sm`}
+              className={`${focusRing} app-input h-9 w-full rounded-lg border px-3 text-xs`}
             />
           </label>
         </div>
@@ -219,11 +219,11 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
   const secondaryActive = ["classification-insights", "follower-insights", "friend-source-links"].includes(currentSection);
   return (
     <div ref={menuRef} className="relative 2xl:hidden">
-      <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active" : ""}`}>
+      <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active bg-slate-100 dark:bg-slate-800" : ""}`}>
         {language === "th" ? "เพิ่มเติม" : language === "zh" ? "更多" : "More"} <span aria-hidden="true">⌄</span>
       </button>
       {isOpen && (
-        <div role="menu" aria-label="More navigation" className="app-surface absolute left-0 top-[calc(100%+0.4rem)] z-50 min-w-56 rounded-xl border p-2 shadow-xl">
+        <div role="menu" aria-label="More navigation" className="app-surface absolute left-0 top-[calc(100%+0.4rem)] z-50 min-w-56 rounded-xl border border-slate-200 dark:border-slate-800 p-1.5 shadow-xl">
           <Link role="menuitem" href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} block lg:hidden`}>{language === "th" ? "จัดการร้านค้า" : language === "zh" ? "门店管理" : "Store Management"}</Link>
           <Link role="menuitem" href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
           <Link role="menuitem" href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
@@ -241,11 +241,16 @@ export function TopNavigation(props: TopNavigationProps) {
     : (text.lastUpdated || "Last updated");
 
   return (
-    <header className="app-header app-surface sticky top-0 z-30 flex min-h-16 min-w-0 items-center gap-3 border-b px-4 py-2.5 sm:px-5">
-      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-5">
-        <Link href="/dashboard" className={`${focusRing} min-w-max shrink-0 rounded-lg p-0.5`}>
-          <h1 className="text-base font-bold tracking-tight xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
-          <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
+    <header className="app-header app-surface sticky top-0 z-30 flex min-h-14 h-14 min-w-0 items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-2 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-6">
+        <Link href="/dashboard" className={`${focusRing} flex items-center gap-2 min-w-max shrink-0 rounded-lg p-0.5 group`}>
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 dark:bg-emerald-500 font-bold text-[11px] text-white shadow-2xs">
+            O
+          </span>
+          <div>
+            <h1 className="text-base font-bold tracking-tight xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
+            <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
+          </div>
         </Link>
 
         <nav aria-label="Primary navigation" className="app-primary-nav flex min-w-0 items-center gap-0.5">
@@ -265,8 +270,8 @@ export function TopNavigation(props: TopNavigationProps) {
       <div className="app-header-controls flex min-w-0 shrink items-center justify-end gap-2 lg:flex-1">
         <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
         {lastUpdatedAt && (
-          <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-9 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold`}>
-            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
+          <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 px-2 text-[11px] font-medium`}>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="hidden xl:inline">Live</span>
             <span className="sr-only">{updatedLabel}</span>
           </button>
