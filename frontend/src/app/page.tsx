@@ -5,7 +5,6 @@ import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api } from "@/lib/api";
-import { CustomerSignals } from "./components/customer/customer-signals";
 import { AUTH_UNAUTHORIZED_EVENT, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import type { PrimarySection } from "./primary-navigation";
@@ -3513,97 +3512,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] bg-slate-50/50 dark:bg-slate-900/40 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-400"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                     </div>
 
-                    {/* ── 3. AI INTENT CONTEXT CHIPS ──────────────────────── */}
-                    {customerIntelligence && (customerIntelligence.intent.length > 0 || customerIntelligence.interestedProducts.length > 0) && (
-                      <div data-chat-intent-chips className="shrink-0 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)] px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Context:</span>
-                          {customerIntelligence.intent.map((item, i) => (
-                            <span key={i} className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300">{item}</span>
-                          ))}
-                          {customerIntelligence.interestedProducts.map((product, i) => (
-                            <span key={`p${i}`} className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">📱 {product}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── 4. INFORMATION PANELS + LOWER SECTIONS ─────────── */}
+                    {/* ── 3. LOWER SECTIONS ──────────────────────────────── */}
                     <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
                       <div className="px-3 py-3 sm:px-4">
-
-                        {/* 4a. 2-column info grid: Customer Profile | AI Intelligence */}
-                        <div className="grid grid-cols-2 gap-3 border-b border-[var(--border)] pb-3">
-                          {/* Customer Profile column */}
-                          <div className="space-y-3">
-                            <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Customer Profile</p>
-                              <div className="space-y-1.5 text-xs font-tabular">
-                                <div className="flex justify-between gap-2"><span className="text-slate-500">Name</span><span className="truncate text-right font-medium">{selectedApiConversation?.customer.displayName ?? selectedConversation.customer}</span></div>
-                                <div className="flex justify-between gap-2"><span className="text-slate-500">Store</span><span className="truncate text-right font-medium">{selectedConversation.store}</span></div>
-                                {customerIntelligence && <div className="flex justify-between gap-2"><span className="text-slate-500">Stage</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-100 text-emerald-800" : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{customerIntelligence.customerStage.replaceAll("_", " ")}</span></div>}
-                                <div className="flex justify-between gap-2"><span className="text-slate-500">Waiting</span><span className="font-medium">{formatRelativeTime(selectedConversation.time, language)}</span></div>
-                              </div>
-                            </div>
-                            {selectedApiConversation && (
-                              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Behavior Signals</p>
-                                <CustomerSignals events={customerEvents} isLoading={customerEventsLoading} error={customerEventsError} language={language} />
-                              </div>
-                            )}
-                          </div>
-                          {/* AI Intelligence column */}
-                          <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-2xs">
-                            <div className="mb-2 flex items-center justify-between gap-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{text.customerIntelligence}</p>
-                              {customerIntelligence?.confidenceScore != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300 font-tabular">{text.confidence}: {Math.round(customerIntelligence.confidenceScore * 100)}%</span>}
-                            </div>
-                            {customerIntelligenceLoading ? (
-                              <div className="space-y-2">
-                                <div className="h-3 w-1/2 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
-                                <div className="h-3 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800" />
-                                <div className="h-8 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
-                              </div>
-                            ) : customerIntelligenceError ? (
-                              <p className="text-xs text-rose-600 dark:text-rose-400">{customerIntelligenceError}</p>
-                            ) : customerIntelligence ? (
-                              <div className="space-y-2 text-xs">
-                                <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-800"><div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(customerIntelligence.confidenceScore * 100)}%` }} /></div>
-                                {customerIntelligence.intent.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.intent}</p><div className="flex flex-wrap gap-1">{customerIntelligence.intent.map((item, i) => <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item}</span>)}</div></div>}
-                                {customerIntelligence.interestedProducts.length > 0 && <div><p className="mb-1 text-[10px] uppercase text-slate-400">{text.interestedProducts}</p><div className="flex flex-wrap gap-1">{customerIntelligence.interestedProducts.map((product, i) => <span key={i} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">{product}</span>)}</div></div>}
-                                {aiRecommendedNextAction && <div className="rounded-lg border border-blue-200 bg-blue-50 p-2 dark:border-blue-900 dark:bg-blue-950/60"><p className="text-[10px] font-semibold uppercase text-blue-600 dark:text-blue-300">{text.aiRecommendedNextAction}</p><p className="mt-1 text-[11px] text-slate-800 dark:text-blue-100 leading-relaxed">{aiRecommendedNextAction}</p></div>}
-                                {customerIntelligence.recommendedActions.length > 0 && <ul className="space-y-1">{customerIntelligence.recommendedActions.slice(0, 3).map((action, i) => <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-700 dark:text-slate-300"><span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[8px] text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">✓</span>{action}</li>)}</ul>}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-slate-500">{text.noCustomerIntelligence}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 4b. Name History — collapsible */}
-                        {selectedApiConversation && (
-                          <details className="group border-b border-[var(--border)] py-2">
-                            <summary className="flex cursor-pointer items-center gap-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 list-none">
-                              <span className="inline-block transition-transform group-open:rotate-90">▶</span>
-                              {text.lineNameHistory} — {customerNameHistory?.currentName ?? selectedApiConversation.customer.displayName}
-                            </summary>
-                            <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
-                              {customerNameHistoryLoading ? <p className="text-slate-500">Loading...</p>
-                                : customerNameHistoryError ? <p className="text-rose-600">{customerNameHistoryError}</p>
-                                  : customerNameHistory?.history.length ? (
-                                    <div className="space-y-1.5 font-tabular">
-                                      {customerNameHistory.history.map((entry) => (
-                                        <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
-                                          <span className="font-medium">{entry.displayName}</span>
-                                          <span className="shrink-0 text-[10px] text-slate-400">{new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(entry.capturedAt))} · {entry.source}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : <p className="text-slate-500">{text.noNameHistory}</p>}
-                            </div>
-                          </details>
-                        )}
-
                         <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
                           <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
