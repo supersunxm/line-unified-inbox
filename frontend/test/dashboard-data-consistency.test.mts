@@ -53,16 +53,16 @@ test("dashboard hero renders streamlined 4-level executive overview and removes 
   // ExecutiveHero integrated into dashboard-view
   assert.match(dashboardViewCode, /<ExecutiveHero/);
 
-  // LEVEL 1: Single row 5 KPI cards
+  // LEVEL 1: Single row 5 KPI cards (pure business & growth metrics)
   assert.match(heroCode, /grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4/);
   assert.match(heroCode, /\{t\.messagesToday\}/);
-  assert.match(heroCode, /\{t\.pending\}/);
-  assert.match(heroCode, /\{t\.slaAchievement\}/);
+  assert.match(heroCode, /\{t\.totalFollowersLabel\}/);
+  assert.match(heroCode, /\{t\.topProduct\}/);
   assert.match(heroCode, /\{t\.storesCritical\}/);
   assert.match(heroCode, /\{t\.followers\}/);
 
-  // LEVEL 2: Operational Trend (60% 7-day trend / 40% reply status donut)
-  assert.match(heroCode, /\{t\.volumeTrend\}/);
+  // LEVEL 2: Follower Acquisition & Reply status donut
+  assert.match(heroCode, /\{t\.followerAcquisition\}/);
   assert.match(heroCode, /\{t\.replyStatusDonut\}/);
   assert.match(heroCode, /\{t\.notReplied\}/);
   assert.match(heroCode, /\{t\.notifiedBm\}/);
