@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BadGatewayException, ServiceUnavailableException } from "@nestjs/common";
-import { LineMessagingService } from "./line-messaging.service";
+import {
+  LineMessagingApiError,
+  LineMessagingService,
+} from "./line-messaging.service";
 
 const input = {
   accessToken: "server-only-token",
@@ -42,9 +44,21 @@ void test("pushText maps credential and network failures without exposing tokens
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async () => new Response("unauthorized", { status: 401 });
-  await assert.rejects(() => new LineMessagingService().pushText(input), (error: unknown) => error instanceof BadGatewayException && !error.message.includes(input.accessToken));
+  await assert.rejects(
+    () => new LineMessagingService().pushText(input),
+    (error: unknown) =>
+      error instanceof LineMessagingApiError &&
+      error.lineStatus === 401 &&
+      !error.message.includes(input.accessToken),
+  );
   globalThis.fetch = async () => { throw new Error(`network ${input.accessToken}`); };
-  await assert.rejects(() => new LineMessagingService().pushText(input), (error: unknown) => error instanceof ServiceUnavailableException && !error.message.includes(input.accessToken));
+  await assert.rejects(
+    () => new LineMessagingService().pushText(input),
+    (error: unknown) =>
+      error instanceof LineMessagingApiError &&
+      error.lineStatus === 0 &&
+      !error.message.includes(input.accessToken),
+  );
 });
 
 void test("pushImage sends original and preview URLs with the retry key", async (t) => {
@@ -119,22 +133,112 @@ void test("multicast validates recipients between 1 and 500 and messages between
   );
 });
 
-void test("multicast treats LINE 409 with acceptedRequestId as idempotent success", async (t) => {
+void test("multicast throws LineMessagingApiError with original LINE status and retryable flag", async (t) => {
   const originalFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = originalFetch; });
-  globalThis.fetch = async () => new Response("Conflict", {
-    status: 409,
-    headers: { "x-line-request-id": "req-999", "x-line-accepted-request-id": "accepted-999" },
+  t.after(() => {
+    globalThis.fetch = originalFetch;
   });
 
-  const result = await new LineMessagingService().multicast({
+  const service = new LineMessagingService();
+  const baseInput = {
     accessToken: "tok",
     to: ["U1"],
     messages: [{ type: "text", text: "hi" }],
-    retryKey: "r-duplicate",
-  });
+    retryKey: "r1",
+  };
 
-  assert.equal(result.duplicateAccepted, true);
-  assert.equal(result.acceptedRequestId, "accepted-999");
+  // 1. LINE 400 Bad Request -> non-retryable
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "Invalid user ID" }), {
+      status: 400,
+      headers: { "x-line-request-id": "req-400" },
+    });
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 400 &&
+      err.lineRequestId === "req-400" &&
+      err.retryable === false &&
+      err.lineErrorMessage === "Invalid user ID",
+  );
+
+  // 2. LINE 401 Unauthorized -> non-retryable
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "Invalid Channel Access Token" }), {
+      status: 401,
+      headers: { "x-line-request-id": "req-401" },
+    });
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 401 &&
+      err.lineRequestId === "req-401" &&
+      err.retryable === false,
+  );
+
+  // 3. LINE 403 Forbidden -> non-retryable
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "Access denied" }), {
+      status: 403,
+      headers: { "x-line-request-id": "req-403" },
+    });
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 403 &&
+      err.lineRequestId === "req-403" &&
+      err.retryable === false,
+  );
+
+  // 4. LINE 429 Rate limit -> retryable
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "Rate limit exceeded" }), {
+      status: 429,
+      headers: { "x-line-request-id": "req-429" },
+    });
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 429 &&
+      err.lineRequestId === "req-429" &&
+      err.retryable === true,
+  );
+
+  // 5. LINE 500 Internal Server Error -> retryable
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ message: "Internal server error" }), {
+      status: 500,
+      headers: { "x-line-request-id": "req-500" },
+    });
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 500 &&
+      err.lineRequestId === "req-500" &&
+      err.retryable === true,
+  );
+
+  // 6. Network error / timeout -> retryable
+  globalThis.fetch = async () => {
+    throw new Error("fetch timeout");
+  };
+
+  await assert.rejects(
+    () => service.multicast(baseInput),
+    (err: any) =>
+      err.name === "LineMessagingApiError" &&
+      err.lineStatus === 0 &&
+      err.retryable === true,
+  );
 });
 

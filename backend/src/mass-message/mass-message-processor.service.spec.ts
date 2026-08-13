@@ -745,3 +745,146 @@ void test("Lease safety: fresh RUNNING batches are NOT stolen by another process
   assert.equal(freshRunningBatch.status, MassMessageBatchStatus.RUNNING, "Fresh RUNNING batch remains owned by Worker 1");
 });
 
+void test("processCampaign non-retryable errors (LINE 400 and LINE 403) fail on attempt 1 without retrying", async () => {
+  const { LineMessagingApiError } = await import("../line-messaging/line-messaging.service");
+
+  for (const status of [400, 403]) {
+    let callCount = 0;
+    const mockCampaign = {
+      id: `campaign-err-${status}`,
+      status: MassMessageCampaignStatus.PENDING,
+      audienceType: "ALL_KNOWN",
+      messagePayload: { messages: [{ type: "text", text: "Hello" }] },
+      storeDeliveries: [
+        {
+          id: `del-${status}`,
+          storeId: "store-1",
+          lineOfficialAccountId: "oa-1",
+          status: MassMessageStoreDeliveryStatus.PENDING,
+          skipReason: null,
+          lineOfficialAccount: {
+            id: "oa-1",
+            name: "OA 1",
+            encryptedChannelAccessToken: "enc-tok-1",
+            isActive: true,
+            archivedAt: null,
+          },
+        },
+      ],
+    };
+
+    const prisma = {
+      massMessageCampaign: {
+        findUnique: async () => mockCampaign,
+        update: async () => mockCampaign,
+      },
+      massMessageStoreDelivery: {
+        update: async () => ({}),
+        findMany: async () => [{ status: MassMessageStoreDeliveryStatus.FAILED }],
+      },
+      massMessageBatch: {
+        findMany: async () => [],
+        create: async (args: any) => ({ id: `batch-${status}`, ...args.data }),
+        updateMany: async () => ({ count: 1 }),
+        update: async () => ({}),
+      },
+      $transaction: async (promises: any[]) => Promise.all(promises),
+    } as any;
+
+    const encryption = { decrypt: () => "token" } as any;
+    const lineMessaging = {
+      multicast: async () => {
+        callCount++;
+        throw new LineMessagingApiError({
+          lineStatus: status,
+          lineRequestId: `req-${status}`,
+          lineErrorMessage: `Error ${status}`,
+          userMessage: `Error ${status}`,
+        });
+      },
+    } as any;
+
+    const scopeService = {
+      resolveRecipientsForOa: async () => ["U1"],
+    } as any;
+
+    const processor = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+    await processor.processCampaign(`campaign-err-${status}`);
+
+    assert.equal(callCount, 1, `Status ${status} must fail on attempt 1 without retrying`);
+  }
+});
+
+void test("processCampaign retryable errors (LINE 429, 500, network error) perform retries", async () => {
+  const { LineMessagingApiError } = await import("../line-messaging/line-messaging.service");
+
+  for (const status of [429, 500, 0]) {
+    let callCount = 0;
+    const mockCampaign = {
+      id: `campaign-retry-${status}`,
+      status: MassMessageCampaignStatus.PENDING,
+      audienceType: "ALL_KNOWN",
+      messagePayload: { messages: [{ type: "text", text: "Hello" }] },
+      storeDeliveries: [
+        {
+          id: `del-retry-${status}`,
+          storeId: "store-1",
+          lineOfficialAccountId: "oa-1",
+          status: MassMessageStoreDeliveryStatus.PENDING,
+          skipReason: null,
+          lineOfficialAccount: {
+            id: "oa-1",
+            name: "OA 1",
+            encryptedChannelAccessToken: "enc-tok-1",
+            isActive: true,
+            archivedAt: null,
+          },
+        },
+      ],
+    };
+
+    const prisma = {
+      massMessageCampaign: {
+        findUnique: async () => mockCampaign,
+        update: async () => mockCampaign,
+      },
+      massMessageStoreDelivery: {
+        update: async () => ({}),
+        findMany: async () => [{ status: MassMessageStoreDeliveryStatus.SUCCESS }],
+      },
+      massMessageBatch: {
+        findMany: async () => [],
+        create: async (args: any) => ({ id: `batch-retry-${status}`, ...args.data }),
+        updateMany: async () => ({ count: 1 }),
+        update: async () => ({}),
+      },
+      $transaction: async (promises: any[]) => Promise.all(promises),
+    } as any;
+
+    const encryption = { decrypt: () => "token" } as any;
+    const lineMessaging = {
+      multicast: async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new LineMessagingApiError({
+            lineStatus: status,
+            lineRequestId: `req-${status}`,
+            lineErrorMessage: `Transient ${status}`,
+            userMessage: `Transient ${status}`,
+          });
+        }
+        return { requestId: "req-ok", acceptedRequestId: null, duplicateAccepted: false };
+      },
+    } as any;
+
+    const scopeService = {
+      resolveRecipientsForOa: async () => ["U1"],
+    } as any;
+
+    const processor = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+    await processor.processCampaign(`campaign-retry-${status}`);
+
+    assert.equal(callCount, 2, `Status ${status} must retry and succeed on attempt 2`);
+  }
+});
+

@@ -55,6 +55,20 @@ export class MassMessageController {
     return this.service.createAndSend(body, req.user!);
   }
 
+  @Post("test-send")
+  async testSend(
+    @Body()
+    body: {
+      storeId: string;
+      testLineUserId: string;
+      text?: string;
+      imageUrl?: string;
+    },
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.sendTestMessage(body, req.user!);
+  }
+
   @Get(":id")
   async getCampaign(
     @Param("id") id: string,

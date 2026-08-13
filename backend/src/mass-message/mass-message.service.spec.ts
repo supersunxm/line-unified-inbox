@@ -510,3 +510,74 @@ void test("createAndSend race condition: simultaneous requests with same campaig
   assert.equal(processorCalls, 1); // Processor dispatched only once
 });
 
+void test("sendTestMessage sends to exactly one test recipient with [TEST] prefix", async () => {
+  let multicastInput: any = null;
+  const encryption = {
+    decrypt: (tok: string) => `decrypted-${tok}`,
+  } as any;
+
+  const lineMessaging = {
+    multicast: async (args: any) => {
+      multicastInput = args;
+      return {
+        requestId: "test-multicast-req-123",
+        acceptedRequestId: null,
+        duplicateAccepted: false,
+      };
+    },
+  } as any;
+
+  const prisma = {
+    store: {
+      findUnique: async () => ({
+        id: "store-test-1",
+        name: "Test Store Bangkapi",
+        lineOfficialAccounts: [
+          {
+            id: "oa-test-1",
+            name: "Test OA Bangkapi",
+            isActive: true,
+            archivedAt: null,
+            encryptedChannelAccessToken: "cipher-token",
+          },
+        ],
+      }),
+    },
+  } as any;
+
+  const service = new MassMessageService(
+    prisma,
+    {} as any,
+    {} as any,
+    {} as any,
+    encryption,
+    lineMessaging,
+  );
+
+  const result = await service.sendTestMessage(
+    {
+      storeId: "store-test-1",
+      testLineUserId: "U_ADMIN_TEST_USER",
+      text: "Testing delivery",
+    },
+    adminUser,
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(result.recipientLineUserId, "U_ADMIN_TEST_USER");
+  assert.equal(result.requestId, "test-multicast-req-123");
+  assert.deepEqual(multicastInput.to, ["U_ADMIN_TEST_USER"]);
+  assert.equal(multicastInput.to.length, 1);
+  assert.match(multicastInput.messages[0].text, /\[TEST - Mass Message Single Recipient\]/);
+  assert.equal(multicastInput.accessToken, "decrypted-cipher-token");
+});
+
+void test("getSharpInstance executes without throwing is not a function", async () => {
+  const { getSharpInstance } = await import("./mass-message.service");
+  const instance = getSharpInstance({
+    create: { width: 10, height: 10, channels: 3, background: { r: 100, g: 100, b: 100 } },
+  });
+  const buf = await instance.jpeg().toBuffer();
+  assert.ok(buf.length > 0);
+});
+

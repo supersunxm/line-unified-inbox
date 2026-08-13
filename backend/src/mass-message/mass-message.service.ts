@@ -14,6 +14,8 @@ import type { AuthUser } from "../auth/auth.guard";
 import { MediaStorageService } from "../media/media-storage";
 import { createMediaPublicUrl } from "../media/media-public-url";
 import { detectImageMime } from "../conversations.service";
+import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
+import { LineMessagingService } from "../line-messaging/line-messaging.service";
 import { MassMessageScopeService } from "./mass-message-scope.service";
 import { MassMessageProcessorService } from "./mass-message-processor.service";
 import {
@@ -38,6 +40,14 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
 };
 
+export function getSharpInstance(
+  input?: Buffer | Parameters<typeof sharp>[0],
+): ReturnType<typeof sharp> {
+  const s: any = sharp;
+  const sharpFn = typeof s === "function" ? s : s?.default ?? s;
+  return sharpFn(input);
+}
+
 @Injectable()
 export class MassMessageService {
   private readonly logger = new Logger(MassMessageService.name);
@@ -47,6 +57,8 @@ export class MassMessageService {
     private readonly scopeService: MassMessageScopeService,
     private readonly processor: MassMessageProcessorService,
     private readonly media: MediaStorageService = undefined as unknown as MediaStorageService,
+    private readonly encryption: CredentialEncryptionService = undefined as unknown as CredentialEncryptionService,
+    private readonly lineMessaging: LineMessagingService = undefined as unknown as LineMessagingService,
   ) {}
 
   async uploadImage(
@@ -89,26 +101,26 @@ export class MassMessageService {
 
     try {
       if (mime === "image/jpeg") {
-        previewBuffer = await sharp(file.buffer)
+        previewBuffer = await getSharpInstance(file.buffer)
           .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
           .jpeg({ quality: 80, progressive: true })
           .toBuffer();
 
         if (previewBuffer.length > 1024 * 1024) {
-          previewBuffer = await sharp(file.buffer)
+          previewBuffer = await getSharpInstance(file.buffer)
             .resize({ width: 800, height: 800, fit: "inside", withoutEnlargement: true })
             .jpeg({ quality: 60 })
             .toBuffer();
         }
       } else {
         // PNG
-        previewBuffer = await sharp(file.buffer)
+        previewBuffer = await getSharpInstance(file.buffer)
           .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
           .png({ compressionLevel: 8 })
           .toBuffer();
 
         if (previewBuffer.length > 1024 * 1024) {
-          previewBuffer = await sharp(file.buffer)
+          previewBuffer = await getSharpInstance(file.buffer)
             .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
             .jpeg({ quality: 80 })
             .toBuffer();
@@ -580,6 +592,94 @@ export class MassMessageService {
       completedAt: campaign.completedAt ? campaign.completedAt.toISOString() : null,
       createdAt: campaign.createdAt.toISOString(),
       updatedAt: campaign.updatedAt.toISOString(),
+    };
+  }
+
+  async sendTestMessage(
+    input: {
+      storeId: string;
+      testLineUserId: string;
+      text?: string;
+      imageUrl?: string;
+    },
+    user: AuthUser,
+  ): Promise<{
+    success: boolean;
+    storeId: string;
+    storeName: string;
+    lineOaName: string;
+    recipientLineUserId: string;
+    requestId: string | null;
+    message: string;
+  }> {
+    if (!input.storeId?.trim()) {
+      throw new BadRequestException("storeId is required");
+    }
+    if (!input.testLineUserId?.trim() || !input.testLineUserId.startsWith("U")) {
+      throw new BadRequestException("testLineUserId must be a valid LINE user ID starting with U");
+    }
+    if (!input.text?.trim() && !input.imageUrl?.trim()) {
+      throw new BadRequestException("At least one of text or imageUrl is required");
+    }
+
+    const store = await this.prisma.store.findUnique({
+      where: { id: input.storeId },
+      include: {
+        lineOfficialAccounts: {
+          where: { isActive: true, archivedAt: null },
+          take: 1,
+        },
+      },
+    });
+
+    if (!store) {
+      throw new NotFoundException(`Store ${input.storeId} not found`);
+    }
+
+    const oa = store.lineOfficialAccounts[0];
+    if (!oa || !oa.encryptedChannelAccessToken) {
+      throw new BadRequestException(
+        `Store ${store.name} does not have an active LINE OA connection with a valid token`,
+      );
+    }
+
+    const accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken);
+
+    const testMessages: Array<Record<string, unknown>> = [];
+    if (input.text?.trim()) {
+      testMessages.push({
+        type: "text",
+        text: `[TEST - Mass Message Single Recipient]\n${input.text.trim()}`,
+      });
+    }
+    if (input.imageUrl?.trim()) {
+      testMessages.push({
+        type: "image",
+        originalContentUrl: input.imageUrl.trim(),
+        previewImageUrl: input.imageUrl.trim(),
+      });
+    }
+
+    const retryKey = randomUUID();
+    const result = await this.lineMessaging.multicast({
+      accessToken,
+      to: [input.testLineUserId.trim()],
+      messages: testMessages,
+      retryKey,
+    });
+
+    this.logger.log(
+      `[MassMessageService:TestSend] Admin ${user.displayName} (${user.id}) sent test message to store ${store.name} (${store.id}), recipient ${input.testLineUserId.trim()}, requestId=${result.requestId || "none"}`,
+    );
+
+    return {
+      success: true,
+      storeId: store.id,
+      storeName: store.name,
+      lineOaName: oa.name,
+      recipientLineUserId: input.testLineUserId.trim(),
+      requestId: result.requestId,
+      message: "Test message sent to single recipient successfully",
     };
   }
 }

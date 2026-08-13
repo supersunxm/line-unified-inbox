@@ -7,7 +7,10 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
-import { LineMessagingService } from "../line-messaging/line-messaging.service";
+import {
+  LineMessagingApiError,
+  LineMessagingService,
+} from "../line-messaging/line-messaging.service";
 import { MassMessageScopeService } from "./mass-message-scope.service";
 import {
   createMediaPublicUrl,
@@ -392,15 +395,39 @@ export class MassMessageProcessorService implements OnModuleInit {
           lineRequestId = result.requestId;
           acceptedRequestId = result.acceptedRequestId;
           batchSuccess = true;
+
+          this.logger.log(
+            `[MassMessageProcessor] campaign=${campaign.id} store=${delivery.storeId} oa=${delivery.lineOfficialAccountId} batch=${batch.id} index=${batch.batchIndex} recipients=${chunk.length} attempt=${attempt} LINE multicast accepted status=200 requestId=${lineRequestId || "none"} duplicateAccepted=${result.duplicateAccepted}`,
+          );
         } catch (error: any) {
           lastErrorMessage = error?.message || "LINE Multicast failed";
-          const status = error?.status ?? error?.getStatus?.() ?? 500;
+          lineRequestId =
+            error instanceof LineMessagingApiError
+              ? error.lineRequestId
+              : error?.headers?.get?.("x-line-request-id") ?? null;
 
-          // Non-retryable client errors (400 Bad Request, 401 Unauthorized, 403 Forbidden)
-          if (status === 400 || status === 401 || status === 403) {
-            this.logger.warn(
-              `Non-retryable error on batch ${batch.id} (attempt ${attempt}): ${lastErrorMessage}`,
-            );
+          const isRetryable =
+            error instanceof LineMessagingApiError
+              ? error.retryable
+              : (error?.status ?? error?.getStatus?.() ?? 500) === 429 ||
+                (error?.status ?? error?.getStatus?.() ?? 500) >= 500 ||
+                (error?.status ?? error?.getStatus?.() ?? 500) === 0;
+
+          const lineStatus =
+            error instanceof LineMessagingApiError
+              ? error.lineStatus
+              : error?.status ?? error?.getStatus?.() ?? "unknown";
+
+          const lineMessage =
+            error instanceof LineMessagingApiError
+              ? error.lineErrorMessage || error.message
+              : lastErrorMessage;
+
+          this.logger.warn(
+            `[MassMessageProcessor] campaign=${campaign.id} store=${delivery.storeId} oa=${delivery.lineOfficialAccountId} batch=${batch.id} index=${batch.batchIndex} recipients=${chunk.length} attempt=${attempt}/${MAX_RETRY_ATTEMPTS} LINE multicast rejected status=${lineStatus} lineMessage="${lineMessage}" requestId=${lineRequestId || "none"} retryable=${isRetryable}`,
+          );
+
+          if (!isRetryable) {
             break;
           }
 

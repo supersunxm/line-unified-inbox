@@ -101,3 +101,26 @@ void test("MassMessageController uploadImage forwards file to service", async ()
   // Missing file rejection
   await assert.rejects(() => controller.uploadImage(undefined, req), /Image file is required/);
 });
+
+void test("MassMessageController testSend forwards parameters to service", async () => {
+  let calledWith: any = null;
+  const mockService = {
+    sendTestMessage: async (input: any, user: AuthUser) => {
+      calledWith = { input, user };
+      return { success: true, requestId: "req-1" };
+    },
+  } as any;
+
+  const controller = new MassMessageController(mockService);
+  const req = { user: adminUser } as AuthRequest;
+  const body = {
+    storeId: "store-1",
+    testLineUserId: "U12345",
+    text: "Testing",
+  };
+
+  const result = await controller.testSend(body, req);
+  assert.equal(result.success, true);
+  assert.deepEqual(calledWith.input, body);
+  assert.equal(calledWith.user.id, "admin-1");
+});
