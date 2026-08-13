@@ -304,4 +304,20 @@ export const api = {
     request<import("@/types/api").ImpactSummary>(`/dashboard/action-impact?period=${encodeURIComponent(period || "today")}`),
   getOperationalMemory: (period?: string) =>
     request<import("@/types/api").OperationalMemorySummary>(`/dashboard/operational-memory?period=${encodeURIComponent(period || "today")}`),
+  previewMassMessage: (input: import("@/types/api").MassMessagePreviewInput) =>
+    request<import("@/types/api").MassMessagePreviewResult>("/mass-messages/preview", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  createMassMessage: (input: import("@/types/api").MassMessageCreateInput) =>
+    request<import("@/types/api").MassMessageCampaignDetail>("/mass-messages", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  getMassMessageCampaign: (id: string) =>
+    request<import("@/types/api").MassMessageCampaignDetail>(`/mass-messages/${encodeURIComponent(id)}`),
+  listMassMessageCampaigns: (limit = 20, offset = 0) =>
+    request<{ items: import("@/types/api").MassMessageCampaignDetail[]; total: number }>(
+      `/mass-messages?limit=${limit}&offset=${offset}`,
+    ),
 };

@@ -980,3 +980,122 @@ export type ProductReviewQueueResponse = {
   pageSize: number;
   total: number;
 };
+
+// ==========================================
+// MASS MESSAGE TYPES
+// ==========================================
+
+export type MassMessageAudienceType =
+  | "ALL_KNOWN"
+  | "NOT_REPLIED"
+  | "NOTIFIED_BM"
+  | "REPLIED"
+  | "SELECTED_USERS";
+
+export type MassMessageStoreMode = "SINGLE" | "MULTIPLE" | "ALL";
+
+export type MassMessageCampaignStatus =
+  | "DRAFT"
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "PARTIAL"
+  | "FAILED"
+  | "CANCELLED";
+
+export type MassMessageStoreDeliveryStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCESS"
+  | "PARTIAL"
+  | "FAILED"
+  | "SKIPPED";
+
+export type MassMessagePreviewInput = {
+  storeSelection: {
+    mode: MassMessageStoreMode;
+    storeIds?: string[];
+  };
+  audienceType?: MassMessageAudienceType;
+};
+
+export type StorePreviewResult = {
+  storeId: string;
+  storeName: string;
+  storeCode: string | null;
+  lineOfficialAccountId: string | null;
+  lineOaName: string | null;
+  recipientCount: number;
+  status: "READY" | "SKIPPED";
+  skipReason: string | null;
+};
+
+export type MassMessagePreviewResult = {
+  storeCount: number;
+  eligibleStoreCount: number;
+  skippedStoreCount: number;
+  estimatedRecipientCount: number;
+  stores: StorePreviewResult[];
+};
+
+export type MassMessageCreateInput = {
+  campaignRequestId: string;
+  title?: string;
+  storeSelection: {
+    mode: MassMessageStoreMode;
+    storeIds?: string[];
+  };
+  audienceType?: MassMessageAudienceType;
+  messages: Array<{ type: "text"; text: string }>;
+};
+
+export type StoreDeliveryDetail = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  storeCode: string | null;
+  lineOfficialAccountId: string | null;
+  lineOaName: string | null;
+  status: MassMessageStoreDeliveryStatus;
+  recipientCount: number;
+  processedCount: number;
+  successCount: number;
+  acceptedCount: number;
+  failedCount: number;
+  failedRequestCount: number;
+  skipReason: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type MassMessageCampaignDetail = {
+  id: string;
+  campaignRequestId: string;
+  title: string | null;
+  audienceType: MassMessageAudienceType;
+  storeMode: MassMessageStoreMode;
+  selectedStoreIds: string[];
+  status: MassMessageCampaignStatus;
+  createdById: string | null;
+  createdByName: string | null;
+  storeCount: number;
+  eligibleStoreCount: number;
+  skippedStoreCount: number;
+  estimatedRecipientCount: number;
+  processedRecipientCount: number;
+  successRecipientCount: number;
+  acceptedRecipientCount: number;
+  failedRecipientCount: number;
+  failedRequestRecipientCount: number;
+  messagePayload: { messages: Array<Record<string, unknown>> };
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  duplicate?: boolean;
+  storeDeliveries?: StoreDeliveryDetail[];
+};
+
