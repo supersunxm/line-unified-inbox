@@ -6,7 +6,7 @@ import { PrismaService } from "../prisma.service";
 import type { DispatchableNotification, PushNotificationProvider } from "./notification-dispatcher.service";
 
 type FcmResponse = { success: boolean; error?: { code?: string } };
-type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; notification: { title: string; body: string }; data: Record<string, string>; android: { priority: "high"; notification: { channelId: string } } }): Promise<{ responses: FcmResponse[] }> };
+type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; data: Record<string, string>; android: { priority: "high" } }): Promise<{ responses: FcmResponse[] }> };
 const invalidTokenCodes = new Set(["messaging/invalid-registration-token", "messaging/registration-token-not-registered"]);
 export const ANDROID_NOTIFICATION_CHANNEL_ID = "line_oa_messages";
 
@@ -39,9 +39,15 @@ export class FirebasePushProvider implements PushNotificationProvider {
     if (usable.length === 0) throw new Error("No active device token is available");
     const response = await this.client().sendEachForMulticast({
       tokens: usable.map((device) => device.token),
-      notification: { title: "New customer message", body: "Tap to open the conversation" },
-      data: { conversationId: notification.conversationId, messageId: notification.messageId, notificationId: notification.id },
-      android: { priority: "high", notification: { channelId: ANDROID_NOTIFICATION_CHANNEL_ID } },
+      data: {
+        title: "New customer message",
+        body: "Tap to open the conversation",
+        channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+        conversationId: notification.conversationId,
+        messageId: notification.messageId,
+        notificationId: notification.id,
+      },
+      android: { priority: "high" },
     });
     let accepted = 0;
     await Promise.all(response.responses.map(async (result, index) => {

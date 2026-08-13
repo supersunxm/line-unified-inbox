@@ -10,7 +10,31 @@ void test("Firebase provider sends a minimal deep-link payload to active encrypt
   const provider = new FirebasePushProvider(prisma as never, { decrypt: () => "fcm-token-1" } as never);
   (provider as unknown as { messaging: { sendEachForMulticast: (input: unknown) => Promise<unknown> } }).messaging = { sendEachForMulticast: async (input) => { request = input; return { responses: [{ success: true }] }; } };
   await provider.send(notification);
-  assert.deepEqual(request, { tokens: ["fcm-token-1"], notification: { title: "New customer message", body: "Tap to open the conversation" }, data: { conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1" }, android: { priority: "high", notification: { channelId: "line_oa_messages" } } });
+  assert.deepEqual(request, { tokens: ["fcm-token-1"], data: { title: "New customer message", body: "Tap to open the conversation", channelId: "line_oa_messages", conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1" }, android: { priority: "high" } });
+});
+
+void test("Firebase provider gives distinct messages unique notification identities without an FCM collapse key", async () => {
+  const requests: Array<{ data: Record<string, string>; android: { priority: string }; notification?: unknown }> = [];
+  const prisma = { deviceToken: { findMany: async () => [{ id: "device-1", token: "encrypted-1" }], update: async () => ({}) } };
+  const provider = new FirebasePushProvider(prisma as never, { decrypt: () => "fcm-token-1" } as never);
+  (provider as unknown as { messaging: { sendEachForMulticast: (input: unknown) => Promise<unknown> } }).messaging = {
+    sendEachForMulticast: async (input) => { requests.push(input as typeof requests[number]); return { responses: [{ success: true }] }; },
+  };
+
+  await provider.send(notification);
+  await provider.send({ ...notification, id: "notification-2", messageId: "message-2", payload: { conversationId: "conversation-1", messageId: "message-2" } });
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0]?.data.conversationId, "conversation-1");
+  assert.equal(requests[1]?.data.conversationId, "conversation-1");
+  assert.equal(requests[0]?.data.messageId, "message-1");
+  assert.equal(requests[1]?.data.messageId, "message-2");
+  assert.equal(requests[0]?.data.notificationId, "notification-1");
+  assert.equal(requests[1]?.data.notificationId, "notification-2");
+  assert.equal(requests[0]?.data.channelId, "line_oa_messages");
+  assert.equal(requests[0]?.android.priority, "high");
+  assert.equal(requests[0]?.notification, undefined);
+  assert.equal("collapseKey" in (requests[0] ?? {}), false);
 });
 
 void test("Firebase provider deactivates invalid registration tokens", async () => {
