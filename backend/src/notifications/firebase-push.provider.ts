@@ -7,6 +7,7 @@ import type { DispatchableNotification, PushNotificationProvider } from "./notif
 
 type FcmResponse = { success: boolean; error?: { code?: string } };
 type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; data: Record<string, string>; android: { priority: "high" } }): Promise<{ responses: FcmResponse[] }> };
+type NotificationPayload = { customerName?: unknown; messageType?: unknown; preview?: unknown; sentAt?: unknown };
 const invalidTokenCodes = new Set(["messaging/invalid-registration-token", "messaging/registration-token-not-registered"]);
 export const ANDROID_NOTIFICATION_CHANNEL_ID = "line_oa_messages";
 
@@ -37,6 +38,8 @@ export class FirebasePushProvider implements PushNotificationProvider {
       catch { await this.prisma.deviceToken.update({ where: { id: device.id }, data: { isActive: false, lastSeenAt: new Date() } }); }
     }
     if (usable.length === 0) throw new Error("No active device token is available");
+    const payload = notification.payload as NotificationPayload;
+    const value = (input: unknown, fallback = "") => typeof input === "string" ? input : fallback;
     const response = await this.client().sendEachForMulticast({
       tokens: usable.map((device) => device.token),
       data: {
@@ -46,6 +49,10 @@ export class FirebasePushProvider implements PushNotificationProvider {
         conversationId: notification.conversationId,
         messageId: notification.messageId,
         notificationId: notification.id,
+        customerName: value(payload.customerName, "Customer"),
+        messageType: value(payload.messageType, "UNSUPPORTED"),
+        preview: value(payload.preview, "New customer message"),
+        sentAt: value(payload.sentAt),
       },
       android: { priority: "high" },
     });

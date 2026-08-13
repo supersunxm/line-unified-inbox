@@ -12,7 +12,8 @@ void test("inbound messages enqueue one pending notification per eligible store 
     },
     pushNotification: { createMany: async (args: any) => { createArgs = args; return { count: 2 }; } },
   };
-  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1" });
+  const input = { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" };
+  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, input);
   assert.deepEqual(result, { count: 2 });
   assert.deepEqual(where, {
     storeId: "store-1",
@@ -21,8 +22,8 @@ void test("inbound messages enqueue one pending notification per eligible store 
   });
   assert.equal(createArgs.skipDuplicates, true);
   assert.deepEqual(createArgs.data, [
-    { userId: "staff-1", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1" }, status: PushNotificationStatus.PENDING },
-    { userId: "staff-2", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1" }, status: PushNotificationStatus.PENDING },
+    { userId: "staff-1", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
+    { userId: "staff-2", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
   ]);
 });
 
@@ -32,7 +33,7 @@ void test("inactive memberships, suspended users, and inactive devices are ignor
     userStoreMembership: { findMany: async () => [] },
     pushNotification: { createMany: async () => { createCalled = true; return { count: 0 }; } },
   };
-  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1" });
+  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" });
   assert.deepEqual(result, { count: 0 });
   assert.equal(createCalled, false);
 });
@@ -43,7 +44,7 @@ void test("duplicate webhook delivery does not create duplicate notifications", 
     userStoreMembership: { findMany: async () => [{ userId: "staff-1" }] },
     pushNotification: { createMany: async (args: any) => { skipDuplicates = args.skipDuplicates; return { count: 0 }; } },
   };
-  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1" });
+  const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" });
   assert.equal(skipDuplicates, true);
   assert.deepEqual(result, { count: 0 });
 });

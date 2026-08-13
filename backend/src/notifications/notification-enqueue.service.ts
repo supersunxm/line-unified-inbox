@@ -5,7 +5,7 @@ type NotificationClient = Prisma.TransactionClient;
 
 @Injectable()
 export class NotificationEnqueueService {
-  async enqueueInboundMessage(tx: NotificationClient, input: { storeId: string; conversationId: string; messageId: string }) {
+  async enqueueInboundMessage(tx: NotificationClient, input: { storeId: string; conversationId: string; messageId: string; customerName: string; messageType: string; preview: string; sentAt: string }) {
     const memberships = await tx.userStoreMembership.findMany({
       where: {
         storeId: input.storeId,
@@ -25,7 +25,7 @@ export class NotificationEnqueueService {
         conversationId: input.conversationId,
         messageId: input.messageId,
         type: "INBOUND_MESSAGE",
-        payload: { conversationId: input.conversationId, messageId: input.messageId },
+        payload: { conversationId: input.conversationId, messageId: input.messageId, customerName: input.customerName, messageType: input.messageType, preview: input.preview, sentAt: input.sentAt },
         status: PushNotificationStatus.PENDING,
       })),
       skipDuplicates: true,
