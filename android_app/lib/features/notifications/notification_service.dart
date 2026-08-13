@@ -10,6 +10,7 @@ typedef ConversationDeepLink = void Function(String conversationId, String? noti
 const _channelId = 'line_oa_messages';
 const _channelName = 'Customer messages';
 final _localNotifications = FlutterLocalNotificationsPlugin();
+bool _localNotificationsInitialized = false;
 
 int _notificationId(String value) {
   var hash = 0;
@@ -20,6 +21,7 @@ int _notificationId(String value) {
 }
 
 Future<void> _initializeLocalNotifications([ConversationDeepLink? onConversation]) async {
+  if (_localNotificationsInitialized) return;
   await _localNotifications.initialize(
     const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
     onDidReceiveNotificationResponse: onConversation == null
@@ -45,6 +47,7 @@ Future<void> _initializeLocalNotifications([ConversationDeepLink? onConversation
           importance: Importance.high,
         ),
       );
+  _localNotificationsInitialized = true;
 }
 
 Future<void> _showRemoteNotification(RemoteMessage message) async {
