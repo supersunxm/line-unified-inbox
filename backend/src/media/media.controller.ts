@@ -1,6 +1,8 @@
 import { Controller, Get, NotFoundException, Param, Req, Res } from "@nestjs/common";
 import { Response } from "express";
 import { AuthRequest } from "../auth/auth.guard";
+import { Public } from "../auth/auth.decorators";
+import { verifyMediaPublicUrl } from "./media-public-url";
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "./media-storage";
@@ -20,5 +22,21 @@ export class MediaController {
     response.setHeader("Cache-Control", "private, max-age=3600");
     response.setHeader("Content-Disposition", "inline");
     response.send(stored.body);
+  }
+
+  @Public()
+  @Get("media/public")
+  async publicMedia(@Req() request: AuthRequest, @Res() response: Response) {
+    const key = typeof request.query.key === "string" ? request.query.key : "";
+    const expires = typeof request.query.expires === "string" ? request.query.expires : "";
+    const signature = typeof request.query.signature === "string" ? request.query.signature : "";
+    if (!key.startsWith("line-media/outbound/") || !verifyMediaPublicUrl(key, expires, signature)) throw new NotFoundException("Media is unavailable");
+    try {
+      const stored = await this.storage.get(key);
+      response.setHeader("Content-Type", stored.contentType ?? "application/octet-stream");
+      response.setHeader("Cache-Control", "private, max-age=300");
+      response.setHeader("Content-Disposition", "inline");
+      response.send(stored.body);
+    } catch { throw new NotFoundException("Media is unavailable"); }
   }
 }

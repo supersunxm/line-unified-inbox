@@ -5,7 +5,7 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto } from "./mobile-conversations.dto";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -59,8 +59,10 @@ export class MobileConversationsService {
     };
   }
 
-  async get(user: AuthUser, conversationId: string) {
+  async get(user: AuthUser, conversationId: string, query: MobileMessageQueryDto = new MobileMessageQueryDto()) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
+    const cursor = query.before ? decodeCursor(query.before) : null;
+    if (query.before && !cursor) throw new NotFoundException("Invalid message cursor");
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: {
@@ -71,14 +73,18 @@ export class MobileConversationsService {
         customer: { select: { id: true, displayName: true } },
         store: { select: { id: true, name: true, code: true } },
         messages: {
+          where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-          take: 50,
+          take: query.limit + 1,
           select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
         _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
     });
     if (!conversation) throw new NotFoundException("Conversation not found");
+    const hasEarlier = conversation.messages.length > query.limit;
+    const pageMessages = conversation.messages.slice(0, query.limit).reverse();
+    const oldest = pageMessages[0];
     return {
       id: conversation.id,
       customer: conversation.customer,
@@ -87,7 +93,8 @@ export class MobileConversationsService {
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
       unreadCount: conversation._count.pushNotifications,
-      messages: conversation.messages.reverse().map((message) => ({
+      nextCursor: hasEarlier && oldest ? encodeCursor(oldest.sentAt, oldest.id) : null,
+      messages: pageMessages.map((message) => ({
         id: message.id,
         direction: message.direction,
         messageType: message.messageType,
@@ -103,4 +110,12 @@ export class MobileConversationsService {
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.sendMessage(conversationId, dto, user);
   }
+
+  async sendImage(user: AuthUser, conversationId: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string) {
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    return this.conversations.sendImage(conversationId, file, idempotencyKey, user);
+  }
 }
+
+function encodeCursor(sentAt: Date, id: string) { return Buffer.from(JSON.stringify({ sentAt: sentAt.toISOString(), id }), "utf8").toString("base64url"); }
+function decodeCursor(value: string): { sentAt: Date; id: string } | null { try { const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { sentAt?: string; id?: string }; if (!parsed.sentAt || !parsed.id) return null; const sentAt = new Date(parsed.sentAt); return Number.isNaN(sentAt.getTime()) ? null : { sentAt, id: parsed.id }; } catch { return null; } }

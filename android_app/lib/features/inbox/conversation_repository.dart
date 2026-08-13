@@ -10,6 +10,7 @@ class ConversationDetail {
   final String? storeCode;
   final List<ChatMessage> messages;
   final String? nextCursor;
+  ConversationDetail copyWith({List<ChatMessage>? messages, String? nextCursor}) => ConversationDetail(id: id, customerName: customerName, storeName: storeName, storeCode: storeCode, messages: messages ?? this.messages, nextCursor: nextCursor);
   factory ConversationDetail.fromJson(Map<String, dynamic> json) {
     final customer = json['customer'] as Map<String, dynamic>?;
     final store = json['store'] as Map<String, dynamic>?;
@@ -32,8 +33,9 @@ class ConversationRepository {
     final result = await _api.get('/mobile/conversations', query: {'page': '$page', 'pageSize': '30'});
     return InboxPageResult(items: (result['items'] as List<dynamic>).map((item) => ConversationSummary.fromJson(item as Map<String, dynamic>)).toList(), page: result['page'] as int, total: result['total'] as int);
   }
-  Future<ConversationDetail> detail(String id) async => ConversationDetail.fromJson(await _api.get('/mobile/conversations/$id'));
+  Future<ConversationDetail> detail(String id, {int limit = 50, String? before}) async => ConversationDetail.fromJson(await _api.get('/mobile/conversations/$id', query: {'limit': '$limit', if (before != null) 'before': before}));
   Future<void> reply(String id, String text, String idempotencyKey) async { await _api.post('/mobile/conversations/$id/messages', body: {'text': text, 'idempotencyKey': idempotencyKey}); }
   Future<Uint8List> media(String url) => _api.getBytes(url);
+  Future<Map<String, dynamic>> sendImage(String id, Uint8List bytes, String filename, String idempotencyKey) => _api.postMultipart('/mobile/conversations/$id/images', field: 'image', filename: filename, bytes: bytes, idempotencyKey: idempotencyKey);
   Future<void> markOpened(String notificationId) async { await _api.patch('/mobile/notifications/$notificationId/opened'); }
 }

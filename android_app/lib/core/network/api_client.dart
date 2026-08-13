@@ -44,6 +44,20 @@ class ApiClient {
     return response.bodyBytes;
   }
 
+  Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, required Uint8List bytes, required String idempotencyKey}) async {
+    if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
+    final request = http.MultipartRequest('POST', AppConfig.uri(path));
+    final token = await _tokens.read();
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    request.fields['idempotencyKey'] = idempotencyKey;
+    request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+    late http.Response response;
+    try { response = await http.Response.fromStream(await request.send()); } catch (_) { throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
+    Map<String, dynamic> decoded = <String, dynamic>{}; try { decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>; } catch (_) { throw ApiException(response.statusCode, 'INVALID_RESPONSE', 'Service returned an invalid response'); }
+    if (response.statusCode < 200 || response.statusCode >= 300) throw ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
+    return decoded;
+  }
+
   Future<Map<String, dynamic>> _request(String method, String path, {Map<String, String>? query, Map<String, dynamic>? body, bool authenticated = true}) async {
     if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
     final headers = <String, String>{'Accept': 'application/json'};

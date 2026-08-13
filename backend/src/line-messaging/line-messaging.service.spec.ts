@@ -46,3 +46,14 @@ void test("pushText maps credential and network failures without exposing tokens
   globalThis.fetch = async () => { throw new Error(`network ${input.accessToken}`); };
   await assert.rejects(() => new LineMessagingService().pushText(input), (error: unknown) => error instanceof ServiceUnavailableException && !error.message.includes(input.accessToken));
 });
+
+void test("pushImage sends original and preview URLs with the retry key", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let request: RequestInit | undefined;
+  globalThis.fetch = (async (_input, init) => { request = init; return new Response(JSON.stringify({ sentMessages: [{ id: "line-image" }] }), { status: 200, headers: { "content-type": "application/json", "x-line-request-id": "request" } }); }) as typeof fetch;
+  try {
+    const result = await new LineMessagingService().pushImage({ accessToken: "token", lineUserId: "Ucustomer", originalContentUrl: "https://backend.example.com/messages/media/public?a", previewImageUrl: "https://backend.example.com/messages/media/public?a", retryKey: "123e4567-e89b-42d3-a456-426614174000" });
+    assert.equal(result.externalMessageId, "line-image");
+    assert.deepEqual(JSON.parse(request?.body as string), { to: "Ucustomer", messages: [{ type: "image", originalContentUrl: "https://backend.example.com/messages/media/public?a", previewImageUrl: "https://backend.example.com/messages/media/public?a" }] });
+  } finally { globalThis.fetch = originalFetch; }
+});

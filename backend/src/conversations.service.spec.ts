@@ -73,6 +73,26 @@ void test("sendMessage does not persist or mark REPLIED when LINE rejects the pu
   assert.equal(transactionCalled, false);
 });
 
+void test("sendImage validates content, persists media, sender, and REPLIED status", async () => {
+  let mediaData: Record<string, unknown> | undefined;
+  const conversation = { id: "conversation-image", storeId: "store", customer: { lineUserId: "Ucustomer" }, lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" } };
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => conversation },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "message-image", ...data }) },
+      messageMedia: { create: async ({ data }: { data: Record<string, unknown> }) => { mediaData = data; return data; } },
+      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data },
+    }),
+  } as unknown as PrismaService;
+  const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, { pushImage: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-image", duplicateAccepted: false }) } as unknown as LineMessagingService, { put: async () => ({ provider: "s3", fileId: "key", mimeType: "image/png", size: 8 }) } as never);
+  const result = await service.sendImage(conversation.id, { buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), mimetype: "image/png", size: 8 }, "123e4567-e89b-42d3-a456-426614174000", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
+  assert.equal(result.message.messageType, "IMAGE");
+  assert.equal(mediaData?.processingStatus, "READY");
+  assert.equal(mediaData?.mediaType, "IMAGE");
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
 void test("conversation returns only the canonical manager URL and excludes chat and credential fields", async () => {
   const managerUrl = "https://manager.line.biz/account/canonical";
   const chatUrl = "https://chat.line.biz/U1234567890abcdef";

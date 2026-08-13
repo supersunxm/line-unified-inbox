@@ -7,6 +7,8 @@ import { isValidManagerUrl } from "./store-master/store-master.utils";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
 import { LineMessagingService } from "./line-messaging/line-messaging.service";
+import { MediaStorageService } from "./media/media-storage";
+import { createMediaPublicUrl } from "./media/media-public-url";
 import type { AuthUser } from "./auth/auth.guard";
 
 const conversationBaseInclude = {
@@ -37,6 +39,7 @@ export class ConversationsService {
     private readonly operations: OperationsService,
     private readonly encryption: CredentialEncryptionService = undefined as unknown as CredentialEncryptionService,
     private readonly lineMessaging: LineMessagingService = undefined as unknown as LineMessagingService,
+    private readonly media: MediaStorageService = undefined as unknown as MediaStorageService,
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
@@ -304,6 +307,42 @@ export class ConversationsService {
       }
       Logger.error(`LINE accepted outbound message but persistence failed for conversation ${conversation.id}`, undefined, "ConversationsService");
       throw new InternalServerErrorException("LINE รับข้อความแล้ว แต่บันทึกประวัติไม่สำเร็จ กรุณาลองส่งคำขอเดิมอีกครั้ง");
+    }
+  }
+
+  async sendImage(id: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string, operator: AuthUser) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
+    const mime = file.mimetype.toLowerCase();
+    const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp" };
+    if (!extensions[mime]) throw new BadRequestException("Unsupported image type");
+    if (!file.buffer.length || file.size > 10 * 1024 * 1024) throw new BadRequestException("Image exceeds the 10 MB limit");
+    const validMagic = mime === "image/jpeg" ? file.buffer.subarray(0, 2).equals(Buffer.from([0xff, 0xd8])) : mime === "image/png" ? file.buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) : mime === "image/gif" ? file.buffer.subarray(0, 3).toString() === "GIF" : file.buffer.subarray(0, 4).toString() === "RIFF" && file.buffer.subarray(8, 12).toString() === "WEBP";
+    if (!validMagic) throw new BadRequestException("Image content does not match its MIME type");
+    const dedupeExternalId = `outbound:${idempotencyKey}`;
+    const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
+    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
+    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true } });
+    if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
+    if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
+    if (!conversation.lineOfficialAccount?.isActive || conversation.lineOfficialAccount.archivedAt || !conversation.lineOfficialAccount.encryptedChannelAccessToken) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
+    let accessToken: string; try { accessToken = this.encryption.decrypt(conversation.lineOfficialAccount.encryptedChannelAccessToken); } catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
+    const objectKey = `line-media/outbound/${conversation.id}/${idempotencyKey}.${extensions[mime]}`;
+    await this.media.put(objectKey, file.buffer, mime);
+    try {
+      const imageUrl = createMediaPublicUrl(objectKey);
+      const lineResult = await this.lineMessaging.pushImage({ accessToken, lineUserId: conversation.customer.lineUserId, originalContentUrl: imageUrl, previewImageUrl: imageUrl, retryKey: idempotencyKey });
+      const sentAt = new Date();
+      const created = await this.prisma.$transaction(async (tx) => {
+        const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
+        await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: mime, objectKey, provider: "s3", fileId: objectKey, fileSize: file.buffer.length, processingStatus: "READY" } });
+        await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
+        return message;
+      });
+      return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: mime, fileSize: file.buffer.length } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
+      throw error;
     }
   }
 

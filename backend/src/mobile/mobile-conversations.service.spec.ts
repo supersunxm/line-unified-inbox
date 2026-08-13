@@ -44,3 +44,16 @@ void test("mobile reply delegates only after store ownership is verified", async
   const denied = new MobileConversationsService({} as never, { assertConversationAccess: async () => { throw new ForbiddenException(); } } as never, conversations as never);
   await assert.rejects(() => denied.send(user, "conversation-2", { text: "Reply", idempotencyKey: "key-2" }), ForbiddenException);
 });
+
+void test("mobile detail returns a stable cursor and prepends older pages without overlap", async () => {
+  let captured: any;
+  const messages = [0, 1, 2].map((index) => ({ id: `message-${index}`, direction: "INBOUND", messageType: "TEXT", originalText: `m${index}`, sentAt: new Date(`2026-08-13T00:0${index}:00.000Z`), senderUserId: null, senderDisplayName: null, media: null }));
+  const prisma = { conversation: { findUnique: async (args: any) => { captured = args; const before = args.select.messages.where; return { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, messages: before ? messages.slice(0, 2) : messages, _count: { pushNotifications: 0 } }; } } };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  const first = await service.get(user, "conversation-1", { limit: 2 });
+  assert.equal(first.messages.length, 2);
+  assert.ok(first.nextCursor);
+  const second = await service.get(user, "conversation-1", { limit: 2, before: first.nextCursor! });
+  assert.equal(second.messages.length, 2);
+  assert.ok(captured.select.messages.where);
+});
