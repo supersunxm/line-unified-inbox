@@ -49,11 +49,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const requestUrl = `${API_BASE_URL}${path}`;
   let response: Response;
 
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (init?.headers) {
+    Object.assign(headers, init.headers);
+  }
+
   try {
     response = await fetch(requestUrl, {
       ...init,
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers,
     });
   } catch {
     const developmentHint =
@@ -304,6 +313,14 @@ export const api = {
     request<import("@/types/api").ImpactSummary>(`/dashboard/action-impact?period=${encodeURIComponent(period || "today")}`),
   getOperationalMemory: (period?: string) =>
     request<import("@/types/api").OperationalMemorySummary>(`/dashboard/operational-memory?period=${encodeURIComponent(period || "today")}`),
+  uploadMassMessageImage: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<import("@/types/api").MassMessageUploadImageResult>("/mass-messages/upload-image", {
+      method: "POST",
+      body: formData,
+    });
+  },
   previewMassMessage: (input: import("@/types/api").MassMessagePreviewInput) =>
     request<import("@/types/api").MassMessagePreviewResult>("/mass-messages/preview", {
       method: "POST",

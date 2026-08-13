@@ -24,12 +24,34 @@ export type MassMessagePreviewInput = {
   audienceType?: MassMessageAudienceType;
 };
 
+export type MassMessageTextMessageItem = {
+  type: "text";
+  text: string;
+};
+
+export type MassMessageImageMessageItem = {
+  type: "image";
+  originalContentUrl: string;
+  previewImageUrl: string;
+};
+
+export type MassMessageItem =
+  | MassMessageTextMessageItem
+  | MassMessageImageMessageItem;
+
 export type MassMessageCreateInput = {
   campaignRequestId: string;
   title?: string;
   storeSelection: StoreSelectionInput;
   audienceType?: MassMessageAudienceType;
   messages: Array<Record<string, unknown>>;
+};
+
+export type MassMessageUploadImageResult = {
+  url: string;
+  previewUrl: string;
+  mimeType: string;
+  fileSize: number;
 };
 
 export type StorePreviewResult = {

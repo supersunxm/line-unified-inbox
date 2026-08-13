@@ -91,3 +91,33 @@ test("Campaign progress polling monitors status and displays terminal banners", 
   assert.match(viewCode, /failedRecipientCount/);
   assert.match(viewCode, /processedRecipientCount/);
 });
+
+test("Mass Message Image Support: Upload UI, file input constraints, replace, and remove", () => {
+  assert.match(viewCode, /api\.uploadMassMessageImage/);
+  assert.match(viewCode, /accept="\.jpg,\.jpeg,\.png,\.webp,image\/jpeg,image\/png,image\/webp"/);
+  assert.match(viewCode, /handleFileSelect/);
+  assert.match(viewCode, /handleReplaceImage/);
+  assert.match(viewCode, /handleRemoveImage/);
+  assert.match(viewCode, /10 \* 1024 \* 1024/); // 10MB limit
+  assert.match(viewCode, /isUploadingImage/);
+});
+
+test("Mass Message Image Support: Live Preview handles text-only, image-only, and text+image", () => {
+  assert.match(viewCode, /attachedImage\.previewUrl \|\| attachedImage\.url/);
+  assert.match(viewCode, /hasContent/);
+  assert.match(viewCode, /messagePreviewEmptyPlaceholder/);
+});
+
+test("Mass Message Image Support: Validation allows text-only, image-only, text+image and blocks empty", () => {
+  assert.match(viewCode, /const hasContent = Boolean\(messageText\.trim\(\) \|\| attachedImage\)/);
+  assert.match(viewCode, /disabled=\{[^}]*!hasContent/);
+});
+
+test("Mass Message Image Support: Confirmation Modal and Campaign detail render content breakdown", () => {
+  assert.match(viewCode, /confirmContentSummaryTitle/);
+  assert.match(viewCode, /confirmTextMessageLabel/);
+  assert.match(viewCode, /confirmImageLabel/);
+  assert.match(viewCode, /confirmNoTextMessage/);
+  assert.match(viewCode, /confirmNoImage/);
+  assert.match(viewCode, /confirmImageAttached/);
+});
