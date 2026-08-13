@@ -44,30 +44,30 @@ export function PeakHourAnalysisCard({ analytics, language }: PeakHourAnalysisPr
       ];
 
   return (
-    <div className="app-card p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm flex flex-col justify-between">
+    <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between font-tabular">
       <div>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[var(--foreground)]">{t.title}</h3>
-          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">Highest Traffic</span>
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{t.title}</h3>
+          <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/40">Peak Window</span>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3 text-center">
-          <div className="p-3 rounded-lg bg-[var(--accent)] border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider block">{t.peakWindow}</span>
-            <span className="text-base font-black text-blue-600 dark:text-blue-400 mt-1 block">{analytics.peakWindow}</span>
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide block">{t.peakWindow}</span>
+            <span className="text-base font-bold text-blue-600 dark:text-blue-400 mt-1 block">{analytics.peakWindow}</span>
           </div>
-          <div className="p-3 rounded-lg bg-[var(--accent)] border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider block">{t.trafficCount}</span>
-            <span className="text-base font-black text-[var(--foreground)] mt-1 block">{analytics.peakTrafficCount} msgs</span>
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide block">{t.trafficCount}</span>
+            <span className="text-base font-bold text-slate-900 dark:text-slate-100 mt-1 block">{analytics.peakTrafficCount} msgs</span>
           </div>
         </div>
 
         {/* Top Stores During Peak */}
-        <div className="mt-4 pt-3 border-t border-[var(--border)] space-y-2">
-          <span className="text-xs font-bold text-[var(--foreground)] block">{t.topStoresTitle}</span>
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">{t.topStoresTitle}</span>
           <div className="space-y-1">
             {topStores.map((st, idx) => (
-              <div key={st.storeId} className="flex items-center justify-between text-xs font-medium text-[var(--foreground)]">
+              <div key={st.storeId} className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                 <span>{idx + 1}. {st.storeName}</span>
                 <span className="font-bold text-blue-600 dark:text-blue-400">{st.count} msgs</span>
               </div>
@@ -76,14 +76,14 @@ export function PeakHourAnalysisCard({ analytics, language }: PeakHourAnalysisPr
         </div>
 
         {/* 24-Hour Micro Bar Chart */}
-        <div className="mt-4 pt-3 border-t border-[var(--border)]">
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
           <div className="flex items-end justify-between gap-1 h-12">
             {analytics.hourlyDistribution.map((cnt, hour) => {
               const hPct = Math.max(8, Math.round((cnt / maxVal) * 100));
               const isPeak = cnt === maxVal && cnt > 0;
               return (
                 <div key={hour} className="flex-1 flex flex-col items-center gap-1 group" title={`${hour}:00 - ${cnt} msgs`}>
-                  <div className={`w-full rounded-t-sm transition-all ${isPeak ? "bg-blue-600" : "bg-blue-200 dark:bg-blue-950"}`} style={{ height: `${hPct}%` }} />
+                  <div className={`w-full rounded-t-xs transition-all ${isPeak ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`} style={{ height: `${hPct}%` }} />
                 </div>
               );
             })}
@@ -91,7 +91,7 @@ export function PeakHourAnalysisCard({ analytics, language }: PeakHourAnalysisPr
         </div>
       </div>
 
-      <div className="mt-4 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 text-xs">
+      <div className="mt-4 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-xs">
         <span className="font-bold text-blue-900 dark:text-blue-300 block mb-0.5">{t.adviceTitle}</span>
         <p className="text-blue-800 dark:text-blue-200">{analytics.recommendation || "Increase manpower coverage during peak hours"}</p>
       </div>

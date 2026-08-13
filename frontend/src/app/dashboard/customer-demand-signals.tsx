@@ -13,8 +13,8 @@ const LABELS = {
     sectionTitle: "Customer Intelligence",
     title: "ข้อมูลความต้องการและความสนใจลูกค้า",
     subtitle: "สัดส่วนสินค้าที่ลูกค้ากล่าวถึงและหัวข้อคำถามหลักในการสนทนา",
-    productsTitle: "สินค้าที่ลูกค้าพูดถึง (Products Mentioned)",
-    topicsTitle: "หัวข้อที่ลูกค้าสอบถาม (Customer Topics)",
+    productsTitle: "สินค้าที่ลูกค้าพูดถึง",
+    topicsTitle: "หัวข้อที่ลูกค้าสอบถาม",
     mentions: "การพูดถึง",
     signals: "สัญญาณ",
     primaryTopic: "ประเด็นหลัก",
@@ -89,13 +89,13 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
           {t.sectionTitle}
         </span>
-        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+        <div className="h-px flex-1 bg-slate-200/80 dark:bg-slate-800/80" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* LEFT (~60%): Products Customers Mention */}
-        <div className="lg:col-span-7 app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+        <div className="lg:col-span-7 app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
+          <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 {t.productsTitle}
@@ -133,7 +133,7 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
                       </span>
                     </div>
                   </div>
-                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-purple-600 dark:bg-purple-500 rounded-full transition-all duration-500"
                       style={{ width: `${widthPct}%` }}
@@ -146,9 +146,9 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
         </div>
 
         {/* RIGHT (~40%): Customer Topics Breakdown */}
-        <div className="lg:col-span-5 app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-5 app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between space-y-4">
           <div>
-            <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+            <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 {t.topicsTitle}
               </h3>
@@ -159,7 +159,7 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
 
             {/* Stacked Multi-Color Progress Bar */}
             <div className="mt-4 space-y-2">
-              <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+              <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
                 {topicBreakdown.map((tItem) => (
                   <div
                     key={tItem.name}
@@ -173,7 +173,7 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
           </div>
 
           {/* Detailed Topic Rows */}
-          <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-tabular">
+          <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs font-tabular">
             {topicBreakdown.map((tItem) => (
               <div key={tItem.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

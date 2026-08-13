@@ -37,14 +37,14 @@ export const HERO_LABELS = {
     totalConversations: "รวมข้อความ",
     followersByStore: "สถิติผู้ติดตามรายสาขา",
     top10Stores: "Top 10 สาขาผู้ติดตามสูงสุด",
-    bottom10Stores: "สาขาที่ต้องได้รับการดูแล (Attention Required)",
+    bottom10Stores: "สาขาที่ต้องได้รับการดูแล",
     followerDistribution: "สรุปการกระจายตัวของผู้ติดตามในเครือข่าย",
     top10Avg: "เฉลี่ย Top 10",
     bottom10Avg: "เฉลี่ยกลุ่มต้องดูแล",
     ratioGap: "Gap Ratio",
     shareComparison: "สัดส่วน Top 10 vs กลุ่มต้องดูแล",
     noFollowerData: "ไม่มีข้อมูลผู้ติดตามรายสาขา",
-    followerAcquisition: "สัดส่วนการได้มาของผู้ติดตาม (Acquisition Breakdown)",
+    followerAcquisition: "สัดส่วนการได้มาของผู้ติดตาม",
   },
   en: {
     messagesToday: "Total Messages",
@@ -105,7 +105,7 @@ export const HERO_LABELS = {
     totalConversations: "消息总数",
     followersByStore: "各门店关注者表现",
     top10Stores: "关注者 Top 10 门店",
-    bottom10Stores: "需关注门店 (Attention Required)",
+    bottom10Stores: "需关注门店",
     followerDistribution: "网络关注者分布统计",
     top10Avg: "Top 10 均值",
     bottom10Avg: "需关注门店均值",
@@ -127,7 +127,6 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
   // Level 1 KPI Data: Clean non-response-time business metrics
   const messagesToday = cards.messagesToday ?? 0;
   const messagesDiffPct = cards.messagesDiffPct ?? 0;
-  const pendingCount = cards.pendingCount ?? 0;
 
   const criticalStoresCount = dailySummary?.storesNeedAttentionCount ?? 0;
   const totalStoresCount = dailySummary?.activeStoresCount ?? (analytics.storeRanking?.length || 142);
@@ -174,68 +173,67 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
     <section aria-label="Executive Hero Overview" className="space-y-8">
       {/* ─────────────────────────────────────────────────────────────
           SECTION 1 — EXECUTIVE PULSE (5 BUSINESS KPI CARDS)
-          100% pure business & volume metrics (NO response-time/SLA)
       ───────────────────────────────────────────────────────────── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Executive Pulse
           </span>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+          <div className="h-px flex-1 bg-slate-200/80 dark:bg-slate-800/80" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Card 1: New Followers (Net Growth) */}
-          <div className="app-card p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="app-card p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {t.followers}
               </span>
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
             </div>
-            <div className="mt-2.5">
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight font-tabular">
+            <div className="mt-3">
+              <div className="text-2xl lg:text-[28px] font-bold text-emerald-600 dark:text-emerald-400 tracking-tight font-tabular leading-none">
                 {netFollowersToday >= 0 ? `+${netFollowersToday.toLocaleString()}` : netFollowersToday.toLocaleString()}
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-tabular">
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-tabular">
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">+{addedFollowers.toLocaleString()}</span>
-                <span>/</span>
-                <span className="text-rose-500 font-semibold">-{blockedFollowers.toLocaleString()}</span>
+                <span className="text-slate-300 dark:text-slate-700">/</span>
+                <span className="text-rose-500 font-medium">-{blockedFollowers.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
           {/* Card 2: Total Followers */}
-          <div className="app-card p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="app-card p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {t.totalFollowersLabel}
               </span>
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600" />
             </div>
-            <div className="mt-2.5">
-              <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular">
+            <div className="mt-3">
+              <div className="text-2xl lg:text-[28px] font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular leading-none">
                 {totalFollowers.toLocaleString()}
               </div>
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-tabular">
+              <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 font-tabular">
                 <span>LINE Official Accounts</span>
               </div>
             </div>
           </div>
 
           {/* Card 3: Total Messages */}
-          <div className="app-card p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="app-card p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {t.messagesToday}
               </span>
               <span className="h-2 w-2 rounded-full bg-blue-500" />
             </div>
-            <div className="mt-2.5">
-              <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular">
+            <div className="mt-3">
+              <div className="text-2xl lg:text-[28px] font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular leading-none">
                 {messagesToday.toLocaleString()}
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-xs font-tabular">
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] font-tabular">
                 <span className={`font-semibold ${messagesDiffPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                   {messagesDiffPct >= 0 ? `▲ +${messagesDiffPct}%` : `▼ ${messagesDiffPct}%`}
                 </span>
@@ -245,18 +243,18 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
           </div>
 
           {/* Card 4: Top Inquired Product */}
-          <div className="app-card p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="app-card p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wider">
+              <span className="text-[11px] font-medium text-purple-700 dark:text-purple-400 uppercase tracking-wider">
                 {t.topProduct}
               </span>
               <span className="h-2 w-2 rounded-full bg-purple-500" />
             </div>
-            <div className="mt-2.5">
-              <div className="text-xl font-bold text-purple-700 dark:text-purple-300 tracking-tight truncate">
+            <div className="mt-3">
+              <div className="text-xl lg:text-2xl font-bold text-purple-700 dark:text-purple-300 tracking-tight truncate leading-none">
                 {topProductObj.productName}
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-tabular">
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-tabular">
                 <span className="font-semibold text-purple-600 dark:text-purple-400">{topProductObj.percentage}%</span>
                 <span>{t.mentionsShare}</span>
               </div>
@@ -264,18 +262,18 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
           </div>
 
           {/* Card 5: Connected Stores */}
-          <div className="app-card p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="app-card p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {t.storesCritical}
               </span>
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
             </div>
-            <div className="mt-2.5">
-              <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular">
+            <div className="mt-3">
+              <div className="text-2xl lg:text-[28px] font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular leading-none">
                 {activeStoresCount} <span className="text-sm font-normal text-slate-400">/ {totalStoresCount}</span>
               </div>
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium font-tabular">
+              <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium font-tabular">
                 {criticalStoresCount > 0 ? `${criticalStoresCount} ${t.needsFollowUp}` : "All stores connected"}
               </div>
             </div>
@@ -285,21 +283,20 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
 
       {/* ─────────────────────────────────────────────────────────────
           SECTION 2 — FOLLOWER PERFORMANCE (Audience Overview + Acquisition)
-          Visualizes strictly follower metrics (Added, Blocked, Net Growth, Total)
       ───────────────────────────────────────────────────────────── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Follower Performance
           </span>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+          <div className="h-px flex-1 bg-slate-200/80 dark:bg-slate-800/80" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
           {/* LEFT (~50%): Audience Overview */}
-          <div className="lg:col-span-6 app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+          <div className="lg:col-span-6 app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {language === "th" ? "การเติบโตของผู้ติดตาม LINE OA" : language === "zh" ? "LINE OA 关注者增长概览" : "LINE OA Audience Growth"}
                 </h3>
@@ -318,8 +315,8 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 text-center font-tabular">
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+            <div className="grid grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80 text-center font-tabular">
+              <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
                 <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
                   {t.addedFriends}
                 </div>
@@ -327,7 +324,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   +{addedFollowers.toLocaleString()}
                 </div>
               </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
                 <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
                   {t.blockedFriends}
                 </div>
@@ -347,8 +344,8 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
           </div>
 
           {/* RIGHT (~50%): Follower Acquisition & Net Growth Breakdown */}
-          <div className="lg:col-span-6 app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="lg:col-span-6 app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {t.followerAcquisition}
@@ -357,7 +354,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   {language === "th" ? "สัดส่วนเพื่อนที่เพิ่มขึ้นและการรักษาฐานผู้ติดตาม" : "Follower acquisition efficiency and retention"}
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-tabular">
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/40 font-tabular">
                 {netGrowthPct}% Retained
               </span>
             </div>
@@ -372,7 +369,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                     {netGrowthPct}%
                   </span>
                 </div>
-                <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                     style={{ width: `${netGrowthPct}%` }}
@@ -389,7 +386,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                     {blockedLossPct}%
                   </span>
                 </div>
-                <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-rose-500 rounded-full transition-all duration-500"
                     style={{ width: `${blockedLossPct}%` }}
@@ -398,7 +395,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between font-tabular">
               <span>Gross Added: +{addedFollowers.toLocaleString()}</span>
               <span>Net Addition: +{netFollowersToday.toLocaleString()}</span>
             </div>
@@ -409,8 +406,8 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
       {/* ─────────────────────────────────────────────────────────────
           SECTION 2b — REPLY STATUS BREAKDOWN DONUT
       ───────────────────────────────────────────────────────────── */}
-      <div className="app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
-        <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+      <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs">
+        <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
             {t.replyStatusDonut}
           </h3>
@@ -423,7 +420,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
           {/* SVG Donut Chart */}
           <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
             <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-              <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="var(--border)" strokeWidth="3.8" />
+              <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="var(--border)" strokeWidth="3.5" />
               {/* REPLIED (Green) */}
               {repliedPct > 0 && (
                 <circle
@@ -432,7 +429,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   r="15.9155"
                   fill="transparent"
                   stroke="#059669"
-                  strokeWidth="3.8"
+                  strokeWidth="3.5"
                   strokeDasharray={`${repliedPct} ${100 - repliedPct}`}
                   strokeDashoffset="0"
                 />
@@ -444,13 +441,13 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   cy="18"
                   r="15.9155"
                   fill="transparent"
-                  stroke="#9333ea"
-                  strokeWidth="3.8"
+                  stroke="#7c3aed"
+                  strokeWidth="3.5"
                   strokeDasharray={`${notifiedBmPct} ${100 - notifiedBmPct}`}
                   strokeDashoffset={`-${repliedPct}`}
                 />
               )}
-              {/* NOT_REPLIED (Slate/Amber) */}
+              {/* NOT_REPLIED (Slate) */}
               {notRepliedPct > 0 && (
                 <circle
                   cx="18"
@@ -458,7 +455,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   r="15.9155"
                   fill="transparent"
                   stroke="#64748b"
-                  strokeWidth="3.8"
+                  strokeWidth="3.5"
                   strokeDasharray={`${notRepliedPct} ${100 - notRepliedPct}`}
                   strokeDashoffset={`-${repliedPct + notifiedBmPct}`}
                 />
@@ -468,14 +465,14 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               <span className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight font-tabular">
                 {totalReplyPopulation.toLocaleString()}
               </span>
-              <span className="text-[8px] text-slate-400 font-semibold uppercase tracking-wider">
+              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
                 {t.totalConversations}
               </span>
             </div>
           </div>
 
           {/* Legend with Verified Counts & Percentages */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs w-full sm:w-auto font-tabular">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs w-full sm:w-auto font-tabular">
             <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/30">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0" />
@@ -496,7 +493,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-slate-500 shrink-0" />
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{t.notReplied}</span>
@@ -511,11 +508,10 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
 
       {/* ─────────────────────────────────────────────────────────────
           SECTION 2c — STORE FOLLOWER METRICS (Top 10 vs Attention Required)
-          No punitive ranking wording
       ───────────────────────────────────────────────────────────── */}
       {hasStoreFollowers && (
-        <div className="app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-5">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
+        <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
+          <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 {t.followersByStore}
@@ -531,13 +527,13 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Top 10 Stores */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-400">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span>{t.top10Stores}</span>
                 </span>
-                <span>Followers</span>
+                <span className="text-[11px] font-medium text-slate-400">Followers</span>
               </div>
               <div className="space-y-2">
                 {top10.map((store, i) => {
@@ -552,7 +548,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                           {store.followers.toLocaleString()}
                         </span>
                       </div>
-                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                           style={{ width: `${widthPct}%` }}
@@ -565,13 +561,13 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
             </div>
 
             {/* Stores Requiring Attention (Neutral Operational Framing) */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
                   <span>{t.bottom10Stores}</span>
                 </span>
-                <span>Followers</span>
+                <span className="text-[11px] font-medium text-slate-400">Followers</span>
               </div>
               <div className="space-y-2">
                 {bottom10.map((store, i) => {
@@ -586,7 +582,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                           {store.followers.toLocaleString()}
                         </span>
                       </div>
-                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-slate-400 dark:bg-slate-600 rounded-full transition-all duration-300"
                           style={{ width: `${widthPct}%` }}
@@ -605,8 +601,8 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
           SECTION 2d — FOLLOWER DISTRIBUTION SUMMARY
       ───────────────────────────────────────────────────────────── */}
       {hasStoreFollowers && (
-        <div className="app-card p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {t.followerDistribution}
             </h4>
@@ -647,7 +643,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               <span>Top 10 ({topSharePct}%)</span>
               <span>{t.bottom10Avg} ({bottomSharePct}%)</span>
             </div>
-            <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+            <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
               <div
                 className="h-full bg-emerald-500 transition-all duration-500"
                 style={{ width: `${topSharePct}%` }}
@@ -665,5 +661,6 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
     </section>
   );
 }
+
 
 

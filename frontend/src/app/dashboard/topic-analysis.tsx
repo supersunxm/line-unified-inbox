@@ -42,25 +42,27 @@ export function CustomerDemandCard({ correlations, language }: CustomerDemandPro
       ];
 
   return (
-    <div className="app-card p-5 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm flex flex-col justify-between">
+    <div className="app-card p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-2xs flex flex-col justify-between font-tabular">
       <div>
-        <h3 className="text-sm font-semibold text-[var(--foreground)]">{t.title}</h3>
-        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{t.subtitle}</p>
+        <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{t.title}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.subtitle}</p>
+        </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2.5">
           {displayList.map((item) => (
-            <div key={item.productModelId} className="p-3 rounded-lg bg-[var(--accent)] border border-[var(--border)] space-y-1.5">
+            <div key={item.productModelId} className="p-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800/60 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-[var(--foreground)]">{item.productName}</span>
-                <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {item.percentage}% <span className="text-[var(--muted-foreground)] font-normal">({item.count})</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{item.productName}</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {item.percentage}% <span className="text-slate-400 font-normal">({item.count})</span>
                 </span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[var(--muted-foreground)]">{t.topTopic}</span>
-                <span className="font-semibold text-teal-600 dark:text-teal-400">{item.topTopicName}</span>
+                <span className="text-slate-500 dark:text-slate-400">{t.topTopic}</span>
+                <span className="font-medium text-purple-600 dark:text-purple-400">{item.topTopicName}</span>
               </div>
-              <div className="w-full h-1.5 bg-[var(--surface)] rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                   style={{ width: `${Math.max(6, item.percentage)}%` }}
