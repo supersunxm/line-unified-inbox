@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
   MassMessageBatchStatus,
@@ -15,7 +15,7 @@ const MULTICAST_BATCH_SIZE = 500;
 const MAX_RETRY_ATTEMPTS = 3;
 
 @Injectable()
-export class MassMessageProcessorService {
+export class MassMessageProcessorService implements OnModuleInit {
   private readonly logger = new Logger(MassMessageProcessorService.name);
 
   constructor(
@@ -24,6 +24,39 @@ export class MassMessageProcessorService {
     private readonly lineMessaging: LineMessagingService,
     private readonly scopeService: MassMessageScopeService,
   ) {}
+
+  async onModuleInit() {
+    if (process.env.NODE_ENV === "test") return;
+    void this.recoverUnfinishedCampaigns();
+  }
+
+  async recoverUnfinishedCampaigns(): Promise<number> {
+    const unfinished = await this.prisma.massMessageCampaign.findMany({
+      where: {
+        status: {
+          in: [
+            MassMessageCampaignStatus.PENDING,
+            MassMessageCampaignStatus.RUNNING,
+          ],
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+
+    if (unfinished.length > 0) {
+      this.logger.log(
+        `Discovered ${unfinished.length} unfinished campaigns on startup; resuming recovery...`,
+      );
+      for (const c of unfinished) {
+        void this.processCampaign(c.id).catch((err) => {
+          this.logger.error(`Recovery failed for campaign ${c.id}`, err);
+        });
+      }
+    }
+
+    return unfinished.length;
+  }
 
   async processCampaign(campaignId: string): Promise<void> {
     const campaign = await this.prisma.massMessageCampaign.findUnique({
@@ -53,6 +86,7 @@ export class MassMessageProcessorService {
 
     if (
       campaign.status !== MassMessageCampaignStatus.PENDING &&
+      campaign.status !== MassMessageCampaignStatus.RUNNING &&
       campaign.status !== MassMessageCampaignStatus.DRAFT
     ) {
       this.logger.warn(
@@ -61,17 +95,21 @@ export class MassMessageProcessorService {
       return;
     }
 
-    const startedAt = new Date();
-    await this.prisma.massMessageCampaign.update({
-      where: { id: campaignId },
-      data: {
-        status: MassMessageCampaignStatus.RUNNING,
-        startedAt,
-      },
-    });
+    if (campaign.status !== MassMessageCampaignStatus.RUNNING) {
+      await this.prisma.massMessageCampaign.update({
+        where: { id: campaignId },
+        data: {
+          status: MassMessageCampaignStatus.RUNNING,
+          startedAt: campaign.startedAt ?? new Date(),
+        },
+      });
+    }
 
-    const pendingDeliveries = campaign.storeDeliveries.filter(
-      (d) => d.status === MassMessageStoreDeliveryStatus.PENDING,
+    // Include both PENDING and RUNNING (interrupted) store deliveries
+    const activeDeliveries = campaign.storeDeliveries.filter(
+      (d) =>
+        d.status === MassMessageStoreDeliveryStatus.PENDING ||
+        d.status === MassMessageStoreDeliveryStatus.RUNNING,
     );
 
     const payload = campaign.messagePayload as {
@@ -81,7 +119,7 @@ export class MassMessageProcessorService {
 
     // Process store deliveries with bounded concurrency
     await this.processWithConcurrency(
-      pendingDeliveries,
+      activeDeliveries,
       MAX_CONCURRENT_STORES,
       async (delivery) => {
         await this.processStoreDelivery(campaign, delivery, messages);
@@ -102,6 +140,7 @@ export class MassMessageProcessorService {
       storeId: string;
       lineOfficialAccountId: string | null;
       skipReason: string | null;
+      status: MassMessageStoreDeliveryStatus;
       lineOfficialAccount: {
         id: string;
         name: string;
@@ -112,19 +151,20 @@ export class MassMessageProcessorService {
     },
     messages: Array<Record<string, unknown>>,
   ): Promise<void> {
-    // If already marked as skipped during creation, no further action needed
+    // If already marked as skipped, no further action needed
     if (delivery.skipReason) {
       return;
     }
 
-    const storeStartedAt = new Date();
-    await this.prisma.massMessageStoreDelivery.update({
-      where: { id: delivery.id },
-      data: {
-        status: MassMessageStoreDeliveryStatus.RUNNING,
-        startedAt: storeStartedAt,
-      },
-    });
+    if (delivery.status !== MassMessageStoreDeliveryStatus.RUNNING) {
+      await this.prisma.massMessageStoreDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          status: MassMessageStoreDeliveryStatus.RUNNING,
+          startedAt: new Date(),
+        },
+      });
+    }
 
     const oa = delivery.lineOfficialAccount;
     if (
@@ -188,26 +228,45 @@ export class MassMessageProcessorService {
       },
     });
 
+    // Check for existing batches (for crash recovery)
+    const existingBatches = await this.prisma.massMessageBatch.findMany({
+      where: { storeDeliveryId: delivery.id },
+      orderBy: { batchIndex: "asc" },
+    });
+
     // Chunk into 500-recipient batches
     const chunks: string[][] = [];
     for (let i = 0; i < recipientUserIds.length; i += MULTICAST_BATCH_SIZE) {
       chunks.push(recipientUserIds.slice(i, i + MULTICAST_BATCH_SIZE));
     }
 
-    // Create batch records with stable UUID retryKeys
-    const batchRecords = await this.prisma.$transaction(
-      chunks.map((chunk, index) =>
-        this.prisma.massMessageBatch.create({
-          data: {
-            storeDeliveryId: delivery.id,
-            batchIndex: index,
-            retryKey: randomUUID(),
-            recipientCount: chunk.length,
-            status: MassMessageBatchStatus.PENDING,
-          },
-        }),
-      ),
-    );
+    let batchRecords: Array<{
+      id: string;
+      batchIndex: number;
+      retryKey: string;
+      recipientCount: number;
+      status: MassMessageBatchStatus;
+    }>;
+
+    if (existingBatches.length > 0) {
+      // Reuse existing batches with their established retryKey values
+      batchRecords = existingBatches;
+    } else {
+      // Create batch records with stable UUID retryKeys
+      batchRecords = await this.prisma.$transaction(
+        chunks.map((chunk, index) =>
+          this.prisma.massMessageBatch.create({
+            data: {
+              storeDeliveryId: delivery.id,
+              batchIndex: index,
+              retryKey: randomUUID(),
+              recipientCount: chunk.length,
+              status: MassMessageBatchStatus.PENDING,
+            },
+          }),
+        ),
+      );
+    }
 
     let storeSuccessCount = 0;
     let storeFailedCount = 0;
@@ -216,6 +275,15 @@ export class MassMessageProcessorService {
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const batch = batchRecords[i];
+
+      if (!batch) continue;
+
+      // If batch already succeeded previously, DO NOT RE-SEND
+      if (batch.status === MassMessageBatchStatus.SUCCESS) {
+        storeSuccessCount += batch.recipientCount;
+        storeProcessedCount += batch.recipientCount;
+        continue;
+      }
 
       const batchStartedAt = new Date();
       await this.prisma.massMessageBatch.update({
@@ -239,7 +307,7 @@ export class MassMessageProcessorService {
             accessToken,
             to: chunk,
             messages,
-            retryKey: batch.retryKey, // REUSE identical retry key across attempts!
+            retryKey: batch.retryKey, // REUSE identical retry key across attempts & restarts!
           });
 
           lineRequestId = result.requestId;
@@ -295,7 +363,7 @@ export class MassMessageProcessorService {
       }
       storeProcessedCount += chunk.length;
 
-      // Increment campaign processed counters
+      // Update campaign processed counters
       await this.prisma.massMessageCampaign.update({
         where: { id: campaign.id },
         data: {
@@ -331,8 +399,27 @@ export class MassMessageProcessorService {
   private async finalizeCampaign(campaignId: string): Promise<void> {
     const deliveries = await this.prisma.massMessageStoreDelivery.findMany({
       where: { campaignId },
-      select: { status: true },
+      select: {
+        status: true,
+        recipientCount: true,
+        processedCount: true,
+        successCount: true,
+        failedCount: true,
+      },
     });
+
+    const totalProcessed = deliveries.reduce(
+      (sum, d) => sum + d.processedCount,
+      0,
+    );
+    const totalSuccess = deliveries.reduce(
+      (sum, d) => sum + d.successCount,
+      0,
+    );
+    const totalFailed = deliveries.reduce(
+      (sum, d) => sum + d.failedCount,
+      0,
+    );
 
     const nonSkipped = deliveries.filter(
       (d) => d.status !== MassMessageStoreDeliveryStatus.SKIPPED,
@@ -362,6 +449,9 @@ export class MassMessageProcessorService {
       where: { id: campaignId },
       data: {
         status: campaignStatus,
+        processedRecipientCount: totalProcessed,
+        successRecipientCount: totalSuccess,
+        failedRecipientCount: totalFailed,
         completedAt: new Date(),
       },
     });
@@ -373,18 +463,21 @@ export class MassMessageProcessorService {
     fn: (item: T) => Promise<void>,
   ): Promise<void> {
     let index = 0;
-    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (index < items.length) {
-        const item = items[index++];
-        if (item) {
-          try {
-            await fn(item);
-          } catch (err) {
-            this.logger.error("Error executing task in worker pool", err);
+    const workers = Array.from(
+      { length: Math.min(concurrency, items.length) },
+      async () => {
+        while (index < items.length) {
+          const item = items[index++];
+          if (item) {
+            try {
+              await fn(item);
+            } catch (err) {
+              this.logger.error("Error executing task in worker pool", err);
+            }
           }
         }
-      }
-    });
+      },
+    );
     await Promise.all(workers);
   }
 }

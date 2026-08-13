@@ -255,3 +255,90 @@ void test("createAndSend rejects invalid UUID or invalid messages array", async 
     /LINE allows at most 5 message objects per multicast request/,
   );
 });
+
+void test("createAndSend race condition: simultaneous requests with same campaignRequestId result in only 1 campaign", async () => {
+  const { Prisma } = await import("@prisma/client");
+  const campaignsInDb = new Map<string, any>();
+  const deliveriesInDb: any[] = [];
+  let processorCalls = 0;
+
+  const prisma = {
+    massMessageCampaign: {
+      findUnique: async ({ where }: any) => {
+        return campaignsInDb.get(where.campaignRequestId) ?? null;
+      },
+      create: async (args: any) => {
+        if (campaignsInDb.has(args.data.campaignRequestId)) {
+          const err = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+            code: "P2002",
+            clientVersion: "6.0.0",
+          });
+          throw err;
+        }
+        const rec = {
+          id: "race-camp-1",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdBy: { displayName: "Admin User" },
+          storeDeliveries: [],
+          ...args.data,
+        };
+        campaignsInDb.set(args.data.campaignRequestId, rec);
+        return rec;
+      },
+    },
+    massMessageStoreDelivery: {
+      create: async (args: any) => {
+        deliveriesInDb.push(args.data);
+        return args.data;
+      },
+    },
+    $transaction: async (fn: any) => fn(prisma),
+  } as any;
+
+  const scopeService = {
+    resolveStoreScope: async () => [
+      {
+        storeId: "s-1",
+        storeName: "Store 1",
+        storeCode: "001",
+        lineOfficialAccountId: "oa-1",
+        lineOaName: "OA 1",
+        encryptedChannelAccessToken: "tok",
+        isEligible: true,
+        skipReason: null,
+        recipientUserIds: ["U1"],
+      },
+    ],
+  } as any;
+
+  const processor = {
+    processCampaign: async () => {
+      processorCalls++;
+    },
+  } as any;
+
+  const service = new MassMessageService(prisma, scopeService, processor);
+
+  const payload = {
+    campaignRequestId: "a0000000-0000-4000-8000-000000000099",
+    storeSelection: { mode: MassMessageStoreMode.ALL },
+    audienceType: MassMessageAudienceType.ALL_KNOWN,
+    messages: [{ type: "text", text: "Race message" }],
+  };
+
+  // Run two requests simultaneously
+  const [res1, res2] = await Promise.all([
+    service.createAndSend(payload, adminUser),
+    service.createAndSend(payload, adminUser),
+  ]);
+
+  assert.equal(campaignsInDb.size, 1);
+  assert.equal(res1.id, "race-camp-1");
+  assert.equal(res2.id, "race-camp-1");
+  // One must be duplicate: false, the other must be duplicate: true
+  const duplicates = [res1.duplicate, res2.duplicate].sort();
+  assert.deepEqual(duplicates, [false, true]);
+  assert.equal(processorCalls, 1); // Processor dispatched only once
+});
+

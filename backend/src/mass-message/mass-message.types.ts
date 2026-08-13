@@ -62,7 +62,9 @@ export type StoreDeliveryDetail = {
   recipientCount: number;
   processedCount: number;
   successCount: number;
+  acceptedCount: number; // Semantic alias for successCount (recipients accepted by LINE API)
   failedCount: number;
+  failedRequestCount: number; // Semantic alias for failedCount (recipients where LINE request failed)
   skipReason: string | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -86,7 +88,9 @@ export type MassMessageCampaignDetail = {
   estimatedRecipientCount: number;
   processedRecipientCount: number;
   successRecipientCount: number;
+  acceptedRecipientCount: number; // Semantic alias for successRecipientCount (recipients accepted by LINE API)
   failedRecipientCount: number;
+  failedRequestRecipientCount: number; // Semantic alias for failedRecipientCount (recipients where LINE request failed)
   messagePayload: { messages: Array<Record<string, unknown>> };
   errorMessage: string | null;
   startedAt: string | null;
