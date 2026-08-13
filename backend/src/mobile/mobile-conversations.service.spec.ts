@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ForbiddenException } from "@nestjs/common";
+import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { MobileConversationsService } from "./mobile-conversations.service";
 
 const user = { id: "user-1", email: "staff@example.com", displayName: "Staff", role: "VIEWER" as const, isActive: true };
@@ -53,7 +53,35 @@ void test("mobile detail returns a stable cursor and prepends older pages withou
   const first = await service.get(user, "conversation-1", { limit: 2 });
   assert.equal(first.messages.length, 2);
   assert.ok(first.nextCursor);
-  const second = await service.get(user, "conversation-1", { limit: 2, before: first.nextCursor! });
+  const second = await service.get(user, "conversation-1", { limit: 2, before: first.nextCursor });
   assert.equal(second.messages.length, 2);
   assert.ok(captured.select.messages.where);
+});
+
+void test("mobile detail cursor orders equal timestamps by id without overlap or gaps", async () => {
+  const sentAt = new Date("2026-08-13T00:00:00.000Z");
+  const messages = ["a", "b", "c"].map((id) => ({ id, direction: "INBOUND", messageType: "TEXT", originalText: id, sentAt, senderUserId: null, senderDisplayName: null, media: null }));
+  const queries: any[] = [];
+  const prisma = { conversation: { findUnique: async (args: any) => {
+    queries.push(args);
+    const cursorId = args.select.messages.where?.OR?.[1]?.id?.lt as string | undefined;
+    const filtered = cursorId ? messages.filter((message) => message.id < cursorId) : messages;
+    return { id: "conversation-1", latestMessageAt: sentAt, bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, messages: filtered.slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, args.select.messages.take), _count: { pushNotifications: 0 } };
+  } } };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  const first = await service.get(user, "conversation-1", { limit: 2 });
+  const second = await service.get(user, "conversation-1", { limit: 2, before: first.nextCursor });
+  assert.deepEqual(first.messages.map((message) => message.id), ["b", "c"]);
+  assert.deepEqual(second.messages.map((message) => message.id), ["a"]);
+  assert.equal(first.messages.some((message) => second.messages.some((older) => older.id === message.id)), false);
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(queries[1].select.messages.where.OR[1], { sentAt, id: { lt: "b" } });
+});
+
+void test("mobile detail rejects an invalid cursor before querying messages", async () => {
+  let queried = false;
+  const prisma = { conversation: { findUnique: async () => { queried = true; return null; } } };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  await assert.rejects(() => service.get(user, "conversation-1", { limit: 20, before: "not-a-cursor" }), NotFoundException);
+  assert.equal(queried, false);
 });

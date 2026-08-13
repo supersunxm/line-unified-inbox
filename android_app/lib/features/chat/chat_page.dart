@@ -36,7 +36,8 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _loadOlder() async {
     final detail = _detail; final cursor = detail?.nextCursor;
     if (_loadingOlder || detail == null || cursor == null) return;
-    final before = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+    final beforeOffset = _scroll.hasClients ? _scroll.position.pixels : 0.0;
+    final beforeMaxExtent = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
     setState(() => _loadingOlder = true);
     try {
       final older = await widget.repository.detail(widget.conversationId, before: cursor);
@@ -44,7 +45,12 @@ class _ChatPageState extends State<ChatPage> {
       final seen = detail.messages.map((message) => message.id).toSet();
       final merged = [...older.messages.where((message) => !seen.contains(message.id)), ...detail.messages];
       setState(() { _detail = detail.copyWith(messages: merged, nextCursor: older.nextCursor); _loadingOlder = false; });
-      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted && _scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent - before); });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        final delta = _scroll.position.maxScrollExtent - beforeMaxExtent;
+        final target = (beforeOffset + delta).clamp(0.0, _scroll.position.maxScrollExtent);
+        _scroll.jumpTo(target);
+      });
     } catch (_) { if (mounted) setState(() { _loadingOlder = false; _error = 'Unable to load older messages'; }); }
   }
   String _key() { final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256)); bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80; final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(); return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}'; }
