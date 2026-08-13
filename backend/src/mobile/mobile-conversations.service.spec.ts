@@ -45,6 +45,32 @@ void test("mobile reply delegates only after store ownership is verified", async
   await assert.rejects(() => denied.send(user, "conversation-2", { text: "Reply", idempotencyKey: "key-2" }), ForbiddenException);
 });
 
+void test("mark read clears every unread notification for the user and conversation", async () => {
+  const updates: any[] = [];
+  const prisma = { pushNotification: { updateMany: async (args: any) => { updates.push(args); return { count: 28 }; } } };
+  const stores = { assertConversationAccess: async () => "store-1" };
+  const service = new MobileConversationsService(prisma as never, stores as never, {} as never);
+
+  assert.deepEqual(await service.markRead(user, "conversation-1"), { conversationId: "conversation-1", unreadCount: 0 });
+  assert.deepEqual(updates[0]?.where, { userId: "user-1", conversationId: "conversation-1", readAt: null });
+  assert.ok(updates[0]?.data.readAt instanceof Date);
+
+  assert.deepEqual(await service.markRead(user, "conversation-1"), { conversationId: "conversation-1", unreadCount: 0 });
+});
+
+void test("mark read preserves reply status and rejects cross-store access", async () => {
+  let conversationUpdated = false;
+  const prisma = {
+    conversation: { update: async () => { conversationUpdated = true; } },
+    pushNotification: { updateMany: async () => ({ count: 0 }) },
+  };
+  const denied = { assertConversationAccess: async () => { throw new ForbiddenException("Store access is forbidden"); } };
+  const service = new MobileConversationsService(prisma as never, denied as never, {} as never);
+
+  await assert.rejects(() => service.markRead(user, "other-store-conversation"), ForbiddenException);
+  assert.equal(conversationUpdated, false);
+});
+
 void test("mobile detail returns a stable cursor and prepends older pages without overlap", async () => {
   let captured: any;
   const messages = [0, 1, 2].map((index) => ({ id: `message-${index}`, direction: "INBOUND", messageType: "TEXT", originalText: `m${index}`, sentAt: new Date(`2026-08-13T00:0${index}:00.000Z`), senderUserId: null, senderDisplayName: null, media: null }));

@@ -106,6 +106,15 @@ export class MobileConversationsService {
     };
   }
 
+  async markRead(user: AuthUser, conversationId: string) {
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    await this.prisma.pushNotification.updateMany({
+      where: { userId: user.id, conversationId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { conversationId, unreadCount: 0 };
+  }
+
   async send(user: AuthUser, conversationId: string, dto: SendConversationMessageDto) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.sendMessage(conversationId, dto, user);
