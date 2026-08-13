@@ -257,8 +257,9 @@ model User {
   pushNotifications    PushNotification[]
   translationFeedback  MessageTranslationFeedback[]
   operationalSessions  OperationalSession[]
-  auditLogsAsActor     AuditLog[]                 @relation("AuditActor")
-  auditLogsAsTarget    AuditLog[]                 @relation("AuditTargetUser")
+  sentMessages         Message[]                    @relation("MessageSender")
+  auditLogsAsActor     AuditLog[]                   @relation("AuditActor")
+  auditLogsAsTarget    AuditLog[]                   @relation("AuditTargetUser")
 
   @@index([status])
   @@index([employeeId])
@@ -383,8 +384,8 @@ model AuditLog {
   userAgent              String?
   createdAt              DateTime @default(now())
 
-  actorUser              User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  targetUser             User? @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  actorUser              User?                @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser             User?                @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
   targetRegistration     RegistrationRequest? @relation(fields: [targetRegistrationId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
@@ -777,17 +778,21 @@ model Message {
   translatedEnglish   String?
   translatedChinese   String?
   rawPayload          Json?
+  senderUserId        String?
+  senderDisplayName   String?
   fileName            String?
   latitude            Float?
   longitude           Float?
   sentAt              DateTime
   createdAt           DateTime                     @default(now())
   conversation        Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender              User?                        @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
   media               MessageMedia?
   translationFeedback MessageTranslationFeedback[]
   pushNotifications   PushNotification[]
 
   @@index([conversationId, sentAt])
+  @@index([senderUserId])
 }
 
 model MessageTranslationFeedback {

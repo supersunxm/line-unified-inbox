@@ -73,7 +73,7 @@ export class MobileConversationsService {
         messages: {
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
           take: 50,
-          select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
+          select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
         _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
@@ -93,6 +93,7 @@ export class MobileConversationsService {
         messageType: message.messageType,
         text: message.originalText,
         sentAt: message.sentAt,
+        sender: message.direction === "OUTBOUND" ? { userId: message.senderUserId, displayName: message.senderDisplayName ?? "Store" } : null,
         media: message.media ? { processingStatus: message.media.processingStatus, mimeType: message.media.mimeType, fileSize: message.media.fileSize, url: message.media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null,
       })),
     };

@@ -15,6 +15,7 @@ const noopOperations = {
 
 void test("sendMessage resolves the conversation OA token, persists outbound text, marks REPLIED, and audits only after LINE accepts", async () => {
   const writes: string[] = [];
+  let persistedData: Record<string, unknown> | undefined;
   const conversation = {
     id: "conversation-send", customerId: "customer-send", storeId: "store-send", lineOfficialAccountId: "oa-send",
     latestMessageAt: new Date(), priority: "NORMAL", prioritySource: "SYSTEM", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
@@ -28,7 +29,7 @@ void test("sendMessage resolves the conversation OA token, persists outbound tex
     conversation: { findUnique: ({ where }: { where: { id?: string } }) => Promise.resolve(where.id ? conversation : null) },
     message: { findUnique: () => Promise.resolve(null) },
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
-      message: { create: () => { writes.push("message"); return Promise.resolve(persisted); } },
+      message: { create: ({ data }: { data: Record<string, unknown> }) => { persistedData = data; writes.push("message"); return Promise.resolve(persisted); } },
       conversation: { update: ({ data }: { data: { bmReplyStatus: string } }) => { writes.push(`status:${data.bmReplyStatus}`); return Promise.resolve(conversation); } },
       activityHistory: { create: ({ data }: { data: { description: string; createdByName: string } }) => { writes.push(`audit:${data.createdByName}:${data.description}`); return Promise.resolve({}); } },
     }),
@@ -45,6 +46,8 @@ void test("sendMessage resolves the conversation OA token, persists outbound tex
   const result = await service.sendMessage(conversation.id, { text: "  สวัสดีครับ  ", idempotencyKey: "123e4567-e89b-42d3-a456-426614174000" }, { id: "admin", email: "admin@example.com", displayName: "Operator", role: UserRole.ADMIN, isActive: true });
   assert.equal(result.message.direction, "OUTBOUND");
   assert.equal(result.message.originalText, "สวัสดีครับ");
+  assert.equal(persistedData?.senderUserId, "admin");
+  assert.equal(persistedData?.senderDisplayName, "Operator");
   assert.equal(result.bmReplyStatus, "REPLIED");
   assert.deepEqual(writes.map((value) => value.split(":")[0]), ["message", "status", "audit"]);
   assert.equal(writes.join(" ").includes("correct-oa-token"), false);

@@ -47,9 +47,12 @@ export class ConversationsService {
     return { ...conversation, resolvedLineOaManagerUrl, lineOfficialAccount, store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" }, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
   }
 
-  private safeMessage<T extends { id: string; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
-    const { media, ...safe } = message;
-    return { ...safe, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
+  private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
+    const { media, senderUserId, senderDisplayName, ...safe } = message;
+    const sender = safe.direction === MessageDirection.OUTBOUND
+      ? { userId: senderUserId ?? null, displayName: senderDisplayName ?? "Store" }
+      : null;
+    return { ...safe, sender, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
   async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null) {
@@ -265,6 +268,8 @@ export class ConversationsService {
             messageType: MessageType.TEXT,
             originalText: text,
             sentAt,
+            senderUserId: operator.id,
+            senderDisplayName: operator.displayName?.trim() || "Store",
             rawPayload: {
               provider: "LINE",
               providerMessageId: lineResult.externalMessageId,
