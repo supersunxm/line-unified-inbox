@@ -434,6 +434,22 @@ void test("Multi-instance safety: two concurrent worker instances processing the
       },
       updateMany: async (args: any) => {
         const batch = batchesInDb.get(args.where.id);
+        if (!batch) return { count: 0 };
+        if (args.where.OR) {
+          const matched = args.where.OR.some((clause: any) => {
+            if (clause.status && clause.status !== batch.status) return false;
+            if (clause.startedAt?.lt && batch.startedAt) {
+              return batch.startedAt < clause.startedAt.lt;
+            }
+            if (clause.startedAt === null && batch.startedAt !== null) return false;
+            return true;
+          });
+          if (matched) {
+            Object.assign(batch, args.data);
+            return { count: 1 };
+          }
+          return { count: 0 };
+        }
         if (batch && (args.where.status === batch.status || args.where.status?.in?.includes(batch.status))) {
           batch.status = args.data.status;
           return { count: 1 };
@@ -476,3 +492,256 @@ void test("Multi-instance safety: two concurrent worker instances processing the
   assert.equal(sentMulticasts.length, 1);
   assert.equal(sentMulticasts[0].to.length, 3);
 });
+
+void test("Crash Recovery: PENDING -> claimed RUNNING -> simulated hard crash -> stale RUNNING -> second processor reclaims it -> same retryKey reused -> exactly 1 logical LINE send", async () => {
+  const sentMulticasts: any[] = [];
+  const batchesInDb = new Map<string, any>();
+
+  // Establish initial batch in RUNNING status with an expired lease (stale 10 minutes ago)
+  const establishedBatch = {
+    id: "batch-crashed-1",
+    storeDeliveryId: "del-crash-1",
+    batchIndex: 0,
+    retryKey: "original-stable-retry-uuid-12345",
+    recipientCount: 50,
+    status: MassMessageBatchStatus.RUNNING,
+    startedAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago (stale!)
+    completedAt: null,
+  };
+  batchesInDb.set("del-crash-1-0", establishedBatch);
+  batchesInDb.set("batch-crashed-1", establishedBatch);
+
+  const mockCampaign = {
+    id: "campaign-crash-recovery",
+    status: MassMessageCampaignStatus.RUNNING,
+    audienceType: "ALL_KNOWN",
+    messagePayload: { messages: [{ type: "text", text: "Resumed post crash" }] },
+    storeDeliveries: [
+      {
+        id: "del-crash-1",
+        storeId: "store-crash-1",
+        lineOfficialAccountId: "oa-crash-1",
+        status: MassMessageStoreDeliveryStatus.RUNNING,
+        skipReason: null,
+        lineOfficialAccount: {
+          id: "oa-crash-1",
+          name: "OA Crash Test",
+          encryptedChannelAccessToken: "enc-tok-crash",
+          isActive: true,
+          archivedAt: null,
+        },
+      },
+    ],
+  };
+
+  const prisma = {
+    massMessageCampaign: {
+      findUnique: async () => mockCampaign,
+      findMany: async () => [{ id: "campaign-crash-recovery" }],
+      update: async () => mockCampaign,
+    },
+    massMessageStoreDelivery: {
+      update: async () => ({}),
+      findMany: async () => [
+        {
+          status: MassMessageStoreDeliveryStatus.SUCCESS,
+          recipientCount: 50,
+          processedCount: 50,
+          successCount: 50,
+          failedCount: 0,
+        },
+      ],
+    },
+    massMessageBatch: {
+      findMany: async () => [establishedBatch],
+      findUnique: async ({ where }: any) => batchesInDb.get(where.id),
+      updateMany: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (!batch) return { count: 0 };
+        if (args.where.OR) {
+          const matched = args.where.OR.some((clause: any) => {
+            if (clause.status && clause.status !== batch.status) return false;
+            if (clause.startedAt?.lt && batch.startedAt) {
+              return batch.startedAt < clause.startedAt.lt;
+            }
+            if (clause.startedAt === null && batch.startedAt !== null) return false;
+            return true;
+          });
+          if (matched) {
+            Object.assign(batch, args.data);
+            return { count: 1 };
+          }
+          return { count: 0 };
+        }
+        return { count: 0 };
+      },
+      update: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (batch) Object.assign(batch, args.data);
+        return batch;
+      },
+    },
+  } as any;
+
+  const encryption = { decrypt: () => "tok-crash-recovery" } as any;
+
+  const lineMessaging = {
+    multicast: async (input: any) => {
+      sentMulticasts.push(input);
+      return {
+        requestId: "line-req-resumed",
+        acceptedRequestId: null,
+        duplicateAccepted: false,
+      };
+    },
+  } as any;
+
+  const scopeService = {
+    resolveRecipientsForOa: async () => Array.from({ length: 50 }, (_, i) => `U_${i}`),
+  } as any;
+
+  // New worker starting up after previous worker crash
+  const worker2 = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+  // Default lease timeout is 5 mins; batch was started 10 mins ago -> stale & reclaimable!
+  worker2.batchClaimTimeoutMs = 5 * 60 * 1000;
+
+  await worker2.processCampaign("campaign-crash-recovery");
+
+  // Verify:
+  // 1. Batch was reclaimed and successfully processed
+  assert.equal(establishedBatch.status, MassMessageBatchStatus.SUCCESS);
+  // 2. Exactly 1 multicast call was executed
+  assert.equal(sentMulticasts.length, 1);
+  assert.equal(sentMulticasts[0].to.length, 50);
+  // 3. The SAME persisted retryKey was reused!
+  assert.equal(sentMulticasts[0].retryKey, "original-stable-retry-uuid-12345");
+  assert.equal(sentMulticasts[0].accessToken, "tok-crash-recovery");
+});
+
+void test("Lease safety: fresh RUNNING batches are NOT stolen by another processor and SUCCESS batches are never reclaimed", async () => {
+  const sentMulticasts: any[] = [];
+  const batchesInDb = new Map<string, any>();
+
+  // Batch 0 is already SUCCESS
+  const successBatch = {
+    id: "batch-success-0",
+    storeDeliveryId: "del-lease-1",
+    batchIndex: 0,
+    retryKey: "retry-key-success-0",
+    recipientCount: 50,
+    status: MassMessageBatchStatus.SUCCESS,
+    startedAt: new Date(Date.now() - 30 * 1000),
+    completedAt: new Date(Date.now() - 28 * 1000),
+  };
+
+  // Batch 1 is fresh RUNNING (claimed only 5 seconds ago by Worker 1)
+  const freshRunningBatch = {
+    id: "batch-running-1",
+    storeDeliveryId: "del-lease-1",
+    batchIndex: 1,
+    retryKey: "retry-key-running-1",
+    recipientCount: 50,
+    status: MassMessageBatchStatus.RUNNING,
+    startedAt: new Date(Date.now() - 5 * 1000), // Fresh (5 seconds ago)!
+    completedAt: null,
+  };
+
+  batchesInDb.set("batch-success-0", successBatch);
+  batchesInDb.set("batch-running-1", freshRunningBatch);
+
+  const mockCampaign = {
+    id: "campaign-lease-safety",
+    status: MassMessageCampaignStatus.RUNNING,
+    audienceType: "ALL_KNOWN",
+    messagePayload: { messages: [{ type: "text", text: "Lease test" }] },
+    storeDeliveries: [
+      {
+        id: "del-lease-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        status: MassMessageStoreDeliveryStatus.RUNNING,
+        skipReason: null,
+        lineOfficialAccount: {
+          id: "oa-1",
+          name: "OA 1",
+          encryptedChannelAccessToken: "enc-tok-1",
+          isActive: true,
+          archivedAt: null,
+        },
+      },
+    ],
+  };
+
+  const prisma = {
+    massMessageCampaign: {
+      findUnique: async () => mockCampaign,
+      update: async () => mockCampaign,
+    },
+    massMessageStoreDelivery: {
+      update: async () => ({}),
+      findMany: async () => [
+        {
+          status: MassMessageStoreDeliveryStatus.RUNNING,
+          recipientCount: 100,
+          processedCount: 50,
+          successCount: 50,
+          failedCount: 0,
+        },
+      ],
+    },
+    massMessageBatch: {
+      findMany: async () => [successBatch, freshRunningBatch],
+      findUnique: async ({ where }: any) => batchesInDb.get(where.id),
+      updateMany: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (!batch) return { count: 0 };
+        if (args.where.OR) {
+          const matched = args.where.OR.some((clause: any) => {
+            if (clause.status && clause.status !== batch.status) return false;
+            if (clause.startedAt?.lt && batch.startedAt) {
+              return batch.startedAt < clause.startedAt.lt;
+            }
+            if (clause.startedAt === null && batch.startedAt !== null) return false;
+            return true;
+          });
+          if (matched) {
+            Object.assign(batch, args.data);
+            return { count: 1 };
+          }
+          return { count: 0 };
+        }
+        return { count: 0 };
+      },
+      update: async (args: any) => {
+        const batch = batchesInDb.get(args.where.id);
+        if (batch) Object.assign(batch, args.data);
+        return batch;
+      },
+    },
+  } as any;
+
+  const encryption = { decrypt: () => "tok-lease" } as any;
+
+  const lineMessaging = {
+    multicast: async (input: any) => {
+      sentMulticasts.push(input);
+      return { requestId: "req-id", acceptedRequestId: null, duplicateAccepted: false };
+    },
+  } as any;
+
+  const scopeService = {
+    resolveRecipientsForOa: async () => Array.from({ length: 100 }, (_, i) => `U_${i}`),
+  } as any;
+
+  // Worker 2 attempts to process the campaign
+  const worker2 = new MassMessageProcessorService(prisma, encryption, lineMessaging, scopeService);
+  worker2.batchClaimTimeoutMs = 5 * 60 * 1000; // 5 min timeout
+
+  await worker2.processCampaign("campaign-lease-safety");
+
+  // Worker 2 must NOT steal the fresh RUNNING batch or re-execute the SUCCESS batch:
+  assert.equal(sentMulticasts.length, 0, "Worker 2 must send 0 multicasts (no batches stolen or duplicated)");
+  assert.equal(successBatch.status, MassMessageBatchStatus.SUCCESS, "SUCCESS batch status remains unchanged");
+  assert.equal(freshRunningBatch.status, MassMessageBatchStatus.RUNNING, "Fresh RUNNING batch remains owned by Worker 1");
+});
+

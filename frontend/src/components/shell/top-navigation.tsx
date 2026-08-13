@@ -216,7 +216,7 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
     };
   }, [isOpen]);
 
-  const secondaryActive = ["classification-insights", "follower-insights", "friend-source-links"].includes(currentSection);
+  const secondaryActive = ["classification-insights", "follower-insights", "friend-source-links", "mass-messages"].includes(currentSection);
   return (
     <div ref={menuRef} className="relative 2xl:hidden">
       <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active bg-slate-100 dark:bg-slate-800" : ""}`}>
@@ -228,6 +228,7 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
           <Link role="menuitem" href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
           <Link role="menuitem" href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
           {authUser?.role === "ADMIN" && <Link role="menuitem" href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
+          {authUser?.role === "ADMIN" && <Link role="menuitem" href="/mass-messages" aria-current={currentSection === "mass-messages" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ส่งข้อความ" : language === "zh" ? "群发消息" : "Mass Message"}</Link>}
         </div>
       )}
     </div>
@@ -262,6 +263,7 @@ export function TopNavigation(props: TopNavigationProps) {
             <Link href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
             <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
             {authUser?.role === "ADMIN" && <Link href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
+            {authUser?.role === "ADMIN" && <Link href="/mass-messages" aria-current={currentSection === "mass-messages" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ส่งข้อความ" : language === "zh" ? "群发消息" : "Mass Message"}</Link>}
           </div>
           <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
         </nav>

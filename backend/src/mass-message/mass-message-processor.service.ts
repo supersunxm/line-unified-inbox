@@ -13,10 +13,12 @@ import { MassMessageScopeService } from "./mass-message-scope.service";
 const MAX_CONCURRENT_STORES = 5;
 const MULTICAST_BATCH_SIZE = 500;
 const MAX_RETRY_ATTEMPTS = 3;
+const DEFAULT_BATCH_CLAIM_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 @Injectable()
 export class MassMessageProcessorService implements OnModuleInit {
   private readonly logger = new Logger(MassMessageProcessorService.name);
+  public batchClaimTimeoutMs = DEFAULT_BATCH_CLAIM_TIMEOUT_MS;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -48,17 +50,10 @@ export class MassMessageProcessorService implements OnModuleInit {
       this.logger.log(
         `Discovered ${unfinished.length} unfinished campaigns on startup; resuming recovery...`,
       );
-      const unfinishedIds = unfinished.map((c) => c.id);
-      await this.prisma.massMessageBatch.updateMany({
-        where: {
-          status: MassMessageBatchStatus.RUNNING,
-          storeDelivery: { campaignId: { in: unfinishedIds } },
-        },
-        data: {
-          status: MassMessageBatchStatus.PENDING,
-        },
-      });
 
+      // Do NOT blindly reset all RUNNING batches to PENDING on startup.
+      // Live worker instances may still be actively processing fresh RUNNING batches.
+      // Each batch's lease and staleness are atomically evaluated per-batch during processCampaign.
       for (const c of unfinished) {
         void this.processCampaign(c.id).catch((err) => {
           this.logger.error(`Recovery failed for campaign ${c.id}`, err);
@@ -311,11 +306,22 @@ export class MassMessageProcessorService implements OnModuleInit {
         continue;
       }
 
-      // Atomic claim: only one worker can claim a PENDING batch
+      // Atomic claim: only one worker can claim a PENDING batch, or reclaim a stale RUNNING batch whose lease expired
+      const staleThreshold = new Date(Date.now() - this.batchClaimTimeoutMs);
       const claimed = await this.prisma.massMessageBatch.updateMany({
         where: {
           id: batch.id,
-          status: MassMessageBatchStatus.PENDING,
+          OR: [
+            { status: MassMessageBatchStatus.PENDING },
+            {
+              status: MassMessageBatchStatus.RUNNING,
+              startedAt: { lt: staleThreshold },
+            },
+            {
+              status: MassMessageBatchStatus.RUNNING,
+              startedAt: null,
+            },
+          ],
         },
         data: {
           status: MassMessageBatchStatus.RUNNING,
