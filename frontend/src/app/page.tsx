@@ -20,6 +20,7 @@ import { ClassificationInsightsView } from "./classification-insights/classifica
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
+import { MassMessagesView } from "./mass-messages/mass-messages-view";
 import { DashboardView } from "./dashboard/dashboard-view";
 import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
 import type { SidebarView } from "@/components/shell";
@@ -2967,6 +2968,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ) : initialSection === "friend-source-links" ? (
             <PageContainer variant="readable">
               <FriendSourceLinksView language={language} userRole={authUser.role} />
+            </PageContainer>
+          ) : initialSection === "mass-messages" ? (
+            <PageContainer variant="full">
+              <MassMessagesView language={language} userRole={authUser.role} />
             </PageContainer>
           ) : (
             <>
