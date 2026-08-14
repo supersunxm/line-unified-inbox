@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type {
+  TikTokAccountListItem,
   TikTokHistoricalMetricsData,
   TikTokStoreData,
   TikTokVideoItem,
@@ -11,6 +12,8 @@ import { TikTokFollowerGrowthChart } from "./tiktok-follower-chart";
 interface TikTokDashboardViewProps {
   data: TikTokStoreData | null;
   historicalMetrics?: TikTokHistoricalMetricsData | null;
+  accounts?: TikTokAccountListItem[];
+  currentAccountId?: string;
 }
 
 function formatDelta(delta: number | null | undefined): {
@@ -80,6 +83,8 @@ function formatDuration(seconds: number | undefined | null): string {
 export function TikTokDashboardView({
   data,
   historicalMetrics,
+  accounts = [],
+  currentAccountId,
 }: TikTokDashboardViewProps) {
   // 1. Empty State
   if (!data) {
@@ -106,7 +111,7 @@ export function TikTokDashboardView({
                 href="/tiktok"
                 className="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
               >
-                Overview
+                Stores Overview
               </Link>
               <Link
                 href="/tiktok/connect"
@@ -297,6 +302,30 @@ export function TikTokDashboardView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+              {accounts.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="tiktok-store-switcher" className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Store:
+                  </label>
+                  <select
+                    id="tiktok-store-switcher"
+                    value={currentAccountId || data.id || ""}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        window.location.href = `/tiktok/dashboard/${e.target.value}`;
+                      }
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-xs focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.storeMaster?.storeName || acc.displayName} (@{acc.username || acc.displayName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {profileUrl && (
                 <a
                   href={profileUrl}

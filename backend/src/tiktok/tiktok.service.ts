@@ -424,32 +424,19 @@ export class TikTokService {
       },
     });
 
-    // 4. Return sanitized account overview
-    const latest = await this.getLatestTikTokAccount();
-    if (!latest) {
+    // 4. Return sanitized account overview for this exact upserted account
+    const safeAccount = await this.getTikTokAccountById(account.id);
+    if (!safeAccount) {
       throw new Error("Failed to retrieve upserted TikTok account overview");
     }
-    return latest;
+    return safeAccount;
   }
 
   /**
-   * Retrieves the most recently synced active TikTok account with its latest 20 videos.
-   * Strictly excludes encryptedAccessToken and encryptedRefreshToken from the return DTO.
+   * Transforms a raw database TikTokAccount entity with videos and storeMaster to a safe overview DTO.
+   * Strictly excludes encryptedAccessToken and encryptedRefreshToken.
    */
-  async getLatestTikTokAccount(): Promise<SafeTikTokAccountOverviewResponse | null> {
-    const raw = await this.prisma.tikTokAccount.findFirst({
-      orderBy: { lastSyncedAt: "desc" },
-      include: {
-        videos: {
-          orderBy: { createTime: "desc" },
-          take: 20,
-        },
-        storeMaster: true,
-      },
-    });
-
-    if (!raw) return null;
-
+  private mapToSafeAccountOverview(raw: any): SafeTikTokAccountOverviewResponse {
     const rawVideos: any[] = raw.videos || [];
     const safeVideos: SafeTikTokVideoResponse[] = rawVideos.map((v) => ({
       id: v.id,
@@ -499,6 +486,47 @@ export class TikTokService {
         : null,
       videos: safeVideos,
     };
+  }
+
+  /**
+   * Retrieves a specific TikTok account overview by ID or openId with its latest 20 videos.
+   */
+  async getTikTokAccountById(identifier: string): Promise<SafeTikTokAccountOverviewResponse | null> {
+    const raw = await this.prisma.tikTokAccount.findFirst({
+      where: {
+        OR: [{ id: identifier }, { openId: identifier }],
+      },
+      include: {
+        videos: {
+          orderBy: { createTime: "desc" },
+          take: 20,
+        },
+        storeMaster: true,
+      },
+    });
+
+    if (!raw) return null;
+    return this.mapToSafeAccountOverview(raw);
+  }
+
+  /**
+   * Retrieves the most recently synced active TikTok account with its latest 20 videos.
+   * Strictly excludes encryptedAccessToken and encryptedRefreshToken from the return DTO.
+   */
+  async getLatestTikTokAccount(): Promise<SafeTikTokAccountOverviewResponse | null> {
+    const raw = await this.prisma.tikTokAccount.findFirst({
+      orderBy: { lastSyncedAt: "desc" },
+      include: {
+        videos: {
+          orderBy: { createTime: "desc" },
+          take: 20,
+        },
+        storeMaster: true,
+      },
+    });
+
+    if (!raw) return null;
+    return this.mapToSafeAccountOverview(raw);
   }
 
   /**

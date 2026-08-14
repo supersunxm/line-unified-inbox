@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  fetchLatestTikTokAccountFromBackend,
-  fetchTikTokHistoricalMetricsFromBackend,
-} from "../tiktok-api-client";
+import { fetchTikTokAccountsListFromBackend } from "../tiktok-api-client";
 import { TikTokDashboardView } from "./tiktok-dashboard-view";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +24,18 @@ export default async function TikTokDashboardPage() {
     redirect("/login");
   }
 
-  const [data, historicalMetrics] = await Promise.all([
-    fetchLatestTikTokAccountFromBackend({ sessionToken }),
-    fetchTikTokHistoricalMetricsFromBackend(undefined, 30, { sessionToken }),
-  ]);
+  const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
 
-  return <TikTokDashboardView data={data} historicalMetrics={historicalMetrics} />;
+  // 0 accounts connected -> render empty state
+  if (accounts.length === 0) {
+    return <TikTokDashboardView data={null} />;
+  }
+
+  // Exactly 1 account connected -> open that account's dashboard directly
+  if (accounts.length === 1) {
+    redirect(`/tiktok/dashboard/${accounts[0].id}`);
+  }
+
+  // 2 or more accounts connected -> redirect to /tiktok overview for explicit store selection
+  redirect("/tiktok");
 }

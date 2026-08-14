@@ -536,6 +536,93 @@ export interface FetchTikTokAccountOptions {
   sessionToken?: string | null;
 }
 
+function mapBackendAccountToStoreData(data: any): TikTokStoreData {
+  return {
+    id: data.id,
+    profile: {
+      open_id: data.openId,
+      union_id: data.unionId || undefined,
+      username: data.username || undefined,
+      display_name: data.displayName,
+      avatar_url: data.avatarUrl || undefined,
+      avatar_url_100: data.avatarUrl100 || undefined,
+      avatar_large_url: data.avatarLargeUrl || undefined,
+      bio_description: data.bioDescription || undefined,
+      profile_deep_link: data.profileDeepLink || undefined,
+      profile_web_link: data.profileWebLink || undefined,
+      is_verified: data.isVerified,
+      follower_count: data.followerCount,
+      following_count: data.followingCount,
+      likes_count: data.likesCount,
+      video_count: data.videoCount,
+    },
+    videos: (data.videos || []).map((v: any) => ({
+      id: v.tikTokVideoId,
+      title: v.title || undefined,
+      video_description: v.videoDescription || undefined,
+      create_time: v.createTime ? Math.floor(new Date(v.createTime).getTime() / 1000) : undefined,
+      cover_image_url: v.coverImageUrl || undefined,
+      share_url: v.shareUrl || undefined,
+      duration: v.duration ?? undefined,
+      view_count: v.viewCount ?? 0,
+      like_count: v.likeCount ?? 0,
+      comment_count: v.commentCount ?? 0,
+      share_count: v.shareCount ?? 0,
+    })),
+    updatedAt: data.lastSyncedAt || data.updatedAt,
+    storeMasterId: data.storeMasterId || null,
+    storeMaster: data.storeMaster || null,
+  };
+}
+
+/**
+ * Fetches a specific persisted TikTok account overview and video metrics by account ID.
+ */
+export async function fetchTikTokAccountByIdFromBackend(
+  accountId: string,
+  options?: FetchTikTokAccountOptions
+): Promise<TikTokStoreData | null> {
+  try {
+    let sessionToken = options?.sessionToken?.trim() || null;
+
+    if (!sessionToken) {
+      try {
+        const { cookies } = await import("next/headers");
+        const cookieStore = await cookies();
+        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+      } catch {
+        // Fallback when executed outside Next.js request context
+      }
+    }
+
+    if (!sessionToken) {
+      return null;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sessionToken}`,
+    };
+
+    const response = await fetch(`${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}`, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data || !data.openId) {
+      return null;
+    }
+
+    return mapBackendAccountToStoreData(data);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetches the latest persisted TikTok account overview and video metrics from backend PostgreSQL.
  * Reads oppo_session from request context or options and forwards as Authorization: Bearer <sessionToken>.
@@ -590,41 +677,7 @@ export async function fetchLatestTikTokAccountFromBackend(
       return null;
     }
 
-    return {
-      profile: {
-        open_id: data.openId,
-        union_id: data.unionId || undefined,
-        username: data.username || undefined,
-        display_name: data.displayName,
-        avatar_url: data.avatarUrl || undefined,
-        avatar_url_100: data.avatarUrl100 || undefined,
-        avatar_large_url: data.avatarLargeUrl || undefined,
-        bio_description: data.bioDescription || undefined,
-        profile_deep_link: data.profileDeepLink || undefined,
-        profile_web_link: data.profileWebLink || undefined,
-        is_verified: data.isVerified,
-        follower_count: data.followerCount,
-        following_count: data.followingCount,
-        likes_count: data.likesCount,
-        video_count: data.videoCount,
-      },
-      videos: (data.videos || []).map((v: any) => ({
-        id: v.tikTokVideoId,
-        title: v.title || undefined,
-        video_description: v.videoDescription || undefined,
-        create_time: v.createTime ? Math.floor(new Date(v.createTime).getTime() / 1000) : undefined,
-        cover_image_url: v.coverImageUrl || undefined,
-        share_url: v.shareUrl || undefined,
-        duration: v.duration ?? undefined,
-        view_count: v.viewCount ?? 0,
-        like_count: v.likeCount ?? 0,
-        comment_count: v.commentCount ?? 0,
-        share_count: v.shareCount ?? 0,
-      })),
-      updatedAt: data.lastSyncedAt || data.updatedAt,
-      storeMasterId: data.storeMasterId || null,
-      storeMaster: data.storeMaster || null,
-    };
+    return mapBackendAccountToStoreData(data);
   } catch {
     console.error("[TikTok Backend Read Diagnostic]", {
       backendReadStatus: "exception",
@@ -638,7 +691,7 @@ export async function fetchLatestTikTokAccountFromBackend(
  */
 export async function fetchTikTokAccountsListFromBackend(
   options?: FetchTikTokAccountOptions
-): Promise<Array<{ id: string; openId: string; displayName: string; videoCountRecorded: number; updatedAt: string }>> {
+): Promise<import("./tiktok-types").TikTokAccountListItem[]> {
   try {
     let sessionToken = options?.sessionToken?.trim() || null;
 

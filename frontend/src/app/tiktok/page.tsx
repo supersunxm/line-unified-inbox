@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchLatestTikTokAccountFromBackend } from "./tiktok-api-client";
+import {
+  fetchLatestTikTokAccountFromBackend,
+  fetchTikTokAccountsListFromBackend,
+} from "./tiktok-api-client";
 import { TikTokOverviewView } from "./tiktok-overview-view";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +26,11 @@ export default async function TikTokOverviewPage() {
     redirect("/login");
   }
 
-  const data = await fetchLatestTikTokAccountFromBackend({ sessionToken });
-  return <TikTokOverviewView data={data} />;
+  const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
+  const singleAccountData =
+    accounts.length === 1
+      ? await fetchLatestTikTokAccountFromBackend({ sessionToken })
+      : null;
+
+  return <TikTokOverviewView accounts={accounts} singleAccountData={singleAccountData} />;
 }

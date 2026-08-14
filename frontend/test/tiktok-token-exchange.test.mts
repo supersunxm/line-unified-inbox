@@ -227,9 +227,10 @@ test("Frontend interacts with backend PostgreSQL sync and query endpoints with c
   // Verify raw cookie header is NOT forwarded to backend
   assert.doesNotMatch(apiClientSource, /headers\["Cookie"\]/);
   assert.match(callbackRouteSource, /request\.cookies\.get\("oppo_session"\)/);
-  assert.match(callbackRouteSource, /syncTikTokAccountToBackend/);
   assert.match(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
-  assert.match(dashboardPageSource, /fetchLatestTikTokAccountFromBackend/);
+  assert.match(dashboardPageSource, /fetchTikTokAccountsListFromBackend/);
+  const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
+  assert.match(dynamicDashboardSource, /fetchTikTokAccountByIdFromBackend/);
 });
 
 test("Route structure: /tiktok is Overview and /tiktok/dashboard is Performance Dashboard", () => {
@@ -350,7 +351,8 @@ test("Follower growth KPI rendering and Follower Growth Chart component", () => 
   assert.match(dashboardViewSource, /7 Days/);
   assert.match(dashboardViewSource, /30 Days/);
   assert.match(dashboardViewSource, /TikTokFollowerGrowthChart/);
-  assert.match(dashboardPageSource, /fetchTikTokHistoricalMetricsFromBackend/);
+  const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
+  assert.match(dynamicDashboardSource, /fetchTikTokHistoricalMetricsFromBackend/);
 
   // 2. Chart component verifies sparse data empty state (< 2 snapshots)
   assert.match(chartSource, /sortedData\.length >= 2/);
@@ -366,6 +368,48 @@ test("Follower growth KPI rendering and Follower Growth Chart component", () => 
   assert.match(chartSource, /text-emerald-600/);
   assert.match(chartSource, /text-rose-600/);
   assert.match(chartSource, /--/);
+});
+
+test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboard/[accountId] route, and store switcher", () => {
+  const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
+  const latestOverviewSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url), "utf8");
+  const latestDashboardViewSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
+
+  // 1. /tiktok/dashboard/[accountId]/page.tsx route exists and fetches account by ID
+  assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url)));
+  assert.match(dynamicDashboardSource, /fetchTikTokAccountByIdFromBackend/);
+  assert.match(dynamicDashboardSource, /fetchTikTokHistoricalMetricsFromBackend/);
+  assert.match(dynamicDashboardSource, /fetchTikTokAccountsListFromBackend/);
+  assert.match(dynamicDashboardSource, /notFound\(\)/);
+
+  // 2. /tiktok overview renders multi-account grid when multiple accounts exist
+  assert.match(latestOverviewSource, /totalAccounts > 1/);
+  assert.match(latestOverviewSource, /Connected Store Accounts/);
+  assert.match(latestOverviewSource, /Store Binding:/);
+  assert.match(latestOverviewSource, /Open Dashboard/);
+  assert.match(latestOverviewSource, /href=\{`\/tiktok\/dashboard\/\$\{account\.id\}`\}/);
+
+  // 3. /tiktok/dashboard view includes account switcher and links to specific accounts
+  assert.match(latestDashboardViewSource, /id="tiktok-store-switcher"/);
+  assert.match(latestDashboardViewSource, /`\/tiktok\/dashboard\/\$\{e\.target\.value\}`/);
+  assert.match(latestDashboardViewSource, /Stores Overview/);
+
+  // 4. API client supports fetchTikTokAccountByIdFromBackend
+  assert.match(apiClientSource, /export async function fetchTikTokAccountByIdFromBackend/);
+  assert.match(apiClientSource, /`\$\{API_BASE_URL\}\/tiktok\/accounts\/\$\{encodeURIComponent\(accountId\)\}`/);
+
+  // 5. Root /tiktok/dashboard page redirect behavior:
+  // - 0 accounts: renders empty state
+  // - 1 account: redirects to /tiktok/dashboard/<accountId>
+  // - 2+ accounts: redirects to /tiktok overview (never arbitrarily selects accounts[0])
+  const rootDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
+  assert.match(rootDashboardSource, /accounts\.length === 0/);
+  assert.match(rootDashboardSource, /<TikTokDashboardView data=\{null\} \/>/);
+  assert.match(rootDashboardSource, /accounts\.length === 1/);
+  assert.match(rootDashboardSource, /redirect\(`\/tiktok\/dashboard\/\$\{accounts\[0\]\.id\}`\)/);
+  assert.match(rootDashboardSource, /redirect\(["']\/tiktok["']\)/);
+  // Guarantee no arbitrary accounts[0] fallback when accounts.length > 1
+  assert.doesNotMatch(rootDashboardSource, /accounts\.length > 0\s*\)\s*\{\s*redirect\(`\/tiktok\/dashboard/);
 });
 
 

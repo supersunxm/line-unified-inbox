@@ -1,3 +1,10 @@
+# Multi-Account TikTok Store Routing & Account-Specific Isolation (2026-08-14)
+
+- **Dedicated Dynamic Dashboard Route (`/tiktok/dashboard/[accountId]`)**: To support multi-account scaling across ~150 retail stores without conflating store metrics, individual account dashboards are decoupled to `/tiktok/dashboard/[accountId]`. The base `/tiktok/dashboard` route redirects to the primary account dashboard if accounts exist or renders an empty state if no stores are connected.
+- **Multi-Account Store Overview (`/tiktok`)**: When 2 or more store accounts are connected, `/tiktok` renders a responsive card grid displaying each store's avatar, displayName, `@username`, StoreMaster store name, province, region, followers, status badge, and direct "Open Dashboard" button.
+- **Account-Specific Backend Data Endpoints (`GET /tiktok/accounts/:id` & `GET /tiktok/accounts/:id/metrics`)**: Endpoints strictly scope queries by `tikTokAccountId`, preventing cross-store video leakage and cross-store follower metric leakage.
+- **Duplicate & Binding Safety**: Reconnecting the same TikTok openId updates the existing account in-place without creating duplicate records. Connecting a distinct openId creates an independent second `TikTokAccount` without overwriting existing store accounts (e.g. O-Central World).
+
 # Automatic Daily TikTok Metric Collection & Scheduled Worker Architecture (2026-08-14)
 
 - **Lightweight Standalone Scheduled Worker (`backend/scripts/sync-tiktok-daily-metrics.ts`)**: Rather than running in-memory cron intervals or browser-triggered fetch loops inside web server containers, daily synchronization is decoupled into a standalone CLI script executable via Railway Cron (`0 18 * * *` UTC, mapping to 01:00 Asia/Bangkok).
@@ -733,3 +740,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Chat UX redesign stays inside the existing stateless presentation seams. Conversation state, repository calls, SSE handling, pagination, scroll generation, optimistic sends, unread marking, media loading, and notification cleanup remain owned by ChatPage and its existing services.
 - The composer keeps attachment and send callbacks unchanged. The AI shortcut invokes the existing quick-reply refresh callback only; suggestions remain editable drafts and never send autonomously.
 - Image bubbles retain a fixed 240x240 viewport across processing states. Message bubbles retain the existing 300px maximum width to preserve established scroll/pagination geometry while the visual styling changes.
+
+# Core Chat/Inbox status and preview semantics (2026-08-14)
+
+- Mobile user-facing reply states are intentionally reduced to two operational concepts: `NOT_REPLIED` and `NOTIFIED_BM` both render as `Need Reply`; `REPLIED` renders as `Completed`. Backend enum values remain unchanged for compatibility.
+- Inbox overview and filter derivation use the same shared status mapping. Any non-`REPLIED` legacy value is treated as actionable so the invariant Total = Need Reply + Completed cannot drift.
+- Latest-message preview is direction-aware: outbound text is prefixed with `You:`, and image previews use `Sent an image` with the same outbound prefix. The backend remains the authoritative source for message direction/type/timestamp.
+- Returning from Chat performs a targeted detail reconciliation and patches the existing Inbox item in place; it must not reload the full list, reset pagination, or disturb scroll state.
+- Persistent Chat header prioritizes customer identity and reply state. Store context remains available in Inbox and the customer profile sheet rather than occupying the always-visible header.

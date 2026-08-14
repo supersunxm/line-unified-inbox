@@ -745,3 +745,247 @@ test("TikTok error classification: permanent vs transient errors, bounded retrie
   await service.syncDailyTikTokMetrics();
   assert.equal(lockReleased, true);
 });
+
+test("Multi-account support: distinct openIds create separate records, reconnect updates in-place, and videos/metrics are isolated", async () => {
+  const accountsDb = new Map<string, any>();
+  const videosDb = new Map<string, any>();
+  const dailyMetricsDb = new Map<string, any>();
+  const storeMastersDb = new Map<string, any>();
+
+  // Set up 2 stores in StoreMaster
+  storeMastersDb.set("sm-cw", {
+    id: "sm-cw",
+    storeName: "OPPO Brand Shop Central World",
+    tiktokUsername: "o_centralworld",
+    province: "Bangkok",
+    region: "Central",
+  });
+  storeMastersDb.set("sm-par", {
+    id: "sm-par",
+    storeName: "OPPO Brand Shop Siam Paragon",
+    tiktokUsername: "o_siamparagon",
+    province: "Bangkok",
+    region: "Central",
+  });
+
+  const fakePrisma: any = {
+    storeMaster: {
+      findMany: async ({ where }: any) => {
+        const username = where?.tiktokUsername;
+        if (!username) return Array.from(storeMastersDb.values());
+        return Array.from(storeMastersDb.values()).filter(
+          (s) => s.tiktokUsername?.toLowerCase() === username.toLowerCase()
+        );
+      },
+    },
+    tikTokAccount: {
+      findUnique: async ({ where, include }: any) => {
+        let account: any = null;
+        if (where?.id) {
+          account = accountsDb.get(where.id);
+        } else if (where?.openId) {
+          account = Array.from(accountsDb.values()).find((a) => a.openId === where.openId);
+        }
+        if (!account) return null;
+        const res = { ...account };
+        if (include?.videos) {
+          res.videos = Array.from(videosDb.values()).filter((v) => v.tikTokAccountId === account.id);
+        }
+        if (include?.storeMaster) {
+          res.storeMaster = account.storeMasterId ? storeMastersDb.get(account.storeMasterId) : null;
+        }
+        return res;
+      },
+      findFirst: async ({ where, include }: any) => {
+        let account: any = null;
+        if (where?.OR) {
+          account = Array.from(accountsDb.values()).find(
+            (a) => a.id === where.OR[0].id || a.openId === where.OR[1].openId
+          );
+        } else if (where?.id) {
+          account = accountsDb.get(where.id);
+        } else if (where?.openId) {
+          account = Array.from(accountsDb.values()).find((a) => a.openId === where.openId);
+        } else {
+          account = Array.from(accountsDb.values())[0];
+        }
+        if (!account) return null;
+        const res = { ...account };
+        if (include?.videos) {
+          res.videos = Array.from(videosDb.values()).filter((v) => v.tikTokAccountId === account.id);
+        }
+        if (include?.storeMaster) {
+          res.storeMaster = account.storeMasterId ? storeMastersDb.get(account.storeMasterId) : null;
+        }
+        return res;
+      },
+      findMany: async ({ include }: any) => {
+        return Array.from(accountsDb.values()).map((a) => ({
+          ...a,
+          storeMaster: a.storeMasterId ? storeMastersDb.get(a.storeMasterId) : null,
+          _count: {
+            videos: Array.from(videosDb.values()).filter((v) => v.tikTokAccountId === a.id).length,
+          },
+        }));
+      },
+      upsert: async ({ where, create, update }: any) => {
+        let existing = Array.from(accountsDb.values()).find((a) => a.openId === where.openId);
+        if (existing) {
+          Object.assign(existing, update, { lastSyncedAt: new Date() });
+          return existing;
+        }
+        const newId = `acc-${accountsDb.size + 1}`;
+        const newRecord = {
+          id: newId,
+          ...create,
+          connectedAt: new Date(),
+          lastSyncedAt: new Date(),
+        };
+        accountsDb.set(newId, newRecord);
+        return newRecord;
+      },
+    },
+    tikTokVideo: {
+      upsert: async ({ where, create, update }: any) => {
+        const key = `${where.tikTokAccountId_tikTokVideoId.tikTokAccountId}_${where.tikTokAccountId_tikTokVideoId.tikTokVideoId}`;
+        const existing = videosDb.get(key);
+        if (existing) {
+          Object.assign(existing, update);
+          return existing;
+        }
+        const record = { id: `vid-${videosDb.size + 1}`, ...create };
+        videosDb.set(key, record);
+        return record;
+      },
+    },
+    tikTokAccountDailyMetric: {
+      upsert: async ({ create, update }: any) => {
+        const key = `${create.tikTokAccountId}_${create.metricDate.toISOString()}`;
+        const existing = dailyMetricsDb.get(key);
+        if (existing) {
+          Object.assign(existing, update, { updatedAt: new Date() });
+          return existing;
+        }
+        const record = {
+          id: `m-${dailyMetricsDb.size + 1}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...create,
+        };
+        dailyMetricsDb.set(key, record);
+        return record;
+      },
+      findMany: async ({ where }: any) => {
+        return Array.from(dailyMetricsDb.values()).filter(
+          (m) => m.tikTokAccountId === where.tikTokAccountId
+        );
+      },
+    },
+  };
+
+  const fakeEncryption: any = {
+    encrypt: (val: string) => `enc:${val}`,
+    decrypt: (val: string) => (val.startsWith("enc:") ? val.slice(4) : val),
+  };
+
+  const service = new TikTokService(fakePrisma, fakeEncryption);
+
+  // 1. Connect Store 1: O-Central World (open_id: "open-cw")
+  const sync1 = await service.upsertTikTokAccount({
+    tokens: {
+      accessToken: "token-cw",
+      refreshToken: "refresh-cw",
+      openId: "open-cw",
+    },
+    profile: {
+      open_id: "open-cw",
+      display_name: "O-Central World",
+      username: "o_centralworld",
+      follower_count: 5000,
+      video_count: 5,
+    },
+    videos: [
+      { id: "vid-cw-1", title: "Central World Video 1", view_count: 1000 },
+      { id: "vid-cw-2", title: "Central World Video 2", view_count: 2000 },
+    ],
+  });
+
+  assert.equal(accountsDb.size, 1);
+  assert.equal(sync1.displayName, "O-Central World");
+  assert.equal(sync1.storeMaster?.storeName, "OPPO Brand Shop Central World");
+  assert.equal(sync1.videos.length, 2);
+
+  // 2. Connect Store 2: Siam Paragon (open_id: "open-paragon")
+  const sync2 = await service.upsertTikTokAccount({
+    tokens: {
+      accessToken: "token-paragon",
+      refreshToken: "refresh-paragon",
+      openId: "open-paragon",
+    },
+    profile: {
+      open_id: "open-paragon",
+      display_name: "OPPO Siam Paragon",
+      username: "o_siamparagon",
+      follower_count: 8000,
+      video_count: 3,
+    },
+    videos: [
+      { id: "vid-par-1", title: "Paragon Video 1", view_count: 5000 },
+    ],
+  });
+
+  // Verify multi-account persistence
+  assert.equal(accountsDb.size, 2);
+  assert.equal(sync2.displayName, "OPPO Siam Paragon");
+  assert.equal(sync2.storeMaster?.storeName, "OPPO Brand Shop Siam Paragon");
+
+  // Verify Store 1 was preserved untouched
+  const acc1 = await service.getTikTokAccountById("acc-1");
+  assert.equal(acc1?.displayName, "O-Central World");
+  assert.equal(acc1?.storeMaster?.storeName, "OPPO Brand Shop Central World");
+
+  // 3. Reconnect Store 1 (same open_id: "open-cw") with updated follower count
+  await service.upsertTikTokAccount({
+    tokens: {
+      accessToken: "token-cw-new",
+      refreshToken: "refresh-cw-new",
+      openId: "open-cw",
+    },
+    profile: {
+      open_id: "open-cw",
+      display_name: "O-Central World Updated",
+      username: "o_centralworld",
+      follower_count: 5200,
+      video_count: 5,
+    },
+    videos: [],
+  });
+
+  // Must NOT create a duplicate third account
+  assert.equal(accountsDb.size, 2);
+  const acc1AfterReconnect = await service.getTikTokAccountById("acc-1");
+  assert.equal(acc1AfterReconnect?.displayName, "O-Central World Updated");
+  assert.equal(acc1AfterReconnect?.followerCount, 5200);
+
+  // 4. Test account list read
+  const list = await service.listTikTokAccounts();
+  assert.equal(list.length, 2);
+  const listCW = list.find((a) => a.openId === "open-cw");
+  const listPar = list.find((a) => a.openId === "open-paragon");
+  assert.equal(listCW?.storeMaster?.storeName, "OPPO Brand Shop Central World");
+  assert.equal(listPar?.storeMaster?.storeName, "OPPO Brand Shop Siam Paragon");
+
+  // 5. Test no cross-store video leakage
+  const acc1Data = await service.getTikTokAccountById("acc-1");
+  const acc2Data = await service.getTikTokAccountById("acc-2");
+  assert.equal(acc1Data?.videos.length, 2);
+  assert.equal(acc1Data?.videos[0].title, "Central World Video 1");
+  assert.equal(acc2Data?.videos.length, 1);
+  assert.equal(acc2Data?.videos[0].title, "Paragon Video 1");
+
+  // 6. Test no cross-store metrics leakage
+  const acc1Metrics = await service.getAccountHistoricalMetrics("acc-1", 30);
+  const acc2Metrics = await service.getAccountHistoricalMetrics("acc-2", 30);
+  assert.equal(acc1Metrics?.accountId, "acc-1");
+  assert.equal(acc2Metrics?.accountId, "acc-2");
+});

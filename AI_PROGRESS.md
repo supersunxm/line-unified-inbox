@@ -1,29 +1,27 @@
 # AI progress
 
-## Current task: Automatic Daily TikTok Metric Collection & Follower Growth Dashboard UI
+## Current task: Multi-Account 2-Store Test Preparation & Account-Specific Dashboard
 
-- **Scheduled Worker Implementation**:
-  - Implemented `syncDailyTikTokMetrics(options)` in `backend/src/tiktok/tiktok.service.ts` with chunked batching (concurrency default 5, up to 20) and individual account error isolation.
-  - Implemented token lifecycle management in `fetchRefreshedTikTokToken` & `syncSingleAccountDailyMetrics`:
-    - Decrypts refresh tokens only when access tokens are expired or invalid.
-    - Handles rotated refresh tokens and updates encrypted database records and expiry timestamps.
-    - Marks deauthorized or expired refresh tokens with `connectionStatus = 'EXPIRED'`.
-    - Upserts daily metric snapshot into `TikTokAccountDailyMetric` normalized to Asia/Bangkok date boundary.
-    - Idempotent execution: Multiple runs on the same Thai calendar day safely update existing records without duplicates.
-  - Created standalone worker runner script: `backend/scripts/sync-tiktok-daily-metrics.ts` and registered `"tiktok:sync-daily-metrics"` in `backend/package.json`.
-  - Added protected manual trigger endpoint `POST /tiktok/sync-daily-metrics` with `@Roles(UserRole.ADMIN)` in `TikTokController`.
-- **Dashboard Growth UI & Historical Chart**:
-  - Updated Followers KPI card in `/tiktok/dashboard` to display real-time growth breakdown for Today, 7 Days, and 30 Days (green positive `+`, red negative `-`, neutral `0`, and `--` for missing historical snapshots).
-  - Created responsive SVG line chart component `TikTokFollowerGrowthChart` (`frontend/src/app/tiktok/dashboard/tiktok-follower-chart.tsx`):
-    - Plots `metricDate` vs `followerCount` over 30 days.
-    - Sparse data handled gracefully with clear empty state when `< 2 snapshots` exist.
-    - Interactive data point hovering with precise follower count and daily change tooltip.
+- **Multi-Account Overview (`/tiktok`)**:
+  - Updated `frontend/src/app/tiktok/page.tsx` and `tiktok-overview-view.tsx` to fetch `GET /tiktok/accounts` list from backend.
+  - If 0 accounts: renders clean empty state.
+  - If 1 account: renders full single-store overview + StoreMaster attribution badge + direct link to `/tiktok/dashboard/${accountId}`.
+  - If 2+ accounts: renders responsive grid of connected store accounts cards displaying avatar, TikTok display name, `@username`, StoreMaster store name, province, region, follower count, connection status badge, last synced timestamp, and "Open Dashboard" button linking to `/tiktok/dashboard/${accountId}`.
+- **Account-Specific Dashboard (`/tiktok/dashboard/[accountId]`)**:
+  - Introduced dynamic route `frontend/src/app/tiktok/dashboard/[accountId]/page.tsx` fetching individual store account data and historical metrics (`GET /tiktok/accounts/:id`, `GET /tiktok/accounts/:id/metrics`).
+  - Updated `/tiktok/dashboard/page.tsx` to redirect to the primary/first account dashboard when accounts exist (`/tiktok/dashboard/${accounts[0].id}`).
+  - Added store switcher dropdown selector to `TikTokDashboardView` when multiple accounts exist, allowing instant switching between stores.
+- **Backend Multi-Account Isolation**:
+  - Added `getTikTokAccountById(id)` in `TikTokService` and `@Get("accounts/:id")` in `TikTokController`.
+  - Refactored `mapToSafeAccountOverview` in `TikTokService` and updated `upsertTikTokAccount` to return the exact account upserted by ID.
+  - Verified account isolation: distinct openIds create separate records, duplicate openId reconnects update in-place without creating duplicate rows, videos and daily metrics are strictly isolated by `tikTokAccountId`.
 - **Verification**:
-  - Prisma schema validation: `npx prisma validate` passed with 0 errors.
-  - Backend tests: `1,105 / 1,105 passed (100%)`.
+  - Backend tests: `1,107 / 1,107 passed (100%)`.
   - Backend build: `nest build` completed with 0 errors.
-  - Frontend tests: `311 / 311 passed (100%)`.
-  - Frontend build: `next build` completed with 0 errors.
+  - Frontend tests: `312 / 312 passed (100%)`.
+  - Frontend build: `next build` completed with 0 errors, registering `/tiktok/dashboard/[accountId]`.
+
+## Previous task: Automatic Daily TikTok Metric Collection & Follower Growth Dashboard UI
 
 ## Previous task: TikTok Daily Account Metric Snapshots for Follower-Growth Tracking
 
@@ -1265,3 +1263,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 
 - Added a presentation-only Inbox header, conversation overview metrics, AI-ready indicator, responsive conversation cards, clearer status mappings, improved search affordance, and icon-based filter chips. InboxPage remains the owner of loading, pagination, pull-to-refresh, SSE patches, unread reconciliation, and navigation callbacks.
 - Added narrow-screen-safe Inbox presentation composition without changing repository/API contracts. `flutter analyze`, the full 33-test suite, the debug APK build, and `git diff --check` pass.
+
+# Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
+
+- Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.
+- Consolidated customer-facing reply state into `Need Reply` (`NOT_REPLIED` and `NOTIFIED_BM`) and `Completed` (`REPLIED`). Inbox overview and filters now use the same mapping and enforce Total = Need Reply + Completed.
+- Added direction/type-aware latest-message previews and targeted post-chat reconciliation for preview, timestamp, unread count, and reply status without reloading or resetting the Inbox list.
+- Backend audit confirmed the mobile list/detail and SSE payloads already expose authoritative latest-message direction, type, text, and timestamp; no backend change or deployment is required.
+- Focused tests (21), full Flutter tests (35), `flutter analyze`, production-configured debug APK build, and `git diff --check` pass. Emulator runtime verification remains the next action.
+- Installed the exact APK on `emulator-5554` with app data preserved (`lastUpdateTime=2026-08-14 17:59:20`). An approved signed inbound event through the normal LINE webhook moved OBS-Sunx2 from Completed to Need Reply and updated the Inbox preview/counts in realtime.
+- Sent `BM preview runtime test` through the mobile reply API (HTTP 201). Production verification found exactly one persisted OUTBOUND message and `REPLIED`; returning to Inbox issued only the targeted detail GET, patched the card to `Completed`, rendered `You: BM preview runtime test` with the outbound timestamp, and changed overview counts from 16/11 to 15/12 without a full Inbox GET.
+- Runtime filter verification confirmed OBS-Sunx2 is absent from Need Reply and present under Completed after reply. Reopening Chat showed the persisted message once, customer-only persistent header context, and no Flutter/RenderFlex exception.

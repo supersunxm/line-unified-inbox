@@ -40,7 +40,39 @@ export interface TikTokVideoItem {
   share_count?: number;
 }
 
+export interface TikTokAccountListItem {
+  id: string;
+  openId: string;
+  unionId?: string | null;
+  username?: string | null;
+  displayName: string;
+  avatarUrl?: string | null;
+  avatarUrl100?: string | null;
+  avatarLargeUrl?: string | null;
+  bioDescription?: string | null;
+  profileDeepLink?: string | null;
+  profileWebLink?: string | null;
+  isVerified?: boolean;
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  videoCountRecorded: number;
+  connectionStatus: string;
+  connectedAt: string;
+  lastSyncedAt: string;
+  storeMasterId?: string | null;
+  storeMaster?: {
+    id: string;
+    storeName: string;
+    accountName: string;
+    province?: string | null;
+    region?: string | null;
+  } | null;
+}
+
 export interface TikTokStoreData {
+  id?: string;
   profile: TikTokUserProfile;
   videos: TikTokVideoItem[];
   updatedAt: string;

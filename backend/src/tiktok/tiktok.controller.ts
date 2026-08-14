@@ -52,6 +52,14 @@ export class TikTokController {
   }
 
   /**
+   * Retrieves a specific TikTok account overview by ID.
+   */
+  @Get("accounts/:id")
+  async getAccountById(@Param("id") id: string): Promise<SafeTikTokAccountOverviewResponse | null> {
+    return this.tiktokService.getTikTokAccountById(id);
+  }
+
+  /**
    * Retrieves historical follower metrics and growth summary for a specific TikTok account.
    */
   @Get("accounts/:id/metrics")

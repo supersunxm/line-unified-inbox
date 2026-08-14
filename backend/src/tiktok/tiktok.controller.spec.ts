@@ -340,4 +340,39 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
   const dailySyncRes = await controller.syncDailyMetrics();
   assert.equal(dailySyncRes.totalAccounts, 1);
   assert.equal(dailySyncRes.succeeded, 1);
+
+  // 13. Authenticated GET /tiktok/accounts/:id returns specific account
+  fakeTikTokService.getTikTokAccountById = async (id: string) => {
+    if (id === "acc-paragon") {
+      return {
+        id: "acc-paragon",
+        openId: "open-paragon",
+        displayName: "OPPO Siam Paragon",
+        followerCount: 8000,
+        followingCount: 300,
+        likesCount: 12000,
+        videoCount: 15,
+        connectionStatus: "CONNECTED",
+        connectedAt: "2026-08-14T00:00:00.000Z",
+        lastSyncedAt: "2026-08-14T00:00:00.000Z",
+        storeMasterId: "sm-paragon",
+        storeMaster: {
+          id: "sm-paragon",
+          storeName: "OPPO Brand Shop Siam Paragon",
+          province: "Bangkok",
+          region: "Central",
+        },
+        videos: [],
+      };
+    }
+    return null;
+  };
+
+  const specificAccount = await controller.getAccountById("acc-paragon");
+  assert.ok(specificAccount);
+  assert.equal(specificAccount.id, "acc-paragon");
+  assert.equal(specificAccount.storeMaster?.storeName, "OPPO Brand Shop Siam Paragon");
+
+  const unknownAccount = await controller.getAccountById("acc-unknown");
+  assert.equal(unknownAccount, null);
 });
