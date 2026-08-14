@@ -1,3 +1,8 @@
+# Direct HTTP Redirect Authorization Endpoint for Cookie Reliability (2026-08-14)
+
+- **Native HTTP 302 Redirect Initiation**: To guarantee `Set-Cookie` header persistence across browser engines before cross-origin navigation to TikTok, authorization is initiated via a dedicated Route Handler (`GET /api/tiktok/authorize`). This avoids Next.js Server Action redirect digest interception and ensure standard `Set-Cookie: tiktok_oauth_state=...; Path=/; HttpOnly; SameSite=Lax; Secure` application.
+- **Safe Diagnostic Capability**: Server-side callback evaluation logs only boolean sanity flags (`callbackStatePresent`, `stateCookiePresent`, `stateLengthsMatch`, `stateMatched`, `hasCode`, `hasError`). Raw state values, codes, and tokens are strictly excluded from logging.
+
 # TikTok OAuth State Validation and Cookie Consumption (2026-08-14)
 
 - **Timing-Safe State Validation**: The callback route `/tiktok/callback` validates the returned `state` parameter against the HttpOnly `tiktok_oauth_state` cookie using Node's `crypto.timingSafeEqual` to prevent side-channel timing attacks.
@@ -652,3 +657,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Quick Reply is enabled at the authenticated shell boundary but remains server-gated by `AI_QUICK_REPLY_ENABLED`; a disabled backend returns an actionable composer error with retry rather than affecting chat loading.
 - ChatPage keeps ownership of all conversation/realtime/pagination/scroll/send state. Quick Reply state is additive composer state only; selecting a suggestion replaces the text-field draft and never invokes the send API.
 - Backend lifecycle events are sent for SHOWN, SELECTED, and EDITED. SENT is logged locally as a non-sensitive client signal because adding a new backend lifecycle enum would violate this phase's no-backend-change constraint; successful delivery still goes through the existing reply endpoint.
+
+# Chat UI transformation (2026-08-14)
+
+- Chat UX redesign stays inside the existing stateless presentation seams. Conversation state, repository calls, SSE handling, pagination, scroll generation, optimistic sends, unread marking, media loading, and notification cleanup remain owned by ChatPage and its existing services.
+- The composer keeps attachment and send callbacks unchanged. The AI shortcut invokes the existing quick-reply refresh callback only; suggestions remain editable drafts and never send autonomously.
+- Image bubbles retain a fixed 240x240 viewport across processing states. Message bubbles retain the existing 300px maximum width to preserve established scroll/pagination geometry while the visual styling changes.

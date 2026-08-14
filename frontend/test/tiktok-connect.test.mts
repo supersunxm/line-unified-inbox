@@ -15,6 +15,7 @@ const pageSource = readFileSync(new URL("../src/app/tiktok/connect/page.tsx", im
 const formSource = readFileSync(new URL("../src/app/tiktok/connect/connect-form.tsx", import.meta.url), "utf8");
 const actionSource = readFileSync(new URL("../src/app/tiktok/connect/actions.ts", import.meta.url), "utf8");
 const oauthSource = readFileSync(new URL("../src/app/tiktok/connect/tiktok-oauth.ts", import.meta.url), "utf8");
+const authorizeRouteSource = readFileSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
 test("TikTok connect route files exist", () => {
@@ -22,6 +23,7 @@ test("TikTok connect route files exist", () => {
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/connect-form.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/actions.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/tiktok-oauth.ts", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url)));
 });
 
 test("TikTok connect page has appropriate metadata and noindex robots directive", () => {
@@ -39,8 +41,8 @@ test("TikTok OAuth requests all 4 required read-only scopes", () => {
   assert.match(oauthSource, /video\.list/);
 });
 
-test("buildTikTokAuthUrl constructs valid TikTok authorization URL with all required query parameters", () => {
-  const state = "test-state-123456";
+test("buildTikTokAuthUrl constructs valid TikTok authorization URL with exact matching state", () => {
+  const state = generateOAuthState();
   const clientKey = "test_client_key_abc";
   const urlString = buildTikTokAuthUrl({
     clientKey,
@@ -54,7 +56,8 @@ test("buildTikTokAuthUrl constructs valid TikTok authorization URL with all requ
   assert.equal(url.searchParams.get("scope"), "user.info.basic,user.info.profile,user.info.stats,video.list");
   assert.equal(url.searchParams.get("response_type"), "code");
   assert.equal(url.searchParams.get("redirect_uri"), "https://lineoppo.click/tiktok/callback");
-  assert.equal(url.searchParams.get("state"), "test-state-123456");
+  // The state in the authorization URL must be exactly identical to the generated state
+  assert.equal(url.searchParams.get("state"), state);
 });
 
 test("buildTikTokAuthUrl falls back to default redirect URI when none provided", () => {
@@ -80,12 +83,18 @@ test("generateOAuthState generates cryptographically secure unique values", () =
   assert.notEqual(state1, state2);
 });
 
-test("Cookie configuration for OAuth state is secure and HttpOnly", () => {
+test("Cookie configuration for OAuth state is secure, HttpOnly, and accessible to callback", () => {
   assert.equal(TIKTOK_OAUTH_STATE_COOKIE, "tiktok_oauth_state");
   assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.httpOnly, true);
   assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.sameSite, "lax");
-  assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.path, "/");
-  assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.maxAge, 600);
+  assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.path, "/"); // Path / ensures cookie is sent to /tiktok/callback
+  assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.maxAge, 600); // 10 minutes
+});
+
+test("Authorize route handler sets cookie on 302 redirect response", () => {
+  assert.match(authorizeRouteSource, /response\.cookies\.set\(TIKTOK_OAUTH_STATE_COOKIE/);
+  assert.match(authorizeRouteSource, /NextResponse\.redirect\(authUrl,\s*302\)/);
+  assert.match(formSource, /action="\/api\/tiktok\/authorize"/);
 });
 
 test("UI emphasizes read-only monitoring and clearly states no video publishing permissions requested", () => {
@@ -98,6 +107,7 @@ test("Security: Client Secret is strictly server-side and never exposed to front
   assert.doesNotMatch(pageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(formSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(oauthSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(authorizeRouteSource, /TIKTOK_CLIENT_SECRET/);
 });
 
 test("TikTok Connect route is NOT linked from existing TopNavigation", () => {

@@ -1,5 +1,17 @@
 # AI progress
 
+## Current task: TikTok OAuth State Lifecycle Hardening and Diagnostics
+
+- **Route & Architecture**:
+  - Implemented direct HTTP redirect route handler at `/api/tiktok/authorize` in `frontend/src/app/api/tiktok/authorize/route.ts` to replace client-side action redirection with standard HTTP 302 redirect carrying `Set-Cookie: tiktok_oauth_state=...; Path=/; HttpOnly; SameSite=Lax; Secure`.
+  - Updated `frontend/src/app/tiktok/connect/connect-form.tsx` to submit natively via GET to `/api/tiktok/authorize`, ensuring guaranteed cookie persistence before navigating to TikTok Login Kit.
+  - Isolated `TikTokCallbackView` props to strictly pass `status` and `errorMessage`, ensuring authorization codes and state strings never enter client component props.
+- **Diagnostics & Safe Logging**:
+  - Implemented `logTikTokCallbackDiagnostic` in `frontend/src/app/tiktok/callback/tiktok-callback-validator.ts` and `page.tsx` emitting safe booleans only (`callbackStatePresent`, `stateCookiePresent`, `stateLengthsMatch`, `stateMatched`, `hasCode`, `hasError`) without logging sensitive strings.
+- **Verification**:
+  - Added test suites in `frontend/test/tiktok-connect.test.mts` and `frontend/test/tiktok-callback.test.mts` (291/291 tests passing across 38 test files).
+  - Next.js Turbopack build verified routes `ƒ /api/tiktok/authorize`, `ƒ /tiktok/callback`, and `○ /tiktok/connect`.
+
 ## Current task: TikTok OAuth State Validation and Cookie Consumption
 
 - **Route & Architecture**:
@@ -1093,3 +1105,15 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added typed mobile Quick Reply generation/lifecycle contracts for the existing backend routes. ChatPage now loads suggestions without replacing conversation detail state, renders them through the existing ChatComposer/QuickReplyPanel seam, inserts a selected draft into the composer, and handles retry/error states without touching realtime, pagination, unread, or scroll ownership.
 - SHOWN, SELECTED, and EDITED telemetry use the backend lifecycle endpoint. SENT is recorded as a local safe lifecycle signal because the deployed backend contract intentionally has no SENT event; the existing reply API remains the only send path.
 - Added Flutter regressions for response parsing, suggestion display/selection/edit/send, and retry behavior. Flutter analyze, full Flutter tests (31), production-configured debug APK build, and `git diff --check` pass.
+
+# Current task: Phase 6G.1 Chat UI transformation (2026-08-14)
+
+- Restyled the extracted chat presentation widgets into an enterprise support workspace: customer/store/status header, differentiated inbound/outbound message bubbles, stable image states, premium quick-reply cards, and a modern composer with attachment and AI shortcut actions.
+- Kept ChatPage ownership and all repository, API, SSE, pagination, scroll, send, unread, media, and notification behavior unchanged. Existing ActionChip/Retry semantics remain available for accessibility and regression coverage.
+- Flutter analyze, full Flutter tests (31), production-configured debug APK build, and `git diff --check` pass. Emulator runtime verification was not available because `adb` is not installed in this environment.
+
+# Current task: Phase 6G.1 runtime UX audit (2026-08-14)
+
+- Installed the exact production-configured debug APK (`1.0.0+1`) on `emulator-5554` (Android 16/API 36) and confirmed the app boots to the login screen. Startup reached the first frame; Flutter screenshot evidence was captured.
+- Chat-specific runtime checks were not executed because the clean install removed the prior session and no BM credentials/test conversation were available in the audit session. No runtime PASS is claimed for header, messages, images, quick replies, composer, realtime, or pagination.
+- Flutter analyze and the full 31-test suite pass. No source changes were made during the audit.

@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { getSafeTikTokErrorMessage } from "./tiktok-callback-utils.ts";
 
+export type TikTokCallbackStatus = "SUCCESS" | "ERROR" | "STATE_MISMATCH" | "INVALID";
+
 export type TikTokCallbackValidationResult =
   | { status: "SUCCESS" }
   | { status: "ERROR"; errorMessage: string }
@@ -9,6 +11,29 @@ export type TikTokCallbackValidationResult =
 
 export const STATE_MISMATCH_ERROR_MESSAGE =
   "Unable to verify the TikTok authorization request. Please start the connection again.";
+
+export interface TikTokDiagnosticInfo {
+  callbackStatePresent: boolean;
+  stateCookiePresent: boolean;
+  stateLengthsMatch: boolean;
+  stateMatched: boolean;
+  hasCode: boolean;
+  hasError: boolean;
+}
+
+export function logTikTokCallbackDiagnostic(info: TikTokDiagnosticInfo): void {
+  // Safe server-side diagnostic: logs booleans/metadata ONLY, never sensitive strings
+  if (process.env.NODE_ENV !== "test") {
+    console.info("[TikTok OAuth Diagnostic]", {
+      callbackStatePresent: info.callbackStatePresent,
+      stateCookiePresent: info.stateCookiePresent,
+      stateLengthsMatch: info.stateLengthsMatch,
+      stateMatched: info.stateMatched,
+      hasCode: info.hasCode,
+      hasError: info.hasError,
+    });
+  }
+}
 
 export function timingSafeStringEqual(a: string, b: string): boolean {
   if (!a || !b) return false;

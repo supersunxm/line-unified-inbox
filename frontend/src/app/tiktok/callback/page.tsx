@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { TIKTOK_OAUTH_STATE_COOKIE } from "../connect/tiktok-oauth";
 import { TikTokCallbackView } from "./tiktok-callback-view";
-import { processTikTokCallbackParams } from "./tiktok-callback-validator";
+import {
+  logTikTokCallbackDiagnostic,
+  processTikTokCallbackParams,
+  timingSafeStringEqual,
+} from "./tiktok-callback-validator";
 
 export const metadata: Metadata = {
   title: "TikTok Authorization | OPPO Retail TikTok Monitor",
@@ -14,7 +18,9 @@ export const metadata: Metadata = {
 };
 
 interface TikTokCallbackPageProps {
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+  searchParams?:
+    | Promise<{ [key: string]: string | string[] | undefined }>
+    | { [key: string]: string | string[] | undefined };
 }
 
 export default async function TikTokCallbackPage(props: TikTokCallbackPageProps) {
@@ -31,6 +37,25 @@ export default async function TikTokCallbackPage(props: TikTokCallbackPageProps)
   const cookieStore = await cookies();
   const cookieState = cookieStore.get(TIKTOK_OAUTH_STATE_COOKIE)?.value || null;
 
+  // Safe server-side diagnostics (booleans/metadata only)
+  const callbackStatePresent = Boolean(state);
+  const stateCookiePresent = Boolean(cookieState);
+  const stateLengthsMatch = Boolean(
+    state && cookieState && state.length === cookieState.length
+  );
+  const stateMatched = Boolean(
+    state && cookieState && timingSafeStringEqual(state, cookieState)
+  );
+
+  logTikTokCallbackDiagnostic({
+    callbackStatePresent,
+    stateCookiePresent,
+    stateLengthsMatch,
+    stateMatched,
+    hasCode: Boolean(code),
+    hasError: Boolean(error),
+  });
+
   const validationResult = processTikTokCallbackParams({
     code,
     state,
@@ -39,5 +64,14 @@ export default async function TikTokCallbackPage(props: TikTokCallbackPageProps)
     cookieState,
   });
 
-  return <TikTokCallbackView result={validationResult} />;
+  // Only pass the status and human-readable error message to the client view
+  // Authorization code, state, and secrets are NEVER passed to client component props
+  return (
+    <TikTokCallbackView
+      status={validationResult.status}
+      errorMessage={
+        "errorMessage" in validationResult ? validationResult.errorMessage : null
+      }
+    />
+  );
 }

@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { consumeTikTokOAuthStateAction } from "./actions";
-import { TikTokCallbackValidationResult } from "./tiktok-callback-validator";
+import { TikTokCallbackStatus } from "./tiktok-callback-validator";
 
 interface TikTokCallbackViewProps {
-  result: TikTokCallbackValidationResult;
+  status: TikTokCallbackStatus;
+  errorMessage?: string | null;
 }
 
-export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
+export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewProps) {
   useEffect(() => {
     // Consume and clear the state cookie on the client side via server action
     // to prevent replay attacks on subsequent reloads or callbacks
@@ -46,7 +47,7 @@ export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
       {/* Main Content Card */}
       <main className="mx-auto flex w-full max-w-3xl flex-1 items-center justify-center px-4 py-12 sm:px-6">
         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-[#12151c] sm:p-10">
-          {result.status === "SUCCESS" && (
+          {status === "SUCCESS" && (
             <div className="space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/70 dark:text-emerald-400">
                 <svg
@@ -93,7 +94,7 @@ export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
             </div>
           )}
 
-          {result.status === "STATE_MISMATCH" && (
+          {status === "STATE_MISMATCH" && (
             <div className="space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400">
                 <svg
@@ -150,7 +151,7 @@ export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
             </div>
           )}
 
-          {result.status === "ERROR" && (
+          {status === "ERROR" && (
             <div className="space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/70 dark:text-rose-400">
                 <svg
@@ -186,7 +187,7 @@ export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
                   Error Details
                 </h2>
                 <p className="mt-1 text-xs leading-relaxed text-rose-800 dark:text-rose-200/90">
-                  {result.errorMessage}
+                  {errorMessage}
                 </p>
               </div>
 
@@ -207,7 +208,7 @@ export function TikTokCallbackView({ result }: TikTokCallbackViewProps) {
             </div>
           )}
 
-          {result.status === "INVALID" && (
+          {status === "INVALID" && (
             <div className="space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400">
                 <svg

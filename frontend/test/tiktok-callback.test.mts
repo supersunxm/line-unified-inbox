@@ -4,6 +4,7 @@ import test from "node:test";
 import { getSafeTikTokErrorMessage } from "../src/app/tiktok/callback/tiktok-callback-utils.ts";
 import {
   STATE_MISMATCH_ERROR_MESSAGE,
+  logTikTokCallbackDiagnostic,
   processTikTokCallbackParams,
   timingSafeStringEqual,
   validateTikTokOAuthState,
@@ -127,6 +128,15 @@ test("State mismatch displays safe user-facing message without exposing state va
   );
 });
 
+test("Safe diagnostics log booleans only, never logging sensitive values", () => {
+  assert.ok(typeof logTikTokCallbackDiagnostic === "function");
+  assert.match(validatorSource, /callbackStatePresent/);
+  assert.match(validatorSource, /stateCookiePresent/);
+  assert.match(validatorSource, /stateLengthsMatch/);
+  assert.match(validatorSource, /stateMatched/);
+  assert.doesNotMatch(validatorSource, /console\.info\([^)]*state,/);
+});
+
 test("State cookie consumption server action clears cookie safely", () => {
   assert.match(actionSource, /consumeTikTokOAuthStateAction/);
   assert.match(actionSource, /maxAge:\s*0/);
@@ -135,13 +145,15 @@ test("State cookie consumption server action clears cookie safely", () => {
 });
 
 test("Security: callback does NOT render or log authorization codes or state values", () => {
-  // Authorization code must not be in client templates
+  // Authorization code must not be in client templates or props
   assert.doesNotMatch(viewSource, /\{code\}/);
   assert.doesNotMatch(viewSource, /code=\{code\}/);
+  assert.doesNotMatch(viewSource, /code:/);
 
-  // State values must not be rendered
+  // State values must not be rendered or passed to client component
   assert.doesNotMatch(viewSource, /\{state\}/);
   assert.doesNotMatch(viewSource, /state=\{state\}/);
+  assert.doesNotMatch(viewSource, /state:/);
 
   // No console logging of code, state, or tokens
   assert.doesNotMatch(viewSource, /console\.log\([^)]*code/i);
