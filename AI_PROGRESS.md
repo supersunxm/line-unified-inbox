@@ -1,5 +1,28 @@
 # AI progress
 
+## Current task: Fix Top Navigation Click Target & Pointer Event Interception
+
+- **Root Cause Analysis**:
+  - `ResponsiveSearch` in `frontend/src/components/shell/top-navigation.tsx` had `className="relative min-w-0 lg:flex lg:flex-1 lg:justify-end"`, and its parent `.app-header-controls` had `lg:flex-1`.
+  - Together with the left branding/navigation container having `flex-1`, the header allocated 50% width to the left side and 50% to the right side.
+  - At $\ge 1536\text{px}$ (2xl) where all 8 navigation items are rendered inline, and at 1280px where the "More" dropdown is rendered, the left navigation items overflowed past the 50% flex boundary into the right-hand area.
+  - Because `app-header-controls` and `ResponsiveSearch` come after the left container in DOM order and had `flex-1`, `ResponsiveSearch` created an invisible, transparent box spanning across the header that sat on top of `Follower Insights`, `Friend Source Links`, `Mass Message` (and the `More` button at 1280px).
+  - Hover visual styles could trigger when approaching the buttons from the left, but clicking inside the invisible search wrapper hit the search `<div>` / `<input>` rather than the underlying `<a>` tag.
+- **Implemented Fix**:
+  - Replaced `lg:flex lg:flex-1 lg:justify-end` on `ResponsiveSearch` container with `shrink-0`.
+  - Replaced `min-w-0 shrink lg:flex-1` on `.app-header-controls` with `shrink-0 ml-auto`.
+  - Adjusted left container gaps (`gap-3 xl:gap-4 2xl:gap-5`) and nav link padding (`px-2 2xl:px-2.5 py-1.5`) and tuned search label responsive clamp (`2xl:w-[clamp(11rem,13vw,16rem)]`) so all 8 navigation links and right-side controls fit comfortably without collisions across all desktop widths.
+- **Verification**:
+  - Ran headless Chrome DevTools CDP layout and click simulation across viewports (1920, 1680, 1600, 1536, 1440, 1366, 1280, 1024, 900, 768, 640) in both Thai and English: 100% of visible navigation links and buttons are directly clickable with `topElement === linkElement` and `isClickableDirectly === true`.
+  - All 253 frontend unit and regression tests passing cleanly (`npm --prefix frontend test`).
+  - Next.js Turbopack production build clean (`npm --prefix frontend run build`).
+
+
+- Added centralized Flutter design tokens for colors, spacing, typography, and Material 3 theme configuration under `android_app/lib/core/theme/`.
+- Added reusable presentation-only widgets under `android_app/lib/core/widgets/`: scaffold/top bar, status and unread badges, avatar/store badge, and loading/empty/error states.
+- Wired `LineOaApp` to use `AppTheme.light()` without changing repositories, realtime handling, notification handling, or feature state.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and `git diff --check` passed.
+
 ## Current task: Store Master ID Propagation Across Web App and Exports
 
 - **Identity and Key Invariant**:

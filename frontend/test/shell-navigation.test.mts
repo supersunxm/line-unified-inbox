@@ -12,8 +12,17 @@ const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.u
 const separatorCode = readFileSync(new URL("../src/app/resizable-separator.tsx", import.meta.url), "utf8");
 const storeChatsOverflowCode = readFileSync(new URL("../src/components/chats/store-chats-overflow-menu.tsx", import.meta.url), "utf8");
 
-test("TopNavigation renders all 6 primary navigation links with aria-current='page'", () => {
-  for (const route of ["/dashboard", "/chats", "/stores", "/classification-insights", "/follower-insights", "/friend-source-links"]) {
+test("TopNavigation renders all 8 primary navigation links with aria-current='page'", () => {
+  for (const route of [
+    "/dashboard",
+    "/chats",
+    "/stores",
+    "/admin/registrations",
+    "/classification-insights",
+    "/follower-insights",
+    "/friend-source-links",
+    "/mass-messages",
+  ]) {
     assert.match(topNavCode, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
   }
   assert.match(topNavCode, /aria-current=\{currentSection ===/);
@@ -144,3 +153,28 @@ test("Store Chats owns pane reset in its page-level overflow menu", () => {
   assert.match(storeChatsOverflowCode, /resetPaneSizes\(\)/);
   assert.match(storeChatsOverflowCode, /event\.key === "Escape"/);
 });
+
+test("TopNavigation search wrapper and controls do not expand invisibly or intercept pointer events over navigation links", () => {
+  // Ensure ResponsiveSearch does NOT use lg:flex-1 (which creates an invisible flex area overlapping nav links)
+  assert.doesNotMatch(topNavCode, /ref=\{searchRef\}\s+className="[^"]*lg:flex-1/);
+  assert.match(topNavCode, /ref=\{searchRef\}\s+className="relative shrink-0"/);
+
+  // Ensure header controls uses shrink-0 and ml-auto instead of expanding across navigation space
+  assert.doesNotMatch(topNavCode, /className="app-header-controls[^"]*lg:flex-1/);
+  assert.match(topNavCode, /className="app-header-controls flex shrink-0 items-center justify-end gap-2 ml-auto"/);
+
+  // Ensure all 8 navigation items use native <Link> tags with valid hrefs and focus rings
+  for (const href of [
+    "/dashboard",
+    "/chats",
+    "/stores",
+    "/admin/registrations",
+    "/classification-insights",
+    "/follower-insights",
+    "/friend-source-links",
+    "/mass-messages",
+  ]) {
+    assert.match(topNavCode, new RegExp(`<Link[^>]*href="${href}"`));
+  }
+});
+
