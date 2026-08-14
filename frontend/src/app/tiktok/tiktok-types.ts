@@ -62,3 +62,12 @@ export interface TikTokTokenDiagnosticInfo {
   grantedScopeCount: number;
   expiresIn?: number;
 }
+
+export interface TikTokVideoDiagnosticInfo {
+  videoListCount: number;
+  videoQueryCount: number;
+  videosWithViewCount: number;
+  videosWithCoverImage: number;
+  apiStatusCode?: number | string;
+  errorCode?: string | null;
+}

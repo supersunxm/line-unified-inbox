@@ -1,17 +1,21 @@
 # AI progress
 
-## Current task: Investigation and Fix for oppo_session Scoping and TikTok Authentication Boundary
+## Current task: TikTok Video Data Retrieval and Display API Metric Enrichment
 
-- **Root Cause Resolution**:
-  - The cross-origin browser setup (`lineoppo.click` vs backend `*.up.railway.app`) previously set `oppo_session` only on the backend domain, meaning Next.js server requests (`/tiktok`, `/tiktok/dashboard`, `/tiktok/callback`) had no cookie.
-  - Implemented same-origin Next.js rewrite for `/auth/:path*` (`frontend/next.config.ts`), routing client-side authentication calls through `lineoppo.click` to establish `Set-Cookie: oppo_session` with `Path=/; HttpOnly; Secure` on the frontend domain.
-  - Enforced the authentication boundary across all TikTok routes (`/tiktok`, `/tiktok/dashboard`, `/tiktok/connect`, `/tiktok/callback`), redirecting unauthenticated requests directly to `/login` to reuse the existing application authentication UX rather than silently failing or displaying empty states.
-  - Backend `sessionCookieOptions` explicitly supports `SESSION_COOKIE_DOMAIN` while strictly enforcing `Path=/`, `HttpOnly`, and `Secure` in production.
-  - Added safe `requestHasOppoSession: boolean` diagnostic telemetry.
+- **Root Cause & Fix**:
+  - Identified property naming mismatch between frontend video item DTO (`view_count`, `like_count`, `comment_count`, `share_count`, `cover_image_url`, `create_time`) and backend persistence entity (`viewCount`, `likeCount`, `commentCount`, `shareCount`, `coverImageUrl`, `createTime`).
+  - Updated backend DTO and service (`TikTokVideoDto`, `TikTokService.upsertTikTokAccount`) to seamlessly handle both camelCase and snake_case properties.
+  - Implemented official Display API video query enrichment pipeline (`fetchEnrichedTikTokVideoList`):
+    - Fetches video IDs from `POST /v2/video/list/?fields=...`
+    - Enriches video details with performance metrics and fresh `cover_image_url` via `POST /v2/video/query/?fields=...`
+    - Merges query results with list items without premature zero coercion on missing fields
+    - Emits safe numeric diagnostics (`videoListCount`, `videoQueryCount`, `videosWithViewCount`, `videosWithCoverImage`) without sensitive tokens
 - **Verification**:
   - Backend tests: `1,114 / 1,114 passed (100%)`.
-  - Frontend tests: `307 / 307 passed (100%)`.
-  - Production builds: Backend `nest build` and Frontend `next build` completed with 0 errors.
+  - Frontend tests: `310 / 310 passed (100%)`.
+  - Builds: Backend `nest build` and Frontend `next build` passed with 0 errors.
+
+## Previous task: Investigation and Fix for oppo_session Scoping and TikTok Authentication Boundary
 
 ## Previous task: Canonical Bearer Session Authentication Forwarding for TikTok Backend Sync
 

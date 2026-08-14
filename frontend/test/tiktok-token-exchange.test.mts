@@ -7,9 +7,13 @@ import {
   TIKTOK_USER_INFO_FIELDS,
   TIKTOK_VIDEO_LIST_ENDPOINT,
   TIKTOK_VIDEO_LIST_FIELDS,
+  TIKTOK_VIDEO_QUERY_ENDPOINT,
   fetchLatestTikTokAccountFromBackend,
   logTikTokTokenDiagnostic,
+  logTikTokVideoDiagnostic,
+  mergeTikTokVideoItems,
   parseTikTokTokenResponse,
+  parseTikTokVideoItem,
   syncTikTokAccountToBackend,
 } from "../src/app/tiktok/tiktok-api-client.ts";
 
@@ -38,6 +42,7 @@ test("TikTok API endpoints adhere to official TikTok Login Kit v2 specification"
   assert.equal(TIKTOK_TOKEN_ENDPOINT, "https://open.tiktokapis.com/v2/oauth/token/");
   assert.equal(TIKTOK_USER_INFO_ENDPOINT, "https://open.tiktokapis.com/v2/user/info/");
   assert.equal(TIKTOK_VIDEO_LIST_ENDPOINT, "https://open.tiktokapis.com/v2/video/list/");
+  assert.equal(TIKTOK_VIDEO_QUERY_ENDPOINT, "https://open.tiktokapis.com/v2/video/query/");
 });
 
 test("TikTok user info and video list fields request required metrics and profile fields", () => {
@@ -122,6 +127,92 @@ test("logTikTokTokenDiagnostic emits booleans and counts without logging sensiti
   assert.doesNotMatch(apiClientSource, /console\.info\([^)]*accessToken,/);
   assert.doesNotMatch(apiClientSource, /console\.info\([^)]*refreshToken,/);
   assert.doesNotMatch(apiClientSource, /console\.info\([^)]*clientSecret,/);
+});
+
+test("parseTikTokVideoItem parses full video metrics and preserves null/undefined without premature zero coercion", () => {
+  const rawVideo = {
+    id: "7123456789012345678",
+    create_time: 1723600000,
+    title: "OPPO Reno 12 Pro Unboxing",
+    video_description: "Check out the newest features #OPPO",
+    cover_image_url: "https://p16-sign.tiktokcdn.com/cover1.jpg",
+    share_url: "https://www.tiktok.com/@oppo/video/7123456789012345678",
+    duration: 45,
+    view_count: 150000,
+    like_count: 12000,
+    comment_count: 450,
+    share_count: 230,
+  };
+
+  const parsed = parseTikTokVideoItem(rawVideo);
+  assert.ok(parsed);
+  assert.equal(parsed.id, "7123456789012345678");
+  assert.equal(parsed.title, "OPPO Reno 12 Pro Unboxing");
+  assert.equal(parsed.view_count, 150000);
+  assert.equal(parsed.like_count, 12000);
+  assert.equal(parsed.comment_count, 450);
+  assert.equal(parsed.share_count, 230);
+  assert.equal(parsed.cover_image_url, "https://p16-sign.tiktokcdn.com/cover1.jpg");
+
+  // Missing metric fields should remain undefined, not prematurely coerced to 0
+  const partialVideo = {
+    id: "7123456789012345679",
+    create_time: 1723600000,
+  };
+  const parsedPartial = parseTikTokVideoItem(partialVideo);
+  assert.ok(parsedPartial);
+  assert.equal(parsedPartial.id, "7123456789012345679");
+  assert.equal(parsedPartial.view_count, undefined);
+  assert.equal(parsedPartial.like_count, undefined);
+});
+
+test("mergeTikTokVideoItems enriches list results with /video/query/ performance metrics and fresh cover URLs", () => {
+  const listVideos = [
+    {
+      id: "vid-1",
+      title: "OPPO Find N3 Flip",
+      cover_image_url: "https://p16-sign.tiktokcdn.com/stale_cover.jpg",
+    },
+    {
+      id: "vid-2",
+      title: "OPPO Reno 12 AI Features",
+      cover_image_url: "https://p16-sign.tiktokcdn.com/cover2.jpg",
+      view_count: 5000,
+    },
+  ];
+
+  const queryVideos = [
+    {
+      id: "vid-1",
+      cover_image_url: "https://p16-sign.tiktokcdn.com/fresh_cover.jpg",
+      view_count: 85000,
+      like_count: 6200,
+      comment_count: 180,
+      share_count: 95,
+    },
+  ];
+
+  const merged = mergeTikTokVideoItems(listVideos, queryVideos);
+  assert.equal(merged.length, 2);
+
+  // Enriched vid-1 gets fresh cover URL and query metrics
+  assert.equal(merged[0].id, "vid-1");
+  assert.equal(merged[0].cover_image_url, "https://p16-sign.tiktokcdn.com/fresh_cover.jpg");
+  assert.equal(merged[0].view_count, 85000);
+  assert.equal(merged[0].like_count, 6200);
+
+  // Unmodified vid-2 keeps its existing data
+  assert.equal(merged[1].id, "vid-2");
+  assert.equal(merged[1].cover_image_url, "https://p16-sign.tiktokcdn.com/cover2.jpg");
+  assert.equal(merged[1].view_count, 5000);
+});
+
+test("logTikTokVideoDiagnostic emits metrics completeness without sensitive data", () => {
+  assert.ok(typeof logTikTokVideoDiagnostic === "function");
+  assert.match(apiClientSource, /videoListCount/);
+  assert.match(apiClientSource, /videoQueryCount/);
+  assert.match(apiClientSource, /videosWithViewCount/);
+  assert.match(apiClientSource, /videosWithCoverImage/);
 });
 
 test("Frontend interacts with backend PostgreSQL sync and query endpoints with canonical Bearer session auth", () => {

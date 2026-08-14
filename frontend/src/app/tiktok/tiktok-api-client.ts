@@ -7,12 +7,14 @@ import type {
   TikTokTokenDiagnosticInfo,
   TikTokTokenResponse,
   TikTokUserProfile,
+  TikTokVideoDiagnosticInfo,
   TikTokVideoItem,
 } from "./tiktok-types.ts";
 
 export const TIKTOK_TOKEN_ENDPOINT = "https://open.tiktokapis.com/v2/oauth/token/";
 export const TIKTOK_USER_INFO_ENDPOINT = "https://open.tiktokapis.com/v2/user/info/";
 export const TIKTOK_VIDEO_LIST_ENDPOINT = "https://open.tiktokapis.com/v2/video/list/";
+export const TIKTOK_VIDEO_QUERY_ENDPOINT = "https://open.tiktokapis.com/v2/video/query/";
 
 export const TIKTOK_USER_INFO_FIELDS = [
   "open_id",
@@ -45,6 +47,8 @@ export const TIKTOK_VIDEO_LIST_FIELDS = [
   "view_count",
 ].join(",");
 
+export const TIKTOK_VIDEO_QUERY_FIELDS = TIKTOK_VIDEO_LIST_FIELDS;
+
 /**
  * Diagnostic logger for token exchange results.
  * Emits strictly boolean sanity flags and counts - NEVER logs sensitive credentials, tokens, or codes.
@@ -61,6 +65,28 @@ export function logTikTokTokenDiagnostic(diagnostic: TikTokTokenDiagnosticInfo):
   };
 
   if (!diagnostic.tokenExchangeSucceeded) {
+    console.warn(JSON.stringify(payload));
+  } else {
+    console.info(JSON.stringify(payload));
+  }
+}
+
+/**
+ * Diagnostic logger for video retrieval, query, and metric enrichment.
+ * Emits counts, metric completeness, and status - NEVER logs access tokens or secrets.
+ */
+export function logTikTokVideoDiagnostic(info: TikTokVideoDiagnosticInfo): void {
+  const payload = {
+    event: "tiktok_video_diagnostic",
+    videoListCount: info.videoListCount,
+    videoQueryCount: info.videoQueryCount,
+    videosWithViewCount: info.videosWithViewCount,
+    videosWithCoverImage: info.videosWithCoverImage,
+    apiStatusCode: info.apiStatusCode ?? "ok",
+    errorCode: info.errorCode ?? null,
+  };
+
+  if (info.errorCode) {
     console.warn(JSON.stringify(payload));
   } else {
     console.info(JSON.stringify(payload));
@@ -233,7 +259,67 @@ export async function fetchTikTokUserProfile(accessToken: string): Promise<TikTo
 }
 
 /**
- * Fetches recent public videos for the authorized TikTok account.
+ * Safely parses a single raw video object from TikTok API response.
+ * Preserves nullable/undefined metrics without premature coercion to zero.
+ */
+export function parseTikTokVideoItem(video: unknown): TikTokVideoItem | null {
+  if (!video || typeof video !== "object") return null;
+  const v = video as Record<string, unknown>;
+  const id = String(v.id || "").trim();
+  if (!id) return null;
+
+  return {
+    id,
+    create_time: typeof v.create_time === "number" ? v.create_time : undefined,
+    title: typeof v.title === "string" ? v.title : undefined,
+    video_description: typeof v.video_description === "string" ? v.video_description : undefined,
+    cover_image_url: typeof v.cover_image_url === "string" ? v.cover_image_url : undefined,
+    share_url: typeof v.share_url === "string" ? v.share_url : undefined,
+    duration: typeof v.duration === "number" ? v.duration : undefined,
+    view_count: typeof v.view_count === "number" ? v.view_count : undefined,
+    like_count: typeof v.like_count === "number" ? v.like_count : undefined,
+    comment_count: typeof v.comment_count === "number" ? v.comment_count : undefined,
+    share_count: typeof v.share_count === "number" ? v.share_count : undefined,
+  };
+}
+
+/**
+ * Merges video list items with detailed query items.
+ * Query results take precedence for fresh cover_image_url and performance metrics.
+ */
+export function mergeTikTokVideoItems(
+  listVideos: TikTokVideoItem[],
+  queryVideos: TikTokVideoItem[]
+): TikTokVideoItem[] {
+  const queryMap = new Map<string, TikTokVideoItem>();
+  for (const q of queryVideos) {
+    if (q.id) queryMap.set(q.id, q);
+  }
+
+  return listVideos.map((lv) => {
+    const qv = queryMap.get(lv.id);
+    if (!qv) return lv;
+
+    return {
+      id: lv.id,
+      create_time: qv.create_time ?? lv.create_time,
+      title: qv.title ?? lv.title,
+      video_description: qv.video_description ?? lv.video_description,
+      // Fresh cover image from query endpoint takes precedence
+      cover_image_url: qv.cover_image_url || lv.cover_image_url,
+      share_url: qv.share_url || lv.share_url,
+      duration: qv.duration ?? lv.duration,
+      // Metrics from query endpoint take precedence if available
+      view_count: qv.view_count ?? lv.view_count,
+      like_count: qv.like_count ?? lv.like_count,
+      comment_count: qv.comment_count ?? lv.comment_count,
+      share_count: qv.share_count ?? lv.share_count,
+    };
+  });
+}
+
+/**
+ * Fetches recent public videos for the authorized TikTok account via /v2/video/list/.
  */
 export async function fetchTikTokVideoList(
   accessToken: string,
@@ -262,19 +348,103 @@ export async function fetchTikTokVideoList(
   const data = json.data as Record<string, unknown> | undefined;
   const rawVideos = Array.isArray(data?.videos) ? (data?.videos as Array<Record<string, unknown>>) : [];
 
-  return rawVideos.map((video) => ({
-    id: String(video.id || ""),
-    create_time: typeof video.create_time === "number" ? video.create_time : undefined,
-    title: typeof video.title === "string" ? video.title : undefined,
-    video_description: typeof video.video_description === "string" ? video.video_description : undefined,
-    cover_image_url: typeof video.cover_image_url === "string" ? video.cover_image_url : undefined,
-    share_url: typeof video.share_url === "string" ? video.share_url : undefined,
-    duration: typeof video.duration === "number" ? video.duration : undefined,
-    view_count: typeof video.view_count === "number" ? video.view_count : undefined,
-    like_count: typeof video.like_count === "number" ? video.like_count : undefined,
-    comment_count: typeof video.comment_count === "number" ? video.comment_count : undefined,
-    share_count: typeof video.share_count === "number" ? video.share_count : undefined,
-  }));
+  return rawVideos
+    .map(parseTikTokVideoItem)
+    .filter((v): v is TikTokVideoItem => v !== null);
+}
+
+/**
+ * Queries detailed performance metrics and fresh cover images for specific video IDs via /v2/video/query/.
+ */
+export async function queryTikTokVideoDetails(
+  accessToken: string,
+  videoIds: string[]
+): Promise<TikTokVideoItem[]> {
+  const validIds = videoIds.map((id) => String(id).trim()).filter(Boolean);
+  if (validIds.length === 0) return [];
+
+  const url = new URL(TIKTOK_VIDEO_QUERY_ENDPOINT);
+  url.searchParams.set("fields", TIKTOK_VIDEO_QUERY_FIELDS);
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken.trim()}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      filters: {
+        video_ids: validIds.slice(0, 20),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TikTok Video Query request failed with status HTTP ${response.status}`);
+  }
+
+  const json = (await response.json()) as Record<string, unknown>;
+  const data = json.data as Record<string, unknown> | undefined;
+  const rawVideos = Array.isArray(data?.videos) ? (data?.videos as Array<Record<string, unknown>>) : [];
+
+  return rawVideos
+    .map(parseTikTokVideoItem)
+    .filter((v): v is TikTokVideoItem => v !== null);
+}
+
+/**
+ * Orchestrates full video sync: fetches list of recent videos, enriches via /video/query/,
+ * refreshes cover_image_urls, and logs safe diagnostic telemetry.
+ */
+export async function fetchEnrichedTikTokVideoList(
+  accessToken: string,
+  maxCount = 20
+): Promise<TikTokVideoItem[]> {
+  let listVideos: TikTokVideoItem[] = [];
+  try {
+    listVideos = await fetchTikTokVideoList(accessToken, maxCount);
+  } catch (err) {
+    logTikTokVideoDiagnostic({
+      videoListCount: 0,
+      videoQueryCount: 0,
+      videosWithViewCount: 0,
+      videosWithCoverImage: 0,
+      apiStatusCode: "list_error",
+      errorCode: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+
+  const videoIds = listVideos.map((v) => v.id).filter(Boolean);
+  let queryVideos: TikTokVideoItem[] = [];
+  let queryError: string | undefined = undefined;
+
+  if (videoIds.length > 0) {
+    try {
+      queryVideos = await queryTikTokVideoDetails(accessToken, videoIds);
+    } catch (err) {
+      queryError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  const finalVideos = queryVideos.length > 0
+    ? mergeTikTokVideoItems(listVideos, queryVideos)
+    : listVideos;
+
+  const videosWithViewCount = finalVideos.filter((v) => typeof v.view_count === "number").length;
+  const videosWithCoverImage = finalVideos.filter((v) => Boolean(v.cover_image_url)).length;
+
+  logTikTokVideoDiagnostic({
+    videoListCount: listVideos.length,
+    videoQueryCount: queryVideos.length,
+    videosWithViewCount,
+    videosWithCoverImage,
+    apiStatusCode: queryError ? "query_partial_error" : "ok",
+    errorCode: queryError,
+  });
+
+  return finalVideos;
 }
 
 export interface SyncTikTokAccountParams {
@@ -305,6 +475,28 @@ export async function syncTikTokAccountToBackend(params: SyncTikTokAccountParams
     headers["Authorization"] = `Bearer ${sessionToken}`;
   }
 
+  const mappedVideos = (params.videos || []).map((v) => ({
+    id: v.id,
+    createTime: v.create_time,
+    create_time: v.create_time,
+    title: v.title,
+    videoDescription: v.video_description,
+    video_description: v.video_description,
+    coverImageUrl: v.cover_image_url,
+    cover_image_url: v.cover_image_url,
+    shareUrl: v.share_url,
+    share_url: v.share_url,
+    duration: v.duration,
+    viewCount: v.view_count,
+    view_count: v.view_count,
+    likeCount: v.like_count,
+    like_count: v.like_count,
+    commentCount: v.comment_count,
+    comment_count: v.comment_count,
+    shareCount: v.share_count,
+    share_count: v.share_count,
+  }));
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/tiktok/sync`, {
@@ -317,7 +509,7 @@ export async function syncTikTokAccountToBackend(params: SyncTikTokAccountParams
         refreshExpiresIn: params.refreshExpiresIn,
         grantedScopes: params.grantedScopes,
         profile: params.profile,
-        videos: params.videos,
+        videos: mappedVideos,
         storeMasterId: params.storeMasterId,
       }),
     });

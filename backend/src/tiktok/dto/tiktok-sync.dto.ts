@@ -1,15 +1,23 @@
 export interface TikTokVideoDto {
   id: string;
   createTime?: number;
+  create_time?: number;
   title?: string;
   videoDescription?: string;
+  video_description?: string;
   coverImageUrl?: string;
+  cover_image_url?: string;
   shareUrl?: string;
+  share_url?: string;
   duration?: number;
   viewCount?: number;
+  view_count?: number;
   likeCount?: number;
+  like_count?: number;
   commentCount?: number;
+  comment_count?: number;
   shareCount?: number;
+  share_count?: number;
 }
 
 export interface TikTokProfileDto {

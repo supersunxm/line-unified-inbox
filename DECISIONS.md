@@ -1,3 +1,10 @@
+# TikTok Video Metric Enrichment & Display API Query Pipeline (2026-08-14)
+
+- **Two-Stage Display API Video Enrichment (`/v2/video/list/` + `/v2/video/query/`)**: In TikTok Display API v2, `POST /v2/video/list/` provides basic pagination and item listing. To guarantee that fresh performance metrics (`like_count`, `comment_count`, `share_count`, `view_count`) and active CDN `cover_image_url` values are retrieved, video IDs obtained from `/video/list/` are queried against `POST /v2/video/query/?fields=...`.
+- **Property Naming DTO Alignment**: Frontend and backend DTOs seamlessly map both camelCase (`viewCount`, `likeCount`, `coverImageUrl`) and snake_case (`view_count`, `like_count`, `cover_image_url`), ensuring seamless persistence without undefined coercion.
+- **Dynamic Cover Image Refresh**: TikTok cover URLs expire periodically. The sync pipeline updates `coverImageUrl` on every video fetch without assuming permanent CDN URLs.
+- **Safe Diagnostic Telemetry**: Logs `videoListCount`, `videoQueryCount`, `videosWithViewCount`, and `videosWithCoverImage` as counts and status codes, never logging access tokens or secrets.
+
 # Next.js Same-Origin Auth Proxy & TikTok Route Authentication Boundary (2026-08-14)
 
 - **Same-Origin Authentication Proxy (`/auth/* -> API_BASE_URL/auth/*`)**: To guarantee that `Set-Cookie: oppo_session` is set directly on the frontend domain (`lineoppo.click`) with `Path=/; HttpOnly; Secure`, Next.js rewrites `/auth/:path*` to the backend. Browser client calls in `api.ts` dispatch to same-origin `/auth/*`, making the session cookie available to Next.js Server Components and Route Handlers on `lineoppo.click`.

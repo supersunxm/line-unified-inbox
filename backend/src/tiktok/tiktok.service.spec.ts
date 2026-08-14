@@ -61,7 +61,7 @@ test("TikTokService upserts account and encrypts tokens securely at rest", async
 
   const service = new TikTokService(fakePrisma, fakeEncryption);
 
-  // 1. Initial sync with tokens
+  // 1. Initial sync with tokens and snake_case video metrics
   const syncPayload = {
     accessToken: "act.sample_access_token_12345",
     refreshToken: "rft.sample_refresh_token_67890",
@@ -82,12 +82,15 @@ test("TikTokService upserts account and encrypts tokens securely at rest", async
       {
         id: "7123456789",
         title: "OPPO Reno 12 Pro Unboxing",
-        viewCount: 150000,
-        likeCount: 12000,
-        commentCount: 450,
-        shareCount: 230,
+        video_description: "Check out the newest features",
+        cover_image_url: "https://p16-sign.tiktokcdn.com/cover1.jpg",
+        share_url: "https://www.tiktok.com/@oppo/video/7123456789",
+        view_count: 150000,
+        like_count: 12000,
+        comment_count: 450,
+        share_count: 230,
         duration: 45,
-        createTime: 1723600000,
+        create_time: 1723600000,
       },
     ],
   };
@@ -101,7 +104,7 @@ test("TikTokService upserts account and encrypts tokens securely at rest", async
   assert.equal(storedAccount.encryptedRefreshToken, "encrypted:rft.sample_refresh_token_67890");
   assert.equal(storedAccount.displayName, "OPPO Central World");
 
-  // Verification 2: Return DTO strictly NEVER contains tokens
+  // Verification 2: Return DTO strictly NEVER contains tokens and has correct video metrics
   assert.equal("accessToken" in result, false);
   assert.equal("refreshToken" in result, false);
   assert.equal("encryptedAccessToken" in result, false);
@@ -110,6 +113,10 @@ test("TikTokService upserts account and encrypts tokens securely at rest", async
   assert.equal(result.displayName, "OPPO Central World");
   assert.equal(result.videos.length, 1);
   assert.equal(result.videos[0].viewCount, 150000);
+  assert.equal(result.videos[0].likeCount, 12000);
+  assert.equal(result.videos[0].commentCount, 450);
+  assert.equal(result.videos[0].shareCount, 230);
+  assert.equal(result.videos[0].coverImageUrl, "https://p16-sign.tiktokcdn.com/cover1.jpg");
 
   // Verification 3: Reconnecting same openId updates record rather than duplicating
   const updatePayload = {

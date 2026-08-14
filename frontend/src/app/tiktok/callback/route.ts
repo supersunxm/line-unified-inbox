@@ -5,8 +5,8 @@ import {
 } from "../connect/tiktok-oauth.ts";
 import {
   exchangeTikTokAuthorizationCode,
+  fetchEnrichedTikTokVideoList,
   fetchTikTokUserProfile,
-  fetchTikTokVideoList,
   syncTikTokAccountToBackend,
 } from "../tiktok-api-client.ts";
 import type {
@@ -114,10 +114,10 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(resultUrl);
   }
 
-  // 3. Fetch recent public videos (gracefully falls back to empty array on failure/no videos)
+  // 3. Fetch recent public videos with enriched metrics and fresh cover URLs
   let videos: TikTokVideoItem[] = [];
   try {
-    videos = await fetchTikTokVideoList(tokenResponse.accessToken, 20);
+    videos = await fetchEnrichedTikTokVideoList(tokenResponse.accessToken, 20);
   } catch {
     videos = [];
   }

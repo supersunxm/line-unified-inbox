@@ -108,7 +108,17 @@ export class TikTokService {
     // 2. Upsert Video records for this account
     for (const v of videos) {
       if (!v.id) continue;
-      const createTime = v.createTime ? new Date(v.createTime * 1000) : null;
+      const createTimeNum = v.createTime ?? v.create_time;
+      const createTime = typeof createTimeNum === "number" ? new Date(createTimeNum * 1000) : null;
+      const title = v.title ?? null;
+      const videoDescription = v.videoDescription ?? v.video_description ?? null;
+      const coverImageUrl = v.coverImageUrl ?? v.cover_image_url ?? null;
+      const shareUrl = v.shareUrl ?? v.share_url ?? null;
+      const duration = typeof v.duration === "number" ? v.duration : null;
+      const viewCount = v.viewCount ?? v.view_count ?? 0;
+      const likeCount = v.likeCount ?? v.like_count ?? 0;
+      const commentCount = v.commentCount ?? v.comment_count ?? 0;
+      const shareCount = v.shareCount ?? v.share_count ?? 0;
 
       await this.prisma.tikTokVideo.upsert({
         where: {
@@ -120,29 +130,29 @@ export class TikTokService {
         create: {
           tikTokAccountId: account.id,
           tikTokVideoId: String(v.id),
-          title: v.title,
-          videoDescription: v.videoDescription,
+          title,
+          videoDescription,
           createTime,
-          coverImageUrl: v.coverImageUrl,
-          shareUrl: v.shareUrl,
-          duration: v.duration,
-          viewCount: v.viewCount ?? 0,
-          likeCount: v.likeCount ?? 0,
-          commentCount: v.commentCount ?? 0,
-          shareCount: v.shareCount ?? 0,
+          coverImageUrl,
+          shareUrl,
+          duration,
+          viewCount,
+          likeCount,
+          commentCount,
+          shareCount,
           lastSyncedAt: now,
         },
         update: {
-          title: v.title,
-          videoDescription: v.videoDescription,
+          title,
+          videoDescription,
           createTime: createTime ?? undefined,
-          coverImageUrl: v.coverImageUrl,
-          shareUrl: v.shareUrl,
-          duration: v.duration,
-          viewCount: v.viewCount ?? 0,
-          likeCount: v.likeCount ?? 0,
-          commentCount: v.commentCount ?? 0,
-          shareCount: v.shareCount ?? 0,
+          coverImageUrl,
+          shareUrl,
+          duration: duration ?? undefined,
+          viewCount,
+          likeCount,
+          commentCount,
+          shareCount,
           lastSyncedAt: now,
         },
       });
