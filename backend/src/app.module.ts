@@ -43,11 +43,10 @@ import { MobileConfigController } from "./mobile/mobile-config.controller";
 import { MobileConfigService } from "./mobile/mobile-config.service";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { MassMessageModule } from "./mass-message/mass-message.module";
-import { QuickReplyModule } from "./ai/quick-reply/quick-reply.module";
 import { TikTokModule } from "./tiktok/tiktok.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, QuickReplyModule, TikTokModule],
+  imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, TikTokModule],
   controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController],
   providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService],
 })

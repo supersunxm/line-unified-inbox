@@ -1,1 +1,0 @@
-export const QUICK_REPLY_PROVIDER = Symbol("QUICK_REPLY_PROVIDER");
