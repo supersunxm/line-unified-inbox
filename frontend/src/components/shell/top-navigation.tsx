@@ -36,7 +36,7 @@ export interface TopNavigationProps {
 type MenuProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "language" | "logout" | "pilotMode" | "text">;
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-1";
-const navLinkClass = `${focusRing} whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-120`;
+const navLinkClass = `${focusRing} whitespace-nowrap rounded-lg px-2 2xl:px-2.5 py-1.5 text-xs font-medium transition-all duration-120`;
 
 function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, text }: MenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -153,8 +153,8 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
   }, [isOpen]);
 
   return (
-    <div ref={searchRef} className="relative min-w-0 lg:flex lg:flex-1 lg:justify-end">
-      <label className="relative hidden w-40 lg:block xl:w-48 2xl:w-[clamp(14rem,18vw,22rem)]">
+    <div ref={searchRef} className="relative shrink-0">
+      <label className="relative hidden w-40 lg:block xl:w-48 2xl:w-[clamp(11rem,13vw,16rem)]">
         <span className="sr-only">{label}</span>
         <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">⌕</span>
         <input
@@ -243,7 +243,7 @@ export function TopNavigation(props: TopNavigationProps) {
 
   return (
     <header className="app-header app-surface sticky top-0 z-30 flex min-h-14 h-14 min-w-0 items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-2 sm:px-5">
-      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-6">
+      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-4 2xl:gap-5">
         <Link href="/dashboard" className={`${focusRing} flex items-center gap-2 min-w-max shrink-0 rounded-lg p-0.5 group`}>
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 dark:bg-emerald-500 font-bold text-[11px] text-white shadow-2xs">
             O
@@ -269,7 +269,7 @@ export function TopNavigation(props: TopNavigationProps) {
         </nav>
       </div>
 
-      <div className="app-header-controls flex min-w-0 shrink items-center justify-end gap-2 lg:flex-1">
+      <div className="app-header-controls flex shrink-0 items-center justify-end gap-2 ml-auto">
         <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
         {lastUpdatedAt && (
           <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 px-2 text-[11px] font-medium`}>

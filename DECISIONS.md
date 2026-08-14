@@ -1,3 +1,13 @@
+# Top Navigation Layout Ownership and Click Target Resolution (2026-08-14)
+
+- **Layout Ownership Invariant**: The right-side controls (`app-header-controls`) and the search wrapper (`ResponsiveSearch`) must only occupy their intrinsic interactive width (`shrink-0` and `ml-auto`) rather than using unbounded flex expansion (`lg:flex-1`). This ensures no transparent or invisible flex containers overlap sibling navigation links in the stacking context.
+- **Responsive Navigation Integrity**: Primary navigation links render directly as native Next.js `<Link>` elements. At 2xl breakpoints ($\ge 1536\text{px}$), secondary links render inline; below 2xl, they collapse into the "More" dropdown. Spacing, link padding, and search clamping are balanced so that all navigation targets remain fully unobstructed, clickable, and keyboard-accessible across all viewport sizes without z-index escalation.
+
+# Phase 6A design system foundation (2026-08-14)
+
+- Centralize presentation tokens and Material 3 theme configuration before screen redesign so visual changes do not alter authentication, realtime, notification, pagination, or message state behavior.
+- Keep reusable widgets presentation-only and callback-driven. Feature pages remain responsible for their existing state and repository interactions until later UX phases extract them incrementally.
+
 # Phase 4C.4.2 cancellable scroll commands (2026-08-14)
 
 - Scroll commands carry a generation token. User-directed movement invalidates pending initial or bottom auto-scroll callbacks, preventing stale post-frame work from overriding the reading position.
