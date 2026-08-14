@@ -108,3 +108,33 @@ export interface ReconcileStoreBindingsResponse {
     status: "MATCHED" | "STORE_NOT_FOUND" | "AMBIGUOUS_STORE_MATCH" | "PRESERVED_EXISTING" | "NO_USERNAME";
   }>;
 }
+
+export interface TikTokDailyMetricDto {
+  id: string;
+  metricDate: string; // ISO YYYY-MM-DD
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TikTokGrowthSummaryDto {
+  currentFollowerCount: number;
+  previousDayFollowerCount: number | null;
+  dailyFollowerGrowth: number | null;
+  sevenDayFollowerCount: number | null;
+  sevenDayFollowerGrowth: number | null;
+  thirtyDayFollowerCount: number | null;
+  thirtyDayFollowerGrowth: number | null;
+}
+
+export interface TikTokHistoricalMetricsResponse {
+  accountId: string;
+  openId: string;
+  displayName: string;
+  username?: string | null;
+  summary: TikTokGrowthSummaryDto;
+  history: TikTokDailyMetricDto[];
+}

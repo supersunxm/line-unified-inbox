@@ -71,3 +71,33 @@ export interface TikTokVideoDiagnosticInfo {
   apiStatusCode?: number | string;
   errorCode?: string | null;
 }
+
+export interface TikTokDailyMetricItem {
+  id: string;
+  metricDate: string; // ISO YYYY-MM-DD
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TikTokGrowthSummary {
+  currentFollowerCount: number;
+  previousDayFollowerCount: number | null;
+  dailyFollowerGrowth: number | null;
+  sevenDayFollowerCount: number | null;
+  sevenDayFollowerGrowth: number | null;
+  thirtyDayFollowerCount: number | null;
+  thirtyDayFollowerGrowth: number | null;
+}
+
+export interface TikTokHistoricalMetricsData {
+  accountId: string;
+  openId: string;
+  displayName: string;
+  username?: string | null;
+  summary: TikTokGrowthSummary;
+  history: TikTokDailyMetricItem[];
+}

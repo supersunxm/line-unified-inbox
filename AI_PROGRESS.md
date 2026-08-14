@@ -1,17 +1,32 @@
 # AI progress
 
-## Current task: Automatic TikTokAccount to StoreMaster Binding & Reconciliation
+## Current task: TikTok Daily Account Metric Snapshots for Follower-Growth Tracking
 
-- **Implementation**:
-  - Implemented `normalizeTikTokUsernameForMatching`: lowercase, trim whitespace, strip leading `@`, normalize invalid tokens (`#REF!`, `none`) to null.
-  - Implemented `resolveStoreMasterIdByTikTokUsername`: case-insensitive username lookup in `StoreMaster` returning `MATCHED` (single match), `STORE_NOT_FOUND` (0 matches), or `AMBIGUOUS_STORE_MATCH` (>1 matches without automatic selection).
-  - Integrated automatic store binding in `upsertTikTokAccount`: auto-resolves and links unlinked accounts while preserving existing `storeMasterId`.
-  - Added `reconcileTikTokStoreBindings` and protected endpoint `POST /tiktok/reconcile-stores` allowing already-persisted accounts (like O-Central World) to be linked to StoreMaster after import without user reauthorization.
+- **Prisma Schema & Additive Migration**:
+  - Created `TikTokAccountDailyMetric` model with fields `id`, `tikTokAccountId`, `metricDate`, `followerCount`, `followingCount`, `likesCount`, `videoCount`, `createdAt`, and `updatedAt`.
+  - Added unique constraint `@@unique([tikTokAccountId, metricDate])` to guarantee at most one snapshot per account per calendar day.
+  - Added relation to `TikTokAccount` with `onDelete: Cascade`.
+  - Added additive migration `20260814173000_add_tiktok_daily_metrics/migration.sql`.
+- **Date & Timezone Normalization**:
+  - Stored `metricDate` at normalized 00:00:00.000 UTC boundary calculated from `Asia/Bangkok` calendar time (`getBangkokCalendarDate`).
+  - Ensures deterministic day-boundary assignment across midnight regardless of server UTC time.
+- **Snapshot Upsert on Sync**:
+  - Integrated daily metric snapshot upsert into `upsertTikTokAccount`.
+  - Same-day syncs update the existing daily snapshot without duplicate records.
+- **Historical Metrics & Growth Calculation**:
+  - Implemented `getAccountHistoricalMetrics` and `getLatestAccountHistoricalMetrics` in `TikTokService`.
+  - Computes `currentFollowerCount`, `previousDayFollowerCount`, `dailyFollowerGrowth`, `sevenDayFollowerCount`, `sevenDayFollowerGrowth`, `thirtyDayFollowerCount`, and `thirtyDayFollowerGrowth`.
+  - Returns `null` when prior comparison snapshot does not exist (never fabricates 0).
+  - Preserves negative growth values (e.g. -20).
+- **Historical Metrics Endpoints**:
+  - Added `GET /tiktok/latest/metrics` and `GET /tiktok/accounts/:id/metrics` in `TikTokController` (protected by `AuthGuard`).
 - **Verification**:
-  - Prisma validation: `npx prisma validate` passed with 0 errors.
-  - Backend tests: `1,103 / 1,103 passed (100%)`.
+  - Prisma schema validation: `npx prisma validate` passed with 0 errors.
+  - Backend tests: `1,104 / 1,104 passed (100%)`.
   - Frontend tests: `310 / 310 passed (100%)`.
   - Production builds: Backend `nest build` and Frontend `next build` completed with 0 errors.
+
+## Previous task: Automatic TikTokAccount to StoreMaster Binding & Reconciliation
 
 ## Previous task: TikTok Video Data Retrieval and Display API Metric Enrichment
 

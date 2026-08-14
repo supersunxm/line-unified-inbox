@@ -1,3 +1,10 @@
+# TikTok Daily Account Metric Snapshots & Follower-Growth Semantics (2026-08-14)
+
+- **Asia/Bangkok Calendar Boundary Normalization (`getBangkokCalendarDate`)**: To align with Thai retail operations and business reporting dates, snapshot `metricDate` values are normalized to the `00:00:00.000` UTC boundary corresponding to the `Asia/Bangkok` calendar date.
+- **Unique Account-Day Constraint (`@@unique([tikTokAccountId, metricDate])`)**: Guarantees that at most one daily snapshot exists per TikTok account per calendar day. Multiple syncs on the same calendar day update the existing daily record to reflect the latest known metrics rather than creating duplicate rows.
+- **Honest Growth Calculation Without Fabrication**: Historical growth metrics (`dailyFollowerGrowth`, `sevenDayFollowerGrowth`, `thirtyDayFollowerGrowth`) compare against actual persisted snapshot records at `T-1`, `T-7`, and `T-30` days. If a comparison snapshot is unavailable, the growth is reported as `null` rather than a misleading `0`. Negative follower deltas are preserved.
+- **Dedicated Protected Metrics Endpoints**: `GET /tiktok/accounts/:id/metrics` and `GET /tiktok/latest/metrics` return historical daily snapshots alongside computed follower growth summaries without exposing tokens or credentials.
+
 # Automatic TikTokAccount to StoreMaster Binding & Reconciliation (2026-08-14)
 
 - **Normalized Username Matching (`TikTokAccount.username -> StoreMaster.tiktokUsername`)**: TikTok usernames are normalized with lowercase conversion, whitespace trimming, and leading `@` stripping on both sides. No fuzzy matching or display name heuristics are used.

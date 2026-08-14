@@ -1360,12 +1360,31 @@ model TikTokAccount {
 
   storeMaster           StoreMaster?           @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
   videos                TikTokVideo[]
+  dailyMetrics          TikTokAccountDailyMetric[]
 
   @@index([storeMasterId])
   @@index([openId])
   @@index([username])
   @@index([connectionStatus])
   @@index([lastSyncedAt])
+}
+
+model TikTokAccountDailyMetric {
+  id              String        @id @default(uuid())
+  tikTokAccountId String
+  metricDate      DateTime
+  followerCount   Int           @default(0)
+  followingCount  Int           @default(0)
+  likesCount      Int           @default(0)
+  videoCount      Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tikTokAccount   TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tikTokAccountId, metricDate])
+  @@index([tikTokAccountId])
+  @@index([metricDate])
 }
 
 model TikTokVideo {

@@ -6,6 +6,9 @@ import {
   SafeTikTokAccountOverviewResponse,
   SafeTikTokVideoResponse,
   SyncTikTokAccountDto,
+  TikTokDailyMetricDto,
+  TikTokGrowthSummaryDto,
+  TikTokHistoricalMetricsResponse,
 } from "./dto/tiktok-sync.dto";
 
 /**
@@ -23,6 +26,30 @@ export function normalizeTikTokUsernameForMatching(value?: string | null): strin
   const cleaned = trimmed.replace(/^@+/u, "").toLowerCase();
   if (!cleaned || cleaned === "#ref!" || cleaned === "none") return null;
   return cleaned;
+}
+
+/**
+ * Returns UTC Date object representing the 00:00:00.000 boundary of the Asia/Bangkok calendar day.
+ */
+export function getBangkokCalendarDate(now: Date = new Date()): Date {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [yearStr, monthStr, dayStr] = formatter.format(now).split("-");
+  return new Date(Date.UTC(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayStr, 10), 0, 0, 0, 0));
+}
+
+/**
+ * Formats a Date to ISO date string (YYYY-MM-DD) based on UTC components.
+ */
+export function formatBangkokDateToIso(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export type StoreBindingDiagnostic =
@@ -318,7 +345,32 @@ export class TikTokService {
       });
     }
 
-    // 3. Return sanitized account overview
+    // 3. Upsert today's daily snapshot (Asia/Bangkok calendar boundary)
+    const metricDate = getBangkokCalendarDate(now);
+    await this.prisma.tikTokAccountDailyMetric.upsert({
+      where: {
+        tikTokAccountId_metricDate: {
+          tikTokAccountId: account.id,
+          metricDate,
+        },
+      },
+      create: {
+        tikTokAccountId: account.id,
+        metricDate,
+        followerCount: account.followerCount,
+        followingCount: account.followingCount,
+        likesCount: account.likesCount,
+        videoCount: account.videoCount,
+      },
+      update: {
+        followerCount: account.followerCount,
+        followingCount: account.followingCount,
+        likesCount: account.likesCount,
+        videoCount: account.videoCount,
+      },
+    });
+
+    // 4. Return sanitized account overview
     const latest = await this.getLatestTikTokAccount();
     if (!latest) {
       throw new Error("Failed to retrieve upserted TikTok account overview");
@@ -441,5 +493,127 @@ export class TikTokService {
         : null,
       videoCountRecorded: raw._count.videos,
     }));
+  }
+
+  /**
+   * Retrieves historical metrics and calculated follower growth for an account.
+   * Compares against actual daily snapshots on Asia/Bangkok date boundaries.
+   * Returns growth as null if comparison date has no prior snapshot (never fabricates 0).
+   */
+  async getAccountHistoricalMetrics(
+    identifier: string,
+    days = 30,
+    referenceNow: Date = new Date()
+  ): Promise<TikTokHistoricalMetricsResponse | null> {
+    const account = await this.prisma.tikTokAccount.findFirst({
+      where: {
+        OR: [{ id: identifier }, { openId: identifier }],
+      },
+      select: {
+        id: true,
+        openId: true,
+        displayName: true,
+        username: true,
+        followerCount: true,
+      },
+    });
+
+    if (!account) return null;
+
+    const validatedDays = Math.min(Math.max(1, days || 30), 365);
+    const todayBangkok = getBangkokCalendarDate(referenceNow);
+    const cutoffDate = new Date(todayBangkok.getTime() - validatedDays * 86400000);
+
+    const metrics = await this.prisma.tikTokAccountDailyMetric.findMany({
+      where: {
+        tikTokAccountId: account.id,
+        metricDate: { gte: cutoffDate },
+      },
+      orderBy: { metricDate: "asc" },
+    });
+
+    const metricByDate = new Map<string, typeof metrics[0]>();
+    for (const m of metrics) {
+      metricByDate.set(formatBangkokDateToIso(m.metricDate), m);
+    }
+
+    const todayIso = formatBangkokDateToIso(todayBangkok);
+    const yesterdayIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 86400000));
+    const sevenDaysAgoIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 7 * 86400000));
+    const thirtyDaysAgoIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 30 * 86400000));
+
+    const todayMetric = metricByDate.get(todayIso);
+    const yesterdayMetric = metricByDate.get(yesterdayIso);
+    const sevenDayMetric = metricByDate.get(sevenDaysAgoIso);
+    const thirtyDayMetric = metricByDate.get(thirtyDaysAgoIso);
+
+    const currentFollowerCount = todayMetric ? todayMetric.followerCount : account.followerCount;
+
+    const previousDayFollowerCount = yesterdayMetric ? yesterdayMetric.followerCount : null;
+    const dailyFollowerGrowth = yesterdayMetric ? currentFollowerCount - yesterdayMetric.followerCount : null;
+
+    const sevenDayFollowerCount = sevenDayMetric ? sevenDayMetric.followerCount : null;
+    const sevenDayFollowerGrowth = sevenDayMetric ? currentFollowerCount - sevenDayMetric.followerCount : null;
+
+    const thirtyDayFollowerCount = thirtyDayMetric ? thirtyDayMetric.followerCount : null;
+    const thirtyDayFollowerGrowth = thirtyDayMetric ? currentFollowerCount - thirtyDayMetric.followerCount : null;
+
+    return {
+      accountId: account.id,
+      openId: account.openId,
+      displayName: account.displayName,
+      username: account.username,
+      summary: {
+        currentFollowerCount,
+        previousDayFollowerCount,
+        dailyFollowerGrowth,
+        sevenDayFollowerCount,
+        sevenDayFollowerGrowth,
+        thirtyDayFollowerCount,
+        thirtyDayFollowerGrowth,
+      },
+      history: metrics.map((m) => ({
+        id: m.id,
+        metricDate: formatBangkokDateToIso(m.metricDate),
+        followerCount: m.followerCount,
+        followingCount: m.followingCount,
+        likesCount: m.likesCount,
+        videoCount: m.videoCount,
+        createdAt: m.createdAt.toISOString(),
+        updatedAt: m.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * Retrieves historical metrics and growth for the latest connected TikTok account.
+   */
+  async getLatestAccountHistoricalMetrics(
+    days = 30,
+    referenceNow: Date = new Date()
+  ): Promise<TikTokHistoricalMetricsResponse | null> {
+    const latest = await this.getLatestTikTokAccount();
+    if (!latest) return null;
+    return this.getAccountHistoricalMetrics(latest.id, days, referenceNow);
+  }
+
+  /**
+   * Service method designed for future daily scheduled synchronization across ~150 connected accounts.
+   * Returns safe summary without exposing sensitive credentials.
+   */
+  async planDailyAccountsSync(): Promise<{ totalConnectedAccounts: number; accountIds: string[] }> {
+    const connectedAccounts = await this.prisma.tikTokAccount.findMany({
+      where: {
+        connectionStatus: "CONNECTED",
+        encryptedAccessToken: { not: null },
+      },
+      select: { id: true },
+      orderBy: { lastSyncedAt: "asc" },
+    });
+
+    return {
+      totalConnectedAccounts: connectedAccounts.length,
+      accountIds: connectedAccounts.map((a) => a.id),
+    };
   }
 }

@@ -237,4 +237,62 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
   const reconcileResult = await controller.reconcileStores();
   assert.equal(reconcileResult.matchedCount, 1);
   assert.equal(reconcileResult.results[0].status, "MATCHED");
+
+  // 9. Authenticated GET /tiktok/latest/metrics succeeds
+  fakeTikTokService.getLatestAccountHistoricalMetrics = async (days: number) => ({
+    accountId: "acc-1",
+    openId: "_000sample_open_id",
+    displayName: "OPPO Central World",
+    username: "oppo_centralworld",
+    summary: {
+      currentFollowerCount: 52000,
+      previousDayFollowerCount: 51900,
+      dailyFollowerGrowth: 100,
+      sevenDayFollowerCount: 51500,
+      sevenDayFollowerGrowth: 500,
+      thirtyDayFollowerCount: 50000,
+      thirtyDayFollowerGrowth: 2000,
+    },
+    history: [
+      {
+        id: "m-1",
+        metricDate: "2026-08-14",
+        followerCount: 52000,
+        followingCount: 120,
+        likesCount: 1420000,
+        videoCount: 85,
+        createdAt: "2026-08-14T00:00:00.000Z",
+        updatedAt: "2026-08-14T00:00:00.000Z",
+      },
+    ],
+  });
+
+  const latestMetrics = await controller.getLatestAccountMetrics("30");
+  assert.ok(latestMetrics);
+  assert.equal(latestMetrics.summary.currentFollowerCount, 52000);
+  assert.equal(latestMetrics.summary.dailyFollowerGrowth, 100);
+  assert.equal(latestMetrics.history.length, 1);
+
+  // 10. Authenticated GET /tiktok/accounts/:id/metrics succeeds
+  fakeTikTokService.getAccountHistoricalMetrics = async (id: string, days: number) => ({
+    accountId: id,
+    openId: "_000sample_open_id",
+    displayName: "OPPO Central World",
+    username: "oppo_centralworld",
+    summary: {
+      currentFollowerCount: 52000,
+      previousDayFollowerCount: null,
+      dailyFollowerGrowth: null,
+      sevenDayFollowerCount: null,
+      sevenDayFollowerGrowth: null,
+      thirtyDayFollowerCount: null,
+      thirtyDayFollowerGrowth: null,
+    },
+    history: [],
+  });
+
+  const accountMetrics = await controller.getAccountMetrics("acc-1", "7");
+  assert.ok(accountMetrics);
+  assert.equal(accountMetrics.accountId, "acc-1");
+  assert.equal(accountMetrics.summary.dailyFollowerGrowth, null);
 });

@@ -3,6 +3,7 @@ import {
   DEFAULT_TIKTOK_REDIRECT_URI,
 } from "./connect/tiktok-oauth.ts";
 import type {
+  TikTokHistoricalMetricsData,
   TikTokStoreData,
   TikTokTokenDiagnosticInfo,
   TikTokTokenResponse,
@@ -671,5 +672,53 @@ export async function fetchTikTokAccountsListFromBackend(
     return (await response.json()) || [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Fetches historical metrics and calculated growth summary for an account or the latest active account.
+ */
+export async function fetchTikTokHistoricalMetricsFromBackend(
+  accountId?: string,
+  days = 30,
+  options?: FetchTikTokAccountOptions
+): Promise<TikTokHistoricalMetricsData | null> {
+  try {
+    let sessionToken = options?.sessionToken?.trim() || null;
+
+    if (!sessionToken) {
+      try {
+        const { cookies } = await import("next/headers");
+        const cookieStore = await cookies();
+        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+      } catch {
+        // Fallback when executed outside Next.js request context
+      }
+    }
+
+    if (!sessionToken) {
+      return null;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sessionToken}`,
+    };
+
+    const endpoint = accountId
+      ? `${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}/metrics?days=${days}`
+      : `${API_BASE_URL}/tiktok/latest/metrics?days=${days}`;
+
+    const response = await fetch(endpoint, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) || null;
+  } catch {
+    return null;
   }
 }
