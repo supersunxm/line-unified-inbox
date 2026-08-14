@@ -342,3 +342,30 @@ test("Authentication boundary: TikTok routes require oppo_session and redirect t
   assert.match(callbackValidatorSource, /requestHasOppoSession:\s*Boolean/);
 });
 
+test("Follower growth KPI rendering and Follower Growth Chart component", () => {
+  const chartSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-follower-chart.tsx", import.meta.url), "utf8");
+
+  // 1. Dashboard view incorporates growth delta breakdown and chart
+  assert.match(dashboardViewSource, /Today/);
+  assert.match(dashboardViewSource, /7 Days/);
+  assert.match(dashboardViewSource, /30 Days/);
+  assert.match(dashboardViewSource, /TikTokFollowerGrowthChart/);
+  assert.match(dashboardPageSource, /fetchTikTokHistoricalMetricsFromBackend/);
+
+  // 2. Chart component verifies sparse data empty state (< 2 snapshots)
+  assert.match(chartSource, /sortedData\.length >= 2/);
+  assert.match(chartSource, /Collecting Daily Snapshots/);
+  assert.match(chartSource, /At least 2 daily snapshots/);
+
+  // 3. Chart component implements non-interpolated SVG lines and area gradients
+  assert.match(chartSource, /<path\s+d=\{linePath\}/);
+  assert.match(chartSource, /<path\s+d=\{areaPath\}/);
+  assert.match(chartSource, /followerAreaGrad/);
+
+  // 4. Positive, negative, and null growth formatting rules
+  assert.match(chartSource, /text-emerald-600/);
+  assert.match(chartSource, /text-rose-600/);
+  assert.match(chartSource, /--/);
+});
+
+

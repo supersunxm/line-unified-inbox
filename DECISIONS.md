@@ -1,3 +1,10 @@
+# Automatic Daily TikTok Metric Collection & Scheduled Worker Architecture (2026-08-14)
+
+- **Lightweight Standalone Scheduled Worker (`backend/scripts/sync-tiktok-daily-metrics.ts`)**: Rather than running in-memory cron intervals or browser-triggered fetch loops inside web server containers, daily synchronization is decoupled into a standalone CLI script executable via Railway Cron (`0 18 * * *` UTC, mapping to 01:00 Asia/Bangkok).
+- **Controlled Concurrency & Error Isolation**: Accounts are synchronized in controlled batches of 5 (up to 20 concurrency) using `Promise.allSettled`. A single account error (e.g. rate limit, deauthorization, or transient network blip) is isolated and recorded in the summary report without halting the remaining ~150 store synchronizations.
+- **Server-Side Token Lifecycle & Rotation**: Refresh tokens are decrypted in memory solely when access tokens expire. Rotated refresh tokens returned by TikTok OAuth v2 are immediately encrypted and persisted to PostgreSQL. Accounts with invalid/revoked grants are gracefully marked `EXPIRED` or `ERROR` without logging credentials.
+- **Zero-Dependency SVG Follower Trend Chart**: Created a lightweight, responsive SVG line chart with non-interpolated data points, area gradient shading, hover tooltips, and explicit empty state handling when fewer than 2 snapshots exist.
+
 # TikTok Daily Account Metric Snapshots & Follower-Growth Semantics (2026-08-14)
 
 - **Asia/Bangkok Calendar Boundary Normalization (`getBangkokCalendarDate`)**: To align with Thai retail operations and business reporting dates, snapshot `metricDate` values are normalized to the `00:00:00.000` UTC boundary corresponding to the `Asia/Bangkok` calendar date.

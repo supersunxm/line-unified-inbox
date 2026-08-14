@@ -1,30 +1,31 @@
 # AI progress
 
-## Current task: TikTok Daily Account Metric Snapshots for Follower-Growth Tracking
+## Current task: Automatic Daily TikTok Metric Collection & Follower Growth Dashboard UI
 
-- **Prisma Schema & Additive Migration**:
-  - Created `TikTokAccountDailyMetric` model with fields `id`, `tikTokAccountId`, `metricDate`, `followerCount`, `followingCount`, `likesCount`, `videoCount`, `createdAt`, and `updatedAt`.
-  - Added unique constraint `@@unique([tikTokAccountId, metricDate])` to guarantee at most one snapshot per account per calendar day.
-  - Added relation to `TikTokAccount` with `onDelete: Cascade`.
-  - Added additive migration `20260814173000_add_tiktok_daily_metrics/migration.sql`.
-- **Date & Timezone Normalization**:
-  - Stored `metricDate` at normalized 00:00:00.000 UTC boundary calculated from `Asia/Bangkok` calendar time (`getBangkokCalendarDate`).
-  - Ensures deterministic day-boundary assignment across midnight regardless of server UTC time.
-- **Snapshot Upsert on Sync**:
-  - Integrated daily metric snapshot upsert into `upsertTikTokAccount`.
-  - Same-day syncs update the existing daily snapshot without duplicate records.
-- **Historical Metrics & Growth Calculation**:
-  - Implemented `getAccountHistoricalMetrics` and `getLatestAccountHistoricalMetrics` in `TikTokService`.
-  - Computes `currentFollowerCount`, `previousDayFollowerCount`, `dailyFollowerGrowth`, `sevenDayFollowerCount`, `sevenDayFollowerGrowth`, `thirtyDayFollowerCount`, and `thirtyDayFollowerGrowth`.
-  - Returns `null` when prior comparison snapshot does not exist (never fabricates 0).
-  - Preserves negative growth values (e.g. -20).
-- **Historical Metrics Endpoints**:
-  - Added `GET /tiktok/latest/metrics` and `GET /tiktok/accounts/:id/metrics` in `TikTokController` (protected by `AuthGuard`).
+- **Scheduled Worker Implementation**:
+  - Implemented `syncDailyTikTokMetrics(options)` in `backend/src/tiktok/tiktok.service.ts` with chunked batching (concurrency default 5, up to 20) and individual account error isolation.
+  - Implemented token lifecycle management in `fetchRefreshedTikTokToken` & `syncSingleAccountDailyMetrics`:
+    - Decrypts refresh tokens only when access tokens are expired or invalid.
+    - Handles rotated refresh tokens and updates encrypted database records and expiry timestamps.
+    - Marks deauthorized or expired refresh tokens with `connectionStatus = 'EXPIRED'`.
+    - Upserts daily metric snapshot into `TikTokAccountDailyMetric` normalized to Asia/Bangkok date boundary.
+    - Idempotent execution: Multiple runs on the same Thai calendar day safely update existing records without duplicates.
+  - Created standalone worker runner script: `backend/scripts/sync-tiktok-daily-metrics.ts` and registered `"tiktok:sync-daily-metrics"` in `backend/package.json`.
+  - Added protected manual trigger endpoint `POST /tiktok/sync-daily-metrics` with `@Roles(UserRole.ADMIN)` in `TikTokController`.
+- **Dashboard Growth UI & Historical Chart**:
+  - Updated Followers KPI card in `/tiktok/dashboard` to display real-time growth breakdown for Today, 7 Days, and 30 Days (green positive `+`, red negative `-`, neutral `0`, and `--` for missing historical snapshots).
+  - Created responsive SVG line chart component `TikTokFollowerGrowthChart` (`frontend/src/app/tiktok/dashboard/tiktok-follower-chart.tsx`):
+    - Plots `metricDate` vs `followerCount` over 30 days.
+    - Sparse data handled gracefully with clear empty state when `< 2 snapshots` exist.
+    - Interactive data point hovering with precise follower count and daily change tooltip.
 - **Verification**:
   - Prisma schema validation: `npx prisma validate` passed with 0 errors.
-  - Backend tests: `1,104 / 1,104 passed (100%)`.
-  - Frontend tests: `310 / 310 passed (100%)`.
-  - Production builds: Backend `nest build` and Frontend `next build` completed with 0 errors.
+  - Backend tests: `1,105 / 1,105 passed (100%)`.
+  - Backend build: `nest build` completed with 0 errors.
+  - Frontend tests: `311 / 311 passed (100%)`.
+  - Frontend build: `next build` completed with 0 errors.
+
+## Previous task: TikTok Daily Account Metric Snapshots for Follower-Growth Tracking
 
 ## Previous task: Automatic TikTokAccount to StoreMaster Binding & Reconciliation
 

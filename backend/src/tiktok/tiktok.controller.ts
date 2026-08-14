@@ -73,4 +73,15 @@ export class TikTokController {
   async reconcileStores(): Promise<ReconcileStoreBindingsResponse> {
     return this.tiktokService.reconcileTikTokStoreBindings();
   }
+
+  /**
+   * Triggers daily account metrics collection across connected accounts.
+   * Restricted to ADMIN role.
+   */
+  @Post("sync-daily-metrics")
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async syncDailyMetrics() {
+    return this.tiktokService.syncDailyTikTokMetrics();
+  }
 }

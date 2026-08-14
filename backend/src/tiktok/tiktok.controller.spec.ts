@@ -295,4 +295,49 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
   assert.ok(accountMetrics);
   assert.equal(accountMetrics.accountId, "acc-1");
   assert.equal(accountMetrics.summary.dailyFollowerGrowth, null);
+
+  // 11. Authenticated POST /tiktok/sync-daily-metrics by VIEWER is rejected with 403 Forbidden
+  const requestSyncDailyViewer: any = {
+    headers: { cookie: "oppo_session=valid-viewer-session" },
+    method: "POST",
+    path: "/tiktok/sync-daily-metrics",
+  };
+  const contextSyncDailyViewer: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncDailyViewer }),
+    getHandler: () => controller.syncDailyMetrics,
+    getClass: () => TikTokController,
+  };
+  await assert.rejects(
+    async () => guard.canActivate(contextSyncDailyViewer),
+    { name: "ForbiddenException" }
+  );
+
+  // 12. Authenticated POST /tiktok/sync-daily-metrics by ADMIN succeeds
+  const requestSyncDailyAdmin: any = {
+    headers: { cookie: "oppo_session=valid-admin-session" },
+    method: "POST",
+    path: "/tiktok/sync-daily-metrics",
+  };
+  const contextSyncDailyAdmin: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncDailyAdmin }),
+    getHandler: () => controller.syncDailyMetrics,
+    getClass: () => TikTokController,
+  };
+  const canSyncDailyAdmin = await guard.canActivate(contextSyncDailyAdmin);
+  assert.equal(canSyncDailyAdmin, true);
+
+  fakeTikTokService.syncDailyTikTokMetrics = async () => ({
+    totalAccounts: 1,
+    succeeded: 1,
+    failed: 0,
+    skipped: 0,
+    tokenRefreshFailures: 0,
+    bangkokDate: "2026-08-14",
+    durationMs: 42,
+    accountResults: [],
+  });
+
+  const dailySyncRes = await controller.syncDailyMetrics();
+  assert.equal(dailySyncRes.totalAccounts, 1);
+  assert.equal(dailySyncRes.succeeded, 1);
 });

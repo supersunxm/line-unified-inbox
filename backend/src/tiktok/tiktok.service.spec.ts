@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  TikTokOAuthPermanentError,
   TikTokService,
+  TikTokTransientError,
   normalizeTikTokUsernameForMatching,
 } from "./tiktok.service";
 
@@ -440,4 +442,306 @@ test("TikTok daily metric snapshots and growth calculation semantics", async () 
   const plan = await service.planDailyAccountsSync();
   assert.equal(typeof plan.totalConnectedAccounts, "number");
   assert.ok(Array.isArray(plan.accountIds));
+});
+
+test("TikTok scheduled daily worker: token refresh, token rotation, failure isolation, and batch execution", async () => {
+  const accountsDb = new Map<string, any>();
+  const dailyMetricsDb = new Map<string, any>();
+
+  const fakePrisma: any = {
+    tikTokAccount: {
+      findMany: async ({ where }: any) => {
+        return Array.from(accountsDb.values()).filter(
+          (acc) => acc.connectionStatus === "CONNECTED" && acc.encryptedRefreshToken != null
+        );
+      },
+      update: async ({ where, data }: any) => {
+        const existing = Array.from(accountsDb.values()).find((a) => a.id === where.id);
+        if (existing) {
+          Object.assign(existing, data);
+        }
+        return existing;
+      },
+    },
+    tikTokAccountDailyMetric: {
+      upsert: async ({ where, create, update }: any) => {
+        const key = `${where.tikTokAccountId_metricDate.tikTokAccountId}:${where.tikTokAccountId_metricDate.metricDate.toISOString()}`;
+        const existing = dailyMetricsDb.get(key);
+        const record = existing
+          ? { ...existing, ...update }
+          : { ...create, id: `metric-${dailyMetricsDb.size + 1}` };
+        dailyMetricsDb.set(key, record);
+        return record;
+      },
+    },
+  };
+
+  const fakeEncryption: any = {
+    encrypt: (val: string) => `enc:${val}`,
+    decrypt: (val: string) => (val.startsWith("enc:") ? val.slice(4) : val),
+  };
+
+  const service = new TikTokService(fakePrisma, fakeEncryption);
+
+  // Setup mock accounts
+  // Account 1: Valid refresh token, rotates refresh token
+  accountsDb.set("acc-1", {
+    id: "acc-1",
+    openId: "open-id-1",
+    username: "store_1",
+    displayName: "Store 1",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: null,
+    encryptedRefreshToken: "enc:refresh-token-1",
+    followerCount: 1000,
+    followingCount: 100,
+    likesCount: 5000,
+    videoCount: 20,
+  });
+
+  // Account 2: Expired refresh token (TikTok rejects with error)
+  accountsDb.set("acc-2", {
+    id: "acc-2",
+    openId: "open-id-2",
+    username: "store_2",
+    displayName: "Store 2",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: null,
+    encryptedRefreshToken: "enc:refresh-token-invalid",
+    followerCount: 2000,
+    followingCount: 200,
+    likesCount: 10000,
+    videoCount: 30,
+  });
+
+  // Account 3: Valid access token (not expired), no refresh needed
+  const validExp = new Date(Date.now() + 3600 * 1000);
+  accountsDb.set("acc-3", {
+    id: "acc-3",
+    openId: "open-id-3",
+    username: "store_3",
+    displayName: "Store 3",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: "enc:valid-token-3",
+    encryptedRefreshToken: "enc:refresh-token-3",
+    accessTokenExpiresAt: validExp,
+    followerCount: 3000,
+    followingCount: 300,
+    likesCount: 15000,
+    videoCount: 40,
+  });
+
+  // Mock fetchRefreshedTikTokToken and fetchTikTokUserProfile
+  service.fetchRefreshedTikTokToken = async (refreshToken: string) => {
+    if (refreshToken === "refresh-token-invalid") {
+      throw new TikTokOAuthPermanentError("TikTok OAuth token refresh failed: invalid_grant", "invalid_grant");
+    }
+    return {
+      accessToken: `new-access-token-for-${refreshToken}`,
+      expiresIn: 86400,
+      refreshToken: `rotated-refresh-token-for-${refreshToken}`,
+      refreshExpiresIn: 31536000,
+      openId: "open-id-1",
+    };
+  };
+
+  service.fetchTikTokUserProfile = async (accessToken: string) => {
+    if (accessToken.includes("refresh-token-1")) {
+      return {
+        open_id: "open-id-1",
+        display_name: "Store 1 Updated",
+        follower_count: 1050, // Grew by 50
+        following_count: 105,
+        likes_count: 5200,
+        video_count: 22,
+      };
+    }
+    if (accessToken === "valid-token-3") {
+      return {
+        open_id: "open-id-3",
+        display_name: "Store 3",
+        follower_count: 3100, // Grew by 100
+        following_count: 300,
+        likes_count: 15500,
+        video_count: 42,
+      };
+    }
+    throw new Error(`Unknown access token: ${accessToken}`);
+  };
+
+  // Run the batch daily sync across all 3 accounts
+  const refDate = new Date("2026-08-14T01:00:00.000Z");
+  const summary = await service.syncDailyTikTokMetrics({
+    concurrency: 2,
+    referenceNow: refDate,
+  });
+
+  // 1. Batch summary verification
+  assert.equal(summary.totalAccounts, 3);
+  assert.equal(summary.succeeded, 2); // acc-1 and acc-3
+  assert.equal(summary.failed, 1); // acc-2 failed
+  assert.equal(summary.tokenRefreshFailures, 1);
+  assert.equal(summary.bangkokDate, "2026-08-14");
+
+  // 2. Account 1 verified: token rotated and metrics updated
+  const acc1 = accountsDb.get("acc-1");
+  assert.equal(acc1.encryptedAccessToken, "enc:new-access-token-for-refresh-token-1");
+  assert.equal(acc1.encryptedRefreshToken, "enc:rotated-refresh-token-for-refresh-token-1");
+  assert.equal(acc1.followerCount, 1050);
+  assert.equal(acc1.connectionStatus, "CONNECTED");
+
+  // 3. Account 2 verified: marked EXPIRED due to permanent refresh failure, did not crash batch
+  const acc2 = accountsDb.get("acc-2");
+  assert.equal(acc2.connectionStatus, "EXPIRED");
+
+  // 4. Account 3 verified: used existing valid access token
+  const acc3 = accountsDb.get("acc-3");
+  assert.equal(acc3.followerCount, 3100);
+
+  // 5. Daily snapshot upsert idempotency: running twice on same day updates existing record
+  assert.equal(dailyMetricsDb.size, 2);
+  const run2Summary = await service.syncDailyTikTokMetrics({
+    concurrency: 2,
+    referenceNow: refDate,
+  });
+  assert.equal(run2Summary.succeeded, 2);
+  assert.equal(dailyMetricsDb.size, 2); // No duplicate rows created
+});
+
+test("TikTok error classification: permanent vs transient errors, bounded retries, and job locking", async () => {
+  const accountsDb = new Map<string, any>();
+  const fakePrisma: any = {
+    tikTokAccount: {
+      findMany: async () => Array.from(accountsDb.values()),
+      update: async ({ where, data }: any) => {
+        const existing = accountsDb.get(where.id);
+        if (existing) Object.assign(existing, data);
+        return existing;
+      },
+    },
+    tikTokAccountDailyMetric: {
+      upsert: async () => ({ id: "m-1" }),
+    },
+  };
+
+  const fakeEncryption: any = {
+    encrypt: (val: string) => `enc:${val}`,
+    decrypt: (val: string) => (val.startsWith("enc:") ? val.slice(4) : val),
+  };
+
+  const service = new TikTokService(fakePrisma, fakeEncryption);
+
+  // Account 1: Transient 500 error during refresh -> MUST REMAIN CONNECTED
+  accountsDb.set("acc-500", {
+    id: "acc-500",
+    openId: "open-id-500",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: null,
+    encryptedRefreshToken: "enc:refresh-500",
+    followerCount: 5000,
+    followingCount: 100,
+    likesCount: 1000,
+    videoCount: 10,
+  });
+
+  let refresh500Attempts = 0;
+  service.fetchRefreshedTikTokToken = async (token: string) => {
+    if (token === "refresh-500") {
+      refresh500Attempts++;
+      throw new TikTokTransientError("TikTok 500 internal server error", 500, 0.001);
+    }
+    return { accessToken: "act", openId: "open" };
+  };
+
+  const res500 = await service.syncSingleAccountDailyMetrics(accountsDb.get("acc-500"));
+  assert.equal(res500.status, "FAILED");
+  // CRITICAL: Must remain CONNECTED on transient 500 error!
+  assert.equal(accountsDb.get("acc-500").connectionStatus, "CONNECTED");
+  // Retried twice (total 3 attempts)
+  assert.equal(refresh500Attempts, 3);
+
+  // Account 2: Rate limit 429 during profile fetch -> retries and succeeds on retry
+  accountsDb.set("acc-429", {
+    id: "acc-429",
+    openId: "open-id-429",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: "enc:token-429",
+    encryptedRefreshToken: "enc:refresh-429",
+    accessTokenExpiresAt: new Date(Date.now() + 3600000),
+    followerCount: 6000,
+    followingCount: 100,
+    likesCount: 1000,
+    videoCount: 10,
+  });
+
+  let profile429Attempts = 0;
+  service.fetchTikTokUserProfile = async (token: string) => {
+    if (token === "token-429") {
+      profile429Attempts++;
+      if (profile429Attempts === 1) {
+        throw new TikTokTransientError("Rate limit", 429, 0.01);
+      }
+      return {
+        open_id: "open-id-429",
+        follower_count: 6050,
+      };
+    }
+    throw new Error("Unknown");
+  };
+
+  const res429 = await service.syncSingleAccountDailyMetrics(accountsDb.get("acc-429"));
+  assert.equal(res429.status, "SUCCESS");
+  assert.equal(res429.followerCount, 6050);
+  assert.equal(accountsDb.get("acc-429").connectionStatus, "CONNECTED");
+  assert.equal(profile429Attempts, 2);
+
+  // Account 3: Permanent invalid_grant -> immediately fails without retries and marks EXPIRED
+  accountsDb.set("acc-perm", {
+    id: "acc-perm",
+    openId: "open-id-perm",
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: null,
+    encryptedRefreshToken: "enc:refresh-perm",
+    followerCount: 7000,
+    followingCount: 100,
+    likesCount: 1000,
+    videoCount: 10,
+  });
+
+  let permAttempts = 0;
+  service.fetchRefreshedTikTokToken = async (token: string) => {
+    if (token === "refresh-perm") {
+      permAttempts++;
+      throw new TikTokOAuthPermanentError("User revoked authorization", "invalid_grant");
+    }
+    return { accessToken: "act", openId: "open" };
+  };
+
+  const resPerm = await service.syncSingleAccountDailyMetrics(accountsDb.get("acc-perm"));
+  assert.equal(resPerm.status, "FAILED");
+  assert.equal(accountsDb.get("acc-perm").connectionStatus, "EXPIRED");
+  assert.equal(permAttempts, 1); // No retries for permanent errors!
+
+  // 4. Job lock prevention: Overlapping execution is safely skipped
+  let lockHeld = true;
+  service.tryAcquireJobLock = async () => !lockHeld;
+  service.releaseJobLock = async () => {
+    lockHeld = false;
+  };
+
+  const skippedJob = await service.syncDailyTikTokMetrics();
+  assert.equal(skippedJob.totalAccounts, 0);
+  assert.equal(skippedJob.succeeded, 0);
+
+  // When lock is acquired, job runs and releases lock in finally block
+  lockHeld = false;
+  let lockReleased = false;
+  service.tryAcquireJobLock = async () => true;
+  service.releaseJobLock = async () => {
+    lockReleased = true;
+  };
+
+  accountsDb.clear();
+  await service.syncDailyTikTokMetrics();
+  assert.equal(lockReleased, true);
 });

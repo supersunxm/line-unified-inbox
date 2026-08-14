@@ -138,3 +138,23 @@ export interface TikTokHistoricalMetricsResponse {
   summary: TikTokGrowthSummaryDto;
   history: TikTokDailyMetricDto[];
 }
+
+export interface TikTokAccountSyncResult {
+  accountId: string;
+  openId: string;
+  username?: string | null;
+  status: "SUCCESS" | "FAILED" | "SKIPPED";
+  followerCount?: number;
+  error?: string;
+}
+
+export interface TikTokDailySyncSummary {
+  totalAccounts: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  tokenRefreshFailures: number;
+  bangkokDate: string;
+  durationMs: number;
+  accountResults: TikTokAccountSyncResult[];
+}

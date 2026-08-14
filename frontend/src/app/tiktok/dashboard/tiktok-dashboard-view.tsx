@@ -1,10 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import type { TikTokStoreData, TikTokVideoItem } from "../tiktok-types";
+import type {
+  TikTokHistoricalMetricsData,
+  TikTokStoreData,
+  TikTokVideoItem,
+} from "../tiktok-types";
+import { TikTokFollowerGrowthChart } from "./tiktok-follower-chart";
 
 interface TikTokDashboardViewProps {
   data: TikTokStoreData | null;
+  historicalMetrics?: TikTokHistoricalMetricsData | null;
+}
+
+function formatDelta(delta: number | null | undefined): {
+  text: string;
+  className: string;
+} {
+  if (delta === null || delta === undefined) {
+    return {
+      text: "--",
+      className: "text-slate-400 dark:text-slate-500 font-medium",
+    };
+  }
+
+  if (delta > 0) {
+    return {
+      text: `+${new Intl.NumberFormat("en-US").format(delta)}`,
+      className: "text-emerald-600 dark:text-emerald-400 font-semibold",
+    };
+  }
+
+  if (delta < 0) {
+    return {
+      text: new Intl.NumberFormat("en-US").format(delta),
+      className: "text-rose-600 dark:text-rose-400 font-semibold",
+    };
+  }
+
+  return {
+    text: "0",
+    className: "text-slate-500 dark:text-slate-400 font-medium",
+  };
 }
 
 function formatNumber(num: number | undefined | null): string {
@@ -40,7 +77,10 @@ function formatDuration(seconds: number | undefined | null): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
+export function TikTokDashboardView({
+  data,
+  historicalMetrics,
+}: TikTokDashboardViewProps) {
   // 1. Empty State
   if (!data) {
     return (
@@ -279,16 +319,43 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
 
         {/* 6 Key Performance Indicators (KPI) Grid */}
         <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 sm:gap-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Followers
-            </span>
-            <p className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
-              {formatNumber(profile.follower_count)}
-            </p>
-            <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-              {formatCompactNumber(profile.follower_count)} total
-            </p>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Followers
+              </span>
+              <p className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
+                {formatNumber(profile.follower_count)}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                {formatCompactNumber(profile.follower_count)} total
+              </p>
+            </div>
+
+            {/* Growth delta breakdown: Today, 7D, 30D */}
+            <div className="mt-3 space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">Today</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.dailyFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">7 Days</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.sevenDayFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">30 Days</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.thirtyDayFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
@@ -351,6 +418,17 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
             </p>
           </div>
         </section>
+
+        {/* Follower Growth Trend Line Chart */}
+        {historicalMetrics && (
+          <section>
+            <TikTokFollowerGrowthChart
+              history={historicalMetrics.history}
+              summary={historicalMetrics.summary}
+              accountDisplayName={profile.display_name}
+            />
+          </section>
+        )}
 
         {/* Video Performance Summary Highlights */}
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 sm:gap-6">
