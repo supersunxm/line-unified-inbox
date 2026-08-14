@@ -14,37 +14,49 @@ const LABELS = {
     title: "ภาพรวมการเติบโตของผู้ติดตาม LINE OA (LINE OA Follower Growth)",
     totalFriends: "ผู้ติดตามทั้งหมด",
     addedToday: "ผู้ติดตามใหม่",
-    blockedToday: "บล็อก",
-    netGrowth: "การเติบโตสุทธิ",
-    todaySuffix: "วันนี้",
-    period7dSuffix: "7 วันที่เลือก",
-    period30dSuffix: "30 วันที่เลือก",
+    blockedToday: "Block เพิ่ม",
+    netGrowth: "เพิ่มขึ้นสุทธิ",
+    added7d: "ผู้ติดตามใหม่ใน 7 วัน",
+    blocked7d: "Block เพิ่มใน 7 วัน",
+    net7d: "เพิ่มขึ้นสุทธิใน 7 วัน",
+    added30d: "ผู้ติดตามใหม่ใน 30 วัน",
+    blocked30d: "Block เพิ่มใน 30 วัน",
+    net30d: "เพิ่มขึ้นสุทธิใน 30 วัน",
   },
   en: {
     title: "LINE OA Follower Growth Analytics",
     totalFriends: "Total Followers",
     addedToday: "New Followers",
-    blockedToday: "Blocked",
+    blockedToday: "New Blocks",
     netGrowth: "Net Growth",
-    todaySuffix: "Today",
-    period7dSuffix: "7 Days",
-    period30dSuffix: "30 Days",
+    added7d: "New Followers (7d)",
+    blocked7d: "New Blocks (7d)",
+    net7d: "Net Growth (7d)",
+    added30d: "New Followers (30d)",
+    blocked30d: "New Blocks (30d)",
+    net30d: "Net Growth (30d)",
   },
   zh: {
     title: "LINE OA 粉丝增长分析",
     totalFriends: "粉丝总数",
     addedToday: "新增粉丝",
-    blockedToday: "封禁数",
+    blockedToday: "新增封禁",
     netGrowth: "净增长",
-    todaySuffix: "今日",
-    period7dSuffix: "所选7天",
-    period30dSuffix: "所选30天",
+    added7d: "7日新增粉丝",
+    blocked7d: "7日新增封禁",
+    net7d: "7日净增长",
+    added30d: "30日新增粉丝",
+    blocked30d: "30日新增封禁",
+    net30d: "30日净增长",
   },
 };
 
 export function FollowerGrowthCard({ growth, language, period = "today" }: FollowerGrowthProps) {
   const t = LABELS[language] ?? LABELS.en;
-  const suffix = period === "7d" ? ` (${t.period7dSuffix})` : period === "30d" ? ` (${t.period30dSuffix})` : ` (${t.todaySuffix})`;
+
+  const addedLabel = period === "7d" ? t.added7d : period === "30d" ? t.added30d : t.addedToday;
+  const blockedLabel = period === "7d" ? t.blocked7d : period === "30d" ? t.blocked30d : t.blockedToday;
+  const netLabel = period === "7d" ? t.net7d : period === "30d" ? t.net30d : t.netGrowth;
 
   const addedVal = growth.addedToday ?? 0;
   const blockedVal = growth.blockedToday ?? 0;
@@ -62,19 +74,19 @@ export function FollowerGrowthCard({ growth, language, period = "today" }: Follo
           <span className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1 block">{(growth.totalFriends ?? 0).toLocaleString()}</span>
         </div>
         <div className="p-3 rounded-xl bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
-          <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase tracking-wide block">{t.addedToday}{suffix}</span>
+          <span className="text-[10px] text-emerald-800 dark:text-emerald-300 uppercase tracking-wide block">{addedLabel}</span>
           <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
             {addedVal >= 0 ? `+${addedVal.toLocaleString()}` : addedVal.toLocaleString()}
           </span>
         </div>
         <div className="p-3 rounded-xl bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/40">
-          <span className="text-[10px] text-rose-800 dark:text-rose-300 uppercase tracking-wide block">{t.blockedToday}{suffix}</span>
+          <span className="text-[10px] text-rose-800 dark:text-rose-300 uppercase tracking-wide block">{blockedLabel}</span>
           <span className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-1 block">
-            {blockedVal > 0 ? `-${blockedVal.toLocaleString()}` : blockedVal === 0 ? "0" : `+${Math.abs(blockedVal).toLocaleString()}`}
+            {blockedVal > 0 ? blockedVal.toLocaleString() : blockedVal === 0 ? "0" : blockedVal.toLocaleString()}
           </span>
         </div>
         <div className="p-3 rounded-xl bg-teal-50/40 dark:bg-teal-950/20 border border-teal-200/60 dark:border-teal-900/40">
-          <span className="text-[10px] text-teal-800 dark:text-teal-300 uppercase tracking-wide block">{t.netGrowth}{suffix}</span>
+          <span className="text-[10px] text-teal-800 dark:text-teal-300 uppercase tracking-wide block">{netLabel}</span>
           <span className="text-lg font-bold text-teal-600 dark:text-teal-400 mt-1 block">
             {netVal >= 0 ? `+${netVal.toLocaleString()}` : netVal.toLocaleString()}
           </span>

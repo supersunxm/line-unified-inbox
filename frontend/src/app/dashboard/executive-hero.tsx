@@ -24,8 +24,8 @@ export const HERO_LABELS = {
     followers: "ผู้ติดตามใหม่ (สุทธิ)",
     todayNet: "ช่วงเวลานี้",
     totalFollowersLabel: "ผู้ติดตามรวมทั้งหมด",
-    addedFriends: "เพิ่มเพื่อน",
-    blockedFriends: "บล็อก",
+    addedFriends: "ผู้ติดตามใหม่",
+    blockedFriends: "Block เพิ่ม",
     netGrowth: "เพิ่มขึ้นสุทธิ",
     topProduct: "สินค้ายอดฮิต",
     mentionsShare: "ของยอดพูดถึง",
@@ -44,7 +44,7 @@ export const HERO_LABELS = {
     ratioGap: "Gap Ratio",
     shareComparison: "สัดส่วน Top 10 vs กลุ่มต้องดูแล",
     noFollowerData: "ไม่มีข้อมูลผู้ติดตามรายสาขา",
-    followerAcquisition: "สัดส่วนการได้มาของผู้ติดตาม",
+    followerAcquisition: "สัดส่วนผู้ติดตามใหม่และบล็อก",
   },
   en: {
     messagesToday: "Total Messages",
@@ -58,8 +58,8 @@ export const HERO_LABELS = {
     followers: "New Followers (Net)",
     todayNet: "this period",
     totalFollowersLabel: "Total Followers",
-    addedFriends: "Added",
-    blockedFriends: "Blocked",
+    addedFriends: "New Followers",
+    blockedFriends: "New Blocks",
     netGrowth: "Net Growth",
     topProduct: "Top Inquired Product",
     mentionsShare: "of product mentions",
@@ -78,7 +78,7 @@ export const HERO_LABELS = {
     ratioGap: "Gap Ratio",
     shareComparison: "Top 10 vs Attention Stores Share",
     noFollowerData: "No store follower data available",
-    followerAcquisition: "Follower Acquisition Breakdown",
+    followerAcquisition: "Follower Acquisition & Block Distribution",
   },
   zh: {
     messagesToday: "消息总量",
@@ -92,8 +92,8 @@ export const HERO_LABELS = {
     followers: "净增关注者",
     todayNet: "本期",
     totalFollowersLabel: "总关注者",
-    addedFriends: "新增好友",
-    blockedFriends: "被拉黑",
+    addedFriends: "新增粉丝",
+    blockedFriends: "新增封禁",
     netGrowth: "净增长",
     topProduct: "最受关注产品",
     mentionsShare: "占比",
@@ -112,7 +112,7 @@ export const HERO_LABELS = {
     ratioGap: "Gap Ratio",
     shareComparison: "Top 10 与需关注门店占比",
     noFollowerData: "暂无门店关注者数据",
-    followerAcquisition: "关注者新增构成细分",
+    followerAcquisition: "新增与封禁分布",
   },
 };
 
@@ -198,9 +198,13 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                 {netFollowersToday >= 0 ? `+${netFollowersToday.toLocaleString()}` : netFollowersToday.toLocaleString()}
               </div>
               <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-tabular">
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">+{addedFollowers.toLocaleString()}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  {addedFollowers >= 0 ? `+${addedFollowers.toLocaleString()}` : addedFollowers.toLocaleString()}
+                </span>
                 <span className="text-slate-300 dark:text-slate-700">/</span>
-                <span className="text-rose-500 font-medium">-{blockedFollowers.toLocaleString()}</span>
+                <span className="text-rose-500 font-medium">
+                  {blockedFollowers > 0 ? blockedFollowers.toLocaleString() : blockedFollowers === 0 ? "0" : blockedFollowers.toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
@@ -323,7 +327,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   {t.addedFriends}
                 </div>
                 <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                  +{addedFollowers.toLocaleString()}
+                  {addedFollowers >= 0 ? `+${addedFollowers.toLocaleString()}` : addedFollowers.toLocaleString()}
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
@@ -331,7 +335,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   {t.blockedFriends}
                 </div>
                 <div className="text-base font-bold text-rose-600 dark:text-rose-400 mt-1">
-                  -{blockedFollowers.toLocaleString()}
+                  {blockedFollowers > 0 ? blockedFollowers.toLocaleString() : blockedFollowers === 0 ? "0" : blockedFollowers.toLocaleString()}
                 </div>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/30">
@@ -353,28 +357,29 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
                   {t.followerAcquisition}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {language === "th" ? "สัดส่วนเพื่อนที่เพิ่มขึ้นและการรักษาฐานผู้ติดตาม" : "Follower acquisition efficiency and retention"}
+                  {language === "th"
+                    ? "สัดส่วนผู้ติดตามใหม่และการบล็อกในเครือข่าย"
+                    : language === "zh"
+                    ? "网络内新增关注与封禁分布"
+                    : "Follower acquisition and block distribution"}
                 </p>
               </div>
-              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/40 font-tabular">
-                {netGrowthPct}% Retained
-              </span>
             </div>
 
             <div className="my-auto py-3 space-y-3 font-tabular">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">
-                    {t.netGrowth} ({netFollowersToday >= 0 ? `+${netFollowersToday.toLocaleString()}` : netFollowersToday.toLocaleString()})
+                    {t.addedFriends} ({addedFollowers >= 0 ? `+${addedFollowers.toLocaleString()}` : addedFollowers.toLocaleString()})
                   </span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    {netGrowthPct}%
+                    {addedFollowers > 0 ? "100%" : "-"}
                   </span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${netGrowthPct}%` }}
+                    style={{ width: addedFollowers > 0 ? "100%" : "0%" }}
                   />
                 </div>
               </div>
@@ -382,24 +387,24 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">
-                    {t.blockedFriends} (-{blockedFollowers.toLocaleString()})
+                    {t.blockedFriends} ({blockedFollowers > 0 ? blockedFollowers.toLocaleString() : blockedFollowers === 0 ? "0" : blockedFollowers.toLocaleString()})
                   </span>
                   <span className="font-bold text-rose-500">
-                    {blockedLossPct}%
+                    {grossAddedTotal > 0 ? `${Math.round((Math.max(0, blockedFollowers) / grossAddedTotal) * 100)}%` : "-"}
                   </span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-rose-500 rounded-full transition-all duration-500"
-                    style={{ width: `${blockedLossPct}%` }}
+                    style={{ width: `${grossAddedTotal > 0 ? Math.min(100, Math.round((Math.max(0, blockedFollowers) / grossAddedTotal) * 100)) : 0}%` }}
                   />
                 </div>
               </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between font-tabular">
-              <span>Gross Added: +{addedFollowers.toLocaleString()}</span>
-              <span>Net Addition: +{netFollowersToday.toLocaleString()}</span>
+              <span>{t.addedFriends}: {addedFollowers >= 0 ? `+${addedFollowers.toLocaleString()}` : addedFollowers.toLocaleString()}</span>
+              <span>{t.netGrowth}: {netFollowersToday >= 0 ? `+${netFollowersToday.toLocaleString()}` : netFollowersToday.toLocaleString()}</span>
             </div>
           </div>
         </div>

@@ -844,6 +844,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added a long-conversation regression with image rows and a pagination cursor proving no automatic older request during landing and successful manual pagination afterward.
 - Flutter analyze, all 26 Flutter tests, debug APK build, and `git diff --check` pass.
 
+# Current task: Phase 4C.4.2 cancellable scroll commands
+
+- Added a scroll-generation token invalidated by user movement so stale initial and bottom-scroll callbacks cannot override manual reading position.
+- Initial stabilization aborts cleanly when superseded, while pagination remains enabled when dimensions are available. Older-page offset restoration and realtime append behavior remain unchanged.
+- Added regressions for interrupting initial stabilization and a queued realtime auto-scroll. Flutter analyze, all 28 Flutter tests, production-configured debug APK build, and `git diff --check` pass.
+
 # Current task: Fix Executive Dashboard Follower KPI Accuracy and Consistency
 
 - Root Cause: `DashboardAnalyticsService` previously called `findFirst({ orderBy: { snapshotDate: "desc" } })` to fetch a single arbitrary OA snapshot across the entire database, mapping `targetedReaches -> addedToday` (e.g. +1,027), `blocks -> blockedToday` (e.g. -47), and `netToday -> 980`. This incorrectly conflated targeted reaches with daily added friends and cumulative blocks with daily new blocks, completely ignoring the other 143 stores in the network.
@@ -852,4 +858,6 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Growth metrics (New Followers, Blocked, Net Growth) are computed by delta comparison between target date and baseline date (`today - 1d` for today, `today - 7d` for 7d, `today - 30d` for 30d) for comparable accounts only (where both target and baseline ready snapshots exist). Accounts with missing baseline are safely excluded from deltas and never assumed to have 0 baseline.
 - Fixed `FollowerInsightsService.getSummary` snapshot query to include previous-day baseline (`minDateUtc = toUtcDateForDb(getPreviousBangkokDateString(dates[0]))`) so 1-day queries correctly compute `dailyIncrease`.
 - Updated frontend cards (`FollowerGrowthCard`, `ExecutiveHero`, `dashboard-transformers`) with dynamic period labeling and faithful metrics.
-- Added comprehensive unit test suite `backend/src/dashboard-follower-growth.spec.ts` (5 tests passing). Verified 1095 backend tests, backend build, 243 frontend tests, and frontend build.
+- Removed misleading "95% Retained" / "Retention" badges and phrasing. Follower acquisition breakdown clearly presents New Followers vs New Blocks / Net Growth Breakdown.
+- Added frontend test suite `frontend/test/dashboard-follower-terminology.test.mts` (5 tests passing).
+- Added comprehensive unit test suite `backend/src/dashboard-follower-growth.spec.ts` (5 tests passing). Verified 1095 backend tests, backend build, 248 frontend tests, and frontend build.

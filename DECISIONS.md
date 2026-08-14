@@ -1,3 +1,8 @@
+# Phase 4C.4.2 cancellable scroll commands (2026-08-14)
+
+- Scroll commands carry a generation token. User-directed movement invalidates pending initial or bottom auto-scroll callbacks, preventing stale post-frame work from overriding the reading position.
+- Pagination restoration remains separately guarded as programmatic work and continues to preserve the pre-fetch offset.
+
 # Phase 4C.4.1 initial scroll pagination guard (2026-08-14)
 
 - Older-message pagination is disabled during initial conversation landing and enabled only after content dimensions and the bounded initial scroll routine complete.
