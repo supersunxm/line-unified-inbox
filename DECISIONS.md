@@ -1,3 +1,31 @@
+# TikTok OAuth State Validation and Cookie Consumption (2026-08-14)
+
+- **Timing-Safe State Validation**: The callback route `/tiktok/callback` validates the returned `state` parameter against the HttpOnly `tiktok_oauth_state` cookie using Node's `crypto.timingSafeEqual` to prevent side-channel timing attacks.
+- **State Consumption and Anti-Replay**: The `tiktok_oauth_state` cookie is consumed and deleted upon callback invocation via `consumeTikTokOAuthStateAction`, preventing state reuse or replay attacks.
+- **Security Messaging Invariant**: If state validation fails (missing state, missing cookie, or mismatched state), the callback displays a generic, safe error message (*"Unable to verify the TikTok authorization request. Please start the connection again."*) without exposing either state value in the response or logs.
+
+# TikTok OAuth Connect Entry Architecture and Scoped Authorization (2026-08-14)
+
+- **Server-Side Authorization Construction**: The TikTok OAuth initiation flow is orchestrated via a Next.js Server Action (`initiateTikTokOAuthAction`) at `/tiktok/connect`. All authorization URL parameters (`client_key`, `redirect_uri`, `scope`, `response_type=code`, `state`) are constructed server-side to prevent client-side parameter tampering.
+- **Cryptographic State Protection**: OAuth `state` is generated using a 32-byte cryptographic random generator and persisted in an HttpOnly, secure, SameSite=Lax cookie (`tiktok_oauth_state`) for CSRF validation during callback processing.
+- **Scoped Read-Only Transparency**: Scopes are strictly limited to read-only monitoring (`user.info.basic`, `user.info.profile`, `user.info.stats`, `video.list`). Publishing or modifying capabilities are deliberately excluded.
+
+# TikTok OAuth Callback Foundation and Security Isolation (2026-08-14)
+
+- **Public Callback Isolation**: The TikTok OAuth callback route is implemented as a standalone public route at `/tiktok/callback` (`frontend/src/app/tiktok/callback/page.tsx`). It safely processes incoming query parameters (`code`, `state`, `error`, `error_description`) via React Suspense and client hooks.
+- **Strict Credential & Code Non-Exposure**: Authorization codes, client secrets, and access tokens are never rendered to the DOM, exposed in client bundles, or logged to the browser console. Token exchange logic is deferred exclusively to server-side backend routines when backend TikTok integration is activated.
+- **Search Engine Indexing Prevention**: The route explicitly specifies `robots: { index: false, follow: false }` to prevent indexing of authorization callbacks.
+
+# Public Privacy Policy Architecture for Developer App Compliance (2026-08-14)
+
+- **Public Route Isolation**: The Privacy Policy page is implemented as an unauthenticated static Next.js App Router route (`/privacy`) at `frontend/src/app/privacy/page.tsx`. It provides official data privacy, storage, and retention documentation required for third-party platform developer app reviews (e.g. TikTok Developer App review).
+- **Navigation Independence**: The route is completely decoupled from the internal application navigation shell (`TopNavigation`) and authentication lifecycle (`ApplicationWorkspace`), ensuring zero side effects on internal LINE OA monitoring flows, navigation layout, or session state.
+
+# Public Terms of Service Architecture for Developer App Compliance (2026-08-14)
+
+- **Public Route Isolation**: The Terms of Service page is implemented as an unauthenticated static Next.js App Router route (`/terms`) at `frontend/src/app/terms/page.tsx`. It provides official legal and operational documentation required for third-party platform developer app reviews (e.g. TikTok Developer App review).
+- **Navigation Independence**: The route is completely decoupled from the internal application navigation shell (`TopNavigation`) and authentication lifecycle (`ApplicationWorkspace`), ensuring zero side effects on internal LINE OA monitoring flows, navigation layout, or session state.
+
 # Top Navigation Layout Ownership and Click Target Resolution (2026-08-14)
 
 - **Layout Ownership Invariant**: The right-side controls (`app-header-controls`) and the search wrapper (`ResponsiveSearch`) must only occupy their intrinsic interactive width (`shrink-0` and `ml-auto`) rather than using unbounded flex expansion (`lg:flex-1`). This ensures no transparent or invisible flex containers overlap sibling navigation links in the stacking context.
@@ -7,6 +35,80 @@
 
 - Centralize presentation tokens and Material 3 theme configuration before screen redesign so visual changes do not alter authentication, realtime, notification, pagination, or message state behavior.
 - Keep reusable widgets presentation-only and callback-driven. Feature pages remain responsible for their existing state and repository interactions until later UX phases extract them incrementally.
+
+# Phase 6B modern Inbox presentation (2026-08-14)
+
+- Keep Inbox data ownership and realtime behavior in `InboxPage`; extract only visual conversation cards, previews, filter/search presentation, and connection status indicators.
+- Filter chips and search are intentionally visual-only in this phase. They do not alter repository queries or conversation state until a later interaction/API phase.
+
+# Phase 6C.1 chat presentation components (2026-08-14)
+
+- Extract only stateless rendering from `ChatPage`: `ConversationHeader` owns the existing app-bar presentation and `MessageBubble` owns bubble layout, timestamp, sender, footer, and retry presentation.
+- Keep ChatPage as the owner of message state, realtime events, pagination, scroll commands, optimistic sends, media loading, notification cleanup, and unread handling. The extracted widgets receive data and callbacks only.
+
+# Phase 6C.2 image presentation component (2026-08-14)
+
+- `ImageBubble` owns only image visual states and the fixed 240×240 container. It receives the current media snapshot and bytes from ChatPage and invokes a callback for viewer navigation.
+- Media fetching, byte caching, processing-state ownership, media.updated handling, and viewer route ownership remain in ChatPage.
+
+# Phase 6C.3 chat composer presentation component (2026-08-14)
+
+- `ChatComposer` owns only the safe-area layout and controls for text entry, image attachment, and sending. It receives the existing `TextEditingController` and callback functions from ChatPage and never disposes or mutates the controller.
+- Optional disabled/loading flags are presentation-only. ChatPage remains the owner of send/image methods, retries, idempotency, optimistic messages, repository calls, and all state transitions.
+
+# Phase 6C.4 message timeline presentation component (2026-08-14)
+
+- `MessageTimeline` owns only list layout, date separators, pending placement, image/message presentation, and the top-scroll notification bridge. It receives the existing controller and delegates pagination, user-scroll invalidation, media loading, retry, and image-opening callbacks.
+- ChatPage remains the owner of ScrollController lifecycle, `_scrollGeneration`, `_programmaticScroll`, initial landing, `_loadOlder`, SSE handling, message state, media bytes/cache, and all mutations.
+
+# Phase 6C.5 conversation header enhancement (2026-08-14)
+
+- Keep `ConversationHeader` stateless and callback-driven while enriching its presentation with the existing customer/store/status data. The More actions control is intentionally a placeholder until a product action is defined.
+- Existing back/profile navigation callbacks and ChatPage read/notification behavior remain untouched.
+
+# Phase 6C.6 quick reply presentation component (2026-08-14)
+
+- `QuickReplyPanel` is presentation-only: it renders loading, empty, and selectable suggestion states and reports selection through a callback.
+- ChatComposer exposes the panel only through optional disabled-by-default inputs. No AI service, repository, backend endpoint, or message-send behavior is introduced in this phase.
+
+# Phase 6D app shell/profile audit (2026-08-14)
+
+- Keep `LineOaApp` responsible for authentication restore/session expiry, Firebase/bootstrap, realtime and notification service lifecycle, and logout cleanup during the first shell migration.
+- Extract an `AuthenticatedShell` only around the authenticated Inbox/Chat/Profile route composition. Keep repositories and lifecycle callbacks injected from the app coordinator; do not duplicate connections or move authorization into presentation navigation.
+- Split Profile presentation into account, memberships, settings, and admin-tools sections incrementally while retaining backend role enforcement and existing approval/logout callbacks.
+
+# Phase 6D.1 AuthenticatedShell extraction (2026-08-14)
+
+- `AuthenticatedShell` owns authenticated page composition and route pushes while continuing to use the existing root Navigator and `MaterialPageRoute` architecture.
+- `LineOaApp` remains the sole owner of auth/session state, repositories, realtime and notification services, logout cleanup, session expiry, and the notification callback that delegates conversation opening to the shell.
+
+# Phase 6D.2 profile presentation sections (2026-08-14)
+
+- ProfilePage remains the callback/data coordinator while stateless widgets own account, membership, settings placeholder, header, and admin-tool presentation.
+- Settings has no persistence or side effects in this phase. Admin tool visibility remains convenience UI only; backend authorization remains authoritative.
+
+# Phase 6E customer profile boundary (2026-08-14)
+
+- Keep `Customer` as the owner of LINE identity/profile data, `Conversation` as the owner of store-scoped status and context, and `Message` as the owner of communication history. A mobile CustomerProfileSheet should initially consume the existing conversation payload and avoid duplicating CRM state.
+- Rich fields (`pictureUrl`, status message, language, profile fetch state), name history, events, and intelligence exist in web/customer APIs but are not part of the mobile detail contract. Any mobile expansion must add a store-authorized, minimal profile endpoint rather than calling the current customer endpoints directly.
+- Do not expose raw LINE user IDs, webhook payloads, credentials, or profile fetch errors to the mobile UI. Treat customer CRM attributes (contact details, consent, lifecycle, tags, ownership, purchase history) as a later bounded schema/API phase.
+
+# Phase 6E.1 customer profile sheet (2026-08-14)
+
+- Keep the first mobile customer context surface local to the loaded `ConversationDetail`. The sheet uses only display name, store context, reply status, unread count, loaded message count, and latest message time.
+- Open the sheet from the existing header profile callback. It has no repository, API, read-state, notification, or chat-state responsibilities.
+
+# Phase 6F AI Quick Reply boundary (2026-08-14)
+
+- Treat the existing AI modules as deterministic analytics/classification and operational recommendation capabilities. They are not a generative reply engine and do not provide RAG or vector retrieval.
+- Quick replies must be generated server-side from an authorized, bounded conversation context and grounded product/store knowledge. Flutter only renders suggestions and inserts a selected draft into the existing composer; it never sends automatically.
+- Customer messages are untrusted prompt data. Enforce store authorization, provider isolation, structured-output validation, rate/cost limits, audit telemetry, and explicit BM approval before using the existing outbound message API.
+
+# AI Quick Reply product specification (2026-08-14)
+
+- Position Quick Reply as a BM copilot that drafts grounded responses; it never becomes an autonomous customer-facing agent in the MVP.
+- Optimize first for faster, safer first responses in a small set of retail intents. Unknown, stale, transactional, or policy-sensitive questions must produce a cautious clarification or human-escalation draft rather than an asserted answer.
+- Treat approved product/store/policy sources as authoritative and preserve the existing outbound send path, UUID idempotency, authorization, and audit requirements.
 
 # Phase 4C.4.2 cancellable scroll commands (2026-08-14)
 
@@ -508,3 +610,45 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
   2. Growth Metrics (New Followers, Blocked, Net Growth) are computed via delta comparison between target date and baseline date (`today - 1d` for today, `today - 7d` for 7d, `today - 30d` for 30d) strictly for comparable accounts where both target and baseline ready snapshots exist.
   3. Accounts with missing baseline snapshots are excluded from growth deltas (never assumed to have 0 baseline or 0 delta) while remaining included in total stock.
   4. Follower Insights `getSummary` range query now includes the preceding day baseline to guarantee valid `dailyIncrease` for single-day and range start dates.
+
+# AI Quick Reply architecture (2026-08-14)
+
+- Quick Reply is a conversation-scoped, on-demand draft capability. It never sends autonomously; BM edits/selects a suggestion and the existing authorized mobile reply endpoint performs the send and idempotency handling.
+- Authorization is resolved server-side with `StoreAccessService.assertConversationAccess`; client-supplied store IDs and LINE OA IDs are not accepted as scope inputs. ADMIN has global access, while active BM/STAFF memberships are limited to active assigned stores.
+- Providers are hidden behind an injection token/interface. The deterministic provider is the production-safe MVP and mandatory fallback; a future LLM adapter may be selected by server-side configuration without changing context, DTO, safety, or send boundaries.
+- Context is bounded and grounded in authorized recent messages, classification/product catalog data, and approved store facts. Raw webhook payloads, credentials, tokens, full unbounded history, and unmasked LINE identifiers are excluded.
+- Existing `AuditLog` is reused for Quick Reply lifecycle actions. Audit writes are best effort and metadata contains IDs, provider/version, source types, latency, risk flags, and outcomes—not prompts, customer text, secrets, or full suggestion bodies.
+
+# AI Quick Reply data contracts (2026-08-14)
+
+- The public API returns only bounded draft suggestions and a `contextMessageId`; the full authorized `QuickReplyContext` is an internal provider contract and is never accepted from the client.
+- Suggestions are transient, server-issued IDs with an expiry and are always drafts. Sending continues through the existing mobile conversation reply endpoint, preserving its authorization and idempotency behavior.
+- Provider output passes through a safety contract that can filter candidates or invoke deterministic fallback. The feature configuration is server-owned, disabled by default, and clamps client-requested locale/count values.
+- Quick Reply audit events map to the existing `AuditLog` action/metadata shape for MVP. Metadata excludes raw prompts, customer text, suggestion bodies, tokens, and credentials; a dedicated event table is deferred until query volume justifies a migration.
+
+# AI Quick Reply context builder (2026-08-14)
+
+- Context is assembled only after `StoreAccessService.assertConversationAccess` resolves the conversation's store. The builder is read-only and does not trust client store, LINE OA, customer, or message identifiers.
+- Message context is bounded and newest-focused, with a small recent window plus the triggering inbound message. Images and other non-text messages contribute type/status metadata, not storage URLs or raw payloads.
+- Product and policy facts follow a strict precedence: approved store/policy data, verified catalog data, then classification signals. Missing or stale facts produce clarification/handoff drafts instead of guessed claims.
+- A canonical context version is derived from conversation/message IDs, timestamps, locale, source versions, and fact versions. It supports cache keys and stale-suggestion rejection without hashing or storing raw customer content.
+
+# AI Quick Reply deterministic MVP implementation (2026-08-14)
+
+- The endpoint is disabled unless `AI_QUICK_REPLY_ENABLED=true`; server configuration clamps locale/count/TTL values and no client flag can enable it.
+- `QuickReplyContextBuilder` performs conversation access authorization before bounded Prisma reads. It does not call the mutating full-history classifier or broad customer-intelligence analysis on request.
+- `DeterministicQuickReplyProvider` returns editable drafts only. Product drafts require persisted active catalog matches; otherwise a safe human-handoff draft is returned. `QuickReplySafetyService` rejects empty, ungrounded, malformed, or high-risk candidates.
+- Suggestions never call LINE or mutate messages. BM delivery continues through the existing mobile reply endpoint. Audit events reuse `AuditLogService`; no migration is required.
+
+# AI Quick Reply production hardening (2026-08-14)
+
+- Generation responses carry a SHA-256 context version derived from bounded authorized context inputs. Lifecycle telemetry is accepted only for a still-valid process-local generation owned by the authenticated user and conversation, with a fresh context-version comparison; stale or expired events return 409 and are not audited as accepted.
+- Quick Reply generation uses the existing `AuthRateLimitBucket` atomic upsert with a per-user one-minute key. This avoids a schema change and works across replicas as long as the existing rate-limit migration is deployed.
+- Safety validation rejects prompt-injection text, URLs/contact-like output, control characters, excessive lines/length, ungrounded claims, and unsupported catalog claims. A deterministic human-handoff fallback remains mandatory; suggestions are never sent automatically.
+- Metrics are intentionally process-local counters plus safe structured logs for this MVP. A durable metrics backend and shared generation store (Redis or a dedicated table) remain future work for multi-replica lifecycle analytics; a restarted replica safely rejects old lifecycle events instead of accepting stale data.
+
+# Flutter AI Quick Reply integration (2026-08-14)
+
+- Quick Reply is enabled at the authenticated shell boundary but remains server-gated by `AI_QUICK_REPLY_ENABLED`; a disabled backend returns an actionable composer error with retry rather than affecting chat loading.
+- ChatPage keeps ownership of all conversation/realtime/pagination/scroll/send state. Quick Reply state is additive composer state only; selecting a suggestion replaces the text-field draft and never invokes the send API.
+- Backend lifecycle events are sent for SHOWN, SELECTED, and EDITED. SENT is logged locally as a non-sensitive client signal because adding a new backend lifecycle enum would violate this phase's no-backend-change constraint; successful delivery still goes through the existing reply endpoint.

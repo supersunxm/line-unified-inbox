@@ -1,5 +1,96 @@
 # AI progress
 
+## Current task: TikTok OAuth State Validation and Cookie Consumption
+
+- **Route & Architecture**:
+  - Enhanced `/tiktok/callback` in `frontend/src/app/tiktok/callback/page.tsx`, `tiktok-callback-view.tsx`, and `tiktok-callback-validator.ts`.
+  - Implemented server-side timing-safe state comparison via `timingSafeStringEqual` and `validateTikTokOAuthState` in `tiktok-callback-validator.ts`.
+  - Added server action `consumeTikTokOAuthStateAction` in `frontend/src/app/tiktok/callback/actions.ts` to immediately clear/expire the `tiktok_oauth_state` HttpOnly cookie upon callback processing to prevent replay attacks.
+- **Validation & Security**:
+  - Rejects callbacks with missing state query parameter, missing `tiktok_oauth_state` cookie, or mismatched state values.
+  - Renders user-friendly security message: *"Unable to verify the TikTok authorization request. Please start the connection again."*
+  - State values and authorization codes are strictly NEVER exposed to client-side DOM, window properties, or console logs.
+  - Maintained safe error mapping for TikTok platform errors and preserved absence of client secrets.
+- **Verification**:
+  - Added test suite in `frontend/test/tiktok-callback.test.mts` validating matching state, missing query state, missing cookie state, mismatched state, safe user-facing messaging, cookie clearance, and non-exposure of codes/states (289/289 tests passing across 38 test files).
+  - Next.js Turbopack build verified dynamic route generation `ƒ /tiktok/callback` alongside static routes `○ /tiktok/connect`, `○ /terms`, and `○ /privacy`.
+
+## Current task: TikTok OAuth Connect Entry Page
+
+- **Route & Architecture**:
+  - Implemented public OAuth initiation page at `/tiktok/connect` in `frontend/src/app/tiktok/connect/page.tsx`, `connect-form.tsx`, `actions.ts`, and `tiktok-oauth.ts`.
+  - Configured Next.js App Router metadata with title `Connect TikTok Account | OPPO Retail TikTok Monitor` and `robots: { index: false, follow: false }`.
+  - Documented server-side environment variables `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, and `TIKTOK_REDIRECT_URI=https://lineoppo.click/tiktok/callback` in `frontend/.env.example`.
+- **OAuth Preparation & Security**:
+  - Server action `initiateTikTokOAuthAction` reads `TIKTOK_CLIENT_KEY` and `TIKTOK_REDIRECT_URI` strictly on the server.
+  - Generates a 64-character cryptographically secure OAuth state (`generateOAuthState`) and stores it in an HttpOnly, secure, SameSite=Lax cookie (`tiktok_oauth_state`).
+  - Constructs TikTok OAuth authorization URL requesting read-only scopes: `user.info.basic,user.info.profile,user.info.stats,video.list`.
+  - UI clearly states that the application only requests read-only monitoring and does not request permission to publish, edit, or delete videos.
+  - `TIKTOK_CLIENT_SECRET` is never exposed to client-side code or bundles; missing credentials fail safely with an informative configuration message.
+- **Verification**:
+  - Added unit, integration, and security test suite in `frontend/test/tiktok-connect.test.mts` (286/286 tests passing across 38 test files).
+  - Next.js Turbopack build verified static route generation `○ /tiktok/connect` (0 errors, clean build).
+
+## Current task: TikTok OAuth Callback Foundation
+
+- **Route & Architecture**:
+  - Implemented public OAuth callback route at `/tiktok/callback` in `frontend/src/app/tiktok/callback/page.tsx`, `tiktok-callback-view.tsx`, and `tiktok-callback-utils.ts`.
+  - Configured Next.js App Router metadata with title `TikTok Authorization | OPPO Retail TikTok Monitor` and `robots: { index: false, follow: false }` to prevent search engine indexing.
+  - Wrapped search params consumer inside React `<Suspense>` boundary for static page prerendering compatibility.
+- **Behavior & Security**:
+  - Handles 3 distinct callback states:
+    1. **Code Received (Success/Pending)**: Displays clean confirmation that authorization was received and is pending server-side verification; authorization codes and tokens are strictly NOT rendered on screen or logged to browser console.
+    2. **Error Received**: Uses `getSafeTikTokErrorMessage` to map standard OAuth error codes (`access_denied`, `invalid_scope`, `unauthorized_client`, `server_error`, `temporarily_unavailable`) to safe human-readable messages without exposing raw payloads or stack traces.
+    3. **Missing Parameters (Invalid)**: Displays an invalid request message directing users to initiate authorization from the dashboard.
+  - No client secrets, tokens, or hardcoded TikTok credentials exist in the client bundle.
+- **Verification**:
+  - Added test suite in `frontend/test/tiktok-callback.test.mts` verifying route existence, metadata, robots tag, error mapping, state rendering, security invariants, and separation from `TopNavigation` (275/275 tests passing across 37 test files).
+  - Next.js Turbopack build verified static route generation `○ /tiktok/callback` (0 errors, clean build).
+
+## Current task: Public Privacy Policy Page for OPPO Retail TikTok Monitor
+
+- **Route & Architecture**:
+  - Implemented standalone public page at `/privacy` in `frontend/src/app/privacy/page.tsx`.
+  - Configured Next.js App Router metadata with title `Privacy Policy | OPPO Retail TikTok Monitor` and description tailored for TikTok Developer App review.
+  - Rendered public legal documentation without requiring user authentication and without altering existing LINE OA pages or navigation headers.
+- **Content & Coverage**:
+  - Included all 11 policy sections matching developer app review requirements:
+    1. Information We Collect (account identifiers, profile info, follower/following count, likes, video metrics, OAuth tokens)
+    2. How We Collect Information (TikTok Login Kit, authorized APIs with explicit operator consent)
+    3. How We Use Information (internal operations monitoring, store-level analytics, content tracking, reporting)
+    4. Data Sharing (data is not sold, not shared with advertisers, authorized internal use/legal compliance only)
+    5. Data Storage and Security (reasonable technical and organizational security measures, secure backend token storage, no frontend exposure)
+    6. Data Retention (retained only as long as necessary, deleted or anonymized when no longer required)
+    7. Account Disconnection and Data Deletion (self-serve disconnection, deletion requests via `obsthailand@gmail.com`)
+    8. Third-Party Services (integration with TikTok and governing platform policies)
+    9. User Rights and Requests (access, correction, deletion via `obsthailand@gmail.com`)
+    10. Changes to This Privacy Policy
+    11. Contact Information (`obsthailand@gmail.com`, `https://lineoppo.click`)
+- **Verification**:
+  - Added unit and regression test suite in `frontend/test/privacy-policy.test.mts` (269/269 tests passing across 36 test files).
+  - Next.js Turbopack build verified static route generation `○ /privacy` alongside `○ /terms` (0 errors, clean build).
+
+## Current task: Public Terms of Service Page for OPPO Retail TikTok Monitor
+
+- **Route & Architecture**:
+  - Implemented standalone public page at `/terms` in `frontend/src/app/terms/page.tsx`.
+  - Configured Next.js App Router metadata with title `Terms of Service | OPPO Retail TikTok Monitor` and description tailored for TikTok Developer App review.
+  - Rendered public legal documentation without requiring user authentication and without altering existing LINE OA pages or navigation headers.
+- **Content & Coverage**:
+  - Included all 9 policy sections required for developer app verification:
+    1. Purpose of Service
+    2. Authorized Use
+    3. TikTok Account Authorization (OAuth 2.0 and scoped permissions)
+    4. Data Usage (internal retail operations only, encryption, no third-party resale/sharing, retention & deletion)
+    5. User Responsibilities
+    6. Service Availability
+    7. Limitation of Liability
+    8. Changes to These Terms
+    9. Contact (`obsthailand@gmail.com`, `https://lineoppo.click`)
+- **Verification**:
+  - Added unit and regression test suite in `frontend/test/terms-of-service.test.mts` (259/259 tests passing).
+  - Next.js Turbopack build verified static route generation `○ /terms` (0 errors, clean build).
+
 ## Current task: Fix Top Navigation Click Target & Pointer Event Interception
 
 - **Root Cause Analysis**:
@@ -16,12 +107,94 @@
   - Ran headless Chrome DevTools CDP layout and click simulation across viewports (1920, 1680, 1600, 1536, 1440, 1366, 1280, 1024, 900, 768, 640) in both Thai and English: 100% of visible navigation links and buttons are directly clickable with `topElement === linkElement` and `isClickableDirectly === true`.
   - All 253 frontend unit and regression tests passing cleanly (`npm --prefix frontend test`).
   - Next.js Turbopack production build clean (`npm --prefix frontend run build`).
-
+## Current task: Phase 6A Design System Foundation
 
 - Added centralized Flutter design tokens for colors, spacing, typography, and Material 3 theme configuration under `android_app/lib/core/theme/`.
 - Added reusable presentation-only widgets under `android_app/lib/core/widgets/`: scaffold/top bar, status and unread badges, avatar/store badge, and loading/empty/error states.
 - Wired `LineOaApp` to use `AppTheme.light()` without changing repositories, realtime handling, notification handling, or feature state.
 - Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and `git diff --check` passed.
+
+## Current task: Phase 6B Modern Inbox Redesign
+
+- Added presentation-only conversation cards, previews, search visual, filter chips, and realtime status indicator under `android_app/lib/features/inbox/widgets/`.
+- Replaced Inbox `ListTile` rendering with the new card layout while preserving existing SSE patching, unread reconciliation, pagination, pull-to-refresh, and open-conversation callbacks.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6C.1 Chat presentation components
+
+- Extracted the existing conversation header and message bubble rendering into stateless `ConversationHeader` and `MessageBubble` widgets under `android_app/lib/features/chat/widgets/`.
+- ChatPage retains all state, realtime handling, scrolling, pagination, sending, media fetching, notification cleanup, and unread behavior; the extraction only delegates rendering and callbacks.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), the debug APK build completed successfully, and the scoped diff check passed.
+
+## Current task: Phase 6C.2 ImageBubble presentation component
+
+- Extracted image placeholder, fixed 240×240 layout, processing states, and the image-open gesture into the stateless `ImageBubble` widget.
+- ChatPage remains responsible for media fetching, byte cache, processing snapshots, viewer navigation callback, and all realtime/state behavior.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6C.3 ChatComposer presentation component
+
+- Extracted the existing safe-area composer row, text field, attachment action, and send action into the stateless `ChatComposer` widget.
+- The widget receives ChatPage's existing controller and callbacks; optional enabled/attaching/sending flags provide presentation states without owning API, idempotency, retry, or optimistic-message logic.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6C.4 MessageTimeline presentation component
+
+- Extracted the message list, date separators, older-loading indicator, regular message rendering, and pending-message placement into `MessageTimeline`.
+- ChatPage retains ScrollController ownership, scroll-generation/programmatic guards, initial-scroll stabilization, `_loadOlder`, SSE/state mutation, media fetching, retry callbacks, and image navigation callbacks.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6C.5 ConversationHeader enhancement
+
+- Enhanced the stateless conversation header with the existing customer avatar, store badge/code, BM reply status badge, profile action, and a presentation-only More actions placeholder.
+- ChatPage still owns navigation callbacks, read marking, notification cleanup, realtime state, and all chat behavior; only existing `ConversationDetail` fields are used.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6C.6 QuickReplyPanel presentation component
+
+- Added the reusable, stateless `QuickReplyPanel` with disabled, loading, empty, and suggestion-chip presentations.
+- Integrated it into `ChatComposer` behind optional, disabled-by-default inputs. It emits only the supplied selection callback and has no AI/API/repository or send-state behavior.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6D App Shell and Profile audit
+
+- Audited `main.dart`, `ProfilePage`, Inbox/Chat/Profile/Admin Approval navigation, authentication restore, realtime lifecycle, notification lifecycle, and back behavior.
+- Recommended an `AuthenticatedShell` extraction that preserves app-level auth/service ownership and moves only authenticated route composition/profile section presentation behind a safe callback boundary.
+- No application code changed; implementation is awaiting approval.
+
+## Current task: Phase 6D.1 AuthenticatedShell extraction
+
+- Added `AuthenticatedShell` for authenticated Inbox, Chat, Profile, and Admin Approval composition and route entry points using the existing root Navigator.
+- `main.dart` retains Firebase/bootstrap, auth restore, token/session expiry, realtime and notification lifecycle, logout cleanup, and notification deep-link delegation.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6D.2 Profile presentation sections
+
+- Split ProfilePage presentation into `ProfileHeader`, `AccountSection`, `MembershipSection`, `SettingsSection`, and `AdminToolsSection` under `features/profile/widgets/`.
+- ProfilePage remains responsible for the CurrentUser snapshot, logout callback, and approval callback. Admin visibility remains a UI convenience; no authorization or navigation behavior changed.
+- Verification: `flutter analyze` passed, `flutter test` passed (28 tests), and the debug APK build completed successfully.
+
+## Current task: Phase 6E Customer Profile audit
+
+- Audited mobile conversation/customer payloads, Prisma Customer/Conversation/Message ownership, existing customer endpoints, LINE profile synchronization, and Flutter detail models.
+- Version 1 can present existing customer name, initials/avatar fallback, assigned store, reply status, conversation metadata, and message-derived context. Rich profile fields and customer intelligence require a store-authorized customer-profile contract before mobile use.
+- No application code or API behavior changed; no tests were required for this audit.
+
+## Current task: Phase 6E.1 Customer Profile sheet
+
+- Added a presentation-only `CustomerProfileSheet` using the existing ConversationDetail name, store, reply status, unread count, loaded messages, and latest message timestamp.
+- Wired the existing ConversationHeader profile action to open the sheet. No backend calls, customer IDs, LINE IDs, chat state, read state, or notification behavior changed.
+
+## Current task: Phase 6F AI Quick Reply audit
+
+- Audited backend AI modules, deterministic classification/product intelligence, dashboard recommendations, operational memory, mobile conversation context, and the Flutter QuickReplyPanel.
+- No generative provider, RAG/vector retrieval layer, quick-reply API, suggestion persistence, or BM approval workflow currently exists. QuickReplyPanel remains a disabled-by-default presentation component.
+- No application code or API behavior changed; the next phase should introduce an authorized, backend-owned, human-reviewed suggestion boundary.
+
+## Current task: AI Quick Reply product specification
+
+- Defined the BM journey, grounded assistance scenarios, supported and high-risk intents, source precedence, human approval requirements, safety rules, MVP boundaries, success metrics, and future roadmap.
+- This is a product specification only; no implementation code, API, schema, or provider configuration changed.
 
 ## Current task: Store Master ID Propagation Across Web App and Exports
 
@@ -884,3 +1057,39 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Removed misleading "95% Retained" / "Retention" badges and phrasing. Follower acquisition breakdown clearly presents New Followers vs New Blocks / Net Growth Breakdown.
 - Added frontend test suite `frontend/test/dashboard-follower-terminology.test.mts` (5 tests passing).
 - Added comprehensive unit test suite `backend/src/dashboard-follower-growth.spec.ts` (5 tests passing). Verified 1095 backend tests, backend build, 248 frontend tests, and frontend build.
+
+# Current task: Phase 6F.1 AI Quick Reply architecture design
+
+- Defined a conversation-scoped `AiQuickReplyModule` boundary with a server-side feature gate, `StoreAccessService` authorization, bounded context builder, replaceable provider token, deterministic MVP provider, safety/grounding validator, and non-blocking audit/telemetry.
+- Preserved the existing `POST /mobile/conversations/:id/messages` reply contract as the only send path; quick replies remain editable drafts and never send autonomously.
+- Specified DTOs, provider lifecycle, context exclusions, audit actions, staged feature flags, deterministic fallback behavior, and an adapter path for a future LLM provider. No application code or schema was changed in this design phase.
+
+# Current task: Phase 6F.2 Quick Reply data contract design
+
+- Defined public generation/response DTOs and internal context/provider/safety contracts without adding a route implementation or migration.
+- Contracts require conversation-scoped store authorization, server-derived context, transient suggestion identifiers, non-autonomous sending through the existing reply API, safe standardized errors, and server-only feature configuration.
+
+# Current task: Phase 6F.3 Quick Reply context builder design
+
+- Defined a read-only, conversation-scoped context retrieval flow that authorizes with `StoreAccessService` before loading messages, store facts, catalog signals, or customer-derived context.
+- Set bounded message/fact limits, deterministic product-fact precedence, missing-data fallback behavior, context version hashing, and unit-test scenarios. No source code or schema changes were made.
+
+# Current task: Phase 6F.4 deterministic Quick Reply backend implementation
+
+- Added the feature-gated Nest `QuickReplyModule` and `POST /mobile/conversations/:id/quick-replies` route. Context is built from an authorization-checked conversation with bounded recent messages, persisted classification, active catalog models, and safe Store Master facts.
+- Added deterministic Thai/English/Chinese draft generation, safety filtering with handoff fallback, transient suggestion IDs/expiry/context version, and best-effort `AuditLogService` lifecycle events. No LINE send logic, message mutation, LLM provider, or Prisma migration was added.
+- Focused Quick Reply tests pass (8/8), full backend tests pass (1102/1102), changed-file ESLint passes, backend build passes, and `git diff --check` passes. Full repository lint still reports pre-existing errors outside this change. Local HTTP startup reached route registration but was blocked by the existing missing `MassMessageCampaign` table / unavailable local PostgreSQL; no unrelated migration was applied.
+
+# Current task: Phase 6F.5 Quick Reply production hardening (2026-08-14)
+
+- Added canonical context-version checks and transient generation records. Lifecycle events use `POST /mobile/conversations/:id/quick-replies/events`, require the issuing user/conversation/generation and context version, and fail closed with 409 when stale or expired.
+- Added a database-backed per-user minute bucket using the existing `AuthRateLimitBucket` table, so generation limits remain atomic across backend instances without a new migration. Added process-local aggregate metric hooks and safe structured metric logs without suggestion/customer content.
+- Hardened candidate safety checks for prompt injection, sensitive URLs/contact-like output, control characters, line/count limits, grounding, and catalog evidence. Added a small synthetic evaluation dataset and focused regressions for lifecycle, stale context, rate limiting, evaluation expectations, and safety fallback.
+- Focused Quick Reply tests pass 12/12; full backend tests pass 1107/1107; Prisma validation, Quick Reply ESLint, backend build, and `git diff --check` pass. Full repository lint remains blocked by 153 pre-existing errors outside this change. No Prisma migration was added.
+- Runtime HTTP verification remains blocked by the repository's existing local database/schema issue (`MassMessageCampaign` missing / PostgreSQL unavailable); no unrelated migration or data change was applied.
+
+# Current task: Phase 6F.6 Flutter AI Quick Reply integration (2026-08-14)
+
+- Added typed mobile Quick Reply generation/lifecycle contracts for the existing backend routes. ChatPage now loads suggestions without replacing conversation detail state, renders them through the existing ChatComposer/QuickReplyPanel seam, inserts a selected draft into the composer, and handles retry/error states without touching realtime, pagination, unread, or scroll ownership.
+- SHOWN, SELECTED, and EDITED telemetry use the backend lifecycle endpoint. SENT is recorded as a local safe lifecycle signal because the deployed backend contract intentionally has no SENT event; the existing reply API remains the only send path.
+- Added Flutter regressions for response parsing, suggestion display/selection/edit/send, and retry behavior. Flutter analyze, full Flutter tests (31), production-configured debug APK build, and `git diff --check` pass.
