@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { TIKTOK_OAUTH_STATE_COOKIE } from "../connect/tiktok-oauth";
+import {
+  TIKTOK_OAUTH_STATE_COOKIE,
+  getPublicAppUrl,
+} from "../connect/tiktok-oauth.ts";
 import {
   logTikTokCallbackDiagnostic,
   processTikTokCallbackParams,
   timingSafeStringEqual,
-} from "./tiktok-callback-validator";
+} from "./tiktok-callback-validator.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +48,9 @@ export async function GET(request: NextRequest) {
     cookieState,
   });
 
-  // Build clean result destination URL without leaking code or state
-  const resultUrl = new URL("/tiktok/callback/result", request.url);
+  // Build clean result destination URL using configured public application origin
+  const publicOrigin = getPublicAppUrl();
+  const resultUrl = new URL("/tiktok/callback/result", publicOrigin);
 
   if (validationResult.status === "SUCCESS") {
     resultUrl.searchParams.set("status", "success");

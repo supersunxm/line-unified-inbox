@@ -1,5 +1,15 @@
 # AI progress
 
+## Current task: Public Origin for OAuth Callback Result Redirect
+
+- **Route & Architecture**:
+  - Implemented `getPublicAppUrl` in `frontend/src/app/tiktok/connect/tiktok-oauth.ts` resolving `NEXT_PUBLIC_APP_URL` or falling back to `https://lineoppo.click`, while rejecting internal container hosts (`0.0.0.0`, `localhost`).
+  - Updated `/tiktok/callback/route.ts` and `/api/tiktok/authorize/route.ts` to construct destination redirect URLs (`/tiktok/callback/result`, `/tiktok/connect`) using the public application origin rather than `request.url` / `request.nextUrl`, preventing internal Railway container address exposure (`http://0.0.0.0:8080`).
+  - Documented `NEXT_PUBLIC_APP_URL=https://lineoppo.click` in `frontend/.env.example`.
+- **Verification**:
+  - Added test cases in `frontend/test/tiktok-callback.test.mts` validating public origin resolution, absence of `0.0.0.0` or `localhost`, and uniform redirect construction across all callback outcomes (294/294 tests passing across 38 test files).
+  - Next.js Turbopack build verified clean build.
+
 ## Current task: Resolve TikTok OAuth Callback Double-Processing Bug
 
 - **Root Cause Resolution**:
@@ -1123,8 +1133,8 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Kept ChatPage ownership and all repository, API, SSE, pagination, scroll, send, unread, media, and notification behavior unchanged. Existing ActionChip/Retry semantics remain available for accessibility and regression coverage.
 - Flutter analyze, full Flutter tests (31), production-configured debug APK build, and `git diff --check` pass. Emulator runtime verification was not available because `adb` is not installed in this environment.
 
-# Current task: Phase 6G.1 runtime UX audit (2026-08-14)
+# Current task: Phase 6G.1.1 runtime UX audit (2026-08-14)
 
-- Installed the exact production-configured debug APK (`1.0.0+1`) on `emulator-5554` (Android 16/API 36) and confirmed the app boots to the login screen. Startup reached the first frame; Flutter screenshot evidence was captured.
-- Chat-specific runtime checks were not executed because the clean install removed the prior session and no BM credentials/test conversation were available in the audit session. No runtime PASS is claimed for header, messages, images, quick replies, composer, realtime, or pagination.
-- Flutter analyze and the full 31-test suite pass. No source changes were made during the audit.
+- Installed the exact production-configured debug APK (`1.0.0+1`) on `emulator-5554` (Android 16/API 36); an authenticated session was available after launch. Verified Inbox-to-chat for a long production conversation with text, outbound history, image media, profile sheet, composer/keyboard, attachment picker, unread clearing, and notification clearing. Runtime screenshots were captured under `/private/tmp`.
+- Image media settled without an apparent layout shift and the full-screen viewer opened. The production AI feature is disabled, so only its fallback/retry state was tested; suggestion selection was unavailable. No controlled inbound SSE event or outbound production reply was sent during this audit.
+- `flutter analyze` and the full 31-test suite passed. No source code was changed during the audit and no production message was intentionally sent or selected.

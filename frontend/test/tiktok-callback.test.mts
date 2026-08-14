@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  DEFAULT_PUBLIC_APP_URL,
+  getPublicAppUrl,
+} from "../src/app/tiktok/connect/tiktok-oauth.ts";
 import { getSafeTikTokErrorMessage } from "../src/app/tiktok/callback/tiktok-callback-utils.ts";
 import {
   STATE_MISMATCH_ERROR_MESSAGE,
@@ -115,6 +119,37 @@ test("processTikTokCallbackParams handles all OAuth callback branches exactly on
   // 6. Missing parameters
   const invalidResult = processTikTokCallbackParams({});
   assert.equal(invalidResult.status, "INVALID");
+});
+
+test("getPublicAppUrl resolves public application domain and excludes internal container hosts", () => {
+  assert.equal(DEFAULT_PUBLIC_APP_URL, "https://lineoppo.click");
+  assert.equal(getPublicAppUrl(), "https://lineoppo.click");
+
+  const originalEnv = process.env.NEXT_PUBLIC_APP_URL;
+
+  try {
+    // Custom valid public URL
+    process.env.NEXT_PUBLIC_APP_URL = "https://custom.lineoppo.click/";
+    assert.equal(getPublicAppUrl(), "https://custom.lineoppo.click");
+
+    // Internal container addresses must be ignored and fallback safely
+    process.env.NEXT_PUBLIC_APP_URL = "http://0.0.0.0:8080";
+    assert.equal(getPublicAppUrl(), "https://lineoppo.click");
+
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+    assert.equal(getPublicAppUrl(), "https://lineoppo.click");
+  } finally {
+    process.env.NEXT_PUBLIC_APP_URL = originalEnv;
+  }
+});
+
+test("Callback route handler constructs result redirects with public application origin", () => {
+  assert.match(routeSource, /const\s+publicOrigin\s*=\s*getPublicAppUrl\(\)/);
+  assert.match(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*publicOrigin\)/);
+  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*request\.url\)/);
+  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*request\.nextUrl\)/);
+  assert.doesNotMatch(routeSource, /0\.0\.0\.0/);
+  assert.doesNotMatch(routeSource, /localhost/);
 });
 
 test("Route handler clears state cookie in the 302 redirect response without client-side actions", () => {

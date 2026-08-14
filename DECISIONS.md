@@ -1,3 +1,7 @@
+# Public Origin Redirect Resolution for Container Deployments (2026-08-14)
+
+- **Sanitized Public Origin Enforcement**: In containerized hosting environments (such as Railway) where SSL is terminated at edge proxies and forwarded to internal loopback/container interfaces, server-side redirects must not resolve `request.url` or `request.nextUrl` directly. Instead, OAuth redirect endpoints (`/tiktok/callback`, `/api/tiktok/authorize`) resolve the public domain via `getPublicAppUrl()`, defaulting securely to `https://lineoppo.click` and rejecting internal host patterns (`0.0.0.0`, `localhost`).
+
 # TikTok OAuth Route Handler Callback & Clean Result Architecture (2026-08-14)
 
 - **Atomic Validation and Cookie Destruction**: The OAuth callback endpoint `/tiktok/callback` is implemented as a pure Route Handler (`GET /tiktok/callback/route.ts`). It performs timing-safe state validation, safe boolean diagnostic logging, immediately clears the `tiktok_oauth_state` HttpOnly cookie in the HTTP 302 redirect response, and forwards the browser to `/tiktok/callback/result?status=...`.

@@ -9,8 +9,17 @@ export const TIKTOK_OAUTH_SCOPES = [
   "video.list",
 ] as const;
 
+export const DEFAULT_PUBLIC_APP_URL = "https://lineoppo.click";
 export const DEFAULT_TIKTOK_REDIRECT_URI = "https://lineoppo.click/tiktok/callback";
 export const TIKTOK_OAUTH_STATE_COOKIE = "tiktok_oauth_state";
+
+export function getPublicAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (envUrl && !envUrl.includes("0.0.0.0") && !envUrl.includes("localhost")) {
+    return envUrl.replace(/\/+$/, "");
+  }
+  return DEFAULT_PUBLIC_APP_URL;
+}
 
 export const TIKTOK_STATE_COOKIE_OPTIONS = {
   httpOnly: true,

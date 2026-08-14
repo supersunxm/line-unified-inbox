@@ -5,7 +5,8 @@ import {
   TIKTOK_STATE_COOKIE_OPTIONS,
   buildTikTokAuthUrl,
   generateOAuthState,
-} from "../../../tiktok/connect/tiktok-oauth";
+  getPublicAppUrl,
+} from "../../../tiktok/connect/tiktok-oauth.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,8 @@ export async function GET(request: NextRequest) {
   const redirectUri = process.env.TIKTOK_REDIRECT_URI || DEFAULT_TIKTOK_REDIRECT_URI;
 
   if (!clientKey) {
-    const connectUrl = new URL("/tiktok/connect", request.url);
+    const publicOrigin = getPublicAppUrl();
+    const connectUrl = new URL("/tiktok/connect", publicOrigin);
     connectUrl.searchParams.set("error", "missing_config");
     return NextResponse.redirect(connectUrl, 302);
   }
