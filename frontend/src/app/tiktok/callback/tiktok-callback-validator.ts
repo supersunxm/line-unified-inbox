@@ -1,7 +1,13 @@
 import crypto from "node:crypto";
 import { getSafeTikTokErrorMessage } from "./tiktok-callback-utils.ts";
 
-export type TikTokCallbackStatus = "SUCCESS" | "ERROR" | "STATE_MISMATCH" | "INVALID";
+export type TikTokCallbackStatus =
+  | "SUCCESS"
+  | "ERROR"
+  | "STATE_MISMATCH"
+  | "INVALID"
+  | "TOKEN_ERROR"
+  | "PROFILE_ERROR";
 
 export type TikTokCallbackValidationResult =
   | { status: "SUCCESS" }

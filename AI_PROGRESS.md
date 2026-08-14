@@ -1,5 +1,22 @@
 # AI progress
 
+## Current task: TikTok Server-Side Token Exchange and Account Data Retrieval
+
+- **Token Exchange & API Client**:
+  - Implemented `exchangeTikTokAuthorizationCode` in `frontend/src/app/tiktok/tiktok-api-client.ts` issuing server-side `POST https://open.tiktokapis.com/v2/oauth/token/` with `application/x-www-form-urlencoded` encoding (`client_key`, `client_secret`, `code`, `grant_type=authorization_code`, `redirect_uri`).
+  - Added safe diagnostic logger `logTikTokTokenDiagnostic` logging boolean/metadata only (`tokenExchangeSucceeded`, `accessTokenPresent`, `refreshTokenPresent`, `openIdPresent`, `grantedScopeCount`, `expiresIn`).
+  - Implemented `fetchTikTokUserProfile` calling `GET https://open.tiktokapis.com/v2/user/info/` with `fields` for basic profile info, verification status, and statistics (followers, following, likes, video count).
+  - Implemented `fetchTikTokVideoList` calling `POST https://open.tiktokapis.com/v2/video/list/` retrieving public video metadata and engagement metrics.
+- **Server Store & Proof-of-Concept Dashboard**:
+  - Created server-side in-memory data store in `frontend/src/app/tiktok/tiktok-data-store.ts` (`setLatestTikTokData`, `getLatestTikTokData`) ensuring tokens and secrets are never stored in client cookies, localStorage, or rendered HTML.
+  - Implemented proof-of-concept dashboard page at `/tiktok` (`frontend/src/app/tiktok/page.tsx` and `tiktok-dashboard-view.tsx`) displaying account header, verified badge, 4 key performance metric cards, and recent video performance list.
+- **Callback Orchestration**:
+  - Enhanced `/tiktok/callback/route.ts` to orchestrate token exchange, profile retrieval, and video list fetch, saving data to server store and redirecting to `https://lineoppo.click/tiktok` on success.
+  - Handled failures safely by redirecting to `/tiktok/callback/result?status=token_error` and `status=profile_error` without exposing raw errors or tokens.
+- **Verification**:
+  - Added test suite in `frontend/test/tiktok-token-exchange.test.mts` validating token response parsing, error handling, safe diagnostics, server store, and non-exposure of secrets (304/304 tests passing across 39 test files).
+  - Next.js Turbopack build verified routes `ƒ /tiktok`, `ƒ /tiktok/callback`, `ƒ /tiktok/callback/result`, `○ /tiktok/connect`, and `ƒ /api/tiktok/authorize`.
+
 ## Current task: Public Origin for OAuth Callback Result Redirect
 
 - **Route & Architecture**:

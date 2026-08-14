@@ -1,3 +1,8 @@
+# TikTok Server-Side Token Exchange & POC Store Architecture (2026-08-14)
+
+- **Strict Server-Side Token Exchange**: The OAuth authorization code is exchanged for tokens exclusively on the server at `https://open.tiktokapis.com/v2/oauth/token/` via `POST application/x-www-form-urlencoded`. Authorization codes, client secrets, access tokens, and refresh tokens are strictly prevented from entering client component props, HTML, cookies, or browser storage.
+- **Server Store for Single-Account POC**: For the Sandbox proof-of-concept, account profile data and video analytics are stored in a server-side in-memory module store without database schema mutations, allowing instant verification and rendering on the `/tiktok` account dashboard.
+
 # Public Origin Redirect Resolution for Container Deployments (2026-08-14)
 
 - **Sanitized Public Origin Enforcement**: In containerized hosting environments (such as Railway) where SSL is terminated at edge proxies and forwarded to internal loopback/container interfaces, server-side redirects must not resolve `request.url` or `request.nextUrl` directly. Instead, OAuth redirect endpoints (`/tiktok/callback`, `/api/tiktok/authorize`) resolve the public domain via `getPublicAppUrl()`, defaulting securely to `https://lineoppo.click` and rejecting internal host patterns (`0.0.0.0`, `localhost`).

@@ -31,6 +31,10 @@ export default async function TikTokCallbackResultPage(props: TikTokCallbackResu
     status = "STATE_MISMATCH";
   } else if (rawStatus === "error") {
     status = "ERROR";
+  } else if (rawStatus === "token_error") {
+    status = "TOKEN_ERROR";
+  } else if (rawStatus === "profile_error") {
+    status = "PROFILE_ERROR";
   }
 
   return <TikTokCallbackView status={status} errorMessage={rawErrorMessage} />;

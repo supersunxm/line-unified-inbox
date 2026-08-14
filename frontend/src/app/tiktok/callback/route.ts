@@ -4,6 +4,17 @@ import {
   getPublicAppUrl,
 } from "../connect/tiktok-oauth.ts";
 import {
+  exchangeTikTokAuthorizationCode,
+  fetchTikTokUserProfile,
+  fetchTikTokVideoList,
+} from "../tiktok-api-client.ts";
+import { setLatestTikTokData } from "../tiktok-data-store.ts";
+import type {
+  TikTokTokenResponse,
+  TikTokUserProfile,
+  TikTokVideoItem,
+} from "../tiktok-types.ts";
+import {
   logTikTokCallbackDiagnostic,
   processTikTokCallbackParams,
   timingSafeStringEqual,
@@ -48,32 +59,73 @@ export async function GET(request: NextRequest) {
     cookieState,
   });
 
-  // Build clean result destination URL using configured public application origin
   const publicOrigin = getPublicAppUrl();
-  const resultUrl = new URL("/tiktok/callback/result", publicOrigin);
 
-  if (validationResult.status === "SUCCESS") {
-    resultUrl.searchParams.set("status", "success");
-  } else if (validationResult.status === "STATE_MISMATCH") {
-    resultUrl.searchParams.set("status", "state_mismatch");
-  } else if (validationResult.status === "ERROR") {
-    resultUrl.searchParams.set("status", "error");
-    if ("errorMessage" in validationResult && validationResult.errorMessage) {
-      resultUrl.searchParams.set("error_message", validationResult.errorMessage);
+  // Helper to create redirect response with atomic cookie consumption
+  const createRedirectResponse = (destinationUrl: URL): NextResponse => {
+    const response = NextResponse.redirect(destinationUrl, 302);
+    response.cookies.set(TIKTOK_OAUTH_STATE_COOKIE, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    });
+    return response;
+  };
+
+  // If state validation failed or error was returned by TikTok
+  if (validationResult.status !== "SUCCESS" || !code) {
+    const resultUrl = new URL("/tiktok/callback/result", publicOrigin);
+    if (validationResult.status === "STATE_MISMATCH") {
+      resultUrl.searchParams.set("status", "state_mismatch");
+    } else if (validationResult.status === "ERROR") {
+      resultUrl.searchParams.set("status", "error");
+      if ("errorMessage" in validationResult && validationResult.errorMessage) {
+        resultUrl.searchParams.set("error_message", validationResult.errorMessage);
+      }
+    } else {
+      resultUrl.searchParams.set("status", "invalid");
     }
-  } else {
-    resultUrl.searchParams.set("status", "invalid");
+    return createRedirectResponse(resultUrl);
   }
 
-  // Redirect to result page while immediately consuming/deleting the OAuth state cookie
-  const response = NextResponse.redirect(resultUrl, 302);
-  response.cookies.set(TIKTOK_OAUTH_STATE_COOKIE, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
+  // 1. Exchange authorization code for tokens
+  let tokenResponse: TikTokTokenResponse;
+  try {
+    tokenResponse = await exchangeTikTokAuthorizationCode(code);
+  } catch {
+    const resultUrl = new URL("/tiktok/callback/result", publicOrigin);
+    resultUrl.searchParams.set("status", "token_error");
+    return createRedirectResponse(resultUrl);
+  }
+
+  // 2. Fetch TikTok user profile & statistics
+  let userProfile: TikTokUserProfile;
+  try {
+    userProfile = await fetchTikTokUserProfile(tokenResponse.accessToken);
+  } catch {
+    const resultUrl = new URL("/tiktok/callback/result", publicOrigin);
+    resultUrl.searchParams.set("status", "profile_error");
+    return createRedirectResponse(resultUrl);
+  }
+
+  // 3. Fetch recent public videos (gracefully falls back to empty array on failure/no videos)
+  let videos: TikTokVideoItem[] = [];
+  try {
+    videos = await fetchTikTokVideoList(tokenResponse.accessToken, 20);
+  } catch {
+    videos = [];
+  }
+
+  // 4. Save retrieved account data into server-side store
+  setLatestTikTokData({
+    profile: userProfile,
+    videos,
+    updatedAt: new Date().toISOString(),
   });
 
-  return response;
+  // 5. Redirect user to proof-of-concept account dashboard at /tiktok
+  const tiktokDashboardUrl = new URL("/tiktok", publicOrigin);
+  return createRedirectResponse(tiktokDashboardUrl);
 }

@@ -198,6 +198,120 @@ export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewP
             </div>
           )}
 
+          {status === "TOKEN_ERROR" && (
+            <div className="space-y-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/70 dark:text-rose-400">
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                  />
+                </svg>
+              </div>
+
+              <div>
+                <span className="rounded-md bg-rose-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-800 dark:bg-rose-950/80 dark:text-rose-300">
+                  Token Exchange Failed
+                </span>
+                <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                  Unable to Complete TikTok Authorization
+                </h1>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600 dark:text-slate-400">
+                  We could not exchange your authorization code with TikTok. Please try connecting your account again.
+                </p>
+              </div>
+
+              <div className="mx-auto max-w-md rounded-xl border border-rose-200 bg-rose-50/60 p-4 text-left dark:border-rose-900/60 dark:bg-rose-950/30">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
+                  Connection Security
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-rose-800 dark:text-rose-200/90">
+                  Authorization codes are single-use and expire quickly. To reconnect your TikTok account, please initiate authorization from the connect page.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <Link
+                  href="/tiktok/connect"
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40 focus-visible:ring-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                >
+                  Try Again
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40 focus-visible:ring-offset-2 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Dashboard
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {status === "PROFILE_ERROR" && (
+            <div className="space-y-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/70 dark:text-rose-400">
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                  />
+                </svg>
+              </div>
+
+              <div>
+                <span className="rounded-md bg-rose-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-800 dark:bg-rose-950/80 dark:text-rose-300">
+                  Profile Retrieval Failed
+                </span>
+                <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                  Unable to Retrieve TikTok Profile
+                </h1>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600 dark:text-slate-400">
+                  We could not retrieve your account profile and statistics from TikTok. Please check your account permissions and try connecting again.
+                </p>
+              </div>
+
+              <div className="mx-auto max-w-md rounded-xl border border-rose-200 bg-rose-50/60 p-4 text-left dark:border-rose-900/60 dark:bg-rose-950/30">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-rose-900 dark:text-rose-300">
+                  Required Permissions
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-rose-800 dark:text-rose-200/90">
+                  The application requires basic profile, account statistics, and public video list permissions to monitor store performance.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <Link
+                  href="/tiktok/connect"
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40 focus-visible:ring-offset-2 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                >
+                  Try Again
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40 focus-visible:ring-offset-2 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Dashboard
+                </Link>
+              </div>
+            </div>
+          )}
+
           {status === "INVALID" && (
             <div className="space-y-6 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/70 dark:text-amber-400">
