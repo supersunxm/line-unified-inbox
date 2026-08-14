@@ -6,10 +6,15 @@ export class CredentialEncryptionService implements OnModuleInit {
   private key!: Buffer;
 
   onModuleInit() {
-    const encoded = process.env.LINE_CREDENTIAL_ENCRYPTION_KEY ?? "";
+    const encoded =
+      process.env.CREDENTIAL_ENCRYPTION_KEY?.trim() ||
+      process.env.LINE_CREDENTIAL_ENCRYPTION_KEY?.trim() ||
+      "";
     const key = Buffer.from(encoded, "base64");
     if (key.length !== 32 || key.toString("base64") !== encoded) {
-      throw new Error("LINE_CREDENTIAL_ENCRYPTION_KEY must be exactly 32 bytes encoded as Base64");
+      throw new Error(
+        "CREDENTIAL_ENCRYPTION_KEY or LINE_CREDENTIAL_ENCRYPTION_KEY must be exactly 32 bytes encoded as Base64"
+      );
     }
     this.key = key;
   }

@@ -44,6 +44,14 @@ export interface TikTokStoreData {
   profile: TikTokUserProfile;
   videos: TikTokVideoItem[];
   updatedAt: string;
+  storeMasterId?: string | null;
+  storeMaster?: {
+    id: string;
+    storeName: string;
+    accountName: string;
+    province?: string | null;
+    region?: string | null;
+  } | null;
 }
 
 export interface TikTokTokenDiagnosticInfo {

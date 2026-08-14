@@ -1,0 +1,89 @@
+export interface TikTokVideoDto {
+  id: string;
+  createTime?: number;
+  title?: string;
+  videoDescription?: string;
+  coverImageUrl?: string;
+  shareUrl?: string;
+  duration?: number;
+  viewCount?: number;
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+}
+
+export interface TikTokProfileDto {
+  open_id: string;
+  union_id?: string;
+  avatar_url?: string;
+  avatar_url_100?: string;
+  avatar_large_url?: string;
+  display_name?: string;
+  username?: string;
+  bio_description?: string;
+  profile_deep_link?: string;
+  profile_web_link?: string;
+  is_verified?: boolean;
+  follower_count?: number;
+  following_count?: number;
+  likes_count?: number;
+  video_count?: number;
+}
+
+export interface SyncTikTokAccountDto {
+  accessToken?: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  refreshExpiresIn?: number;
+  grantedScopes?: string;
+  profile: TikTokProfileDto;
+  videos?: TikTokVideoDto[];
+  storeMasterId?: string;
+}
+
+export interface SafeTikTokVideoResponse {
+  id: string;
+  tikTokVideoId: string;
+  title?: string | null;
+  videoDescription?: string | null;
+  createTime?: string | null;
+  coverImageUrl?: string | null;
+  shareUrl?: string | null;
+  duration?: number | null;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  lastSyncedAt: string;
+}
+
+export interface SafeTikTokAccountOverviewResponse {
+  id: string;
+  openId: string;
+  unionId?: string | null;
+  username?: string | null;
+  displayName: string;
+  avatarUrl?: string | null;
+  avatarUrl100?: string | null;
+  avatarLargeUrl?: string | null;
+  bioDescription?: string | null;
+  profileDeepLink?: string | null;
+  profileWebLink?: string | null;
+  isVerified: boolean;
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  connectionStatus: string;
+  connectedAt: string;
+  lastSyncedAt: string;
+  storeMasterId?: string | null;
+  storeMaster?: {
+    id: string;
+    storeName: string;
+    accountName: string;
+    province?: string | null;
+    region?: string | null;
+  } | null;
+  videos: SafeTikTokVideoResponse[];
+}

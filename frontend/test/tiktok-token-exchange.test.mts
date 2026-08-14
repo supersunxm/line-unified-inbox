@@ -7,14 +7,11 @@ import {
   TIKTOK_USER_INFO_FIELDS,
   TIKTOK_VIDEO_LIST_ENDPOINT,
   TIKTOK_VIDEO_LIST_FIELDS,
+  fetchLatestTikTokAccountFromBackend,
   logTikTokTokenDiagnostic,
   parseTikTokTokenResponse,
+  syncTikTokAccountToBackend,
 } from "../src/app/tiktok/tiktok-api-client.ts";
-import {
-  clearLatestTikTokData,
-  getLatestTikTokData,
-  setLatestTikTokData,
-} from "../src/app/tiktok/tiktok-data-store.ts";
 
 const apiClientSource = readFileSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url), "utf8");
 const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
@@ -24,10 +21,11 @@ const topNavSource = readFileSync(new URL("../src/components/shell/top-navigatio
 
 test("TikTok OAuth and API files exist", () => {
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-types.ts", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-data-store.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-dashboard-view.tsx", import.meta.url)));
+  // In-memory store removed
+  assert.equal(existsSync(new URL("../src/app/tiktok/tiktok-data-store.ts", import.meta.url)), false);
 });
 
 test("TikTok API endpoints adhere to official TikTok Login Kit v2 specification", () => {
@@ -120,44 +118,13 @@ test("logTikTokTokenDiagnostic emits booleans and counts without logging sensiti
   assert.doesNotMatch(apiClientSource, /console\.info\([^)]*clientSecret,/);
 });
 
-test("TikTok server-side data store stores and retrieves account data safely", () => {
-  clearLatestTikTokData();
-  assert.equal(getLatestTikTokData(), null);
-
-  const sampleData = {
-    profile: {
-      open_id: "_000test_open_id",
-      display_name: "OPPO Store Rama 9",
-      username: "opporama9",
-      follower_count: 14500,
-      following_count: 25,
-      likes_count: 89000,
-      video_count: 34,
-      is_verified: true,
-    },
-    videos: [
-      {
-        id: "71234567890123",
-        title: "OPPO Find N3 Unboxing",
-        view_count: 24500,
-        like_count: 3200,
-        comment_count: 120,
-        share_count: 85,
-        duration: 38,
-      },
-    ],
-    updatedAt: new Date().toISOString(),
-  };
-
-  setLatestTikTokData(sampleData);
-  const retrieved = getLatestTikTokData();
-  assert.ok(retrieved);
-  assert.equal(retrieved?.profile.display_name, "OPPO Store Rama 9");
-  assert.equal(retrieved?.profile.follower_count, 14500);
-  assert.equal(retrieved?.videos.length, 1);
-
-  clearLatestTikTokData();
-  assert.equal(getLatestTikTokData(), null);
+test("Frontend interacts with backend PostgreSQL sync and query endpoints", () => {
+  assert.ok(typeof syncTikTokAccountToBackend === "function");
+  assert.ok(typeof fetchLatestTikTokAccountFromBackend === "function");
+  assert.match(apiClientSource, /\/tiktok\/sync/);
+  assert.match(apiClientSource, /\/tiktok\/latest/);
+  assert.match(callbackRouteSource, /syncTikTokAccountToBackend/);
+  assert.match(dashboardPageSource, /fetchLatestTikTokAccountFromBackend/);
 });
 
 test("Callback route handler redirects to /tiktok on success and safe error statuses on failure", () => {

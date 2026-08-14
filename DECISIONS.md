@@ -1,3 +1,14 @@
+# StoreMaster TikTok Account Mapping & Importer Pipeline (2026-08-14)
+
+- **Master Directory Pre-Authorization Mapping**: To support accurate multi-account attribution across 150 retail stores before OAuth initiation, `StoreMaster` stores `tiktokUsername` and `tiktokProfileUrl`. The fields are indexed on `tiktokUsername` to enable fast store resolution by authorized TikTok handle.
+- **Resilient Importer Sanitization**: Column I (`TikTok Username`) and Column J (`TikTok Profile URL`) in the master Google Sheet/CSV are parsed with automatic leading `@` stripping, whitespace trimming, and `#REF!` normalization to `null`. Missing TikTok entries do not fail the import.
+- **Diagnostic Signal Independence**: Importer diagnostics track missing usernames, duplicate usernames, malformed profile URLs, and handle-URL mismatches as actionable data-quality metrics without impeding LINE OA metadata sync or database upserts.
+
+# Canonical StoreMaster Ownership for TikTok Persistence (2026-08-14)
+
+- **Single StoreMaster Canonical Relation**: `TikTokAccount` maintains `storeMasterId` as the single canonical foreign key relation (`onDelete: SetNull`) to `StoreMaster`, eliminating dual-FK drift from the previous schema.
+- **AES-256-GCM Token Encryption**: Tokens are encrypted at rest with AES-256-GCM supporting `CREDENTIAL_ENCRYPTION_KEY || LINE_CREDENTIAL_ENCRYPTION_KEY` fallback for 100% backward compatibility.
+
 # TikTok Server-Side Token Exchange & POC Store Architecture (2026-08-14)
 
 - **Strict Server-Side Token Exchange**: The OAuth authorization code is exchanged for tokens exclusively on the server at `https://open.tiktokapis.com/v2/oauth/token/` via `POST application/x-www-form-urlencoded`. Authorization codes, client secrets, access tokens, and refresh tokens are strictly prevented from entering client component props, HTML, cookies, or browser storage.

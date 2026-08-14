@@ -7,8 +7,8 @@ import {
   exchangeTikTokAuthorizationCode,
   fetchTikTokUserProfile,
   fetchTikTokVideoList,
+  syncTikTokAccountToBackend,
 } from "../tiktok-api-client.ts";
-import { setLatestTikTokData } from "../tiktok-data-store.ts";
 import type {
   TikTokTokenResponse,
   TikTokUserProfile,
@@ -118,14 +118,22 @@ export async function GET(request: NextRequest) {
     videos = [];
   }
 
-  // 4. Save retrieved account data into server-side store
-  setLatestTikTokData({
-    profile: userProfile,
-    videos,
-    updatedAt: new Date().toISOString(),
-  });
+  // 4. Save retrieved account data into PostgreSQL backend store (tokens encrypted at rest)
+  try {
+    await syncTikTokAccountToBackend({
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken,
+      expiresIn: tokenResponse.expiresIn,
+      refreshExpiresIn: tokenResponse.refreshExpiresIn,
+      grantedScopes: tokenResponse.scope,
+      profile: userProfile,
+      videos,
+    });
+  } catch (syncErr) {
+    console.error("Failed to sync TikTok account to backend database", syncErr);
+  }
 
-  // 5. Redirect user to proof-of-concept account dashboard at /tiktok
+  // 5. Redirect user to account dashboard at /tiktok
   const tiktokDashboardUrl = new URL("/tiktok", publicOrigin);
   return createRedirectResponse(tiktokDashboardUrl);
 }

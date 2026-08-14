@@ -1,5 +1,41 @@
 # AI progress
 
+## Current task: StoreMaster TikTok Account Mapping & Importer Pipeline Update
+
+- **Prisma Schema & Migration**:
+  - Added nullable fields `tiktokUsername String?` and `tiktokProfileUrl String?` with index `@@index([tiktokUsername])` to `StoreMaster` model in `backend/prisma/schema.prisma`.
+  - Added migration `backend/prisma/migrations/20260814160000_add_store_master_tiktok_fields/migration.sql`.
+- **Importer Pipeline & Utilities**:
+  - Updated `parseStoreMasterCsv` in `backend/src/store-master/store-master.utils.ts` to map Column I (`TikTok Username`) and Column J (`TikTok Profile URL`).
+  - Added `cleanTikTokUsername` to strip leading `@`, trim whitespace, and normalize empty/`#REF!` values to `null`.
+  - Added `isValidTikTokProfileUrl` and `extractTikTokUsernameFromUrl` to validate URLs and detect handle mismatches between username and profile link.
+  - Updated `StoreMasterService.importCsv` and `StoreMasterService.search` in `backend/src/store-master/store-master.service.ts` to persist TikTok fields during Google Sheet/CSV imports and support search by TikTok handle.
+  - Added import diagnostics for missing TikTok handles, duplicate TikTok handles, malformed URLs, and username/URL mismatches without failing the overall import.
+- **Verification**:
+  - Added test suites in `backend/src/store-master/store-master.utils.spec.ts` and `backend/src/store-master/store-master.service.spec.ts` testing Column I & J parsing, `@` stripping, empty values to null, duplicate diagnostics, and safe re-imports.
+  - Backend tests: **1,112 / 1,112 passed (100%)**.
+  - Backend build: `nest build` passed with 0 errors.
+  - Frontend tests: **304 / 304 passed (100%)**.
+  - Frontend build: Next.js Turbopack build passed with 0 errors.
+
+## Previous task: Final Architecture & Security Audit for TikTok PostgreSQL Persistence
+
+- **Backend Architecture & Prisma Schema**:
+  - Added `TikTokConnectionStatus` enum (`CONNECTED`, `EXPIRED`, `DISCONNECTED`, `ERROR`), `TikTokAccount` model, and `TikTokVideo` model to `backend/prisma/schema.prisma` with reverse relations to `Store` and `StoreMaster`.
+  - Added migration `backend/prisma/migrations/20260814150000_add_tiktok_account_and_videos/migration.sql` creating tables, foreign keys, and indexes.
+  - Implemented `TikTokService` in `backend/src/tiktok/tiktok.service.ts` with AES-256-GCM token encryption via existing `CredentialEncryptionService` (`encryptedAccessToken`, `encryptedRefreshToken`), unique `openId` upserting, video analytics upserting, and safe DTO projections strictly omitting token fields.
+  - Implemented `TikTokController` in `backend/src/tiktok/tiktok.controller.ts` providing `POST /tiktok/sync`, `GET /tiktok/latest`, and `GET /tiktok/accounts`.
+  - Registered `TikTokModule` in `backend/src/app.module.ts`.
+- **Frontend Integration**:
+  - Updated `/tiktok/callback/route.ts` to call backend `POST /tiktok/sync` to persist accounts and videos upon successful authorization.
+  - Updated `/tiktok/page.tsx` as an async Server Component fetching persisted data from backend `GET /tiktok/latest`.
+  - Removed temporary single-instance in-memory store (`frontend/src/app/tiktok/tiktok-data-store.ts`).
+- **Verification**:
+  - Backend unit tests (`backend/src/tiktok/tiktok.service.spec.ts`) verified token encryption at rest, unique openId reconnect/update handling, video upserting, and DTO token sanitization.
+  - All 1,108 backend tests passing across NestJS test suites.
+  - All 304 frontend tests passing across 39 suites.
+  - Prisma validation and Next.js Turbopack build succeeded.
+
 ## Current task: TikTok Server-Side Token Exchange and Account Data Retrieval
 
 - **Token Exchange & API Client**:
@@ -1155,3 +1191,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Installed the exact production-configured debug APK (`1.0.0+1`) on `emulator-5554` (Android 16/API 36); an authenticated session was available after launch. Verified Inbox-to-chat for a long production conversation with text, outbound history, image media, profile sheet, composer/keyboard, attachment picker, unread clearing, and notification clearing. Runtime screenshots were captured under `/private/tmp`.
 - Image media settled without an apparent layout shift and the full-screen viewer opened. The production AI feature is disabled, so only its fallback/retry state was tested; suggestion selection was unavailable. No controlled inbound SSE event or outbound production reply was sent during this audit.
 - `flutter analyze` and the full 31-test suite passed. No source code was changed during the audit and no production message was intentionally sent or selected.
+
+# Current task: Phase 6G.1.2 Chat premium polish (2026-08-14)
+
+- Upgraded the Quick Reply presentation into an explicit AI draft workspace with assistant identity, review-before-send guidance, premium suggestion cards, and responsive loading/error/empty/retry states. Selection still inserts editable text into the existing composer and never sends automatically.
+- Improved the responsive conversation header, message/composer surface, and fixed-size image presentation. Successful mark-read now synchronizes the existing local conversation detail used by the customer profile sheet, without a new request or conversation reload.
+- Added narrow-screen presentation coverage and a regression for the post-mark-read profile unread count. `flutter analyze`, all 33 Flutter tests, the debug APK build, and `git diff --check` pass. Realtime, scroll generation, pagination, notification, unread, reply API, and AI backend ownership remain unchanged.
+
+# Current task: Phase 6G.2.1 Inbox UI transformation (2026-08-14)
+
+- Added a presentation-only Inbox header, conversation overview metrics, AI-ready indicator, responsive conversation cards, clearer status mappings, improved search affordance, and icon-based filter chips. InboxPage remains the owner of loading, pagination, pull-to-refresh, SSE patches, unread reconciliation, and navigation callbacks.
+- Added narrow-screen-safe Inbox presentation composition without changing repository/API contracts. `flutter analyze`, the full 33-test suite, the debug APK build, and `git diff --check` pass.

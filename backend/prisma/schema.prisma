@@ -523,6 +523,8 @@ model StoreMaster {
   lineOaLink            String?
   lineId                String?
   lineManagerUrl        String?
+  tiktokUsername        String?
+  tiktokProfileUrl      String?
   province              String?
   region                String?
   source                String
@@ -533,11 +535,13 @@ model StoreMaster {
   createdAt             DateTime                     @default(now())
   updatedAt             DateTime                     @updatedAt
   stores                Store[]
+  tikTokAccounts        TikTokAccount[]
 
   @@unique([source, sourceRowNumber])
   @@index([normalizedAccountName])
   @@index([externalStoreId])
   @@index([lineId])
+  @@index([tiktokUsername])
   @@index([province])
   @@index([region])
   @@index([isActive])
@@ -1316,4 +1320,77 @@ model MassMessageBatch {
   @@unique([storeDeliveryId, batchIndex])
   @@index([status])
   @@index([retryKey])
+}
+
+enum TikTokConnectionStatus {
+  CONNECTED
+  EXPIRED
+  DISCONNECTED
+  ERROR
+}
+
+model TikTokAccount {
+  id                    String                 @id @default(uuid())
+  storeMasterId         String?
+  openId                String                 @unique
+  unionId               String?
+  username              String?
+  displayName           String
+  avatarUrl             String?
+  avatarUrl100          String?
+  avatarLargeUrl        String?
+  bioDescription        String?
+  profileDeepLink       String?
+  profileWebLink        String?
+  isVerified            Boolean                @default(false)
+  followerCount         Int                    @default(0)
+  followingCount        Int                    @default(0)
+  likesCount            Int                    @default(0)
+  videoCount            Int                    @default(0)
+  grantedScopes         String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  connectionStatus      TikTokConnectionStatus @default(CONNECTED)
+  connectedAt           DateTime               @default(now())
+  lastSyncedAt          DateTime               @default(now())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  storeMaster           StoreMaster?           @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
+  videos                TikTokVideo[]
+
+  @@index([storeMasterId])
+  @@index([openId])
+  @@index([username])
+  @@index([connectionStatus])
+  @@index([lastSyncedAt])
+}
+
+model TikTokVideo {
+  id               String        @id @default(uuid())
+  tikTokAccountId  String
+  tikTokVideoId    String
+  title            String?
+  videoDescription String?
+  createTime       DateTime?
+  coverImageUrl    String?
+  shareUrl         String?
+  duration         Int?
+  viewCount        Int           @default(0)
+  likeCount        Int           @default(0)
+  commentCount     Int           @default(0)
+  shareCount       Int           @default(0)
+  lastSyncedAt     DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tikTokAccount    TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tikTokAccountId, tikTokVideoId])
+  @@index([tikTokAccountId])
+  @@index([tikTokVideoId])
+  @@index([createTime])
+  @@index([viewCount])
 }

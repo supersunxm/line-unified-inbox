@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getLatestTikTokData } from "./tiktok-data-store.ts";
+import { fetchLatestTikTokAccountFromBackend } from "./tiktok-api-client.ts";
 import { TikTokDashboardView } from "./tiktok-dashboard-view.tsx";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TikTokDashboardPage() {
-  const data = getLatestTikTokData();
+export default async function TikTokDashboardPage() {
+  const data = await fetchLatestTikTokAccountFromBackend();
   return <TikTokDashboardView data={data} />;
 }

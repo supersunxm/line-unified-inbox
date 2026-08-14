@@ -1,7 +1,9 @@
+import { API_BASE_URL } from "../../lib/runtime-config.ts";
 import {
   DEFAULT_TIKTOK_REDIRECT_URI,
 } from "./connect/tiktok-oauth.ts";
 import type {
+  TikTokStoreData,
   TikTokTokenDiagnosticInfo,
   TikTokTokenResponse,
   TikTokUserProfile,
@@ -274,3 +276,86 @@ export async function fetchTikTokVideoList(
     share_count: typeof video.share_count === "number" ? video.share_count : undefined,
   }));
 }
+
+/**
+ * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend API.
+ */
+export async function syncTikTokAccountToBackend(params: {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  refreshExpiresIn?: number;
+  grantedScopes?: string;
+  profile: TikTokUserProfile;
+  videos: TikTokVideoItem[];
+  storeMasterId?: string;
+}): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/tiktok/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to sync TikTok account to backend database (HTTP ${response.status})`);
+  }
+}
+
+/**
+ * Fetches the latest persisted TikTok account overview and video metrics from backend PostgreSQL.
+ */
+export async function fetchLatestTikTokAccountFromBackend(): Promise<TikTokStoreData | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tiktok/latest`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data || !data.openId) {
+      return null;
+    }
+
+    return {
+      profile: {
+        open_id: data.openId,
+        union_id: data.unionId || undefined,
+        username: data.username || undefined,
+        display_name: data.displayName,
+        avatar_url: data.avatarUrl || undefined,
+        avatar_url_100: data.avatarUrl100 || undefined,
+        avatar_large_url: data.avatarLargeUrl || undefined,
+        bio_description: data.bioDescription || undefined,
+        profile_deep_link: data.profileDeepLink || undefined,
+        profile_web_link: data.profileWebLink || undefined,
+        is_verified: data.isVerified,
+        follower_count: data.followerCount,
+        following_count: data.followingCount,
+        likes_count: data.likesCount,
+        video_count: data.videoCount,
+      },
+      videos: (data.videos || []).map((v: any) => ({
+        id: v.tikTokVideoId,
+        title: v.title || undefined,
+        video_description: v.videoDescription || undefined,
+        create_time: v.createTime ? Math.floor(new Date(v.createTime).getTime() / 1000) : undefined,
+        cover_image_url: v.coverImageUrl || undefined,
+        share_url: v.shareUrl || undefined,
+        duration: v.duration ?? undefined,
+        view_count: v.viewCount ?? 0,
+        like_count: v.likeCount ?? 0,
+        comment_count: v.commentCount ?? 0,
+        share_count: v.shareCount ?? 0,
+      })),
+      updatedAt: data.lastSyncedAt,
+      storeMasterId: data.storeMasterId || null,
+      storeMaster: data.storeMaster || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
