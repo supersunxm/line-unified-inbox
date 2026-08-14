@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { consumeTikTokOAuthStateAction } from "./actions";
 import { TikTokCallbackStatus } from "./tiktok-callback-validator";
 
 interface TikTokCallbackViewProps {
@@ -11,14 +9,6 @@ interface TikTokCallbackViewProps {
 }
 
 export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewProps) {
-  useEffect(() => {
-    // Consume and clear the state cookie on the client side via server action
-    // to prevent replay attacks on subsequent reloads or callbacks
-    consumeTikTokOAuthStateAction().catch(() => {
-      // Ignore background cookie cleanup failures
-    });
-  }, []);
-
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-150 dark:bg-[#0b0d11] dark:text-slate-100">
       {/* Top Header Bar */}

@@ -10,22 +10,22 @@ import {
   validateTikTokOAuthState,
 } from "../src/app/tiktok/callback/tiktok-callback-validator.ts";
 
-const pageSource = readFileSync(new URL("../src/app/tiktok/callback/page.tsx", import.meta.url), "utf8");
+const routeSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
+const resultPageSource = readFileSync(new URL("../src/app/tiktok/callback/result/page.tsx", import.meta.url), "utf8");
 const viewSource = readFileSync(new URL("../src/app/tiktok/callback/tiktok-callback-view.tsx", import.meta.url), "utf8");
-const actionSource = readFileSync(new URL("../src/app/tiktok/callback/actions.ts", import.meta.url), "utf8");
 const validatorSource = readFileSync(new URL("../src/app/tiktok/callback/tiktok-callback-validator.ts", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
 test("TikTok callback route files exist", () => {
-  assert.ok(existsSync(new URL("../src/app/tiktok/callback/page.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/callback/result/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/callback/tiktok-callback-view.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/callback/tiktok-callback-validator.ts", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/tiktok/callback/actions.ts", import.meta.url)));
 });
 
-test("TikTok callback page has appropriate metadata and noindex robots tag", () => {
-  assert.match(pageSource, /title:\s*"TikTok Authorization \| OPPO Retail TikTok Monitor"/);
-  assert.match(pageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
+test("TikTok callback result page has appropriate metadata and noindex robots tag", () => {
+  assert.match(resultPageSource, /title:\s*"TikTok Authorization \| OPPO Retail TikTok Monitor"/);
+  assert.match(resultPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
 });
 
 test("timingSafeStringEqual compares strings securely", () => {
@@ -59,7 +59,7 @@ test("validateTikTokOAuthState validates matching, missing, and mismatched state
   );
 });
 
-test("processTikTokCallbackParams handles all OAuth callback branches", () => {
+test("processTikTokCallbackParams handles all OAuth callback branches exactly once", () => {
   const matchingState = "state_123456_abcdef";
   const validCode = "tiktok_auth_code_sample_999";
 
@@ -117,6 +117,21 @@ test("processTikTokCallbackParams handles all OAuth callback branches", () => {
   assert.equal(invalidResult.status, "INVALID");
 });
 
+test("Route handler clears state cookie in the 302 redirect response without client-side actions", () => {
+  assert.match(routeSource, /response\.cookies\.set\(TIKTOK_OAUTH_STATE_COOKIE/);
+  assert.match(routeSource, /maxAge:\s*0/);
+  assert.match(routeSource, /httpOnly:\s*true/);
+  assert.match(routeSource, /sameSite:\s*"lax"/);
+  assert.match(routeSource, /\/tiktok\/callback\/result/);
+});
+
+test("No client-side useEffect, POST request, or Server Action triggered from callback view", () => {
+  assert.doesNotMatch(viewSource, /useEffect/);
+  assert.doesNotMatch(viewSource, /consumeTikTokOAuthStateAction/);
+  assert.doesNotMatch(viewSource, /fetch\(/);
+  assert.doesNotMatch(viewSource, /method="POST"/i);
+});
+
 test("State mismatch displays safe user-facing message without exposing state values", () => {
   assert.match(
     STATE_MISMATCH_ERROR_MESSAGE,
@@ -135,13 +150,6 @@ test("Safe diagnostics log booleans only, never logging sensitive values", () =>
   assert.match(validatorSource, /stateLengthsMatch/);
   assert.match(validatorSource, /stateMatched/);
   assert.doesNotMatch(validatorSource, /console\.info\([^)]*state,/);
-});
-
-test("State cookie consumption server action clears cookie safely", () => {
-  assert.match(actionSource, /consumeTikTokOAuthStateAction/);
-  assert.match(actionSource, /maxAge:\s*0/);
-  assert.match(actionSource, /httpOnly:\s*true/);
-  assert.match(actionSource, /sameSite:\s*"lax"/);
 });
 
 test("Security: callback does NOT render or log authorization codes or state values", () => {
@@ -164,7 +172,7 @@ test("Security: callback does NOT render or log authorization codes or state val
   assert.doesNotMatch(viewSource, /client_secret/i);
   assert.doesNotMatch(viewSource, /access_token/i);
   assert.doesNotMatch(viewSource, /refresh_token/i);
-  assert.doesNotMatch(pageSource, /client_secret/i);
+  assert.doesNotMatch(resultPageSource, /client_secret/i);
 });
 
 test("TikTok callback is NOT linked from existing TopNavigation", () => {

@@ -1,3 +1,8 @@
+# TikTok OAuth Route Handler Callback & Clean Result Architecture (2026-08-14)
+
+- **Atomic Validation and Cookie Destruction**: The OAuth callback endpoint `/tiktok/callback` is implemented as a pure Route Handler (`GET /tiktok/callback/route.ts`). It performs timing-safe state validation, safe boolean diagnostic logging, immediately clears the `tiktok_oauth_state` HttpOnly cookie in the HTTP 302 redirect response, and forwards the browser to `/tiktok/callback/result?status=...`.
+- **Elimination of Post-Render Side Effects**: Decoupling validation into a Route Handler eliminates client-side `useEffect` triggers and Server Action `POST` requests, preventing Next.js App Router post-action component re-renders that previously caused double-processing and state replay failures.
+
 # Direct HTTP Redirect Authorization Endpoint for Cookie Reliability (2026-08-14)
 
 - **Native HTTP 302 Redirect Initiation**: To guarantee `Set-Cookie` header persistence across browser engines before cross-origin navigation to TikTok, authorization is initiated via a dedicated Route Handler (`GET /api/tiktok/authorize`). This avoids Next.js Server Action redirect digest interception and ensure standard `Set-Cookie: tiktok_oauth_state=...; Path=/; HttpOnly; SameSite=Lax; Secure` application.

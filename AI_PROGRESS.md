@@ -1,5 +1,16 @@
 # AI progress
 
+## Current task: Resolve TikTok OAuth Callback Double-Processing Bug
+
+- **Root Cause Resolution**:
+  - Diagnosed that the previous `useEffect` calling Server Action `consumeTikTokOAuthStateAction()` generated a `POST /tiktok/callback` request. In Next.js App Router, Server Actions automatically re-render the page Server Component after mutation. Because the cookie was already cleared by the action, the second render re-evaluated state without the cookie and rendered `STATE_MISMATCH`.
+  - Replaced the callback architecture with a dedicated Route Handler at `/tiktok/callback` (`frontend/src/app/tiktok/callback/route.ts`) that validates state, immediately clears the `tiktok_oauth_state` cookie on the server redirect response, and redirects to `/tiktok/callback/result?status=...`.
+  - Created pure presentational result page at `frontend/src/app/tiktok/callback/result/page.tsx` with zero client-side `useEffect`, zero Server Actions, and zero `POST` requests.
+  - Deleted obsolete `frontend/src/app/tiktok/callback/actions.ts`.
+- **Verification**:
+  - Added test suites in `frontend/test/tiktok-callback.test.mts` verifying single server-side evaluation, route handler cookie cleanup, absence of `useEffect`/Server Actions, and client prop isolation (292/292 tests passing across 38 test files).
+  - Next.js Turbopack build verified routes `ƒ /tiktok/callback` (Route Handler) and `ƒ /tiktok/callback/result` (Result Page).
+
 ## Current task: TikTok OAuth State Lifecycle Hardening and Diagnostics
 
 - **Route & Architecture**:
