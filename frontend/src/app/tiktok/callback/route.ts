@@ -119,6 +119,8 @@ export async function GET(request: NextRequest) {
   }
 
   // 4. Save retrieved account data into PostgreSQL backend store (tokens encrypted at rest)
+  const sessionToken = request.cookies.get("oppo_session")?.value?.trim() || null;
+
   try {
     await syncTikTokAccountToBackend({
       accessToken: tokenResponse.accessToken,
@@ -128,6 +130,7 @@ export async function GET(request: NextRequest) {
       grantedScopes: tokenResponse.scope,
       profile: userProfile,
       videos,
+      sessionToken,
     });
   } catch (syncErr) {
     console.error("Failed to sync TikTok account to backend database", syncErr);

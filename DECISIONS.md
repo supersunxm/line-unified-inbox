@@ -1,3 +1,9 @@
+# Canonical Bearer Session Authentication for Server-to-Server TikTok Endpoints (2026-08-14)
+
+- **Single Canonical Server-to-Server Auth (`Authorization: Bearer <sessionToken>`)**: When Next.js Route Handlers (`/tiktok/callback`) or Server Components (`/tiktok`, `/tiktok/dashboard`) call backend endpoints protected by `AuthGuard`, the authenticated `oppo_session` token is extracted from the request context and forwarded solely as an `Authorization: Bearer <token>` header. Raw incoming browser cookie headers and duplicate `Cookie: oppo_session=...` headers are strictly excluded.
+- **Fail-Closed Missing Session Handling**: If `oppo_session` is absent from the incoming context, authenticated requests are rejected/short-circuited without dispatching unauthenticated empty-token requests to backend services.
+- **Safe Diagnostic Telemetry**: Logs `sessionTokenPresent: boolean`, `backendSyncStatus`, and `backendReadStatus` as numeric/boolean signals, strictly preventing session token and credential material exposure.
+
 # TikTok Module Route Restructuring & Performance Dashboard (2026-08-14)
 
 - **Dedicated Module Route Hierarchy**: Separated `/tiktok` (Module Overview / Home) from `/tiktok/dashboard` (Performance Analytics Dashboard) and `/tiktok/connect` (OAuth Connection Entry). This establishes a clean multi-view navigation model for TikTok operations without conflating the main LINE OA `/dashboard`.

@@ -1,0 +1,190 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { UserRole } from "@prisma/client";
+import { AuthGuard } from "../auth/auth.guard";
+import { TikTokController } from "./tiktok.controller";
+
+test("TikTokController requires authentication and rejects unauthenticated sync and read requests", async () => {
+  const adminUser = {
+    id: "u-admin",
+    email: "admin@oppo.th",
+    displayName: "Admin User",
+    role: UserRole.ADMIN,
+    isActive: true,
+  };
+
+  const viewerUser = {
+    id: "u-viewer",
+    email: "viewer@oppo.th",
+    displayName: "Viewer User",
+    role: UserRole.VIEWER,
+    isActive: true,
+  };
+
+  const fakeAuthService: any = {
+    authenticate: async (token?: string) => {
+      if (token === "valid-admin-session") return adminUser;
+      if (token === "valid-viewer-session") return viewerUser;
+      return null;
+    },
+  };
+
+  const fakeReflector: any = {
+    getAllAndOverride: (key: string) => {
+      if (key === "isPublic") return false;
+      return undefined;
+    },
+  };
+
+  const guard = new AuthGuard(fakeReflector, fakeAuthService);
+
+  const fakeTikTokService: any = {
+    upsertTikTokAccount: async (dto: any) => ({
+      id: "acc-1",
+      openId: dto.profile.open_id,
+      displayName: dto.profile.display_name,
+      followerCount: dto.profile.follower_count,
+      followingCount: dto.profile.following_count,
+      likesCount: dto.profile.likes_count,
+      videoCount: dto.profile.video_count,
+      isVerified: dto.profile.is_verified,
+      updatedAt: new Date().toISOString(),
+      videos: dto.videos,
+      storeMaster: null,
+    }),
+    getLatestTikTokAccount: async () => ({
+      id: "acc-1",
+      openId: "_000sample_open_id",
+      displayName: "OPPO Central World",
+      followerCount: 52000,
+      followingCount: 120,
+      likesCount: 1420000,
+      videoCount: 85,
+      isVerified: true,
+      updatedAt: new Date().toISOString(),
+      videos: [],
+      storeMaster: null,
+    }),
+    listTikTokAccounts: async () => [
+      {
+        id: "acc-1",
+        openId: "_000sample_open_id",
+        displayName: "OPPO Central World",
+        videoCountRecorded: 0,
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  };
+
+  const controller = new TikTokController(fakeTikTokService);
+
+  // 1. Authenticated POST /tiktok/sync with cookie succeeds
+  const requestSyncCookie: any = {
+    headers: { cookie: "oppo_session=valid-admin-session" },
+    method: "POST",
+    path: "/tiktok/sync",
+  };
+  const contextSyncCookie: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncCookie }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  const canSyncCookie = await guard.canActivate(contextSyncCookie);
+  assert.equal(canSyncCookie, true);
+  assert.deepEqual(requestSyncCookie.user, adminUser);
+
+  const syncResult = await controller.syncAccount({
+    accessToken: "act.token_123",
+    profile: {
+      open_id: "_000sample_open_id",
+      display_name: "OPPO Central World",
+      follower_count: 52000,
+      following_count: 120,
+      likes_count: 1420000,
+      video_count: 85,
+      is_verified: true,
+    },
+    videos: [],
+  });
+  assert.equal(syncResult.openId, "_000sample_open_id");
+
+  // 2. Authenticated POST /tiktok/sync with Bearer header succeeds
+  const requestSyncBearer: any = {
+    headers: { authorization: "Bearer valid-admin-session" },
+    method: "POST",
+    path: "/tiktok/sync",
+  };
+  const contextSyncBearer: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncBearer }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  const canSyncBearer = await guard.canActivate(contextSyncBearer);
+  assert.equal(canSyncBearer, true);
+
+  // 3. Unauthenticated POST /tiktok/sync is rejected with 401 Unauthorized
+  const requestSyncUnauth: any = {
+    headers: {},
+    method: "POST",
+    path: "/tiktok/sync",
+  };
+  const contextSyncUnauth: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncUnauth }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  await assert.rejects(
+    async () => guard.canActivate(contextSyncUnauth),
+    { name: "UnauthorizedException", message: "Authentication required" }
+  );
+
+  // 4. Read-only VIEWER role cannot perform POST /tiktok/sync (403 Forbidden)
+  const requestSyncViewer: any = {
+    headers: { cookie: "oppo_session=valid-viewer-session" },
+    method: "POST",
+    path: "/tiktok/sync",
+  };
+  const contextSyncViewer: any = {
+    switchToHttp: () => ({ getRequest: () => requestSyncViewer }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  await assert.rejects(
+    async () => guard.canActivate(contextSyncViewer),
+    { name: "ForbiddenException", message: "Viewer access is read-only" }
+  );
+
+  // 5. Authenticated GET /tiktok/latest succeeds
+  const requestGetCookie: any = {
+    headers: { cookie: "oppo_session=valid-admin-session" },
+    method: "GET",
+    path: "/tiktok/latest",
+  };
+  const contextGetCookie: any = {
+    switchToHttp: () => ({ getRequest: () => requestGetCookie }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  const canGetCookie = await guard.canActivate(contextGetCookie);
+  assert.equal(canGetCookie, true);
+
+  const getResult = await controller.getLatestAccount();
+  assert.ok(getResult);
+  assert.equal(getResult.displayName, "OPPO Central World");
+
+  // 6. Unauthenticated GET /tiktok/latest is rejected with 401 Unauthorized
+  const requestGetUnauth: any = {
+    headers: {},
+    method: "GET",
+    path: "/tiktok/latest",
+  };
+  const contextGetUnauth: any = {
+    switchToHttp: () => ({ getRequest: () => requestGetUnauth }),
+    getHandler: () => ({}),
+    getClass: () => ({}),
+  };
+  await assert.rejects(
+    async () => guard.canActivate(contextGetUnauth),
+    { name: "UnauthorizedException", message: "Authentication required" }
+  );
+});

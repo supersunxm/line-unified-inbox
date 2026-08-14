@@ -277,10 +277,7 @@ export async function fetchTikTokVideoList(
   }));
 }
 
-/**
- * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend API.
- */
-export async function syncTikTokAccountToBackend(params: {
+export interface SyncTikTokAccountParams {
   accessToken: string;
   refreshToken?: string;
   expiresIn?: number;
@@ -289,11 +286,52 @@ export async function syncTikTokAccountToBackend(params: {
   profile: TikTokUserProfile;
   videos: TikTokVideoItem[];
   storeMasterId?: string;
-}): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/tiktok/sync`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+  sessionToken?: string | null;
+}
+
+/**
+ * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend API.
+ * Forwards user session authentication as canonical Authorization: Bearer <sessionToken>.
+ */
+export async function syncTikTokAccountToBackend(params: SyncTikTokAccountParams): Promise<void> {
+  const sessionToken = params.sessionToken?.trim() || null;
+  const sessionTokenPresent = Boolean(sessionToken);
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (sessionToken) {
+    headers["Authorization"] = `Bearer ${sessionToken}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/tiktok/sync`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        accessToken: params.accessToken,
+        refreshToken: params.refreshToken,
+        expiresIn: params.expiresIn,
+        refreshExpiresIn: params.refreshExpiresIn,
+        grantedScopes: params.grantedScopes,
+        profile: params.profile,
+        videos: params.videos,
+        storeMasterId: params.storeMasterId,
+      }),
+    });
+  } catch (netErr) {
+    console.error("[TikTok Backend Sync Diagnostic]", {
+      sessionTokenPresent,
+      backendSyncStatus: "network_error",
+    });
+    throw netErr;
+  }
+
+  console.info("[TikTok Backend Sync Diagnostic]", {
+    sessionTokenPresent,
+    backendSyncStatus: response.status,
   });
 
   if (!response.ok) {
@@ -301,13 +339,53 @@ export async function syncTikTokAccountToBackend(params: {
   }
 }
 
+export interface FetchTikTokAccountOptions {
+  sessionToken?: string | null;
+}
+
 /**
  * Fetches the latest persisted TikTok account overview and video metrics from backend PostgreSQL.
+ * Reads oppo_session from request context or options and forwards as Authorization: Bearer <sessionToken>.
  */
-export async function fetchLatestTikTokAccountFromBackend(): Promise<TikTokStoreData | null> {
+export async function fetchLatestTikTokAccountFromBackend(
+  options?: FetchTikTokAccountOptions
+): Promise<TikTokStoreData | null> {
   try {
+    let sessionToken = options?.sessionToken?.trim() || null;
+
+    // Auto-resolve oppo_session cookie from Next.js server context if not passed explicitly
+    if (!sessionToken) {
+      try {
+        const { cookies } = await import("next/headers");
+        const cookieStore = await cookies();
+        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+      } catch {
+        // Fallback when executed outside Next.js request context
+      }
+    }
+
+    const sessionTokenPresent = Boolean(sessionToken);
+
+    if (!sessionToken) {
+      console.info("[TikTok Backend Read Diagnostic]", {
+        sessionTokenPresent: false,
+        backendReadStatus: "unauthenticated",
+      });
+      return null;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sessionToken}`,
+    };
+
     const response = await fetch(`${API_BASE_URL}/tiktok/latest`, {
+      headers,
       cache: "no-store",
+    });
+
+    console.info("[TikTok Backend Read Diagnostic]", {
+      sessionTokenPresent,
+      backendReadStatus: response.status,
     });
 
     if (!response.ok) {
@@ -350,12 +428,56 @@ export async function fetchLatestTikTokAccountFromBackend(): Promise<TikTokStore
         comment_count: v.commentCount ?? 0,
         share_count: v.shareCount ?? 0,
       })),
-      updatedAt: data.lastSyncedAt,
+      updatedAt: data.lastSyncedAt || data.updatedAt,
       storeMasterId: data.storeMasterId || null,
       storeMaster: data.storeMaster || null,
     };
   } catch {
+    console.error("[TikTok Backend Read Diagnostic]", {
+      backendReadStatus: "exception",
+    });
     return null;
   }
 }
 
+/**
+ * Fetches the list of all persisted TikTok accounts from backend PostgreSQL.
+ */
+export async function fetchTikTokAccountsListFromBackend(
+  options?: FetchTikTokAccountOptions
+): Promise<Array<{ id: string; openId: string; displayName: string; videoCountRecorded: number; updatedAt: string }>> {
+  try {
+    let sessionToken = options?.sessionToken?.trim() || null;
+
+    if (!sessionToken) {
+      try {
+        const { cookies } = await import("next/headers");
+        const cookieStore = await cookies();
+        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+      } catch {
+        // Fallback when executed outside Next.js request context
+      }
+    }
+
+    if (!sessionToken) {
+      return [];
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sessionToken}`,
+    };
+
+    const response = await fetch(`${API_BASE_URL}/tiktok/accounts`, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return (await response.json()) || [];
+  } catch {
+    return [];
+  }
+}

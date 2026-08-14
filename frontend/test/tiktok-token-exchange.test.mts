@@ -124,11 +124,18 @@ test("logTikTokTokenDiagnostic emits booleans and counts without logging sensiti
   assert.doesNotMatch(apiClientSource, /console\.info\([^)]*clientSecret,/);
 });
 
-test("Frontend interacts with backend PostgreSQL sync and query endpoints", () => {
+test("Frontend interacts with backend PostgreSQL sync and query endpoints with canonical Bearer session auth", () => {
   assert.ok(typeof syncTikTokAccountToBackend === "function");
   assert.ok(typeof fetchLatestTikTokAccountFromBackend === "function");
   assert.match(apiClientSource, /\/tiktok\/sync/);
   assert.match(apiClientSource, /\/tiktok\/latest/);
+  assert.match(apiClientSource, /sessionTokenPresent/);
+  assert.match(apiClientSource, /backendSyncStatus/);
+  assert.match(apiClientSource, /backendReadStatus/);
+  assert.match(apiClientSource, /Bearer \$\{sessionToken\}/);
+  // Verify raw cookie header is NOT forwarded to backend
+  assert.doesNotMatch(apiClientSource, /headers\["Cookie"\]/);
+  assert.match(callbackRouteSource, /request\.cookies\.get\("oppo_session"\)/);
   assert.match(callbackRouteSource, /syncTikTokAccountToBackend/);
   assert.match(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
   assert.match(dashboardPageSource, /fetchLatestTikTokAccountFromBackend/);

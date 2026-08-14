@@ -1,6 +1,18 @@
 # AI progress
 
-## Current task: TikTok Frontend Route Restructuring & Performance Dashboard
+## Current task: Canonical Bearer Session Authentication Forwarding for TikTok Backend Sync
+
+- **Canonical Bearer Authentication**:
+  - Implemented single canonical server-to-server authentication pattern (`Authorization: Bearer <sessionToken>`) for all TikTok backend endpoints (`POST /tiktok/sync`, `GET /tiktok/latest`, `GET /tiktok/accounts`).
+  - Extracted solely the `oppo_session` token from incoming `NextRequest` cookies or Server Component `cookies()` context without forwarding raw cookie headers or duplicating cookie parameters.
+  - Fail-closed unauthenticated behavior: If `oppo_session` is absent, requests are short-circuited/rejected with 401 without dispatching unauthenticated empty-token requests.
+  - Safe boolean/status diagnostic telemetry: Logs `sessionTokenPresent: boolean`, `backendSyncStatus`, and `backendReadStatus` while strictly preserving token confidentiality.
+- **Verification**:
+  - Backend tests: Added `backend/src/tiktok/tiktok.controller.spec.ts` testing `AuthGuard` protection (1,113/1,113 passing).
+  - Frontend tests: Updated `frontend/test/tiktok-token-exchange.test.mts` testing Bearer forwarding, cookie exclusion, and diagnostic safety (306/306 passing).
+  - Production builds: Backend `nest build` and Frontend `next build` succeeded with 0 errors.
+
+## Previous task: TikTok Frontend Route Restructuring & Performance Dashboard
 
 - **Route Architecture**:
   - Restructured `/tiktok` to serve as the TikTok Module Overview / Home (`frontend/src/app/tiktok/page.tsx` + `tiktok-overview-view.tsx`).
