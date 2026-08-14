@@ -830,3 +830,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - `message.created` patches the matching loaded row and moves it to the top. Unread counts remain authoritative: because the current SSE contract has no per-user unread count, the client performs a targeted conversation detail reconciliation instead of incrementing locally.
 - Returning from Chat now patches the opened row to unread zero without reloading page 1. Full `_load(reset: true)` remains only for initial load, pull-to-refresh, explicit retry, and pagination.
 - Added `ConversationSummary.copyWith`, nullable detail metadata for targeted unread reconciliation, and pagination-safe cursor copying. Flutter analyze, all 25 Flutter tests, and `git diff --check` pass.
+
+# Current task: Phase 4C.4 initial chat scroll stabilization
+
+- Replaced the one-shot initial `jumpTo` with a bounded three-frame routine that waits for content dimensions and rechecks the current max extent before marking initial scrolling complete.
+- IMAGE rows without a media relation now use the same fixed 240x240 placeholder as other image states, preventing a text-to-image height change during initial layout.
+- Added a widget regression with long variable-height messages, pending media, and an IMAGE without media; the final scroll position reaches `maxScrollExtent`. Flutter analyze, all 26 Flutter tests, and `git diff --check` pass.

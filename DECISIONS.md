@@ -475,3 +475,6 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 # Phase 4C.3 inbox true realtime
 
 - Inbox realtime updates patch the existing immutable conversation summary rather than reloading page 1. Since unread counts are per-user and absent from the shared SSE event, a targeted authorized conversation detail request reconciles unread state; local increments are intentionally avoided. Full refresh remains available for explicit user refresh, retry, and initial load.
+# Phase 4C.4 initial chat scroll
+
+- Initial ChatPage scrolling uses bounded post-frame stabilization rather than a single first-frame jump. It waits for content dimensions and repeats the jump across three frames; realtime append scrolling remains unchanged. All IMAGE states, including missing media metadata, reserve the same fixed viewport.
