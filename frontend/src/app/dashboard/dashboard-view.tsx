@@ -476,7 +476,7 @@ export function DashboardView({
             <ResponseRateCard analytics={analytics.responseAnalytics} language={language} />
             <CustomerDemandCard correlations={analytics.customerDemandProductCorrelation} language={language} />
             <PeakHourAnalysisCard analytics={analytics.peakHourAnalysis} language={language} />
-            <FollowerGrowthCard growth={analytics.summaryCards.followerGrowth} language={language} />
+            <FollowerGrowthCard growth={analytics.summaryCards.followerGrowth} language={language} period={period === "7d" || period === "30d" ? period : "today"} />
             <ActionStatusCard workflow={analytics.actionWorkflowStatus} status={analytics.actionStatus} language={language} />
           </div>
 

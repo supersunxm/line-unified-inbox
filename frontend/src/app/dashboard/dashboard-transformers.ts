@@ -691,8 +691,11 @@ export function transformExecutiveKpiProps(
       title: isTh ? "ผู้ติดตาม LINE OA" : isZh ? "LINE OA 好友数" : "LINE OA Followers",
       value: (followerGrowth?.totalFriends ?? 1993).toLocaleString(),
       trendText: `${netSymbol}${netToday} Net Today`,
-      trendPositive: netToday >= 0,
-      subtext: isTh ? `เพิ่มวันนี้: +${followerGrowth?.addedToday ?? 0}` : `Added today: +${followerGrowth?.addedToday ?? 0}`,
+      subtext: isTh
+        ? `ผู้ติดตามใหม่: ${followerGrowth?.addedToday != null && followerGrowth.addedToday >= 0 ? `+${followerGrowth.addedToday}` : followerGrowth?.addedToday ?? 0}`
+        : isZh
+        ? `新增: ${followerGrowth?.addedToday != null && followerGrowth.addedToday >= 0 ? `+${followerGrowth.addedToday}` : followerGrowth?.addedToday ?? 0}`
+        : `New: ${followerGrowth?.addedToday != null && followerGrowth.addedToday >= 0 ? `+${followerGrowth.addedToday}` : followerGrowth?.addedToday ?? 0}`,
     },
   ];
 }

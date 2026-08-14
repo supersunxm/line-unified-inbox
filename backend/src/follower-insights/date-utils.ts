@@ -88,10 +88,14 @@ export function getDateRangeArray(dateFromStr: string, dateToStr: string): strin
   return result;
 }
 
-export function getPreviousBangkokDateString(isoDateStr: string): string {
+export function getOffsetBangkokDateString(isoDateStr: string, offsetDays: number): string {
   const iso = formatToIsoDate(isoDateStr);
   const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
   const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() - 1);
+  dt.setUTCDate(dt.getUTCDate() + offsetDays);
   return formatDbDateToIso(dt);
+}
+
+export function getPreviousBangkokDateString(isoDateStr: string): string {
+  return getOffsetBangkokDateString(isoDateStr, -1);
 }
