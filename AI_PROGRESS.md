@@ -836,3 +836,20 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Replaced the one-shot initial `jumpTo` with a bounded three-frame routine that waits for content dimensions and rechecks the current max extent before marking initial scrolling complete.
 - IMAGE rows without a media relation now use the same fixed 240x240 placeholder as other image states, preventing a text-to-image height change during initial layout.
 - Added a widget regression with long variable-height messages, pending media, and an IMAGE without media; the final scroll position reaches `maxScrollExtent`. Flutter analyze, all 26 Flutter tests, and `git diff --check` pass.
+
+# Current task: Phase 4C.4.1 initial scroll pagination race
+
+- Added an initial-landing lifecycle guard so older-message pagination remains disabled until content dimensions are available and the bounded initial scroll stabilization completes.
+- Guarded programmatic initial and pagination-restoration jumps from triggering the older-message listener. Manual top scrolling still loads the next cursor page.
+- Added a long-conversation regression with image rows and a pagination cursor proving no automatic older request during landing and successful manual pagination afterward.
+- Flutter analyze, all 26 Flutter tests, debug APK build, and `git diff --check` pass.
+
+# Current task: Fix Executive Dashboard Follower KPI Accuracy and Consistency
+
+- Root Cause: `DashboardAnalyticsService` previously called `findFirst({ orderBy: { snapshotDate: "desc" } })` to fetch a single arbitrary OA snapshot across the entire database, mapping `targetedReaches -> addedToday` (e.g. +1,027), `blocks -> blockedToday` (e.g. -47), and `netToday -> 980`. This incorrectly conflated targeted reaches with daily added friends and cumulative blocks with daily new blocks, completely ignoring the other 143 stores in the network.
+- Extracted shared follower aggregation helper `backend/src/follower-insights/follower-aggregation.helper.ts` with pure calculation functions `calculateFollowerGrowthMetrics` and `calculateStoreFollowerRanking`.
+- Total Followers is now strictly a stock metric computed by summing latest valid ready snapshots per active eligible LINE OA in the network scope.
+- Growth metrics (New Followers, Blocked, Net Growth) are computed by delta comparison between target date and baseline date (`today - 1d` for today, `today - 7d` for 7d, `today - 30d` for 30d) for comparable accounts only (where both target and baseline ready snapshots exist). Accounts with missing baseline are safely excluded from deltas and never assumed to have 0 baseline.
+- Fixed `FollowerInsightsService.getSummary` snapshot query to include previous-day baseline (`minDateUtc = toUtcDateForDb(getPreviousBangkokDateString(dates[0]))`) so 1-day queries correctly compute `dailyIncrease`.
+- Updated frontend cards (`FollowerGrowthCard`, `ExecutiveHero`, `dashboard-transformers`) with dynamic period labeling and faithful metrics.
+- Added comprehensive unit test suite `backend/src/dashboard-follower-growth.spec.ts` (5 tests passing). Verified 1095 backend tests, backend build, 243 frontend tests, and frontend build.

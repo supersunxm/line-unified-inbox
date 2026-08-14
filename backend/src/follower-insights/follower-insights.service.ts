@@ -736,7 +736,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
       }));
     }
 
-    const minDateUtc = toUtcDateForDb(dates[0]);
+    const minDateUtc = toUtcDateForDb(getPreviousBangkokDateString(dates[0]));
     const maxDateUtc = toUtcDateForDb(dates[dates.length - 1]);
 
     const snapshots = await this.prisma.lineOaFollowerSnapshot.findMany({

@@ -1,3 +1,9 @@
+# Phase 4C.4.1 initial scroll pagination guard (2026-08-14)
+
+- Older-message pagination is disabled during initial conversation landing and enabled only after content dimensions and the bounded initial scroll routine complete.
+- Programmatic scroll jumps are marked so the pagination listener cannot mistake initial positioning or viewport restoration for a user request to load older messages.
+- Manual scrolling remains the only trigger for the first older-page fetch, preserving realtime append behavior and pagination viewport stability.
+
 # Store Master ID Business Key Propagation (2026-08-14)
 
 - **Strict Identity Architecture**:
@@ -478,3 +484,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 # Phase 4C.4 initial chat scroll
 
 - Initial ChatPage scrolling uses bounded post-frame stabilization rather than a single first-frame jump. It waits for content dimensions and repeats the jump across three frames; realtime append scrolling remains unchanged. All IMAGE states, including missing media metadata, reserve the same fixed viewport.
+
+# Follower KPI Alignment and Shared Calculation (2026-08-14)
+
+- Shared Follower Aggregation Helper: Extracted pure calculation functions (`calculateFollowerGrowthMetrics`, `calculateStoreFollowerRanking`, and `getPeriodDates`) in `backend/src/follower-insights/follower-aggregation.helper.ts`.
+- Executive Dashboard and Follower Insights now share identical calculation semantics for follower metrics:
+  1. Total Followers is a stock metric computed by summing the latest valid ready snapshot per unique eligible active OA in the permission scope.
+  2. Growth Metrics (New Followers, Blocked, Net Growth) are computed via delta comparison between target date and baseline date (`today - 1d` for today, `today - 7d` for 7d, `today - 30d` for 30d) strictly for comparable accounts where both target and baseline ready snapshots exist.
+  3. Accounts with missing baseline snapshots are excluded from growth deltas (never assumed to have 0 baseline or 0 delta) while remaining included in total stock.
+  4. Follower Insights `getSummary` range query now includes the preceding day baseline to guarantee valid `dailyIncrease` for single-day and range start dates.

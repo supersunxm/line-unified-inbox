@@ -1,5 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "./prisma.service";
+import {
+  calculateFollowerGrowthMetrics,
+  calculateStoreFollowerRanking,
+  getPeriodDates,
+} from "./follower-insights/follower-aggregation.helper";
+import { toUtcDateForDb } from "./follower-insights/date-utils";
 
 export type AnalyticsPeriod = "today" | "7d" | "30d";
 
@@ -767,65 +773,94 @@ export class DashboardAnalyticsService {
       : null;
 
     // Follower Insights Summary & Store Followers Ranking (Top 10 vs Bottom 10)
-    const latestFollowerSnapshot = this.prisma?.lineOaFollowerSnapshot
-      ? await this.prisma.lineOaFollowerSnapshot.findFirst({
-          orderBy: { snapshotDate: "desc" },
-        })
-      : null;
-
     const storeFollowerAccounts = this.prisma?.lineOfficialAccount
       ? await this.prisma.lineOfficialAccount.findMany({
           where: {
             isActive: true,
             archivedAt: null,
+            storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
             store: { archivedAt: null },
           },
           select: {
             id: true,
             name: true,
-            store: { select: { id: true, name: true, storeMaster: { select: { externalStoreId: true } } } },
-            followerSnapshots: {
-              where: { followers: { not: null } },
-              orderBy: { snapshotDate: "desc" },
-              take: 1,
-              select: { followers: true, snapshotDate: true },
+            storeId: true,
+            store: {
+              select: {
+                id: true,
+                name: true,
+                storeMaster: { select: { externalStoreId: true } },
+              },
             },
           },
         })
       : [];
 
-    const storeFollowersMap = new Map<string, { storeId: string; storeName: string; followers: number }>();
-    for (const oa of storeFollowerAccounts) {
-      if (oa.store && oa.followerSnapshots.length > 0 && typeof oa.followerSnapshots[0].followers === "number") {
-        const existing = storeFollowersMap.get(oa.store.id) ?? {
-          storeId: oa.store.id,
-          storeName: oa.store.name,
-          followers: 0,
-        };
-        existing.followers += oa.followerSnapshots[0].followers;
-        storeFollowersMap.set(oa.store.id, existing);
+    const accountIds = storeFollowerAccounts.map((a) => a.id);
+
+    const { targetIsoDate, baselineIsoDate } = getPeriodDates(period, now);
+    const targetUtcDate = toUtcDateForDb(targetIsoDate);
+    const baselineUtcDate = toUtcDateForDb(baselineIsoDate);
+
+    const periodSnapshots = this.prisma?.lineOaFollowerSnapshot && accountIds.length > 0
+      ? await this.prisma.lineOaFollowerSnapshot.findMany({
+          where: {
+            lineOaId: { in: accountIds },
+            snapshotDate: { in: [targetUtcDate, baselineUtcDate] },
+            status: "ready",
+          },
+          select: {
+            lineOaId: true,
+            snapshotDate: true,
+            status: true,
+            followers: true,
+            targetedReaches: true,
+            blocks: true,
+          },
+        })
+      : [];
+
+    const latestSnapshots = this.prisma?.lineOaFollowerSnapshot && accountIds.length > 0
+      ? await this.prisma.lineOaFollowerSnapshot.findMany({
+          where: {
+            lineOaId: { in: accountIds },
+            status: "ready",
+            followers: { not: null },
+          },
+          orderBy: { snapshotDate: "desc" },
+          select: {
+            lineOaId: true,
+            followers: true,
+          },
+        })
+      : [];
+
+    const latestFollowersPerOa = new Map<string, number>();
+    for (const s of latestSnapshots) {
+      if (!latestFollowersPerOa.has(s.lineOaId) && typeof s.followers === "number") {
+        latestFollowersPerOa.set(s.lineOaId, s.followers);
       }
     }
 
-    const validStoreFollowers = Array.from(storeFollowersMap.values())
-      .filter((s) => s.followers > 0)
-      .sort((a, b) => b.followers - a.followers);
+    const rankingResult = calculateStoreFollowerRanking({
+      accounts: storeFollowerAccounts,
+      latestFollowersPerOa,
+    });
 
-    const top10Followers = validStoreFollowers.slice(0, 10);
-    const bottom10Followers = [...validStoreFollowers].reverse().slice(0, 10).sort((a, b) => b.followers - a.followers);
+    const top10Followers = rankingResult.top10;
+    const bottom10Followers = rankingResult.bottom10;
+    const top10Average = rankingResult.top10Average;
+    const bottom10Average = rankingResult.bottom10Average;
+    const followerRatio = rankingResult.ratio;
 
-    const top10Average = top10Followers.length > 0 ? Math.round(top10Followers.reduce((s, x) => s + x.followers, 0) / top10Followers.length) : 0;
-    const bottom10Average = bottom10Followers.length > 0 ? Math.round(bottom10Followers.reduce((s, x) => s + x.followers, 0) / bottom10Followers.length) : 0;
-    const followerRatio = bottom10Average > 0 ? +(top10Average / bottom10Average).toFixed(1) : 0;
-
-    const totalFollowersCount = validStoreFollowers.reduce((s, x) => s + x.followers, 0) || ((latestFollowerSnapshot as any)?.followersCount ?? latestFollowerSnapshot?.followers ?? 0);
-
-    const followerGrowth = {
-      totalFriends: totalFollowersCount,
-      addedToday: latestFollowerSnapshot?.targetedReaches ?? 0,
-      blockedToday: latestFollowerSnapshot?.blocks ?? 0,
-      netToday: (latestFollowerSnapshot?.targetedReaches ?? 0) - (latestFollowerSnapshot?.blocks ?? 0),
-    };
+    const followerGrowth = calculateFollowerGrowthMetrics({
+      accounts: storeFollowerAccounts,
+      targetIsoDate,
+      baselineIsoDate,
+      period,
+      snapshots: periodSnapshots,
+      latestFollowersPerOa,
+    });
 
     // Operation Health Breakdown
     const pendingControlScore = Math.max(0, 100 - pendingCount * 3);

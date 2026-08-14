@@ -165,8 +165,10 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
   const topSharePct = Math.round((top10Avg / totalAvgSum) * 100);
   const bottomSharePct = Math.max(0, 100 - topSharePct);
 
-  const grossAddedTotal = addedFollowers || 1;
-  const netGrowthPct = Math.round((Math.max(0, netFollowersToday) / grossAddedTotal) * 100);
+  const grossAddedTotal = addedFollowers > 0 ? addedFollowers : 0;
+  const netGrowthPct = grossAddedTotal > 0
+    ? Math.min(100, Math.max(0, Math.round((netFollowersToday / grossAddedTotal) * 100)))
+    : (netFollowersToday > 0 ? 100 : 0);
   const blockedLossPct = Math.max(0, 100 - netGrowthPct);
 
   return (
@@ -363,7 +365,7 @@ export function ExecutiveHero({ analytics, language, getStoreDisplayName }: Exec
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">
-                    {t.netGrowth} (+{netFollowersToday.toLocaleString()})
+                    {t.netGrowth} ({netFollowersToday >= 0 ? `+${netFollowersToday.toLocaleString()}` : netFollowersToday.toLocaleString()})
                   </span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
                     {netGrowthPct}%
