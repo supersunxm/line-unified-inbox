@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { fetchLatestTikTokAccountFromBackend } from "../tiktok-api-client";
 import { TikTokDashboardView } from "./tiktok-dashboard-view";
 
@@ -15,6 +17,13 @@ export const metadata: Metadata = {
 };
 
 export default async function TikTokDashboardPage() {
-  const data = await fetchLatestTikTokAccountFromBackend();
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("oppo_session")?.value?.trim();
+
+  if (!sessionToken) {
+    redirect("/login");
+  }
+
+  const data = await fetchLatestTikTokAccountFromBackend({ sessionToken });
   return <TikTokDashboardView data={data} />;
 }

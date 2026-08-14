@@ -1,6 +1,19 @@
 # AI progress
 
-## Current task: Canonical Bearer Session Authentication Forwarding for TikTok Backend Sync
+## Current task: Investigation and Fix for oppo_session Scoping and TikTok Authentication Boundary
+
+- **Root Cause Resolution**:
+  - The cross-origin browser setup (`lineoppo.click` vs backend `*.up.railway.app`) previously set `oppo_session` only on the backend domain, meaning Next.js server requests (`/tiktok`, `/tiktok/dashboard`, `/tiktok/callback`) had no cookie.
+  - Implemented same-origin Next.js rewrite for `/auth/:path*` (`frontend/next.config.ts`), routing client-side authentication calls through `lineoppo.click` to establish `Set-Cookie: oppo_session` with `Path=/; HttpOnly; Secure` on the frontend domain.
+  - Enforced the authentication boundary across all TikTok routes (`/tiktok`, `/tiktok/dashboard`, `/tiktok/connect`, `/tiktok/callback`), redirecting unauthenticated requests directly to `/login` to reuse the existing application authentication UX rather than silently failing or displaying empty states.
+  - Backend `sessionCookieOptions` explicitly supports `SESSION_COOKIE_DOMAIN` while strictly enforcing `Path=/`, `HttpOnly`, and `Secure` in production.
+  - Added safe `requestHasOppoSession: boolean` diagnostic telemetry.
+- **Verification**:
+  - Backend tests: `1,114 / 1,114 passed (100%)`.
+  - Frontend tests: `307 / 307 passed (100%)`.
+  - Production builds: Backend `nest build` and Frontend `next build` completed with 0 errors.
+
+## Previous task: Canonical Bearer Session Authentication Forwarding for TikTok Backend Sync
 
 - **Canonical Bearer Authentication**:
   - Implemented single canonical server-to-server authentication pattern (`Authorization: Bearer <sessionToken>`) for all TikTok backend endpoints (`POST /tiktok/sync`, `GET /tiktok/latest`, `GET /tiktok/accounts`).

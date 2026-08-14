@@ -229,3 +229,25 @@ test("Dashboard and callback routes are NOT linked from existing TopNavigation",
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/dashboard"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
 });
+
+test("Authentication boundary: TikTok routes require oppo_session and redirect to /login when unauthenticated", () => {
+  const nextConfigContent = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
+  const apiLibContent = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+  const callbackValidatorSource = readFileSync(new URL("../src/app/tiktok/callback/tiktok-callback-validator.ts", import.meta.url), "utf8");
+
+  // Next.js rewrites proxy /auth/* to establish oppo_session cookie on lineoppo.click
+  assert.match(nextConfigContent, /createAuthRewrite/);
+  assert.match(nextConfigContent, /source:\s*["']\/auth\/:path\*["']/);
+  assert.match(apiLibContent, /path\.startsWith\(["']\/auth\/["']\)/);
+
+  // TikTok Overview, Dashboard, Connect, and Callback redirect unauthenticated requests to /login
+  assert.match(overviewPageSource, /redirect\(["']\/login["']\)/);
+  assert.match(dashboardPageSource, /redirect\(["']\/login["']\)/);
+  assert.match(connectPageSource, /redirect\(["']\/login["']\)/);
+  assert.match(callbackRouteSource, /createRedirectResponse\(loginUrl\)/);
+
+  // Safe diagnostics log requestHasOppoSession boolean
+  assert.match(callbackRouteSource, /requestHasOppoSession/);
+  assert.match(callbackValidatorSource, /requestHasOppoSession:\s*Boolean/);
+});
+

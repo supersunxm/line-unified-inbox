@@ -1,3 +1,9 @@
+# Next.js Same-Origin Auth Proxy & TikTok Route Authentication Boundary (2026-08-14)
+
+- **Same-Origin Authentication Proxy (`/auth/* -> API_BASE_URL/auth/*`)**: To guarantee that `Set-Cookie: oppo_session` is set directly on the frontend domain (`lineoppo.click`) with `Path=/; HttpOnly; Secure`, Next.js rewrites `/auth/:path*` to the backend. Browser client calls in `api.ts` dispatch to same-origin `/auth/*`, making the session cookie available to Next.js Server Components and Route Handlers on `lineoppo.click`.
+- **Enforced Authentication Boundary on TikTok Routes**: `/tiktok`, `/tiktok/dashboard`, `/tiktok/connect`, and `/tiktok/callback` now enforce active session validation via `cookies()`. Unauthenticated requests redirect to `/login` to reuse the existing application authentication UX rather than silently failing backend sync or rendering empty dashboard states.
+- **Safe Cookie Scoping & Configuration**: Cookie remains `Path=/`, `HttpOnly: true`, `Secure: true` in production, `SameSite: "none"` (or `"lax"` for same-origin proxying), with optional `SESSION_COOKIE_DOMAIN` support without creating second sessions.
+
 # Canonical Bearer Session Authentication for Server-to-Server TikTok Endpoints (2026-08-14)
 
 - **Single Canonical Server-to-Server Auth (`Authorization: Bearer <sessionToken>`)**: When Next.js Route Handlers (`/tiktok/callback`) or Server Components (`/tiktok`, `/tiktok/dashboard`) call backend endpoints protected by `AuthGuard`, the authenticated `oppo_session` token is extracted from the request context and forwarded solely as an `Authorization: Bearer <token>` header. Raw incoming browser cookie headers and duplicate `Cookie: oppo_session=...` headers are strictly excluded.

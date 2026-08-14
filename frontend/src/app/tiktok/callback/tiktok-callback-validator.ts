@@ -25,6 +25,7 @@ export interface TikTokDiagnosticInfo {
   stateMatched: boolean;
   hasCode: boolean;
   hasError: boolean;
+  requestHasOppoSession?: boolean;
 }
 
 export function logTikTokCallbackDiagnostic(info: TikTokDiagnosticInfo): void {
@@ -37,6 +38,7 @@ export function logTikTokCallbackDiagnostic(info: TikTokDiagnosticInfo): void {
       stateMatched: info.stateMatched,
       hasCode: info.hasCode,
       hasError: info.hasError,
+      requestHasOppoSession: Boolean(info.requestHasOppoSession),
     });
   }
 }

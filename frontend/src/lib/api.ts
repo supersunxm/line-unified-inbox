@@ -46,7 +46,8 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const requestUrl = `${API_BASE_URL}${path}`;
+  const isBrowser = typeof window !== "undefined";
+  const requestUrl = isBrowser && path.startsWith("/auth/") ? path : `${API_BASE_URL}${path}`;
   let response: Response;
 
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;

@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { TikTokConnectForm } from "./connect-form";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Connect TikTok Account | OPPO Retail TikTok Monitor",
@@ -12,7 +16,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TikTokConnectPage() {
+export default async function TikTokConnectPage() {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("oppo_session")?.value?.trim();
+
+  if (!sessionToken) {
+    redirect("/login");
+  }
+
   const isConfigured = Boolean(process.env.TIKTOK_CLIENT_KEY);
 
   return (

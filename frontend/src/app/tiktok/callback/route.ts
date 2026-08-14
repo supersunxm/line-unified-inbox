@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
     state && cookieState && timingSafeStringEqual(state, cookieState)
   );
 
+  const sessionToken = request.cookies.get("oppo_session")?.value?.trim() || null;
+  const requestHasOppoSession = Boolean(sessionToken);
+
   logTikTokCallbackDiagnostic({
     callbackStatePresent,
     stateCookiePresent,
@@ -49,6 +52,7 @@ export async function GET(request: NextRequest) {
     stateMatched,
     hasCode: Boolean(code),
     hasError: Boolean(error),
+    requestHasOppoSession,
   });
 
   const validationResult = processTikTokCallbackParams({
@@ -119,7 +123,10 @@ export async function GET(request: NextRequest) {
   }
 
   // 4. Save retrieved account data into PostgreSQL backend store (tokens encrypted at rest)
-  const sessionToken = request.cookies.get("oppo_session")?.value?.trim() || null;
+  if (!sessionToken) {
+    const loginUrl = new URL("/login", publicOrigin);
+    return createRedirectResponse(loginUrl);
+  }
 
   try {
     await syncTikTokAccountToBackend({

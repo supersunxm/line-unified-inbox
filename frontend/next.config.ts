@@ -8,9 +8,19 @@ export function createFriendSourceLinkRewrite(apiBaseUrl: string) {
   };
 }
 
+export function createAuthRewrite(apiBaseUrl: string) {
+  return {
+    source: "/auth/:path*",
+    destination: `${apiBaseUrl}/auth/:path*`,
+  };
+}
+
 const nextConfig: NextConfig = {
   async rewrites() {
-    return [createFriendSourceLinkRewrite(API_BASE_URL)];
+    return [
+      createFriendSourceLinkRewrite(API_BASE_URL),
+      createAuthRewrite(API_BASE_URL),
+    ];
   },
 };
 
