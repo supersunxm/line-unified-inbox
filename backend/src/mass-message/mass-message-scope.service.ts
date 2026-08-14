@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
-import { BmReplyStatus, UserRole } from "@prisma/client";
+import { BmReplyStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { StoreAccessService } from "../auth/store-access.service";
@@ -35,6 +35,7 @@ export class MassMessageScopeService {
       code: string | null;
       isActive: boolean;
       archivedAt: Date | null;
+      storeMaster: { externalStoreId: string | null } | null;
       lineOfficialAccounts: Array<{
         id: string;
         name: string;
@@ -57,6 +58,7 @@ export class MassMessageScopeService {
           code: true,
           isActive: true,
           archivedAt: true,
+          storeMaster: { select: { externalStoreId: true } },
           lineOfficialAccounts: {
             where: { isActive: true, archivedAt: null },
             select: {
@@ -84,6 +86,7 @@ export class MassMessageScopeService {
           code: true,
           isActive: true,
           archivedAt: true,
+          storeMaster: { select: { externalStoreId: true } },
           lineOfficialAccounts: {
             where: { isActive: true, archivedAt: null },
             select: {
@@ -103,10 +106,13 @@ export class MassMessageScopeService {
     const results: StoreScopeItem[] = [];
 
     for (const store of candidateStores) {
+      const masterStoreId = store.storeMaster?.externalStoreId ?? null;
       // Check user authorization for this specific store
       if (accessibleStoreIds && !accessibleStoreIds.includes(store.id)) {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: null,
@@ -123,6 +129,8 @@ export class MassMessageScopeService {
       if (!store.isActive || store.archivedAt) {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: null,
@@ -139,6 +147,8 @@ export class MassMessageScopeService {
       if (!oa || !oa.isActive || oa.archivedAt) {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: oa?.id ?? null,
@@ -154,6 +164,8 @@ export class MassMessageScopeService {
       if (!oa.encryptedChannelAccessToken) {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: oa.id,
@@ -172,6 +184,8 @@ export class MassMessageScopeService {
       } catch {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: oa.id,
@@ -194,6 +208,8 @@ export class MassMessageScopeService {
       if (recipientUserIds.length === 0) {
         results.push({
           storeId: store.id,
+          masterStoreId,
+          externalStoreId: masterStoreId,
           storeName: store.name,
           storeCode: store.code,
           lineOfficialAccountId: oa.id,
@@ -208,6 +224,8 @@ export class MassMessageScopeService {
 
       results.push({
         storeId: store.id,
+        masterStoreId,
+        externalStoreId: masterStoreId,
         storeName: store.name,
         storeCode: store.code,
         lineOfficialAccountId: oa.id,

@@ -17,7 +17,7 @@ import { GenerateFriendSourceLinksDto, QueryFriendSourceLinksDto, UpdateFriendSo
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 type LinkWithRelations = Prisma.FriendSourceLinkGetPayload<{
-  include: { store: true; lineOa: true; _count: { select: { clicks: true } } };
+  include: { store: { include: { storeMaster: true } }; lineOa: true; _count: { select: { clicks: true } } };
 }>;
 
 export function generateShortCode(length = 8): string {
@@ -80,7 +80,7 @@ export class FriendSourceLinksService {
       for (const source of ALL_SOURCES) {
         let existing: LinkWithRelations | null = await this.prisma.friendSourceLink.findUnique({
           where: { lineOaId_source: { lineOaId: acc.id, source } },
-          include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
+          include: { store: { include: { storeMaster: true } }, lineOa: true, _count: { select: { clicks: true } } },
         });
 
         if (existing) {
@@ -104,7 +104,7 @@ export class FriendSourceLinksService {
                 destinationUrl,
                 isActive: true,
               },
-              include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
+              include: { store: { include: { storeMaster: true } }, lineOa: true, _count: { select: { clicks: true } } },
             });
           } catch (err: unknown) {
             const errWithMeta = err as { code?: string; meta?: { target?: unknown } } | null | undefined;
@@ -117,7 +117,7 @@ export class FriendSourceLinksService {
               if (targetArray.includes("lineOaId")) {
                 existing = await this.prisma.friendSourceLink.findUnique({
                   where: { lineOaId_source: { lineOaId: acc.id, source } },
-                  include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
+                  include: { store: { include: { storeMaster: true } }, lineOa: true, _count: { select: { clicks: true } } },
                 });
                 if (existing) {
                   existingCount++;
@@ -161,7 +161,7 @@ export class FriendSourceLinksService {
 
     const links = await this.prisma.friendSourceLink.findMany({
       where,
-      include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
+      include: { store: { include: { storeMaster: true } }, lineOa: true, _count: { select: { clicks: true } } },
       orderBy: [{ store: { name: "asc" } }, { source: "asc" }],
     });
 
@@ -232,7 +232,7 @@ export class FriendSourceLinksService {
     const updated = await this.prisma.friendSourceLink.update({
       where: { id },
       data,
-      include: { store: true, lineOa: true, _count: { select: { clicks: true } } },
+      include: { store: { include: { storeMaster: true } }, lineOa: true, _count: { select: { clicks: true } } },
     });
 
     return this.formatLinkResponse(updated);
@@ -241,7 +241,7 @@ export class FriendSourceLinksService {
   async getSummary() {
     const links = await this.prisma.friendSourceLink.findMany({
       include: {
-        store: true,
+        store: { include: { storeMaster: true } },
         _count: { select: { clicks: true } },
       },
       orderBy: [{ store: { name: "asc" } }, { source: "asc" }],
@@ -274,6 +274,8 @@ export class FriendSourceLinksService {
       string,
       {
         storeId: string;
+        masterStoreId: string | null;
+        externalStoreId: string | null;
         storeName: string;
         storeCode: string | null;
         source: FriendSource;
@@ -294,6 +296,8 @@ export class FriendSourceLinksService {
       if (!item) {
         item = {
           storeId: link.storeId,
+          masterStoreId: link.store?.storeMaster?.externalStoreId ?? null,
+          externalStoreId: link.store?.storeMaster?.externalStoreId ?? null,
           storeName: link.store?.name || link.storeId,
           storeCode: link.store?.code || null,
           source: link.source,
@@ -859,6 +863,8 @@ export class FriendSourceLinksService {
     return {
       id: link.id,
       storeId: link.storeId,
+      masterStoreId: link.store?.storeMaster?.externalStoreId ?? null,
+      externalStoreId: link.store?.storeMaster?.externalStoreId ?? null,
       storeName: link.store?.name || null,
       storeCode: link.store?.code || null,
       lineOaId: link.lineOaId,

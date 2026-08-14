@@ -7,7 +7,10 @@ export type UserRolePermission = "HEAD_OFFICE" | "AREA_MANAGER" | "STORE_MANAGER
 
 export type StorePerformanceRow = {
   rank: number;
+  id?: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   messages: number;
   replied: number;
@@ -24,6 +27,8 @@ export type StorePerformanceRow = {
 
 export type NeedActionStoreItem = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   pending: number;
   responseRate: number;
@@ -39,6 +44,8 @@ export type NeedActionStoreItem = {
 
 export type SlaRiskPredictionItem = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   currentWaitingHours: number;
   expectedBreachHours: number;
@@ -88,6 +95,8 @@ export type ProductDemandCorrelationItem = {
 
 export type StoreQuickViewData = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   messages: number;
   answered: number;
@@ -165,7 +174,12 @@ export class DashboardAnalyticsService {
     // Fetch active stores scoped to permissions
     const activeStores = await this.prisma.store.findMany({
       where: storeWhereClause,
-      select: { id: true, name: true, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        storeMaster: { select: { externalStoreId: true } },
+      },
       orderBy: { name: "asc" },
     });
 
@@ -178,7 +192,13 @@ export class DashboardAnalyticsService {
         createdAt: { gte: startDate },
       },
       include: {
-        store: { select: { id: true, name: true } },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            storeMaster: { select: { externalStoreId: true } },
+          },
+        },
         messages: {
           select: { direction: true, sentAt: true },
           orderBy: { sentAt: "asc" },
@@ -232,6 +252,8 @@ export class DashboardAnalyticsService {
 
     type StoreAgg = {
       storeId: string;
+      masterStoreId: string | null;
+      externalStoreId: string | null;
       storeName: string;
       messages: number;
       replied: number;
@@ -248,6 +270,8 @@ export class DashboardAnalyticsService {
     for (const st of activeStores) {
       storeAggMap.set(st.id, {
         storeId: st.id,
+        masterStoreId: st.storeMaster?.externalStoreId ?? null,
+        externalStoreId: st.storeMaster?.externalStoreId ?? null,
         storeName: st.name,
         messages: 0,
         replied: 0,
@@ -266,6 +290,8 @@ export class DashboardAnalyticsService {
       const storeId = conv.storeId;
       const agg = storeAggMap.get(storeId) ?? {
         storeId,
+        masterStoreId: conv.store?.storeMaster?.externalStoreId ?? null,
+        externalStoreId: conv.store?.storeMaster?.externalStoreId ?? null,
         storeName: conv.store?.name ?? "Unknown Store",
         messages: 0,
         replied: 0,
@@ -541,7 +567,10 @@ export class DashboardAnalyticsService {
 
       storeRows.push({
         rank: 0,
+        id: agg.storeId,
         storeId: agg.storeId,
+        masterStoreId: agg.masterStoreId,
+        externalStoreId: agg.externalStoreId,
         storeName: agg.storeName,
         messages: agg.messages,
         replied: agg.replied,
@@ -558,6 +587,8 @@ export class DashboardAnalyticsService {
 
       storeQuickViews[agg.storeId] = {
         storeId: agg.storeId,
+        masterStoreId: agg.masterStoreId,
+        externalStoreId: agg.externalStoreId,
         storeName: agg.storeName,
         messages: agg.messages,
         answered: agg.replied,
@@ -608,6 +639,8 @@ export class DashboardAnalyticsService {
 
         return {
           storeId: agg.storeId,
+          masterStoreId: agg.masterStoreId,
+          externalStoreId: agg.externalStoreId,
           storeName: agg.storeName,
           currentWaitingHours: waitingHours,
           expectedBreachHours: breachInHours,
@@ -635,6 +668,8 @@ export class DashboardAnalyticsService {
 
         return {
           storeId: s.storeId,
+          masterStoreId: s.masterStoreId,
+          externalStoreId: s.externalStoreId,
           storeName: s.storeName,
           pending: s.pending,
           responseRate: s.responseRate24h,
@@ -732,28 +767,32 @@ export class DashboardAnalyticsService {
       : null;
 
     // Follower Insights Summary & Store Followers Ranking (Top 10 vs Bottom 10)
-    const latestFollowerSnapshot = await this.prisma.lineOaFollowerSnapshot.findFirst({
-      orderBy: { snapshotDate: "desc" },
-    });
-
-    const storeFollowerAccounts = await this.prisma.lineOfficialAccount.findMany({
-      where: {
-        isActive: true,
-        archivedAt: null,
-        store: { archivedAt: null },
-      },
-      select: {
-        id: true,
-        name: true,
-        store: { select: { id: true, name: true } },
-        followerSnapshots: {
-          where: { followers: { not: null } },
+    const latestFollowerSnapshot = this.prisma?.lineOaFollowerSnapshot
+      ? await this.prisma.lineOaFollowerSnapshot.findFirst({
           orderBy: { snapshotDate: "desc" },
-          take: 1,
-          select: { followers: true, snapshotDate: true },
-        },
-      },
-    });
+        })
+      : null;
+
+    const storeFollowerAccounts = this.prisma?.lineOfficialAccount
+      ? await this.prisma.lineOfficialAccount.findMany({
+          where: {
+            isActive: true,
+            archivedAt: null,
+            store: { archivedAt: null },
+          },
+          select: {
+            id: true,
+            name: true,
+            store: { select: { id: true, name: true, storeMaster: { select: { externalStoreId: true } } } },
+            followerSnapshots: {
+              where: { followers: { not: null } },
+              orderBy: { snapshotDate: "desc" },
+              take: 1,
+              select: { followers: true, snapshotDate: true },
+            },
+          },
+        })
+      : [];
 
     const storeFollowersMap = new Map<string, { storeId: string; storeName: string; followers: number }>();
     for (const oa of storeFollowerAccounts) {

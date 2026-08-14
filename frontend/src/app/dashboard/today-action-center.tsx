@@ -134,6 +134,11 @@ export function TodayActionCenter({
                   <div className="flex items-center gap-2">
                     <span className="text-base">🏬</span>
                     <h3 className="text-base font-bold text-[var(--foreground)]">
+                      {(item.masterStoreId || item.externalStoreId) && (
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1.5 opacity-80 font-normal">
+                          [{item.masterStoreId ?? item.externalStoreId}]
+                        </span>
+                      )}
                       {getStoreDisplayName(item.storeName || t.unassignedStore)}
                     </h3>
                   </div>
@@ -149,6 +154,11 @@ export function TodayActionCenter({
                       {t.store}
                     </div>
                     <div className="mt-1 font-bold text-[var(--foreground)] text-sm truncate">
+                      {(item.masterStoreId || item.externalStoreId) && (
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1 opacity-80 font-normal">
+                          [{item.masterStoreId ?? item.externalStoreId}]
+                        </span>
+                      )}
                       {getStoreDisplayName(item.storeName)}
                     </div>
                   </div>

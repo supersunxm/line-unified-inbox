@@ -424,7 +424,11 @@ export class ConversationsService {
     const stores = await this.prisma.store.findMany({
       where: { archivedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        storeMaster: { select: { externalStoreId: true } },
+      },
     });
 
     const resetFilter = await this.operations.getOperationalConversationFilter();
@@ -490,7 +494,10 @@ export class ConversationsService {
     const storesList = stores.map((store) => {
       const counts = storeMap.get(store.id) ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
       return {
+        id: store.id,
         storeId: store.id,
+        masterStoreId: store.storeMaster?.externalStoreId ?? null,
+        externalStoreId: store.storeMaster?.externalStoreId ?? null,
         storeName: store.name,
         notReplied: counts.notReplied,
         notifiedBm: counts.notifiedBm,

@@ -3,6 +3,7 @@ import { getFriendSourceLinksText, type Language } from "./friend-source-links-t
 import { formatConversionRate } from "./friend-source-links-utils.ts";
 
 export type StoreDistributionRow = {
+  masterStoreId: string;
   storeName: string;
   storeCode: string;
   lineOaName: string;
@@ -20,6 +21,7 @@ export type StoreDistributionRow = {
 };
 
 export type LinkDetailRow = {
+  masterStoreId: string;
   storeName: string;
   storeCode: string;
   lineOaName: string;
@@ -89,6 +91,7 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
   const map = new Map<
     string,
     {
+      masterStoreId: string;
       storeName: string;
       storeCode: string;
       lineOaName: string;
@@ -110,6 +113,7 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
     let item = map.get(key);
     if (!item) {
       item = {
+        masterStoreId: link.masterStoreId ?? link.externalStoreId ?? (link as any).storeMaster?.externalStoreId ?? "",
         storeName: link.storeName ?? "",
         storeCode: link.storeCode ?? "",
         lineOaName: link.lineOaName ?? "",
@@ -130,6 +134,8 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
     if (link.storeName) item.storeName = link.storeName;
     if (link.storeCode) item.storeCode = link.storeCode;
     if (link.lineOaName) item.lineOaName = link.lineOaName;
+    const storeMasterId = link.masterStoreId ?? link.externalStoreId ?? (link as any).storeMaster?.externalStoreId ?? "";
+    if (storeMasterId) item.masterStoreId = storeMasterId;
 
     // Source link mapping
     if (link.source === "STORE_QR") item.qrLink = link.shortUrl;
@@ -159,6 +165,7 @@ export function pivotLinksByStore(links: FriendSourceLink[]): StoreDistributionR
   const rows: StoreDistributionRow[] = Array.from(map.values()).map((item) => {
     const rate = formatConversionRate(item.totalClicks > 0 ? item.confirmedAdds / item.totalClicks : 0);
     return {
+      masterStoreId: item.masterStoreId,
       storeName: item.storeName,
       storeCode: item.storeCode,
       lineOaName: item.lineOaName,
@@ -207,6 +214,7 @@ export function prepareLinkDetailsRows(
     const confirmed = link.confirmedAdds || 0;
     const rate = link.conversionRate != null ? formatConversionRate(link.conversionRate) : formatConversionRate(clicks > 0 ? confirmed / clicks : 0);
     return {
+      masterStoreId: link.masterStoreId ?? link.externalStoreId ?? (link as any).storeMaster?.externalStoreId ?? "",
       storeName: link.storeName ?? "",
       storeCode: link.storeCode ?? "",
       lineOaName: link.lineOaName ?? "",
@@ -270,6 +278,7 @@ export async function createExcelWorkbookBuffer(
   });
 
   const distHeaders = [
+    t.excelStoreId,
     t.excelStoreName,
     t.excelStoreCode,
     t.excelLineOaName,
@@ -287,20 +296,21 @@ export async function createExcelWorkbookBuffer(
   ];
 
   sheet1.columns = [
-    { header: distHeaders[0], key: "storeName", width: 26 },
-    { header: distHeaders[1], key: "storeCode", width: 14 },
-    { header: distHeaders[2], key: "lineOaName", width: 24 },
-    { header: distHeaders[3], key: "basicId", width: 16 },
-    { header: distHeaders[4], key: "qrLink", width: 36 },
-    { header: distHeaders[5], key: "tiktokLink", width: 36 },
-    { header: distHeaders[6], key: "facebookLink", width: 36 },
-    { header: distHeaders[7], key: "instagramLink", width: 36 },
-    { header: distHeaders[8], key: "activeSourcesCount", width: 16 },
-    { header: distHeaders[9], key: "totalClicks", width: 14 },
-    { header: distHeaders[10], key: "identifiedVisits", width: 16 },
-    { header: distHeaders[11], key: "confirmedAdds", width: 16 },
-    { header: distHeaders[12], key: "conversionRate", width: 18 },
-    { header: distHeaders[13], key: "generatedAt", width: 18 },
+    { header: distHeaders[0], key: "masterStoreId", width: 14 },
+    { header: distHeaders[1], key: "storeName", width: 26 },
+    { header: distHeaders[2], key: "storeCode", width: 14 },
+    { header: distHeaders[3], key: "lineOaName", width: 24 },
+    { header: distHeaders[4], key: "basicId", width: 16 },
+    { header: distHeaders[5], key: "qrLink", width: 36 },
+    { header: distHeaders[6], key: "tiktokLink", width: 36 },
+    { header: distHeaders[7], key: "facebookLink", width: 36 },
+    { header: distHeaders[8], key: "instagramLink", width: 36 },
+    { header: distHeaders[9], key: "activeSourcesCount", width: 16 },
+    { header: distHeaders[10], key: "totalClicks", width: 14 },
+    { header: distHeaders[11], key: "identifiedVisits", width: 16 },
+    { header: distHeaders[12], key: "confirmedAdds", width: 16 },
+    { header: distHeaders[13], key: "conversionRate", width: 18 },
+    { header: distHeaders[14], key: "generatedAt", width: 18 },
   ];
 
   // Apply header styling
@@ -315,6 +325,7 @@ export async function createExcelWorkbookBuffer(
   const pivotedRows = pivotLinksByStore(links);
   pivotedRows.forEach((item) => {
     const row = sheet1.addRow({
+      masterStoreId: item.masterStoreId,
       storeName: item.storeName,
       storeCode: item.storeCode,
       lineOaName: item.lineOaName,
@@ -337,10 +348,10 @@ export async function createExcelWorkbookBuffer(
       }
     };
 
-    setLinkCell(5, item.qrLink);
-    setLinkCell(6, item.tiktokLink);
-    setLinkCell(7, item.facebookLink);
-    setLinkCell(8, item.instagramLink);
+    setLinkCell(6, item.qrLink);
+    setLinkCell(7, item.tiktokLink);
+    setLinkCell(8, item.facebookLink);
+    setLinkCell(9, item.instagramLink);
 
     row.eachCell({ includeEmpty: true }, (cell) => {
       cell.border = thinBorder;
@@ -353,7 +364,7 @@ export async function createExcelWorkbookBuffer(
   if (pivotedRows.length > 0) {
     sheet1.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: pivotedRows.length + 1, column: 14 },
+      to: { row: pivotedRows.length + 1, column: 15 },
     };
   }
 
@@ -365,6 +376,7 @@ export async function createExcelWorkbookBuffer(
   });
 
   const detailHeaders = [
+    t.excelStoreId,
     t.excelStoreName,
     t.excelStoreCode,
     t.excelLineOaName,
@@ -380,18 +392,19 @@ export async function createExcelWorkbookBuffer(
   ];
 
   sheet2.columns = [
-    { header: detailHeaders[0], key: "storeName", width: 26 },
-    { header: detailHeaders[1], key: "storeCode", width: 14 },
-    { header: detailHeaders[2], key: "lineOaName", width: 24 },
-    { header: detailHeaders[3], key: "source", width: 16 },
-    { header: detailHeaders[4], key: "shortUrl", width: 38 },
-    { header: detailHeaders[5], key: "clicks", width: 12 },
-    { header: detailHeaders[6], key: "identifiedVisits", width: 16 },
-    { header: detailHeaders[7], key: "confirmedAdds", width: 16 },
-    { header: detailHeaders[8], key: "conversionRate", width: 16 },
-    { header: detailHeaders[9], key: "status", width: 14 },
-    { header: detailHeaders[10], key: "createdAt", width: 18 },
-    { header: detailHeaders[11], key: "updatedAt", width: 18 },
+    { header: detailHeaders[0], key: "masterStoreId", width: 14 },
+    { header: detailHeaders[1], key: "storeName", width: 26 },
+    { header: detailHeaders[2], key: "storeCode", width: 14 },
+    { header: detailHeaders[3], key: "lineOaName", width: 24 },
+    { header: detailHeaders[4], key: "source", width: 16 },
+    { header: detailHeaders[5], key: "shortUrl", width: 38 },
+    { header: detailHeaders[6], key: "clicks", width: 12 },
+    { header: detailHeaders[7], key: "identifiedVisits", width: 16 },
+    { header: detailHeaders[8], key: "confirmedAdds", width: 16 },
+    { header: detailHeaders[9], key: "conversionRate", width: 16 },
+    { header: detailHeaders[10], key: "status", width: 14 },
+    { header: detailHeaders[11], key: "createdAt", width: 18 },
+    { header: detailHeaders[12], key: "updatedAt", width: 18 },
   ];
 
   const sheet2Row1 = sheet2.getRow(1);
@@ -405,6 +418,7 @@ export async function createExcelWorkbookBuffer(
   const detailRows = prepareLinkDetailsRows(links, language);
   detailRows.forEach((item) => {
     const row = sheet2.addRow({
+      masterStoreId: item.masterStoreId,
       storeName: item.storeName,
       storeCode: item.storeCode,
       lineOaName: item.lineOaName,
@@ -418,7 +432,7 @@ export async function createExcelWorkbookBuffer(
       updatedAt: item.updatedAt,
     });
 
-    const urlCell = row.getCell(5);
+    const urlCell = row.getCell(6);
     urlCell.value = { text: item.shortUrl, hyperlink: item.shortUrl };
     urlCell.font = hyperlinkFont;
     urlCell.alignment = { wrapText: true, vertical: "middle" };
@@ -434,7 +448,7 @@ export async function createExcelWorkbookBuffer(
   if (detailRows.length > 0) {
     sheet2.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: detailRows.length + 1, column: 12 },
+      to: { row: detailRows.length + 1, column: 13 },
     };
   }
 

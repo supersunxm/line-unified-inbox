@@ -112,6 +112,7 @@ export type FriendSourceLinksTranslations = {
   exportNoData: string;
 
   // Excel Sheet Headers & Content
+  excelStoreId: string;
   excelStoreName: string;
   excelStoreCode: string;
   excelLineOaName: string;
@@ -269,6 +270,7 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     exportError: (msg) => `ส่งออกไม่สำเร็จ: ${msg}`,
     exportNoData: "ไม่มีข้อมูลสำหรับส่งออก",
 
+    excelStoreId: "รหัสสาขา (Store ID)",
     excelStoreName: "ชื่อร้านค้า",
     excelStoreCode: "รหัสร้านค้า",
     excelLineOaName: "ชื่อ LINE OA",
@@ -423,6 +425,7 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     exportError: (msg) => `Export failed: ${msg}`,
     exportNoData: "No data available to export",
 
+    excelStoreId: "Store ID",
     excelStoreName: "Store Name",
     excelStoreCode: "Store Code",
     excelLineOaName: "LINE OA Name",
@@ -577,6 +580,7 @@ export const friendSourceLinksTranslations: Record<Language, FriendSourceLinksTr
     exportError: (msg) => `导出失败: ${msg}`,
     exportNoData: "没有可导出的数据",
 
+    excelStoreId: "门店编号 (Store ID)",
     excelStoreName: "门店名称",
     excelStoreCode: "门店代码",
     excelLineOaName: "LINE OA 名称",

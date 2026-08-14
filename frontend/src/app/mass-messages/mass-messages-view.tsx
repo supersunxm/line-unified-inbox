@@ -109,6 +109,7 @@ export function MassMessagesView({
     return stores.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
+        (s.storeId && s.storeId.toLowerCase().includes(q)) ||
         (s.code && s.code.toLowerCase().includes(q)),
     );
   }, [stores, storeSearch]);
@@ -518,6 +519,11 @@ export function MassMessagesView({
                                       className="h-3.5 w-3.5 rounded text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span className="font-medium text-slate-800 dark:text-slate-200 flex-1 truncate">
+                                      {store.storeId && (
+                                        <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1.5 opacity-80">
+                                          [{store.storeId}]
+                                        </span>
+                                      )}
                                       {store.name}
                                     </span>
                                     {store.code && (
@@ -785,6 +791,11 @@ export function MassMessagesView({
                               .map((s) => (
                                 <div key={s.storeId} className="flex items-center justify-between text-[11px]">
                                   <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                                    {(s.masterStoreId || s.externalStoreId) && (
+                                      <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1 opacity-80">
+                                        [{s.masterStoreId ?? s.externalStoreId}]
+                                      </span>
+                                    )}
                                     {s.storeName}
                                   </span>
                                   <span className="text-amber-700 dark:text-amber-400 font-mono text-[10px]">
@@ -1046,6 +1057,11 @@ export function MassMessagesView({
                           <tr key={delivery.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                             <td className="p-3">
                               <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                {(delivery.masterStoreId || delivery.externalStoreId) && (
+                                  <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1 opacity-80">
+                                    [{delivery.masterStoreId ?? delivery.externalStoreId}]
+                                  </span>
+                                )}
                                 {delivery.storeName}
                               </div>
                               {delivery.storeCode && (

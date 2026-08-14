@@ -1,8 +1,11 @@
 export interface StoreSearchItem {
   id: string;
+  storeId?: string | null;
   name: string;
-  code?: string;
-  accountName?: string;
+  code?: string | null;
+  accountName?: string | null;
+  externalStoreId?: string | null;
+  masterStoreId?: string | null;
   storeMaster?: {
     externalStoreId?: string | null;
     accountName?: string | null;
@@ -12,7 +15,7 @@ export interface StoreSearchItem {
   [key: string]: any;
 }
 
-// Filter stores by search keyword (case-insensitive) across store name, account name, and store code.
+// Filter stores by search keyword (case-insensitive) across store name, Store ID, account name, and store code.
 export function filterStoresBySearch<T extends StoreSearchItem>(
   stores: T[],
   keyword: string,
@@ -24,16 +27,18 @@ export function filterStoresBySearch<T extends StoreSearchItem>(
   return stores.filter((store) => {
     const rawName = store.name ?? "";
     const displayName = getStoreDisplayName(rawName);
-    const code = store.code ?? store.storeMaster?.externalStoreId ?? store.id ?? "";
+    const code = store.code ?? "";
+    const storeId = store.storeId ?? store.masterStoreId ?? store.externalStoreId ?? store.storeMaster?.externalStoreId ?? "";
     const accountName = store.accountName ?? store.storeMaster?.accountName ?? "";
     const storeMasterName = store.storeMaster?.storeName ?? "";
 
     return (
       rawName.toLowerCase().includes(trimmed) ||
       displayName.toLowerCase().includes(trimmed) ||
-      code.toLowerCase().includes(trimmed) ||
-      accountName.toLowerCase().includes(trimmed) ||
-      storeMasterName.toLowerCase().includes(trimmed)
+      (Boolean(storeId) && String(storeId).toLowerCase().includes(trimmed)) ||
+      (Boolean(code) && String(code).toLowerCase().includes(trimmed)) ||
+      (Boolean(accountName) && String(accountName).toLowerCase().includes(trimmed)) ||
+      (Boolean(storeMasterName) && String(storeMasterName).toLowerCase().includes(trimmed))
     );
   });
 }

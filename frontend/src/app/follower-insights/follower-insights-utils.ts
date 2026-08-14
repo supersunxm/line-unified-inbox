@@ -155,10 +155,10 @@ export function exportStoreCsv(
 ) {
   const headers =
     language === "th"
-      ? ["ร้านค้า", "LINE OA", "ผู้ติดตาม", "ผู้ติดตามวันเริ่มต้น", "เพิ่มขึ้นในช่วงเวลา", "ผู้รับข้อความที่เข้าถึงได้", "จำนวนบล็อก", "สถานะ", "ดึงข้อมูลล่าสุด"]
+      ? ["รหัสสาขา (Store ID)", "ร้านค้า", "LINE OA", "ผู้ติดตาม", "ผู้ติดตามวันเริ่มต้น", "เพิ่มขึ้นในช่วงเวลา", "ผู้รับข้อความที่เข้าถึงได้", "จำนวนบล็อก", "สถานะ", "ดึงข้อมูลล่าสุด"]
       : language === "zh"
-      ? ["门店", "LINE OA", "关注者", "起始关注者", "期间增加", "目标覆盖人数", "屏蔽数", "状态", "最新拉取"]
-      : ["Store", "LINE OA", "Followers", "Start Followers", "Period Increase", "Targeted Reach", "Blocks", "Status", "Last Fetched"];
+      ? ["门店编号 (Store ID)", "门店", "LINE OA", "关注者", "起始关注者", "期间增加", "目标覆盖人数", "屏蔽数", "状态", "最新拉取"]
+      : ["Store ID", "Store", "LINE OA", "Followers", "Start Followers", "Period Increase", "Targeted Reach", "Blocks", "Status", "Last Fetched"];
 
   const formatStatusCell = (status: string) => {
     if (status === "ready") return language === "th" ? "พร้อม" : language === "zh" ? "就绪" : "Ready";
@@ -169,6 +169,7 @@ export function exportStoreCsv(
   };
 
   const rows = data.map((r) => [
+    escapeCsvCell(r.masterStoreId ?? r.externalStoreId ?? ""),
     escapeCsvCell(r.storeName),
     escapeCsvCell(r.accountName),
     escapeCsvCell(r.followers),

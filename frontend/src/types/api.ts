@@ -83,7 +83,10 @@ export type BmReplyStatusSummaryResponse = {
 };
 export type StorePerformanceRow = {
   rank: number;
+  id?: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   messages: number;
   replied: number;
@@ -109,6 +112,8 @@ export type NeedImprovementStoreDetail = StorePerformanceRow & {
 
 export type NeedActionStoreItem = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   pending: number;
   responseRate: number;
@@ -157,6 +162,8 @@ export type ProductDemandCorrelationItem = {
 
 export type StoreQuickViewData = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   messages: number;
   answered: number;
@@ -294,7 +301,7 @@ export type StorePrioritySummaryResponse = {
     oldestWaitingMinutes?: number;
   }>;
 };
-export type ApiStore = { id: string; name: string; code: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
+export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
 export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
 export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };
 export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };
@@ -394,7 +401,7 @@ export type LineOfficialAccountResponse = {
   channelId: string | null;
   maskedChannelId: string | null;
   destinationId: string | null;
-  store: { id: string; name: string; code: string | null; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
+  store: { id: string; storeId?: string | null; name: string; code: string | null; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
   connectionStatus: LineOaConnectionStatus;
   isActive: boolean;
   lastWebhookReceivedAt: string | null;
@@ -494,6 +501,8 @@ export type ByStoreAccountRow = {
   lineOaId: string;
   accountName: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   date: string;
   followers: number | null;
@@ -549,6 +558,8 @@ export type FriendSource = "STORE_QR" | "TIKTOK" | "FACEBOOK" | "INSTAGRAM";
 export type FriendSourceLink = {
   id: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string | null;
   storeCode: string | null;
   lineOaId: string;
@@ -577,6 +588,8 @@ export type FriendSourceLinksGenerateResult = {
 
 export type FriendSourceLinksSummaryItem = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   source: FriendSource;
@@ -1021,6 +1034,8 @@ export type MassMessagePreviewInput = {
 
 export type StorePreviewResult = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   lineOfficialAccountId: string | null;
@@ -1074,6 +1089,8 @@ export type MassMessageCreateInput = {
 export type StoreDeliveryDetail = {
   id: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   lineOfficialAccountId: string | null;

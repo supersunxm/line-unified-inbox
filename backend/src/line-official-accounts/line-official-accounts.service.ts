@@ -69,7 +69,7 @@ export class LineOfficialAccountsService {
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
-      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, name: item.store.name, code: item.store.code, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
+      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, storeId: item.store.storeMaster?.externalStoreId ?? null, name: item.store.name, code: item.store.code, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
       connectionStatus: this.calculatedStatus(item), isActive: item.isActive, lastWebhookReceivedAt: item.lastWebhookReceivedAt,
       lastConnectionTestAt: item.lastConnectionTestAt, lastConnectionError: item.lastConnectionError,
       hasChannelSecret: Boolean(item.encryptedChannelSecret), hasChannelAccessToken: Boolean(item.encryptedChannelAccessToken),
@@ -102,17 +102,17 @@ export class LineOfficialAccountsService {
       const matchesStatus = query.status === "all" || (query.status === "active"
         ? item.isActive
         : item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED");
-      const matchesSearch = !search || [item.name, item.store.name, item.store.accountName]
+      const matchesSearch = !search || [item.name, item.store.name, item.store.accountName, item.store.storeId, item.store.externalStoreId, item.store.code]
         .some((value) => value?.toLocaleLowerCase().includes(search));
       return matchesStatus && matchesSearch;
     });
     const columns = [
-      "LINE OA Account Name", "Store Name", "Store Code / External Store ID", "Province", "Region",
+      "Store ID", "Store Name", "LINE OA Account Name", "Store Code", "Province", "Region",
       "LINE OA Basic ID", "LINE OA Account ID", "Connection Status", "Enabled / Disabled", "Webhook URL",
       "Webhook Status", "Last Webhook Activity", "Messages Today", "LINE Manager URL", "LINE OA URL", "Created At", "Updated At",
     ];
     const rows = items.map((item) => [
-      item.name, item.store.name, item.store.externalStoreId ?? item.store.code, item.store.province, item.store.region,
+      item.store.externalStoreId ?? "", item.store.name, item.name, item.store.code ?? "", item.store.province, item.store.region,
       item.basicId, item.channelId, item.connectionStatus, item.isActive ? "Enabled" : "Disabled", item.webhookUrl,
       item.webhookConfigured ? "Configured" : "Not configured", this.formatBangkokDate(item.lastWebhookReceivedAt),
       item.messagesReceivedToday, item.store.lineManagerUrl, item.store.lineOaLink, this.formatBangkokDate(item.createdAt), this.formatBangkokDate(item.updatedAt),

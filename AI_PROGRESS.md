@@ -1,6 +1,34 @@
 # AI progress
 
-## Current task: Production OTP dependency-injection crash recovery
+## Current task: Store Master ID Propagation Across Web App and Exports
+
+- **Identity and Key Invariant**:
+  - `Store.id` = internal system UUID (never mutated, replaced, or exported as "Store ID").
+  - `StoreMaster.externalStoreId` = Master File business Store ID (e.g., `28220`).
+  - Added additive `storeId: store.storeMaster?.externalStoreId ?? null` and `masterStoreId` / `externalStoreId` across backend responses, frontend types, UI components, and data export routines.
+  - Sourced missing or unlinked store IDs safely as `null` / `""` without ever falling back to UUID or auto-generated numbers.
+- **Backend API Endpoints Updated**:
+  - `GET /stores` & `GET /stores/:id` (`stores.controller.ts`): Expose `storeId: store.storeMaster?.externalStoreId ?? null`.
+  - `GET /conversations/bm-reply-status-summary` (`conversations.service.ts`): Included `storeMaster` and return `id`, `storeId`, `masterStoreId`, `externalStoreId`.
+  - `GET /dashboard/analytics` (`dashboard-analytics.service.ts`): Included `storeMaster` query and exposed `masterStoreId` and `externalStoreId` on store performance ranking, need-action queue, SLA prediction, and quick view drawer data.
+  - `GET /line-official-accounts` & `GET /line-official-accounts/export` (`line-official-accounts.service.ts`): Expose `storeId: store.storeMaster?.externalStoreId ?? null`, CSV export sets `Store ID` (`item.store.externalStoreId ?? ""`) as Column 1, and search filter includes Store ID.
+  - `GET /follower-insights/by-store` (`follower-insights.service.ts`): Expose `masterStoreId` / `externalStoreId`.
+  - `GET /friend-source-links` & `GET /friend-source-links/summary` (`friend-source-links.service.ts`): Propagate `masterStoreId` / `externalStoreId`.
+  - `POST /mass-messages/preview` & `GET /mass-messages/:campaignId` (`mass-message.service.ts`, `mass-message-scope.service.ts`): Propagate `masterStoreId` / `externalStoreId` in scope items, preview results, and store deliveries.
+- **Frontend Views & Exports Updated**:
+  - `types/api.ts`: Updated `ApiStore`, `StorePerformanceRow`, `NeedActionStoreItem`, `StoreQuickViewData`, `ByStoreAccountRow`, `FriendSourceLink`, `FriendSourceLinksSummaryItem`, `StorePreviewResult`, `StoreDeliveryDetail`, and `LineOfficialAccountResponse.store`.
+  - `components/shell/store-search.ts` & `context-sidebar.tsx`: Search includes Store ID, and store list items display subtle `[Store ID]` badge.
+  - `app/page.tsx`: LINE OA management table displays `[Store ID]` badge, `Store ID: <id>` detail metadata, search filter supports Store ID, and available stores dropdown displays `[Store ID]`.
+  - `app/dashboard/*`: Store Performance Table, Today Action Center, and Store Quick View Drawer display `[Store ID]` badge and support Store ID search.
+  - `app/follower-insights/*`: Store Breakdown Table displays `[Store ID]` badge, search filter supports Store ID, and `exportStoreCsv` outputs `Store ID` as Column 1.
+  - `app/friend-source-links/*`: Excel Sheet 1 (Store Distribution) and Sheet 2 (Link Details) updated to output `Store ID` (`masterStoreId`, blank if unlinked) as Column 1.
+  - `app/mass-messages/*`: Store picker selector, live preview skipped stores, and campaign monitor store delivery breakdown display `[Store ID]`.
+- **Verification**:
+  - Backend tests: 1,090 / 1,090 passed (100%).
+  - Backend build: `prisma generate && nest build` passed cleanly.
+  - Frontend tests: 243 / 243 passed (100%).
+  - Frontend build: Next.js Turbopack build passed cleanly.
+
 
 - Identified the registration-flow bootstrap failure: a constructor parameter typed as `() => string` emitted runtime metadata as `Function`, which Nest cannot resolve as a provider.
 - The current AuthModule resolves the generator with the explicit `OTP_CODE_GENERATOR` token and a registered `useValue` provider. Added a focused metadata/provider regression test.
@@ -731,3 +759,74 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added an ADMIN-only management-page download control with loading/duplicate-click protection, error state, browser Blob download, and the server-provided filename.
 - Focused backend lint, five LINE OA service tests, backend build, frontend build, and frontend lint with zero errors pass. The frontend retains four pre-existing warnings.
 - Next: review diff, commit/push, deploy Railway, authenticate safely, and compare production database and CSV row counts without exposing CSV contents.
+
+# Current task: Android notification token lifecycle
+
+- Added an explicit authenticated FCM device-registration path after login and session restoration, with retry-safe in-flight coordination and logout ordering that deactivates the token after registration completes.
+- Token acquisition and `/device-tokens` registration now emit only safe lifecycle/status diagnostics; registration failures remain non-blocking for inbox navigation. Token refresh registration remains authenticated-only.
+- Added focused Flutter tests for authenticated registration, logged-out startup, null token handling, and retry after registration failure. Flutter analyze, all tests, production-configured APK build, exact APK installation, and `git diff --check` pass.
+- Runtime login/production database verification remains pending because APK installation cleared the secure session and no BM credentials were available in this session; no token or push E2E result is claimed.
+
+- A fresh production message after token activation was traced end-to-end: the outbox row reached SENT and Android received the FCM data message, but the Flutter background handler's local notification failed with `PlatformException(invalid_icon)` because `@mipmap/ic_launcher` did not exist.
+- Replaced the missing icon with a checked-in notification drawable, added safe background/message/show diagnostics, and revalidated Flutter analyze, tests, diff check, APK build, and exact APK installation. A fresh login and background message are still required for post-fix visible-notification verification.
+
+# Current task: Phase 5 chat-style Android notifications
+
+- Replaced per-outbox Android notification identity with deterministic conversation identity and Android MessagingStyle presentation. Message-level PushNotification outbox uniqueness remains unchanged.
+- Added a bounded SharedPreferences-backed per-conversation history (eight messages), with message-ID deduplication and image fallback text. It is cleared per conversation after a successful Chat load and globally on logout.
+- Added only the customer name, message type, safe preview, and ISO timestamp to the existing data-only FCM payload; no Firebase notification envelope, media URL, token, credential, or database migration was added.
+- Flutter analyze/tests, focused backend notification/webhook tests, changed-file backend ESLint, and backend build pass. Next: review scoped diff, build/install production APK, and run the required multi-conversation production E2E after the backend deploy.
+
+# Current task: Flutter logout crash hardening
+
+- Resolved an unresolved notification-service merge conflict before rebuilding; the final source now contains one coherent Phase 5 notification implementation.
+- Logout now serializes notification initialization and token registration, guards duplicate logout calls, deactivates a non-empty token best-effort, skips unavailable local-notification cleanup safely, clears persisted notification history, and always clears the auth session.
+- Added safe logout lifecycle diagnostics without tokens, credentials, customer data, or message contents, plus focused tests for normal logout, null token, unavailable cleanup, deactivation failure, double logout, and in-flight registration.
+- Flutter analyze, all 17 Flutter tests, production-configured APK build, exact APK installation, and `git diff --check` pass. Manual production BM login/logout and DeviceToken database verification remain pending because the APK reinstall cleared the secure session and no credentials were available in this session.
+- The auth root now derives authenticated rendering from a local `CurrentUser` snapshot, enters a neutral logout state before asynchronous cleanup, and removes the profile route before teardown. The final APK was rebuilt and installed with SHA-256 `0329ee2b1a9600db750579e80ba7fc69caab98c14d3b75e9290d006f5a849251`.
+- The authenticated root no longer force-unwraps `_user` during rebuild; it renders from a checked local snapshot. Current emulator logcat shows no startup `Null check operator` exception. Authenticated logout remains a manual verification dependency because credentials are not available in this session.
+
+# Current task: Phase 5 production E2E — Test B
+
+- Verified explicit inbound `phase5-b1` persisted in a conversation distinct from Customer A, with one SENT PushNotification (attempt 1) addressed to the active tested BM/device.
+- Android retained Customer A's stable notification `1740057898` with its three-message MessagingStyle and posted Customer B as independent notification `44971303` with only `phase5-b1`.
+- App-private SharedPreferences history contains three A entries and one B entry with no cross-conversation contamination. No notification was tapped or cleared, and no rebuild/reinstall/logout/data clear occurred.
+- Test B passed. Next: wait for operator approval/instructions before Test C (tap A and verify selective clearing).
+
+# Current task: Phase 5 production E2E — Test C
+
+- Tapped Customer A's notification and verified the emulator is on Conversation A, showing the A customer header and `phase5-a1`, `phase5-a2`, and `phase5-a3`; production detail requests for A returned HTTP 200.
+- Android NotificationManager no longer contains A notification `1740057898`; B notification `44971303` remains as an independent MessagingStyle notification with only `phase5-b1`.
+- App-private SharedPreferences history now contains only B's one-entry record; A's history is absent. The normal conversation-open callback uses per-conversation `cancel(id)` and history deletion; `cancelAll()` is only in logout cleanup.
+- Test C passed. Next: wait for operator approval/instructions before Test D (manual open after a new A message).
+
+# Current task: Phase 5 production E2E — Test D
+
+- `phase5-a4` persisted for Conversation A and its PushNotification reached SENT on attempt 1.
+- The required pre-open evidence was not preserved when Test D inspection began: the app was already foregrounded on Conversation A with A4 visible, while A notification `1740057898` and A's SharedPreferences history were already absent. Android's notification archive contained no retained record.
+- Explicitly verified the manual interaction path afterward by navigating Back to Inbox and selecting Customer A's Inbox row. The A detail request returned HTTP 200; B notification `44971303` and B's one-entry history remained intact; no crash/red-frame diagnostics appeared and no global clear path ran.
+- Test D is not accepted because “A notification existed before manual open” and “A history contained only A4 before manual open” cannot be evidenced. No code was changed and Test E was not started.
+
+# Current task: mobile Inbox unread-state correction
+
+- Confirmed production badge values were backend-derived per-user unread PushNotification counts (`readAt IS NULL`), not stale Flutter-only state: the tested BM had counts 28 and 3 for the two visible conversations.
+- Added an authenticated, store-authorized, idempotent mobile conversation mark-read operation that updates only the current user's unread PushNotification rows. It does not modify conversation reply status or message data.
+- Flutter now marks read only after conversation detail loads successfully, independently clears the Android conversation notification/history, and refreshes the Inbox from REST after returning from Chat.
+- Focused backend tests, targeted ESLint, backend build, Flutter analyze, all 21 Flutter tests, and `git diff --check` pass.
+- Backend commit `6abc0f2` was isolated to the three mobile conversation files, pushed to `main`, and deployed successfully on Railway. The runtime fingerprint matches the full commit, and health/readiness return 200.
+- The production-configured debug APK was rebuilt and installed on `emulator-5554` (SHA-256 `28a4949a2ffe3325926cf359b791102d189d1a2065ecdfaf11b6b5302db120e1`). Flutter's first streamed install removed the prior package before failing; direct ADB installation succeeded, so the app is now at Login and production E2E requires a fresh BM login.
+- Production unread Test 1 passed after fresh BM login. Conversation `9a82e1d0-ad2c-455c-baf9-3e4357bac05f` started unread 1 / NOT_REPLIED with Android notification `1479688050` and one local-history entry; detail GET and mark-read PATCH both returned 200.
+- After opening, the tested BM's backend unread count was 0 while reply status remained NOT_REPLIED. Returning to Inbox removed the badge, the Android notification/history were absent, and control conversation `1ca5f4ac-00e3-408b-958a-90a9a7f3a8e9` remained unread 3 / NOT_REPLIED. No Flutter exception or red-frame evidence occurred.
+
+# Current task: Phase 4C.2 image realtime UX polish
+
+- Image media updates now compare processing status, MIME type, size, and URL before calling `setState`, preventing duplicate unchanged realtime events from rebuilding ChatPage state.
+- Image bubbles reserve a stable 240x240 container across PENDING, READY/loading, and loaded states, removing the lifecycle height jump without changing the backend contract.
+- Added a focused Flutter regression covering one IMAGE `message.created`, duplicate creation replay, repeated `message.media.updated`, one media load, and no conversation reload. Flutter analyze, all 25 Flutter tests, and `git diff --check` pass.
+
+# Current task: Phase 4C.3 inbox true realtime
+
+- Replaced Inbox full reloads for `connected`, `message.created`, `message.media.updated`, and `conversation.updated` with immutable summary patches. IMAGE media events are ignored by Inbox because ChatPage owns media state.
+- `message.created` patches the matching loaded row and moves it to the top. Unread counts remain authoritative: because the current SSE contract has no per-user unread count, the client performs a targeted conversation detail reconciliation instead of incrementing locally.
+- Returning from Chat now patches the opened row to unread zero without reloading page 1. Full `_load(reset: true)` remains only for initial load, pull-to-refresh, explicit retry, and pagination.
+- Added `ConversationSummary.copyWith`, nullable detail metadata for targeted unread reconciliation, and pagination-safe cursor copying. Flutter analyze, all 25 Flutter tests, and `git diff --check` pass.

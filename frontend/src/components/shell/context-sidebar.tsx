@@ -31,7 +31,7 @@ export interface ContextSidebarProps {
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
-  stores: Array<{ id: string; name: string; waiting: number; lineOaCount: number; code?: string; accountName?: string }>;
+  stores: Array<{ id: string; storeId?: string | null; masterStoreId?: string | null; externalStoreId?: string | null; name: string; waiting: number; lineOaCount: number; code?: string; accountName?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   text: Record<string, any>;
   getStoreDisplayName: (name: string) => string;
@@ -243,7 +243,14 @@ export function ContextSidebar({
                   }`}
                 >
                   <div className="flex w-full items-center justify-between">
-                    <span className="truncate pr-1 font-medium">{getStoreDisplayName(store.name)}</span>
+                    <span className="truncate pr-1 font-medium">
+                      {(store.masterStoreId || store.externalStoreId) && (
+                        <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500 mr-1 opacity-80">
+                          [{store.masterStoreId ?? store.externalStoreId}]
+                        </span>
+                      )}
+                      {getStoreDisplayName(store.name)}
+                    </span>
                     <div className="ml-2 flex items-center space-x-1 shrink-0 font-tabular">
                       <span className="rounded bg-slate-100 dark:bg-slate-800 px-1 py-0.2 text-[10px] font-medium text-slate-600 dark:text-slate-300" title="Not Replied">
                         {counts.notReplied}
