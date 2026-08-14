@@ -1,6 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
+import { Roles } from "../auth/auth.decorators";
 import { TikTokService } from "./tiktok.service";
 import {
+  ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
   SyncTikTokAccountDto,
 } from "./dto/tiktok-sync.dto";
@@ -34,5 +37,16 @@ export class TikTokController {
   @Get("accounts")
   async listAccounts() {
     return this.tiktokService.listTikTokAccounts();
+  }
+
+  /**
+   * Reconciles already-persisted TikTok accounts with StoreMaster by matching TikTok username.
+   * Mutates account-store relationships: strictly restricted to ADMIN role.
+   */
+  @Post("reconcile-stores")
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async reconcileStores(): Promise<ReconcileStoreBindingsResponse> {
+    return this.tiktokService.reconcileTikTokStoreBindings();
   }
 }

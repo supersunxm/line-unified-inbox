@@ -2,10 +2,41 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import {
+  ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
   SafeTikTokVideoResponse,
   SyncTikTokAccountDto,
 } from "./dto/tiktok-sync.dto";
+
+/**
+ * Normalizes TikTok username for StoreMaster account mapping.
+ * Rules:
+ * - lowercase
+ * - trim whitespace
+ * - remove leading "@"
+ * - return null if empty, "#REF!", or "none"
+ */
+export function normalizeTikTokUsernameForMatching(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const cleaned = trimmed.replace(/^@+/u, "").toLowerCase();
+  if (!cleaned || cleaned === "#ref!" || cleaned === "none") return null;
+  return cleaned;
+}
+
+export type StoreBindingDiagnostic =
+  | "MATCHED"
+  | "STORE_NOT_FOUND"
+  | "AMBIGUOUS_STORE_MATCH"
+  | "PRESERVED_EXISTING"
+  | "NO_USERNAME";
+
+export interface ResolveStoreResult {
+  storeMasterId: string | null;
+  status: StoreBindingDiagnostic;
+  matchedCount: number;
+}
 
 @Injectable()
 export class TikTokService {
@@ -17,8 +48,119 @@ export class TikTokService {
   ) {}
 
   /**
+   * Resolves StoreMaster ID by matching normalized TikTok username.
+   * Matches TikTokAccount.username -> StoreMaster.tiktokUsername.
+   * Returns:
+   * - MATCHED (1 store found) -> storeMasterId
+   * - STORE_NOT_FOUND (0 stores found) -> null
+   * - AMBIGUOUS_STORE_MATCH (>1 stores found) -> null
+   */
+  async resolveStoreMasterIdByTikTokUsername(rawUsername?: string | null): Promise<ResolveStoreResult> {
+    const normalized = normalizeTikTokUsernameForMatching(rawUsername);
+    if (!normalized) {
+      return { storeMasterId: null, status: "NO_USERNAME", matchedCount: 0 };
+    }
+
+    const candidates = await this.prisma.storeMaster.findMany({
+      where: {
+        OR: [
+          { tiktokUsername: { equals: normalized, mode: "insensitive" } },
+          { tiktokUsername: { equals: `@${normalized}`, mode: "insensitive" } },
+        ],
+      },
+    });
+
+    const exactMatches = candidates.filter((store) => {
+      const storeNormalized = normalizeTikTokUsernameForMatching(store.tiktokUsername);
+      return storeNormalized === normalized;
+    });
+
+    if (exactMatches.length === 1) {
+      return {
+        storeMasterId: exactMatches[0].id,
+        status: "MATCHED",
+        matchedCount: 1,
+      };
+    }
+
+    if (exactMatches.length > 1) {
+      this.logger.warn(
+        `Ambiguous StoreMaster match for TikTok username '${rawUsername}': ${exactMatches.length} stores found`
+      );
+      return {
+        storeMasterId: null,
+        status: "AMBIGUOUS_STORE_MATCH",
+        matchedCount: exactMatches.length,
+      };
+    }
+
+    return {
+      storeMasterId: null,
+      status: "STORE_NOT_FOUND",
+      matchedCount: 0,
+    };
+  }
+
+  /**
+   * Reconciles already-persisted TikTokAccount records with StoreMaster.
+   * Finds unlinked accounts (storeMasterId == null) and resolves storeMasterId via normalized username.
+   */
+  async reconcileTikTokStoreBindings(): Promise<ReconcileStoreBindingsResponse> {
+    const unboundAccounts = await this.prisma.tikTokAccount.findMany({
+      where: {
+        storeMasterId: null,
+      },
+    });
+
+    let matchedCount = 0;
+    let unmatchedCount = 0;
+    let ambiguousCount = 0;
+    const results: ReconcileStoreBindingsResponse["results"] = [];
+
+    for (const acc of unboundAccounts) {
+      const resolution = await this.resolveStoreMasterIdByTikTokUsername(acc.username);
+
+      if (resolution.status === "MATCHED" && resolution.storeMasterId) {
+        await this.prisma.tikTokAccount.update({
+          where: { id: acc.id },
+          data: {
+            storeMasterId: resolution.storeMasterId,
+            lastSyncedAt: new Date(),
+          },
+        });
+        matchedCount++;
+      } else if (resolution.status === "AMBIGUOUS_STORE_MATCH") {
+        ambiguousCount++;
+      } else {
+        unmatchedCount++;
+      }
+
+      results.push({
+        openId: acc.openId,
+        username: acc.username,
+        storeMasterId: resolution.storeMasterId,
+        status: resolution.status,
+      });
+    }
+
+    this.logger.log(
+      `TikTok StoreMaster reconciliation completed: ${matchedCount} matched, ${unmatchedCount} unmatched, ${ambiguousCount} ambiguous out of ${unboundAccounts.length} unbound accounts.`
+    );
+
+    return {
+      totalChecked: unboundAccounts.length,
+      matchedCount,
+      unmatchedCount,
+      ambiguousCount,
+      alreadyBoundCount: 0,
+      results,
+    };
+  }
+
+  /**
    * Upserts authorized TikTok account and its video analytics.
    * Encrypts access and refresh tokens at rest with AES-256-GCM before database write.
+   * Automatically binds TikTok account to matching StoreMaster via normalized TikTok username if unlinked.
    */
   async upsertTikTokAccount(dto: SyncTikTokAccountDto): Promise<SafeTikTokAccountOverviewResponse> {
     const { profile, videos = [] } = dto;
@@ -50,6 +192,24 @@ export class TikTokService {
       ? new Date(now.getTime() + dto.refreshExpiresIn * 1000)
       : undefined;
 
+    // Check existing account record to preserve existing storeMasterId
+    const existingAccount = await this.prisma.tikTokAccount.findUnique({
+      where: { openId: profile.open_id },
+      select: { id: true, storeMasterId: true },
+    });
+
+    let effectiveStoreMasterId: string | null = null;
+    if (existingAccount?.storeMasterId) {
+      // 1. Immutable store binding: preserve existing binding unconditionally during OAuth sync
+      effectiveStoreMasterId = existingAccount.storeMasterId;
+    } else {
+      // 2. Auto-resolve store binding by normalized TikTok username only when currently unlinked
+      const matchResult = await this.resolveStoreMasterIdByTikTokUsername(profile.username);
+      if (matchResult.status === "MATCHED" && matchResult.storeMasterId) {
+        effectiveStoreMasterId = matchResult.storeMasterId;
+      }
+    }
+
     // 1. Upsert TikTok Account record by unique openId
     const account = await this.prisma.tikTokAccount.upsert({
       where: { openId: profile.open_id },
@@ -77,7 +237,7 @@ export class TikTokService {
         connectionStatus: "CONNECTED",
         connectedAt: now,
         lastSyncedAt: now,
-        storeMasterId: dto.storeMasterId,
+        storeMasterId: effectiveStoreMasterId,
       },
       update: {
         unionId: profile.union_id,
@@ -101,7 +261,7 @@ export class TikTokService {
         refreshTokenExpiresAt: refreshTokenExpiresAt ?? undefined,
         connectionStatus: "CONNECTED",
         lastSyncedAt: now,
-        storeMasterId: dto.storeMasterId ?? undefined,
+        storeMasterId: effectiveStoreMasterId ?? undefined,
       },
     });
 

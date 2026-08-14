@@ -1,19 +1,19 @@
 # AI progress
 
-## Current task: TikTok Video Data Retrieval and Display API Metric Enrichment
+## Current task: Automatic TikTokAccount to StoreMaster Binding & Reconciliation
 
-- **Root Cause & Fix**:
-  - Identified property naming mismatch between frontend video item DTO (`view_count`, `like_count`, `comment_count`, `share_count`, `cover_image_url`, `create_time`) and backend persistence entity (`viewCount`, `likeCount`, `commentCount`, `shareCount`, `coverImageUrl`, `createTime`).
-  - Updated backend DTO and service (`TikTokVideoDto`, `TikTokService.upsertTikTokAccount`) to seamlessly handle both camelCase and snake_case properties.
-  - Implemented official Display API video query enrichment pipeline (`fetchEnrichedTikTokVideoList`):
-    - Fetches video IDs from `POST /v2/video/list/?fields=...`
-    - Enriches video details with performance metrics and fresh `cover_image_url` via `POST /v2/video/query/?fields=...`
-    - Merges query results with list items without premature zero coercion on missing fields
-    - Emits safe numeric diagnostics (`videoListCount`, `videoQueryCount`, `videosWithViewCount`, `videosWithCoverImage`) without sensitive tokens
+- **Implementation**:
+  - Implemented `normalizeTikTokUsernameForMatching`: lowercase, trim whitespace, strip leading `@`, normalize invalid tokens (`#REF!`, `none`) to null.
+  - Implemented `resolveStoreMasterIdByTikTokUsername`: case-insensitive username lookup in `StoreMaster` returning `MATCHED` (single match), `STORE_NOT_FOUND` (0 matches), or `AMBIGUOUS_STORE_MATCH` (>1 matches without automatic selection).
+  - Integrated automatic store binding in `upsertTikTokAccount`: auto-resolves and links unlinked accounts while preserving existing `storeMasterId`.
+  - Added `reconcileTikTokStoreBindings` and protected endpoint `POST /tiktok/reconcile-stores` allowing already-persisted accounts (like O-Central World) to be linked to StoreMaster after import without user reauthorization.
 - **Verification**:
-  - Backend tests: `1,114 / 1,114 passed (100%)`.
+  - Prisma validation: `npx prisma validate` passed with 0 errors.
+  - Backend tests: `1,103 / 1,103 passed (100%)`.
   - Frontend tests: `310 / 310 passed (100%)`.
-  - Builds: Backend `nest build` and Frontend `next build` passed with 0 errors.
+  - Production builds: Backend `nest build` and Frontend `next build` completed with 0 errors.
+
+## Previous task: TikTok Video Data Retrieval and Display API Metric Enrichment
 
 ## Previous task: Investigation and Fix for oppo_session Scoping and TikTok Authentication Boundary
 

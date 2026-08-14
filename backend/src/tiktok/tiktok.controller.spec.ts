@@ -187,4 +187,54 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
     async () => guard.canActivate(contextGetUnauth),
     { name: "UnauthorizedException", message: "Authentication required" }
   );
+
+  // 7. Authenticated POST /tiktok/reconcile-stores by VIEWER is rejected with 403 Forbidden
+  const requestReconcileViewer: any = {
+    headers: { cookie: "oppo_session=valid-viewer-session" },
+    method: "POST",
+    path: "/tiktok/reconcile-stores",
+  };
+  const contextReconcileViewer: any = {
+    switchToHttp: () => ({ getRequest: () => requestReconcileViewer }),
+    getHandler: () => controller.reconcileStores,
+    getClass: () => TikTokController,
+  };
+  await assert.rejects(
+    async () => guard.canActivate(contextReconcileViewer),
+    { name: "ForbiddenException" }
+  );
+
+  // 8. Authenticated POST /tiktok/reconcile-stores by ADMIN succeeds
+  const requestReconcileAdmin: any = {
+    headers: { cookie: "oppo_session=valid-admin-session" },
+    method: "POST",
+    path: "/tiktok/reconcile-stores",
+  };
+  const contextReconcileAdmin: any = {
+    switchToHttp: () => ({ getRequest: () => requestReconcileAdmin }),
+    getHandler: () => controller.reconcileStores,
+    getClass: () => TikTokController,
+  };
+  const canReconcileAdmin = await guard.canActivate(contextReconcileAdmin);
+  assert.equal(canReconcileAdmin, true);
+
+  fakeTikTokService.reconcileTikTokStoreBindings = async () => ({
+    totalChecked: 1,
+    matchedCount: 1,
+    unmatchedCount: 0,
+    ambiguousCount: 0,
+    alreadyBoundCount: 0,
+    results: [
+      {
+        openId: "_000sample_open_id",
+        username: "oppo_centralworld",
+        storeMasterId: "store-cw-1",
+        status: "MATCHED",
+      },
+    ],
+  });
+
+  const reconcileResult = await controller.reconcileStores();
+  assert.equal(reconcileResult.matchedCount, 1);
+  assert.equal(reconcileResult.results[0].status, "MATCHED");
 });

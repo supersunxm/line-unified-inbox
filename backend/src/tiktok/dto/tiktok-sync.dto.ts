@@ -46,7 +46,6 @@ export interface SyncTikTokAccountDto {
   grantedScopes?: string;
   profile: TikTokProfileDto;
   videos?: TikTokVideoDto[];
-  storeMasterId?: string;
 }
 
 export interface SafeTikTokVideoResponse {
@@ -94,4 +93,18 @@ export interface SafeTikTokAccountOverviewResponse {
     region?: string | null;
   } | null;
   videos: SafeTikTokVideoResponse[];
+}
+
+export interface ReconcileStoreBindingsResponse {
+  totalChecked: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  ambiguousCount: number;
+  alreadyBoundCount: number;
+  results: Array<{
+    openId: string;
+    username?: string | null;
+    storeMasterId?: string | null;
+    status: "MATCHED" | "STORE_NOT_FOUND" | "AMBIGUOUS_STORE_MATCH" | "PRESERVED_EXISTING" | "NO_USERNAME";
+  }>;
 }

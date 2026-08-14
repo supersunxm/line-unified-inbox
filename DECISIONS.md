@@ -1,3 +1,10 @@
+# Automatic TikTokAccount to StoreMaster Binding & Reconciliation (2026-08-14)
+
+- **Normalized Username Matching (`TikTokAccount.username -> StoreMaster.tiktokUsername`)**: TikTok usernames are normalized with lowercase conversion, whitespace trimming, and leading `@` stripping on both sides. No fuzzy matching or display name heuristics are used.
+- **Fail-Safe Ambiguity Handling**: If exactly 1 store matches, `storeMasterId` is linked. If 0 matches (`STORE_NOT_FOUND`) or multiple matches (`AMBIGUOUS_STORE_MATCH`), `storeMasterId` remains null and a diagnostic is returned without guessing.
+- **Durable Post-Import Reconciliation**: `POST /tiktok/reconcile-stores` enables retroactively binding already-synced accounts (e.g. O-Central World) once StoreMaster data is imported/refreshed, removing any requirement for store managers to reauthorize TikTok OAuth.
+- **Preservation of Existing Links**: Existing `storeMasterId` values are preserved upon subsequent account synchronization unless an explicit override is provided.
+
 # TikTok Video Metric Enrichment & Display API Query Pipeline (2026-08-14)
 
 - **Two-Stage Display API Video Enrichment (`/v2/video/list/` + `/v2/video/query/`)**: In TikTok Display API v2, `POST /v2/video/list/` provides basic pagination and item listing. To guarantee that fresh performance metrics (`like_count`, `comment_count`, `share_count`, `view_count`) and active CDN `cover_image_url` values are retrieved, video IDs obtained from `/video/list/` are queried against `POST /v2/video/query/?fields=...`.
