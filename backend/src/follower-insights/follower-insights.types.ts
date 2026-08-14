@@ -94,6 +94,8 @@ export interface ByStoreAccountRow {
   lineOaId: string;
   accountName: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   date: string;
   followers: number | null;

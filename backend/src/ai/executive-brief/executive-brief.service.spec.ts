@@ -1,15 +1,11 @@
-import { Test, TestingModule } from "@nestjs/testing";
+import test from "node:test";
+import assert from "node:assert/strict";
 import { ExecutiveBriefService } from "./executive-brief.service";
-import { DashboardAnalyticsService } from "../../dashboard-analytics.service";
-import { RootCauseService } from "../root-cause.service";
-import { RecommendationService } from "../recommendation.service";
-import { PrismaService } from "../../prisma.service";
+import { AiTelemetryService } from "../telemetry/ai-telemetry.service";
 
-describe("ExecutiveBriefService", () => {
-  let service: ExecutiveBriefService;
-
-  const mockDashboardAnalyticsService = {
-    getAnalytics: jest.fn().mockResolvedValue({
+test("ExecutiveBriefService: should generate deterministic Executive Daily Brief", async () => {
+  const mockDashboardAnalyticsService: any = {
+    getAnalytics: async () => ({
       period: "today",
       summaryCards: {
         messagesToday: 18420,
@@ -33,8 +29,8 @@ describe("ExecutiveBriefService", () => {
     }),
   };
 
-  const mockRootCauseService = {
-    generateRootCauseInsights: jest.fn().mockResolvedValue({
+  const mockRootCauseService: any = {
+    generateRootCauseInsights: async () => ({
       summary: "SLA degradation detected mainly from evening peak workload concentration.",
       confidence: 94,
       totalAffectedStores: 1,
@@ -42,32 +38,23 @@ describe("ExecutiveBriefService", () => {
     }),
   };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ExecutiveBriefService,
-        { provide: DashboardAnalyticsService, useValue: mockDashboardAnalyticsService },
-        { provide: RootCauseService, useValue: mockRootCauseService },
-        RecommendationService,
-        { provide: PrismaService, useValue: {} },
-      ],
-    }).compile();
+  const telemetryService = new AiTelemetryService(mockDashboardAnalyticsService);
+  const service = new ExecutiveBriefService(
+    mockDashboardAnalyticsService,
+    mockRootCauseService,
+    telemetryService,
+  );
 
-    service = module.get<ExecutiveBriefService>(ExecutiveBriefService);
-  });
+  const brief = await service.generateExecutiveBrief("today", "HEAD_OFFICE");
 
-  it("should generate deterministic Executive Daily Brief", async () => {
-    const brief = await service.generateExecutiveBrief("today", "HEAD_OFFICE");
-
-    expect(brief).toBeDefined();
-    expect(brief.overallStatus).toBe("ATTENTION");
-    expect(brief.headline).toContain("SLA degradation detected");
-    expect(brief.keyHighlights.length).toBeGreaterThan(0);
-    expect(brief.criticalIssues.length).toBeGreaterThan(0);
-    expect(brief.criticalIssues[0].storeName).toBe("Robinson Chonburi");
-    expect(brief.recommendedDecisions.length).toBeGreaterThan(0);
-    expect(brief.recommendedDecisions[0].owner).toBe("Area Manager");
-    expect(brief.metrics.totalMessages).toBe(18420);
-    expect(brief.metrics.slaRate).toBe(82);
-  });
+  assert.ok(brief);
+  assert.equal(brief.overallStatus, "ATTENTION");
+  assert.ok(brief.headline.includes("SLA degradation detected"));
+  assert.ok(brief.keyHighlights.length > 0);
+  assert.ok(brief.criticalIssues.length > 0);
+  assert.equal(brief.criticalIssues[0].storeName, "Robinson Chonburi");
+  assert.ok(brief.recommendedDecisions.length > 0);
+  assert.equal(brief.recommendedDecisions[0].owner, "Area Manager");
+  assert.equal(brief.metrics.totalMessages, 18420);
+  assert.equal(brief.metrics.slaRate, 82);
 });

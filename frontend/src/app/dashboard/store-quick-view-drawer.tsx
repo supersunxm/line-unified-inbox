@@ -131,6 +131,11 @@ export function StoreQuickViewDrawer({
                 {t.title}
               </span>
               <h2 className="text-xl font-extrabold text-[var(--foreground)] mt-0.5">
+                {(storeData.masterStoreId || storeData.externalStoreId) && (
+                  <span className="font-mono text-sm text-slate-400 dark:text-slate-500 mr-2 opacity-80 font-normal">
+                    [{storeData.masterStoreId ?? storeData.externalStoreId}]
+                  </span>
+                )}
                 {getStoreDisplayName(storeData.storeName)}
               </h2>
             </div>

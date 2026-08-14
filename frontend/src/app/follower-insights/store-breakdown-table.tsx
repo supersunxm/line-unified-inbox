@@ -74,7 +74,9 @@ function StoreBreakdownTableInner({
       (r) =>
         r.storeName.toLowerCase().includes(q) ||
         r.accountName.toLowerCase().includes(q) ||
-        r.lineOaId.toLowerCase().includes(q)
+        r.lineOaId.toLowerCase().includes(q) ||
+        (r.masterStoreId && r.masterStoreId.toLowerCase().includes(q)) ||
+        (r.externalStoreId && r.externalStoreId.toLowerCase().includes(q))
     );
   }, [storeData, searchQuery]);
 
@@ -255,7 +257,14 @@ function StoreBreakdownTableInner({
               <tbody className="divide-y divide-[var(--border)] text-[var(--foreground)]">
                 {paginatedStores.map((row) => (
                   <tr key={row.lineOaId} className="hover:bg-[var(--hover)] transition-colors">
-                    <td className="px-4 py-3 text-[var(--muted)]">{row.storeName}</td>
+                    <td className="px-4 py-3 text-[var(--muted)]">
+                      {(row.masterStoreId || row.externalStoreId) && (
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1 opacity-80">
+                          [{row.masterStoreId ?? row.externalStoreId}]
+                        </span>
+                      )}
+                      {row.storeName}
+                    </td>
                     <td className="px-4 py-3 font-medium text-[var(--foreground)]">{row.accountName}</td>
                     <td className="px-4 py-3 text-right font-medium">
                       {row.followers?.toLocaleString() ?? "—"}

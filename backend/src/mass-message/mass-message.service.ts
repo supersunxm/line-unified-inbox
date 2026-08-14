@@ -1,7 +1,6 @@
 import sharp from "sharp";
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -249,6 +248,8 @@ export class MassMessageService {
 
       return {
         storeId: s.storeId,
+        masterStoreId: s.masterStoreId ?? null,
+        externalStoreId: s.externalStoreId ?? null,
         storeName: s.storeName,
         storeCode: s.storeCode,
         lineOfficialAccountId: s.lineOfficialAccountId,
@@ -398,7 +399,13 @@ export class MassMessageService {
         createdBy: { select: { displayName: true } },
         storeDeliveries: {
           include: {
-            store: { select: { name: true, code: true } },
+            store: {
+              select: {
+                name: true,
+                code: true,
+                storeMaster: { select: { externalStoreId: true } },
+              },
+            },
             lineOfficialAccount: { select: { name: true } },
           },
           orderBy: { createdAt: "asc" },
@@ -473,7 +480,7 @@ export class MassMessageService {
       errorMessage: string | null;
       startedAt: Date | null;
       completedAt: Date | null;
-      store: { name: string; code: string | null };
+      store: { name: string; code: string | null; storeMaster?: { externalStoreId: string | null } | null };
       lineOfficialAccount: { name: string } | null;
     }>;
   }): MassMessageCampaignDetail {
@@ -481,6 +488,8 @@ export class MassMessageService {
       (d) => ({
         id: d.id,
         storeId: d.storeId,
+        masterStoreId: d.store.storeMaster?.externalStoreId ?? null,
+        externalStoreId: d.store.storeMaster?.externalStoreId ?? null,
         storeName: d.store.name,
         storeCode: d.store.code,
         lineOfficialAccountId: d.lineOfficialAccountId,

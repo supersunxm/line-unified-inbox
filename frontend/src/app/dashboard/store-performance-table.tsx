@@ -115,7 +115,12 @@ export function StorePerformanceTable({
   const [sortBy, setSortBy] = useState<SortField>("worst_rate");
 
   let processed = stores.filter((s) => {
-    const matchSearch = getStoreDisplayName(s.storeName).toLowerCase().includes(search.toLowerCase());
+    const q = search.trim().toLowerCase();
+    const matchSearch =
+      !q ||
+      getStoreDisplayName(s.storeName).toLowerCase().includes(q) ||
+      (s.masterStoreId && s.masterStoreId.toLowerCase().includes(q)) ||
+      (s.externalStoreId && s.externalStoreId.toLowerCase().includes(q));
     if (!matchSearch) return false;
     if (filterStatus === "ALL") return true;
     if (filterStatus === "Excellent") return s.responseRate24h >= 90;
@@ -215,7 +220,14 @@ export function StorePerformanceTable({
                     className="hover:bg-[var(--accent)]/50 transition-colors cursor-pointer"
                   >
                     <td className="py-3 px-3 font-bold text-[var(--foreground)]">#{s.rank}</td>
-                    <td className="py-3 px-3 font-semibold text-[var(--foreground)]">{getStoreDisplayName(s.storeName)}</td>
+                    <td className="py-3 px-3 font-semibold text-[var(--foreground)]">
+                      {(s.masterStoreId || s.externalStoreId) && (
+                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1 opacity-80">
+                          [{s.masterStoreId ?? s.externalStoreId}]
+                        </span>
+                      )}
+                      {getStoreDisplayName(s.storeName)}
+                    </td>
                     <td className="py-3 px-3 text-right font-medium text-[var(--foreground)]">{s.messages}</td>
                     <td className="py-3 px-3 text-right font-black text-emerald-700 dark:text-emerald-300">{s.responseRate24h}%</td>
                     <td className="py-3 px-3 text-right font-medium text-[var(--muted-foreground)]">{s.networkAvgResponseRate24h || 91}%</td>

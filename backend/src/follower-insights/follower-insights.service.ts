@@ -1136,6 +1136,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
           select: {
             id: true,
             name: true,
+            storeMaster: { select: { externalStoreId: true } },
           },
         },
         followerSnapshots: {
@@ -1183,6 +1184,8 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
         lineOaId: account.id,
         accountName: account.name,
         storeId: account.store.id,
+        masterStoreId: account.store.storeMaster?.externalStoreId ?? null,
+        externalStoreId: account.store.storeMaster?.externalStoreId ?? null,
         storeName: account.store.name,
         date: targetIsoDate,
         followers: currentFollowers,

@@ -583,9 +583,9 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
 
   // 2. Per-store aggregation
   assert.deepEqual(summary.stores, [
-    { storeId: "store-1", storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1, oldestWaitingMinutes: 0 },
-    { storeId: "store-2", storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
+    { id: "store-1", storeId: "store-1", masterStoreId: null, externalStoreId: null, storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1, oldestWaitingMinutes: 0 },
+    { id: "store-2", storeId: "store-2", masterStoreId: null, externalStoreId: null, storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
     // 3. Empty store handling
-    { storeId: "store-3", storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
+    { id: "store-3", storeId: "store-3", masterStoreId: null, externalStoreId: null, storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
   ]);
 });

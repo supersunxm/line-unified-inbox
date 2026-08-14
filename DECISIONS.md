@@ -1,3 +1,14 @@
+# Store Master ID Business Key Propagation (2026-08-14)
+
+- **Strict Identity Architecture**:
+  - `Store.id` remains the immutable internal system UUID for internal database relations and foreign keys.
+  - `StoreMaster.externalStoreId` is the business Store ID imported from the master file.
+  - All public API models, views, and exports expose `storeId` as the business Store ID (`StoreMaster.externalStoreId ?? null`) while preserving `id` UUID for component keys and mutation IDs.
+  - Unlinked stores return `null` / empty string `""` in exports; under no circumstance is an internal UUID, auto-increment integer, or fallback store code substituted into the Store ID field.
+- **Universal Export Standardization**:
+  - All CSV and XLSX reports containing store data place `Store ID` in Column 1, followed by `Store Name`.
+  - Applied across LINE OA Management CSV export, Follower Insights Store Breakdown CSV export, and Friend Source Links Excel workbook (both Store Distribution and Link Details worksheets).
+
 # OTP generator dependency injection
 
 - Function-typed constructor dependencies are never resolved by Nest through reflected runtime metadata. `OtpChallengeService` injects the explicit `OTP_CODE_GENERATOR` symbol, and AuthModule supplies the generator through a `useValue` provider. This keeps OTP generation testable without treating JavaScript's `Function` constructor as a provider.
@@ -424,8 +435,46 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Mobile conversation endpoints never accept a store ID or LINE OA ID. Store access is resolved through `StoreAccessService`, and outbound replies use the pre-existing conversation-derived LINE OA service.
 - Notification delivery status and user read/open state are independent. Badge counts are calculated only from the authenticated user's notifications with `readAt = NULL`.
 
+# Mobile conversation unread state (2026-08-13)
+
+- Mobile unread state remains per-user and is derived from that user's PushNotification outbox rows whose `readAt` is null; no conversation-global unread field or new read-receipt model is introduced.
+- Opening an authorized conversation marks all matching unread rows for that user/conversation as read only after detail loading succeeds. This is idempotent and deliberately independent from `bmReplyStatus`, which changes only through the existing reply flow.
+- The Android notification/history cleanup is a separate best-effort operation. Either backend mark-read or local cleanup may fail without making Chat unusable, and the Inbox REST refresh remains the authoritative reconciliation path.
+
 # Mobile push foundation
 
 - Push tokens are encrypted with the existing backend credential-encryption service and addressed by a SHA-256 lookup hash; neither token values nor payload content are returned by the API.
 - LINE webhook processing writes a durable, minimal-ID notification outbox record in the same database transaction after the inbound message is persisted. It never performs provider delivery synchronously.
 - Notification eligibility is membership/store/device based at enqueue time. A unique `(userId, messageId)` constraint makes provider webhook retries idempotent.
+
+# Android notification token lifecycle (2026-08-13)
+
+- Device registration is explicitly gated on an existing authenticated mobile session and runs after login or successful session restoration. The client never associates a refreshed FCM token while logged out.
+- Registration is idempotent through the existing backend token hash/upsert contract; a single in-flight registration is shared and logout waits for it before deactivation to avoid reactivating a token after logout.
+- Diagnostics expose only lifecycle event names and HTTP status/error categories. FCM token values, bearer tokens, credentials, and customer data are never logged.
+
+# Android notification icon (2026-08-13)
+
+- The first post-registration background FCM delivery reached Android and invoked the Flutter background isolate, but local notification `show()` failed because the configured `@mipmap/ic_launcher` resource was absent.
+- Notifications use the dedicated checked-in `ic_stat_line_oa` drawable for both initialization and `AndroidNotificationDetails`. The data-only FCM payload and channel contract remain unchanged.
+
+# Chat-style Android notifications (2026-08-13)
+
+- FCM remains one message-level outbox delivery per inbound Message with no notification envelope or collapse key. Android maps the stable Conversation UUID through deterministic FNV-1a 31-bit identity, so later messages update that conversation's single notification while different conversations remain independent.
+- Android MessagingStyle uses only locally persisted, bounded customer-message previews. The history stores conversation ID, display name, message ID, sanitized preview, and timestamp; it never stores media, tokens, credentials, or full backend payloads. Images always render as `Sent an image`.
+- SharedPreferencesAsync is used because background notification handlers can run in a separate isolate and need non-cached persistence. History is cleared on successful manual or notification-driven conversation opening and entirely on logout, preventing cross-user leakage on a shared device.
+
+# Flutter logout hardening (2026-08-13)
+
+- Logout treats notification cleanup and DeviceToken deactivation as best-effort side effects. Auth session clearing and return to the login route are guaranteed even when FCM, local notifications, or the network fail.
+- Notification initialization is serialized with logout, and a logout-in-progress guard prevents token refresh or registration callbacks from reactivating a device after logout. Cleanup is skipped when local notifications were never initialized.
+- Notification history storage is lazy outside background handling so app startup and unit tests do not require a platform SharedPreferences implementation. No backend API, Prisma schema, or notification delivery architecture changed.
+# Phase 4C.2 image realtime UX
+
+- Chat image bubbles reserve a fixed 240x240 viewport while media transitions from PENDING through download to READY. Realtime media patches are idempotent by comparing all rendered media fields before rebuilding; backend events and message identity remain unchanged.
+# Phase 4C.3 inbox true realtime
+
+- Inbox realtime updates patch the existing immutable conversation summary rather than reloading page 1. Since unread counts are per-user and absent from the shared SSE event, a targeted authorized conversation detail request reconciles unread state; local increments are intentionally avoided. Full refresh remains available for explicit user refresh, retry, and initial load.
+# Phase 4C.4 initial chat scroll
+
+- Initial ChatPage scrolling uses bounded post-frame stabilization rather than a single first-frame jump. It waits for content dimensions and repeats the jump across three frames; realtime append scrolling remains unchanged. All IMAGE states, including missing media metadata, reserve the same fixed viewport.

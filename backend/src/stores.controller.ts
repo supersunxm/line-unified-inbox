@@ -14,7 +14,10 @@ export class StoresController {
     const stores = await this.prisma.store.findMany({
       where: showArchived === "true" ? undefined : { archivedAt: null },
       orderBy: { name: "asc" },
-      include: { _count: { select: { conversations: true, lineOfficialAccounts: true } } },
+      include: {
+        _count: { select: { conversations: true, lineOfficialAccounts: true } },
+        storeMaster: { select: { externalStoreId: true } },
+      },
     });
 
     const operationalGroups = await this.prisma.conversation.groupBy({
@@ -36,8 +39,10 @@ export class StoresController {
 
     return stores.map((store) => {
       const counts = storeCountsMap.get(store.id) ?? { total: 0, notReplied: 0 };
+      const { storeMaster, ...storeFields } = store;
       return {
-        ...store,
+        ...storeFields,
+        storeId: storeMaster?.externalStoreId ?? null,
         _count: {
           ...store._count,
           conversations: store._count.conversations, // historical total
@@ -49,9 +54,19 @@ export class StoresController {
   }
 
   @Get(":id") async get(@Param("id") id: string) {
-    const store = await this.prisma.store.findUnique({ where: { id }, include: { lineOfficialAccounts: true } });
+    const store = await this.prisma.store.findUnique({
+      where: { id },
+      include: {
+        lineOfficialAccounts: true,
+        storeMaster: { select: { externalStoreId: true } },
+      },
+    });
     if (!store) throw new NotFoundException("Store not found");
-    return store;
+    const { storeMaster, ...storeFields } = store;
+    return {
+      ...storeFields,
+      storeId: storeMaster?.externalStoreId ?? null,
+    };
   }
 
   @Get(":id/summary") async summary(@Param("id") id: string) {

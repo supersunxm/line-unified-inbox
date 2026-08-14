@@ -61,6 +61,8 @@ export type MassMessageUploadImageResult = {
 
 export type StorePreviewResult = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   lineOfficialAccountId: string | null;
@@ -81,6 +83,8 @@ export type MassMessagePreviewResult = {
 export type StoreDeliveryDetail = {
   id: string;
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   lineOfficialAccountId: string | null;
@@ -129,6 +133,8 @@ export type MassMessageCampaignDetail = {
 
 export type StoreScopeItem = {
   storeId: string;
+  masterStoreId?: string | null;
+  externalStoreId?: string | null;
   storeName: string;
   storeCode: string | null;
   lineOfficialAccountId: string | null;

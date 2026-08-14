@@ -56,7 +56,7 @@ void test("CSV export uses the complete safe list, applies filters, escapes RFC 
   assert.equal(result.rowCount, 1);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   assert.equal(result.filename, `line-oa-management-${today}.csv`);
-  assert.equal(result.csv.startsWith("\uFEFF\"LINE OA Account Name\""), true);
+  assert.equal(result.csv.startsWith("\uFEFF\"Store ID\""), true);
   assert.equal(result.csv.includes('"บัญชี, ""ทดสอบ""\nสาขา"'), true);
   assert.equal(result.csv.includes("ร้านไทย"), true);
   assert.equal(result.csv.includes("must-never-export-secret"), false);
