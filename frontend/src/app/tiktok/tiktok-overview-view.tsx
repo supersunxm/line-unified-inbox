@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { TikTokStoreData, TikTokVideoItem } from "./tiktok-types.ts";
+import type { TikTokStoreData } from "./tiktok-types";
 
-interface TikTokDashboardViewProps {
+interface TikTokOverviewViewProps {
   data: TikTokStoreData | null;
 }
 
@@ -23,25 +23,20 @@ function formatCompactNumber(num: number | undefined | null): string {
   return num.toString();
 }
 
-function formatDate(timestamp: number | undefined | null): string {
-  if (!timestamp) return "—";
-  // TikTok create_time is in seconds
-  const date = new Date(timestamp * 1000);
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
-    year: "numeric",
     month: "short",
     day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
-function formatDuration(seconds: number | undefined | null): string {
-  if (!seconds) return "—";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
+export function TikTokOverviewView({ data }: TikTokOverviewViewProps) {
+  // 1. Empty State
   if (!data) {
     return (
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-150 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -57,16 +52,24 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                 </span>
                 <span className="hidden text-xs text-slate-500 dark:text-slate-400 sm:inline">
                   {" "}
-                  · Sandbox Account POC
+                  · Module Overview
                 </span>
               </div>
             </div>
-            <Link
-              href="/tiktok/connect"
-              className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
-            >
-              Connect TikTok
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/tiktok/dashboard"
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/tiktok/connect"
+                className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+              >
+                Connect TikTok
+              </Link>
+            </div>
           </div>
         </header>
 
@@ -81,7 +84,7 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
               No TikTok Account Connected Yet
             </h1>
             <p className="mx-auto mt-2 max-w-md text-sm text-slate-600 dark:text-slate-400">
-              Connect your authorized TikTok store account to retrieve real-time profile metrics and video performance analytics.
+              Connect your authorized TikTok retail account to enable real-time audience metrics, engagement insights, and video performance monitoring.
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Link
@@ -91,7 +94,7 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                 Connect TikTok Account
               </Link>
               <Link
-                href="/dashboard"
+                href="/tiktok/dashboard"
                 className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Dashboard
@@ -103,7 +106,8 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
     );
   }
 
-  const { profile, videos, updatedAt } = data;
+  // 2. Connected State
+  const { profile, videos, updatedAt, storeMaster } = data;
   const avatarSrc = profile.avatar_large_url || profile.avatar_url || profile.avatar_url_100;
   const profileUrl =
     profile.profile_web_link ||
@@ -111,7 +115,7 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-150 dark:bg-[#0b0d11] dark:text-slate-100">
-      {/* Top Header */}
+      {/* Top Navigation Header */}
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-[#12151c]/90">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
@@ -124,15 +128,20 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
               </span>
               <span className="hidden text-xs text-slate-500 dark:text-slate-400 sm:inline">
                 {" "}
-                · Authorized Account Overview
+                · Module Overview
               </span>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Connected
-            </span>
+            <Link
+              href="/tiktok/dashboard"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+            >
+              <span>Dashboard</span>
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
             <Link
               href="/tiktok/connect"
               className="text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
@@ -145,7 +154,7 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
 
       {/* Main Container */}
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-8 sm:px-6">
-        {/* Account Profile Card */}
+        {/* Store Account Banner Card */}
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-[#12151c] sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4 sm:gap-5">
@@ -154,16 +163,16 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                 <img
                   src={avatarSrc}
                   alt={profile.display_name || "TikTok Profile"}
-                  className="h-16 w-16 rounded-2xl border-2 border-emerald-500/20 object-cover shadow-xs dark:border-emerald-500/30 sm:h-20 sm:w-20"
+                  className="h-20 w-20 rounded-2xl border-2 border-emerald-500/20 object-cover shadow-xs dark:border-emerald-500/30 sm:h-24 sm:w-24"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 font-bold text-2xl text-white shadow-xs sm:h-20 sm:w-20">
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-600 font-bold text-2xl text-white shadow-xs sm:h-24 sm:w-24">
                   {(profile.display_name || "T")[0].toUpperCase()}
                 </div>
               )}
 
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
                     {profile.display_name || "TikTok Store Account"}
                   </h1>
@@ -181,6 +190,10 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                       </svg>
                     </span>
                   )}
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Connected
+                  </span>
                 </div>
 
                 {profile.username && (
@@ -188,6 +201,35 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                     @{profile.username}
                   </p>
                 )}
+
+                {/* Retail Store Attribution Badge */}
+                <div className="pt-1">
+                  {storeMaster ? (
+                    <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        {storeMaster.storeName}
+                      </span>
+                      {storeMaster.province && (
+                        <>
+                          <span className="text-slate-300 dark:text-slate-700">·</span>
+                          <span>{storeMaster.province}</span>
+                        </>
+                      )}
+                      {storeMaster.region && (
+                        <>
+                          <span className="text-slate-300 dark:text-slate-700">·</span>
+                          <span className="text-slate-500">{storeMaster.region}</span>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        Store not linked yet
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 {profile.bio_description && (
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -197,7 +239,17 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2.5 sm:flex-col sm:items-end">
+              <Link
+                href="/tiktok/dashboard"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+              >
+                <span>Open Dashboard</span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
               {profileUrl && (
                 <a
                   href={profileUrl}
@@ -212,13 +264,13 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
                 </a>
               )}
               <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                Synced {new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                Last synced: {formatDate(updatedAt)}
               </span>
             </div>
           </div>
         </section>
 
-        {/* Key Statistics Grid */}
+        {/* Quick Audience Overview Grid */}
         <section className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -261,14 +313,14 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
               {formatNumber(profile.likes_count)}
             </p>
             <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              {formatCompactNumber(profile.likes_count)} total likes received
+              {formatCompactNumber(profile.likes_count)} likes across account
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
               <span className="text-xs font-medium uppercase tracking-wider">Public Videos</span>
-              <svg className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+              <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
               </svg>
             </div>
@@ -276,144 +328,32 @@ export function TikTokDashboardView({ data }: TikTokDashboardViewProps) {
               {formatNumber(profile.video_count)}
             </p>
             <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              Videos published
+              {videos.length} videos synced to database
             </p>
           </div>
         </section>
 
-        {/* Recent Videos Section */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-[#12151c] sm:p-8">
-          <div className="flex items-center justify-between pb-5 border-b border-slate-100 dark:border-slate-800">
-            <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                Recent Public Videos
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Performance metrics for the latest store account video posts
-              </p>
-            </div>
-            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              {videos.length} {videos.length === 1 ? "video" : "videos"}
-            </span>
+        {/* Dashboard Entry CTA Banner */}
+        <section className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-6 dark:border-emerald-500/20 dark:from-emerald-950/40 sm:flex-row sm:p-8">
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-xl">
+              Explore Store Video Performance &amp; Engagement
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 sm:text-sm">
+              View total video views, top performing content, comment breakdown, and share ratios.
+            </p>
           </div>
-
-          {videos.length === 0 ? (
-            <div className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
-              No recent public videos retrieved for this TikTok account.
-            </div>
-          ) : (
-            <div className="mt-6 divide-y divide-slate-100 dark:divide-slate-800/80">
-              {videos.map((video: TikTokVideoItem) => (
-                <div
-                  key={video.id}
-                  className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-start gap-4">
-                    {video.cover_image_url ? (
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={video.cover_image_url}
-                          alt={video.title || "Video thumbnail"}
-                          className="h-full w-full object-cover"
-                        />
-                        {video.duration ? (
-                          <span className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-medium text-white">
-                            {formatDuration(video.duration)}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-                        </svg>
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
-                        {video.title || video.video_description || "Untitled Video"}
-                      </h3>
-                      {video.video_description && video.title && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                          {video.video_description}
-                        </p>
-                      )}
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                        Published {formatDate(video.create_time)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Metrics & Link */}
-                  <div className="flex items-center justify-between sm:justify-end gap-5">
-                    <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
-                      <div className="flex items-center gap-1" title="Views">
-                        <svg className="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span>{formatCompactNumber(video.view_count)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1" title="Likes">
-                        <svg className="h-3.5 w-3.5 text-rose-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                        </svg>
-                        <span>{formatCompactNumber(video.like_count)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1" title="Comments">
-                        <svg className="h-3.5 w-3.5 text-sky-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.51.107 1.04.162 1.555.162z" />
-                        </svg>
-                        <span>{formatCompactNumber(video.comment_count)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1" title="Shares">
-                        <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                        </svg>
-                        <span>{formatCompactNumber(video.share_count)}</span>
-                      </div>
-                    </div>
-
-                    {video.share_url && (
-                      <a
-                        href={video.share_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                      >
-                        <span>Watch</span>
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                        </svg>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <Link
+            href="/tiktok/dashboard"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+          >
+            <span>Open Performance Dashboard</span>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© {new Date().getFullYear()} OPPO Retail Operations. All rights reserved.</p>
-          <div className="flex items-center gap-4 text-xs">
-            <Link href="/terms" className="hover:underline">
-              Terms of Service
-            </Link>
-            <Link href="/privacy" className="hover:underline">
-              Privacy Policy
-            </Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

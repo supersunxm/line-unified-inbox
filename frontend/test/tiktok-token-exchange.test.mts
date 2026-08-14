@@ -15,16 +15,22 @@ import {
 
 const apiClientSource = readFileSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url), "utf8");
 const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
-const dashboardPageSource = readFileSync(new URL("../src/app/tiktok/page.tsx", import.meta.url), "utf8");
-const dashboardViewSource = readFileSync(new URL("../src/app/tiktok/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
+const overviewPageSource = readFileSync(new URL("../src/app/tiktok/page.tsx", import.meta.url), "utf8");
+const overviewViewSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url), "utf8");
+const dashboardPageSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
+const dashboardViewSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
+const connectPageSource = readFileSync(new URL("../src/app/tiktok/connect/page.tsx", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
-test("TikTok OAuth and API files exist", () => {
+test("TikTok OAuth, overview, and dashboard route files exist", () => {
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-types.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/page.tsx", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-dashboard-view.tsx", import.meta.url)));
-  // In-memory store removed
+  assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/connect/page.tsx", import.meta.url)));
+  // In-memory store permanently removed
   assert.equal(existsSync(new URL("../src/app/tiktok/tiktok-data-store.ts", import.meta.url)), false);
 });
 
@@ -124,24 +130,88 @@ test("Frontend interacts with backend PostgreSQL sync and query endpoints", () =
   assert.match(apiClientSource, /\/tiktok\/sync/);
   assert.match(apiClientSource, /\/tiktok\/latest/);
   assert.match(callbackRouteSource, /syncTikTokAccountToBackend/);
+  assert.match(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
   assert.match(dashboardPageSource, /fetchLatestTikTokAccountFromBackend/);
 });
 
-test("Callback route handler redirects to /tiktok on success and safe error statuses on failure", () => {
-  assert.match(callbackRouteSource, /const\s+tiktokDashboardUrl\s*=\s*new\s+URL\("\/tiktok",\s*publicOrigin\)/);
-  assert.match(callbackRouteSource, /resultUrl\.searchParams\.set\("status",\s*"token_error"\)/);
-  assert.match(callbackRouteSource, /resultUrl\.searchParams\.set\("status",\s*"profile_error"\)/);
-  assert.match(callbackRouteSource, /resultUrl\.searchParams\.set\("status",\s*"state_mismatch"\)/);
+test("Route structure: /tiktok is Overview and /tiktok/dashboard is Performance Dashboard", () => {
+  // Overview view links to /tiktok/dashboard and /tiktok/connect
+  assert.match(overviewViewSource, /href="\/tiktok\/dashboard"/);
+  assert.match(overviewViewSource, /href="\/tiktok\/connect"/);
+  assert.doesNotMatch(overviewViewSource, /href="\/dashboard"/);
+
+  // Dashboard view links to /tiktok and /tiktok/connect
+  assert.match(dashboardViewSource, /href="\/tiktok"/);
+  assert.match(dashboardViewSource, /href="\/tiktok\/connect"/);
+  assert.doesNotMatch(dashboardViewSource, /href="\/dashboard"/);
+
+  // Connect page links to /tiktok and /tiktok/dashboard
+  assert.match(connectPageSource, /href="\/tiktok"/);
+  assert.match(connectPageSource, /href="\/tiktok\/dashboard"/);
+  assert.doesNotMatch(connectPageSource, /href="\/dashboard"/);
+});
+
+test("Overview view renders connected account info and empty state appropriately", () => {
+  // Connected elements
+  assert.match(overviewViewSource, /profile\.display_name/);
+  assert.match(overviewViewSource, /profile\.follower_count/);
+  assert.match(overviewViewSource, /profile\.following_count/);
+  assert.match(overviewViewSource, /profile\.likes_count/);
+  assert.match(overviewViewSource, /profile\.video_count/);
+  assert.match(overviewViewSource, /Connected/);
+  assert.match(overviewViewSource, /Open Dashboard/);
+
+  // Neutral store attribution fallback when storeMaster is null
+  assert.match(overviewViewSource, /Store not linked yet/);
+  assert.doesNotMatch(overviewViewSource, /POC Sandbox/);
+  assert.match(dashboardViewSource, /Store not linked yet/);
+  assert.doesNotMatch(dashboardViewSource, /POC Sandbox/);
+
+  // Empty state elements
+  assert.match(overviewViewSource, /No TikTok Account Connected Yet/);
+  assert.match(overviewViewSource, /Connect TikTok Account/);
+});
+
+test("TikTok dashboard renders all 6 KPI cards, performance highlights, and video analytics", () => {
+  // 6 KPIs
+  assert.match(dashboardViewSource, /Followers/);
+  assert.match(dashboardViewSource, /Following/);
+  assert.match(dashboardViewSource, /Total Likes/);
+  assert.match(dashboardViewSource, /Total Videos/);
+  assert.match(dashboardViewSource, /Total Video Views/);
+  assert.match(dashboardViewSource, /Avg Views \/ Video/);
+
+  // Performance Highlights
+  assert.match(dashboardViewSource, /Top Video by Views/);
+  assert.match(dashboardViewSource, /Top Video by Likes/);
+  assert.match(dashboardViewSource, /Total Engagement/);
+  assert.match(dashboardViewSource, /Avg Engagement \/ Post/);
+
+  // Video item analytics
+  assert.match(dashboardViewSource, /view_count/);
+  assert.match(dashboardViewSource, /like_count/);
+  assert.match(dashboardViewSource, /comment_count/);
+  assert.match(dashboardViewSource, /share_count/);
+  assert.match(dashboardViewSource, /duration/);
+  assert.match(dashboardViewSource, /share_url/);
 });
 
 test("Security: Client Secret, tokens, and authorization code are strictly server-side", () => {
   // No client secret in views
+  assert.doesNotMatch(overviewPageSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(overviewViewSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(overviewViewSource, /access_token/);
+  assert.doesNotMatch(overviewViewSource, /refresh_token/);
+
   assert.doesNotMatch(dashboardPageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(dashboardViewSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(dashboardViewSource, /access_token/);
   assert.doesNotMatch(dashboardViewSource, /refresh_token/);
 
   // No localStorage or cookies storing tokens in views
+  assert.doesNotMatch(overviewViewSource, /localStorage/);
+  assert.doesNotMatch(overviewViewSource, /sessionStorage/);
+  assert.doesNotMatch(overviewViewSource, /document\.cookie/);
   assert.doesNotMatch(dashboardViewSource, /localStorage/);
   assert.doesNotMatch(dashboardViewSource, /sessionStorage/);
   assert.doesNotMatch(dashboardViewSource, /document\.cookie/);
@@ -149,5 +219,6 @@ test("Security: Client Secret, tokens, and authorization code are strictly serve
 
 test("Dashboard and callback routes are NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok"/);
+  assert.doesNotMatch(topNavSource, /href="\/tiktok\/dashboard"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
 });

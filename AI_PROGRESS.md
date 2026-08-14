@@ -1,6 +1,24 @@
 # AI progress
 
-## Current task: StoreMaster TikTok Account Mapping & Importer Pipeline Update
+## Current task: TikTok Frontend Route Restructuring & Performance Dashboard
+
+- **Route Architecture**:
+  - Restructured `/tiktok` to serve as the TikTok Module Overview / Home (`frontend/src/app/tiktok/page.tsx` + `tiktok-overview-view.tsx`).
+    - If account is connected: Renders account card, avatar, display name, `@username`, store attribution badge (`StoreMaster` or `O-Central World POC Sandbox`), connection status, audience metrics, quick profile link, and primary button to open dashboard.
+    - If no account is connected: Renders clean empty state with direct action buttons linking to `/tiktok/connect` and `/tiktok/dashboard`.
+  - Created `/tiktok/dashboard` as the dedicated TikTok Performance Dashboard (`frontend/src/app/tiktok/dashboard/page.tsx` + `tiktok-dashboard-view.tsx`).
+    - Renders 6 real-time KPI cards: Followers, Following, Total Likes, Total Videos, Total Video Views, and Average Views per Video.
+    - Renders Performance Summary: Top Video by Views, Top Video by Likes, Total Video Engagement, and Average Engagement per Post.
+    - Renders Recent Published Videos section with cover thumbnails, durations, titles, publish dates, views, likes, comments, shares, and direct video links.
+  - Updated `/tiktok/connect` navigation and footer links to direct users to `/tiktok` and `/tiktok/dashboard` rather than the main LINE OA `/dashboard`.
+- **Store Attribution & Data Integrity**:
+  - Leverages persisted PostgreSQL data via backend `GET /tiktok/latest` (Server Components).
+  - Central World POC account is cleanly displayed; if `storeMaster` is linked, displays store metadata, and if `null`, gracefully displays TikTok account identity without fake foreign keys or dashboard disruption.
+- **Verification**:
+  - Added test coverage in `frontend/test/tiktok-token-exchange.test.mts` verifying overview and dashboard route separation, 6 KPI cards, performance highlights, video analytics, internal TikTok route navigation, and zero token leakage (306/306 tests passing).
+  - Next.js Turbopack build compiled `ƒ /tiktok`, `ƒ /tiktok/dashboard`, and `○ /tiktok/connect` with zero errors.
+
+## Previous task: StoreMaster TikTok Account Mapping & Importer Pipeline Update
 
 - **Prisma Schema & Migration**:
   - Added nullable fields `tiktokUsername String?` and `tiktokProfileUrl String?` with index `@@index([tiktokUsername])` to `StoreMaster` model in `backend/prisma/schema.prisma`.

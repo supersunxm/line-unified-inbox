@@ -1,3 +1,8 @@
+# TikTok Module Route Restructuring & Performance Dashboard (2026-08-14)
+
+- **Dedicated Module Route Hierarchy**: Separated `/tiktok` (Module Overview / Home) from `/tiktok/dashboard` (Performance Analytics Dashboard) and `/tiktok/connect` (OAuth Connection Entry). This establishes a clean multi-view navigation model for TikTok operations without conflating the main LINE OA `/dashboard`.
+- **Server-Driven Overview & Dashboard Separation**: `/tiktok` focuses on account status, retail store binding attribution, and quick audience metrics with a primary CTA to open the dashboard. `/tiktok/dashboard` delivers in-depth performance analytics across the 6 core KPI dimensions, top-performing video highlights, total engagement aggregations, and individual video performance metrics.
+
 # StoreMaster TikTok Account Mapping & Importer Pipeline (2026-08-14)
 
 - **Master Directory Pre-Authorization Mapping**: To support accurate multi-account attribution across 150 retail stores before OAuth initiation, `StoreMaster` stores `tiktokUsername` and `tiktokProfileUrl`. The fields are indexed on `tiktokUsername` to enable fast store resolution by authorized TikTok handle.

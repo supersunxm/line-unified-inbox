@@ -34,9 +34,20 @@ export default function TikTokConnectPage() {
               </span>
             </div>
           </div>
-          <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-            TikTok Connect
-          </span>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/tiktok"
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              Overview
+            </Link>
+            <Link
+              href="/tiktok/dashboard"
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            >
+              Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -101,7 +112,7 @@ export default function TikTokConnectPage() {
           {/* Connect Action Form */}
           <TikTokConnectForm isConfigured={isConfigured} />
 
-          {/* Policy Links */}
+          {/* Policy & Module Links */}
           <div className="mt-6 flex items-center justify-center gap-4 text-xs text-slate-500 dark:text-slate-400">
             <Link href="/terms" className="hover:underline">
               Terms of Service
@@ -111,7 +122,11 @@ export default function TikTokConnectPage() {
               Privacy Policy
             </Link>
             <span>·</span>
-            <Link href="/dashboard" className="hover:underline">
+            <Link href="/tiktok" className="hover:underline">
+              TikTok Overview
+            </Link>
+            <span>·</span>
+            <Link href="/tiktok/dashboard" className="hover:underline">
               Dashboard
             </Link>
           </div>
