@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../l10n/app_localizations.dart';
+
 const maxConversationNotificationMessages = 8;
 
 class ConversationNotificationMessage {
@@ -209,5 +211,18 @@ String notificationPreview({required String messageType, String? preview}) {
   if (messageType.toUpperCase() == 'IMAGE') return 'Sent an image';
   final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
   if (compact.isEmpty) return 'New customer message';
+  return compact.length <= 160 ? compact : '${compact.substring(0, 157)}...';
+}
+
+String localizedNotificationPreview({
+  required AppLocalizations localizations,
+  required String messageType,
+  String? preview,
+}) {
+  if (messageType.toUpperCase() == 'IMAGE') {
+    return localizations.sentAnImage;
+  }
+  final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (compact.isEmpty) return localizations.newCustomerMessage;
   return compact.length <= 160 ? compact : '${compact.substring(0, 157)}...';
 }

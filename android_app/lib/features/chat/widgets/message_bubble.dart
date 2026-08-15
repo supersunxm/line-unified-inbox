@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 
@@ -27,8 +28,11 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final senderLabel = outbound
-        ? (message?.sender?.displayName ?? (message == null ? 'You' : 'Store'))
-        : 'Customer';
+        ? (message?.sender?.displayName ??
+            (message == null
+                ? appLocalizations(context).you
+                : appLocalizations(context).store))
+        : appLocalizations(context).customer;
     final footerText = footer?.trim();
     final isFailed = footerText?.toLowerCase().contains('fail') ?? false;
     final isSending = footerText?.toLowerCase().contains('sending') ?? false;

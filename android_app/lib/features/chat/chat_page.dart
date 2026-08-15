@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/localization/localization.dart';
 import '../../core/models/models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/logging/safe_logger.dart';
@@ -348,16 +349,16 @@ class _ChatPageState extends State<ChatPage> {
       final send = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-                  title: const Text('Send image?'),
+                  title: Text(appLocalizations(context).sendImageQuestion),
                   content:
                       Image.memory(bytes, height: 220, fit: BoxFit.contain),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel')),
+                        child: Text(appLocalizations(context).cancel)),
                     FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Send'))
+                        child: Text(appLocalizations(context).send))
                   ]));
       if (send == true) {
         await _sendImage(bytes, picked.name, mimeType: picked.mimeType);
@@ -394,7 +395,7 @@ class _ChatPageState extends State<ChatPage> {
       if (mounted) {
         setState(() {
           pending.state = ReplyState.failed;
-          _error = 'Image could not be sent';
+          _error = appLocalizations(context).imageUnavailable;
         });
       }
     }
@@ -478,7 +479,8 @@ class _ChatPageState extends State<ChatPage> {
             if (snapshot.hasError || !snapshot.hasData) {
               return Center(
                   child: FilledButton(
-                      onPressed: _load, child: const Text('Retry')));
+                      onPressed: _load,
+                      child: Text(appLocalizations(context).retry)));
             }
             final detail = _detail ?? snapshot.data!;
             _detail ??= detail;

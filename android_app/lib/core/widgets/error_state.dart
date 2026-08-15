@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../localization/localization.dart';
 
 class ErrorState extends StatelessWidget {
   const ErrorState({
     super.key,
     required this.message,
     this.onRetry,
-    this.retryLabel = 'Retry',
+    this.retryLabel,
   });
 
   final String message;
   final VoidCallback? onRetry;
-  final String retryLabel;
+  final String? retryLabel;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -26,7 +27,10 @@ class ErrorState extends StatelessWidget {
               Text(message, textAlign: TextAlign.center),
               if (onRetry != null) ...[
                 const SizedBox(height: AppSpacing.lg),
-                FilledButton(onPressed: onRetry, child: Text(retryLabel)),
+                FilledButton(
+                    onPressed: onRetry,
+                    child: Text(retryLabel ??
+                        appLocalizations(context).retry)),
               ],
             ],
           ),

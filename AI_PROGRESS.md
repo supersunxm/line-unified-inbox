@@ -1322,6 +1322,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Replaced the Flutter Summary placeholder with month navigation, activity metrics, operational Need Reply/Completed counts, truthful response-data availability states, retry/empty handling, and comparison messaging. The existing authenticated shell now injects the Summary repository.
 - Focused backend analytics tests (23), full backend tests (1149), changed-file ESLint, Prisma validation/generation/build, Flutter analyze, full Flutter tests (61), focused Summary widget tests (10), production APK build, and diff checks pass. Production migration is applied, the exact `OBS-Sunx2` conversation is marked QA, the deployed service reports QA exclusion and response metrics withheld at sample size 7, and the three-run service timings were 291/176/180ms. Authenticated emulator Summary navigation remains blocked because APK reinstall removed the prior session and no QA credentials/token are available; no credentials were changed or invented.
 
+# Current task: Phase 8C full app localization (2026-08-15)
+
+- Added Flutter generated localization from ARB resources for Thai, English, and Simplified Chinese (`th`, `en`, `zh`, and `zh_CN` aliases), with English fallback for unsupported locales.
+- Added persisted language selection through `SharedPreferences`, native-language labels in Profile settings, and immediate app-wide locale updates without changing authentication, backend, realtime, notification, or conversation state.
+- Centralized visible auth, inbox, chat, tagging, profile, summary, status, error, loading, and notification fallback strings. Customer/store names, employee IDs, emails, product master values, and message content remain dynamic and untranslated.
+- Added localization widget coverage for all three locales, dynamic-content preservation, persistence, and immediate switching. Analyzer and the full Flutter test suite pass; production APK build/install and emulator locale verification remain the final release checks.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

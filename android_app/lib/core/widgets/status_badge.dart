@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../localization/localization.dart';
 import '../theme/app_colors.dart';
 
 class StatusBadge extends StatelessWidget {
@@ -26,7 +27,7 @@ class StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        label ?? conversationStatusLabel(status),
+        label ?? localizedConversationStatusLabel(context, status),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: colors.$2,
               fontWeight: FontWeight.w700,
@@ -74,4 +75,28 @@ String conversationStatusLabel(String value) {
       .map((part) =>
           part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
+}
+
+String localizedConversationStatusLabel(BuildContext context, String value) {
+  final localizations = AppLocalizations.of(context);
+  if (localizations == null) return conversationStatusLabel(value);
+  if (isNeedReplyStatus(value)) return localizations.needReply;
+  if (isCompletedStatus(value)) return localizations.completed;
+  return localizedRoleLabel(context, value);
+}
+
+String localizedRoleLabel(BuildContext context, String value) {
+  final localizations = AppLocalizations.of(context);
+  if (localizations == null) return conversationStatusLabel(value);
+  switch (value.toUpperCase()) {
+    case 'ADMIN':
+      return localizations.roleAdmin;
+    case 'VIEWER':
+      return localizations.roleViewer;
+    case 'STORE_MANAGER':
+      return localizations.roleStoreManager;
+    case 'STAFF':
+      return localizations.roleStaff;
+  }
+  return conversationStatusLabel(value);
 }

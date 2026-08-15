@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
   flutter_local_notifications: ^19.4.0
@@ -29,3 +32,4 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  generate: true

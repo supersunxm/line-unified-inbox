@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/localization/localization.dart';
 
 class ImageBubble extends StatelessWidget {
   const ImageBubble({
@@ -21,9 +22,9 @@ class ImageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget content;
     if (media == null) {
-      content = const _ImageState(
+      content = _ImageState(
         icon: Icons.image_outlined,
-        label: 'Image processing…',
+        label: appLocalizations(context).imageProcessing,
       );
     } else if (media!.processingStatus != 'READY') {
       content = _ImageState(
@@ -31,13 +32,13 @@ class ImageBubble extends StatelessWidget {
             ? Icons.hourglass_empty
             : Icons.broken_image_outlined,
         label: media!.processingStatus == 'PENDING'
-            ? 'Image processing…'
-            : 'Image unavailable',
+            ? appLocalizations(context).imageProcessing
+            : appLocalizations(context).imageUnavailable,
       );
     } else if (bytes == null) {
-      content = const _ImageState(
+      content = _ImageState(
         icon: Icons.image_outlined,
-        label: 'Loading image…',
+        label: appLocalizations(context).loadingImage,
         loading: true,
       );
     } else {
@@ -45,7 +46,7 @@ class ImageBubble extends StatelessWidget {
         onTap: onOpen,
         child: Semantics(
           button: onOpen != null,
-          label: 'Open image',
+          label: appLocalizations(context).openImage,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.memory(bytes!, fit: BoxFit.contain),

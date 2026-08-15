@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 
 enum InboxFilter { all, notReplied, replied }
 
@@ -25,7 +26,7 @@ class InboxFilterBar extends StatelessWidget {
               padding: const EdgeInsets.only(right: AppSpacing.sm),
               child: FilterChip(
                 selected: isSelected,
-                label: Text(_label(filter)),
+                label: Text(_label(context, filter)),
                 avatar: Icon(_icon(filter), size: 16),
                 selectedColor: AppColors.primaryContainer,
                 checkmarkColor: AppColors.primary,
@@ -42,10 +43,10 @@ class InboxFilterBar extends StatelessWidget {
         ),
       );
 
-  String _label(InboxFilter filter) => switch (filter) {
-        InboxFilter.all => 'All',
-        InboxFilter.notReplied => 'Need Reply',
-        InboxFilter.replied => 'Completed',
+  String _label(BuildContext context, InboxFilter filter) => switch (filter) {
+        InboxFilter.all => appLocalizations(context).all,
+        InboxFilter.notReplied => appLocalizations(context).needReply,
+        InboxFilter.replied => appLocalizations(context).completed,
       };
 
   IconData _icon(InboxFilter filter) => switch (filter) {

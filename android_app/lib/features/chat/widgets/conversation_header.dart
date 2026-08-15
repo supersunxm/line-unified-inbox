@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/widgets/app_widgets.dart';
 
 class ConversationHeader extends StatelessWidget
@@ -40,7 +41,7 @@ class ConversationHeader extends StatelessWidget
           ? null
           : IconButton(
               onPressed: onBack,
-              tooltip: 'Back',
+              tooltip: appLocalizations(context).back,
               icon: const Icon(Icons.arrow_back),
             ),
       titleSpacing: AppSpacing.sm,
@@ -74,12 +75,12 @@ class ConversationHeader extends StatelessWidget
         if (onProfile != null)
           IconButton(
             onPressed: onProfile,
-            tooltip: 'Customer profile',
+            tooltip: appLocalizations(context).customerProfile,
             icon: const Icon(Icons.person_outline),
           ),
         IconButton(
           onPressed: onAction,
-          tooltip: 'More actions',
+          tooltip: appLocalizations(context).moreActions,
           icon: const Icon(Icons.more_horiz),
         ),
       ],

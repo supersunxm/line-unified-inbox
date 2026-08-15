@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/models/models.dart';
+import '../../core/localization/localization.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/widgets/app_widgets.dart';
 import 'conversation_repository.dart';
@@ -334,10 +335,11 @@ class _InboxPageState extends State<InboxPage> {
         onRefresh: () => _load(reset: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [
+          children: [
             SizedBox(
               height: 320,
-              child: EmptyState(title: 'No conversations yet'),
+              child: EmptyState(
+                  title: appLocalizations(context).noConversationsYet),
             ),
           ],
         ),
@@ -350,10 +352,11 @@ class _InboxPageState extends State<InboxPage> {
         child: ListView(
           controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [
+          children: [
             SizedBox(
               height: 320,
-              child: EmptyState(title: 'No matching conversations'),
+              child: EmptyState(
+                  title: appLocalizations(context).noMatchingConversations),
             ),
           ],
         ),

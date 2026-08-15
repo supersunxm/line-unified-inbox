@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/status_badge.dart';
@@ -35,7 +36,7 @@ class ConversationOverviewCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Today at a glance',
+                    appLocalizations(context).todayAtAGlance,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -47,21 +48,21 @@ class ConversationOverviewCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _Metric(
-                      label: 'Total',
+                      label: appLocalizations(context).total,
                       value: conversations.length,
                       color: AppColors.textPrimary,
                     ),
                   ),
                   Expanded(
                     child: _Metric(
-                      label: 'Need Reply',
+                      label: appLocalizations(context).needReply,
                       value: needReply,
                       color: AppColors.warning,
                     ),
                   ),
                   Expanded(
                     child: _Metric(
-                      label: 'Completed',
+                      label: appLocalizations(context).completed,
                       value: completed,
                       color: AppColors.success,
                     ),

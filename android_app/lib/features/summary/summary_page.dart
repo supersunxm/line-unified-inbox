@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/models.dart';
+import '../../core/localization/localization.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_widgets.dart';
@@ -64,7 +65,7 @@ class _SummaryPageState extends State<SummaryPage> {
 
   @override
   Widget build(BuildContext context) => AppScaffold(
-        title: 'Summary',
+        title: appLocalizations(context).summary,
         body: Column(
           children: [
             _MonthSelector(
@@ -79,30 +80,33 @@ class _SummaryPageState extends State<SummaryPage> {
 
   Widget _content(BuildContext context) {
     if (_loading) {
-      return const LoadingState(message: 'Loading monthly summary…');
+      return LoadingState(
+          message: appLocalizations(context).loadingMonthlySummary);
     }
     if (_error != null) {
       return ErrorState(
-          message: 'Unable to load summary. Please try again.', onRetry: _load);
+          message: appLocalizations(context).unableToLoadSummary,
+          onRetry: _load);
     }
     final summary = _summary;
     if (summary == null) {
       return ErrorState(
-          message: 'Summary data is unavailable.', onRetry: _load);
+          message: appLocalizations(context).summaryUnavailable,
+          onRetry: _load);
     }
     if (summary.volume.incomingMessages == 0 &&
         summary.volume.incomingConversations == 0) {
-      return const EmptyState(
+      return EmptyState(
           icon: Icons.bar_chart_outlined,
-          title: 'No activity',
-          message: 'There is no customer activity for this month.');
+          title: appLocalizations(context).noActivity,
+          message: appLocalizations(context).noActivityThisMonth);
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: AppSpacing.screen,
         children: [
-          Text('Monthly activity',
+          Text(appLocalizations(context).monthlyActivity,
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.md),
           _MetricGrid(summary: summary),
@@ -111,12 +115,13 @@ class _SummaryPageState extends State<SummaryPage> {
           const SizedBox(height: AppSpacing.lg),
           _ComparisonCard(comparison: summary.comparison),
           const SizedBox(height: AppSpacing.lg),
-          Text('Data quality', style: Theme.of(context).textTheme.titleMedium),
+          Text(appLocalizations(context).dataQuality,
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Text(
             summary.dataQuality.qaExcluded
-                ? 'QA conversations are excluded from business analytics.'
-                : 'Analytics quality could not be confirmed.',
+                ? appLocalizations(context).qaExcluded
+                : appLocalizations(context).analyticsQualityUnknown,
             style: Theme.of(context)
                 .textTheme
                 .bodySmall
@@ -146,15 +151,15 @@ class _MonthSelector extends StatelessWidget {
         child: Row(
           children: [
             IconButton(
-                tooltip: 'Previous month',
+                tooltip: appLocalizations(context).previousMonth,
                 onPressed: onPrevious,
                 icon: const Icon(Icons.chevron_left)),
             Expanded(
-                child: Text(_monthLabel(month),
+                child: Text(_monthLabel(context, month),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium)),
             IconButton(
-                tooltip: 'Next month',
+                tooltip: appLocalizations(context).nextMonth,
                 onPressed: canGoNext ? onNext : null,
                 icon: const Icon(Icons.chevron_right)),
           ],
@@ -176,23 +181,23 @@ class _MetricGrid extends StatelessWidget {
             children: [
               _MetricCard(
                   width: width,
-                  label: 'Incoming Messages',
+                  label: appLocalizations(context).incomingMessages,
                   value: summary.volume.incomingMessages.toString(),
                   icon: Icons.markunread_outlined),
               _MetricCard(
                   width: width,
-                  label: 'Customer Conversations',
+                  label: appLocalizations(context).customerConversations,
                   value: summary.volume.incomingConversations.toString(),
                   icon: Icons.forum_outlined),
               _MetricCard(
                   width: width,
-                  label: 'Need Reply',
+                  label: appLocalizations(context).needReply,
                   value: summary.operational.needReply.toString(),
                   icon: Icons.priority_high,
                   color: AppColors.warning),
               _MetricCard(
                   width: width,
-                  label: 'Completed',
+                  label: appLocalizations(context).completed,
                   value: summary.operational.completed.toString(),
                   icon: Icons.check_circle_outline,
                   color: AppColors.success),
@@ -248,36 +253,36 @@ class _ResponseCard extends StatelessWidget {
           padding: AppSpacing.card,
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Response performance',
+            Text(appLocalizations(context).responsePerformance,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.md),
             if (!response.available) ...[
               const Icon(Icons.hourglass_bottom, color: AppColors.info),
               const SizedBox(height: AppSpacing.sm),
-              Text('Collecting response data',
+              Text(appLocalizations(context).collectingResponseData,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.xs),
-              const Text(
-                  'Response metrics will appear after enough verified BM replies are recorded.'),
+              Text(appLocalizations(context).responseDataAfterReplies),
               const SizedBox(height: AppSpacing.md),
               LinearProgressIndicator(
                   value: (response.sampleSize / _minimumResponseSample)
                       .clamp(0, 1)),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                  'Verified responses ${response.sampleSize} / $_minimumResponseSample required',
+                  appLocalizations(context).verifiedResponses(
+                      response.sampleSize, _minimumResponseSample),
                   style: Theme.of(context).textTheme.bodySmall),
             ] else ...[
               _ResponseMetricRow(
-                  label: 'Response rate',
+                  label: appLocalizations(context).responseRate,
                   value:
                       '${((response.responseRate ?? 0) * 100).toStringAsFixed(0)}%'),
               _ResponseMetricRow(
-                  label: 'Median response time',
-                  value: _formatDuration(response.medianSeconds)),
+                  label: appLocalizations(context).medianResponseTime,
+                  value: _formatDuration(context, response.medianSeconds)),
               _ResponseMetricRow(
-                  label: 'Average response time',
-                  value: _formatDuration(response.averageSeconds)),
+                  label: appLocalizations(context).averageResponseTime,
+                  value: _formatDuration(context, response.averageSeconds)),
               const Divider(height: AppSpacing.xl),
               _BucketRow(
                   label: '< 4h',
@@ -327,7 +332,8 @@ class _BucketRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         child: Row(children: [
           Expanded(child: Text(label)),
-          Text('${percentage.toStringAsFixed(0)}% · $count responses')
+          Text(
+              '${percentage.toStringAsFixed(0)}% · $count ${appLocalizations(context).responses}')
         ]));
   }
 }
@@ -346,7 +352,8 @@ class _ComparisonCard extends StatelessWidget {
             const Icon(Icons.compare_arrows, color: AppColors.textSecondary),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-                child: Text('Previous-period comparison unavailable',
+                child: Text(
+                    appLocalizations(context).previousPeriodUnavailable,
                     style: Theme.of(context).textTheme.bodyMedium)),
           ]),
         ),
@@ -354,8 +361,8 @@ class _ComparisonCard extends StatelessWidget {
     }
     final incomingChange = comparison.changes['incomingMessages'];
     final changeLabel = incomingChange == null
-        ? 'Compared with the previous period'
-        : '${incomingChange >= 0 ? '↑' : '↓'} ${(incomingChange.abs() * 100).toStringAsFixed(1)}% incoming messages vs previous period';
+        ? appLocalizations(context).comparedPreviousPeriod
+        : '${incomingChange >= 0 ? '↑' : '↓'} ${(incomingChange.abs() * 100).toStringAsFixed(1)}% ${appLocalizations(context).incomingMessages.toLowerCase()}';
     return Card(
       child: Padding(
         padding: AppSpacing.card,
@@ -382,30 +389,39 @@ int _compareMonths(String left, String right) {
   return (leftParts[0] - rightParts[0]) * 12 + leftParts[1] - rightParts[1];
 }
 
-String _monthLabel(String month) {
+String _monthLabel(BuildContext context, String month) {
   final parts = month.split('-').map(int.parse).toList();
-  const names = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December'
+  final localizations = appLocalizations(context);
+  final names = [
+    localizations.january,
+    localizations.february,
+    localizations.march,
+    localizations.april,
+    localizations.may,
+    localizations.june,
+    localizations.july,
+    localizations.august,
+    localizations.september,
+    localizations.october,
+    localizations.november,
+    localizations.december,
   ];
+  if (localizations.localeName.startsWith('zh')) {
+    return '${parts[0]}年${parts[1]}月';
+  }
   return '${names[parts[1] - 1]} ${parts[0]}';
 }
 
-String _formatDuration(double? seconds) {
+String _formatDuration(BuildContext context, double? seconds) {
   if (seconds == null) return '—';
   final totalMinutes = (seconds / 60).round();
-  if (totalMinutes < 60) return '${totalMinutes}m';
+  final localizations = appLocalizations(context);
+  if (totalMinutes < 60) {
+    return localizations.minutes(totalMinutes);
+  }
   final hours = totalMinutes ~/ 60;
   final minutes = totalMinutes % 60;
-  return minutes == 0 ? '${hours}h' : '${hours}h ${minutes}m';
+  return minutes == 0
+      ? '${hours}h'
+      : localizations.hoursMinutes(hours, minutes);
 }

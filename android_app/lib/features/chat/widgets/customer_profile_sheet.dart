@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../inbox/conversation_repository.dart';
 
@@ -34,29 +35,30 @@ class CustomerProfileSheet extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      const Text('Customer profile'),
+                      Text(appLocalizations(context).customerProfile),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text('Store context',
+            Text(appLocalizations(context).storeContext,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.storefront_outlined),
                 title: Text(detail.storeName.isEmpty
-                    ? 'Store unavailable'
+                    ? appLocalizations(context).storeUnavailable
                     : detail.storeName),
                 subtitle: detail.storeCode?.trim().isNotEmpty == true
-                    ? Text('Store code: ${detail.storeCode}')
+                    ? Text(appLocalizations(context)
+                        .storeCode(detail.storeCode!))
                     : null,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('Conversation context',
+            Text(appLocalizations(context).conversationContext,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.sm),
             Card(
@@ -67,7 +69,7 @@ class CustomerProfileSheet extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Text('Reply status'),
+                        Text(appLocalizations(context).replyStatus),
                         const Spacer(),
                         StatusBadge(status: detail.bmReplyStatus ?? 'UNKNOWN'),
                       ],
@@ -75,21 +77,21 @@ class CustomerProfileSheet extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     _ContextRow(
                       icon: Icons.mark_chat_unread_outlined,
-                      label: 'Unread messages',
+                      label: appLocalizations(context).unreadMessages,
                       value: '$unreadCount',
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _ContextRow(
                       icon: Icons.forum_outlined,
-                      label: 'Messages in view',
+                      label: appLocalizations(context).messagesInView,
                       value: '${detail.messages.length}',
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     _ContextRow(
                       icon: Icons.schedule_outlined,
-                      label: 'Latest activity',
+                      label: appLocalizations(context).latestActivity,
                       value: latestActivity == null
-                          ? 'No messages yet'
+                          ? appLocalizations(context).noMessagesYet
                           : _formatActivity(context, latestActivity),
                     ),
                   ],

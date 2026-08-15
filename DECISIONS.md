@@ -800,3 +800,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Monthly reporting is query-based at current scale. It filters active, non-archived stores through `StoreAccessService`, uses explicit Asia/Bangkok UTC boundaries, and computes response cycles from chronological inbound messages plus persisted outbound messages with a non-null `senderUserId`. Ambiguous outbound rows and SYSTEM messages are excluded.
 - Response SLA values remain withheld until at least ten answered cycles are available. The API returns safe internal counts and an explicit availability flag; Flutter shows collection progress instead of fabricated percentages or durations. Previous-period comparisons are hidden when historical coverage is insufficient.
 - No analytics warehouse, Redis cache, materialized table, or persisted response-cycle model is introduced in V1. The message volume is measured at roughly 20k rows and can be revisited only after production query timing demonstrates a need.
+
+# Full app localization (2026-08-15)
+
+- Flutter `gen_l10n` with ARB resources is the localization boundary. Supported locales are Thai (`th`), English (`en`), and Simplified Chinese (`zh`/`zh_CN`); Traditional Chinese is intentionally unsupported.
+- Language preference is persisted locally and applied immediately at the root `MaterialApp`. Startup precedence is saved preference, then supported system locale, then English. No backend field, session change, or logout is involved.
+- Only product-owned UI copy is translated. Customer names, store names, employee IDs, emails, Product Master names/colors, and customer/BM message text remain authoritative dynamic content. Status mapping is explicit: `NOT_REPLIED` and `NOTIFIED_BM` render as Need Reply; `REPLIED` renders as Completed.

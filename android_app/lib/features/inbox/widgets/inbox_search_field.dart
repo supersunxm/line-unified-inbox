@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 
 class InboxSearchField extends StatelessWidget {
   const InboxSearchField({
@@ -29,13 +30,13 @@ class InboxSearchField extends StatelessWidget {
           onChanged: onChanged,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'Search conversations',
+            hintText: appLocalizations(context).searchConversations,
             prefixIcon: const Icon(Icons.search),
             suffixIcon: query.isEmpty
                 ? null
                 : IconButton(
                     onPressed: onClear,
-                    tooltip: 'Clear search',
+                    tooltip: appLocalizations(context).clearSearch,
                     icon: const Icon(Icons.close),
                   ),
             filled: true,

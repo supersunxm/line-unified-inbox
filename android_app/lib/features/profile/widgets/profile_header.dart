@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class ProfileHeader extends StatelessWidget {
   const ProfileHeader({super.key, required this.user});
@@ -21,10 +22,11 @@ class ProfileHeader extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            (user.memberships.isEmpty
+            localizedRoleLabel(
+                context,
+                user.memberships.isEmpty
                     ? user.role
-                    : user.memberships.first.role)
-                .replaceAll('_', ' '),
+                    : user.memberships.first.role),
             textAlign: TextAlign.center,
           ),
           if (user.position != null) ...[

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import 'image_bubble.dart';
@@ -106,16 +107,16 @@ class MessageTimeline extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Text(
-              _dayLabel(message.sentAt.toLocal()),
+              _dayLabel(context, message.sentAt.toLocal()),
               style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
-        _messageBubble(message),
+        _messageBubble(context, message),
       ],
     );
   }
 
-  Widget _messageBubble(ChatMessage message) {
+  Widget _messageBubble(BuildContext context, ChatMessage message) {
     final outbound = message.direction == 'OUTBOUND';
     final media = message.media;
     final image = message.messageType == 'IMAGE';
@@ -128,7 +129,7 @@ class MessageTimeline extends StatelessWidget {
       outbound: outbound,
       timestamp: message.sentAt.toLocal(),
       message: message,
-      footer: outbound ? 'Sent' : null,
+      footer: outbound ? appLocalizations(context).sent : null,
       content: image
           ? ImageBubble(
               media: media,
@@ -175,7 +176,9 @@ class MessageTimeline extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                pending.isSending ? 'Sending…' : 'Failed · Retry',
+                pending.isSending
+                    ? appLocalizations(context).sending
+                    : appLocalizations(context).failedRetry,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: pending.isSending
                           ? AppColors.textSecondary
@@ -188,7 +191,7 @@ class MessageTimeline extends StatelessWidget {
                   onPressed: onRetryMessage == null
                       ? null
                       : () => onRetryMessage!(pending.key),
-                  child: const Text('Retry'),
+                  child: Text(appLocalizations(context).retry),
                 ),
             ],
           ),
@@ -200,7 +203,9 @@ class MessageTimeline extends StatelessWidget {
       text: pending.text ?? '',
       outbound: true,
       timestamp: DateTime.now(),
-      footer: pending.isSending ? 'Sending…' : 'Failed · Retry',
+      footer: pending.isSending
+          ? appLocalizations(context).sending
+          : appLocalizations(context).failedRetry,
       onRetry: pending.isSending || onRetryMessage == null
           ? null
           : () => onRetryMessage!(pending.key),
@@ -210,11 +215,11 @@ class MessageTimeline extends StatelessWidget {
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String _dayLabel(DateTime date) {
+  String _dayLabel(BuildContext context, DateTime date) {
     final now = DateTime.now();
-    if (_sameDay(date, now)) return 'Today';
+    if (_sameDay(date, now)) return _localizedToday(context);
     final yesterday = now.subtract(const Duration(days: 1));
-    if (_sameDay(date, yesterday)) return 'Yesterday';
+    if (_sameDay(date, yesterday)) return _localizedYesterday(context);
     const months = [
       'Jan',
       'Feb',
@@ -231,4 +236,18 @@ class MessageTimeline extends StatelessWidget {
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
+
+  String _localizedToday(BuildContext context) =>
+      switch (appLocalizations(context).localeName.split('_').first) {
+        'th' => 'วันนี้',
+        'zh' => '今天',
+        _ => 'Today',
+      };
+
+  String _localizedYesterday(BuildContext context) =>
+      switch (appLocalizations(context).localeName.split('_').first) {
+        'th' => 'เมื่อวาน',
+        'zh' => '昨天',
+        _ => 'Yesterday',
+      };
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/localization/localization.dart';
 
 class ConnectionStatusIndicator extends StatelessWidget {
   const ConnectionStatusIndicator({
@@ -30,7 +31,7 @@ class ConnectionStatusIndicator extends StatelessWidget {
             if (!compact) ...[
               const SizedBox(width: 6),
               Text(
-                'Support queue',
+                appLocalizations(context).supportQueue,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textSecondary,
                     ),

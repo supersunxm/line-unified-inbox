@@ -1,0 +1,1091 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for Chinese (`zh`).
+class AppLocalizationsZh extends AppLocalizations {
+  AppLocalizationsZh([String locale = 'zh']) : super(locale);
+
+  @override
+  String get appName => 'LINE OA Chat Hub';
+
+  @override
+  String get customer => '客户';
+
+  @override
+  String get sent => '已发送';
+
+  @override
+  String get interest => '兴趣';
+
+  @override
+  String get unableToLoadProducts => '无法加载产品';
+
+  @override
+  String get unableToLoadConfigurations => '无法加载配置';
+
+  @override
+  String get unableToSaveTags => '无法保存会话标签';
+
+  @override
+  String get inbox => '消息';
+
+  @override
+  String get all => '全部';
+
+  @override
+  String get summary => '汇总';
+
+  @override
+  String get profile => '个人资料';
+
+  @override
+  String conversationsCount(Object count) {
+    return '$count 个会话';
+  }
+
+  @override
+  String get todayAtAGlance => '今日概览';
+
+  @override
+  String get total => '全部';
+
+  @override
+  String get needReply => '待回复';
+
+  @override
+  String get completed => '已回复';
+
+  @override
+  String get searchConversations => '搜索会话';
+
+  @override
+  String get clearSearch => '清除搜索';
+
+  @override
+  String get noConversationsYet => '暂无会话';
+
+  @override
+  String get noMatchingConversations => '没有匹配的会话';
+
+  @override
+  String get noMessagesYet => '暂无消息';
+
+  @override
+  String get sentAnImage => '发送了一张图片';
+
+  @override
+  String get newCustomerMessage => '新的客户消息';
+
+  @override
+  String newMessages(Object count) {
+    return '$count 条新消息';
+  }
+
+  @override
+  String get you => '你';
+
+  @override
+  String get store => '门店';
+
+  @override
+  String get online => '线上';
+
+  @override
+  String get installment => '分期';
+
+  @override
+  String get profileTooltip => '个人资料';
+
+  @override
+  String get supportQueue => '客服队列';
+
+  @override
+  String get previousMonth => '上个月';
+
+  @override
+  String get nextMonth => '下个月';
+
+  @override
+  String get monthlyActivity => '月度活动';
+
+  @override
+  String get loadingMonthlySummary => '正在加载月度汇总…';
+
+  @override
+  String get unableToLoadSummary => '无法加载汇总，请重试。';
+
+  @override
+  String get summaryUnavailable => '汇总数据不可用。';
+
+  @override
+  String get noActivity => '暂无活动';
+
+  @override
+  String get noActivityThisMonth => '本月暂无客户活动。';
+
+  @override
+  String get dataQuality => '数据质量';
+
+  @override
+  String get qaExcluded => 'QA 会话不计入业务分析。';
+
+  @override
+  String get analyticsQualityUnknown => '无法确认分析质量。';
+
+  @override
+  String get incomingMessages => '收到的消息';
+
+  @override
+  String get customerConversations => '客户会话';
+
+  @override
+  String get responsePerformance => '回复表现';
+
+  @override
+  String get collectingResponseData => '正在收集回复数据';
+
+  @override
+  String get responseDataAfterReplies => '收集足够的已验证 BM 回复后将显示回复指标。';
+
+  @override
+  String verifiedResponses(Object count, Object minimum) {
+    return '已验证回复 $count / 需要 $minimum 条';
+  }
+
+  @override
+  String get responseRate => '回复率';
+
+  @override
+  String get medianResponseTime => '回复时间中位数';
+
+  @override
+  String get averageResponseTime => '平均回复时间';
+
+  @override
+  String get responses => '条回复';
+
+  @override
+  String get previousPeriodUnavailable => '无法比较上一周期';
+
+  @override
+  String get comparedPreviousPeriod => '与上一周期比较';
+
+  @override
+  String hoursMinutes(Object hours, Object minutes) {
+    return '$hours小时$minutes分钟';
+  }
+
+  @override
+  String minutes(Object minutes) {
+    return '$minutes分钟';
+  }
+
+  @override
+  String get back => '返回';
+
+  @override
+  String get customerProfile => '客户资料';
+
+  @override
+  String get moreActions => '更多操作';
+
+  @override
+  String get storeContext => '门店信息';
+
+  @override
+  String get storeUnavailable => '门店信息不可用';
+
+  @override
+  String storeCode(Object code) {
+    return '门店编号：$code';
+  }
+
+  @override
+  String get conversationContext => '会话信息';
+
+  @override
+  String get replyStatus => '回复状态';
+
+  @override
+  String get unreadMessages => '未读消息';
+
+  @override
+  String get messagesInView => '当前消息数';
+
+  @override
+  String get latestActivity => '最近活动';
+
+  @override
+  String get openImage => '打开图片';
+
+  @override
+  String get imageProcessing => '正在处理图片…';
+
+  @override
+  String get loadingImage => '正在加载图片…';
+
+  @override
+  String get imageUnavailable => '图片不可用';
+
+  @override
+  String get sendImageQuestion => '发送图片？';
+
+  @override
+  String get cancel => '取消';
+
+  @override
+  String get send => '发送';
+
+  @override
+  String get retry => '重试';
+
+  @override
+  String get sending => '发送中…';
+
+  @override
+  String get failedRetry => '失败 · 重试';
+
+  @override
+  String get attachImage => '添加图片';
+
+  @override
+  String get replyToCustomer => '回复客户';
+
+  @override
+  String get sendReply => '发送回复';
+
+  @override
+  String get conversationTags => '会话标签';
+
+  @override
+  String get addTags => '+ 添加标签';
+
+  @override
+  String get close => '关闭';
+
+  @override
+  String get clear => '清除';
+
+  @override
+  String get clearAll => '全部清除';
+
+  @override
+  String get save => '保存';
+
+  @override
+  String get customerSource => '客户来源';
+
+  @override
+  String get product => '产品';
+
+  @override
+  String get searchProduct => '搜索产品...';
+
+  @override
+  String get noMatchingProducts => '没有匹配的产品';
+
+  @override
+  String get configuration => '配置';
+
+  @override
+  String get loadingConfigurations => '正在加载配置...';
+
+  @override
+  String get noVariantsAvailable => '该产品没有可用配置';
+
+  @override
+  String get clearVariant => '清除配置';
+
+  @override
+  String get change => '更改';
+
+  @override
+  String get ram => 'RAM';
+
+  @override
+  String get rom => 'ROM';
+
+  @override
+  String get color => '颜色';
+
+  @override
+  String get login => '登录';
+
+  @override
+  String get signInApproved => '使用已批准的账号登录。';
+
+  @override
+  String get email => '电子邮箱';
+
+  @override
+  String get password => '密码';
+
+  @override
+  String get createBmAccount => '创建 BM 账号';
+
+  @override
+  String get name => '姓名';
+
+  @override
+  String get employeeId => '员工编号';
+
+  @override
+  String get role => '角色';
+
+  @override
+  String get confirmPassword => '确认密码';
+
+  @override
+  String get passwordRequirement => '密码（至少 12 个字符）';
+
+  @override
+  String get submitRegistration => '提交注册';
+
+  @override
+  String get staff => '员工';
+
+  @override
+  String get storeManager => '门店经理';
+
+  @override
+  String get pendingApproval => '等待批准';
+
+  @override
+  String get pendingApprovalMessage => '账号已提交，正在等待管理员批准。';
+
+  @override
+  String get backToLogin => '返回登录';
+
+  @override
+  String get waitingForApproval => '等待批准';
+
+  @override
+  String get waitingApprovalMessage => '门店经理或总部批准账号后，才能访问会话。';
+
+  @override
+  String get checkAgain => '再次检查';
+
+  @override
+  String get noPendingRegistrations => '没有待处理的注册。';
+
+  @override
+  String get pendingBmRegistrations => '待批准的 BM 注册';
+
+  @override
+  String get reject => '拒绝';
+
+  @override
+  String get approve => '批准';
+
+  @override
+  String employeeIdValue(Object value) {
+    return '员工编号：$value';
+  }
+
+  @override
+  String get notSet => '未设置';
+
+  @override
+  String get account => '账号';
+
+  @override
+  String get platformRole => '平台角色';
+
+  @override
+  String get assignedStores => '所属门店';
+
+  @override
+  String get noMemberships => '尚未分配门店。';
+
+  @override
+  String get settings => '设置';
+
+  @override
+  String get personalInformation => '个人信息';
+
+  @override
+  String get language => '语言';
+
+  @override
+  String get notifications => '通知';
+
+  @override
+  String get appearance => '外观';
+
+  @override
+  String get accountSecurity => '账号与安全';
+
+  @override
+  String get managedByOrganization => '由您的组织管理';
+
+  @override
+  String get about => '关于';
+
+  @override
+  String get comingSoon => '即将推出';
+
+  @override
+  String get adminTools => '管理员工具';
+
+  @override
+  String get signOut => '退出登录';
+
+  @override
+  String get adminApprovals => '待批准的 BM 注册';
+
+  @override
+  String get languageTitle => '语言';
+
+  @override
+  String get thaiLanguage => 'ไทย';
+
+  @override
+  String get englishLanguage => 'English';
+
+  @override
+  String get simplifiedChineseLanguage => '简体中文';
+
+  @override
+  String get roleAdmin => '管理员';
+
+  @override
+  String get roleViewer => '查看者';
+
+  @override
+  String get roleStoreManager => '门店经理';
+
+  @override
+  String get roleStaff => '员工';
+
+  @override
+  String get nameRequired => '请输入姓名。';
+
+  @override
+  String get employeeIdRequired => '请输入员工编号。';
+
+  @override
+  String get selectStore => '请选择门店。';
+
+  @override
+  String get passwordsDoNotMatch => '两次输入的密码不一致。';
+
+  @override
+  String get invalidCredentials => '电子邮箱或密码不正确。';
+
+  @override
+  String get accountPendingMessage => '您的账号正在等待管理员批准。';
+
+  @override
+  String get accountRejectedMessage => '该账号已被拒绝，请联系管理员。';
+
+  @override
+  String get unableToSignIn => '无法登录，请重试。';
+
+  @override
+  String get cannotReachBackend => '无法连接服务，请检查 API 地址和网络连接。';
+
+  @override
+  String get unexpectedStoreError => '加载门店时发生错误。';
+
+  @override
+  String get unableToSubmitRegistration => '无法提交注册。';
+
+  @override
+  String get employeeIdAlreadyRegistered => '该员工编号已被注册。';
+
+  @override
+  String get verifyOtp => '验证 OTP';
+
+  @override
+  String codeSentTo(Object phone) {
+    return '验证码已发送至 $phone';
+  }
+
+  @override
+  String get sixDigitOtp => '6 位 OTP';
+
+  @override
+  String get verify => '验证';
+
+  @override
+  String get january => '一月';
+
+  @override
+  String get february => '二月';
+
+  @override
+  String get march => '三月';
+
+  @override
+  String get april => '四月';
+
+  @override
+  String get may => '五月';
+
+  @override
+  String get june => '六月';
+
+  @override
+  String get july => '七月';
+
+  @override
+  String get august => '八月';
+
+  @override
+  String get september => '九月';
+
+  @override
+  String get october => '十月';
+
+  @override
+  String get november => '十一月';
+
+  @override
+  String get december => '十二月';
+}
+
+/// The translations for Chinese, as used in China (`zh_CN`).
+class AppLocalizationsZhCn extends AppLocalizationsZh {
+  AppLocalizationsZhCn() : super('zh_CN');
+
+  @override
+  String get appName => 'LINE OA Chat Hub';
+
+  @override
+  String get customer => '客户';
+
+  @override
+  String get sent => '已发送';
+
+  @override
+  String get interest => '兴趣';
+
+  @override
+  String get unableToLoadProducts => '无法加载产品';
+
+  @override
+  String get unableToLoadConfigurations => '无法加载配置';
+
+  @override
+  String get unableToSaveTags => '无法保存会话标签';
+
+  @override
+  String get inbox => '消息';
+
+  @override
+  String get all => '全部';
+
+  @override
+  String get summary => '汇总';
+
+  @override
+  String get profile => '个人资料';
+
+  @override
+  String conversationsCount(Object count) {
+    return '$count 个会话';
+  }
+
+  @override
+  String get todayAtAGlance => '今日概览';
+
+  @override
+  String get total => '全部';
+
+  @override
+  String get needReply => '待回复';
+
+  @override
+  String get completed => '已回复';
+
+  @override
+  String get searchConversations => '搜索会话';
+
+  @override
+  String get clearSearch => '清除搜索';
+
+  @override
+  String get noConversationsYet => '暂无会话';
+
+  @override
+  String get noMatchingConversations => '没有匹配的会话';
+
+  @override
+  String get noMessagesYet => '暂无消息';
+
+  @override
+  String get sentAnImage => '发送了一张图片';
+
+  @override
+  String get newCustomerMessage => '新的客户消息';
+
+  @override
+  String newMessages(Object count) {
+    return '$count 条新消息';
+  }
+
+  @override
+  String get you => '你';
+
+  @override
+  String get store => '门店';
+
+  @override
+  String get online => '线上';
+
+  @override
+  String get installment => '分期';
+
+  @override
+  String get profileTooltip => '个人资料';
+
+  @override
+  String get supportQueue => '客服队列';
+
+  @override
+  String get previousMonth => '上个月';
+
+  @override
+  String get nextMonth => '下个月';
+
+  @override
+  String get monthlyActivity => '月度活动';
+
+  @override
+  String get loadingMonthlySummary => '正在加载月度汇总…';
+
+  @override
+  String get unableToLoadSummary => '无法加载汇总，请重试。';
+
+  @override
+  String get summaryUnavailable => '汇总数据不可用。';
+
+  @override
+  String get noActivity => '暂无活动';
+
+  @override
+  String get noActivityThisMonth => '本月暂无客户活动。';
+
+  @override
+  String get dataQuality => '数据质量';
+
+  @override
+  String get qaExcluded => 'QA 会话不计入业务分析。';
+
+  @override
+  String get analyticsQualityUnknown => '无法确认分析质量。';
+
+  @override
+  String get incomingMessages => '收到的消息';
+
+  @override
+  String get customerConversations => '客户会话';
+
+  @override
+  String get responsePerformance => '回复表现';
+
+  @override
+  String get collectingResponseData => '正在收集回复数据';
+
+  @override
+  String get responseDataAfterReplies => '收集足够的已验证 BM 回复后将显示回复指标。';
+
+  @override
+  String verifiedResponses(Object count, Object minimum) {
+    return '已验证回复 $count / 需要 $minimum 条';
+  }
+
+  @override
+  String get responseRate => '回复率';
+
+  @override
+  String get medianResponseTime => '回复时间中位数';
+
+  @override
+  String get averageResponseTime => '平均回复时间';
+
+  @override
+  String get responses => '条回复';
+
+  @override
+  String get previousPeriodUnavailable => '无法比较上一周期';
+
+  @override
+  String get comparedPreviousPeriod => '与上一周期比较';
+
+  @override
+  String hoursMinutes(Object hours, Object minutes) {
+    return '$hours小时$minutes分钟';
+  }
+
+  @override
+  String minutes(Object minutes) {
+    return '$minutes分钟';
+  }
+
+  @override
+  String get back => '返回';
+
+  @override
+  String get customerProfile => '客户资料';
+
+  @override
+  String get moreActions => '更多操作';
+
+  @override
+  String get storeContext => '门店信息';
+
+  @override
+  String get storeUnavailable => '门店信息不可用';
+
+  @override
+  String storeCode(Object code) {
+    return '门店编号：$code';
+  }
+
+  @override
+  String get conversationContext => '会话信息';
+
+  @override
+  String get replyStatus => '回复状态';
+
+  @override
+  String get unreadMessages => '未读消息';
+
+  @override
+  String get messagesInView => '当前消息数';
+
+  @override
+  String get latestActivity => '最近活动';
+
+  @override
+  String get openImage => '打开图片';
+
+  @override
+  String get imageProcessing => '正在处理图片…';
+
+  @override
+  String get loadingImage => '正在加载图片…';
+
+  @override
+  String get imageUnavailable => '图片不可用';
+
+  @override
+  String get sendImageQuestion => '发送图片？';
+
+  @override
+  String get cancel => '取消';
+
+  @override
+  String get send => '发送';
+
+  @override
+  String get retry => '重试';
+
+  @override
+  String get sending => '发送中…';
+
+  @override
+  String get failedRetry => '失败 · 重试';
+
+  @override
+  String get attachImage => '添加图片';
+
+  @override
+  String get replyToCustomer => '回复客户';
+
+  @override
+  String get sendReply => '发送回复';
+
+  @override
+  String get conversationTags => '会话标签';
+
+  @override
+  String get addTags => '+ 添加标签';
+
+  @override
+  String get close => '关闭';
+
+  @override
+  String get clear => '清除';
+
+  @override
+  String get clearAll => '全部清除';
+
+  @override
+  String get save => '保存';
+
+  @override
+  String get customerSource => '客户来源';
+
+  @override
+  String get product => '产品';
+
+  @override
+  String get searchProduct => '搜索产品...';
+
+  @override
+  String get noMatchingProducts => '没有匹配的产品';
+
+  @override
+  String get configuration => '配置';
+
+  @override
+  String get loadingConfigurations => '正在加载配置...';
+
+  @override
+  String get noVariantsAvailable => '该产品没有可用配置';
+
+  @override
+  String get clearVariant => '清除配置';
+
+  @override
+  String get change => '更改';
+
+  @override
+  String get ram => 'RAM';
+
+  @override
+  String get rom => 'ROM';
+
+  @override
+  String get color => '颜色';
+
+  @override
+  String get login => '登录';
+
+  @override
+  String get signInApproved => '使用已批准的账号登录。';
+
+  @override
+  String get email => '电子邮箱';
+
+  @override
+  String get password => '密码';
+
+  @override
+  String get createBmAccount => '创建 BM 账号';
+
+  @override
+  String get name => '姓名';
+
+  @override
+  String get employeeId => '员工编号';
+
+  @override
+  String get role => '角色';
+
+  @override
+  String get confirmPassword => '确认密码';
+
+  @override
+  String get passwordRequirement => '密码（至少 12 个字符）';
+
+  @override
+  String get submitRegistration => '提交注册';
+
+  @override
+  String get staff => '员工';
+
+  @override
+  String get storeManager => '门店经理';
+
+  @override
+  String get pendingApproval => '等待批准';
+
+  @override
+  String get pendingApprovalMessage => '账号已提交，正在等待管理员批准。';
+
+  @override
+  String get backToLogin => '返回登录';
+
+  @override
+  String get waitingForApproval => '等待批准';
+
+  @override
+  String get waitingApprovalMessage => '门店经理或总部批准账号后，才能访问会话。';
+
+  @override
+  String get checkAgain => '再次检查';
+
+  @override
+  String get noPendingRegistrations => '没有待处理的注册。';
+
+  @override
+  String get pendingBmRegistrations => '待批准的 BM 注册';
+
+  @override
+  String get reject => '拒绝';
+
+  @override
+  String get approve => '批准';
+
+  @override
+  String employeeIdValue(Object value) {
+    return '员工编号：$value';
+  }
+
+  @override
+  String get notSet => '未设置';
+
+  @override
+  String get account => '账号';
+
+  @override
+  String get platformRole => '平台角色';
+
+  @override
+  String get assignedStores => '所属门店';
+
+  @override
+  String get noMemberships => '尚未分配门店。';
+
+  @override
+  String get settings => '设置';
+
+  @override
+  String get personalInformation => '个人信息';
+
+  @override
+  String get language => '语言';
+
+  @override
+  String get notifications => '通知';
+
+  @override
+  String get appearance => '外观';
+
+  @override
+  String get accountSecurity => '账号与安全';
+
+  @override
+  String get managedByOrganization => '由您的组织管理';
+
+  @override
+  String get about => '关于';
+
+  @override
+  String get comingSoon => '即将推出';
+
+  @override
+  String get adminTools => '管理员工具';
+
+  @override
+  String get signOut => '退出登录';
+
+  @override
+  String get adminApprovals => '待批准的 BM 注册';
+
+  @override
+  String get languageTitle => '语言';
+
+  @override
+  String get thaiLanguage => 'ไทย';
+
+  @override
+  String get englishLanguage => 'English';
+
+  @override
+  String get simplifiedChineseLanguage => '简体中文';
+
+  @override
+  String get roleAdmin => '管理员';
+
+  @override
+  String get roleViewer => '查看者';
+
+  @override
+  String get roleStoreManager => '门店经理';
+
+  @override
+  String get roleStaff => '员工';
+
+  @override
+  String get nameRequired => '请输入姓名。';
+
+  @override
+  String get employeeIdRequired => '请输入员工编号。';
+
+  @override
+  String get selectStore => '请选择门店。';
+
+  @override
+  String get passwordsDoNotMatch => '两次输入的密码不一致。';
+
+  @override
+  String get invalidCredentials => '电子邮箱或密码不正确。';
+
+  @override
+  String get accountPendingMessage => '您的账号正在等待管理员批准。';
+
+  @override
+  String get accountRejectedMessage => '该账号已被拒绝，请联系管理员。';
+
+  @override
+  String get unableToSignIn => '无法登录，请重试。';
+
+  @override
+  String get cannotReachBackend => '无法连接服务，请检查 API 地址和网络连接。';
+
+  @override
+  String get unexpectedStoreError => '加载门店时发生错误。';
+
+  @override
+  String get unableToSubmitRegistration => '无法提交注册。';
+
+  @override
+  String get employeeIdAlreadyRegistered => '该员工编号已被注册。';
+
+  @override
+  String get verifyOtp => '验证 OTP';
+
+  @override
+  String codeSentTo(Object phone) {
+    return '验证码已发送至 $phone';
+  }
+
+  @override
+  String get sixDigitOtp => '6 位 OTP';
+
+  @override
+  String get verify => '验证';
+
+  @override
+  String get january => '一月';
+
+  @override
+  String get february => '二月';
+
+  @override
+  String get march => '三月';
+
+  @override
+  String get april => '四月';
+
+  @override
+  String get may => '五月';
+
+  @override
+  String get june => '六月';
+
+  @override
+  String get july => '七月';
+
+  @override
+  String get august => '八月';
+
+  @override
+  String get september => '九月';
+
+  @override
+  String get october => '十月';
+
+  @override
+  String get november => '十一月';
+
+  @override
+  String get december => '十二月';
+}

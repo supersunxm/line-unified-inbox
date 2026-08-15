@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../inbox/conversation_repository.dart';
 
@@ -19,7 +20,7 @@ class ConversationTagsBar extends StatelessWidget {
         child: TextButton.icon(
           onPressed: onPressed,
           icon: const Icon(Icons.sell_outlined, size: 18),
-          label: const Text('+ Add tags'),
+          label: Text(appLocalizations(context).addTags),
         ),
       );
     }
@@ -38,7 +39,7 @@ class ConversationTagsBar extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  _label(current),
+                  _label(context, current),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge,
@@ -52,17 +53,18 @@ class ConversationTagsBar extends StatelessWidget {
     );
   }
 
-  String _label(ConversationTags value) {
+  String _label(BuildContext context, ConversationTags value) {
     final sources = value.sourceChannels.map((source) => switch (source) {
-          'STORE' => 'Store',
-          'ONLINE' => 'Online',
+          'STORE' => appLocalizations(context).store,
+          'ONLINE' => appLocalizations(context).online,
           _ => source,
         });
     final parts = [
       ...sources,
       if (value.product != null) value.product!.productName,
       if (value.variant?.label.isNotEmpty == true) value.variant!.label,
-      if (value.isInstallment) '💳 Installment',
+      if (value.isInstallment)
+        '💳 ${appLocalizations(context).installment}',
     ];
     return parts.join(' · ');
   }
@@ -164,7 +166,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _loadingProducts = false;
-        _error = 'Unable to load products';
+        _error = appLocalizations(context).unableToLoadProducts;
       });
     }
   }
@@ -229,7 +231,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'Unable to save conversation tags';
+        _error = appLocalizations(context).unableToSaveTags;
       });
     }
   }
@@ -285,19 +287,19 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 child:
                                     CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Save'),
+                            : Text(appLocalizations(context).save),
                       ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Text('Customer source',
+                  Text(appLocalizations(context).customerSource,
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.sm,
                     children: [
                       FilterChip(
-                        label: const Text('Store'),
+                        label: Text(appLocalizations(context).store),
                         selected: _sourceChannels.contains('STORE'),
                         onSelected: _saving
                             ? null
@@ -310,7 +312,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 }),
                       ),
                       FilterChip(
-                        label: const Text('Online'),
+                        label: Text(appLocalizations(context).online),
                         selected: _sourceChannels.contains('ONLINE'),
                         onSelected: _saving
                             ? null
@@ -325,11 +327,12 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('Interest',
+                  Text(appLocalizations(context).interest,
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: AppSpacing.sm),
                   FilterChip(
-                    label: const Text('ผ่อน / Installment'),
+                    label: Text(
+                        'ผ่อน / ${appLocalizations(context).installment}'),
                     selected: _isInstallment,
                     onSelected: _saving
                         ? null

@@ -1,28 +1,45 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/models.dart';
+import '../../core/localization/localization.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/status_badge.dart';
 
 class PersonalInformationPage extends StatelessWidget {
   const PersonalInformationPage({super.key, required this.user});
 
   final CurrentUser user;
 
-  String _value(String? value) => value == null || value.trim().isEmpty ? 'Not set' : value;
+  String _value(BuildContext context, String? value) =>
+      value == null || value.trim().isEmpty
+          ? appLocalizations(context).notSet
+          : value;
 
   @override
   Widget build(BuildContext context) {
     final membership = user.memberships.isEmpty ? null : user.memberships.first;
     return Scaffold(
-      appBar: AppBar(title: const Text('Personal Information')),
+      appBar: AppBar(
+          title: Text(appLocalizations(context).personalInformation)),
       body: ListView(
         padding: AppSpacing.screen,
         children: [
-          _InfoCard(label: 'Name', value: _value(user.displayName)),
-          _InfoCard(label: 'Employee ID', value: _value(user.employeeId)),
-          _InfoCard(label: 'Email', value: _value(user.email)),
-          _InfoCard(label: 'Role', value: _value(membership?.role ?? user.role).replaceAll('_', ' ')),
-          _InfoCard(label: 'Assigned Store', value: _value(membership?.store.name)),
+          _InfoCard(
+              label: appLocalizations(context).name,
+              value: _value(context, user.displayName)),
+          _InfoCard(
+              label: appLocalizations(context).employeeId,
+              value: _value(context, user.employeeId)),
+          _InfoCard(
+              label: appLocalizations(context).email,
+              value: _value(context, user.email)),
+          _InfoCard(
+              label: appLocalizations(context).role,
+              value: localizedRoleLabel(
+                  context, _value(context, membership?.role ?? user.role))),
+          _InfoCard(
+              label: appLocalizations(context).assignedStores,
+              value: _value(context, membership?.store.name)),
         ],
       ),
     );

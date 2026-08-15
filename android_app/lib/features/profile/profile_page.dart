@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/models.dart';
+import '../../core/localization/localization.dart';
 import '../../core/theme/app_spacing.dart';
 import 'widgets/account_section.dart';
 import 'widgets/admin_tools_section.dart';
@@ -24,7 +25,7 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: Text(appLocalizations(context).profile)),
         body: ListView(
           padding: AppSpacing.screen,
           children: [
@@ -43,7 +44,7 @@ class ProfilePage extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onLogout,
               icon: const Icon(Icons.logout),
-              label: const Text('Sign out'),
+              label: Text(appLocalizations(context).signOut),
             ),
           ],
         ),

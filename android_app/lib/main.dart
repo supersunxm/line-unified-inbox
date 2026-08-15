@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/logging/safe_logger.dart';
+import 'core/localization/localization.dart';
 import 'core/network/api_client.dart';
 import 'core/storage/token_store.dart';
 import 'core/models/models.dart';
@@ -42,6 +43,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   late final SummaryRepository _summary;
   late final RealtimeService _realtime;
   late final NotificationService _notifications;
+  late final AppLanguageController _language;
   CurrentUser? _user;
   bool _registering = false;
   bool _pendingApproval = false;
@@ -59,6 +61,8 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     _summary = SummaryRepository(_api);
     _realtime = RealtimeService(_tokens);
     _notifications = NotificationService(_api, _tokens);
+    _language = AppLanguageController();
+    unawaited(_language.load());
     _restore();
   }
 
@@ -66,6 +70,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   void dispose() {
     _notifications.dispose();
     _realtime.dispose();
+    _language.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -174,14 +179,25 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-      navigatorKey: _navigator,
-      title: 'LINE OA Chat Hub',
-      theme: AppTheme.light(),
-      scrollBehavior: const AppScrollBehavior(),
-      home: _loading
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _home());
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _language,
+        builder: (_, __) => AppLanguageScope(
+          controller: _language,
+          child: MaterialApp(
+            navigatorKey: _navigator,
+            title: 'LINE OA Chat Hub',
+            locale: _language.locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: AppTheme.light(),
+            scrollBehavior: const AppScrollBehavior(),
+            home: _loading
+                ? const Scaffold(
+                    body: Center(child: CircularProgressIndicator()))
+                : _home(),
+          ),
+        ),
+      );
   Widget _home() {
     if (_loggingOut) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));

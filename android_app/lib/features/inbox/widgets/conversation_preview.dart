@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/localization/localization.dart';
 
 class ConversationPreview extends StatelessWidget {
   const ConversationPreview({
@@ -12,32 +13,41 @@ class ConversationPreview extends StatelessWidget {
   final DateTime? sentAt;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              preview?.trim().isNotEmpty == true
-                  ? preview!.trim()
-                  : 'No messages yet',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-            ),
+  Widget build(BuildContext context) {
+    final localizations = appLocalizations(context);
+    var displayPreview = preview?.trim();
+    if (displayPreview == 'Sent an image') {
+      displayPreview = localizations.sentAnImage;
+    } else if (displayPreview?.startsWith('You:') == true) {
+      displayPreview = '${localizations.you}:${displayPreview!.substring(4)}';
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            displayPreview?.isNotEmpty == true
+                ? displayPreview!
+                : localizations.noMessagesYet,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
           ),
-          if (sentAt != null) ...[
-            const SizedBox(width: 12),
-            Text(
-              _formatTimestamp(sentAt!.toLocal()),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-            ),
-          ],
+        ),
+        if (sentAt != null) ...[
+          const SizedBox(width: 12),
+          Text(
+            _formatTimestamp(sentAt!.toLocal()),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+          ),
         ],
-      );
+      ],
+    );
+  }
 
   String _formatTimestamp(DateTime value) {
     final now = DateTime.now();

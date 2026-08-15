@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 
 class AdminToolsSection extends StatelessWidget {
   const AdminToolsSection({super.key, this.onApprovals});
@@ -13,12 +14,13 @@ class AdminToolsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Admin tools', style: Theme.of(context).textTheme.titleMedium),
+        Text(appLocalizations(context).adminTools,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         OutlinedButton.icon(
           onPressed: onApprovals,
           icon: const Icon(Icons.verified_user),
-          label: const Text('Pending BM registrations'),
+          label: Text(appLocalizations(context).adminApprovals),
         ),
       ],
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 import 'connection_status_indicator.dart';
 
 class InboxHeader extends StatelessWidget {
@@ -30,7 +31,7 @@ class InboxHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Inbox',
+                    appLocalizations(context).inbox,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -38,7 +39,8 @@ class InboxHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '$conversationCount conversations',
+                    appLocalizations(context)
+                        .conversationsCount(conversationCount),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -50,7 +52,7 @@ class InboxHeader extends StatelessWidget {
             const SizedBox(width: AppSpacing.xs),
             IconButton(
               onPressed: onProfile,
-              tooltip: 'Profile',
+              tooltip: appLocalizations(context).profileTooltip,
               icon: const Icon(Icons.person_outline),
               style: IconButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,

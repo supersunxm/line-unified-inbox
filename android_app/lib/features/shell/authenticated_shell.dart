@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/models.dart';
+import '../../core/localization/localization.dart';
 import '../auth/admin_approval_page.dart';
 import '../auth/auth_repository.dart';
 import '../chat/chat_page.dart';
@@ -95,21 +96,21 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
           selectedIndex: _selectedIndex,
           onDestinationSelected: (index) =>
               setState(() => _selectedIndex = index),
-          destinations: const [
+          destinations: [
             NavigationDestination(
               icon: Icon(Icons.inbox_outlined),
               selectedIcon: Icon(Icons.inbox),
-              label: 'Inbox',
+              label: appLocalizations(context).inbox,
             ),
             NavigationDestination(
               icon: Icon(Icons.bar_chart_outlined),
               selectedIcon: Icon(Icons.bar_chart),
-              label: 'Summary',
+              label: appLocalizations(context).summary,
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
-              label: 'Profile',
+              label: appLocalizations(context).profile,
             ),
           ],
         ),

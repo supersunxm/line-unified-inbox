@@ -5,11 +5,16 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/logging/safe_logger.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/storage/token_store.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/app_localizations_en.dart';
+import '../../l10n/app_localizations_th.dart';
+import '../../l10n/app_localizations_zh.dart';
 import 'conversation_notification_history.dart';
 
 typedef ConversationDeepLink = void Function(
@@ -30,6 +35,19 @@ bool _localNotificationsInitialized = false;
 ConversationNotificationHistoryStore get _effectiveBackgroundHistory =>
     _backgroundHistory ??=
         SharedPreferencesConversationNotificationHistoryStore();
+
+Future<AppLocalizations> _loadNotificationLocalizations() async {
+  final value = await SharedPreferencesAsync().getString('app_language');
+  switch (value) {
+    case 'th':
+      return AppLocalizationsTh();
+    case 'zh':
+    case 'zh_CN':
+      return AppLocalizationsZhCn();
+    default:
+      return AppLocalizationsEn();
+  }
+}
 
 Future<void> _ensureFirebaseInitialized() async {
   if (Firebase.apps.isEmpty) await Firebase.initializeApp();
@@ -101,15 +119,17 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
     return;
   }
   try {
+    final localizations = await _loadNotificationLocalizations();
     await _initializeLocalNotifications();
     final history = await _effectiveBackgroundHistory.append(
       conversationId: conversationId,
       customerName: customerName is String && customerName.trim().isNotEmpty
           ? customerName
-          : 'Customer',
+          : localizations.customer,
       message: ConversationNotificationMessage(
         messageId: messageId,
-        preview: notificationPreview(
+        preview: localizedNotificationPreview(
+          localizations: localizations,
           messageType: messageType is String ? messageType : '',
           preview: preview is String ? preview : null,
         ),
@@ -127,7 +147,7 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
       history.customerName,
       history.messages.length == 1
           ? history.messages.single.preview
-          : '${history.messages.length} new messages',
+          : localizations.newMessages(history.messages.length),
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
@@ -140,7 +160,7 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
           playSound: true,
           enableVibration: true,
           styleInformation: MessagingStyleInformation(
-            const Person(name: 'You'),
+            Person(name: localizations.you),
             conversationTitle: history.customerName,
             groupConversation: false,
             messages: history.messages

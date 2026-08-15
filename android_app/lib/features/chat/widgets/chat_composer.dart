@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/localization/localization.dart';
 
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
@@ -57,7 +58,7 @@ class ChatComposer extends StatelessWidget {
               width: 44,
               height: 44,
               child: IconButton.filledTonal(
-                tooltip: 'Attach image',
+                tooltip: appLocalizations(context).attachImage,
                 onPressed: enabled && !isAttaching ? onAttach : null,
                 icon: isAttaching
                     ? const SizedBox(
@@ -76,8 +77,8 @@ class ChatComposer extends StatelessWidget {
                 minLines: 1,
                 maxLines: 4,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Reply to customer',
+                decoration: InputDecoration(
+                  hintText: appLocalizations(context).replyToCustomer,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -92,7 +93,7 @@ class ChatComposer extends StatelessWidget {
               width: 44,
               height: 44,
               child: IconButton.filled(
-                tooltip: 'Send reply',
+                tooltip: appLocalizations(context).sendReply,
                 onPressed: enabled && !isSending ? onSend : null,
                 icon: isSending
                     ? const SizedBox(

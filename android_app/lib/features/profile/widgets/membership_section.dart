@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/store_badge.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class MembershipSection extends StatelessWidget {
   const MembershipSection({super.key, required this.memberships});
@@ -13,11 +15,11 @@ class MembershipSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Assigned stores',
+          Text(appLocalizations(context).assignedStores,
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           if (memberships.isEmpty)
-            const Text('No store memberships assigned.')
+            Text(appLocalizations(context).noMemberships)
           else
             Card(
               child: Column(
@@ -31,8 +33,8 @@ class MembershipSection extends StatelessWidget {
                         compact: true,
                       ),
                       title: Text(memberships[index].store.name),
-                      subtitle:
-                          Text(memberships[index].role.replaceAll('_', ' ')),
+                      subtitle: Text(
+                          localizedRoleLabel(context, memberships[index].role)),
                     ),
                   ],
                 ],
