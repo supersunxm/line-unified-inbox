@@ -4,8 +4,13 @@ import { redirect } from "next/navigation";
 import {
   fetchLatestTikTokAccountFromBackend,
   fetchTikTokAccountsListFromBackend,
+  fetchTikTokHistoricalMetricsFromBackend,
 } from "./tiktok-api-client";
 import { TikTokOverviewView } from "./tiktok-overview-view";
+import {
+  getTikTokDemoGrowthMetrics,
+  isTikTokDemoGrowthEnabled,
+} from "./dashboard/tiktok-demo-growth";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +32,29 @@ export default async function TikTokOverviewPage() {
   }
 
   const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
-  const singleAccountData =
-    accounts.length === 1
-      ? await fetchLatestTikTokAccountFromBackend({ sessionToken })
-      : null;
+  const singleAccountId = accounts.length === 1 ? accounts[0].id : null;
 
-  return <TikTokOverviewView accounts={accounts} singleAccountData={singleAccountData} />;
+  const [singleAccountData, realHistoricalMetrics] =
+    accounts.length === 1
+      ? await Promise.all([
+          fetchLatestTikTokAccountFromBackend({ sessionToken }),
+          singleAccountId
+            ? fetchTikTokHistoricalMetricsFromBackend(singleAccountId, 30, {
+                sessionToken,
+              })
+            : Promise.resolve(null),
+        ])
+      : [null, null];
+
+  const historicalMetrics = isTikTokDemoGrowthEnabled()
+    ? getTikTokDemoGrowthMetrics(singleAccountId || "acc-central-world")
+    : realHistoricalMetrics;
+
+  return (
+    <TikTokOverviewView
+      accounts={accounts}
+      singleAccountData={singleAccountData}
+      historicalMetrics={historicalMetrics}
+    />
+  );
 }

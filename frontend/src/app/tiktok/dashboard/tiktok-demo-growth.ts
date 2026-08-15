@@ -5,7 +5,11 @@ import type {
 } from "../tiktok-types";
 
 export function isTikTokDemoGrowthEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_TIKTOK_DEMO_GROWTH === "true";
+  if (typeof process === "undefined" || !process.env) {
+    return false;
+  }
+  const flag = process.env.NEXT_PUBLIC_TIKTOK_DEMO_GROWTH;
+  return flag === "true" || flag === "1";
 }
 
 function bangkokDateString(offsetDays: number): string {
@@ -28,12 +32,22 @@ function interpolate(start: number, end: number, steps: number): number[] {
 }
 
 export function getTikTokDemoGrowthMetrics(
-  data: TikTokStoreData,
+  accountOrData?: string | TikTokStoreData | null,
 ): TikTokHistoricalMetricsData {
-  const current = data.profile.follower_count ?? 13_295;
+  const accountId =
+    typeof accountOrData === "string"
+      ? accountOrData
+      : accountOrData?.id ?? "acc-central-world";
+
+  const storeData =
+    typeof accountOrData === "object" && accountOrData !== null
+      ? accountOrData
+      : null;
+
+  const current = storeData?.profile?.follower_count ?? 13342;
   const yesterday = current - 47;
   const sevenDaysAgo = current - 286;
-  const thirtyDaysAgo = current - 1_124;
+  const thirtyDaysAgo = current - 1124;
 
   const counts = [
     ...interpolate(thirtyDaysAgo, sevenDaysAgo, 23),
@@ -48,19 +62,20 @@ export function getTikTokDemoGrowthMetrics(
       id: `demo-${metricDate}`,
       metricDate,
       followerCount,
-      followingCount: data.profile.following_count ?? 0,
-      likesCount: data.profile.likes_count ?? 0,
-      videoCount: data.profile.video_count ?? 0,
+      followingCount: storeData?.profile?.following_count ?? 120,
+      likesCount: storeData?.profile?.likes_count ?? 54200,
+      videoCount: storeData?.profile?.video_count ?? 18,
       createdAt: `${metricDate}T01:00:00.000+07:00`,
       updatedAt: `${metricDate}T01:00:00.000+07:00`,
     };
   });
 
   return {
-    accountId: data.id ?? "demo-account",
-    openId: data.profile.open_id || "demo-open-id",
-    displayName: data.profile.display_name || "TikTok Store",
-    username: data.profile.username ?? null,
+    accountId,
+    openId: storeData?.profile?.open_id || "demo-open-id",
+    displayName:
+      storeData?.profile?.display_name || "OPPO Brand Shop Central World",
+    username: storeData?.profile?.username ?? "o_centralworld",
     summary: {
       currentFollowerCount: current,
       previousDayFollowerCount: yesterday,
@@ -68,7 +83,7 @@ export function getTikTokDemoGrowthMetrics(
       sevenDayFollowerCount: sevenDaysAgo,
       sevenDayFollowerGrowth: 286,
       thirtyDayFollowerCount: thirtyDaysAgo,
-      thirtyDayFollowerGrowth: 1_124,
+      thirtyDayFollowerGrowth: 1124,
     },
     history,
   };

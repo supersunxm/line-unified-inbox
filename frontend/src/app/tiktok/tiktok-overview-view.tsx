@@ -1,12 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import type { TikTokAccountListItem, TikTokStoreData } from "./tiktok-types";
+import type {
+  TikTokAccountListItem,
+  TikTokHistoricalMetricsData,
+  TikTokStoreData,
+} from "./tiktok-types";
 
 interface TikTokOverviewViewProps {
   accounts?: TikTokAccountListItem[];
   singleAccountData?: TikTokStoreData | null;
+  historicalMetrics?: TikTokHistoricalMetricsData | null;
   data?: TikTokStoreData | null; // For backwards compatibility
+}
+
+function formatDelta(delta: number | null | undefined): {
+  text: string;
+  className: string;
+} {
+  if (delta === null || delta === undefined) {
+    return {
+      text: "--",
+      className: "text-slate-400 dark:text-slate-500 font-medium",
+    };
+  }
+
+  if (delta > 0) {
+    return {
+      text: `+${new Intl.NumberFormat("en-US").format(delta)}`,
+      className: "text-emerald-600 dark:text-emerald-400 font-semibold",
+    };
+  }
+
+  if (delta < 0) {
+    return {
+      text: new Intl.NumberFormat("en-US").format(delta),
+      className: "text-rose-600 dark:text-rose-400 font-semibold",
+    };
+  }
+
+  return {
+    text: "0",
+    className: "text-slate-500 dark:text-slate-400 font-medium",
+  };
 }
 
 function formatNumber(num: number | undefined | null): string {
@@ -65,6 +101,7 @@ function renderStatusBadge(status: string) {
 export function TikTokOverviewView({
   accounts = [],
   singleAccountData,
+  historicalMetrics,
   data,
 }: TikTokOverviewViewProps) {
   // Support legacy props if passed
@@ -503,64 +540,97 @@ export function TikTokOverviewView({
 
         {/* Quick Audience Overview Grid */}
         <section className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium uppercase tracking-wider">Followers</span>
-              <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div>
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider">Followers</span>
+                <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </div>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                {formatNumber(profile.follower_count)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                {formatCompactNumber(profile.follower_count)} total followers
+              </p>
             </div>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
-              {formatNumber(profile.follower_count)}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              {formatCompactNumber(profile.follower_count)} total followers
-            </p>
+
+            {/* Growth delta breakdown: Today, 7D, 30D */}
+            <div className="mt-3 space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800/80">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">Today</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.dailyFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">7 Days</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.sevenDayFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">30 Days</span>
+                {(() => {
+                  const d = formatDelta(historicalMetrics?.summary?.thirtyDayFollowerGrowth);
+                  return <span className={d.className}>{d.text}</span>;
+                })()}
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium uppercase tracking-wider">Following</span>
-              <svg className="h-4 w-4 text-sky-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-              </svg>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div>
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider">Following</span>
+                <svg className="h-4 w-4 text-sky-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                </svg>
+              </div>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                {formatNumber(profile.following_count)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                Accounts followed
+              </p>
             </div>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
-              {formatNumber(profile.following_count)}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              Accounts followed
-            </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium uppercase tracking-wider">Total Likes</span>
-              <svg className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div>
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider">Total Likes</span>
+                <svg className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+              </div>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                {formatNumber(profile.likes_count)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                {formatCompactNumber(profile.likes_count)} likes across account
+              </p>
             </div>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
-              {formatNumber(profile.likes_count)}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              {formatCompactNumber(profile.likes_count)} likes across account
-            </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-              <span className="text-xs font-medium uppercase tracking-wider">Public Videos</span>
-              <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-              </svg>
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div>
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wider">Public Videos</span>
+                <svg className="h-4 w-4 text-purple-500" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              </div>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                {formatNumber(profile.video_count)}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                {videos.length} videos synced to database
+              </p>
             </div>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
-              {formatNumber(profile.video_count)}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              {videos.length} videos synced to database
-            </p>
           </div>
         </section>
 
