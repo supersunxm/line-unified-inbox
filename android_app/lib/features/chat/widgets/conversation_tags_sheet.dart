@@ -125,7 +125,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   int _variantGeneration = 0;
 
   bool get _dirty =>
-      !_sameSources(_sourceChannels, widget.initialTags.sourceChannels.toSet()) ||
+      !_sameSources(
+          _sourceChannels, widget.initialTags.sourceChannels.toSet()) ||
       _isInstallment != widget.initialTags.isInstallment ||
       _product?.id != widget.initialTags.product?.id ||
       _variant?.id != widget.initialTags.variant?.id;
@@ -263,6 +264,29 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         icon: const Icon(Icons.close),
                         tooltip: 'Close',
                       ),
+                      TextButton(
+                        onPressed: _saving
+                            ? null
+                            : () => setState(() {
+                                  _sourceChannels = <String>{};
+                                  _isInstallment = false;
+                                  _product = null;
+                                  _variant = null;
+                                  _variants = const [];
+                                }),
+                        child: const Text('Clear all'),
+                      ),
+                      FilledButton(
+                        onPressed: !_dirty || _saving ? null : _save,
+                        child: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Save'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -366,7 +390,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             title: Text(product.productName),
                             subtitle: Text(product.seriesName),
                             selected: _product?.id == product.id,
-                            onTap: _saving ? null : () => _selectProduct(product),
+                            onTap:
+                                _saving ? null : () => _selectProduct(product),
                           );
                         },
                       ),
@@ -420,35 +445,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           style: TextStyle(
                               color: Theme.of(context).colorScheme.error)),
                     ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Wrap(
-                    spacing: AppSpacing.xl,
-                    children: [
-                      TextButton(
-                        onPressed: _saving
-                            ? null
-                            : () => setState(() {
-                                  _sourceChannels = <String>{};
-                                  _isInstallment = false;
-                                  _product = null;
-                                  _variant = null;
-                                  _variants = const [];
-                                }),
-                        child: const Text('Clear all'),
-                      ),
-                      FilledButton(
-                        onPressed: !_dirty || _saving ? null : _save,
-                        child: _saving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Save'),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
