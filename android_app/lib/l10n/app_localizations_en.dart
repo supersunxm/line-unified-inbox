@@ -556,4 +556,101 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get december => 'December';
+
+  @override
+  String get customerInsights => 'Customer insights';
+
+  @override
+  String get tagCoverage => 'Tag coverage';
+
+  @override
+  String get eligibleConversations => 'Eligible conversations';
+
+  @override
+  String get taggedConversations => 'Tagged conversations';
+
+  @override
+  String get coverageQuality => 'Coverage quality';
+
+  @override
+  String get coverageLow => 'Low coverage';
+
+  @override
+  String get coveragePartial => 'Partial coverage';
+
+  @override
+  String get coverageModerate => 'Moderate coverage';
+
+  @override
+  String get coverageStrong => 'Strong coverage';
+
+  @override
+  String get tagCoverageWarning =>
+      'Tag more conversations to improve customer insight accuracy.';
+
+  @override
+  String get sourceStoreOnly => 'Store only';
+
+  @override
+  String get sourceOnlineOnly => 'Online only';
+
+  @override
+  String get sourceStoreAndOnline => 'Store + Online';
+
+  @override
+  String get sourceUntagged => 'Not tagged';
+
+  @override
+  String get installmentInterest => 'Installment interest';
+
+  @override
+  String get taggedInstallment => 'Installment tagged';
+
+  @override
+  String get eligibleRate => 'Of eligible conversations';
+
+  @override
+  String get taggedRate => 'Of tagged conversations';
+
+  @override
+  String get topProducts => 'Top products';
+
+  @override
+  String get topConfigurations => 'Top configurations';
+
+  @override
+  String get noTaggedData => 'No manual tag data for this period.';
+
+  @override
+  String get currentTagSnapshot => 'Based on current tags';
+
+  @override
+  String get faster => 'faster';
+
+  @override
+  String get slower => 'slower';
+
+  @override
+  String get percentagePoints => 'pp';
+
+  @override
+  String get volumeComparison => 'Activity vs previous period';
+
+  @override
+  String get responseComparison => 'Response vs previous period';
+
+  @override
+  String get comparisonUnavailable => 'Comparison unavailable for this period';
+
+  @override
+  String get underFourHours => '< 4h';
+
+  @override
+  String get fourToTwelveHours => '4–12h';
+
+  @override
+  String get twelveToTwentyFourHours => '12–24h';
+
+  @override
+  String get overTwentyFourHours => '≥ 24h';
 }

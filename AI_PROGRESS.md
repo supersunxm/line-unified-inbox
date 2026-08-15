@@ -1329,6 +1329,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Centralized visible auth, inbox, chat, tagging, profile, summary, status, error, loading, and notification fallback strings. Customer/store names, employee IDs, emails, product master values, and message content remain dynamic and untranslated.
 - Added localization widget coverage for all three locales, dynamic-content preservation, persistence, and immediate switching. Analyzer and the full Flutter test suite pass; production APK build/install and emulator locale verification remain the final release checks.
 
+# Current task: Phase 8D Summary V2 (2026-08-15)
+
+- Extended the existing monthly summary with response deltas, explicit response-distribution semantics, and manual-tag analytics using `CURRENT_TAG_SNAPSHOT`; no historical tag claims or tag comparisons are presented.
+- Added truthful coverage quality, mutually exclusive source buckets, installment denominators, manual ProductModel/ProductVariant top-five aggregates, and preserved QA exclusion, store authorization, and the ten answered-cycle response threshold.
+- Added Thai, English, and Simplified Chinese Summary V2 copy with locale-aware counts, percentages, and response-duration formatting. No schema migration was needed because all analytics use existing persisted fields.
+- Focused backend summary tests (26), full backend tests (1152), Prisma validation/generation, backend build, changed-file ESLint, Flutter analyze, full Flutter tests (65), Summary widget tests (12), and production-configured APK build pass. Deployment and authenticated runtime QA remain the final release checks.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

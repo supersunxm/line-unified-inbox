@@ -806,3 +806,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Flutter `gen_l10n` with ARB resources is the localization boundary. Supported locales are Thai (`th`), English (`en`), and Simplified Chinese (`zh`/`zh_CN`); Traditional Chinese is intentionally unsupported.
 - Language preference is persisted locally and applied immediately at the root `MaterialApp`. Startup precedence is saved preference, then supported system locale, then English. No backend field, session change, or logout is involved.
 - Only product-owned UI copy is translated. Customer names, store names, employee IDs, emails, Product Master names/colors, and customer/BM message text remain authoritative dynamic content. Status mapping is explicit: `NOT_REPLIED` and `NOTIFIED_BM` render as Need Reply; `REPLIED` renders as Completed.
+
+# Summary V2 analytics semantics (2026-08-15)
+
+- Manual tags have no change-history model, so Summary V2 reports current manual tag state for conversations with inbound activity in the selected period and labels the mode `CURRENT_TAG_SNAPSHOT`. Tag month-over-month comparison is intentionally suppressed.
+- Response-cycle semantics and the ten verified answered-cycle threshold are unchanged. Duration comparisons use a human semantic delta (faster/slower), while distribution comparisons use percentage points; unavailable comparison data remains neutral.
+- Customer source analytics use mutually exclusive `storeOnly`, `onlineOnly`, `storeAndOnline`, and `untagged` buckets. Product analytics include only `MANUAL` ConversationProduct rows, aggregate one model row per conversation, and retain variant dimensions together to avoid cross-model color claims.
+- The query-based implementation reuses existing authorized conversation/message/tag data and adds no migration, cache, warehouse, or background aggregation until measured production latency demonstrates a need.

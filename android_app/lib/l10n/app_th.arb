@@ -173,5 +173,37 @@
   "september": "กันยายน",
   "october": "ตุลาคม",
   "november": "พฤศจิกายน",
-  "december": "ธันวาคม"
+  "december": "ธันวาคม",
+  "customerInsights": "ข้อมูลเชิงลูกค้า",
+  "tagCoverage": "ความครอบคลุมของแท็ก",
+  "eligibleConversations": "บทสนทนาที่เข้าเกณฑ์",
+  "taggedConversations": "บทสนทนาที่มีแท็ก",
+  "coverageQuality": "คุณภาพความครอบคลุม",
+  "coverageLow": "ความครอบคลุมต่ำ",
+  "coveragePartial": "ความครอบคลุมบางส่วน",
+  "coverageModerate": "ความครอบคลุมปานกลาง",
+  "coverageStrong": "ความครอบคลุมสูง",
+  "tagCoverageWarning": "เพิ่มแท็กให้บทสนทนาเพื่อให้ข้อมูลเชิงลูกค้ามีความแม่นยำมากขึ้น",
+  "sourceStoreOnly": "หน้าร้านเท่านั้น",
+  "sourceOnlineOnly": "ออนไลน์เท่านั้น",
+  "sourceStoreAndOnline": "หน้าร้าน + ออนไลน์",
+  "sourceUntagged": "ยังไม่แท็ก",
+  "installmentInterest": "ความสนใจผ่อนชำระ",
+  "taggedInstallment": "แท็กความสนใจผ่อนชำระ",
+  "eligibleRate": "จากบทสนทนาที่เข้าเกณฑ์",
+  "taggedRate": "จากบทสนทนาที่มีแท็ก",
+  "topProducts": "สินค้ายอดนิยม",
+  "topConfigurations": "การกำหนดยอดนิยม",
+  "noTaggedData": "ยังไม่มีข้อมูลแท็กแบบแมนนวลในช่วงเวลานี้",
+  "currentTagSnapshot": "อ้างอิงจากแท็กปัจจุบัน",
+  "faster": "เร็วขึ้น",
+  "slower": "ช้าลง",
+  "percentagePoints": "จุดเปอร์เซ็นต์",
+  "volumeComparison": "กิจกรรมเทียบกับช่วงก่อนหน้า",
+  "responseComparison": "การตอบเทียบกับช่วงก่อนหน้า",
+  "comparisonUnavailable": "ไม่มีข้อมูลเปรียบเทียบสำหรับช่วงเวลานี้"
+  ,"underFourHours": "< 4 ชม."
+  ,"fourToTwelveHours": "4–12 ชม."
+  ,"twelveToTwentyFourHours": "12–24 ชม."
+  ,"overTwentyFourHours": "≥ 24 ชม."
 }

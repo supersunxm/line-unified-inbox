@@ -545,6 +545,102 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get december => '十二月';
+
+  @override
+  String get customerInsights => '客户洞察';
+
+  @override
+  String get tagCoverage => '标签覆盖率';
+
+  @override
+  String get eligibleConversations => '符合条件的对话';
+
+  @override
+  String get taggedConversations => '已标记对话';
+
+  @override
+  String get coverageQuality => '覆盖质量';
+
+  @override
+  String get coverageLow => '覆盖率低';
+
+  @override
+  String get coveragePartial => '覆盖率部分';
+
+  @override
+  String get coverageModerate => '覆盖率中等';
+
+  @override
+  String get coverageStrong => '覆盖率高';
+
+  @override
+  String get tagCoverageWarning => '为更多对话添加标签，以提高客户洞察的准确性。';
+
+  @override
+  String get sourceStoreOnly => '仅门店';
+
+  @override
+  String get sourceOnlineOnly => '仅线上';
+
+  @override
+  String get sourceStoreAndOnline => '门店 + 线上';
+
+  @override
+  String get sourceUntagged => '未标记';
+
+  @override
+  String get installmentInterest => '分期兴趣';
+
+  @override
+  String get taggedInstallment => '已标记分期';
+
+  @override
+  String get eligibleRate => '占符合条件对话';
+
+  @override
+  String get taggedRate => '占已标记对话';
+
+  @override
+  String get topProducts => '热门产品';
+
+  @override
+  String get topConfigurations => '热门配置';
+
+  @override
+  String get noTaggedData => '此期间没有手动标签数据。';
+
+  @override
+  String get currentTagSnapshot => '基于当前标签';
+
+  @override
+  String get faster => '更快';
+
+  @override
+  String get slower => '更慢';
+
+  @override
+  String get percentagePoints => '个百分点';
+
+  @override
+  String get volumeComparison => '与上一期间的活动对比';
+
+  @override
+  String get responseComparison => '与上一期间的回复对比';
+
+  @override
+  String get comparisonUnavailable => '此期间没有可用的对比数据';
+
+  @override
+  String get underFourHours => '< 4小时';
+
+  @override
+  String get fourToTwelveHours => '4–12小时';
+
+  @override
+  String get twelveToTwentyFourHours => '12–24小时';
+
+  @override
+  String get overTwentyFourHours => '≥ 24小时';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1088,4 +1184,100 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get december => '十二月';
+
+  @override
+  String get customerInsights => '客户洞察';
+
+  @override
+  String get tagCoverage => '标签覆盖率';
+
+  @override
+  String get eligibleConversations => '符合条件的对话';
+
+  @override
+  String get taggedConversations => '已标记对话';
+
+  @override
+  String get coverageQuality => '覆盖质量';
+
+  @override
+  String get coverageLow => '覆盖率低';
+
+  @override
+  String get coveragePartial => '覆盖率部分';
+
+  @override
+  String get coverageModerate => '覆盖率中等';
+
+  @override
+  String get coverageStrong => '覆盖率高';
+
+  @override
+  String get tagCoverageWarning => '为更多对话添加标签，以提高客户洞察的准确性。';
+
+  @override
+  String get sourceStoreOnly => '仅门店';
+
+  @override
+  String get sourceOnlineOnly => '仅线上';
+
+  @override
+  String get sourceStoreAndOnline => '门店 + 线上';
+
+  @override
+  String get sourceUntagged => '未标记';
+
+  @override
+  String get installmentInterest => '分期兴趣';
+
+  @override
+  String get taggedInstallment => '已标记分期';
+
+  @override
+  String get eligibleRate => '占符合条件对话';
+
+  @override
+  String get taggedRate => '占已标记对话';
+
+  @override
+  String get topProducts => '热门产品';
+
+  @override
+  String get topConfigurations => '热门配置';
+
+  @override
+  String get noTaggedData => '此期间没有手动标签数据。';
+
+  @override
+  String get currentTagSnapshot => '基于当前标签';
+
+  @override
+  String get faster => '更快';
+
+  @override
+  String get slower => '更慢';
+
+  @override
+  String get percentagePoints => '个百分点';
+
+  @override
+  String get volumeComparison => '与上一期间的活动对比';
+
+  @override
+  String get responseComparison => '与上一期间的回复对比';
+
+  @override
+  String get comparisonUnavailable => '此期间没有可用的对比数据';
+
+  @override
+  String get underFourHours => '< 4小时';
+
+  @override
+  String get fourToTwelveHours => '4–12小时';
+
+  @override
+  String get twelveToTwentyFourHours => '12–24小时';
+
+  @override
+  String get overTwentyFourHours => '≥ 24小时';
 }

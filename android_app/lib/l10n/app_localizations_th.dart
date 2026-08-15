@@ -548,4 +548,101 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get december => 'ธันวาคม';
+
+  @override
+  String get customerInsights => 'ข้อมูลเชิงลูกค้า';
+
+  @override
+  String get tagCoverage => 'ความครอบคลุมของแท็ก';
+
+  @override
+  String get eligibleConversations => 'บทสนทนาที่เข้าเกณฑ์';
+
+  @override
+  String get taggedConversations => 'บทสนทนาที่มีแท็ก';
+
+  @override
+  String get coverageQuality => 'คุณภาพความครอบคลุม';
+
+  @override
+  String get coverageLow => 'ความครอบคลุมต่ำ';
+
+  @override
+  String get coveragePartial => 'ความครอบคลุมบางส่วน';
+
+  @override
+  String get coverageModerate => 'ความครอบคลุมปานกลาง';
+
+  @override
+  String get coverageStrong => 'ความครอบคลุมสูง';
+
+  @override
+  String get tagCoverageWarning =>
+      'เพิ่มแท็กให้บทสนทนาเพื่อให้ข้อมูลเชิงลูกค้ามีความแม่นยำมากขึ้น';
+
+  @override
+  String get sourceStoreOnly => 'หน้าร้านเท่านั้น';
+
+  @override
+  String get sourceOnlineOnly => 'ออนไลน์เท่านั้น';
+
+  @override
+  String get sourceStoreAndOnline => 'หน้าร้าน + ออนไลน์';
+
+  @override
+  String get sourceUntagged => 'ยังไม่แท็ก';
+
+  @override
+  String get installmentInterest => 'ความสนใจผ่อนชำระ';
+
+  @override
+  String get taggedInstallment => 'แท็กความสนใจผ่อนชำระ';
+
+  @override
+  String get eligibleRate => 'จากบทสนทนาที่เข้าเกณฑ์';
+
+  @override
+  String get taggedRate => 'จากบทสนทนาที่มีแท็ก';
+
+  @override
+  String get topProducts => 'สินค้ายอดนิยม';
+
+  @override
+  String get topConfigurations => 'การกำหนดยอดนิยม';
+
+  @override
+  String get noTaggedData => 'ยังไม่มีข้อมูลแท็กแบบแมนนวลในช่วงเวลานี้';
+
+  @override
+  String get currentTagSnapshot => 'อ้างอิงจากแท็กปัจจุบัน';
+
+  @override
+  String get faster => 'เร็วขึ้น';
+
+  @override
+  String get slower => 'ช้าลง';
+
+  @override
+  String get percentagePoints => 'จุดเปอร์เซ็นต์';
+
+  @override
+  String get volumeComparison => 'กิจกรรมเทียบกับช่วงก่อนหน้า';
+
+  @override
+  String get responseComparison => 'การตอบเทียบกับช่วงก่อนหน้า';
+
+  @override
+  String get comparisonUnavailable => 'ไม่มีข้อมูลเปรียบเทียบสำหรับช่วงเวลานี้';
+
+  @override
+  String get underFourHours => '< 4 ชม.';
+
+  @override
+  String get fourToTwelveHours => '4–12 ชม.';
+
+  @override
+  String get twelveToTwentyFourHours => '12–24 ชม.';
+
+  @override
+  String get overTwentyFourHours => '≥ 24 ชม.';
 }

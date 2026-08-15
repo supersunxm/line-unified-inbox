@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/models/models.dart';
 import '../../core/localization/localization.dart';
@@ -111,9 +112,12 @@ class _SummaryPageState extends State<SummaryPage> {
           const SizedBox(height: AppSpacing.md),
           _MetricGrid(summary: summary),
           const SizedBox(height: AppSpacing.xl),
-          _ResponseCard(response: summary.response),
+          _ResponseCard(
+              response: summary.response, comparison: summary.comparison),
           const SizedBox(height: AppSpacing.lg),
           _ComparisonCard(comparison: summary.comparison),
+          const SizedBox(height: AppSpacing.lg),
+          _TagAnalyticsCard(tags: summary.tags),
           const SizedBox(height: AppSpacing.lg),
           Text(appLocalizations(context).dataQuality,
               style: Theme.of(context).textTheme.titleMedium),
@@ -127,6 +131,16 @@ class _SummaryPageState extends State<SummaryPage> {
                 .bodySmall
                 ?.copyWith(color: AppColors.textSecondary),
           ),
+          if (summary.dataQuality.tagAnalyticsMode != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '${appLocalizations(context).tagCoverage}: ${summary.dataQuality.tagAnalyticsMode == 'CURRENT_TAG_SNAPSHOT' ? appLocalizations(context).currentTagSnapshot : summary.dataQuality.tagAnalyticsMode}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
         ],
       ),
     );
@@ -182,23 +196,24 @@ class _MetricGrid extends StatelessWidget {
               _MetricCard(
                   width: width,
                   label: appLocalizations(context).incomingMessages,
-                  value: summary.volume.incomingMessages.toString(),
+                  value: _formatCount(context, summary.volume.incomingMessages),
                   icon: Icons.markunread_outlined),
               _MetricCard(
                   width: width,
                   label: appLocalizations(context).customerConversations,
-                  value: summary.volume.incomingConversations.toString(),
+                  value: _formatCount(
+                      context, summary.volume.incomingConversations),
                   icon: Icons.forum_outlined),
               _MetricCard(
                   width: width,
                   label: appLocalizations(context).needReply,
-                  value: summary.operational.needReply.toString(),
+                  value: _formatCount(context, summary.operational.needReply),
                   icon: Icons.priority_high,
                   color: AppColors.warning),
               _MetricCard(
                   width: width,
                   label: appLocalizations(context).completed,
-                  value: summary.operational.completed.toString(),
+                  value: _formatCount(context, summary.operational.completed),
                   icon: Icons.check_circle_outline,
                   color: AppColors.success),
             ],
@@ -244,8 +259,9 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _ResponseCard extends StatelessWidget {
-  const _ResponseCard({required this.response});
+  const _ResponseCard({required this.response, required this.comparison});
   final SummaryResponse response;
+  final SummaryComparison comparison;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -283,21 +299,24 @@ class _ResponseCard extends StatelessWidget {
               _ResponseMetricRow(
                   label: appLocalizations(context).averageResponseTime,
                   value: _formatDuration(context, response.averageSeconds)),
+              if (comparison.responseChanges?.medianSeconds != null)
+                _ResponseDelta(
+                    seconds: comparison.responseChanges!.medianSeconds!),
               const Divider(height: AppSpacing.xl),
               _BucketRow(
-                  label: '< 4h',
+                  label: appLocalizations(context).underFourHours,
                   count: response.buckets.under4h,
                   total: response.sampleSize),
               _BucketRow(
-                  label: '4–12h',
+                  label: appLocalizations(context).fourToTwelveHours,
                   count: response.buckets.from4To12h,
                   total: response.sampleSize),
               _BucketRow(
-                  label: '12–24h',
+                  label: appLocalizations(context).twelveToTwentyFourHours,
                   count: response.buckets.from12To24h,
                   total: response.sampleSize),
               _BucketRow(
-                  label: '≥ 24h',
+                  label: appLocalizations(context).overTwentyFourHours,
                   count: response.buckets.over24h,
                   total: response.sampleSize),
             ],
@@ -319,6 +338,26 @@ class _ResponseMetricRow extends StatelessWidget {
       ]));
 }
 
+class _ResponseDelta extends StatelessWidget {
+  const _ResponseDelta({required this.seconds});
+  final double seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final faster = seconds < 0;
+    final value = _formatDuration(context, seconds.abs());
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Text(
+        '${faster ? '↓' : '↑'} $value ${faster ? appLocalizations(context).faster : appLocalizations(context).slower}',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: faster ? AppColors.success : AppColors.warning,
+            ),
+      ),
+    );
+  }
+}
+
 class _BucketRow extends StatelessWidget {
   const _BucketRow(
       {required this.label, required this.count, required this.total});
@@ -333,7 +372,7 @@ class _BucketRow extends StatelessWidget {
         child: Row(children: [
           Expanded(child: Text(label)),
           Text(
-              '${percentage.toStringAsFixed(0)}% · $count ${appLocalizations(context).responses}')
+              '${percentage.toStringAsFixed(0)}% · ${_formatCount(context, count)} ${appLocalizations(context).responses}')
         ]));
   }
 }
@@ -352,8 +391,7 @@ class _ComparisonCard extends StatelessWidget {
             const Icon(Icons.compare_arrows, color: AppColors.textSecondary),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-                child: Text(
-                    appLocalizations(context).previousPeriodUnavailable,
+                child: Text(appLocalizations(context).previousPeriodUnavailable,
                     style: Theme.of(context).textTheme.bodyMedium)),
           ]),
         ),
@@ -376,6 +414,133 @@ class _ComparisonCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TagAnalyticsCard extends StatelessWidget {
+  const _TagAnalyticsCard({required this.tags});
+  final SummaryTagAnalytics tags;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverage = tags.coverage;
+    final quality = switch (coverage.quality) {
+      'STRONG' => appLocalizations(context).coverageStrong,
+      'MODERATE' => appLocalizations(context).coverageModerate,
+      'PARTIAL' => appLocalizations(context).coveragePartial,
+      _ => appLocalizations(context).coverageLow,
+    };
+    return Card(
+      child: Padding(
+        padding: AppSpacing.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(appLocalizations(context).customerInsights,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.md),
+            Text(appLocalizations(context).tagCoverage,
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+                '${_formatCount(context, coverage.taggedConversations)} / ${_formatCount(context, coverage.eligibleConversations)} · ${_formatPercent(context, coverage.coverageRate)}'),
+            const SizedBox(height: AppSpacing.xs),
+            LinearProgressIndicator(value: coverage.coverageRate.clamp(0, 1)),
+            const SizedBox(height: AppSpacing.xs),
+            Text('${appLocalizations(context).coverageQuality}: $quality',
+                style: Theme.of(context).textTheme.bodySmall),
+            if (coverage.quality == 'LOW' || coverage.quality == 'PARTIAL')
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(appLocalizations(context).tagCoverageWarning,
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+            const Divider(height: AppSpacing.xl),
+            Text(appLocalizations(context).customerSource,
+                style: Theme.of(context).textTheme.titleSmall),
+            _InsightRow(
+                label: appLocalizations(context).sourceStoreOnly,
+                value: tags.sources.storeOnly),
+            _InsightRow(
+                label: appLocalizations(context).sourceOnlineOnly,
+                value: tags.sources.onlineOnly),
+            _InsightRow(
+                label: appLocalizations(context).sourceStoreAndOnline,
+                value: tags.sources.storeAndOnline),
+            _InsightRow(
+                label: appLocalizations(context).sourceUntagged,
+                value: tags.sources.untagged),
+            const Divider(height: AppSpacing.xl),
+            Text(appLocalizations(context).installmentInterest,
+                style: Theme.of(context).textTheme.titleSmall),
+            _InsightRow(
+                label: appLocalizations(context).taggedInstallment,
+                value: tags.installment.count),
+            Text(
+                '${_formatPercent(context, tags.installment.eligibleRate)} ${appLocalizations(context).eligibleRate}',
+                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+                '${_formatPercent(context, tags.installment.taggedRate)} ${appLocalizations(context).taggedRate}',
+                style: Theme.of(context).textTheme.bodySmall),
+            if (tags.topProducts.isNotEmpty) ...[
+              const Divider(height: AppSpacing.xl),
+              Text(appLocalizations(context).topProducts,
+                  style: Theme.of(context).textTheme.titleSmall),
+              for (final product in tags.topProducts)
+                _InsightRow(label: product.productName, value: product.count),
+            ],
+            if (tags.topVariants.isNotEmpty) ...[
+              const Divider(height: AppSpacing.xl),
+              Text(appLocalizations(context).topConfigurations,
+                  style: Theme.of(context).textTheme.titleSmall),
+              for (final variant in tags.topVariants)
+                _InsightRow(
+                    label: _variantLabel(variant), value: variant.count),
+            ],
+            if (coverage.eligibleConversations == 0 && tags.topProducts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(appLocalizations(context).noTaggedData),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InsightRow extends StatelessWidget {
+  const _InsightRow({required this.label, required this.value});
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Row(children: [
+          Expanded(child: Text(label)),
+          Text(_formatCount(context, value),
+              style: Theme.of(context).textTheme.titleSmall),
+        ]),
+      );
+}
+
+String _variantLabel(SummaryVariant variant) => [
+      variant.productName,
+      if (variant.ram?.isNotEmpty == true) '${variant.ram}GB',
+      if (variant.rom?.isNotEmpty == true) '${variant.rom}GB',
+      if (variant.color?.isNotEmpty == true) variant.color!,
+    ].join(' / ');
+
+String _formatCount(BuildContext context, int value) =>
+    NumberFormat.decimalPattern(appLocalizations(context).localeName)
+        .format(value);
+
+String _formatPercent(BuildContext context, double value) {
+  final formatter =
+      NumberFormat.percentPattern(appLocalizations(context).localeName)
+        ..maximumFractionDigits = 1
+        ..minimumFractionDigits = value == 0 ? 0 : 1;
+  return formatter.format(value);
 }
 
 String _currentMonth() {

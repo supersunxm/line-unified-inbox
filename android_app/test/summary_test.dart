@@ -69,12 +69,55 @@ class FakeSummaryRepository extends SummaryRepository {
         'operational': {'needReply': 3, 'completed': 7},
         'comparison': {
           'available': available,
-          'reason': available ? null : 'insufficient_previous_period_data'
+          'reason': available ? null : 'insufficient_previous_period_data',
+          'responseChanges': available
+              ? {
+                  'responseRate': 0.1,
+                  'medianSeconds': -900,
+                  'averageSeconds': -1200,
+                  'bucketPercentagePoints': {'under4h': 0.1}
+                }
+              : null,
+        },
+        'tags': {
+          'mode': 'CURRENT_TAG_SNAPSHOT',
+          'coverage': {
+            'eligibleConversations': empty ? 0 : 4,
+            'taggedConversations': empty ? 0 : 3,
+            'coverageRate': empty ? 0 : 0.75,
+            'quality': empty ? 'LOW' : 'MODERATE'
+          },
+          'sources': {
+            'storeOnly': 1,
+            'onlineOnly': 1,
+            'storeAndOnline': 1,
+            'untagged': 1
+          },
+          'installment': {'count': 1, 'eligibleRate': 0.25, 'taggedRate': 0.33},
+          'topProducts': [
+            {'productId': 'p1', 'productName': 'OPPO Find X', 'count': 2}
+          ],
+          'topVariants': [
+            {
+              'productName': 'OPPO Find X',
+              'ram': '12',
+              'rom': '256',
+              'color': 'Black',
+              'count': 1
+            }
+          ]
         },
         'dataQuality': {
           'qaExcluded': true,
           'ambiguousOutboundExcluded': 1,
-          'responseMetricsAvailable': available
+          'responseMetricsAvailable': available,
+          'tagAnalyticsMode': 'CURRENT_TAG_SNAPSHOT',
+          'tagCoverage': {
+            'eligibleConversations': empty ? 0 : 4,
+            'taggedConversations': empty ? 0 : 3,
+            'coverageRate': empty ? 0 : 0.75,
+            'quality': empty ? 'LOW' : 'MODERATE'
+          }
         },
       });
 }
@@ -142,6 +185,21 @@ void main() {
     expect(find.text('Response rate'), findsOneWidget);
     expect(find.text('83%'), findsOneWidget);
     expect(find.text('80% · 8 responses'), findsOneWidget);
+  });
+
+  testWidgets('summary renders snapshot coverage and manual insights',
+      (tester) async {
+    await tester.pumpWidget(app(FakeSummaryRepository(available: true)));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Customer insights'),
+      300,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Customer insights'), findsOneWidget);
+    expect(find.textContaining('3 / 4'), findsOneWidget);
+    expect(find.text('OPPO Find X'), findsOneWidget);
+    expect(find.text('Store only'), findsOneWidget);
   });
 
   testWidgets(

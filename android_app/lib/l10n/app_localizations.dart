@@ -1144,6 +1144,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'December'**
   String get december;
+
+  /// No description provided for @customerInsights.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer insights'**
+  String get customerInsights;
+
+  /// No description provided for @tagCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag coverage'**
+  String get tagCoverage;
+
+  /// No description provided for @eligibleConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Eligible conversations'**
+  String get eligibleConversations;
+
+  /// No description provided for @taggedConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Tagged conversations'**
+  String get taggedConversations;
+
+  /// No description provided for @coverageQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage quality'**
+  String get coverageQuality;
+
+  /// No description provided for @coverageLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low coverage'**
+  String get coverageLow;
+
+  /// No description provided for @coveragePartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial coverage'**
+  String get coveragePartial;
+
+  /// No description provided for @coverageModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate coverage'**
+  String get coverageModerate;
+
+  /// No description provided for @coverageStrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Strong coverage'**
+  String get coverageStrong;
+
+  /// No description provided for @tagCoverageWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag more conversations to improve customer insight accuracy.'**
+  String get tagCoverageWarning;
+
+  /// No description provided for @sourceStoreOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Store only'**
+  String get sourceStoreOnly;
+
+  /// No description provided for @sourceOnlineOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Online only'**
+  String get sourceOnlineOnly;
+
+  /// No description provided for @sourceStoreAndOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Store + Online'**
+  String get sourceStoreAndOnline;
+
+  /// No description provided for @sourceUntagged.
+  ///
+  /// In en, this message translates to:
+  /// **'Not tagged'**
+  String get sourceUntagged;
+
+  /// No description provided for @installmentInterest.
+  ///
+  /// In en, this message translates to:
+  /// **'Installment interest'**
+  String get installmentInterest;
+
+  /// No description provided for @taggedInstallment.
+  ///
+  /// In en, this message translates to:
+  /// **'Installment tagged'**
+  String get taggedInstallment;
+
+  /// No description provided for @eligibleRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Of eligible conversations'**
+  String get eligibleRate;
+
+  /// No description provided for @taggedRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Of tagged conversations'**
+  String get taggedRate;
+
+  /// No description provided for @topProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'Top products'**
+  String get topProducts;
+
+  /// No description provided for @topConfigurations.
+  ///
+  /// In en, this message translates to:
+  /// **'Top configurations'**
+  String get topConfigurations;
+
+  /// No description provided for @noTaggedData.
+  ///
+  /// In en, this message translates to:
+  /// **'No manual tag data for this period.'**
+  String get noTaggedData;
+
+  /// No description provided for @currentTagSnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on current tags'**
+  String get currentTagSnapshot;
+
+  /// No description provided for @faster.
+  ///
+  /// In en, this message translates to:
+  /// **'faster'**
+  String get faster;
+
+  /// No description provided for @slower.
+  ///
+  /// In en, this message translates to:
+  /// **'slower'**
+  String get slower;
+
+  /// No description provided for @percentagePoints.
+  ///
+  /// In en, this message translates to:
+  /// **'pp'**
+  String get percentagePoints;
+
+  /// No description provided for @volumeComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity vs previous period'**
+  String get volumeComparison;
+
+  /// No description provided for @responseComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Response vs previous period'**
+  String get responseComparison;
+
+  /// No description provided for @comparisonUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Comparison unavailable for this period'**
+  String get comparisonUnavailable;
+
+  /// No description provided for @underFourHours.
+  ///
+  /// In en, this message translates to:
+  /// **'< 4h'**
+  String get underFourHours;
+
+  /// No description provided for @fourToTwelveHours.
+  ///
+  /// In en, this message translates to:
+  /// **'4–12h'**
+  String get fourToTwelveHours;
+
+  /// No description provided for @twelveToTwentyFourHours.
+  ///
+  /// In en, this message translates to:
+  /// **'12–24h'**
+  String get twelveToTwentyFourHours;
+
+  /// No description provided for @overTwentyFourHours.
+  ///
+  /// In en, this message translates to:
+  /// **'≥ 24h'**
+  String get overTwentyFourHours;
 }
 
 class _AppLocalizationsDelegate

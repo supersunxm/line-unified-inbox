@@ -173,5 +173,37 @@
   "september": "九月",
   "october": "十月",
   "november": "十一月",
-  "december": "十二月"
+  "december": "十二月",
+  "customerInsights": "客户洞察",
+  "tagCoverage": "标签覆盖率",
+  "eligibleConversations": "符合条件的对话",
+  "taggedConversations": "已标记对话",
+  "coverageQuality": "覆盖质量",
+  "coverageLow": "覆盖率低",
+  "coveragePartial": "覆盖率部分",
+  "coverageModerate": "覆盖率中等",
+  "coverageStrong": "覆盖率高",
+  "tagCoverageWarning": "为更多对话添加标签，以提高客户洞察的准确性。",
+  "sourceStoreOnly": "仅门店",
+  "sourceOnlineOnly": "仅线上",
+  "sourceStoreAndOnline": "门店 + 线上",
+  "sourceUntagged": "未标记",
+  "installmentInterest": "分期兴趣",
+  "taggedInstallment": "已标记分期",
+  "eligibleRate": "占符合条件对话",
+  "taggedRate": "占已标记对话",
+  "topProducts": "热门产品",
+  "topConfigurations": "热门配置",
+  "noTaggedData": "此期间没有手动标签数据。",
+  "currentTagSnapshot": "基于当前标签",
+  "faster": "更快",
+  "slower": "更慢",
+  "percentagePoints": "个百分点",
+  "volumeComparison": "与上一期间的活动对比",
+  "responseComparison": "与上一期间的回复对比",
+  "comparisonUnavailable": "此期间没有可用的对比数据"
+  ,"underFourHours": "< 4小时"
+  ,"fourToTwelveHours": "4–12小时"
+  ,"twelveToTwentyFourHours": "12–24小时"
+  ,"overTwentyFourHours": "≥ 24小时"
 }

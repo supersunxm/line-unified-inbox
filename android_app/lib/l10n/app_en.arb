@@ -173,5 +173,37 @@
   "september": "September",
   "october": "October",
   "november": "November",
-  "december": "December"
+  "december": "December",
+  "customerInsights": "Customer insights",
+  "tagCoverage": "Tag coverage",
+  "eligibleConversations": "Eligible conversations",
+  "taggedConversations": "Tagged conversations",
+  "coverageQuality": "Coverage quality",
+  "coverageLow": "Low coverage",
+  "coveragePartial": "Partial coverage",
+  "coverageModerate": "Moderate coverage",
+  "coverageStrong": "Strong coverage",
+  "tagCoverageWarning": "Tag more conversations to improve customer insight accuracy.",
+  "sourceStoreOnly": "Store only",
+  "sourceOnlineOnly": "Online only",
+  "sourceStoreAndOnline": "Store + Online",
+  "sourceUntagged": "Not tagged",
+  "installmentInterest": "Installment interest",
+  "taggedInstallment": "Installment tagged",
+  "eligibleRate": "Of eligible conversations",
+  "taggedRate": "Of tagged conversations",
+  "topProducts": "Top products",
+  "topConfigurations": "Top configurations",
+  "noTaggedData": "No manual tag data for this period.",
+  "currentTagSnapshot": "Based on current tags",
+  "faster": "faster",
+  "slower": "slower",
+  "percentagePoints": "pp",
+  "volumeComparison": "Activity vs previous period",
+  "responseComparison": "Response vs previous period",
+  "comparisonUnavailable": "Comparison unavailable for this period"
+  ,"underFourHours": "< 4h"
+  ,"fourToTwelveHours": "4–12h"
+  ,"twelveToTwentyFourHours": "12–24h"
+  ,"overTwentyFourHours": "≥ 24h"
 }
