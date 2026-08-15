@@ -6,6 +6,10 @@ import {
   fetchTikTokAccountsListFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
 } from "../../tiktok-api-client";
+import {
+  getTikTokDemoGrowthMetrics,
+  isTikTokDemoGrowthEnabled,
+} from "../tiktok-demo-growth";
 import { TikTokDashboardView } from "../tiktok-dashboard-view";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +47,14 @@ export default async function TikTokAccountDashboardPage({ params }: Props) {
     notFound();
   }
 
+  const effectiveHistoricalMetrics = isTikTokDemoGrowthEnabled()
+    ? getTikTokDemoGrowthMetrics(data)
+    : historicalMetrics;
+
   return (
     <TikTokDashboardView
       data={data}
-      historicalMetrics={historicalMetrics}
+      historicalMetrics={effectiveHistoricalMetrics}
       accounts={accounts}
       currentAccountId={accountId}
     />
