@@ -375,4 +375,29 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
 
   const unknownAccount = await controller.getAccountById("acc-unknown");
   assert.equal(unknownAccount, null);
+
+  // 14. Authenticated GET /tiktok/accounts/metrics-summary returns bulk metrics
+  fakeTikTokService.getBulkAccountsMetricsSummary = async (days: number) => ({
+    accounts: [
+      {
+        accountId: "acc-1",
+        current: {
+          followerCount: 13342,
+          followingCount: 120,
+          likesCount: 54200,
+          videoCount: 18,
+        },
+        growth: {
+          today: { followers: 47, following: 3, likes: 1245, videos: 2 },
+          sevenDays: { followers: 286, following: 12, likes: 3021, videos: 8 },
+          thirtyDays: { followers: 1124, following: 28, likes: 8764, videos: 15 },
+        },
+      },
+    ],
+  });
+
+  const bulkMetricsRes = await controller.getBulkAccountsMetricsSummary("30");
+  assert.equal(bulkMetricsRes.accounts.length, 1);
+  assert.equal(bulkMetricsRes.accounts[0].accountId, "acc-1");
+  assert.equal(bulkMetricsRes.accounts[0].growth.sevenDays.followers, 286);
 });

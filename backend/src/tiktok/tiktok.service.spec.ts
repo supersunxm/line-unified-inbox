@@ -4,6 +4,7 @@ import {
   TikTokOAuthPermanentError,
   TikTokService,
   TikTokTransientError,
+  getBangkokCalendarDate,
   normalizeTikTokUsernameForMatching,
 } from "./tiktok.service";
 
@@ -989,3 +990,230 @@ test("Multi-account support: distinct openIds create separate records, reconnect
   assert.equal(acc1Metrics?.accountId, "acc-1");
   assert.equal(acc2Metrics?.accountId, "acc-2");
 });
+
+test("TikTokService.getBulkAccountsMetricsSummary accurately computes today, 7D, and 30D growth across all connected accounts in bulk", async () => {
+  const accountsTable: any[] = [
+    {
+      id: "acc-1",
+      openId: "open-cw",
+      displayName: "OPPO Central World",
+      username: "o_centralworld",
+      followerCount: 13342,
+      followingCount: 120,
+      likesCount: 54200,
+      videoCount: 18,
+      createdAt: new Date("2026-07-01"),
+    },
+    {
+      id: "acc-2",
+      openId: "open-par",
+      displayName: "OPPO Siam Paragon",
+      username: "o_siamparagon",
+      followerCount: 8500,
+      followingCount: 95,
+      likesCount: 31000,
+      videoCount: 12,
+      createdAt: new Date("2026-07-01"),
+    },
+    {
+      id: "acc-3",
+      openId: "open-mega",
+      displayName: "OPPO Mega Bangna",
+      username: "o_megabangna",
+      followerCount: 4200,
+      followingCount: 50,
+      likesCount: 12000,
+      videoCount: 8,
+      createdAt: new Date("2026-07-01"),
+    },
+  ];
+
+  const refDate = new Date("2026-08-15T12:00:00.000Z"); // 2026-08-15 in Bangkok
+  const todayBangkok = getBangkokCalendarDate(refDate);
+
+  const metricsTable: any[] = [
+    // Account 1 (Central World): snapshots for today, yesterday (T-1), 7D ago (T-7), 30D ago (T-30)
+    {
+      id: "m-cw-today",
+      tikTokAccountId: "acc-1",
+      metricDate: todayBangkok,
+      followerCount: 13342,
+      followingCount: 120,
+      likesCount: 54200,
+      videoCount: 18,
+      createdAt: todayBangkok,
+      updatedAt: todayBangkok,
+    },
+    {
+      id: "m-cw-yesterday",
+      tikTokAccountId: "acc-1",
+      metricDate: new Date(todayBangkok.getTime() - 86400000),
+      followerCount: 13295, // Delta today: +47
+      followingCount: 117, // Delta today: +3
+      likesCount: 52955, // Delta today: +1245
+      videoCount: 16, // Delta today: +2
+      createdAt: new Date(todayBangkok.getTime() - 86400000),
+      updatedAt: new Date(todayBangkok.getTime() - 86400000),
+    },
+    {
+      id: "m-cw-7d",
+      tikTokAccountId: "acc-1",
+      metricDate: new Date(todayBangkok.getTime() - 7 * 86400000),
+      followerCount: 13056, // Delta 7D: +286
+      followingCount: 108, // Delta 7D: +12
+      likesCount: 51179, // Delta 7D: +3021
+      videoCount: 10, // Delta 7D: +8
+      createdAt: new Date(todayBangkok.getTime() - 7 * 86400000),
+      updatedAt: new Date(todayBangkok.getTime() - 7 * 86400000),
+    },
+    {
+      id: "m-cw-30d",
+      tikTokAccountId: "acc-1",
+      metricDate: new Date(todayBangkok.getTime() - 30 * 86400000),
+      followerCount: 12218, // Delta 30D: +1124
+      followingCount: 92, // Delta 30D: +28
+      likesCount: 45436, // Delta 30D: +8764
+      videoCount: 3, // Delta 30D: +15
+      createdAt: new Date(todayBangkok.getTime() - 30 * 86400000),
+      updatedAt: new Date(todayBangkok.getTime() - 30 * 86400000),
+    },
+
+    // Account 2 (Siam Paragon): net negative and zero changes
+    {
+      id: "m-par-today",
+      tikTokAccountId: "acc-2",
+      metricDate: todayBangkok,
+      followerCount: 8500,
+      followingCount: 95,
+      likesCount: 31000,
+      videoCount: 12,
+      createdAt: todayBangkok,
+      updatedAt: todayBangkok,
+    },
+    {
+      id: "m-par-yesterday",
+      tikTokAccountId: "acc-2",
+      metricDate: new Date(todayBangkok.getTime() - 86400000),
+      followerCount: 8520, // Delta today: -20 (net unfollows)
+      followingCount: 95, // Delta today: 0 (zero change)
+      likesCount: 30800, // Delta today: +200
+      videoCount: 12, // Delta today: 0
+      createdAt: new Date(todayBangkok.getTime() - 86400000),
+      updatedAt: new Date(todayBangkok.getTime() - 86400000),
+    },
+    {
+      id: "m-par-7d",
+      tikTokAccountId: "acc-2",
+      metricDate: new Date(todayBangkok.getTime() - 7 * 86400000),
+      followerCount: 8600, // Delta 7D: -100
+      followingCount: 90, // Delta 7D: +5
+      likesCount: 30000, // Delta 7D: +1000
+      videoCount: 10, // Delta 7D: +2
+      createdAt: new Date(todayBangkok.getTime() - 7 * 86400000),
+      updatedAt: new Date(todayBangkok.getTime() - 7 * 86400000),
+    },
+    // No 30D snapshot for Account 2 -> should return null for thirtyDays growth
+
+    // Account 3 (Mega Bangna): Brand new account with only today's snapshot -> all growth deltas null
+    {
+      id: "m-mega-today",
+      tikTokAccountId: "acc-3",
+      metricDate: todayBangkok,
+      followerCount: 4200,
+      followingCount: 50,
+      likesCount: 12000,
+      videoCount: 8,
+      createdAt: todayBangkok,
+      updatedAt: todayBangkok,
+    },
+  ];
+
+  const fakePrisma: any = {
+    tikTokAccount: {
+      findMany: async () => accountsTable,
+    },
+    tikTokAccountDailyMetric: {
+      findMany: async ({ where }: any) => {
+        return metricsTable.filter(
+          (m) =>
+            (!where.tikTokAccountId ||
+              (where.tikTokAccountId.in && where.tikTokAccountId.in.includes(m.tikTokAccountId))) &&
+            (!where.metricDate || !where.metricDate.gte || m.metricDate >= where.metricDate.gte)
+        );
+      },
+    },
+  };
+
+  const fakeEncryption: any = {};
+  const service = new TikTokService(fakePrisma, fakeEncryption);
+
+  const bulkSummary = await service.getBulkAccountsMetricsSummary(30, refDate);
+
+  assert.equal(bulkSummary.accounts.length, 3);
+
+  // 1. Account 1 (Central World) - full growth across all 3 periods and all 4 metrics
+  const cw = bulkSummary.accounts.find((a) => a.accountId === "acc-1");
+  assert.ok(cw);
+  assert.equal(cw?.current.followerCount, 13342);
+  assert.equal(cw?.current.followingCount, 120);
+  assert.equal(cw?.current.likesCount, 54200);
+  assert.equal(cw?.current.videoCount, 18);
+
+  assert.deepEqual(cw?.growth.today, {
+    followers: 47,
+    following: 3,
+    likes: 1245,
+    videos: 2,
+  });
+  assert.deepEqual(cw?.growth.sevenDays, {
+    followers: 286,
+    following: 12,
+    likes: 3021,
+    videos: 8,
+  });
+  assert.deepEqual(cw?.growth.thirtyDays, {
+    followers: 1124,
+    following: 28,
+    likes: 8764,
+    videos: 15,
+  });
+
+  // 2. Account 2 (Siam Paragon) - negative, zero, and missing 30D snapshot
+  const par = bulkSummary.accounts.find((a) => a.accountId === "acc-2");
+  assert.ok(par);
+  assert.equal(par?.growth.today.followers, -20);
+  assert.equal(par?.growth.today.following, 0);
+  assert.equal(par?.growth.today.likes, 200);
+  assert.equal(par?.growth.today.videos, 0);
+
+  assert.equal(par?.growth.sevenDays.followers, -100);
+  assert.equal(par?.growth.sevenDays.following, 5);
+
+  assert.equal(par?.growth.thirtyDays.followers, null);
+  assert.equal(par?.growth.thirtyDays.following, null);
+  assert.equal(par?.growth.thirtyDays.likes, null);
+  assert.equal(par?.growth.thirtyDays.videos, null);
+
+  // 3. Account 3 (Mega Bangna) - missing past snapshots => all nulls
+  const mega = bulkSummary.accounts.find((a) => a.accountId === "acc-3");
+  assert.ok(mega);
+  assert.deepEqual(mega?.growth.today, {
+    followers: null,
+    following: null,
+    likes: null,
+    videos: null,
+  });
+  assert.deepEqual(mega?.growth.sevenDays, {
+    followers: null,
+    following: null,
+    likes: null,
+    videos: null,
+  });
+  assert.deepEqual(mega?.growth.thirtyDays, {
+    followers: null,
+    following: null,
+    likes: null,
+    videos: null,
+  });
+});
+

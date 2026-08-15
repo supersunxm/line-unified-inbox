@@ -6,6 +6,7 @@ import {
   ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
   SyncTikTokAccountDto,
+  TikTokBulkMetricsSummaryResponse,
   TikTokHistoricalMetricsResponse,
 } from "./dto/tiktok-sync.dto";
 
@@ -49,6 +50,18 @@ export class TikTokController {
   @Get("accounts")
   async listAccounts() {
     return this.tiktokService.listTikTokAccounts();
+  }
+
+  /**
+   * Retrieves bulk account metrics summary and growth across connected TikTok accounts.
+   * Registered before :id to prevent path parameter shadowing.
+   */
+  @Get("accounts/metrics-summary")
+  async getBulkAccountsMetricsSummary(
+    @Query("days") days?: string
+  ): Promise<TikTokBulkMetricsSummaryResponse> {
+    const daysNum = days ? parseInt(days, 10) : 30;
+    return this.tiktokService.getBulkAccountsMetricsSummary(daysNum);
   }
 
   /**

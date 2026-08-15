@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import {
   fetchLatestTikTokAccountFromBackend,
   fetchTikTokAccountsListFromBackend,
+  fetchTikTokBulkMetricsSummaryFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
 } from "./tiktok-api-client";
 import { TikTokOverviewView } from "./tiktok-overview-view";
@@ -68,7 +69,11 @@ export default async function TikTokOverviewPage() {
     redirect("/login");
   }
 
-  const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
+  const [accounts, bulkMetricsSummary] = await Promise.all([
+    fetchTikTokAccountsListFromBackend({ sessionToken }),
+    fetchTikTokBulkMetricsSummaryFromBackend(30, { sessionToken }),
+  ]);
+
   const singleAccountId = accounts.length === 1 ? accounts[0].id : null;
 
   const [singleAccountData, realHistoricalMetrics] =
@@ -97,6 +102,7 @@ export default async function TikTokOverviewPage() {
       accounts={overviewAccounts}
       singleAccountData={singleAccountData}
       historicalMetrics={historicalMetrics}
+      bulkMetricsSummary={bulkMetricsSummary}
     />
   );
 }

@@ -133,3 +133,32 @@ export interface TikTokHistoricalMetricsData {
   summary: TikTokGrowthSummary;
   history: TikTokDailyMetricItem[];
 }
+
+export type TikTokGrowthPeriod = "today" | "sevenDays" | "thirtyDays";
+
+export interface TikTokAccountMetricsGrowthSummary {
+  followers: number | null;
+  following: number | null;
+  likes: number | null;
+  videos: number | null;
+}
+
+export interface TikTokAccountBulkMetricSummaryItem {
+  accountId: string;
+  current: {
+    followerCount: number;
+    followingCount: number;
+    likesCount: number;
+    videoCount: number;
+  };
+  growth: {
+    today: TikTokAccountMetricsGrowthSummary;
+    sevenDays: TikTokAccountMetricsGrowthSummary;
+    thirtyDays: TikTokAccountMetricsGrowthSummary;
+  };
+}
+
+export interface TikTokBulkMetricsSummaryResponse {
+  accounts: TikTokAccountBulkMetricSummaryItem[];
+}
+

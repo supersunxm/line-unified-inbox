@@ -3,6 +3,7 @@ import {
   DEFAULT_TIKTOK_REDIRECT_URI,
 } from "./connect/tiktok-oauth.ts";
 import type {
+  TikTokBulkMetricsSummaryResponse,
   TikTokHistoricalMetricsData,
   TikTokStoreData,
   TikTokTokenDiagnosticInfo,
@@ -775,3 +776,49 @@ export async function fetchTikTokHistoricalMetricsFromBackend(
     return null;
   }
 }
+
+/**
+ * Fetches bulk account metrics summary and growth across connected TikTok accounts in a single request.
+ */
+export async function fetchTikTokBulkMetricsSummaryFromBackend(
+  days = 30,
+  options?: FetchTikTokAccountOptions
+): Promise<TikTokBulkMetricsSummaryResponse> {
+  try {
+    let sessionToken = options?.sessionToken?.trim() || null;
+
+    if (!sessionToken) {
+      try {
+        const { cookies } = await import("next/headers");
+        const cookieStore = await cookies();
+        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+      } catch {
+        // Fallback when executed outside Next.js request context
+      }
+    }
+
+    if (!sessionToken) {
+      return { accounts: [] };
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sessionToken}`,
+    };
+
+    const endpoint = `${API_BASE_URL}/tiktok/accounts/metrics-summary?days=${days}`;
+
+    const response = await fetch(endpoint, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return { accounts: [] };
+    }
+
+    return (await response.json()) || { accounts: [] };
+  } catch {
+    return { accounts: [] };
+  }
+}
+

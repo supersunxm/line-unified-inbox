@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import type {
   TikTokAccountListItem,
+  TikTokAccountMetricsGrowthSummary,
+  TikTokBulkMetricsSummaryResponse,
+  TikTokGrowthPeriod,
   TikTokHistoricalMetricsData,
   TikTokStoreData,
 } from "./tiktok-types";
@@ -11,8 +15,30 @@ interface TikTokOverviewViewProps {
   accounts?: TikTokAccountListItem[];
   singleAccountData?: TikTokStoreData | null;
   historicalMetrics?: TikTokHistoricalMetricsData | null;
+  bulkMetricsSummary?: TikTokBulkMetricsSummaryResponse | null;
   data?: TikTokStoreData | null; // For backwards compatibility
 }
+
+const DEMO_PREVIEW_GROWTH = {
+  today: {
+    followers: 18,
+    following: 1,
+    likes: 697,
+    videos: 0,
+  },
+  sevenDays: {
+    followers: 132,
+    following: 6,
+    likes: 1821,
+    videos: 4,
+  },
+  thirtyDays: {
+    followers: 562,
+    following: 14,
+    likes: 4213,
+    videos: 9,
+  },
+};
 
 function formatDelta(delta: number | null | undefined): {
   text: string;
@@ -41,6 +67,48 @@ function formatDelta(delta: number | null | undefined): {
 
   return {
     text: "0",
+    className: "text-slate-500 dark:text-slate-400 font-medium",
+  };
+}
+
+function getPeriodChipSuffix(period: TikTokGrowthPeriod): string {
+  switch (period) {
+    case "today":
+      return "Today";
+    case "sevenDays":
+      return "7D";
+    case "thirtyDays":
+      return "30D";
+  }
+}
+
+function formatGrowthChip(
+  value: number | null | undefined,
+  periodLabel: string
+): { text: string; className: string } {
+  if (value === null || value === undefined) {
+    return {
+      text: `--`,
+      className: "text-slate-400 dark:text-slate-500 font-medium",
+    };
+  }
+
+  if (value > 0) {
+    return {
+      text: `+${new Intl.NumberFormat("en-US").format(value)} ▲ ${periodLabel}`,
+      className: "text-emerald-600 dark:text-emerald-400 font-semibold",
+    };
+  }
+
+  if (value < 0) {
+    return {
+      text: `${new Intl.NumberFormat("en-US").format(value)} ▼ ${periodLabel}`,
+      className: "text-rose-600 dark:text-rose-400 font-semibold",
+    };
+  }
+
+  return {
+    text: `0 ${periodLabel}`,
     className: "text-slate-500 dark:text-slate-400 font-medium",
   };
 }
@@ -102,11 +170,244 @@ export function TikTokOverviewView({
   accounts = [],
   singleAccountData,
   historicalMetrics,
+  bulkMetricsSummary,
   data,
 }: TikTokOverviewViewProps) {
   // Support legacy props if passed
   const effectiveData = singleAccountData || data || null;
   const totalAccounts = accounts.length;
+
+  // Multi-Store Controls State
+  const [growthPeriod, setGrowthPeriod] = useState<TikTokGrowthPeriod>("sevenDays");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
+  const [selectedProvince, setSelectedProvince] = useState<string>("ALL");
+  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+  const [sortOption, setSortOption] = useState<string>("storeNameAsc");
+
+  // Lookup map for bulk metrics summaries
+  const metricsSummaryMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        today: TikTokAccountMetricsGrowthSummary;
+        sevenDays: TikTokAccountMetricsGrowthSummary;
+        thirtyDays: TikTokAccountMetricsGrowthSummary;
+      }
+    >();
+    if (bulkMetricsSummary?.accounts) {
+      for (const item of bulkMetricsSummary.accounts) {
+        map.set(item.accountId, item.growth);
+      }
+    }
+    return map;
+  }, [bulkMetricsSummary]);
+
+  // Helper to extract growth for an account
+  const getAccountGrowthValues = (
+    account: TikTokAccountListItem,
+    period: TikTokGrowthPeriod
+  ): TikTokAccountMetricsGrowthSummary => {
+    if (
+      account.connectionStatus === "DEMO PREVIEW" ||
+      account.id === "demo-preview-mega-bangna"
+    ) {
+      return DEMO_PREVIEW_GROWTH[period];
+    }
+    const growth = metricsSummaryMap.get(account.id);
+    if (growth && growth[period]) {
+      return growth[period];
+    }
+    return {
+      followers: null,
+      following: null,
+      likes: null,
+      videos: null,
+    };
+  };
+
+  // Dynamic filter options derived from accounts list
+  const regionOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const acc of accounts) {
+      if (acc.storeMaster?.region) {
+        set.add(acc.storeMaster.region.trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [accounts]);
+
+  const provinceOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const acc of accounts) {
+      if (acc.storeMaster?.province) {
+        set.add(acc.storeMaster.province.trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [accounts]);
+
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const acc of accounts) {
+      if (acc.connectionStatus) {
+        set.add(acc.connectionStatus.trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [accounts]);
+
+  // Filtered & Sorted Multi-Store Accounts
+  const sortedAndFilteredAccounts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    const filtered = accounts.filter((acc) => {
+      // 1. Search Query (storeName, accountName, displayName, username)
+      if (query) {
+        const storeName = acc.storeMaster?.storeName?.toLowerCase() || "";
+        const accountName = acc.storeMaster?.accountName?.toLowerCase() || "";
+        const displayName = acc.displayName?.toLowerCase() || "";
+        const username = acc.username?.toLowerCase() || "";
+        if (
+          !storeName.includes(query) &&
+          !accountName.includes(query) &&
+          !displayName.includes(query) &&
+          !username.includes(query)
+        ) {
+          return false;
+        }
+      }
+
+      // 2. Region Filter
+      if (selectedRegion !== "ALL") {
+        if ((acc.storeMaster?.region || "") !== selectedRegion) {
+          return false;
+        }
+      }
+
+      // 3. Province Filter
+      if (selectedProvince !== "ALL") {
+        if ((acc.storeMaster?.province || "") !== selectedProvince) {
+          return false;
+        }
+      }
+
+      // 4. Status Filter
+      if (selectedStatus !== "ALL") {
+        if (acc.connectionStatus !== selectedStatus) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Helper for sorting growth where null/undefined always sorts last
+    const compareGrowth = (
+      aValue: number | null | undefined,
+      bValue: number | null | undefined,
+      isAscending: boolean
+    ) => {
+      const aHasVal = aValue !== null && aValue !== undefined;
+      const bHasVal = bValue !== null && bValue !== undefined;
+
+      if (!aHasVal && !bHasVal) return 0;
+      if (!aHasVal) return 1; // null sorts last
+      if (!bHasVal) return -1; // null sorts last
+
+      return isAscending ? (aValue as number) - (bValue as number) : (bValue as number) - (aValue as number);
+    };
+
+    return [...filtered].sort((a, b) => {
+      const nameA = a.storeMaster?.storeName || a.displayName || "";
+      const nameB = b.storeMaster?.storeName || b.displayName || "";
+
+      switch (sortOption) {
+        case "storeNameAsc":
+          return nameA.localeCompare(nameB);
+        case "storeNameDesc":
+          return nameB.localeCompare(nameA);
+
+        case "followersDesc":
+          return (b.followerCount || 0) - (a.followerCount || 0);
+        case "followersAsc":
+          return (a.followerCount || 0) - (b.followerCount || 0);
+
+        case "followerGrowthDesc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).followers;
+          const gB = getAccountGrowthValues(b, growthPeriod).followers;
+          const diff = compareGrowth(gA, gB, false);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+        case "followerGrowthAsc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).followers;
+          const gB = getAccountGrowthValues(b, growthPeriod).followers;
+          const diff = compareGrowth(gA, gB, true);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+
+        case "likesDesc":
+          return (b.likesCount || 0) - (a.likesCount || 0);
+        case "likesAsc":
+          return (a.likesCount || 0) - (b.likesCount || 0);
+
+        case "likeGrowthDesc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).likes;
+          const gB = getAccountGrowthValues(b, growthPeriod).likes;
+          const diff = compareGrowth(gA, gB, false);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+        case "likeGrowthAsc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).likes;
+          const gB = getAccountGrowthValues(b, growthPeriod).likes;
+          const diff = compareGrowth(gA, gB, true);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+
+        case "videosDesc":
+          return (
+            (b.videoCountRecorded ?? b.videoCount ?? 0) -
+            (a.videoCountRecorded ?? a.videoCount ?? 0)
+          );
+        case "videosAsc":
+          return (
+            (a.videoCountRecorded ?? a.videoCount ?? 0) -
+            (b.videoCountRecorded ?? b.videoCount ?? 0)
+          );
+
+        case "videoGrowthDesc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).videos;
+          const gB = getAccountGrowthValues(b, growthPeriod).videos;
+          const diff = compareGrowth(gA, gB, false);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+        case "videoGrowthAsc": {
+          const gA = getAccountGrowthValues(a, growthPeriod).videos;
+          const gB = getAccountGrowthValues(b, growthPeriod).videos;
+          const diff = compareGrowth(gA, gB, true);
+          return diff !== 0 ? diff : nameA.localeCompare(nameB);
+        }
+
+        default:
+          return nameA.localeCompare(nameB);
+      }
+    });
+  }, [
+    accounts,
+    searchQuery,
+    selectedRegion,
+    selectedProvince,
+    selectedStatus,
+    sortOption,
+    growthPeriod,
+    metricsSummaryMap,
+  ]);
+
+  const hasActiveFilter =
+    searchQuery.trim().length > 0 ||
+    selectedRegion !== "ALL" ||
+    selectedProvince !== "ALL" ||
+    selectedStatus !== "ALL";
 
   // 1. Empty State (0 accounts connected)
   if (totalAccounts === 0 && !effectiveData) {
@@ -174,6 +475,8 @@ export function TikTokOverviewView({
 
   // 2. Multi-Account Grid State (2+ accounts exist)
   if (totalAccounts > 1) {
+    const periodSuffix = getPeriodChipSuffix(growthPeriod);
+
     return (
       <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-150 dark:bg-[#0b0d11] dark:text-slate-100">
         {/* Top Header */}
@@ -217,154 +520,378 @@ export function TikTokOverviewView({
                   Connected Store Accounts
                 </h1>
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
-                  {totalAccounts} Stores
+                  {hasActiveFilter
+                    ? `${sortedAndFilteredAccounts.length} of ${totalAccounts} Stores`
+                    : `${totalAccounts} Stores`}
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                Select any retail store to view individual account metrics, follower growth trends, and video performance.
+                Operations overview across retail store accounts. Monitor audience momentum, follower changes, and engagement trends.
               </p>
             </div>
           </div>
 
-          {/* Store Account Cards Grid */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {accounts.map((account) => {
-              const avatarSrc =
-                account.avatarLargeUrl || account.avatarUrl || account.avatarUrl100;
-              const store = account.storeMaster;
+          {/* Interactive Controls Toolbar: Growth Period, Search, Region, Province, Status, Sort */}
+          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              {/* Growth Period Selector */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Growth Period
+                </span>
+                <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+                  {(
+                    [
+                      { key: "today", label: "Today" },
+                      { key: "sevenDays", label: "7 Days" },
+                      { key: "thirtyDays", label: "30 Days" },
+                    ] as const
+                  ).map((item) => {
+                    const isActive = growthPeriod === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setGrowthPeriod(item.key)}
+                        className={`rounded-lg px-3.5 py-1 text-xs font-semibold transition-all ${
+                          isActive
+                            ? "bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-slate-50"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              return (
-                <div
-                  key={account.id}
-                  className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xs transition-all hover:border-slate-300 hover:shadow-md dark:border-slate-800 dark:bg-[#12151c] dark:hover:border-slate-700"
+              {/* Stores Count Summary */}
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {hasActiveFilter ? (
+                  <span>
+                    Showing <strong className="font-bold text-slate-900 dark:text-slate-100">{sortedAndFilteredAccounts.length}</strong> of {totalAccounts} stores
+                  </span>
+                ) : (
+                  <span>
+                    <strong className="font-bold text-slate-900 dark:text-slate-100">{totalAccounts}</strong> stores connected
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Search and Filters Row */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {/* Search Input */}
+              <div className="relative lg:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Search store name, display name, @username…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/75 py-2 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-900"
+                />
+                <svg
+                  className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
+                  stroke="currentColor"
                 >
-                  <div className="space-y-4">
-                    {/* Header: Avatar, Display Name, Status */}
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-3.5">
-                        {avatarSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarSrc}
-                            alt={account.displayName}
-                            className="h-14 w-14 rounded-xl border border-emerald-500/20 object-cover shadow-xs dark:border-emerald-500/30"
-                          />
-                        ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-600 font-bold text-xl text-white shadow-xs">
-                            {(account.displayName || "T")[0].toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h2 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                              {account.displayName}
-                            </h2>
-                            {account.isVerified && (
-                              <span
-                                title="Verified Account"
-                                className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white"
-                              >
-                                <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </span>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+                  />
+                </svg>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Region Filter */}
+              <div>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2 text-xs font-medium text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200 dark:focus:bg-slate-900"
+                >
+                  <option value="ALL">All Regions</option>
+                  {regionOptions.map((reg) => (
+                    <option key={reg} value={reg}>
+                      {reg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Province Filter */}
+              <div>
+                <select
+                  value={selectedProvince}
+                  onChange={(e) => setSelectedProvince(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2 text-xs font-medium text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200 dark:focus:bg-slate-900"
+                >
+                  <option value="ALL">All Provinces</option>
+                  {provinceOptions.map((prov) => (
+                    <option key={prov} value={prov}>
+                      {prov}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sort By Dropdown */}
+              <div>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2 text-xs font-medium text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200 dark:focus:bg-slate-900"
+                >
+                  <option value="storeNameAsc">Store Name (A → Z)</option>
+                  <option value="storeNameDesc">Store Name (Z → A)</option>
+                  <option value="followersDesc">Followers (High → Low)</option>
+                  <option value="followersAsc">Followers (Low → High)</option>
+                  <option value="followerGrowthDesc">Follower Growth (High → Low)</option>
+                  <option value="followerGrowthAsc">Follower Growth (Low → High)</option>
+                  <option value="likesDesc">Likes (High → Low)</option>
+                  <option value="likesAsc">Likes (Low → High)</option>
+                  <option value="likeGrowthDesc">Like Growth (High → Low)</option>
+                  <option value="likeGrowthAsc">Like Growth (Low → High)</option>
+                  <option value="videosDesc">Videos (High → Low)</option>
+                  <option value="videosAsc">Videos (Low → High)</option>
+                  <option value="videoGrowthDesc">Video Growth (High → Low)</option>
+                  <option value="videoGrowthAsc">Video Growth (Low → High)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Store Account Cards Grid or No-Match State */}
+          {sortedAndFilteredAccounts.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-[#12151c]">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.75" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+              <h3 className="mt-3 text-base font-bold text-slate-900 dark:text-slate-100">
+                No store accounts match your filters
+              </h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Try adjusting your search terms or clearing selected filters to view connected accounts.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedRegion("ALL");
+                  setSelectedProvince("ALL");
+                  setSelectedStatus("ALL");
+                }}
+                className="mt-4 inline-flex items-center rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+              >
+                Clear Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {sortedAndFilteredAccounts.map((account) => {
+                const avatarSrc =
+                  account.avatarLargeUrl || account.avatarUrl || account.avatarUrl100;
+                const store = account.storeMaster;
+                const growth = getAccountGrowthValues(account, growthPeriod);
+
+                return (
+                  <div
+                    key={account.id}
+                    className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xs transition-all hover:border-slate-300 hover:shadow-md dark:border-slate-800 dark:bg-[#12151c] dark:hover:border-slate-700"
+                  >
+                    <div className="space-y-4">
+                      {/* Header: Avatar, Display Name, Status */}
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                          {avatarSrc ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarSrc}
+                              alt={account.displayName}
+                              className="h-14 w-14 rounded-xl border border-emerald-500/20 object-cover shadow-xs dark:border-emerald-500/30"
+                            />
+                          ) : (
+                            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-600 font-bold text-xl text-white shadow-xs">
+                              {(account.displayName || "T")[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h2 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                                {account.displayName}
+                              </h2>
+                              {account.isVerified && (
+                                <span
+                                  title="Verified Account"
+                                  className="flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white"
+                                >
+                                  <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </span>
+                              )}
+                            </div>
+                            {account.username && (
+                              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                @{account.username}
+                              </p>
                             )}
                           </div>
-                          {account.username && (
-                            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                              @{account.username}
-                            </p>
-                          )}
+                        </div>
+                        <div>{renderStatusBadge(account.connectionStatus)}</div>
+                      </div>
+
+                      {/* Store Master Binding Badge */}
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/75 p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <svg className="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.25A2.25 2.25 0 010 18.75V6.75A2.25 2.25 0 012.25 4.5h19.5A2.25 2.25 0 0124 6.75v12a2.25 2.25 0 01-2.25 2.25H13.5z" />
+                          </svg>
+                          <span className="font-medium">Store Binding:</span>
+                        </div>
+                        {store ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">
+                              {store.storeName}
+                            </span>
+                            {store.province && (
+                              <>
+                                <span className="text-slate-300 dark:text-slate-700">·</span>
+                                <span className="text-slate-600 dark:text-slate-400">{store.province}</span>
+                              </>
+                            )}
+                            {store.region && (
+                              <>
+                                <span className="text-slate-300 dark:text-slate-700">·</span>
+                                <span className="text-slate-500 dark:text-slate-500">{store.region}</span>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-500 italic dark:text-slate-400">
+                            Store not linked yet
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Quick Stats Grid with Net Growth */}
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-center sm:grid-cols-4">
+                        <div className="flex flex-col justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
+                          <div>
+                            <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
+                              {formatCompactNumber(account.followerCount)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Followers</span>
+                          </div>
+                          <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                            {(() => {
+                              const chip = formatGrowthChip(growth.followers, periodSuffix);
+                              return (
+                                <span className={`text-[10px] tracking-tight block truncate ${chip.className}`}>
+                                  {chip.text}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
+                          <div>
+                            <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
+                              {formatCompactNumber(account.followingCount)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Following</span>
+                          </div>
+                          <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                            {(() => {
+                              const chip = formatGrowthChip(growth.following, periodSuffix);
+                              return (
+                                <span className={`text-[10px] tracking-tight block truncate ${chip.className}`}>
+                                  {chip.text}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
+                          <div>
+                            <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
+                              {formatCompactNumber(account.likesCount)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Likes</span>
+                          </div>
+                          <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                            {(() => {
+                              const chip = formatGrowthChip(growth.likes, periodSuffix);
+                              return (
+                                <span className={`text-[10px] tracking-tight block truncate ${chip.className}`}>
+                                  {chip.text}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-between rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900/60">
+                          <div>
+                            <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
+                              {account.videoCountRecorded ?? account.videoCount}
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Videos</span>
+                          </div>
+                          <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                            {(() => {
+                              const chip = formatGrowthChip(growth.videos, periodSuffix);
+                              return (
+                                <span className={`text-[10px] tracking-tight block truncate ${chip.className}`}>
+                                  {chip.text}
+                                </span>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </div>
-                      <div>{renderStatusBadge(account.connectionStatus)}</div>
                     </div>
 
-                    {/* Store Master Binding Badge */}
-                    <div className="rounded-xl border border-slate-100 bg-slate-50/75 p-3 dark:border-slate-800/80 dark:bg-slate-900/50">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                        <svg className="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.25A2.25 2.25 0 010 18.75V6.75A2.25 2.25 0 012.25 4.5h19.5A2.25 2.25 0 0124 6.75v12a2.25 2.25 0 01-2.25 2.25H13.5z" />
+                    {/* Card Footer Actions */}
+                    <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        Synced {formatDate(account.lastSyncedAt)}
+                      </span>
+                      <Link
+                        href={`/tiktok/dashboard/${account.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                      >
+                        <span>Open Dashboard</span>
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                         </svg>
-                        <span className="font-medium">Store Binding:</span>
-                      </div>
-                      {store ? (
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-                          <span className="font-semibold text-slate-900 dark:text-slate-100">
-                            {store.storeName}
-                          </span>
-                          {store.province && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-700">·</span>
-                              <span className="text-slate-600 dark:text-slate-400">{store.province}</span>
-                            </>
-                          )}
-                          {store.region && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-700">·</span>
-                              <span className="text-slate-500 dark:text-slate-500">{store.region}</span>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-slate-500 italic dark:text-slate-400">
-                          Store not linked yet
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Quick Stats Grid */}
-                    <div className="grid grid-cols-4 gap-2 pt-1 text-center">
-                      <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                        <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
-                          {formatCompactNumber(account.followerCount)}
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Followers</span>
-                      </div>
-                      <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                        <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
-                          {formatCompactNumber(account.followingCount)}
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Following</span>
-                      </div>
-                      <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                        <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
-                          {formatCompactNumber(account.likesCount)}
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Likes</span>
-                      </div>
-                      <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900/60">
-                        <span className="block font-bold text-sm text-slate-900 dark:text-slate-100">
-                          {account.videoCountRecorded ?? account.videoCount}
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Videos</span>
-                      </div>
+                      </Link>
                     </div>
                   </div>
-
-                  {/* Card Footer Actions */}
-                  <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Synced {formatDate(account.lastSyncedAt)}
-                    </span>
-                    <Link
-                      href={`/tiktok/dashboard/${account.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
-                    >
-                      <span>Open Dashboard</span>
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </main>
       </div>
     );

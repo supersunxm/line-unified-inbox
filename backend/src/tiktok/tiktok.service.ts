@@ -6,7 +6,9 @@ import {
   SafeTikTokAccountOverviewResponse,
   SafeTikTokVideoResponse,
   SyncTikTokAccountDto,
+  TikTokAccountBulkMetricSummaryItem,
   TikTokAccountSyncResult,
+  TikTokBulkMetricsSummaryResponse,
   TikTokDailyMetricDto,
   TikTokDailySyncSummary,
   TikTokGrowthSummaryDto,
@@ -677,6 +679,104 @@ export class TikTokService {
     const latest = await this.getLatestTikTokAccount();
     if (!latest) return null;
     return this.getAccountHistoricalMetrics(latest.id, days, referenceNow);
+  }
+
+  /**
+   * Retrieves bulk metrics summary across all connected TikTok accounts.
+   * Performs 1 query for accounts and 1 grouped query for metrics to avoid N+1 DB operations.
+   */
+  async getBulkAccountsMetricsSummary(
+    days = 30,
+    referenceNow: Date = new Date()
+  ): Promise<TikTokBulkMetricsSummaryResponse> {
+    const accounts = await this.prisma.tikTokAccount.findMany({
+      select: {
+        id: true,
+        followerCount: true,
+        followingCount: true,
+        likesCount: true,
+        videoCount: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (accounts.length === 0) {
+      return { accounts: [] };
+    }
+
+    const validatedDays = Math.min(Math.max(1, days || 30), 365);
+    const todayBangkok = getBangkokCalendarDate(referenceNow);
+    const cutoffDate = new Date(todayBangkok.getTime() - validatedDays * 86400000);
+
+    const metrics = await this.prisma.tikTokAccountDailyMetric.findMany({
+      where: {
+        tikTokAccountId: { in: accounts.map((a) => a.id) },
+        metricDate: { gte: cutoffDate },
+      },
+      orderBy: { metricDate: "asc" },
+    });
+
+    // Group metrics by accountId -> map of YYYY-MM-DD -> metric
+    const metricsByAccount = new Map<string, Map<string, typeof metrics[0]>>();
+    for (const m of metrics) {
+      let accountMap = metricsByAccount.get(m.tikTokAccountId);
+      if (!accountMap) {
+        accountMap = new Map();
+        metricsByAccount.set(m.tikTokAccountId, accountMap);
+      }
+      accountMap.set(formatBangkokDateToIso(m.metricDate), m);
+    }
+
+    const todayIso = formatBangkokDateToIso(todayBangkok);
+    const yesterdayIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 86400000));
+    const sevenDaysAgoIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 7 * 86400000));
+    const thirtyDaysAgoIso = formatBangkokDateToIso(new Date(todayBangkok.getTime() - 30 * 86400000));
+
+    const resultAccounts: TikTokAccountBulkMetricSummaryItem[] = accounts.map((account) => {
+      const metricByDate = metricsByAccount.get(account.id) ?? new Map();
+
+      const todayMetric = metricByDate.get(todayIso);
+      const yesterdayMetric = metricByDate.get(yesterdayIso);
+      const sevenDayMetric = metricByDate.get(sevenDaysAgoIso);
+      const thirtyDayMetric = metricByDate.get(thirtyDaysAgoIso);
+
+      const currentFollowers = todayMetric ? todayMetric.followerCount : account.followerCount;
+      const currentFollowing = todayMetric ? todayMetric.followingCount : account.followingCount;
+      const currentLikes = todayMetric ? todayMetric.likesCount : account.likesCount;
+      const currentVideos = todayMetric ? todayMetric.videoCount : account.videoCount;
+
+      return {
+        accountId: account.id,
+        current: {
+          followerCount: currentFollowers,
+          followingCount: currentFollowing,
+          likesCount: currentLikes,
+          videoCount: currentVideos,
+        },
+        growth: {
+          today: {
+            followers: yesterdayMetric ? currentFollowers - yesterdayMetric.followerCount : null,
+            following: yesterdayMetric ? currentFollowing - yesterdayMetric.followingCount : null,
+            likes: yesterdayMetric ? currentLikes - yesterdayMetric.likesCount : null,
+            videos: yesterdayMetric ? currentVideos - yesterdayMetric.videoCount : null,
+          },
+          sevenDays: {
+            followers: sevenDayMetric ? currentFollowers - sevenDayMetric.followerCount : null,
+            following: sevenDayMetric ? currentFollowing - sevenDayMetric.followingCount : null,
+            likes: sevenDayMetric ? currentLikes - sevenDayMetric.likesCount : null,
+            videos: sevenDayMetric ? currentVideos - sevenDayMetric.videoCount : null,
+          },
+          thirtyDays: {
+            followers: thirtyDayMetric ? currentFollowers - thirtyDayMetric.followerCount : null,
+            following: thirtyDayMetric ? currentFollowing - thirtyDayMetric.followingCount : null,
+            likes: thirtyDayMetric ? currentLikes - thirtyDayMetric.likesCount : null,
+            videos: thirtyDayMetric ? currentVideos - thirtyDayMetric.videoCount : null,
+          },
+        },
+      };
+    });
+
+    return { accounts: resultAccounts };
   }
 
   /**
