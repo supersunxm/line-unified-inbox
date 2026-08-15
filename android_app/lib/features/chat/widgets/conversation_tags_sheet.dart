@@ -193,7 +193,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       if (!mounted || generation != _variantGeneration) return;
       setState(() {
         _loadingVariants = false;
-        _error = 'Unable to load product variants';
+        _error = appLocalizations(context).unableToLoadConfigurations;
       });
     }
   }
@@ -258,13 +258,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: AppSpacing.sm,
                     children: [
-                      Text('Conversation Tags',
+                      Text(appLocalizations(context).conversationTags,
                           style: Theme.of(context).textTheme.titleLarge),
                       IconButton(
                         onPressed:
                             _saving ? null : () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
-                        tooltip: 'Close',
+                        tooltip: appLocalizations(context).close,
                       ),
                       TextButton(
                         onPressed: _saving
@@ -276,7 +276,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                   _variant = null;
                                   _variants = const [];
                                 }),
-                        child: const Text('Clear all'),
+                        child: Text(appLocalizations(context).clearAll),
                       ),
                       FilledButton(
                         onPressed: !_dirty || _saving ? null : _save,
@@ -340,15 +340,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             setState(() => _isInstallment = selected),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('Product',
+                  Text(appLocalizations(context).product,
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: AppSpacing.sm),
                   TextField(
                     controller: _searchController,
                     onChanged: _loadProducts,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       prefixIcon: Icon(Icons.search),
-                      hintText: 'Search product...',
+                      hintText: appLocalizations(context).searchProduct,
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -360,7 +360,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         title: Text(_product!.productName),
                         subtitle: Text(_product!.seriesName),
                         trailing: IconButton(
-                          tooltip: 'Clear product',
+                          tooltip: appLocalizations(context).clear,
                           onPressed: _saving
                               ? null
                               : () => setState(() {
@@ -377,9 +377,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         padding: EdgeInsets.all(AppSpacing.lg),
                         child: Center(child: CircularProgressIndicator()))
                   else if (_products.isEmpty)
-                    const Padding(
+                    Padding(
                         padding: EdgeInsets.all(AppSpacing.md),
-                        child: Text('No matching products'))
+                        child: Text(appLocalizations(context).noMatchingProducts))
                   else
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 230),
@@ -401,13 +401,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                   if (_product != null) ...[
                     const SizedBox(height: AppSpacing.md),
-                    Text('Configuration',
+                    Text(appLocalizations(context).configuration,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.sm),
                     if (_loadingVariants)
                       const Center(child: CircularProgressIndicator())
                     else if (_variants.isEmpty)
-                      const Text('No variants available for this product')
+                      Text(appLocalizations(context).noVariantsAvailable)
                     else
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 230),
@@ -438,7 +438,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             ? null
                             : () => setState(() => _variant = null),
                         icon: const Icon(Icons.clear),
-                        label: const Text('Clear variant'),
+                        label: Text(appLocalizations(context).clearVariant),
                       ),
                   ],
                   if (_error != null)
