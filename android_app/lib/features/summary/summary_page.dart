@@ -291,8 +291,7 @@ class _ResponseCard extends StatelessWidget {
             ] else ...[
               _ResponseMetricRow(
                   label: appLocalizations(context).responseRate,
-                  value:
-                      '${((response.responseRate ?? 0) * 100).toStringAsFixed(0)}%'),
+                  value: _formatPercent(context, response.responseRate ?? 0)),
               _ResponseMetricRow(
                   label: appLocalizations(context).medianResponseTime,
                   value: _formatDuration(context, response.medianSeconds)),
