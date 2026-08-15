@@ -58,7 +58,7 @@ export function getTikTokDemoGrowthMetrics(
 
   return {
     accountId: data.id ?? "demo-account",
-    openId: data.openId ?? "demo-open-id",
+    openId: data.profile.open_id || "demo-open-id",
     displayName: data.profile.display_name || "TikTok Store",
     username: data.profile.username ?? null,
     summary: {
