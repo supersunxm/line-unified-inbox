@@ -3,7 +3,10 @@ import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
 export function messageMediaUrl(messageId: string) {
-  return `${API_BASE_URL}/messages/${encodeURIComponent(messageId)}/media`;
+  const isBrowser = typeof window !== "undefined";
+  return isBrowser
+    ? `/api-backend/messages/${encodeURIComponent(messageId)}/media`
+    : `${API_BASE_URL}/messages/${encodeURIComponent(messageId)}/media`;
 }
 
 export type MessageTranslationResult = {
@@ -47,7 +50,9 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isBrowser = typeof window !== "undefined";
-  const requestUrl = isBrowser && path.startsWith("/auth/") ? path : `${API_BASE_URL}${path}`;
+  const requestUrl = isBrowser
+    ? (path.startsWith("/auth/") ? path : `/api-backend${path}`)
+    : `${API_BASE_URL}${path}`;
   let response: Response;
 
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
@@ -85,8 +90,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function download(path: string) {
+  const isBrowser = typeof window !== "undefined";
+  const requestUrl = isBrowser
+    ? (path.startsWith("/auth/") ? path : `/api-backend${path}`)
+    : `${API_BASE_URL}${path}`;
   let response: Response;
-  try { response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" }); }
+  try { response = await fetch(requestUrl, { credentials: "include" }); }
   catch { throw new ApiError("Unable to reach the data service.", 0); }
   if (!response.ok) {
     let message = `API request failed (${response.status})`;
@@ -101,12 +110,20 @@ async function download(path: string) {
 
 export const api = {
   login: (identifier: string, password: string) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) }),
-  setupStatus: () => request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>("/auth/setup-status"),
+  setupStatus: () =>
+    request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>(
+      "/auth/setup-status",
+      { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
+    ),
   requestSetupOtp: (displayName: string, email: string, password: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/request-otp", { method: "POST", body: JSON.stringify({ displayName, email, password, language }) }),
   verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) }),
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
-  me: () => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/me"),
+  me: () =>
+    request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>(
+      "/auth/me",
+      { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
+    ),
   getPendingRegistrations: async () => {
     const response = await request<{ registrations?: PendingRegistration[] } | PendingRegistration[]>("/admin/registrations/pending");
     return Array.isArray(response) ? response : response.registrations ?? [];

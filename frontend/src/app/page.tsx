@@ -5,7 +5,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api } from "@/lib/api";
-import { AUTH_UNAUTHORIZED_EVENT, routeAfterLogin } from "@/lib/auth-session";
+import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import type { PrimarySection } from "./primary-navigation";
 import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStoreMasterData } from "./store-master-form";
@@ -1669,7 +1669,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     const handleUnauthorized = () => {
       setAuthUser(null);
       setLoginPassword("");
-      if (window.location.pathname !== "/login") window.location.replace("/login");
+      if (window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
     };
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
@@ -1678,10 +1680,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   useEffect(() => { const timer = window.setTimeout(() => void checkSetupStatus(), 0); return () => window.clearTimeout(timer); }, [checkSetupStatus]);
 
   useEffect(() => {
-    if (!authUser) return;
-    const destination = routeAfterLogin(window.location.pathname);
-    if (destination) window.location.replace(destination);
-  }, [authUser]);
+    if (!authChecked) return;
+    const authState = getAuthState(authChecked, authUser);
+    const destination = resolveAuthRedirect({
+      authState,
+      pathname: window.location.pathname,
+      firstAdminRequired: Boolean(setupStatus?.firstAdminRequired),
+    });
+    if (destination && destination !== window.location.pathname) {
+      window.location.replace(destination);
+    }
+  }, [authChecked, authUser, setupStatus?.firstAdminRequired]);
 
   useEffect(() => {
     if (!setupChallenge) return; const timer = window.setInterval(() => { setSetupExpires((value) => Math.max(0, value - 1)); setSetupResend((value) => Math.max(0, value - 1)); }, 1000); return () => window.clearInterval(timer);
@@ -2611,7 +2620,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   async function submitLogin(event: FormEvent) {
     event.preventDefault(); setLoginLoading(true); setLoginError(null);
-    try { setAuthUser(await api.login(loginEmail, loginPassword)); setLoginPassword(""); }
+    try {
+      const user = await api.login(loginEmail, loginPassword);
+      setAuthUser(user);
+      setLoginPassword("");
+      if (typeof window !== "undefined" && window.location.pathname === "/login") {
+        window.location.replace("/dashboard");
+      }
+    }
     catch (error) { setLoginError(error instanceof Error ? error.message : "Login failed"); }
     finally { setLoginLoading(false); }
   }
@@ -2622,7 +2638,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     } finally {
       setAuthUser(null);
       setLoginPassword("");
-      window.location.replace("/login");
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
     }
   }
 
@@ -2650,7 +2668,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500"><div className="absolute right-6 top-6"><ThemeControl /></div>Loading…</main>;
   if (setupStatusError) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><div className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-xl"><h1 className="text-xl font-bold">Unable to check administrator setup</h1><p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{setupStatusError}</p><button onClick={() => void checkSetupStatus()} className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-white">Retry</button></div></main>;
   if (setupStatus?.firstAdminRequired) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><div className="absolute right-6 top-6 flex gap-2">{(["th", "en", "zh"] as const).map((item) => <button key={item} onClick={() => setLanguage(item)} className={`rounded px-2 py-1 text-xs ${language === item ? "bg-slate-900 text-white" : "bg-white"}`}>{item.toUpperCase()}</button>)}</div>{!setupChallenge ? <form onSubmit={(event) => void sendSetupOtp(event)} className="w-full max-w-md rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-2xl font-bold">{setupLabels.title}</h1>{!setupStatus.emailProviderConfigured && <p className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800">Email delivery is not configured. Configure Resend or development console mode.</p>}{loginError && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">{setupLabels.name}<input required value={setupName} onChange={(event) => setSetupName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.email}<input type="email" required value={setupEmail} onChange={(event) => setSetupEmail(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.password}<input type={showSetupPassword ? "text" : "password"} minLength={12} required value={setupPassword} onChange={(event) => setSetupPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.confirm}<input type={showSetupPassword ? "text" : "password"} minLength={12} required value={setupPasswordConfirmation} onChange={(event) => setSetupPasswordConfirmation(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={showSetupPassword} onChange={(event) => setShowSetupPassword(event.target.checked)} />Show password</label><p className={`mt-2 text-xs ${setupPassword.length >= 12 ? "text-green-700" : "text-amber-700"}`}>Password must contain at least 12 characters</p><button disabled={loginLoading || setupPassword !== setupPasswordConfirmation || setupPassword.length < 12} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{setupLabels.send}</button></form> : <form onSubmit={(event) => void verifySetupOtp(event)} className="w-full max-w-md rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-2xl font-bold">{setupLabels.verifyTitle}</h1><p className="mt-2 text-sm text-slate-500">{setupLabels.sent} {setupChallenge.maskedEmail}</p>{loginError && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<input aria-label="Six-digit verification code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoFocus value={setupOtp} onChange={(event) => setSetupOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} onPaste={(event) => { const value = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6); if (value.length === 6) { event.preventDefault(); setSetupOtp(value); } }} className="mt-6 w-full rounded-lg border p-3 text-center font-mono text-3xl tracking-[0.5em]" /><p className="mt-2 text-center text-xs text-slate-500">{setupExpires > 0 ? `${Math.floor(setupExpires / 60)}:${String(setupExpires % 60).padStart(2, "0")}` : "Code expired"}</p><button disabled={loginLoading || setupOtp.length !== 6 || setupExpires === 0} className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{setupLabels.verify}</button><div className="mt-4 flex justify-between text-sm"><button type="button" onClick={() => { setSetupChallenge(null); setSetupOtp(""); setLoginError(null); }} className="text-blue-700">{setupLabels.change}</button><button type="button" disabled={setupResend > 0 || loginLoading} onClick={() => void api.resendSetupOtp(setupChallenge.challengeId, language).then((result) => { setSetupChallenge(result); setSetupExpires(result.expiresInSeconds); setSetupResend(result.resendAfterSeconds); }).catch((error: unknown) => setLoginError(error instanceof Error ? error.message : "Unable to resend"))} className="text-blue-700 disabled:text-slate-400">{setupLabels.resend}{setupResend > 0 ? ` (${setupResend})` : ""}</button></div></form>}</main>;
-  if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><form onSubmit={(event) => void submitLogin(event)} className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-xl font-bold">OPPO LINE OA Monitor</h1><p className="mt-1 text-sm text-slate-500">Administrator sign in</p>{process.env.NODE_ENV !== "production" && <p className="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-800">{language === "th" ? "บัญชีทดสอบสำหรับเครื่อง Local เท่านั้น" : language === "zh" ? "仅限本地开发账户" : "Local development account only"}</p>}{loginError && <p className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">Username or email<input type="text" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="mt-4 block text-sm">Password<input type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><button disabled={loginLoading} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{loginLoading ? "Signing in…" : "Sign in"}</button></form></main>;
+  if (!authUser) {
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500"><div className="absolute right-6 top-6"><ThemeControl /></div>Redirecting to login…</main>;
+    }
+    return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><form onSubmit={(event) => void submitLogin(event)} className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-xl font-bold">OPPO LINE OA Monitor</h1><p className="mt-1 text-sm text-slate-500">Administrator sign in</p>{process.env.NODE_ENV !== "production" && <p className="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-800">{language === "th" ? "บัญชีทดสอบสำหรับเครื่อง Local เท่านั้น" : language === "zh" ? "仅限本地开发账户" : "Local development account only"}</p>}{loginError && <p className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">Username or email<input type="text" required autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="mt-4 block text-sm">Password<input type="password" required autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><button disabled={loginLoading} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{loginLoading ? "Signing in…" : "Sign in"}</button></form></main>;
+  }
+
+  if (typeof window !== "undefined" && window.location.pathname === "/login") {
+    return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500"><div className="absolute right-6 top-6"><ThemeControl /></div>Redirecting to dashboard…</main>;
+  }
 
   return (
     <AppShell

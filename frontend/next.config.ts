@@ -15,11 +15,19 @@ export function createAuthRewrite(apiBaseUrl: string) {
   };
 }
 
+export function createBackendRewrite(apiBaseUrl: string) {
+  return {
+    source: "/api-backend/:path*",
+    destination: `${apiBaseUrl}/:path*`,
+  };
+}
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       createFriendSourceLinkRewrite(API_BASE_URL),
       createAuthRewrite(API_BASE_URL),
+      createBackendRewrite(API_BASE_URL),
     ];
   },
 };
