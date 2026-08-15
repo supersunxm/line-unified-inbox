@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { MobileConversationsService } from "./mobile-conversations.service";
 
 const user = { id: "user-1", email: "staff@example.com", displayName: "Staff", role: "VIEWER" as const, isActive: true };
@@ -110,4 +110,80 @@ void test("mobile detail rejects an invalid cursor before querying messages", as
   const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
   await assert.rejects(() => service.get(user, "conversation-1", { limit: 20, before: "not-a-cursor" }), NotFoundException);
   assert.equal(queried, false);
+});
+
+void test("mobile product selector returns bounded active model-level products", async () => {
+  let captured: any;
+  const prisma = {
+    productModel: {
+      findMany: async (args: any) => {
+        captured = args;
+        return [{ id: "model-1", name: "OPPO Reno16 Pro 5G", productSeries: { name: "Reno16", productGroup: "SMARTPHONE" } }];
+      },
+    },
+  };
+  const service = new MobileConversationsService(prisma as never, {} as never, {} as never);
+  const result = await service.products({ search: "reno16", limit: 100 });
+  assert.deepEqual(result.items, [{ id: "model-1", productName: "OPPO Reno16 Pro 5G", category: "SMARTPHONE", seriesName: "Reno16" }]);
+  assert.equal(captured.take, 50);
+  assert.deepEqual(captured.where, {
+    isActive: true,
+    classificationLevel: "MODEL",
+    productSeries: { isActive: true },
+    name: { contains: "reno16", mode: "insensitive" },
+  });
+});
+
+void test("mobile tags replace only the manual product and preserve RULE products", async () => {
+  const writes: any[] = [];
+  const detail = {
+    id: "conversation-1",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "NOT_REPLIED",
+    followUpStatus: "FOLLOW_UP",
+    sourceChannel: "STORE",
+    customer: { id: "customer-1", displayName: "Customer" },
+    store: { id: "store-1", name: "Store", code: "S1" },
+    products: [{ productModel: { id: "model-2", name: "OPPO Find N6", productSeries: { name: "Find", productGroup: "SMARTPHONE" } } }],
+    messages: [],
+    _count: { pushNotifications: 0 },
+  };
+  const tx = {
+    conversation: {
+      findUnique: async () => ({ id: "conversation-1" }),
+      update: async (args: any) => { detail.sourceChannel = args.data.sourceChannel; writes.push({ type: "conversation", args }); return {}; },
+    },
+    productModel: { findFirst: async () => ({ id: "model-2" }) },
+    conversationProduct: {
+      deleteMany: async (args: any) => { writes.push({ type: "delete", args }); return {}; },
+      create: async (args: any) => { writes.push({ type: "create", args }); return {}; },
+    },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    conversation: { findUnique: async () => detail },
+  };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  const result = await service.updateTags(user, "conversation-1", { sourceChannel: "ONLINE", productId: "model-2" });
+  assert.equal(result.tags.product?.productName, "OPPO Find N6");
+  assert.equal(result.tags.sourceChannel, "ONLINE");
+  assert.deepEqual(writes[0], { type: "conversation", args: { where: { id: "conversation-1" }, data: { sourceChannel: "ONLINE" } } });
+  assert.deepEqual(writes[1], { type: "delete", args: { where: { conversationId: "conversation-1", source: "MANUAL" } } });
+  assert.deepEqual(writes[2], { type: "create", args: { data: { conversationId: "conversation-1", productModelId: "model-2", source: "MANUAL", confidence: 1 } } });
+});
+
+void test("mobile tags clear only the manual product and reject inactive products", async () => {
+  const writes: any[] = [];
+  const tx = {
+    conversation: { findUnique: async () => ({ id: "conversation-1" }) },
+    productModel: { findFirst: async () => null },
+    conversationProduct: { deleteMany: async (args: any) => { writes.push(args); return {}; }, create: async () => { throw new Error("must not create"); } },
+  };
+  const detail = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", sourceChannel: null, customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, products: [], messages: [], _count: { pushNotifications: 0 } };
+  const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx), conversation: { findUnique: async () => detail } };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  await service.updateTags(user, "conversation-1", { productId: null });
+  assert.deepEqual(writes, [{ where: { conversationId: "conversation-1", source: "MANUAL" } }]);
+  await assert.rejects(() => service.updateTags(user, "conversation-1", { productId: "inactive-model" }), BadRequestException);
+  assert.equal(writes.length, 1);
 });

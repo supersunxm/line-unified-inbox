@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto, MobileMessageQueryDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, UpdateMobileConversationTagsDto } from "./mobile-conversations.dto";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -70,8 +70,14 @@ export class MobileConversationsService {
         latestMessageAt: true,
         bmReplyStatus: true,
         followUpStatus: true,
+        sourceChannel: true,
         customer: { select: { id: true, displayName: true } },
         store: { select: { id: true, name: true, code: true } },
+        products: {
+          where: { source: "MANUAL" },
+          take: 1,
+          select: { productModel: { select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } } } },
+        },
         messages: {
           where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
@@ -92,6 +98,17 @@ export class MobileConversationsService {
       latestMessageAt: conversation.latestMessageAt,
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
+      tags: {
+        sourceChannel: conversation.sourceChannel,
+        product: conversation.products?.[0]
+          ? {
+              id: conversation.products[0].productModel.id,
+              productName: conversation.products[0].productModel.name,
+              category: conversation.products[0].productModel.productSeries.productGroup,
+              seriesName: conversation.products[0].productModel.productSeries.name,
+            }
+          : null,
+      },
       unreadCount: conversation._count.pushNotifications,
       nextCursor: hasEarlier && oldest ? encodeCursor(oldest.sentAt, oldest.id) : null,
       messages: pageMessages.map((message) => ({
@@ -113,6 +130,61 @@ export class MobileConversationsService {
       data: { readAt: new Date() },
     });
     return { conversationId, unreadCount: 0 };
+  }
+
+  async products(query: MobileProductQueryDto) {
+    const search = query.search?.trim();
+    const models = await this.prisma.productModel.findMany({
+      where: {
+        isActive: true,
+        classificationLevel: "MODEL",
+        productSeries: {
+          isActive: true,
+          ...(query.category ? { productGroup: query.category } : {}),
+        },
+        ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: Math.min(50, Math.max(1, query.limit)),
+      select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } },
+    });
+    return {
+      items: models.map((model) => ({
+        id: model.id,
+        productName: model.name,
+        category: model.productSeries.productGroup,
+        seriesName: model.productSeries.name,
+      })),
+    };
+  }
+
+  async updateTags(user: AuthUser, conversationId: string, dto: UpdateMobileConversationTagsDto) {
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    await this.prisma.$transaction(async (tx) => {
+      const conversation = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
+      if (!conversation) throw new NotFoundException("Conversation not found");
+
+      let productModel: { id: string } | null = null;
+      if (dto.productId !== undefined && dto.productId !== null) {
+        productModel = await tx.productModel.findFirst({
+          where: { id: dto.productId, isActive: true, classificationLevel: "MODEL", productSeries: { isActive: true } },
+          select: { id: true },
+        });
+        if (!productModel) throw new BadRequestException("Product model is unavailable");
+      }
+
+      if (dto.sourceChannel !== undefined) {
+        await tx.conversation.update({ where: { id: conversationId }, data: { sourceChannel: dto.sourceChannel } });
+      }
+
+      if (dto.productId !== undefined) {
+        await tx.conversationProduct.deleteMany({ where: { conversationId, source: "MANUAL" } });
+        if (productModel) {
+          await tx.conversationProduct.create({ data: { conversationId, productModelId: productModel.id, source: "MANUAL", confidence: 1 } });
+        }
+      }
+    });
+    return this.get(user, conversationId);
   }
 
   async send(user: AuthUser, conversationId: string, dto: SendConversationMessageDto) {

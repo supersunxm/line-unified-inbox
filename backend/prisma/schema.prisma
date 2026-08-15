@@ -28,6 +28,11 @@ enum BmReplyStatus {
   REPLIED
 }
 
+enum ConversationSourceChannel {
+  STORE
+  ONLINE
+}
+
 enum ProductRelationship {
   INTERESTED
   CURRENT_OWNER
@@ -744,6 +749,7 @@ model Conversation {
   prioritySource        String                @default("SYSTEM")
   followUpStatus        FollowUpStatus        @default(FOLLOW_UP)
   bmReplyStatus         BmReplyStatus         @default(NOT_REPLIED)
+  sourceChannel         ConversationSourceChannel?
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
   createdAt             DateTime              @default(now())

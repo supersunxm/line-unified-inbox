@@ -748,3 +748,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Latest-message preview is direction-aware: outbound text is prefixed with `You:`, and image previews use `Sent an image` with the same outbound prefix. The backend remains the authoritative source for message direction/type/timestamp.
 - Returning from Chat performs a targeted detail reconciliation and patches the existing Inbox item in place; it must not reload the full list, reset pagination, or disturb scroll state.
 - Persistent Chat header prioritizes customer identity and reply state. Store context remains available in Inbox and the customer profile sheet rather than occupying the always-visible header.
+
+# Manual conversation tagging V1 (2026-08-15)
+
+- Customer source is a nullable conversation-level enum (`STORE` or `ONLINE`); no client-supplied store or LINE account scope is accepted.
+- A conversation may have one optional manual model tag selected from active model-level catalog rows. The mobile endpoint deletes/replaces only `MANUAL` rows, so automatic `RULE` classifications remain available internally.
+- Tag updates are authorized by `StoreAccessService` and use partial PATCH semantics: omitted fields are preserved and explicit null clears a field. No automatic tagging, AI, Inbox filters, or new ProductMaster model is introduced in V1.

@@ -6,9 +6,10 @@
 2. Add `android/local.properties` with `flutter.sdk=/absolute/path/to/flutter`.
 3. Configure Firebase for application ID `com.oppo.lineoahub` and place the Firebase Android configuration at `android/app/google-services.json`. This file is deliberately ignored.
 4. Fetch packages: `flutter pub get`.
-5. Build: `flutter build apk --debug --dart-define=API_BASE_URL=https://your-backend.example`.
+5. Local Android emulator run: `flutter run --dart-define=APP_ENV=development`. Development defaults to `http://10.0.2.2:3001` (the host machine from the Android emulator). For a physical device, pass a reachable LAN URL explicitly with `--dart-define=API_BASE_URL=http://<host-lan-ip>:3001`.
+6. Production build: `flutter build apk --release --dart-define=APP_ENV=production --dart-define=API_BASE_URL=https://your-backend.example`.
 
-`API_BASE_URL` must be the backend origin (not the web application origin). FCM service-account credentials are backend-only and never belong in this project.
+`API_BASE_URL` must be the backend origin (not the web application origin). Production builds require it explicitly; no production URL or secret is embedded in the app. FCM service-account credentials are backend-only and never belong in this project.
 
 ## Contract coverage
 

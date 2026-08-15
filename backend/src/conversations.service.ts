@@ -370,11 +370,6 @@ export class ConversationsService {
       await tx.conversationProduct.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
       await tx.conversationTopic.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
 
-      // If user is setting manual tags, clean up old RULE product tags
-      if (uniqueModelIds.length > 0) {
-        await tx.conversationProduct.deleteMany({ where: { conversationId: id, source: "RULE" } });
-      }
-
       for (const productModelId of uniqueModelIds) {
         await tx.conversationProduct.upsert({
           where: { conversationId_productModelId: { conversationId: id, productModelId } },

@@ -17,6 +17,30 @@ class AuthRepository {
     await _tokens.save(result['accessToken'] as String);
   }
 
+  Future<void> login(String email, String password) async {
+    final result = await _api.post('/auth/mobile/login', body: {'email': email.trim(), 'password': password}, authenticated: false);
+    await _tokens.save(result['accessToken'] as String);
+  }
+
+  Future<List<Store>> stores() async {
+    final result = await _api.get('/registration/stores', authenticated: false);
+    final items = (result['stores'] as List<dynamic>?) ?? <dynamic>[];
+    return items.map((item) => Store.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> register({required String name, required String email, required String storeId, required String role, required String password}) async {
+    await _api.post('/registration/request', body: {'name': name, 'email': email.trim(), 'storeId': storeId, 'role': role, 'password': password}, authenticated: false);
+  }
+
+  Future<List<PendingRegistration>> pendingRegistrations() async {
+    final result = await _api.get('/admin/registrations/pending');
+    final items = (result['registrations'] as List<dynamic>?) ?? <dynamic>[];
+    return items.map((item) => PendingRegistration.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> approveRegistration(String id) => _api.patch('/admin/registrations/$id/approve').then((_) {});
+  Future<void> rejectRegistration(String id) => _api.patch('/admin/registrations/$id/reject').then((_) {});
+
   Future<CurrentUser> me() async => CurrentUser.fromJson(await _api.get('/auth/me'));
   Future<void> logout() async { try { await _api.post('/auth/mobile/logout'); } finally { await _tokens.clear(); } }
   Future<bool> hasToken() async => (await _tokens.read()) != null;

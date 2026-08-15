@@ -1,9 +1,49 @@
 import 'package:flutter/material.dart';
+
 import '../../core/models/models.dart';
+import '../../core/theme/app_spacing.dart';
+import 'widgets/account_section.dart';
+import 'widgets/admin_tools_section.dart';
+import 'widgets/membership_section.dart';
+import 'widgets/profile_header.dart';
+import 'widgets/settings_section.dart';
 
 class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key, required this.user, required this.onLogout});
+  const ProfilePage({
+    super.key,
+    required this.user,
+    required this.onLogout,
+    this.onApprovals,
+  });
+
   final CurrentUser user;
   final VoidCallback onLogout;
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Profile')), body: ListView(padding: const EdgeInsets.all(20), children: [CircleAvatar(radius: 34, child: Text(user.displayName.substring(0, 1).toUpperCase())), const SizedBox(height: 16), Center(child: Text(user.displayName, style: Theme.of(context).textTheme.titleLarge)), if (user.position != null) Center(child: Text(user.position!)), const SizedBox(height: 24), const Text('Assigned stores', style: TextStyle(fontWeight: FontWeight.bold)), ...user.memberships.map((membership) => ListTile(contentPadding: EdgeInsets.zero, title: Text(membership.store.name), subtitle: Text(membership.role.replaceAll('_', ' ')))), const SizedBox(height: 24), OutlinedButton.icon(onPressed: onLogout, icon: const Icon(Icons.logout), label: const Text('Sign out'))]));
+  final VoidCallback? onApprovals;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Profile')),
+        body: ListView(
+          padding: AppSpacing.screen,
+          children: [
+            ProfileHeader(user: user),
+            const SizedBox(height: AppSpacing.xl),
+            AccountSection(user: user),
+            const SizedBox(height: AppSpacing.xl),
+            MembershipSection(memberships: user.memberships),
+            const SizedBox(height: AppSpacing.xl),
+            SettingsSection(),
+            if (onApprovals != null) ...[
+              const SizedBox(height: AppSpacing.xl),
+              AdminToolsSection(onApprovals: onApprovals),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            OutlinedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign out'),
+            ),
+          ],
+        ),
+      );
 }

@@ -5,18 +5,44 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/models/models.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/logging/safe_logger.dart';
 import '../inbox/conversation_repository.dart';
+import 'widgets/conversation_header.dart';
+import 'widgets/chat_composer.dart';
+import 'widgets/customer_profile_sheet.dart';
+import 'widgets/conversation_tags_sheet.dart';
+import 'widgets/message_timeline.dart';
 
 enum ReplyState { sending, failed }
-class PendingReply { PendingReply(this.text, this.key, this.state); final String text; final String key; ReplyState state; }
-class PendingImage { PendingImage(this.bytes, this.filename, this.key); final Uint8List bytes; final String filename; final String key; ReplyState state = ReplyState.sending; }
+
+class PendingReply {
+  PendingReply(this.text, this.key, this.state);
+  final String text;
+  final String key;
+  ReplyState state;
+}
+
+class PendingImage {
+  PendingImage(this.bytes, this.filename, this.key);
+  final Uint8List bytes;
+  final String filename;
+  final String key;
+  ReplyState state = ReplyState.sending;
+}
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.conversationId, required this.repository, this.events});
+  const ChatPage(
+      {super.key,
+      required this.conversationId,
+      required this.repository,
+      this.events,
+      this.onConversationOpened});
   final String conversationId;
   final ConversationRepository repository;
   final Stream<Map<String, dynamic>>? events;
-  @override State<ChatPage> createState() => _ChatPageState();
+  final Future<void> Function(String conversationId)? onConversationOpened;
+  @override
+  State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> {
@@ -31,94 +57,506 @@ class _ChatPageState extends State<ChatPage> {
   bool _loadingOlder = false;
   String? _error;
   bool _didInitialScroll = false;
+  bool _initialScrollScheduled = false;
+  int _initialScrollPasses = 0;
+  bool _paginationEnabled = false;
+  bool _programmaticScroll = false;
+  int _scrollGeneration = 0;
+  bool _openedNotified = false;
   StreamSubscription<Map<String, dynamic>>? _eventsSubscription;
 
-  @override void initState() { super.initState(); _eventsSubscription = widget.events?.listen((event) { if (mounted && (event['type'] == 'connected' || event['conversationId'] == widget.conversationId)) _load(); }); _load(); }
-  @override void dispose() { _eventsSubscription?.cancel(); _text.dispose(); _scroll.dispose(); super.dispose(); }
-  void _load() { setState(() { _detail = null; _future = widget.repository.detail(widget.conversationId); _didInitialScroll = false; }); }
+  @override
+  void initState() {
+    super.initState();
+    _eventsSubscription = widget.events?.listen(_handleRealtimeEvent);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _eventsSubscription?.cancel();
+    _text.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _load() {
+    final request = widget.repository.detail(widget.conversationId);
+    setState(() {
+      _detail = null;
+      _future = request;
+      _didInitialScroll = false;
+      _initialScrollScheduled = false;
+      _initialScrollPasses = 0;
+      _paginationEnabled = false;
+      _programmaticScroll = false;
+      _scrollGeneration += 1;
+    });
+    request.then((_) async {
+      if (!_openedNotified && mounted) {
+        _openedNotified = true;
+        try {
+          await widget.repository.markRead(widget.conversationId);
+          if (mounted && _detail != null) {
+            _detail = _detail!.copyWith(unreadCount: 0);
+          }
+        } catch (error) {
+          SafeLogger.conversationMarkReadFailed(error.runtimeType.toString());
+        }
+        try {
+          await widget.onConversationOpened?.call(widget.conversationId);
+        } catch (error) {
+          SafeLogger.conversationNotificationCleanupFailed(
+              error.runtimeType.toString());
+        }
+      }
+    }).catchError((_) {});
+  }
+
+  void _showCustomerProfile() {
+    final detail = _detail;
+    if (detail == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CustomerProfileSheet(detail: detail),
+    );
+  }
+
+  Future<void> _showConversationTags() async {
+    final detail = _detail;
+    if (detail == null || !mounted) return;
+    final updated = await ConversationTagsSheet.show(
+      context: context,
+      conversationId: detail.id,
+      repository: widget.repository,
+      initialTags: detail.tags ?? const ConversationTags(),
+    );
+    if (mounted && updated != null && _detail != null) {
+      setState(() => _detail = _detail!.copyWith(tags: updated));
+    }
+  }
+
+  void _handleRealtimeEvent(Map<String, dynamic> event) {
+    if (!mounted || event['conversationId'] != widget.conversationId) return;
+    if (event['type'] == 'message.created') {
+      _appendRealtimeMessage(event['message']);
+    } else if (event['type'] == 'message.media.updated') {
+      _updateRealtimeMedia(event['message'], event['messageId']);
+    }
+  }
+
+  void _updateRealtimeMedia(Object? rawMessage, Object? eventMessageId) {
+    final detail = _detail;
+    if (detail == null || rawMessage is! Map) return;
+    final messageJson = Map<String, dynamic>.from(rawMessage);
+    final id = messageJson['id'] ?? eventMessageId;
+    final mediaJson = messageJson['media'];
+    if (id is! String || mediaJson is! Map) return;
+    final index = detail.messages.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+
+    final current = detail.messages[index];
+    final updatedMedia = ChatMedia(
+        processingStatus: mediaJson['processingStatus'] is String
+            ? mediaJson['processingStatus'] as String
+            : current.media?.processingStatus ?? 'FAILED',
+        mimeType: mediaJson['mimeType'] is String
+            ? mediaJson['mimeType'] as String
+            : current.media?.mimeType ??
+                (current.messageType == 'IMAGE' ? 'image/*' : null),
+        fileSize: mediaJson['fileSize'] is num
+            ? (mediaJson['fileSize'] as num).toInt()
+            : current.media?.fileSize,
+        url: mediaJson['url'] is String
+            ? mediaJson['url'] as String
+            : current.media?.url ?? '/messages/$id/media');
+    if (_sameMedia(current.media, updatedMedia)) return;
+    final messages = [...detail.messages];
+    messages[index] = ChatMessage(
+        id: current.id,
+        text: current.text,
+        direction: current.direction,
+        messageType: current.messageType,
+        sentAt: current.sentAt,
+        sender: current.sender,
+        media: updatedMedia,
+        idempotencyKey: current.idempotencyKey);
+    setState(() => _detail = detail.copyWith(messages: messages));
+  }
+
+  bool _sameMedia(ChatMedia? current, ChatMedia updated) =>
+      current?.processingStatus == updated.processingStatus &&
+      current?.mimeType == updated.mimeType &&
+      current?.fileSize == updated.fileSize &&
+      current?.url == updated.url;
+
+  void _mergeSentMessage(ChatMessage? message, String idempotencyKey) {
+    final detail = _detail;
+    if (detail == null) return;
+    final messages = [...detail.messages];
+    if (message != null && !messages.any((item) => item.id == message.id)) {
+      messages.add(message);
+      messages.sort((left, right) {
+        final timestamp = left.sentAt.compareTo(right.sentAt);
+        return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
+      });
+    }
+    setState(() {
+      _pending.removeWhere((item) => item.key == idempotencyKey);
+      _pendingImages.removeWhere((item) => item.key == idempotencyKey);
+      _detail = detail.copyWith(messages: messages);
+    });
+  }
+
+  void _appendRealtimeMessage(Object? rawMessage) {
+    final detail = _detail;
+    if (detail == null || rawMessage is! Map) return;
+
+    try {
+      final messageJson = Map<String, dynamic>.from(rawMessage);
+      final message = ChatMessage.fromJson(messageJson);
+      if (detail.messages.any((item) => item.id == message.id)) return;
+
+      if (message.idempotencyKey != null) {
+        _pending.removeWhere((item) => item.key == message.idempotencyKey);
+        _pendingImages
+            .removeWhere((item) => item.key == message.idempotencyKey);
+      }
+
+      final messages = [...detail.messages, message]..sort((left, right) {
+          final timestamp = left.sentAt.compareTo(right.sentAt);
+          return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
+        });
+      final nearBottom = !_scroll.hasClients ||
+          _scroll.position.maxScrollExtent - _scroll.position.pixels <= 120;
+      setState(() {
+        _detail = detail.copyWith(messages: messages);
+        _error = null;
+      });
+      if (nearBottom) _scrollToBottom();
+    } catch (_) {
+      // Ignore malformed or incomplete realtime payloads. The next normal
+      // reconciliation can still recover the authoritative conversation.
+    }
+  }
+
   Future<void> _loadOlder() async {
-    final detail = _detail; final cursor = detail?.nextCursor;
-    if (_loadingOlder || detail == null || cursor == null) return;
+    final detail = _detail;
+    final cursor = detail?.nextCursor;
+    if (!_paginationEnabled ||
+        _programmaticScroll ||
+        _loadingOlder ||
+        detail == null ||
+        cursor == null) {
+      return;
+    }
     final beforeOffset = _scroll.hasClients ? _scroll.position.pixels : 0.0;
-    final beforeMaxExtent = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+    final beforeMaxExtent =
+        _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
     setState(() => _loadingOlder = true);
     try {
-      final older = await widget.repository.detail(widget.conversationId, before: cursor);
+      final older =
+          await widget.repository.detail(widget.conversationId, before: cursor);
       if (!mounted) return;
       final seen = detail.messages.map((message) => message.id).toSet();
-      final merged = [...older.messages.where((message) => !seen.contains(message.id)), ...detail.messages];
-      setState(() { _detail = detail.copyWith(messages: merged, nextCursor: older.nextCursor); _loadingOlder = false; });
+      final merged = [
+        ...older.messages.where((message) => !seen.contains(message.id)),
+        ...detail.messages
+      ];
+      setState(() {
+        _detail =
+            detail.copyWith(messages: merged, nextCursor: older.nextCursor);
+        _loadingOlder = false;
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_scroll.hasClients) return;
         final delta = _scroll.position.maxScrollExtent - beforeMaxExtent;
-        final target = (beforeOffset + delta).clamp(0.0, _scroll.position.maxScrollExtent);
-        _scroll.jumpTo(target);
+        final target =
+            (beforeOffset + delta).clamp(0.0, _scroll.position.maxScrollExtent);
+        _programmaticScroll = true;
+        try {
+          _scroll.jumpTo(target);
+        } finally {
+          _programmaticScroll = false;
+        }
       });
-    } catch (_) { if (mounted) setState(() { _loadingOlder = false; _error = 'Unable to load older messages'; }); }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingOlder = false;
+          _error = 'Unable to load older messages';
+        });
+      }
+    }
   }
-  String _key() { final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256)); bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80; final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join(); return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}'; }
+
+  String _key() {
+    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex =
+        bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
   Future<void> _sendText(String text, {PendingReply? existing}) async {
     final pending = existing ?? PendingReply(text, _key(), ReplyState.sending);
-    setState(() { if (existing == null) _pending.add(pending); pending.state = ReplyState.sending; _error = null; });
+    setState(() {
+      if (existing == null) _pending.add(pending);
+      pending.state = ReplyState.sending;
+      _error = null;
+    });
     _scrollToBottom();
-    try { await widget.repository.reply(widget.conversationId, pending.text, pending.key); if (mounted) { setState(() => _pending.remove(pending)); _load(); } }
-    on ApiException catch (error) { if (mounted) setState(() { pending.state = ReplyState.failed; _error = error.message; }); }
-    catch (_) { if (mounted) setState(() { pending.state = ReplyState.failed; _error = 'Message could not be sent'; }); }
+    try {
+      final message = await widget.repository
+          .reply(widget.conversationId, pending.text, pending.key);
+      if (mounted) {
+        _mergeSentMessage(message, pending.key);
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = 'Message could not be sent';
+        });
+      }
+    }
   }
-  Future<void> _send() async { final text = _text.text.trim(); if (text.isEmpty) return; _text.clear(); await _sendText(text); }
+
+  Future<void> _send() async {
+    final text = _text.text.trim();
+    if (text.isEmpty) return;
+    _text.clear();
+    await _sendText(text);
+  }
+
   Future<void> _pickImage() async {
     try {
       final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
       if (!mounted) return;
-      final send = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('Send image?'), content: Image.memory(bytes, height: 220, fit: BoxFit.contain), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send'))]));
-      if (send == true) await _sendImage(bytes, picked.name, mimeType: picked.mimeType);
-    } catch (_) { if (mounted) setState(() => _error = 'Unable to choose this image'); }
+      final send = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+                  title: const Text('Send image?'),
+                  content:
+                      Image.memory(bytes, height: 220, fit: BoxFit.contain),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Send'))
+                  ]));
+      if (send == true) {
+        await _sendImage(bytes, picked.name, mimeType: picked.mimeType);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Unable to choose this image');
+    }
   }
-  Future<void> _sendImage(Uint8List bytes, String filename, {String? mimeType, PendingImage? existing}) async {
+
+  Future<void> _sendImage(Uint8List bytes, String filename,
+      {String? mimeType, PendingImage? existing}) async {
     final pending = existing ?? PendingImage(bytes, filename, _key());
     if (existing == null) setState(() => _pendingImages.add(pending));
-    setState(() { pending.state = ReplyState.sending; _error = null; });
+    setState(() {
+      pending.state = ReplyState.sending;
+      _error = null;
+    });
     _scrollToBottom();
-    try { await widget.repository.sendImage(widget.conversationId, pending.bytes, pending.filename, pending.key, mimeType: mimeType); if (mounted) { setState(() => _pendingImages.remove(pending)); _load(); } }
-    on ApiException catch (error) { if (mounted) setState(() { pending.state = ReplyState.failed; _error = error.message; }); }
-    catch (_) { if (mounted) setState(() { pending.state = ReplyState.failed; _error = 'Image could not be sent'; }); }
+    try {
+      final message = await widget.repository.sendImage(
+          widget.conversationId, pending.bytes, pending.filename, pending.key,
+          mimeType: mimeType);
+      if (mounted) {
+        _mergeSentMessage(message, pending.key);
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = 'Image could not be sent';
+        });
+      }
+    }
   }
-  void _scrollToBottom({bool immediate = false}) { WidgetsBinding.instance.addPostFrameCallback((_) { if (!mounted || !_scroll.hasClients) return; if (immediate) { _scroll.jumpTo(_scroll.position.maxScrollExtent); } else { _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 220), curve: Curves.easeOut); } }); }
+
+  void _scrollToBottom({bool immediate = false}) {
+    final generation = _scrollGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _scrollGeneration || !_scroll.hasClients) {
+        return;
+      }
+      if (immediate) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      } else {
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+      }
+    });
+  }
+
+  void _scheduleInitialScroll() {
+    if (_didInitialScroll || _initialScrollScheduled) return;
+    final generation = _scrollGeneration;
+    _initialScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialScrollScheduled = false;
+      if (!mounted || _didInitialScroll) return;
+      if (generation != _scrollGeneration) {
+        _didInitialScroll = true;
+        _paginationEnabled =
+            _scroll.hasClients && _scroll.position.hasContentDimensions;
+        return;
+      }
+      if (!_scroll.hasClients || !_scroll.position.hasContentDimensions) {
+        _scheduleInitialScroll();
+        return;
+      }
+      if (_initialScrollPasses == 0) {
+        _initialScrollPasses = 1;
+        _scheduleInitialScroll();
+        return;
+      }
+      _programmaticScroll = true;
+      try {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      } finally {
+        _programmaticScroll = false;
+      }
+      _initialScrollPasses += 1;
+      if (_initialScrollPasses < 3) {
+        _scheduleInitialScroll();
+      } else {
+        _didInitialScroll = true;
+        _paginationEnabled = true;
+      }
+    });
+  }
+
   Future<void> _loadMedia(ChatMedia media, String id) async {
-    if (!media.ready || _mediaBytes.containsKey(id) || !_mediaLoading.add(id)) return;
-    try { final bytes = await widget.repository.media(media.url!); if (mounted) setState(() => _mediaBytes[id] = bytes); }
-    catch (_) { if (mounted) setState(() {}); }
-    finally { _mediaLoading.remove(id); }
+    if (!media.ready || _mediaBytes.containsKey(id) || !_mediaLoading.add(id)) {
+      return;
+    }
+    try {
+      final bytes = await widget.repository.media(media.url!);
+      if (mounted) setState(() => _mediaBytes[id] = bytes);
+    } catch (_) {
+      if (mounted) setState(() {});
+    } finally {
+      _mediaLoading.remove(id);
+    }
   }
-  @override Widget build(BuildContext context) => Scaffold(body: FutureBuilder<ConversationDetail>(future: _future, builder: (context, snapshot) {
-    if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-    if (snapshot.hasError || !snapshot.hasData) return Center(child: FilledButton(onPressed: _load, child: const Text('Retry')));
-    final detail = _detail ?? snapshot.data!;
-    _detail ??= detail;
-    if (!_didInitialScroll) { _didInitialScroll = true; _scrollToBottom(immediate: true); }
-    return Scaffold(appBar: AppBar(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(detail.customerName, overflow: TextOverflow.ellipsis), if (detail.storeName.isNotEmpty) Text(detail.storeName, style: Theme.of(context).textTheme.labelSmall, overflow: TextOverflow.ellipsis)])), body: Column(children: [if (_loadingOlder) const LinearProgressIndicator(minHeight: 2), Expanded(child: NotificationListener<ScrollNotification>(onNotification: (notification) { if (notification.metrics.pixels < 100) _loadOlder(); return false; }, child: ListView.builder(controller: _scroll, padding: const EdgeInsets.all(12), itemCount: detail.messages.length + _pending.length + _pendingImages.length, itemBuilder: (context, index) { if (index < detail.messages.length) return _messageRow(detail.messages, index); final textIndex = index - detail.messages.length; if (textIndex < _pending.length) { final pending = _pending[textIndex]; return _bubble(pending.text, true, timestamp: DateTime.now(), footer: pending.state == ReplyState.sending ? 'Sending…' : 'Failed · Retry', onRetry: pending.state == ReplyState.failed ? () => _sendText(pending.text, existing: pending) : null); } final pending = _pendingImages[textIndex - _pending.length]; return _pendingImageBubble(pending); }))), if (_error != null) Padding(padding: const EdgeInsets.all(8), child: Text(_error!, style: const TextStyle(color: Colors.red))), SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [SizedBox(width: 48, height: 48, child: IconButton.filledTonal(tooltip: 'Attach image', onPressed: _pickImage, icon: const Icon(Icons.add_photo_alternate))), const SizedBox(width: 8), Expanded(child: TextField(controller: _text, minLines: 1, maxLines: 4, decoration: const InputDecoration(hintText: 'Reply to customer', border: OutlineInputBorder()))), const SizedBox(width: 8), SizedBox(width: 48, height: 48, child: IconButton(tooltip: 'Send reply', onPressed: _send, icon: const Icon(Icons.send))) ])))]));
-  }));
-  Widget _messageRow(List<ChatMessage> messages, int index) { final message = messages[index]; final previous = index == 0 ? null : messages[index - 1]; final separator = previous == null || !_sameDay(previous.sentAt.toLocal(), message.sentAt.toLocal()); return Column(children: [if (separator) Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(_dayLabel(message.sentAt.toLocal()), style: Theme.of(context).textTheme.labelMedium)), _bubble(message.text, message.direction == 'OUTBOUND', message: message, timestamp: message.sentAt.toLocal(), footer: message.direction == 'OUTBOUND' ? 'Sent' : null)]); }
-  Widget _bubble(String text, bool outbound, {ChatMessage? message, required DateTime timestamp, String? footer, VoidCallback? onRetry}) {
-    final imageMessage = message;
-    final media = imageMessage?.media;
-    final image = imageMessage != null && imageMessage.messageType == 'IMAGE' && media != null;
-    if (image && media.ready) _loadMedia(media, imageMessage.id);
-    final bytes = imageMessage == null ? null : _mediaBytes[imageMessage.id];
-    final senderLabel = outbound ? (message?.sender?.displayName ?? (message == null ? 'You' : 'Store')) : null;
-    return Align(alignment: outbound ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.symmetric(vertical: 4), padding: const EdgeInsets.all(8), constraints: const BoxConstraints(maxWidth: 300), decoration: BoxDecoration(color: outbound ? Colors.green.shade100 : Colors.grey.shade200, borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (image) _imageContent(imageMessage, media, bytes) else Text(text), Row(mainAxisSize: MainAxisSize.min, children: [Text(_time(timestamp), style: Theme.of(context).textTheme.labelSmall), if (footer != null) ...[const SizedBox(width: 6), onRetry == null ? Text(footer, style: Theme.of(context).textTheme.labelSmall) : TextButton(onPressed: onRetry, child: Text(footer))]]), if (senderLabel != null) Text(senderLabel, style: Theme.of(context).textTheme.labelSmall)])));
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      body: FutureBuilder<ConversationDetail>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Center(
+                  child: FilledButton(
+                      onPressed: _load, child: const Text('Retry')));
+            }
+            final detail = _detail ?? snapshot.data!;
+            _detail ??= detail;
+            if (!_didInitialScroll) {
+              _scheduleInitialScroll();
+            }
+            return Scaffold(
+                appBar: ConversationHeader(
+                    customerName: detail.customerName,
+                    bmReplyStatus: detail.bmReplyStatus,
+                    onProfile: _showCustomerProfile),
+                body: Column(children: [
+                  ConversationTagsBar(
+                      tags: detail.tags, onPressed: _showConversationTags),
+                  Expanded(
+                      child: MessageTimeline(
+                          controller: _scroll,
+                          messages: detail.messages,
+                          pendingMessages: [
+                            ..._pending.map((pending) => PendingTimelineMessage(
+                                key: pending.key,
+                                isImage: false,
+                                isSending: pending.state == ReplyState.sending,
+                                text: pending.text)),
+                            ..._pendingImages.map((pending) =>
+                                PendingTimelineMessage(
+                                    key: pending.key,
+                                    isImage: true,
+                                    isSending:
+                                        pending.state == ReplyState.sending,
+                                    bytes: pending.bytes,
+                                    filename: pending.filename))
+                          ],
+                          loadingOlder: _loadingOlder,
+                          mediaBytes: _mediaBytes,
+                          onLoadOlder: _loadOlder,
+                          onRetryMessage: _retryPending,
+                          onOpenImage: (bytes) => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => _ImageViewer(bytes: bytes))),
+                          onLoadMedia: _loadMedia,
+                          onUserScroll: () => _scrollGeneration += 1,
+                          isProgrammaticScroll: () => _programmaticScroll)),
+                  if (_error != null)
+                    Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(_error!,
+                            style: const TextStyle(color: Colors.red))),
+                  ChatComposer(
+                      controller: _text, onAttach: _pickImage, onSend: _send)
+                ]));
+          }));
+
+  void _retryPending(String key) {
+    for (final pending in _pending) {
+      if (pending.key == key) {
+        _sendText(pending.text, existing: pending);
+        return;
+      }
+    }
+    for (final pending in _pendingImages) {
+      if (pending.key == key) {
+        _sendImage(pending.bytes, pending.filename, existing: pending);
+        return;
+      }
+    }
   }
-  Widget _imageContent(ChatMessage message, ChatMedia media, Uint8List? bytes) { if (media.processingStatus != 'READY') return Text(media.processingStatus == 'PENDING' ? 'Image processing…' : 'Image unavailable'); if (bytes == null) return const SizedBox(width: 220, height: 140, child: Center(child: CircularProgressIndicator())); return GestureDetector(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ImageViewer(bytes: bytes))), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(bytes, width: 240, height: 240, fit: BoxFit.contain))); }
-  Widget _pendingImageBubble(PendingImage pending) => Align(alignment: Alignment.centerRight, child: Container(margin: const EdgeInsets.symmetric(vertical: 4), padding: const EdgeInsets.all(8), constraints: const BoxConstraints(maxWidth: 280), decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Image.memory(pending.bytes, width: 240, height: 180, fit: BoxFit.contain), Text(pending.state == ReplyState.sending ? 'Sending…' : 'Failed · Retry', style: Theme.of(context).textTheme.labelSmall), if (pending.state == ReplyState.failed) TextButton(onPressed: () => _sendImage(pending.bytes, pending.filename, existing: pending), child: const Text('Retry'))])));
-  String _time(DateTime value) => '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-  bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
-  String _dayLabel(DateTime date) { final now = DateTime.now(); if (_sameDay(date, now)) return 'Today'; final yesterday = now.subtract(const Duration(days: 1)); if (_sameDay(date, yesterday)) return 'Yesterday'; const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; return '${date.day} ${months[date.month - 1]} ${date.year}'; }
 }
 
 class _ImageViewer extends StatelessWidget {
   const _ImageViewer({required this.bytes});
   final Uint8List bytes;
-  @override Widget build(BuildContext context) => Scaffold(backgroundColor: Colors.black, appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white), body: Center(child: InteractiveViewer(child: Image.memory(bytes, fit: BoxFit.contain))));
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      backgroundColor: Colors.black,
+      appBar:
+          AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+      body: Center(
+          child: InteractiveViewer(
+              child: Image.memory(bytes, fit: BoxFit.contain))));
 }

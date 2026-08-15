@@ -1264,6 +1264,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added a presentation-only Inbox header, conversation overview metrics, AI-ready indicator, responsive conversation cards, clearer status mappings, improved search affordance, and icon-based filter chips. InboxPage remains the owner of loading, pagination, pull-to-refresh, SSE patches, unread reconciliation, and navigation callbacks.
 - Added narrow-screen-safe Inbox presentation composition without changing repository/API contracts. `flutter analyze`, the full 33-test suite, the debug APK build, and `git diff --check` pass.
 
+# Current task: Phase 7B manual conversation tagging V1 (2026-08-15)
+
+- Added nullable `Conversation.sourceChannel` backed by the additive `ConversationSourceChannel` enum and a reviewed migration. Existing conversations remain unchanged.
+- Added authorized mobile product discovery and partial tag updates. Mobile detail now returns manual source/product tags; manual updates replace only the MANUAL product row, preserve RULE classifications, validate active model-level products, and return authoritative detail.
+- Added Flutter tag models, repository methods, and a presentation-only tag bar/sheet with source chips, bounded product search, replacement/clear behavior, and local detail patching.
+- Product selector/service tests, tagging widget tests, Prisma validation/generation, backend build, full backend tests (1110), changed-file ESLint, Flutter analyze, and full Flutter tests pass. The full repository ESLint command remains blocked by pre-existing unrelated violations.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.
