@@ -45,10 +45,12 @@ import { MobileProductsController } from "./mobile/mobile-products.controller";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { MassMessageModule } from "./mass-message/mass-message.module";
 import { TikTokModule } from "./tiktok/tiktok.module";
+import { MonthlySummaryController } from "./mobile/monthly-summary.controller";
+import { MonthlySummaryService } from "./mobile/monthly-summary.service";
 
 @Module({
   imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, ClassificationInsightsModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, TikTokModule],
-  controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController],
-  providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService],
+  controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController],
+  providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService, MonthlySummaryService],
 })
 export class AppModule {}

@@ -10,6 +10,7 @@ import 'package:line_oa_chat_hub/features/profile/profile_page.dart';
 import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 import 'package:line_oa_chat_hub/features/shell/authenticated_shell.dart';
 import 'package:line_oa_chat_hub/features/summary/summary_page.dart';
+import 'package:line_oa_chat_hub/features/summary/summary_repository.dart';
 
 CurrentUser user({String? employeeId}) => CurrentUser(
       id: 'user-1',
@@ -22,7 +23,8 @@ CurrentUser user({String? employeeId}) => CurrentUser(
           id: 'membership-1',
           storeId: 'store-1',
           role: 'STAFF',
-          store: Store(id: 'store-1', name: 'OBS Seacon Bangkae', code: '28243'),
+          store:
+              Store(id: 'store-1', name: 'OBS Seacon Bangkae', code: '28243'),
         ),
       ],
       stores: [Store(id: 'store-1', name: 'OBS Seacon Bangkae', code: '28243')],
@@ -46,6 +48,53 @@ class FakeConversationRepository extends ConversationRepository {
       InboxPageResult(items: const [], page: page, total: 0);
 }
 
+class FakeSummaryRepository extends SummaryRepository {
+  FakeSummaryRepository() : super(ApiClient(TokenStore()));
+
+  @override
+  Future<MonthlySummary> monthly(String month) async =>
+      MonthlySummary.fromJson({
+        'period': {
+          'month': month,
+          'timezone': 'Asia/Bangkok',
+          'isCurrentMonth': true,
+          'throughDate': '2026-08-15',
+          'comparisonBasis': 'same_day_range'
+        },
+        'volume': {
+          'incomingMessages': 4,
+          'incomingConversations': 2,
+          'bmReplies': 1
+        },
+        'response': {
+          'cyclesStarted': 2,
+          'cyclesAnswered': 1,
+          'unanswered': 1,
+          'responseRate': null,
+          'averageSeconds': null,
+          'medianSeconds': null,
+          'buckets': {
+            'under4h': 1,
+            'from4To12h': 0,
+            'from12To24h': 0,
+            'over24h': 0
+          },
+          'sampleSize': 1,
+          'available': false
+        },
+        'operational': {'needReply': 1, 'completed': 1},
+        'comparison': {
+          'available': false,
+          'reason': 'insufficient_previous_period_data'
+        },
+        'dataQuality': {
+          'qaExcluded': true,
+          'ambiguousOutboundExcluded': 0,
+          'responseMetricsAvailable': false
+        },
+      });
+}
+
 void main() {
   test('CurrentUser preserves employee ID and legacy null values', () {
     final parsed = CurrentUser.fromJson({
@@ -59,14 +108,16 @@ void main() {
       'permissions': <String, dynamic>{},
     });
     expect(parsed.employeeId, 'EMP-1');
-    expect(CurrentUser.fromJson({
-      'id': 'legacy',
-      'displayName': 'Legacy',
-      'role': 'VIEWER',
-      'memberships': [],
-      'stores': [],
-      'permissions': <String, dynamic>{},
-    }).employeeId, isNull);
+    expect(
+        CurrentUser.fromJson({
+          'id': 'legacy',
+          'displayName': 'Legacy',
+          'role': 'VIEWER',
+          'memberships': [],
+          'stores': [],
+          'permissions': <String, dynamic>{},
+        }).employeeId,
+        isNull);
   });
 
   testWidgets('profile hub opens personal information and handles legacy IDs',
@@ -75,8 +126,11 @@ void main() {
       home: ProfilePage(
         user: user(),
         onLogout: () {},
-        onPersonalInformation: () => Navigator.of(tester.element(find.text('Personal Information'))).push(
-          MaterialPageRoute(builder: (_) => PersonalInformationPage(user: user())),
+        onPersonalInformation: () =>
+            Navigator.of(tester.element(find.text('Personal Information')))
+                .push(
+          MaterialPageRoute(
+              builder: (_) => PersonalInformationPage(user: user())),
         ),
       ),
     ));
@@ -89,10 +143,14 @@ void main() {
     expect(find.text('OBS Seacon Bangkae'), findsOneWidget);
   });
 
-  testWidgets('summary is a truthful placeholder and registration shows employee ID',
+  testWidgets(
+      'summary loads trusted activity and registration shows employee ID',
       (tester) async {
-    await tester.pumpWidget(MaterialApp(home: const SummaryPage()));
-    expect(find.text('Monthly performance insights'), findsOneWidget);
+    await tester.pumpWidget(
+        MaterialApp(home: SummaryPage(repository: FakeSummaryRepository())));
+    await tester.pumpAndSettle();
+    expect(find.text('Monthly activity'), findsOneWidget);
+    expect(find.text('Collecting response data'), findsOneWidget);
     await tester.pumpWidget(MaterialApp(
       home: RegistrationPage(
         auth: FakeAuthRepository(),
@@ -111,6 +169,7 @@ void main() {
         user: user(employeeId: 'EMP-1'),
         auth: FakeAuthRepository(),
         conversations: FakeConversationRepository(),
+        summary: FakeSummaryRepository(),
         events: null,
         onLogout: () {},
         onConversationOpened: (_) async {},
@@ -123,7 +182,7 @@ void main() {
     expect(find.text('Profile'), findsOneWidget);
     await tester.tap(find.text('Summary'));
     await tester.pumpAndSettle();
-    expect(find.text('Monthly performance insights'), findsOneWidget);
+    expect(find.text('Monthly activity'), findsOneWidget);
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
     expect(find.text('Personal Information'), findsOneWidget);

@@ -793,3 +793,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Authenticated top-level destinations use a persistent `IndexedStack` with Inbox, a truthful Summary placeholder, and Profile. Conversation detail remains a root Navigator push, so the bottom navigation is not shown over Chat and existing Inbox state stays mounted across tab switches.
 - Personal Information is read-only in V1. It displays the authoritative `/auth/me` fields and gracefully renders `Not set` for legacy users without an employee ID; setting rows without an implemented backend contract are explicit non-actionable `Coming soon` surfaces.
 - Employee IDs belong to User, not Store. New registration validates and canonicalizes `trim().toUpperCase()`, while the database field remains nullable for legacy users and gains a unique index. Admin and authenticated-user responses expose only the safe employee ID field.
+
+# Analytics trust foundation and monthly summary (2026-08-15)
+
+- QA exclusion is an explicit persistent `Conversation.isQa` boolean, controlled by safe ADMIN/data-maintenance operations. Analytics never infers QA from display names, message text, or sender heuristics; operational conversation behavior remains unchanged.
+- Monthly reporting is query-based at current scale. It filters active, non-archived stores through `StoreAccessService`, uses explicit Asia/Bangkok UTC boundaries, and computes response cycles from chronological inbound messages plus persisted outbound messages with a non-null `senderUserId`. Ambiguous outbound rows and SYSTEM messages are excluded.
+- Response SLA values remain withheld until at least ten answered cycles are available. The API returns safe internal counts and an explicit availability flag; Flutter shows collection progress instead of fabricated percentages or durations. Previous-period comparisons are hidden when historical coverage is insufficient.
+- No analytics warehouse, Redis cache, materialized table, or persisted response-cycle model is introduced in V1. The message volume is measured at roughly 20k rows and can be revisited only after production query timing demonstrates a need.

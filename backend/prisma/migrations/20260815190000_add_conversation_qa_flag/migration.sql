@@ -1,0 +1,1 @@
+ALTER TABLE "Conversation" ADD COLUMN "isQa" BOOLEAN NOT NULL DEFAULT false;

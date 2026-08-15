@@ -17,6 +17,7 @@ import 'features/inbox/conversation_repository.dart';
 import 'features/notifications/notification_service.dart';
 import 'features/realtime/realtime_service.dart';
 import 'features/shell/authenticated_shell.dart';
+import 'features/summary/summary_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +39,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   late final AuthRepository _auth;
   late final ApiClient _api;
   late final ConversationRepository _conversations;
+  late final SummaryRepository _summary;
   late final RealtimeService _realtime;
   late final NotificationService _notifications;
   CurrentUser? _user;
@@ -54,6 +56,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     _api = ApiClient(_tokens, onSessionExpired: _expireSession);
     _auth = AuthRepository(_api, _tokens);
     _conversations = ConversationRepository(_api);
+    _summary = SummaryRepository(_api);
     _realtime = RealtimeService(_tokens);
     _notifications = NotificationService(_api, _tokens);
     _restore();
@@ -212,6 +215,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         user: user,
         auth: _auth,
         conversations: _conversations,
+        summary: _summary,
         events: _realtime.events,
         onLogout: _logout,
         onConversationOpened: _notifications.clearConversationNotifications);

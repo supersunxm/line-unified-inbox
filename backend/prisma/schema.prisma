@@ -751,6 +751,7 @@ model Conversation {
   bmReplyStatus         BmReplyStatus               @default(NOT_REPLIED)
   sourceChannels        ConversationSourceChannel[] @default([])
   isInstallment         Boolean                     @default(false)
+  isQa                  Boolean                     @default(false)
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
   createdAt             DateTime                    @default(now())

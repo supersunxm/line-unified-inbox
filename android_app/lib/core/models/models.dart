@@ -93,7 +93,8 @@ class CurrentUser {
             .toList(),
         permissions: (json['permissions'] as Map<String, dynamic>?) ??
             <String, dynamic>{},
-        employeeId: profile['employeeId'] as String? ?? json['employeeId'] as String?,
+        employeeId:
+            profile['employeeId'] as String? ?? json['employeeId'] as String?,
         phone: profile['phone'] as String?,
         position: profile['position'] as String?);
   }
@@ -219,7 +220,8 @@ class ConversationTags {
   final ConversationProductTag? product;
   final ConversationProductVariant? variant;
 
-  bool get isEmpty => sourceChannels.isEmpty && !isInstallment && product == null;
+  bool get isEmpty =>
+      sourceChannels.isEmpty && !isInstallment && product == null;
 
   factory ConversationTags.fromJson(Map<String, dynamic>? json) {
     final productJson = json?['product'];
@@ -373,3 +375,190 @@ class ChatMedia {
         url: json['url'] is String ? json['url'] as String : null);
   }
 }
+
+class MonthlySummary {
+  MonthlySummary({
+    required this.period,
+    required this.volume,
+    required this.response,
+    required this.operational,
+    required this.comparison,
+    required this.dataQuality,
+  });
+
+  final SummaryPeriod period;
+  final SummaryVolume volume;
+  final SummaryResponse response;
+  final SummaryOperational operational;
+  final SummaryComparison comparison;
+  final SummaryDataQuality dataQuality;
+
+  factory MonthlySummary.fromJson(Map<String, dynamic> json) => MonthlySummary(
+        period: SummaryPeriod.fromJson(
+            json['period'] as Map<String, dynamic>? ?? {}),
+        volume: SummaryVolume.fromJson(
+            json['volume'] as Map<String, dynamic>? ?? {}),
+        response: SummaryResponse.fromJson(
+            json['response'] as Map<String, dynamic>? ?? {}),
+        operational: SummaryOperational.fromJson(
+            json['operational'] as Map<String, dynamic>? ?? {}),
+        comparison: SummaryComparison.fromJson(
+            json['comparison'] as Map<String, dynamic>? ?? {}),
+        dataQuality: SummaryDataQuality.fromJson(
+            json['dataQuality'] as Map<String, dynamic>? ?? {}),
+      );
+}
+
+class SummaryPeriod {
+  SummaryPeriod(
+      {required this.month,
+      required this.timezone,
+      required this.isCurrentMonth,
+      required this.throughDate,
+      required this.comparisonBasis});
+  final String month;
+  final String timezone;
+  final bool isCurrentMonth;
+  final String throughDate;
+  final String comparisonBasis;
+
+  factory SummaryPeriod.fromJson(Map<String, dynamic> json) => SummaryPeriod(
+        month: json['month'] as String? ?? '',
+        timezone: json['timezone'] as String? ?? 'Asia/Bangkok',
+        isCurrentMonth: json['isCurrentMonth'] == true,
+        throughDate: json['throughDate'] as String? ?? '',
+        comparisonBasis: json['comparisonBasis'] as String? ?? 'full_month',
+      );
+}
+
+class SummaryVolume {
+  SummaryVolume(
+      {required this.incomingMessages,
+      required this.incomingConversations,
+      required this.bmReplies});
+  final int incomingMessages;
+  final int incomingConversations;
+  final int bmReplies;
+
+  factory SummaryVolume.fromJson(Map<String, dynamic> json) => SummaryVolume(
+        incomingMessages: _intValue(json['incomingMessages']),
+        incomingConversations: _intValue(json['incomingConversations']),
+        bmReplies: _intValue(json['bmReplies']),
+      );
+}
+
+class SummaryResponse {
+  SummaryResponse(
+      {required this.cyclesStarted,
+      required this.cyclesAnswered,
+      required this.unanswered,
+      required this.responseRate,
+      required this.averageSeconds,
+      required this.medianSeconds,
+      required this.buckets,
+      required this.sampleSize,
+      required this.available});
+  final int cyclesStarted;
+  final int cyclesAnswered;
+  final int unanswered;
+  final double? responseRate;
+  final double? averageSeconds;
+  final double? medianSeconds;
+  final SummaryBuckets buckets;
+  final int sampleSize;
+  final bool available;
+
+  factory SummaryResponse.fromJson(Map<String, dynamic> json) =>
+      SummaryResponse(
+        cyclesStarted: _intValue(json['cyclesStarted']),
+        cyclesAnswered: _intValue(json['cyclesAnswered']),
+        unanswered: _intValue(json['unanswered']),
+        responseRate: _doubleValue(json['responseRate']),
+        averageSeconds: _doubleValue(json['averageSeconds']),
+        medianSeconds: _doubleValue(json['medianSeconds']),
+        buckets: SummaryBuckets.fromJson(
+            json['buckets'] as Map<String, dynamic>? ?? {}),
+        sampleSize: _intValue(json['sampleSize']),
+        available: json['available'] == true,
+      );
+}
+
+class SummaryBuckets {
+  SummaryBuckets(
+      {required this.under4h,
+      required this.from4To12h,
+      required this.from12To24h,
+      required this.over24h});
+  final int under4h;
+  final int from4To12h;
+  final int from12To24h;
+  final int over24h;
+
+  factory SummaryBuckets.fromJson(Map<String, dynamic> json) => SummaryBuckets(
+        under4h: _intValue(json['under4h']),
+        from4To12h: _intValue(json['from4To12h']),
+        from12To24h: _intValue(json['from12To24h']),
+        over24h: _intValue(json['over24h']),
+      );
+}
+
+class SummaryOperational {
+  SummaryOperational({required this.needReply, required this.completed});
+  final int needReply;
+  final int completed;
+
+  factory SummaryOperational.fromJson(Map<String, dynamic> json) =>
+      SummaryOperational(
+        needReply: _intValue(json['needReply']),
+        completed: _intValue(json['completed']),
+      );
+}
+
+class SummaryComparison {
+  SummaryComparison(
+      {required this.available,
+      this.reason,
+      this.volume,
+      this.response,
+      this.changes = const {}});
+  final bool available;
+  final String? reason;
+  final SummaryVolume? volume;
+  final SummaryResponse? response;
+  final Map<String, double?> changes;
+
+  factory SummaryComparison.fromJson(Map<String, dynamic> json) =>
+      SummaryComparison(
+        available: json['available'] == true,
+        reason: json['reason'] as String?,
+        volume: json['volume'] is Map<String, dynamic>
+            ? SummaryVolume.fromJson(json['volume'] as Map<String, dynamic>)
+            : null,
+        response: json['response'] is Map<String, dynamic>
+            ? SummaryResponse.fromJson(json['response'] as Map<String, dynamic>)
+            : null,
+        changes: (json['changes'] as Map<String, dynamic>?)
+                ?.map((key, value) => MapEntry(key, _doubleValue(value))) ??
+            const {},
+      );
+}
+
+class SummaryDataQuality {
+  SummaryDataQuality(
+      {required this.qaExcluded,
+      required this.ambiguousOutboundExcluded,
+      required this.responseMetricsAvailable});
+  final bool qaExcluded;
+  final int ambiguousOutboundExcluded;
+  final bool responseMetricsAvailable;
+
+  factory SummaryDataQuality.fromJson(Map<String, dynamic> json) =>
+      SummaryDataQuality(
+        qaExcluded: json['qaExcluded'] == true,
+        ambiguousOutboundExcluded: _intValue(json['ambiguousOutboundExcluded']),
+        responseMetricsAvailable: json['responseMetricsAvailable'] == true,
+      );
+}
+
+int _intValue(Object? value) => value is num ? value.toInt() : 0;
+double? _doubleValue(Object? value) => value is num ? value.toDouble() : null;

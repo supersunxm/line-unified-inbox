@@ -1315,6 +1315,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Employee ID is now required for new registration requests, normalized server-side to uppercase, persisted on User and RegistrationRequest, exposed in current-user/admin approval responses, and guarded by a nullable unique User constraint so legacy null values remain valid.
 - Prisma validation/generation, backend build, full backend tests, Flutter analyze, and full Flutter tests pass. The local database contains only legacy null employee IDs; the new migration is reviewed but local migration status still has seven pre-existing unapplied migrations, so no migration was applied.
 
+# Current task: Phase 8B.1 analytics trust foundation and monthly summary (2026-08-15)
+
+- Added the explicit additive `Conversation.isQa` marker and a non-destructive Prisma migration. Analytics queries exclude marked QA conversations without changing Inbox, Chat, unread, reply, notification, tagging, or realtime behavior.
+- Added the authenticated, store-scoped `GET /mobile/summary/monthly` endpoint. It uses explicit Asia/Bangkok half-open month boundaries, authoritative message chronology, human outbound attribution only, a ten-cycle response-quality threshold, and neutral comparison/quality states when coverage is insufficient.
+- Replaced the Flutter Summary placeholder with month navigation, activity metrics, operational Need Reply/Completed counts, truthful response-data availability states, retry/empty handling, and comparison messaging. The existing authenticated shell now injects the Summary repository.
+- Focused backend analytics tests (23), full backend tests (1149), changed-file ESLint, Prisma validation/generation/build, Flutter analyze, and focused Summary widget tests (10) pass. Full Flutter tests and the production APK build remain in the final validation loop. Production migration/QA marking/deployment are pending.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

@@ -9,6 +9,7 @@ import '../inbox/inbox_page.dart';
 import '../profile/profile_page.dart';
 import '../profile/personal_information_page.dart';
 import '../summary/summary_page.dart';
+import '../summary/summary_repository.dart';
 
 class AuthenticatedShell extends StatefulWidget {
   const AuthenticatedShell({
@@ -17,6 +18,7 @@ class AuthenticatedShell extends StatefulWidget {
     required this.auth,
     required this.conversations,
     required this.events,
+    required this.summary,
     required this.onLogout,
     required this.onConversationOpened,
   });
@@ -25,6 +27,7 @@ class AuthenticatedShell extends StatefulWidget {
   final AuthRepository auth;
   final ConversationRepository conversations;
   final Stream<Map<String, dynamic>>? events;
+  final SummaryRepository summary;
   final VoidCallback onLogout;
   final Future<void> Function(String conversationId) onConversationOpened;
 
@@ -78,18 +81,20 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
               onOpen: openConversation,
               onProfile: _openProfile,
             ),
-            const SummaryPage(),
+            SummaryPage(repository: widget.summary),
             ProfilePage(
               user: widget.user,
               onLogout: widget.onLogout,
-              onApprovals: widget.user.role == 'ADMIN' ? _openAdminApprovals : null,
+              onApprovals:
+                  widget.user.role == 'ADMIN' ? _openAdminApprovals : null,
               onPersonalInformation: _openPersonalInformation,
             ),
           ],
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedIndex,
-          onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+          onDestinationSelected: (index) =>
+              setState(() => _selectedIndex = index),
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.inbox_outlined),
