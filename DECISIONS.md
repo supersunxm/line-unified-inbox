@@ -767,3 +767,5 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Customer source is migrated from one nullable enum to a PostgreSQL enum array with `NULL -> []`, `STORE -> [STORE]`, and `ONLINE -> [ONLINE]`; encoded strings are not used. `isInstallment` is a separate explicit boolean.
 - Product variants are canonical rows keyed by `(productModelId, variantKey)` from normalized RAM/ROM/COLOR values. Variant selection remains optional and is validated server-side against the selected manual ProductModel; changing or clearing the model clears the variant.
 - Product Master synchronization remains dry-run-first, idempotent, non-destructive, and model-ID preserving while adding variants. Missing variants are not automatically deleted in this phase.
+
+- Mobile tag actions are placed in the bounded sheet header using a wrapping layout. This keeps Clear all and Save reachable on narrow Android screens without changing tag state ownership or API behavior.

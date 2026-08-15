@@ -1285,6 +1285,8 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added additive migration coverage for multi-select `sourceChannels`, `isInstallment`, `ProductVariant`, and an optional manual ConversationProduct variant relation. The migration preserves NULL as `[]`, STORE/ONLINE values, existing model IDs, aliases, rules, and conversation products; it contains no destructive deletes.
 - Extended the mobile tags contract and Flutter sheet for multi-source selection, installment, bounded Product Master variant selection, replacement, and clear semantics. No automatic tagging or AI behavior was added.
 
+- Production verification completed on the approved OBS-Sunx2 conversation: source multi-select, installment, Product Master model, synced variant selection, isolated variant/product clearing, persistence, and final Clear all state all passed. Production migration is applied, catalog sync is idempotent, and the installed production-configured APK showed no app crash or RenderFlex overflow.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.
