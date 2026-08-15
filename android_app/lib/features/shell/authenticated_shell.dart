@@ -7,6 +7,8 @@ import '../chat/chat_page.dart';
 import '../inbox/conversation_repository.dart';
 import '../inbox/inbox_page.dart';
 import '../profile/profile_page.dart';
+import '../profile/personal_information_page.dart';
+import '../summary/summary_page.dart';
 
 class AuthenticatedShell extends StatefulWidget {
   const AuthenticatedShell({
@@ -31,6 +33,8 @@ class AuthenticatedShell extends StatefulWidget {
 }
 
 class AuthenticatedShellState extends State<AuthenticatedShell> {
+  int _selectedIndex = 0;
+
   Future<void> openConversation(String conversationId) async {
     if (!mounted) return;
     await Navigator.of(context).push(
@@ -46,15 +50,13 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
   }
 
   void _openProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProfilePage(
-          user: widget.user,
-          onLogout: widget.onLogout,
-          onApprovals: widget.user.role == 'ADMIN' ? _openAdminApprovals : null,
-        ),
-      ),
-    );
+    if (mounted) setState(() => _selectedIndex = 2);
+  }
+
+  void _openPersonalInformation() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PersonalInformationPage(user: widget.user),
+    ));
   }
 
   void _openAdminApprovals() {
@@ -66,10 +68,45 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
   }
 
   @override
-  Widget build(BuildContext context) => InboxPage(
-        repository: widget.conversations,
-        events: widget.events,
-        onOpen: openConversation,
-        onProfile: _openProfile,
+  Widget build(BuildContext context) => Scaffold(
+        body: IndexedStack(
+          index: _selectedIndex,
+          children: [
+            InboxPage(
+              repository: widget.conversations,
+              events: widget.events,
+              onOpen: openConversation,
+              onProfile: _openProfile,
+            ),
+            const SummaryPage(),
+            ProfilePage(
+              user: widget.user,
+              onLogout: widget.onLogout,
+              onApprovals: widget.user.role == 'ADMIN' ? _openAdminApprovals : null,
+              onPersonalInformation: _openPersonalInformation,
+            ),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.inbox_outlined),
+              selectedIcon: Icon(Icons.inbox),
+              label: 'Inbox',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.bar_chart_outlined),
+              selectedIcon: Icon(Icons.bar_chart),
+              label: 'Summary',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       );
 }

@@ -27,6 +27,7 @@ export type StoreMasterSyncResult = {
 export type PendingRegistration = {
   id: string;
   name: string;
+  employeeId: string | null;
   email: string;
   store: { id: string; name: string; code: string | null };
   role: "STAFF" | "STORE_MANAGER";

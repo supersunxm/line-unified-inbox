@@ -1308,6 +1308,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Final validation: `flutter analyze`, full Flutter tests (47), production-configured debug APK build, install on `emulator-5554`, and `git diff --check` pass. The registration form's two dropdowns also received `isExpanded: true` after runtime QA exposed a pre-existing narrow-layout overflow marker.
 - Runtime QA on the authenticated production-configured APK exercised Inbox boundaries, OBS-Sunx2 chat boundaries, and Profile scrolling; no stretch/glow/bounce, Flutter exception, ANR, or RenderFlex overflow remained in the final run. The final install timestamp was 2026-08-15 20:28:10.
 
+# Current task: Phase 8A bottom navigation, profile hub, and employee ID (2026-08-15)
+
+- Added persistent authenticated Inbox / Summary / Profile bottom navigation with an IndexedStack so Inbox state remains mounted while switching tabs. Chat remains a pushed detail route and does not inherit the bottom navigation.
+- Added a truthful Summary placeholder and a Profile hub with assigned-store context, structured settings rows, read-only Personal Information, legacy employee-ID fallback, and the existing logout/admin approval callbacks.
+- Employee ID is now required for new registration requests, normalized server-side to uppercase, persisted on User and RegistrationRequest, exposed in current-user/admin approval responses, and guarded by a nullable unique User constraint so legacy null values remain valid.
+- Prisma validation/generation, backend build, full backend tests, Flutter analyze, and full Flutter tests pass. The local database contains only legacy null employee IDs; the new migration is reviewed but local migration status still has seven pre-existing unapplied migrations, so no migration was applied.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

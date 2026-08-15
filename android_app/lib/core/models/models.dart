@@ -31,12 +31,14 @@ class PendingRegistration {
   PendingRegistration(
       {required this.id,
       required this.name,
+      this.employeeId,
       required this.email,
       required this.storeName,
       required this.role,
       required this.createdAt});
   final String id;
   final String name;
+  final String? employeeId;
   final String email;
   final String storeName;
   final String role;
@@ -45,6 +47,7 @@ class PendingRegistration {
       PendingRegistration(
           id: json['id'] as String,
           name: json['name'] as String,
+          employeeId: json['employeeId'] as String?,
           email: json['email'] as String,
           storeName: (json['store'] as Map<String, dynamic>)['name'] as String,
           role: json['role'] as String,
@@ -59,14 +62,18 @@ class CurrentUser {
       required this.memberships,
       required this.stores,
       required this.permissions,
+      this.email,
+      this.employeeId,
       this.phone,
       this.position});
   final String id;
+  final String? email;
   final String displayName;
   final String role;
   final List<StoreMembership> memberships;
   final List<Store> stores;
   final Map<String, dynamic> permissions;
+  final String? employeeId;
   final String? phone;
   final String? position;
   factory CurrentUser.fromJson(Map<String, dynamic> json) {
@@ -74,6 +81,7 @@ class CurrentUser {
         (json['profile'] as Map<String, dynamic>?) ?? <String, dynamic>{};
     return CurrentUser(
         id: json['id'] as String,
+        email: json['email'] as String?,
         displayName: json['displayName'] as String,
         role: json['role'] as String,
         memberships: ((json['memberships'] as List<dynamic>?) ?? [])
@@ -85,6 +93,7 @@ class CurrentUser {
             .toList(),
         permissions: (json['permissions'] as Map<String, dynamic>?) ??
             <String, dynamic>{},
+        employeeId: profile['employeeId'] as String? ?? json['employeeId'] as String?,
         phone: profile['phone'] as String?,
         position: profile['position'] as String?);
   }

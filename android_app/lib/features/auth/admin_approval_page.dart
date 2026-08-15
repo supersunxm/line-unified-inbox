@@ -37,6 +37,7 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
                 padding: const EdgeInsets.all(12),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(item.name, style: Theme.of(context).textTheme.titleMedium),
+                  Text('Employee ID: ${item.employeeId ?? 'Not set'}'),
                   Text(item.email),
                   Text('${item.storeName} · ${item.role.replaceAll('_', ' ')}'),
                   Text(item.createdAt.toLocal().toString()),

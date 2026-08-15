@@ -787,3 +787,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Explicit `AlwaysScrollableScrollPhysics` remains only on lists wrapped by `RefreshIndicator`; Flutter composes it with the app's clamped parent, preserving pull-to-refresh without restoring stretch/glow.
 - Chat's previous local behavior was removed after the global policy was installed. Scroll controller ownership, initial landing, pagination/offset restoration, realtime append, unread, and notification lifecycles remain unchanged.
 - Runtime QA found a narrow registration dropdown layout overflow unrelated to scrolling; setting both existing dropdowns to `isExpanded` was the smallest presentation-only correction and does not alter registration state or API behavior.
+
+# Phase 8A navigation and employee identity (2026-08-15)
+
+- Authenticated top-level destinations use a persistent `IndexedStack` with Inbox, a truthful Summary placeholder, and Profile. Conversation detail remains a root Navigator push, so the bottom navigation is not shown over Chat and existing Inbox state stays mounted across tab switches.
+- Personal Information is read-only in V1. It displays the authoritative `/auth/me` fields and gracefully renders `Not set` for legacy users without an employee ID; setting rows without an implemented backend contract are explicit non-actionable `Coming soon` surfaces.
+- Employee IDs belong to User, not Store. New registration validates and canonicalizes `trim().toUpperCase()`, while the database field remains nullable for legacy users and gains a unique index. Admin and authenticated-user responses expose only the safe employee ID field.

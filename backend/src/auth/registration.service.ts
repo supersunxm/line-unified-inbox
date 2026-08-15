@@ -16,10 +16,13 @@ export class RegistrationService {
 
   async request(dto: CreateRegistrationRequestDto, ip = "unknown") {
     const normalizedEmail = dto.email.trim().toLowerCase();
+    const employeeId = dto.employeeId.trim().toUpperCase();
+    if (!employeeId) throw new ConflictException("Employee ID is required");
     await this.rateLimiter?.consumeRegistration(ip);
     const store = await this.prisma.store.findUnique({ where: { id: dto.storeId }, select: { id: true, isActive: true, archivedAt: true } });
     if (!store || !store.isActive || store.archivedAt) throw new NotFoundException("Store is unavailable for registration");
     if (await this.prisma.user.findUnique({ where: { normalizedEmail }, select: { id: true } })) throw new ConflictException("An account with this email already exists");
+    if (await this.prisma.user.findFirst({ where: { employeeId: { equals: employeeId, mode: "insensitive" } }, select: { id: true } })) throw new ConflictException("Employee ID is already registered");
     if (await this.prisma.registrationRequest.findFirst({ where: { normalizedEmail, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } }, select: { id: true } })) throw new ConflictException("A registration for this email was recently submitted");
     const passwordHash = await this.passwords.hash(dto.password);
     const registration = await this.prisma.$transaction(async (tx) => {
@@ -29,13 +32,14 @@ export class RegistrationService {
           storeId: store.id,
           email: dto.email.trim(),
           normalizedEmail,
+          employeeId,
           passwordHash,
           requestedRole: dto.role,
           status: RegistrationRequestStatus.PENDING_APPROVAL,
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
         },
       });
-      const user = await tx.user.create({ data: { email: dto.email.trim(), normalizedEmail, displayName: name, passwordHash, role: UserRole.VIEWER, status: UserStatus.PENDING_APPROVAL, isActive: true } });
+      const user = await tx.user.create({ data: { email: dto.email.trim(), normalizedEmail, displayName: name, employeeId, passwordHash, role: UserRole.VIEWER, status: UserStatus.PENDING_APPROVAL, isActive: true } });
       await tx.userStoreMembership.create({ data: { userId: user.id, storeId: store.id, role: dto.role, status: MembershipStatus.PENDING_APPROVAL } });
       await tx.registrationRequest.update({ where: { id: request.id }, data: { createdUserId: user.id } });
       return { request, user };
@@ -51,7 +55,7 @@ export class RegistrationService {
     });
     return requests.filter((request) => request.createdUser?.memberships.some((membership) => membership.storeId === request.storeId && membership.status === MembershipStatus.PENDING_APPROVAL)).map((request) => {
       const membership = request.createdUser!.memberships.find((item) => item.storeId === request.storeId);
-      return { id: request.id, name: request.createdUser!.displayName, email: request.email, store: request.store, role: membership?.role ?? request.requestedRole, createdAt: request.createdAt };
+      return { id: request.id, name: request.createdUser!.displayName, employeeId: request.createdUser!.employeeId ?? request.employeeId, email: request.email, store: request.store, role: membership?.role ?? request.requestedRole, createdAt: request.createdAt };
     });
   }
 

@@ -14,11 +14,13 @@ class ProfilePage extends StatelessWidget {
     required this.user,
     required this.onLogout,
     this.onApprovals,
+    this.onPersonalInformation,
   });
 
   final CurrentUser user;
   final VoidCallback onLogout;
   final VoidCallback? onApprovals;
+  final VoidCallback? onPersonalInformation;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -32,7 +34,7 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             MembershipSection(memberships: user.memberships),
             const SizedBox(height: AppSpacing.xl),
-            SettingsSection(),
+            SettingsSection(onPersonalInformation: onPersonalInformation),
             if (onApprovals != null) ...[
               const SizedBox(height: AppSpacing.xl),
               AdminToolsSection(onApprovals: onApprovals),

@@ -4,7 +4,7 @@ import { ConflictException, NotFoundException } from "@nestjs/common";
 import { RegistrationService } from "./registration.service";
 
 function dto() {
-  return { storeId: "store-1", email: "bm@example.test", name: "Bee Manager", role: "STORE_MANAGER" as const, password: "strong-password-1234" };
+  return { storeId: "store-1", email: "bm@example.test", name: "Bee Manager", employeeId: "emp-001", role: "STORE_MANAGER" as const, password: "strong-password-1234" };
 }
 
 void test("creates a pending user and membership with a hashed password without OTP", async () => {
@@ -19,7 +19,7 @@ void test("creates a pending user and membership with a hashed password without 
   };
   const prisma: any = {
     store: { findUnique: async () => ({ id: "store-1", isActive: true, archivedAt: null }) },
-    user: { findUnique: async () => null },
+    user: { findUnique: async () => null, findFirst: async () => null },
     registrationRequest: { findFirst: async () => null },
     $transaction: async (callback: any) => callback(tx),
   };
@@ -27,6 +27,7 @@ void test("creates a pending user and membership with a hashed password without 
   const result = await service.request(dto());
   assert.equal(result.status, "PENDING_APPROVAL");
   assert.equal(created.normalizedEmail, "bm@example.test");
+  assert.equal(created.employeeId, "EMP-001");
   assert.equal(created.createdUserId, "user-1");
   assert.notEqual(created.passwordHash, dto().password);
 });
@@ -38,6 +39,37 @@ void test("rejects unavailable stores and duplicate emails", async () => {
   prisma.store.findUnique = async () => ({ id: "store-1", isActive: true, archivedAt: null });
   prisma.user.findUnique = async () => ({ id: "user-1" });
   await assert.rejects(() => service.request(dto()), ConflictException);
+});
+
+void test("rejects a duplicate employee ID without exposing database details", async () => {
+  const prisma: any = {
+    store: { findUnique: async () => ({ id: "store-1", isActive: true, archivedAt: null }) },
+    user: {
+      findUnique: async () => null,
+      findFirst: async () => ({ id: "existing-user" }),
+    },
+  };
+  const service = new RegistrationService(prisma, {} as any);
+  await assert.rejects(
+    () => service.request(dto()),
+    (error: unknown) => error instanceof ConflictException && error.message === "Employee ID is already registered",
+  );
+});
+
+void test("normalizes employee IDs consistently for new registrations", async () => {
+  const prisma: any = {
+    store: { findUnique: async () => ({ id: "store-1", isActive: true, archivedAt: null }) },
+    user: { findUnique: async () => null, findFirst: async () => null },
+    registrationRequest: { findFirst: async () => null },
+    $transaction: async (callback: any) => callback({
+      registrationRequest: { create: async ({ data }: any) => ({ id: "registration-1", ...data }), update: async () => undefined },
+      user: { create: async ({ data }: any) => ({ id: "user-1", ...data }) },
+      userStoreMembership: { create: async () => ({ id: "membership-1" }) },
+    }),
+  };
+  const service = new RegistrationService(prisma, { hash: async () => "scrypt:hashed" } as any);
+  const result = await service.request({ ...dto(), employeeId: "  emp-xyz  " });
+  assert.equal(result.status, "PENDING_APPROVAL");
 });
 
 void test("approval activates both user and membership atomically", async () => {

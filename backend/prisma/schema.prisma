@@ -246,7 +246,7 @@ model User {
   phone                String?                      @unique
   firstName            String?
   lastName             String?
-  employeeId           String?
+  employeeId           String?                      @unique
   position             String?
   emailVerifiedAt      DateTime?
   phoneVerifiedAt      DateTime?

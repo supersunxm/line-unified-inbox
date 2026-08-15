@@ -19,9 +19,26 @@ class ProfileHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            (user.memberships.isEmpty
+                    ? user.role
+                    : user.memberships.first.role)
+                .replaceAll('_', ' '),
+            textAlign: TextAlign.center,
+          ),
           if (user.position != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(user.position!, textAlign: TextAlign.center),
+          ],
+          if (user.memberships.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              user.memberships.first.store.name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ],
       );

@@ -28,8 +28,8 @@ class AuthRepository {
     return items.map((item) => Store.fromJson(item as Map<String, dynamic>)).toList();
   }
 
-  Future<void> register({required String name, required String email, required String storeId, required String role, required String password}) async {
-    await _api.post('/registration/request', body: {'name': name, 'email': email.trim(), 'storeId': storeId, 'role': role, 'password': password}, authenticated: false);
+  Future<void> register({required String name, required String employeeId, required String email, required String storeId, required String role, required String password}) async {
+    await _api.post('/registration/request', body: {'name': name, 'employeeId': employeeId.trim(), 'email': email.trim(), 'storeId': storeId, 'role': role, 'password': password}, authenticated: false);
   }
 
   Future<List<PendingRegistration>> pendingRegistrations() async {
