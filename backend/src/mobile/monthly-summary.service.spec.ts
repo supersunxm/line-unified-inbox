@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyVolume, responseMetrics, type AnalyticsMessage } from "./monthly-summary.service";
+import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, type AnalyticsMessage } from "./monthly-summary.service";
 
 const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, senderUserId: null });
 const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", senderUserId });
@@ -156,4 +156,39 @@ void test("future month is rejected", async () => {
 void test("invalid month is rejected", async () => {
   const service = new MonthlySummaryService({} as never, { accessibleStoreIds: async () => null } as never);
   await assert.rejects(() => service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-13"));
+});
+
+void test("tag analytics uses mutually exclusive source buckets", () => {
+  const result = tagAnalytics([
+    { sourceChannels: ["STORE"], isInstallment: false, products: [] },
+    { sourceChannels: ["ONLINE"], isInstallment: false, products: [] },
+    { sourceChannels: ["STORE", "ONLINE"], isInstallment: false, products: [] },
+    { sourceChannels: [], isInstallment: false, products: [] },
+  ]);
+  assert.deepEqual(result.sources, { storeOnly: 1, onlineOnly: 1, storeAndOnline: 1, untagged: 1 });
+  assert.equal(Object.values(result.sources).reduce((sum, count) => sum + count, 0), 4);
+});
+
+void test("tag coverage counts source, installment, product, and variant tags", () => {
+  const result = tagAnalytics([
+    { sourceChannels: [], isInstallment: true, products: [] },
+    { sourceChannels: [], isInstallment: false, products: [{ productModel: { id: "p1", name: "Reno" }, productVariant: null }] },
+    { sourceChannels: [], isInstallment: false, products: [{ productModel: { id: "p1", name: "Reno" }, productVariant: { ram: "12", rom: "256", color: "Purple" } }] },
+    { sourceChannels: ["STORE"], isInstallment: false, products: [] },
+    { sourceChannels: [], isInstallment: false, products: [] },
+  ]);
+  assert.equal(result.coverage.eligibleConversations, 5);
+  assert.equal(result.coverage.taggedConversations, 4);
+  assert.equal(result.coverage.coverageRate, 0.8);
+  assert.equal(result.coverage.quality, "STRONG");
+  assert.equal(result.installment.count, 1);
+  assert.equal(result.topProducts[0]?.count, 2);
+  assert.equal(result.topVariants[0]?.color, "Purple");
+});
+
+void test("tag quality thresholds are centralized", () => {
+  assert.equal(tagQuality(0.19), "LOW");
+  assert.equal(tagQuality(0.2), "PARTIAL");
+  assert.equal(tagQuality(0.5), "MODERATE");
+  assert.equal(tagQuality(0.8), "STRONG");
 });

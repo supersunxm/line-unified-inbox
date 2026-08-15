@@ -383,6 +383,7 @@ class MonthlySummary {
     required this.response,
     required this.operational,
     required this.comparison,
+    required this.tags,
     required this.dataQuality,
   });
 
@@ -391,6 +392,7 @@ class MonthlySummary {
   final SummaryResponse response;
   final SummaryOperational operational;
   final SummaryComparison comparison;
+  final SummaryTagAnalytics tags;
   final SummaryDataQuality dataQuality;
 
   factory MonthlySummary.fromJson(Map<String, dynamic> json) => MonthlySummary(
@@ -404,6 +406,8 @@ class MonthlySummary {
             json['operational'] as Map<String, dynamic>? ?? {}),
         comparison: SummaryComparison.fromJson(
             json['comparison'] as Map<String, dynamic>? ?? {}),
+        tags: SummaryTagAnalytics.fromJson(
+            json['tags'] as Map<String, dynamic>? ?? {}),
         dataQuality: SummaryDataQuality.fromJson(
             json['dataQuality'] as Map<String, dynamic>? ?? {}),
       );
@@ -520,12 +524,14 @@ class SummaryComparison {
       this.reason,
       this.volume,
       this.response,
-      this.changes = const {}});
+      this.changes = const {},
+      this.responseChanges});
   final bool available;
   final String? reason;
   final SummaryVolume? volume;
   final SummaryResponse? response;
   final Map<String, double?> changes;
+  final SummaryResponseChanges? responseChanges;
 
   factory SummaryComparison.fromJson(Map<String, dynamic> json) =>
       SummaryComparison(
@@ -540,6 +546,162 @@ class SummaryComparison {
         changes: (json['changes'] as Map<String, dynamic>?)
                 ?.map((key, value) => MapEntry(key, _doubleValue(value))) ??
             const {},
+        responseChanges: json['responseChanges'] is Map<String, dynamic>
+            ? SummaryResponseChanges.fromJson(
+                json['responseChanges'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
+class SummaryResponseChanges {
+  SummaryResponseChanges(
+      {this.responseRate,
+      this.medianSeconds,
+      this.averageSeconds,
+      this.bucketPercentagePoints});
+  final double? responseRate;
+  final double? medianSeconds;
+  final double? averageSeconds;
+  final Map<String, double?>? bucketPercentagePoints;
+
+  factory SummaryResponseChanges.fromJson(Map<String, dynamic> json) =>
+      SummaryResponseChanges(
+        responseRate: _doubleValue(json['responseRate']),
+        medianSeconds: _doubleValue(json['medianSeconds']),
+        averageSeconds: _doubleValue(json['averageSeconds']),
+        bucketPercentagePoints:
+            (json['bucketPercentagePoints'] as Map<String, dynamic>?)
+                ?.map((key, value) => MapEntry(key, _doubleValue(value))),
+      );
+}
+
+class SummaryTagAnalytics {
+  SummaryTagAnalytics(
+      {required this.mode,
+      required this.coverage,
+      required this.sources,
+      required this.installment,
+      required this.topProducts,
+      required this.topVariants});
+  final String mode;
+  final SummaryTagCoverage coverage;
+  final SummaryTagSources sources;
+  final SummaryInstallment installment;
+  final List<SummaryProduct> topProducts;
+  final List<SummaryVariant> topVariants;
+
+  factory SummaryTagAnalytics.fromJson(Map<String, dynamic> json) =>
+      SummaryTagAnalytics(
+        mode: json['mode'] as String? ?? 'CURRENT_TAG_SNAPSHOT',
+        coverage: SummaryTagCoverage.fromJson(
+            json['coverage'] as Map<String, dynamic>? ?? {}),
+        sources: SummaryTagSources.fromJson(
+            json['sources'] as Map<String, dynamic>? ?? {}),
+        installment: SummaryInstallment.fromJson(
+            json['installment'] as Map<String, dynamic>? ?? {}),
+        topProducts: ((json['topProducts'] as List<dynamic>?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(SummaryProduct.fromJson)
+            .toList(),
+        topVariants: ((json['topVariants'] as List<dynamic>?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(SummaryVariant.fromJson)
+            .toList(),
+      );
+}
+
+class SummaryTagCoverage {
+  SummaryTagCoverage(
+      {required this.eligibleConversations,
+      required this.taggedConversations,
+      required this.coverageRate,
+      required this.quality});
+  final int eligibleConversations;
+  final int taggedConversations;
+  final double coverageRate;
+  final String quality;
+
+  factory SummaryTagCoverage.fromJson(Map<String, dynamic> json) =>
+      SummaryTagCoverage(
+        eligibleConversations: _intValue(json['eligibleConversations']),
+        taggedConversations: _intValue(json['taggedConversations']),
+        coverageRate: _doubleValue(json['coverageRate']) ?? 0,
+        quality: json['quality'] as String? ?? 'LOW',
+      );
+}
+
+class SummaryTagSources {
+  SummaryTagSources(
+      {required this.storeOnly,
+      required this.onlineOnly,
+      required this.storeAndOnline,
+      required this.untagged});
+  final int storeOnly;
+  final int onlineOnly;
+  final int storeAndOnline;
+  final int untagged;
+
+  factory SummaryTagSources.fromJson(Map<String, dynamic> json) =>
+      SummaryTagSources(
+        storeOnly: _intValue(json['storeOnly']),
+        onlineOnly: _intValue(json['onlineOnly']),
+        storeAndOnline: _intValue(json['storeAndOnline']),
+        untagged: _intValue(json['untagged']),
+      );
+}
+
+class SummaryInstallment {
+  SummaryInstallment(
+      {required this.count,
+      required this.eligibleRate,
+      required this.taggedRate});
+  final int count;
+  final double eligibleRate;
+  final double taggedRate;
+
+  factory SummaryInstallment.fromJson(Map<String, dynamic> json) =>
+      SummaryInstallment(
+        count: _intValue(json['count']),
+        eligibleRate: _doubleValue(json['eligibleRate']) ?? 0,
+        taggedRate: _doubleValue(json['taggedRate']) ?? 0,
+      );
+}
+
+class SummaryProduct {
+  SummaryProduct(
+      {required this.productId,
+      required this.productName,
+      required this.count});
+  final String productId;
+  final String productName;
+  final int count;
+
+  factory SummaryProduct.fromJson(Map<String, dynamic> json) => SummaryProduct(
+        productId: json['productId'] as String? ?? '',
+        productName: json['productName'] as String? ?? '',
+        count: _intValue(json['count']),
+      );
+}
+
+class SummaryVariant {
+  SummaryVariant(
+      {required this.productName,
+      this.ram,
+      this.rom,
+      this.color,
+      required this.count});
+  final String productName;
+  final String? ram;
+  final String? rom;
+  final String? color;
+  final int count;
+
+  factory SummaryVariant.fromJson(Map<String, dynamic> json) => SummaryVariant(
+        productName: json['productName'] as String? ?? '',
+        ram: json['ram'] as String?,
+        rom: json['rom'] as String?,
+        color: json['color'] as String?,
+        count: _intValue(json['count']),
       );
 }
 
@@ -547,16 +709,25 @@ class SummaryDataQuality {
   SummaryDataQuality(
       {required this.qaExcluded,
       required this.ambiguousOutboundExcluded,
-      required this.responseMetricsAvailable});
+      required this.responseMetricsAvailable,
+      this.tagAnalyticsMode,
+      this.tagCoverage});
   final bool qaExcluded;
   final int ambiguousOutboundExcluded;
   final bool responseMetricsAvailable;
+  final String? tagAnalyticsMode;
+  final SummaryTagCoverage? tagCoverage;
 
   factory SummaryDataQuality.fromJson(Map<String, dynamic> json) =>
       SummaryDataQuality(
         qaExcluded: json['qaExcluded'] == true,
         ambiguousOutboundExcluded: _intValue(json['ambiguousOutboundExcluded']),
         responseMetricsAvailable: json['responseMetricsAvailable'] == true,
+        tagAnalyticsMode: json['tagAnalyticsMode'] as String?,
+        tagCoverage: json['tagCoverage'] is Map<String, dynamic>
+            ? SummaryTagCoverage.fromJson(
+                json['tagCoverage'] as Map<String, dynamic>)
+            : null,
       );
 }
 
