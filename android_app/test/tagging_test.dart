@@ -23,10 +23,14 @@ class _FakeTagRepository extends ConversationRepository {
 
   @override
   Future<ConversationDetail> updateConversationTags(String id,
-      {Object? sourceChannel = const Object(),
-      Object? productId = const Object()}) async {
+      {Object? sourceChannels = const Object(),
+      Object? isInstallment = const Object(),
+      Object? productId = const Object(),
+      Object? variantId = const Object()}) async {
     current = ConversationTags(
-      sourceChannel: sourceChannel is String ? sourceChannel : null,
+      sourceChannels: sourceChannels is List
+          ? sourceChannels.whereType<String>().toList()
+          : const [],
       product: productId is String
           ? const ConversationProductTag(
               id: 'model-1',
@@ -63,15 +67,15 @@ void main() {
 
     expect(find.text('Conversation Tags'), findsOneWidget);
     expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
-    await tester.tap(find.byType(ChoiceChip).first);
+    await tester.tap(find.byType(FilterChip).first);
     await tester.pump();
-    expect(tester.widget<ChoiceChip>(find.byType(ChoiceChip).first).selected,
+    expect(tester.widget<FilterChip>(find.byType(FilterChip).first).selected,
         isTrue);
     await tester.tap(find.text('OPPO Reno16 Pro 5G'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(repository.current.sourceChannel, 'STORE');
+    expect(repository.current.sourceChannels, ['STORE']);
     expect(repository.current.product?.productName, 'OPPO Reno16 Pro 5G');
   });
 }

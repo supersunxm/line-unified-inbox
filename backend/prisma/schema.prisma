@@ -380,19 +380,19 @@ model AuthRateLimitBucket {
 }
 
 model AuditLog {
-  id                     String   @id @default(uuid())
-  actorUserId            String?
-  action                 String
-  targetUserId           String?
-  targetRegistrationId   String?
-  metadata               Json?
-  ipAddress              String?
-  userAgent              String?
-  createdAt              DateTime @default(now())
+  id                   String   @id @default(uuid())
+  actorUserId          String?
+  action               String
+  targetUserId         String?
+  targetRegistrationId String?
+  metadata             Json?
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime @default(now())
 
-  actorUser              User?                @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  targetUser             User?                @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
-  targetRegistration     RegistrationRequest? @relation(fields: [targetRegistrationId], references: [id], onDelete: SetNull)
+  actorUser          User?                @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser         User?                @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetRegistration RegistrationRequest? @relation(fields: [targetRegistrationId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
   @@index([targetUserId])
@@ -494,24 +494,24 @@ model OperationalSession {
 }
 
 model Store {
-  id                   String                @id @default(uuid())
-  name                 String
-  code                 String?               @unique
-  region               String?
-  area                 String?
-  isActive             Boolean               @default(true)
-  archivedAt           DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  storeMasterId        String?               @unique
-  provinceSource       StoreMetadataSource?
-  regionSource         StoreMetadataSource?
-  storeMaster          StoreMaster?          @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
-  lineOfficialAccounts LineOfficialAccount[]
-  conversations        Conversation[]
-  friendSourceLinks    FriendSourceLink[]
-  memberships          UserStoreMembership[]
-  registrationRequests RegistrationRequest[]
+  id                         String                     @id @default(uuid())
+  name                       String
+  code                       String?                    @unique
+  region                     String?
+  area                       String?
+  isActive                   Boolean                    @default(true)
+  archivedAt                 DateTime?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  storeMasterId              String?                    @unique
+  provinceSource             StoreMetadataSource?
+  regionSource               StoreMetadataSource?
+  storeMaster                StoreMaster?               @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
+  lineOfficialAccounts       LineOfficialAccount[]
+  conversations              Conversation[]
+  friendSourceLinks          FriendSourceLink[]
+  memberships                UserStoreMembership[]
+  registrationRequests       RegistrationRequest[]
   massMessageStoreDeliveries MassMessageStoreDelivery[]
 
   @@index([isActive])
@@ -740,23 +740,24 @@ model CustomerNameHistory {
 }
 
 model Conversation {
-  id                    String                @id @default(uuid())
+  id                    String                      @id @default(uuid())
   customerId            String
   storeId               String
   lineOfficialAccountId String
   latestMessageAt       DateTime
-  priority              Priority              @default(NORMAL)
-  prioritySource        String                @default("SYSTEM")
-  followUpStatus        FollowUpStatus        @default(FOLLOW_UP)
-  bmReplyStatus         BmReplyStatus         @default(NOT_REPLIED)
-  sourceChannel         ConversationSourceChannel?
+  priority              Priority                    @default(NORMAL)
+  prioritySource        String                      @default("SYSTEM")
+  followUpStatus        FollowUpStatus              @default(FOLLOW_UP)
+  bmReplyStatus         BmReplyStatus               @default(NOT_REPLIED)
+  sourceChannels        ConversationSourceChannel[] @default([])
+  isInstallment         Boolean                     @default(false)
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  customer              Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  store                 Store                 @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  lineOfficialAccount   LineOfficialAccount   @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  customer              Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  store                 Store                       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount   LineOfficialAccount         @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
   messages              Message[]
   products              ConversationProduct[]
   topics                ConversationTopic[]
@@ -907,9 +908,27 @@ model ProductModel {
   conversations       ConversationProduct[]
   aliases             ProductAlias[]
   signals             CustomerSignal[]
+  variants            ProductVariant[]
 
   @@index([isActive])
   @@index([productSeriesId])
+}
+
+model ProductVariant {
+  id             String                @id @default(uuid())
+  productModelId String
+  variantKey     String
+  ram            String?
+  rom            String?
+  color          String?
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  productModel   ProductModel          @relation(fields: [productModelId], references: [id], onDelete: Cascade)
+  conversations  ConversationProduct[]
+
+  @@unique([productModelId, variantKey])
+  @@index([productModelId, isActive])
 }
 
 model ProductAlias {
@@ -927,18 +946,21 @@ model ProductAlias {
 }
 
 model ConversationProduct {
-  conversationId  String
-  productModelId  String
-  confidence      Float?
-  source          String?
-  matchedPhrase   String?
-  detectionMethod String?
-  sourceMessageId String?
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  productModel    ProductModel @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  conversationId   String
+  productModelId   String
+  productVariantId String?
+  confidence       Float?
+  source           String?
+  matchedPhrase    String?
+  detectionMethod  String?
+  sourceMessageId  String?
+  conversation     Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  productModel     ProductModel    @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
 
   @@id([conversationId, productModelId])
   @@index([productModelId])
+  @@index([productVariantId])
 }
 
 model Topic {
@@ -1239,33 +1261,33 @@ enum MassMessageBatchStatus {
 }
 
 model MassMessageCampaign {
-  id                      String                    @id @default(uuid())
-  campaignRequestId       String                    @unique
-  title                   String?
-  audienceType            MassMessageAudienceType   @default(ALL_KNOWN)
-  storeMode               MassMessageStoreMode      @default(SINGLE)
-  selectedStoreIds        String[]                  @default([])
-  messagePayload          Json
-  status                  MassMessageCampaignStatus @default(PENDING)
-  createdById             String?
-  createdBy               User?                     @relation("CreatedMassMessageCampaigns", fields: [createdById], references: [id], onDelete: SetNull)
+  id                String                    @id @default(uuid())
+  campaignRequestId String                    @unique
+  title             String?
+  audienceType      MassMessageAudienceType   @default(ALL_KNOWN)
+  storeMode         MassMessageStoreMode      @default(SINGLE)
+  selectedStoreIds  String[]                  @default([])
+  messagePayload    Json
+  status            MassMessageCampaignStatus @default(PENDING)
+  createdById       String?
+  createdBy         User?                     @relation("CreatedMassMessageCampaigns", fields: [createdById], references: [id], onDelete: SetNull)
 
-  storeCount              Int                       @default(0)
-  eligibleStoreCount      Int                       @default(0)
-  skippedStoreCount       Int                       @default(0)
+  storeCount         Int @default(0)
+  eligibleStoreCount Int @default(0)
+  skippedStoreCount  Int @default(0)
 
-  estimatedRecipientCount Int                       @default(0)
-  processedRecipientCount Int                       @default(0)
-  successRecipientCount   Int                       @default(0)
-  failedRecipientCount    Int                       @default(0)
+  estimatedRecipientCount Int @default(0)
+  processedRecipientCount Int @default(0)
+  successRecipientCount   Int @default(0)
+  failedRecipientCount    Int @default(0)
 
-  errorMessage            String?
-  startedAt               DateTime?
-  completedAt             DateTime?
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  storeDeliveries         MassMessageStoreDelivery[]
+  storeDeliveries MassMessageStoreDelivery[]
 
   @@index([status, createdAt])
   @@index([createdById])
@@ -1279,24 +1301,24 @@ model MassMessageStoreDelivery {
   lineOfficialAccountId String?
   status                MassMessageStoreDeliveryStatus @default(PENDING)
 
-  recipientCount        Int                            @default(0)
-  processedCount        Int                            @default(0)
-  successCount          Int                            @default(0)
-  failedCount           Int                            @default(0)
+  recipientCount Int @default(0)
+  processedCount Int @default(0)
+  successCount   Int @default(0)
+  failedCount    Int @default(0)
 
-  skipReason            String?
-  errorCode             String?
-  errorMessage          String?
+  skipReason   String?
+  errorCode    String?
+  errorMessage String?
 
-  startedAt             DateTime?
-  completedAt           DateTime?
-  createdAt             DateTime                       @default(now())
-  updatedAt             DateTime                       @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  campaign              MassMessageCampaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  store                 Store                          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  lineOfficialAccount   LineOfficialAccount?           @relation(fields: [lineOfficialAccountId], references: [id], onDelete: SetNull)
-  batches               MassMessageBatch[]
+  campaign            MassMessageCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  store               Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount LineOfficialAccount? @relation(fields: [lineOfficialAccountId], references: [id], onDelete: SetNull)
+  batches             MassMessageBatch[]
 
   @@unique([campaignId, storeId])
   @@index([campaignId, status])
@@ -1321,7 +1343,7 @@ model MassMessageBatch {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
 
-  storeDelivery     MassMessageStoreDelivery @relation(fields: [storeDeliveryId], references: [id], onDelete: Cascade)
+  storeDelivery MassMessageStoreDelivery @relation(fields: [storeDeliveryId], references: [id], onDelete: Cascade)
 
   @@unique([storeDeliveryId, batchIndex])
   @@index([status])
@@ -1364,9 +1386,9 @@ model TikTokAccount {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
-  storeMaster           StoreMaster?           @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
-  videos                TikTokVideo[]
-  dailyMetrics          TikTokAccountDailyMetric[]
+  storeMaster  StoreMaster?               @relation(fields: [storeMasterId], references: [id], onDelete: SetNull)
+  videos       TikTokVideo[]
+  dailyMetrics TikTokAccountDailyMetric[]
 
   @@index([storeMasterId])
   @@index([openId])
@@ -1376,17 +1398,17 @@ model TikTokAccount {
 }
 
 model TikTokAccountDailyMetric {
-  id              String        @id @default(uuid())
+  id              String   @id @default(uuid())
   tikTokAccountId String
   metricDate      DateTime
-  followerCount   Int           @default(0)
-  followingCount  Int           @default(0)
-  likesCount      Int           @default(0)
-  videoCount      Int           @default(0)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  followerCount   Int      @default(0)
+  followingCount  Int      @default(0)
+  likesCount      Int      @default(0)
+  videoCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  tikTokAccount   TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
+  tikTokAccount TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
 
   @@unique([tikTokAccountId, metricDate])
   @@index([tikTokAccountId])
@@ -1394,7 +1416,7 @@ model TikTokAccountDailyMetric {
 }
 
 model TikTokVideo {
-  id               String        @id @default(uuid())
+  id               String    @id @default(uuid())
   tikTokAccountId  String
   tikTokVideoId    String
   title            String?
@@ -1403,15 +1425,15 @@ model TikTokVideo {
   coverImageUrl    String?
   shareUrl         String?
   duration         Int?
-  viewCount        Int           @default(0)
-  likeCount        Int           @default(0)
-  commentCount     Int           @default(0)
-  shareCount       Int           @default(0)
-  lastSyncedAt     DateTime      @default(now())
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  viewCount        Int       @default(0)
+  likeCount        Int       @default(0)
+  commentCount     Int       @default(0)
+  shareCount       Int       @default(0)
+  lastSyncedAt     DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  tikTokAccount    TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
+  tikTokAccount TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
 
   @@unique([tikTokAccountId, tikTokVideoId])
   @@index([tikTokAccountId])

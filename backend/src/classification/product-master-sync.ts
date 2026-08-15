@@ -4,7 +4,17 @@ import { parseCsv } from "../store-master/store-master.utils";
 export type ProductMasterRow = {
   name: string;
   category: string;
+  ram: string | null;
+  rom: string | null;
+  color: string | null;
   sourceRowNumber: number;
+};
+
+export type ProductMasterVariant = {
+  variantKey: string;
+  ram: string | null;
+  rom: string | null;
+  color: string | null;
 };
 
 export type ProductMasterCanonical = {
@@ -13,6 +23,12 @@ export type ProductMasterCanonical = {
   category: string;
   productGroup: ProductGroup;
   seriesName: string;
+  variants: ProductMasterVariant[];
+};
+
+export type ProductMasterExistingVariant = ProductMasterVariant & {
+  id: string;
+  isActive: boolean;
 };
 
 export type ProductMasterExistingModel = {
@@ -25,6 +41,7 @@ export type ProductMasterExistingModel = {
     productGroup: ProductGroup;
     isActive: boolean;
   };
+  variants?: ProductMasterExistingVariant[];
 };
 
 export type ProductMasterExistingSeries = {
@@ -53,6 +70,9 @@ export type ProductMasterPlan = {
   unchangedCount: number;
   skippedCount: number;
   deleteCount: 0;
+  variantCreateCount: number;
+  variantReactivateCount: number;
+  variantUnchangedCount: number;
 };
 
 const categoryGroups: Record<string, ProductGroup> = {
@@ -79,6 +99,15 @@ export function normalizeProductMasterName(value: string): string {
 
 function normalizeCategory(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleUpperCase();
+}
+
+function normalizeVariantValue(value: string | null | undefined): string | null {
+  const normalized = value?.normalize("NFKC").trim().replace(/\s+/gu, " ") ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function productMasterVariantKey(ram: string | null, rom: string | null, color: string | null): string {
+  return [ram, rom, color].map((value) => normalizeVariantValue(value)?.toLocaleLowerCase() ?? "").join("\u001f");
 }
 
 function seriesForProduct(name: string, category: string): string | undefined {
@@ -110,6 +139,9 @@ export function parseProductMasterCsv(csv: string): ProductMasterRow[] {
     .map((row, index) => ({
       name: row[nameIndex]?.trim() ?? "",
       category: row[categoryIndex]?.trim() ?? "",
+      ram: normalizeVariantValue(row[headers.indexOf("ram")] ?? null),
+      rom: normalizeVariantValue(row[headers.indexOf("rom")] ?? null),
+      color: normalizeVariantValue(row[headers.indexOf("color")] ?? null),
       sourceRowNumber: index + 2,
     }))
     .filter(({ name }) => name.length > 0);
@@ -131,12 +163,19 @@ export function canonicalizeProductMasterRows(rows: ProductMasterRow[]): {
       ambiguous.push(`Row ${row.sourceRowNumber}: ${name || "(blank)"} (${row.category || "missing category"})`);
       continue;
     }
+    const variant = {
+      variantKey: productMasterVariantKey(row.ram, row.rom, row.color),
+      ram: row.ram,
+      rom: row.rom,
+      color: row.color,
+    } satisfies ProductMasterVariant;
     const candidate: ProductMasterCanonical = {
       name,
       normalizedName,
       category: normalizedCategory,
       productGroup,
       seriesName,
+      variants: [variant],
     };
     const existing = byName.get(normalizedName);
     if (existing && (existing.category !== candidate.category || existing.seriesName !== candidate.seriesName)) {
@@ -144,6 +183,7 @@ export function canonicalizeProductMasterRows(rows: ProductMasterRow[]): {
       continue;
     }
     if (!existing) byName.set(normalizedName, candidate);
+    else if (!existing.variants.some(({ variantKey }) => variantKey === variant.variantKey)) existing.variants.push(variant);
   }
   return { canonical: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)), ambiguous };
 }
@@ -193,6 +233,21 @@ export function buildProductMasterPlan(
     .filter((model) => !sourceNames.has(normalizeProductMasterName(model.name)))
     .map((model) => model.name)
     .sort((a, b) => a.localeCompare(b));
+  const variantCreateCount = items.reduce((sum, item) => {
+    const existing = existingModels.find(({ id }) => id === item.existingId);
+    const existingKeys = new Set((existing?.variants ?? []).map(({ variantKey }) => variantKey));
+    return sum + item.canonical.variants.filter(({ variantKey }) => !existingKeys.has(variantKey)).length;
+  }, 0);
+  const variantReactivateCount = items.reduce((sum, item) => {
+    const existing = existingModels.find(({ id }) => id === item.existingId);
+    const existingByKey = new Map((existing?.variants ?? []).map((variant) => [variant.variantKey, variant]));
+    return sum + item.canonical.variants.filter(({ variantKey }) => existingByKey.get(variantKey)?.isActive === false).length;
+  }, 0);
+  const variantUnchangedCount = items.reduce((sum, item) => {
+    const existing = existingModels.find(({ id }) => id === item.existingId);
+    const existingKeys = new Set((existing?.variants ?? []).map(({ variantKey }) => variantKey));
+    return sum + item.canonical.variants.filter(({ variantKey }) => existingKeys.has(variantKey)).length;
+  }, 0);
   return {
     sourceRows: rows.length,
     uniqueProductNames: canonical.length,
@@ -206,6 +261,9 @@ export function buildProductMasterPlan(
     unchangedCount: items.filter(({ action }) => action === "UNCHANGED").length,
     skippedCount: ambiguous.length,
     deleteCount: 0,
+    variantCreateCount,
+    variantReactivateCount,
+    variantUnchangedCount,
   };
 }
 
@@ -218,6 +276,7 @@ export async function readProductMasterState(prisma: PrismaClient) {
         isActive: true,
         classificationLevel: true,
         productSeries: { select: { name: true, productGroup: true, isActive: true } },
+        variants: { select: { id: true, variantKey: true, ram: true, rom: true, color: true, isActive: true } },
       },
     }),
     prisma.productSeries.findMany({ select: { name: true, productGroup: true, isActive: true } }),
@@ -233,8 +292,9 @@ export async function applyProductMasterPlan(prisma: PrismaClient, plan: Product
     for (const item of plan.items) {
       const series = await tx.productSeries.findUnique({ where: { name: item.canonical.seriesName }, select: { id: true } });
       if (!series) throw new Error(`ProductSeries not found: ${item.canonical.seriesName}`);
+      let productModelId = item.existingId;
       if (item.action === "CREATE") {
-        await tx.productModel.create({
+        const created = await tx.productModel.create({
           data: {
             name: item.canonical.name,
             productSeriesId: series.id,
@@ -242,10 +302,19 @@ export async function applyProductMasterPlan(prisma: PrismaClient, plan: Product
             isActive: true,
           },
         });
+        productModelId = created.id;
       } else if (item.existingId && item.action !== "UNCHANGED") {
         await tx.productModel.update({
           where: { id: item.existingId },
           data: { productSeriesId: series.id, classificationLevel: "MODEL", isActive: true },
+        });
+      }
+      if (!productModelId) throw new Error(`ProductModel id missing for ${item.canonical.name}`);
+      for (const variant of item.canonical.variants) {
+        await tx.productVariant.upsert({
+          where: { productModelId_variantKey: { productModelId, variantKey: variant.variantKey } },
+          create: { productModelId, variantKey: variant.variantKey, ram: variant.ram, rom: variant.rom, color: variant.color, isActive: true },
+          update: { ram: variant.ram, rom: variant.rom, color: variant.color, isActive: true },
         });
       }
     }

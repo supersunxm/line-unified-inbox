@@ -141,7 +141,8 @@ void test("mobile tags replace only the manual product and preserve RULE product
     latestMessageAt: new Date(),
     bmReplyStatus: "NOT_REPLIED",
     followUpStatus: "FOLLOW_UP",
-    sourceChannel: "STORE",
+    sourceChannels: ["STORE"],
+    isInstallment: false,
     customer: { id: "customer-1", displayName: "Customer" },
     store: { id: "store-1", name: "Store", code: "S1" },
     products: [{ productModel: { id: "model-2", name: "OPPO Find N6", productSeries: { name: "Find", productGroup: "SMARTPHONE" } } }],
@@ -151,7 +152,7 @@ void test("mobile tags replace only the manual product and preserve RULE product
   const tx = {
     conversation: {
       findUnique: async () => ({ id: "conversation-1" }),
-      update: async (args: any) => { detail.sourceChannel = args.data.sourceChannel; writes.push({ type: "conversation", args }); return {}; },
+      update: async (args: any) => { detail.sourceChannels = args.data.sourceChannels; writes.push({ type: "conversation", args }); return {}; },
     },
     productModel: { findFirst: async () => ({ id: "model-2" }) },
     conversationProduct: {
@@ -164,12 +165,12 @@ void test("mobile tags replace only the manual product and preserve RULE product
     conversation: { findUnique: async () => detail },
   };
   const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
-  const result = await service.updateTags(user, "conversation-1", { sourceChannel: "ONLINE", productId: "model-2" });
+  const result = await service.updateTags(user, "conversation-1", { sourceChannels: ["ONLINE"], productId: "model-2" });
   assert.equal(result.tags.product?.productName, "OPPO Find N6");
-  assert.equal(result.tags.sourceChannel, "ONLINE");
-  assert.deepEqual(writes[0], { type: "conversation", args: { where: { id: "conversation-1" }, data: { sourceChannel: "ONLINE" } } });
+  assert.deepEqual(result.tags.sourceChannels, ["ONLINE"]);
+  assert.deepEqual(writes[0], { type: "conversation", args: { where: { id: "conversation-1" }, data: { sourceChannels: ["ONLINE"] } } });
   assert.deepEqual(writes[1], { type: "delete", args: { where: { conversationId: "conversation-1", source: "MANUAL" } } });
-  assert.deepEqual(writes[2], { type: "create", args: { data: { conversationId: "conversation-1", productModelId: "model-2", source: "MANUAL", confidence: 1 } } });
+  assert.deepEqual(writes[2], { type: "create", args: { data: { conversationId: "conversation-1", productModelId: "model-2", productVariantId: null, source: "MANUAL", confidence: 1 } } });
 });
 
 void test("mobile tags clear only the manual product and reject inactive products", async () => {
@@ -179,11 +180,41 @@ void test("mobile tags clear only the manual product and reject inactive product
     productModel: { findFirst: async () => null },
     conversationProduct: { deleteMany: async (args: any) => { writes.push(args); return {}; }, create: async () => { throw new Error("must not create"); } },
   };
-  const detail = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", sourceChannel: null, customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, products: [], messages: [], _count: { pushNotifications: 0 } };
+  const detail = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", sourceChannels: [], isInstallment: false, customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, products: [], messages: [], _count: { pushNotifications: 0 } };
   const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx), conversation: { findUnique: async () => detail } };
   const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
   await service.updateTags(user, "conversation-1", { productId: null });
   assert.deepEqual(writes, [{ where: { conversationId: "conversation-1", source: "MANUAL" } }]);
   await assert.rejects(() => service.updateTags(user, "conversation-1", { productId: "inactive-model" }), BadRequestException);
   assert.equal(writes.length, 1);
+});
+
+void test("mobile tags support both sources and installment independently", async () => {
+  const updates: any[] = [];
+  const detail = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", sourceChannels: ["STORE", "ONLINE"], isInstallment: true, customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, products: [], messages: [], _count: { pushNotifications: 0 } };
+  const tx = {
+    conversation: {
+      findUnique: async () => ({ id: "conversation-1", sourceChannels: [], isInstallment: false }),
+      update: async (args: any) => { updates.push(args); return {}; },
+    },
+    productModel: { findFirst: async () => null },
+    productVariant: { findFirst: async () => null },
+    conversationProduct: { deleteMany: async () => ({}), findFirst: async () => null, update: async () => ({}) },
+  };
+  const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx), conversation: { findUnique: async () => detail } };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  await service.updateTags(user, "conversation-1", { sourceChannels: ["STORE", "ONLINE"], isInstallment: true });
+  assert.deepEqual(updates[0]?.data, { sourceChannels: ["STORE", "ONLINE"], isInstallment: true });
+});
+
+void test("mobile tags reject a variant belonging to another product", async () => {
+  const tx = {
+    conversation: { findUnique: async () => ({ id: "conversation-1", sourceChannels: [], isInstallment: false }) },
+    productModel: { findFirst: async () => ({ id: "model-1" }) },
+    productVariant: { findFirst: async () => ({ id: "variant-2", productModelId: "model-2" }) },
+    conversationProduct: { findFirst: async () => ({ productModelId: "model-1" }), deleteMany: async () => ({}), create: async () => ({}) },
+  };
+  const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx) };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  await assert.rejects(() => service.updateTags(user, "conversation-1", { productId: "model-1", variantId: "variant-2" }), BadRequestException);
 });

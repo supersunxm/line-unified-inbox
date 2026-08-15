@@ -1279,6 +1279,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added a deterministic, dry-run-first importer that deduplicates variants by normalized PRODUCT NAME, maps the five sheet categories to existing ProductGroup values and existing series, creates only missing ProductModel rows, safely reactivates authoritative inactive rows, preserves aliases and ConversationProduct relations, and never deletes absent products.
 - The importer is ready for a production dry run. No catalog data has been mutated yet.
 
+# Current task: Phase 7B.2 detailed manual conversation tagging (2026-08-15)
+
+- Audited production source tags (5,959 NULL, 1 STORE, 0 ONLINE), 7 MANUAL product rows, and the 104-row Product Master variant source (100 unique configurations, including products without RAM/ROM).
+- Added additive migration coverage for multi-select `sourceChannels`, `isInstallment`, `ProductVariant`, and an optional manual ConversationProduct variant relation. The migration preserves NULL as `[]`, STORE/ONLINE values, existing model IDs, aliases, rules, and conversation products; it contains no destructive deletes.
+- Extended the mobile tags contract and Flutter sheet for multi-source selection, installment, bounded Product Master variant selection, replacement, and clear semantics. No automatic tagging or AI behavior was added.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

@@ -761,3 +761,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Product Master imports are canonical model-only data: RAM/ROM/COLOR variant rows collapse to one `ProductModel`, and existing ProductSeries/ProductGroup records are reused. Sheet categories map deterministically to SMARTPHONE, TABLET, AUDIO, WEARABLE, and ACCESSORIES.
 - The importer is a separate maintenance command with a mandatory dry-run mode. It updates/reactivates only authoritative canonical models, preserves ProductAlias and ConversationProduct rows, and never deletes products absent from the sheet. Ambiguous categories, series, or duplicate normalized names fail before any transaction starts.
+
+# Detailed manual conversation tagging (2026-08-15)
+
+- Customer source is migrated from one nullable enum to a PostgreSQL enum array with `NULL -> []`, `STORE -> [STORE]`, and `ONLINE -> [ONLINE]`; encoded strings are not used. `isInstallment` is a separate explicit boolean.
+- Product variants are canonical rows keyed by `(productModelId, variantKey)` from normalized RAM/ROM/COLOR values. Variant selection remains optional and is validated server-side against the selected manual ProductModel; changing or clearing the model clears the variant.
+- Product Master synchronization remains dry-run-first, idempotent, non-destructive, and model-ID preserving while adding variants. Missing variants are not automatically deleted in this phase.

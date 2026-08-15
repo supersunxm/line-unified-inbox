@@ -46,7 +46,7 @@ void main() {
       home: Scaffold(
         body: ConversationTagsBar(
           tags: const ConversationTags(
-            sourceChannel: 'ONLINE',
+            sourceChannels: ['ONLINE'],
             product: ConversationProductTag(
               id: 'model-1',
               productName: 'OPPO Find N6',
@@ -54,13 +54,13 @@ void main() {
               seriesName: 'Find',
             ),
           ),
-          onPressed: () => tags = const ConversationTags(sourceChannel: 'STORE'),
+          onPressed: () => tags = const ConversationTags(sourceChannels: ['STORE']),
         ),
       ),
     ));
     expect(find.text('Online · OPPO Find N6'), findsOneWidget);
     expect(tags, isNull);
     await tester.tap(find.text('Online · OPPO Find N6'));
-    expect(tags?.sourceChannel, 'STORE');
+    expect(tags?.sourceChannels, ['STORE']);
   });
 }

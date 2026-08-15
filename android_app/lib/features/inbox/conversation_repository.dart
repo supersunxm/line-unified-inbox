@@ -113,14 +113,25 @@ class ConversationRepository {
         .toList();
   }
 
+  Future<List<ProductVariantSelectorItem>> fetchProductVariants(String productId) async {
+    final result = await _api.get('/mobile/products/$productId/variants');
+    return (result['items'] as List<dynamic>? ?? [])
+        .map((item) => ProductVariantSelectorItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<ConversationDetail> updateConversationTags(
       String id, {
-      Object? sourceChannel = _unset,
+      Object? sourceChannels = _unset,
+      Object? isInstallment = _unset,
       Object? productId = _unset,
+      Object? variantId = _unset,
   }) async {
     final body = <String, dynamic>{};
-    if (!identical(sourceChannel, _unset)) body['sourceChannel'] = sourceChannel;
+    if (!identical(sourceChannels, _unset)) body['sourceChannels'] = sourceChannels;
+    if (!identical(isInstallment, _unset)) body['isInstallment'] = isInstallment;
     if (!identical(productId, _unset)) body['productId'] = productId;
+    if (!identical(variantId, _unset)) body['variantId'] = variantId;
     return ConversationDetail.fromJson(
         await _api.patch('/mobile/conversations/$id/tags', body: body));
   }

@@ -39,7 +39,7 @@ class ConversationTagsBar extends StatelessWidget {
               Expanded(
                 child: Text(
                   _label(current),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
@@ -53,14 +53,18 @@ class ConversationTagsBar extends StatelessWidget {
   }
 
   String _label(ConversationTags value) {
-    final source = switch (value.sourceChannel) {
-      'STORE' => 'Store',
-      'ONLINE' => 'Online',
-      _ => null,
-    };
-    final product = value.product?.productName;
-    return [if (source != null) source, if (product != null) product]
-        .join(' · ');
+    final sources = value.sourceChannels.map((source) => switch (source) {
+          'STORE' => 'Store',
+          'ONLINE' => 'Online',
+          _ => source,
+        });
+    final parts = [
+      ...sources,
+      if (value.product != null) value.product!.productName,
+      if (value.variant?.label.isNotEmpty == true) value.variant!.label,
+      if (value.isInstallment) '💳 Installment',
+    ];
+    return parts.join(' · ');
   }
 }
 
@@ -106,24 +110,33 @@ class ConversationTagsSheet extends StatefulWidget {
 }
 
 class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
-  late String? _sourceChannel = widget.initialTags.sourceChannel;
+  late Set<String> _sourceChannels = widget.initialTags.sourceChannels.toSet();
+  late bool _isInstallment = widget.initialTags.isInstallment;
   late ConversationProductTag? _product = widget.initialTags.product;
+  late ConversationProductVariant? _variant = widget.initialTags.variant;
   final _searchController = TextEditingController();
   List<ProductSelectorItem> _products = const [];
+  List<ProductVariantSelectorItem> _variants = const [];
   bool _loadingProducts = true;
+  bool _loadingVariants = false;
   bool _saving = false;
   String? _error;
   int _searchGeneration = 0;
+  int _variantGeneration = 0;
 
   bool get _dirty =>
-      _sourceChannel != widget.initialTags.sourceChannel ||
-      _product?.id != widget.initialTags.product?.id;
+      !_sameSources(_sourceChannels, widget.initialTags.sourceChannels.toSet()) ||
+      _isInstallment != widget.initialTags.isInstallment ||
+      _product?.id != widget.initialTags.product?.id ||
+      _variant?.id != widget.initialTags.variant?.id;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadProducts();
+      if (!mounted) return;
+      _loadProducts();
+      if (_product != null) _loadVariants(_product!.id);
     });
   }
 
@@ -155,6 +168,46 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     }
   }
 
+  Future<void> _loadVariants(String productId) async {
+    final generation = ++_variantGeneration;
+    setState(() {
+      _loadingVariants = true;
+      _variants = const [];
+      _error = null;
+    });
+    try {
+      final variants = await widget.repository.fetchProductVariants(productId);
+      if (!mounted || generation != _variantGeneration) return;
+      setState(() {
+        _variants = variants;
+        _loadingVariants = false;
+        if (_variant != null &&
+            !_variants.any((candidate) => candidate.id == _variant!.id)) {
+          _variant = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted || generation != _variantGeneration) return;
+      setState(() {
+        _loadingVariants = false;
+        _error = 'Unable to load product variants';
+      });
+    }
+  }
+
+  void _selectProduct(ProductSelectorItem product) {
+    setState(() {
+      _product = ConversationProductTag(
+        id: product.id,
+        productName: product.productName,
+        category: product.category,
+        seriesName: product.seriesName,
+      );
+      _variant = null;
+    });
+    _loadVariants(product.id);
+  }
+
   Future<void> _save() async {
     if (!_dirty || _saving) return;
     setState(() {
@@ -164,8 +217,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     try {
       final detail = await widget.repository.updateConversationTags(
         widget.conversationId,
-        sourceChannel: _sourceChannel,
+        sourceChannels: _sourceChannels.toList(),
+        isInstallment: _isInstallment,
         productId: _product?.id,
+        variantId: _variant?.id,
       );
       if (!mounted) return;
       Navigator.of(context).pop(detail.tags ?? const ConversationTags());
@@ -217,23 +272,45 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   Wrap(
                     spacing: AppSpacing.sm,
                     children: [
-                      ChoiceChip(
+                      FilterChip(
                         label: const Text('Store'),
-                        selected: _sourceChannel == 'STORE',
+                        selected: _sourceChannels.contains('STORE'),
                         onSelected: _saving
                             ? null
-                            : (selected) => setState(() =>
-                                _sourceChannel = selected ? 'STORE' : null),
+                            : (selected) => setState(() {
+                                  if (selected) {
+                                    _sourceChannels.add('STORE');
+                                  } else {
+                                    _sourceChannels.remove('STORE');
+                                  }
+                                }),
                       ),
-                      ChoiceChip(
+                      FilterChip(
                         label: const Text('Online'),
-                        selected: _sourceChannel == 'ONLINE',
+                        selected: _sourceChannels.contains('ONLINE'),
                         onSelected: _saving
                             ? null
-                            : (selected) => setState(() =>
-                                _sourceChannel = selected ? 'ONLINE' : null),
+                            : (selected) => setState(() {
+                                  if (selected) {
+                                    _sourceChannels.add('ONLINE');
+                                  } else {
+                                    _sourceChannels.remove('ONLINE');
+                                  }
+                                }),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Interest',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.sm),
+                  FilterChip(
+                    label: const Text('ผ่อน / Installment'),
+                    selected: _isInstallment,
+                    onSelected: _saving
+                        ? null
+                        : (selected) =>
+                            setState(() => _isInstallment = selected),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Text('Product',
@@ -259,7 +336,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           tooltip: 'Clear product',
                           onPressed: _saving
                               ? null
-                              : () => setState(() => _product = null),
+                              : () => setState(() {
+                                    _product = null;
+                                    _variant = null;
+                                    _variants = const [];
+                                  }),
                           icon: const Icon(Icons.clear),
                         ),
                       ),
@@ -285,20 +366,53 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             title: Text(product.productName),
                             subtitle: Text(product.seriesName),
                             selected: _product?.id == product.id,
-                            onTap: _saving
-                                ? null
-                                : () => setState(() {
-                                      _product = ConversationProductTag(
-                                        id: product.id,
-                                        productName: product.productName,
-                                        category: product.category,
-                                        seriesName: product.seriesName,
-                                      );
-                                    }),
+                            onTap: _saving ? null : () => _selectProduct(product),
                           );
                         },
                       ),
                     ),
+                  if (_product != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text('Configuration',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (_loadingVariants)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_variants.isEmpty)
+                      const Text('No variants available for this product')
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 230),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _variants.length,
+                          itemBuilder: (context, index) {
+                            final variant = _variants[index];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                _variant?.id == variant.id
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                              ),
+                              title: Text(variant.label),
+                              selected: _variant?.id == variant.id,
+                              onTap: _saving
+                                  ? null
+                                  : () => setState(() => _variant = variant),
+                            );
+                          },
+                        ),
+                      ),
+                    if (_variant != null)
+                      TextButton.icon(
+                        onPressed: _saving
+                            ? null
+                            : () => setState(() => _variant = null),
+                        icon: const Icon(Icons.clear),
+                        label: const Text('Clear variant'),
+                      ),
+                  ],
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -314,10 +428,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         onPressed: _saving
                             ? null
                             : () => setState(() {
-                                  _sourceChannel = null;
+                                  _sourceChannels = <String>{};
+                                  _isInstallment = false;
                                   _product = null;
+                                  _variant = null;
+                                  _variants = const [];
                                 }),
-                        child: const Text('Clear'),
+                        child: const Text('Clear all'),
                       ),
                       FilledButton(
                         onPressed: !_dirty || _saving ? null : _save,
@@ -340,4 +457,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       ),
     );
   }
+
+  bool _sameSources(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
 }

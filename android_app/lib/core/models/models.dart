@@ -169,20 +169,67 @@ class ConversationProductTag {
       );
 }
 
+class ConversationProductVariant {
+  const ConversationProductVariant({
+    required this.id,
+    this.ram,
+    this.rom,
+    this.color,
+  });
+
+  final String id;
+  final String? ram;
+  final String? rom;
+  final String? color;
+
+  factory ConversationProductVariant.fromJson(Map<String, dynamic> json) =>
+      ConversationProductVariant(
+        id: json['id'] as String,
+        ram: json['ram'] as String?,
+        rom: json['rom'] as String?,
+        color: json['color'] as String?,
+      );
+
+  String get label => [
+        if (ram?.trim().isNotEmpty == true) '${ram}GB',
+        if (rom?.trim().isNotEmpty == true) '${rom}GB',
+        if (color?.trim().isNotEmpty == true) color!,
+      ].join(' / ');
+}
+
 class ConversationTags {
-  const ConversationTags({this.sourceChannel, this.product});
+  const ConversationTags({
+    this.sourceChannels = const [],
+    this.isInstallment = false,
+    this.product,
+    this.variant,
+  });
 
-  final String? sourceChannel;
+  final List<String> sourceChannels;
+  final bool isInstallment;
   final ConversationProductTag? product;
+  final ConversationProductVariant? variant;
 
-  bool get isEmpty => sourceChannel == null && product == null;
+  bool get isEmpty => sourceChannels.isEmpty && !isInstallment && product == null;
 
   factory ConversationTags.fromJson(Map<String, dynamic>? json) {
     final productJson = json?['product'];
+    final variantJson = json?['variant'];
+    final rawSources = json?['sourceChannels'];
+    final sources = rawSources is List
+        ? rawSources.whereType<String>().toList(growable: false)
+        : switch (json?['sourceChannel']) {
+            String source => [source],
+            _ => const <String>[],
+          };
     return ConversationTags(
-      sourceChannel: json?['sourceChannel'] as String?,
+      sourceChannels: sources,
+      isInstallment: json?['isInstallment'] == true,
       product: productJson is Map<String, dynamic>
           ? ConversationProductTag.fromJson(productJson)
+          : null,
+      variant: variantJson is Map<String, dynamic>
+          ? ConversationProductVariant.fromJson(variantJson)
           : null,
     );
   }
@@ -207,6 +254,23 @@ class ProductSelectorItem {
         productName: json['productName'] as String,
         category: json['category'] as String,
         seriesName: json['seriesName'] as String,
+      );
+}
+
+class ProductVariantSelectorItem extends ConversationProductVariant {
+  const ProductVariantSelectorItem({
+    required super.id,
+    super.ram,
+    super.rom,
+    super.color,
+  });
+
+  factory ProductVariantSelectorItem.fromJson(Map<String, dynamic> json) =>
+      ProductVariantSelectorItem(
+        id: json['id'] as String,
+        ram: json['ram'] as String?,
+        rom: json['rom'] as String?,
+        color: json['color'] as String?,
       );
 }
 

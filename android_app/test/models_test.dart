@@ -123,7 +123,7 @@ void main() {
       },
       'messages': [],
     });
-    expect(detail.tags?.sourceChannel, 'STORE');
+    expect(detail.tags?.sourceChannels, ['STORE']);
     expect(detail.tags?.product?.productName, 'OPPO Reno16 Pro 5G');
   });
 }

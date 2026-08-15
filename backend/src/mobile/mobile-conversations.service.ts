@@ -5,7 +5,7 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, UpdateMobileConversationTagsDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, UpdateMobileConversationTagsDto } from "./mobile-conversations.dto";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -70,13 +70,17 @@ export class MobileConversationsService {
         latestMessageAt: true,
         bmReplyStatus: true,
         followUpStatus: true,
-        sourceChannel: true,
+        sourceChannels: true,
+        isInstallment: true,
         customer: { select: { id: true, displayName: true } },
         store: { select: { id: true, name: true, code: true } },
         products: {
           where: { source: "MANUAL" },
           take: 1,
-          select: { productModel: { select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } } } },
+          select: {
+            productModel: { select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } } },
+            productVariant: { select: { id: true, ram: true, rom: true, color: true } },
+          },
         },
         messages: {
           where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
@@ -99,7 +103,8 @@ export class MobileConversationsService {
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
       tags: {
-        sourceChannel: conversation.sourceChannel,
+        sourceChannels: conversation.sourceChannels,
+        isInstallment: conversation.isInstallment,
         product: conversation.products?.[0]
           ? {
               id: conversation.products[0].productModel.id,
@@ -108,6 +113,7 @@ export class MobileConversationsService {
               seriesName: conversation.products[0].productModel.productSeries.name,
             }
           : null,
+        variant: conversation.products?.[0]?.productVariant ?? null,
       },
       unreadCount: conversation._count.pushNotifications,
       nextCursor: hasEarlier && oldest ? encodeCursor(oldest.sentAt, oldest.id) : null,
@@ -158,13 +164,32 @@ export class MobileConversationsService {
     };
   }
 
+  async productVariants(productId: string, query: MobileProductVariantQueryDto = new MobileProductVariantQueryDto()) {
+    const product = await this.prisma.productModel.findFirst({
+      where: { id: productId, isActive: true, classificationLevel: "MODEL", productSeries: { isActive: true } },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException("Product model is unavailable");
+    const variants = await this.prisma.productVariant.findMany({
+      where: { productModelId: productId, isActive: true },
+      orderBy: [{ ram: "asc" }, { rom: "asc" }, { color: "asc" }, { id: "asc" }],
+      take: Math.min(50, Math.max(1, query.limit)),
+      select: { id: true, ram: true, rom: true, color: true },
+    });
+    return { items: variants };
+  }
+
   async updateTags(user: AuthUser, conversationId: string, dto: UpdateMobileConversationTagsDto) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
     await this.prisma.$transaction(async (tx) => {
-      const conversation = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
+      const conversation = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true, sourceChannels: true, isInstallment: true } });
       if (!conversation) throw new NotFoundException("Conversation not found");
 
       let productModel: { id: string } | null = null;
+      let productVariant: { id: string; productModelId: string } | null = null;
+      if (dto.productId === null && dto.variantId !== undefined && dto.variantId !== null) {
+        throw new BadRequestException("A product is required for a product variant");
+      }
       if (dto.productId !== undefined && dto.productId !== null) {
         productModel = await tx.productModel.findFirst({
           where: { id: dto.productId, isActive: true, classificationLevel: "MODEL", productSeries: { isActive: true } },
@@ -173,15 +198,32 @@ export class MobileConversationsService {
         if (!productModel) throw new BadRequestException("Product model is unavailable");
       }
 
-      if (dto.sourceChannel !== undefined) {
-        await tx.conversation.update({ where: { id: conversationId }, data: { sourceChannel: dto.sourceChannel } });
+      if (dto.variantId !== undefined && dto.variantId !== null) {
+        productVariant = await tx.productVariant.findFirst({
+          where: { id: dto.variantId, isActive: true, productModel: { isActive: true, classificationLevel: "MODEL", productSeries: { isActive: true } } },
+          select: { id: true, productModelId: true },
+        });
+        if (!productVariant) throw new BadRequestException("Product variant is unavailable");
+        const selectedProductId = productModel?.id ?? (await tx.conversationProduct.findFirst({ where: { conversationId, source: "MANUAL" }, select: { productModelId: true } }))?.productModelId;
+        if (!selectedProductId || productVariant.productModelId !== selectedProductId) {
+          throw new BadRequestException("Product variant does not belong to the selected product");
+        }
       }
+
+      const conversationUpdate: { sourceChannels?: typeof dto.sourceChannels; isInstallment?: boolean } = {};
+      if (dto.sourceChannels !== undefined) conversationUpdate.sourceChannels = dto.sourceChannels;
+      if (dto.isInstallment !== undefined) conversationUpdate.isInstallment = dto.isInstallment;
+      if (Object.keys(conversationUpdate).length > 0) await tx.conversation.update({ where: { id: conversationId }, data: conversationUpdate });
 
       if (dto.productId !== undefined) {
         await tx.conversationProduct.deleteMany({ where: { conversationId, source: "MANUAL" } });
         if (productModel) {
-          await tx.conversationProduct.create({ data: { conversationId, productModelId: productModel.id, source: "MANUAL", confidence: 1 } });
+          await tx.conversationProduct.create({ data: { conversationId, productModelId: productModel.id, productVariantId: productVariant?.id ?? null, source: "MANUAL", confidence: 1 } });
         }
+      } else if (dto.variantId !== undefined) {
+        const manual = await tx.conversationProduct.findFirst({ where: { conversationId, source: "MANUAL" }, select: { conversationId: true, productModelId: true } });
+        if (!manual) throw new BadRequestException("A product must be selected before choosing a variant");
+        await tx.conversationProduct.update({ where: { conversationId_productModelId: { conversationId, productModelId: manual.productModelId } }, data: { productVariantId: productVariant?.id ?? null } });
       }
     });
     return this.get(user, conversationId);

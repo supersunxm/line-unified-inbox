@@ -22,7 +22,17 @@ async function main() {
     await applyProductMasterPlan(prisma, plan);
     const after = await readProductMasterState(prisma);
     const secondRun = buildProductMasterPlan(rows, after.models, after.series);
-    console.log(JSON.stringify({ secondRun: { createCount: secondRun.createCount, updateCount: secondRun.updateCount, reactivateCount: secondRun.reactivateCount, unchangedCount: secondRun.unchangedCount, skippedCount: secondRun.skippedCount, deleteCount: secondRun.deleteCount } }, null, 2));
+    console.log(JSON.stringify({ secondRun: {
+      createCount: secondRun.createCount,
+      updateCount: secondRun.updateCount,
+      reactivateCount: secondRun.reactivateCount,
+      unchangedCount: secondRun.unchangedCount,
+      skippedCount: secondRun.skippedCount,
+      deleteCount: secondRun.deleteCount,
+      variantCreateCount: secondRun.variantCreateCount,
+      variantReactivateCount: secondRun.variantReactivateCount,
+      variantUnchangedCount: secondRun.variantUnchangedCount,
+    } }, null, 2));
   } finally {
     await prisma.$disconnect();
   }
