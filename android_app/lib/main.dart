@@ -7,6 +7,7 @@ import 'core/network/api_client.dart';
 import 'core/storage/token_store.dart';
 import 'core/models/models.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/app_scroll_behavior.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/registration_page.dart';
@@ -174,6 +175,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       navigatorKey: _navigator,
       title: 'LINE OA Chat Hub',
       theme: AppTheme.light(),
+      scrollBehavior: const AppScrollBehavior(),
       home: _loading
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _home());

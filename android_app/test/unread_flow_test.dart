@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:line_oa_chat_hub/core/models/models.dart';
 import 'package:line_oa_chat_hub/core/network/api_client.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
+import 'package:line_oa_chat_hub/core/theme/app_scroll_behavior.dart';
 import 'package:line_oa_chat_hub/core/widgets/app_widgets.dart';
 import 'package:line_oa_chat_hub/features/chat/chat_page.dart';
 import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
@@ -653,6 +654,31 @@ void main() {
 
     expect(repository.detailBeforeCalls, contains('older-cursor'));
     expect(find.text('Older page message'), findsOneWidget);
+  });
+
+  testWidgets('app scroll policy clamps chat without overscroll indicator',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      scrollBehavior: const AppScrollBehavior(),
+      home: ChatPage(
+        conversationId: 'conversation-a',
+        repository: FakeConversationRepository(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final list = tester.widget<ListView>(find.byType(ListView));
+    expect(list.physics, isNull);
+    final configurations = tester
+        .widgetList<ScrollConfiguration>(find.byType(ScrollConfiguration));
+    expect(
+      configurations
+          .any((configuration) => configuration.behavior is AppScrollBehavior),
+      isTrue,
+    );
+    final scrollable = tester.state<ScrollableState>(find.descendant(
+        of: find.byType(ListView), matching: find.byType(Scrollable)));
+    expect(scrollable.position.physics, isA<ClampingScrollPhysics>());
   });
 
   testWidgets('manual movement cancels pending initial scroll', (tester) async {

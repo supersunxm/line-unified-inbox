@@ -27,6 +27,7 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
       body = RefreshIndicator(
         onRefresh: _load,
         child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(12),
           itemCount: _items.length,
           itemBuilder: (_, index) {

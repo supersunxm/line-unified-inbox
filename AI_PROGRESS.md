@@ -1287,6 +1287,27 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 
 - Production verification completed on the approved OBS-Sunx2 conversation: source multi-select, installment, Product Master model, synced variant selection, isolated variant/product clearing, persistence, and final Clear all state all passed. Production migration is applied, catalog sync is idempotent, and the installed production-configured APK showed no app crash or RenderFlex overflow.
 
+# Current task: Phase 7B.2.1 variant selection UX (2026-08-15)
+
+- Audited the tag sheet and confirmed the product result list remained rendered after model selection, pushing Configuration below the usable viewport. The existing repository/backend variant endpoint was already present and authoritative.
+- Updated the presentation flow so selecting a product collapses search/results into a selected-product card with Change/Clear actions, then loads valid variants from `GET /mobile/products/:productId/variants`. RAM, ROM, and Color are rendered as constrained FilterChips; only dimensions present in the response are shown, and selected combinations are resolved from real variant IDs.
+- Added loading, empty, retryable error, saved-variant restoration, valid-combination, clear-product, and API-call widget coverage. No backend, schema, reply, realtime, notification, or conversation-state code changed.
+- `flutter analyze`, full Flutter tests (42), production-configured debug APK build, emulator installation, and `git diff --check` pass. Runtime verification on `emulator-5554` with authenticated OBS-Sunx2 confirmed Reno15 5G and Find N6 configuration controls, valid selections, persistence after reopen, and final Clear all cleanup. Production catalog contains both requested models; final OBS tags are empty.
+
+# Current task: Phase 7B.3 chat overscroll behavior (2026-08-15)
+
+- Audited ChatPage/MessageTimeline: the timeline used default ListView physics and inherited Material's Android overscroll indicator. Added a chat-scoped `ChatScrollBehavior` that removes the overscroll indicator and explicit `ClampingScrollPhysics`; controller ownership, scroll-generation guards, initial stabilization, pagination, offset restoration, realtime append, and auto-scroll code were unchanged.
+- Added a focused widget regression asserting clamped physics and the local scroll behavior. `flutter analyze`, full Flutter tests (43), production-configured debug APK build, emulator installation, and `git diff --check` pass.
+- Runtime verification on authenticated OBS-Sunx2 exercised top/bottom boundary drags, older-message pagination, offset return to latest, and a normal BM send. Screenshots during boundary drags showed no stretch/bounce/glow; no app exception, ANR, or RenderFlex overflow appeared in logcat.
+
+# Current task: Phase 7B.3 app-wide overscroll policy (2026-08-15)
+
+- Audited every Flutter scroll surface: Inbox, Chat, profile, auth/registration, admin approval, tag/product sheets, customer profile, and horizontal Inbox filters. Added one `AppScrollBehavior` at `MaterialApp` so all scrollables use clamped physics and no Android stretch/glow indicator.
+- Removed the chat-only scroll behavior and retained `AlwaysScrollableScrollPhysics` only on Inbox/admin `RefreshIndicator` lists so short empty/error states remain pull-to-refreshable. No controller, pagination, realtime, unread, notification, or bottom-sheet drag logic changed.
+- Added focused app policy and refresh regressions. `flutter analyze` and the full Flutter suite (45 tests) pass; production APK build/install and runtime boundary verification remain to be completed.
+- Final validation: `flutter analyze`, full Flutter tests (47), production-configured debug APK build, install on `emulator-5554`, and `git diff --check` pass. The registration form's two dropdowns also received `isExpanded: true` after runtime QA exposed a pre-existing narrow-layout overflow marker.
+- Runtime QA on the authenticated production-configured APK exercised Inbox boundaries, OBS-Sunx2 chat boundaries, and Profile scrolling; no stretch/glow/bounce, Flutter exception, ANR, or RenderFlex overflow remained in the final run. The final install timestamp was 2026-08-15 20:28:10.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

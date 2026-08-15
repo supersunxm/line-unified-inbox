@@ -316,6 +316,7 @@ class _InboxPageState extends State<InboxPage> {
       return RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(
               height: 320,
@@ -332,6 +333,7 @@ class _InboxPageState extends State<InboxPage> {
       return RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(
               height: 320,
@@ -347,6 +349,7 @@ class _InboxPageState extends State<InboxPage> {
         onRefresh: () => _load(reset: true),
         child: ListView(
           controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
           children: const [
             SizedBox(
               height: 320,
@@ -360,6 +363,7 @@ class _InboxPageState extends State<InboxPage> {
       onRefresh: () => _load(reset: true),
       child: ListView.separated(
         controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         itemCount: renderItems.length + (_loadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 8),

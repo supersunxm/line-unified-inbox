@@ -769,3 +769,21 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Product Master synchronization remains dry-run-first, idempotent, non-destructive, and model-ID preserving while adding variants. Missing variants are not automatically deleted in this phase.
 
 - Mobile tag actions are placed in the bounded sheet header using a wrapping layout. This keeps Clear all and Save reachable on narrow Android screens without changing tag state ownership or API behavior.
+
+# Variant selection UX (2026-08-15)
+
+- Product selection is a two-stage presentation: before selection, the sheet shows bounded product search/results; after selection, results are hidden and a selected model card plus Configuration controls are shown. This prevents the results list from pushing RAM/ROM/Color controls off-screen.
+- Variant dimensions are derived only from active server-returned `ProductVariant` rows. Selecting a dimension resolves to an existing variant ID, so the client cannot construct arbitrary RAM/ROM/Color combinations. Missing dimensions are omitted; a model with no variants remains selectable and saveable.
+- Variant loading is isolated from product errors, has a retry state, and uses generation guards so stale product changes cannot overwrite current configuration state. Saved variants are restored by ID when the endpoint response includes them. No new API or migration was needed.
+
+# Chat overscroll behavior (2026-08-15)
+
+- Overscroll suppression is scoped to `MessageTimeline`: `ClampingScrollPhysics` prevents elastic movement and `ChatScrollBehavior.buildOverscrollIndicator` returns the child unchanged, removing Android stretch/glow without changing app-wide scrolling.
+- Pagination continues to observe normal scroll notifications and remains owned by ChatPage/MessageTimeline. No scroll controller, generation token, initial landing, offset restoration, realtime, or notification behavior was changed.
+
+# App-wide overscroll policy (2026-08-15)
+
+- Use a single `AppScrollBehavior` on `MaterialApp` rather than per-screen wrappers. It returns `ClampingScrollPhysics` and suppresses Material's Android overscroll indicator, covering vertical, horizontal, sheet, and modal scrollables consistently.
+- Explicit `AlwaysScrollableScrollPhysics` remains only on lists wrapped by `RefreshIndicator`; Flutter composes it with the app's clamped parent, preserving pull-to-refresh without restoring stretch/glow.
+- Chat's previous local behavior was removed after the global policy was installed. Scroll controller ownership, initial landing, pagination/offset restoration, realtime append, unread, and notification lifecycles remain unchanged.
+- Runtime QA found a narrow registration dropdown layout overflow unrelated to scrolling; setting both existing dropdowns to `isExpanded` was the smallest presentation-only correction and does not alter registration state or API behavior.
