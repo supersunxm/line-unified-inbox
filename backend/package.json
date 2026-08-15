@@ -26,6 +26,8 @@
     "auth:status": "tsx --env-file=.env scripts/auth-status.ts",
     "product-catalog:validate": "tsx scripts/product-catalog.ts validate",
     "product-catalog:seed": "tsx --env-file=.env scripts/product-catalog.ts seed",
+    "product-master:dry-run": "tsx --env-file=.env src/product-master-sync-cli.ts",
+    "product-master:sync": "tsx --env-file=.env src/product-master-sync-cli.ts --apply",
     "product-alias:adopt-phase1": "tsx scripts/adopt-product-alias-ownership.ts",
     "translation:benchmark": "tsx scripts/translation-benchmark.ts",
     "translation:benchmark:generate-google": "tsx scripts/translation-benchmark-generate-google.ts",

@@ -756,3 +756,8 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Tag updates are authorized by `StoreAccessService` and use partial PATCH semantics: omitted fields are preserved and explicit null clears a field. No automatic tagging, AI, Inbox filters, or new ProductMaster model is introduced in V1.
 
 - The mobile tag editor uses bounded modal dimensions and wrapping action/header layouts instead of `Expanded`/`Spacer` inside an intrinsic bottom sheet. This prevents Android unbounded-width render failures while preserving the existing tag state and save callbacks. Product QA must report the missing active `OPPO Find N6` catalog row separately from the tagging implementation.
+
+# Product Master synchronization (2026-08-15)
+
+- Product Master imports are canonical model-only data: RAM/ROM/COLOR variant rows collapse to one `ProductModel`, and existing ProductSeries/ProductGroup records are reused. Sheet categories map deterministically to SMARTPHONE, TABLET, AUDIO, WEARABLE, and ACCESSORIES.
+- The importer is a separate maintenance command with a mandatory dry-run mode. It updates/reactivates only authoritative canonical models, preserves ProductAlias and ConversationProduct rows, and never deletes products absent from the sheet. Ambiguous categories, series, or duplicate normalized names fail before any transaction starts.

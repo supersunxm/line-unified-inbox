@@ -1273,6 +1273,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 
 - Runtime follow-up: the tag editor bottom sheet was hardened for narrow Android layouts by giving it an explicit bounded width/height and replacing unbounded header/action flex rows with wrapping layouts. The latest Flutter analyze and full test suite pass. The production catalog currently has no active `OPPO Find N6` model row; `OPPO Find X9` was used only as an available replacement during QA, and the target conversation was cleared back to untagged state.
 
+# Current task: Phase 7B.1 Product Master catalog synchronization (2026-08-15)
+
+- Audited the authoritative Product Master Sheet (`Sheet1`): 104 variant rows, 34 unique canonical names, five categories, and no category conflicts. Production currently has 19 active series, 27 models, 86 aliases, 8 active model-level selector rows, and no duplicate normalized model names; 24 existing models are extra and will not be deleted.
+- Added a deterministic, dry-run-first importer that deduplicates variants by normalized PRODUCT NAME, maps the five sheet categories to existing ProductGroup values and existing series, creates only missing ProductModel rows, safely reactivates authoritative inactive rows, preserves aliases and ConversationProduct relations, and never deletes absent products.
+- The importer is ready for a production dry run. No catalog data has been mutated yet.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.
