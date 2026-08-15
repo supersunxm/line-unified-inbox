@@ -1271,6 +1271,8 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added Flutter tag models, repository methods, and a presentation-only tag bar/sheet with source chips, bounded product search, replacement/clear behavior, and local detail patching.
 - Product selector/service tests, tagging widget tests, Prisma validation/generation, backend build, full backend tests (1110), changed-file ESLint, Flutter analyze, and full Flutter tests pass. The full repository ESLint command remains blocked by pre-existing unrelated violations.
 
+- Runtime follow-up: the tag editor bottom sheet was hardened for narrow Android layouts by giving it an explicit bounded width/height and replacing unbounded header/action flex rows with wrapping layouts. The latest Flutter analyze and full test suite pass. The production catalog currently has no active `OPPO Find N6` model row; `OPPO Find X9` was used only as an available replacement during QA, and the target conversation was cleared back to untagged state.
+
 # Current task: Phase 7A.1 core Chat/Inbox cleanup (2026-08-14)
 
 - Removed persistent store context from the Chat header while retaining store data in conversation models, Inbox cards, and the customer profile sheet.

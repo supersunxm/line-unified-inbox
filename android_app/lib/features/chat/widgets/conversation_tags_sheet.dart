@@ -25,8 +25,8 @@ class ConversationTagsBar extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl,
-          AppSpacing.xs),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.xs),
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(12),
@@ -86,10 +86,18 @@ class ConversationTagsSheet extends StatefulWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => ConversationTagsSheet(
-          conversationId: conversationId,
-          repository: repository,
-          initialTags: initialTags,
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width,
+        ),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        builder: (_) => SizedBox(
+          width: MediaQuery.sizeOf(context).width,
+          height: MediaQuery.sizeOf(context).height * .8,
+          child: ConversationTagsSheet(
+            conversationId: conversationId,
+            repository: repository,
+            initialTags: initialTags,
+          ),
         ),
       );
 
@@ -171,148 +179,165 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SingleChildScrollView(
-          padding: AppSpacing.screen,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          width: screenWidth,
+          child: Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom),
+            child: SingleChildScrollView(
+              padding: AppSpacing.screen,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text('Conversation Tags',
-                        style: Theme.of(context).textTheme.titleLarge),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    children: [
+                      Text('Conversation Tags',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      IconButton(
+                        onPressed:
+                            _saving ? null : () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close',
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close',
+                  const SizedBox(height: AppSpacing.md),
+                  Text('Customer source',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Store'),
+                        selected: _sourceChannel == 'STORE',
+                        onSelected: _saving
+                            ? null
+                            : (selected) => setState(() =>
+                                _sourceChannel = selected ? 'STORE' : null),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Online'),
+                        selected: _sourceChannel == 'ONLINE',
+                        onSelected: _saving
+                            ? null
+                            : (selected) => setState(() =>
+                                _sourceChannel = selected ? 'ONLINE' : null),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text('Customer source',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                children: [
-                  ChoiceChip(
-                    label: const Text('Store'),
-                    selected: _sourceChannel == 'STORE',
-                    onSelected: _saving
-                        ? null
-                        : (selected) => setState(
-                            () => _sourceChannel = selected ? 'STORE' : null),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Online'),
-                    selected: _sourceChannel == 'ONLINE',
-                    onSelected: _saving
-                        ? null
-                        : (selected) => setState(
-                            () => _sourceChannel = selected ? 'ONLINE' : null),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text('Product', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(
-                controller: _searchController,
-                onChanged: _loadProducts,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search product...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              if (_product != null)
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.check_circle_outline),
-                    title: Text(_product!.productName),
-                    subtitle: Text(_product!.seriesName),
-                    trailing: IconButton(
-                      tooltip: 'Clear product',
-                      onPressed: _saving
-                          ? null
-                          : () => setState(() => _product = null),
-                      icon: const Icon(Icons.clear),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Product',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextField(
+                    controller: _searchController,
+                    onChanged: _loadProducts,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search product...',
+                      border: OutlineInputBorder(),
                     ),
                   ),
-                ),
-              if (_loadingProducts)
-                const Padding(
-                    padding: EdgeInsets.all(AppSpacing.lg),
-                    child: Center(child: CircularProgressIndicator()))
-              else if (_products.isEmpty)
-                const Padding(
-                    padding: EdgeInsets.all(AppSpacing.md),
-                    child: Text('No matching products'))
-              else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 230),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _products.length,
-                    itemBuilder: (context, index) {
-                      final product = _products[index];
-                      return ListTile(
-                        dense: true,
-                        title: Text(product.productName),
-                        subtitle: Text(product.seriesName),
-                        selected: _product?.id == product.id,
-                        onTap: _saving
+                  const SizedBox(height: AppSpacing.sm),
+                  if (_product != null)
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.check_circle_outline),
+                        title: Text(_product!.productName),
+                        subtitle: Text(_product!.seriesName),
+                        trailing: IconButton(
+                          tooltip: 'Clear product',
+                          onPressed: _saving
+                              ? null
+                              : () => setState(() => _product = null),
+                          icon: const Icon(Icons.clear),
+                        ),
+                      ),
+                    ),
+                  if (_loadingProducts)
+                    const Padding(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        child: Center(child: CircularProgressIndicator()))
+                  else if (_products.isEmpty)
+                    const Padding(
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        child: Text('No matching products'))
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 230),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _products.length,
+                        itemBuilder: (context, index) {
+                          final product = _products[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(product.productName),
+                            subtitle: Text(product.seriesName),
+                            selected: _product?.id == product.id,
+                            onTap: _saving
+                                ? null
+                                : () => setState(() {
+                                      _product = ConversationProductTag(
+                                        id: product.id,
+                                        productName: product.productName,
+                                        category: product.category,
+                                        seriesName: product.seriesName,
+                                      );
+                                    }),
+                          );
+                        },
+                      ),
+                    ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Text(_error!,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
+                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Wrap(
+                    spacing: AppSpacing.xl,
+                    children: [
+                      TextButton(
+                        onPressed: _saving
                             ? null
                             : () => setState(() {
-                                  _product = ConversationProductTag(
-                                    id: product.id,
-                                    productName: product.productName,
-                                    category: product.category,
-                                    seriesName: product.seriesName,
-                                  );
+                                  _sourceChannel = null;
+                                  _product = null;
                                 }),
-                      );
-                    },
-                  ),
-                ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Text(_error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: _saving
-                        ? null
-                        : () => setState(() {
-                              _sourceChannel = null;
-                              _product = null;
-                            }),
-                    child: const Text('Clear'),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: !_dirty || _saving ? null : _save,
-                    child: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
+                        child: const Text('Clear'),
+                      ),
+                      FilledButton(
+                        onPressed: !_dirty || _saving ? null : _save,
+                        child: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Save'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }

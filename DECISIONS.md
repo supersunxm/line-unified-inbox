@@ -754,3 +754,5 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Customer source is a nullable conversation-level enum (`STORE` or `ONLINE`); no client-supplied store or LINE account scope is accepted.
 - A conversation may have one optional manual model tag selected from active model-level catalog rows. The mobile endpoint deletes/replaces only `MANUAL` rows, so automatic `RULE` classifications remain available internally.
 - Tag updates are authorized by `StoreAccessService` and use partial PATCH semantics: omitted fields are preserved and explicit null clears a field. No automatic tagging, AI, Inbox filters, or new ProductMaster model is introduced in V1.
+
+- The mobile tag editor uses bounded modal dimensions and wrapping action/header layouts instead of `Expanded`/`Spacer` inside an intrinsic bottom sheet. This prevents Android unbounded-width render failures while preserving the existing tag state and save callbacks. Product QA must report the missing active `OPPO Find N6` catalog row separately from the tagging implementation.
