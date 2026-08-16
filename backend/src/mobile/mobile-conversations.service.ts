@@ -237,6 +237,8 @@ export class MobileConversationsService {
           id: true,
           sourceChannels: true,
           isInstallment: true,
+          purchaseRecordedById: true,
+          purchaseRecordedAt: true,
           products: { where: { source: "MANUAL" }, select: { productModelId: true, productVariantId: true } },
         },
       });
@@ -307,7 +309,8 @@ export class MobileConversationsService {
           isInstallment: updated?.isInstallment ?? conversation.isInstallment ?? false,
           products: updated?.products ?? conversation.products ?? [],
         });
-        if (JSON.stringify(previousPurchase) !== JSON.stringify(nextPurchase)) {
+        const provenanceChanged = Boolean(recordPurchaseBy && (!conversation.purchaseRecordedAt || conversation.purchaseRecordedById !== recordPurchaseBy.id));
+        if (provenanceChanged || JSON.stringify(previousPurchase) !== JSON.stringify(nextPurchase)) {
           await tx.activityHistory.create({
             data: {
               conversationId,
