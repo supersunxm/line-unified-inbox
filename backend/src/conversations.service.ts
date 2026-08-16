@@ -17,7 +17,7 @@ const conversationBaseInclude = {
   store: { include: { storeMaster: true } },
   lineOfficialAccount: true,
   purchaseRecordedBy: { select: { id: true, displayName: true } },
-  products: { include: { productModel: { include: { productSeries: true } } } },
+  products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },
 } satisfies Prisma.ConversationInclude;
 export const conversationListInclude = {
