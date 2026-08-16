@@ -2,6 +2,55 @@ export type ApiFollowUpStatus = "FOLLOW_UP" | "REMINDED" | "ACKNOWLEDGED" | "COM
 export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 
+export type ApiPurchaseInformation = {
+  recordState: "VERIFIED" | "LEGACY_MANUAL" | "NONE";
+  purchaseChannel: string[];
+  paymentMethod: "INSTALLMENT" | null;
+  products: Array<{
+    model: { id: string; name: string; seriesName: string | null; category: string | null };
+    variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
+    source: "MANUAL";
+  }>;
+  recordedBy: string | null;
+  recordedAt: string | null;
+};
+
+export type PurchaseAnalyticsResponse = {
+  filters: { from: string | null; to: string | null; storeId: string | null };
+  overview: {
+    verifiedPurchaseRecords: number;
+    recordedProducts: number;
+    stores: number;
+    recordingBms: number;
+  };
+  products: Array<{ productModelId: string; name: string; seriesName: string; count: number }>;
+  variants: Array<{ productVariantId: string; modelName: string; variant: string; color: string | null; count: number }>;
+  colors: Array<{ label: string; count: number }>;
+  channels: Array<{ label: string; count: number }>;
+  paymentMethods: Array<{ label: string; count: number }>;
+  stores: Array<{ storeId: string; storeName: string; storeCode: string | null; recordCount: number; uniqueConversations: number }>;
+  recordingActivity: Array<{ userId: string | null; displayName: string; recordCount: number; lastRecordedAt: string }>;
+};
+
+export type ApiAiInsight = {
+  mentionedProducts: Array<{
+    model: { id: string; name: string; seriesName: string | null; category: string | null };
+    variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
+    confidence: number | null;
+    matchedPhrase: string | null;
+    detectionMethod: string | null;
+    sourceMessageId: string | null;
+  }>;
+  topics: Array<{ id: string; name: string; category: string; confidence: number | null }>;
+  classification: { productRelationship: string | null; purchaseIntent: string | null };
+};
+
+export type ApiOperationalState = {
+  replyStatus: ApiBmReplyStatus;
+  priority: { level: string };
+  unread: number | null;
+};
+
 export type ApiConversation = {
   id: string;
   latestMessageAt: string;
@@ -31,8 +80,11 @@ export type ApiConversation = {
   }>;
   products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
+  purchaseInformation?: ApiPurchaseInformation;
+  aiInsight?: ApiAiInsight;
+  operationalState?: ApiOperationalState;
   notes: Array<{ id: string; content: string; createdAt: string }>;
-  activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; newBmReplyStatus: ApiBmReplyStatus | null; createdAt: string }>;
+  activityHistory: Array<{ id: string; actionType: string; newStatus: ApiFollowUpStatus | null; newBmReplyStatus: ApiBmReplyStatus | null; createdByUserId?: string | null; metadata?: unknown; createdAt: string }>;
 };
 
 export type ApiCustomerIntelligence = {
@@ -307,6 +359,7 @@ export type StoreDeletionPreview = { storeId: string; storeName: string; lineOff
 export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };
 export type ConversationMessagesResponse = { items: ApiConversation["messages"]; total: number; page: number; pageSize: number; hasEarlier: boolean };
 export type ProductMetadataResponse = { series: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> };
+export type ProductVariantMetadata = { id: string; ram: string | null; rom: string | null; color: string | null };
 export type ApiTopic = { id: string; name: string; category: string };
 export type DashboardSummaryResponse = {
   totalConversations: number;
@@ -1137,4 +1190,3 @@ export type MassMessageCampaignDetail = {
   duplicate?: boolean;
   storeDeliveries?: StoreDeliveryDetail[];
 };
-

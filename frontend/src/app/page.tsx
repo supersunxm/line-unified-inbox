@@ -182,9 +182,23 @@ const translations = {
     showOriginal: "ดูต้นฉบับ",
 
     productInsight: "ข้อมูลสินค้า",
+    customerPurchase: "ข้อมูลการซื้อของลูกค้า",
+    purchaseChannel: "ช่องทางการซื้อ",
+    paymentMethod: "วิธีชำระเงิน",
+    recordedBy: "บันทึกโดย",
+    recordedAt: "บันทึกเมื่อ",
+    purchaseInformationUpdated: "อัปเดตข้อมูลการซื้อแล้ว",
+    aiInsight: "ข้อมูลเชิงลึกจาก AI",
+    mentionedProduct: "สินค้าที่กล่าวถึง",
+    noPurchaseInformation: "ยังไม่มีข้อมูลการซื้อที่ยืนยัน",
+    legacyPurchaseInformation: "ข้อมูลเดิมที่บันทึกแบบแมนนวล — ยังไม่ยืนยัน",
+    noInsightAvailable: "ยังไม่มีข้อมูลเชิงลึก",
+    editPurchaseInformation: "แก้ไขข้อมูลการซื้อ",
     productCategory: "ประเภทสินค้า",
     productSeries: "กลุ่มผลิตภัณฑ์",
     productModel: "รุ่นสินค้า",
+    variant: "ตัวเลือกสินค้า",
+    noMatchingProducts: "ไม่พบสินค้าที่ตรงกัน",
     customerRelationship: "สถานะความสัมพันธ์กับสินค้า",
     purchaseIntent: "ความตั้งใจซื้อ",
 
@@ -477,9 +491,23 @@ const translations = {
     showOriginal: "Show Original",
 
     productInsight: "Product Insight",
+    customerPurchase: "Customer Purchase",
+    purchaseChannel: "Purchase Channel",
+    paymentMethod: "Payment Method",
+    recordedBy: "Recorded by",
+    recordedAt: "Recorded at",
+    purchaseInformationUpdated: "Purchase information updated",
+    aiInsight: "AI Insight",
+    mentionedProduct: "Mentioned Product",
+    noPurchaseInformation: "No verified purchase information",
+    legacyPurchaseInformation: "Legacy manual record — not verified",
+    noInsightAvailable: "No additional insight available",
+    editPurchaseInformation: "Edit Purchase Information",
     productCategory: "Product Category",
     productSeries: "Product Series",
     productModel: "Product Model",
+    variant: "Variant",
+    noMatchingProducts: "No matching product",
     customerRelationship: "Product Relationship",
     purchaseIntent: "Purchase Intent",
 
@@ -771,9 +799,23 @@ const translations = {
     showOriginal: "查看原文",
 
     productInsight: "产品信息",
+    customerPurchase: "客户购买信息",
+    purchaseChannel: "购买渠道",
+    paymentMethod: "支付方式",
+    recordedBy: "记录人",
+    recordedAt: "记录时间",
+    purchaseInformationUpdated: "购买信息已更新",
+    aiInsight: "AI 洞察",
+    mentionedProduct: "提及的产品",
+    noPurchaseInformation: "暂无已验证的购买信息",
+    legacyPurchaseInformation: "历史手动记录 — 尚未验证",
+    noInsightAvailable: "暂无更多洞察",
+    editPurchaseInformation: "编辑购买信息",
     productCategory: "产品类别",
     productSeries: "产品系列",
     productModel: "产品型号",
+    variant: "规格",
+    noMatchingProducts: "没有匹配的产品",
     customerRelationship: "客户产品关系",
     purchaseIntent: "购买意向",
 
@@ -2587,19 +2629,70 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     finally { setChatLoading(false); }
   }
 
-  async function editConversationTags() {
-    if (!selectedConversationId || !selectedApiConversation) return;
-    const currentProducts = selectedApiConversation.products.map(({ productModel }) => productModel.name).join(", ");
-    const currentTopics = selectedApiConversation.topics.map(({ topic }) => topic.name).join(", ");
-    const productNames = window.prompt(`${text.productModel}\n${availableProductModels.map(({ name }) => name).join(", ")}`, currentProducts);
-    if (productNames === null) return;
-    const topicNames = window.prompt(`${text.conversationTopics}\n${availableTopics.map(({ name }) => name).join(", ")}`, currentTopics);
-    if (topicNames === null) return;
-    const normalizeNames = (value: string) => value.split(",").map((name) => name.trim().toLocaleLowerCase()).filter(Boolean);
-    const requestedProducts = normalizeNames(productNames); const requestedTopics = normalizeNames(topicNames);
+  async function editPurchaseInformation() {
+    if (!selectedConversationId || !selectedApiConversation || authUser?.role === "VIEWER") return;
+    const current = selectedApiConversation.purchaseInformation;
+    const currentProduct = current?.products[0];
+    const modelInput = window.prompt(
+      `${text.productModel}\n${availableProductModels.map(({ name }) => name).join(", ")}`,
+      currentProduct?.model.name ?? "",
+    );
+    if (modelInput === null) return;
+    const normalizedModel = modelInput.trim().toLocaleLowerCase();
+    const selectedModel = normalizedModel
+      ? availableProductModels.find(({ name }) => name.toLocaleLowerCase() === normalizedModel)
+      : undefined;
+    if (normalizedModel && !selectedModel) {
+      setToastMessage(text.noMatchingProducts);
+      return;
+    }
+
+    let productVariantId: string | null = selectedModel?.id === currentProduct?.model.id
+      ? currentProduct?.variant?.id ?? null
+      : null;
+    if (selectedModel && selectedModel.id !== currentProduct?.model.id) {
+      let variants: Awaited<ReturnType<typeof api.productVariants>>;
+      try {
+        variants = await api.productVariants(selectedModel.id);
+      } catch (error) {
+        setToastMessage(error instanceof Error ? error.message : text.noMatchingProducts);
+        return;
+      }
+      if (variants.items.length > 0) {
+        const labels = variants.items.map((variant, index) => `${index + 1}. ${[variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") || variant.id}`).join("\n");
+        const variantInput = window.prompt(`${text.variant}\n${labels}`, "");
+        if (variantInput === null) return;
+        const selectedVariant = variants.items[Number.parseInt(variantInput.trim(), 10) - 1];
+        if (!selectedVariant) {
+          setToastMessage(text.noMatchingProducts);
+          return;
+        }
+        productVariantId = selectedVariant.id;
+      }
+    }
+
+    const channelInput = window.prompt(`${text.purchaseChannel} (STORE, ONLINE)`, current?.purchaseChannel.join(", ") ?? "");
+    if (channelInput === null) return;
+    const purchaseChannel = [...new Set(channelInput.split(",").map((value) => value.trim().toUpperCase()).filter((value): value is "STORE" | "ONLINE" => value === "STORE" || value === "ONLINE"))];
+    const paymentInput = window.prompt(`${text.paymentMethod} (INSTALLMENT or blank)`, current?.paymentMethod ?? "");
+    if (paymentInput === null) return;
+    const paymentMethod = paymentInput.trim().toUpperCase() === "INSTALLMENT" ? "INSTALLMENT" as const : null;
+
     setChatLoading(true);
-    try { const updated = await api.updateConversationTags(selectedConversationId, availableProductModels.filter(({ name }) => requestedProducts.includes(name.toLocaleLowerCase())).map(({ id }) => id), availableTopics.filter(({ name }) => requestedTopics.includes(name.toLocaleLowerCase())).map(({ id }) => id)); setSelectedApiConversation(updated); setToastMessage(text.classificationUpdated); }
-    finally { setChatLoading(false); }
+    try {
+      const updated = await api.updatePurchaseInformation(selectedConversationId, {
+        purchaseChannel,
+        paymentMethod,
+        productModelId: selectedModel?.id ?? null,
+        productVariantId,
+      });
+      setSelectedApiConversation(updated);
+      setToastMessage(text.purchaseInformationUpdated);
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : text.noPurchaseInformation);
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   function connectionLabel(status: LineOfficialAccountResponse["connectionStatus"]) {
@@ -3548,33 +3641,56 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
                       <div className="px-3 py-3 sm:px-4">
                         <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
-                          <section data-product-intent-card data-insights-section className="pb-3 chat-detail-insights">
+                          <section data-purchase-information-card data-insights-section className="pb-3 chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                              <h3 className="font-semibold">{text.productInsight}</h3>
-                              <div className="flex flex-wrap gap-2">
-                                <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
-                                <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void editConversationTags()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editTags}</button>
-                              </div>
+                              <h3 className="font-semibold">{text.customerPurchase}</h3>
+                              <button data-chat-detail-secondary-action disabled={chatLoading || authUser.role === "VIEWER"} onClick={() => void editPurchaseInformation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editPurchaseInformation}</button>
                             </div>
+                            {selectedApiConversation?.purchaseInformation?.recordState === "LEGACY_MANUAL" ? (
+                              <p className="text-sm text-slate-500">{text.legacyPurchaseInformation}</p>
+                            ) : selectedApiConversation?.purchaseInformation?.products.length ? (
+                              <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                                <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ model }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}`).join(", ")}</dd></div>
+                                <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ model }) => model.category?.replaceAll("_", " ")).filter(Boolean).join(", ") || "—"}</dd></div>
+                                <div><dt className="app-muted text-xs">{text.purchaseChannel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.purchaseChannel.join(", ") || "—"}</dd></div>
+                                <div><dt className="app-muted text-xs">{text.paymentMethod}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.paymentMethod ?? "—"}</dd></div>
+                                <div className="sm:col-span-2"><dt className="app-muted text-xs">{text.variant}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ variant }) => variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "—").join(", ")}</dd></div>
+                              </dl>
+                            ) : (
+                              <p className="text-sm text-slate-500">{text.noPurchaseInformation}</p>
+                            )}
+                            {selectedApiConversation?.purchaseInformation?.recordState === "VERIFIED" && (selectedApiConversation.purchaseInformation.recordedBy || selectedApiConversation.purchaseInformation.recordedAt) && (
+                              <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
+                                {selectedApiConversation.purchaseInformation.recordedBy && <div><dt className="app-muted text-xs">{text.recordedBy}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.recordedBy}</dd></div>}
+                                {selectedApiConversation.purchaseInformation.recordedAt && <div><dt className="app-muted text-xs">{text.recordedAt}</dt><dd className="mt-0.5 text-sm font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedApiConversation.purchaseInformation.recordedAt))}</dd></div>}
+                              </dl>
+                            )}
+                          </section>
+
+                          <section data-product-intent-card data-insights-section className="border-t border-[var(--border)] py-3 chat-detail-insights">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                              <h3 className="font-semibold">{text.aiInsight}</h3>
+                              <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
+                            </div>
+                            {selectedApiConversation?.aiInsight?.mentionedProducts.length ? (
+                              <div className="mb-3"><h4 className="app-muted mb-1 text-xs font-semibold uppercase tracking-wide">{text.mentionedProduct}</h4><p className="text-sm font-medium">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
+                            ) : (
+                              <p className="text-sm text-slate-500">{text.noInsightAvailable}</p>
+                            )}
                             <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                              <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.products.map(({ productModel }) => productModel.productSeries.productGroup?.replaceAll("_", " ")).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(", ") || text.noProductDetected}</dd></div>
-                              <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium font-tabular">{selectedApiConversation?.products.map(({ productModel, confidence }) => `${productModel.productSeries.name} · ${productModel.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ") || text.noProductDetected}</dd></div>
-                              <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedConversation.relationship === "Interested" ? text.interested : selectedConversation.relationship}</span></dd></div>
-                              <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedConversation.purchaseIntent === "High Intent" ? text.highIntent : selectedConversation.purchaseIntent}</span></dd></div>
+                              <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
+                              <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
                             </dl>
                             <div className="mt-3 border-t border-[var(--border)] pt-3">
                               <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
                               <div className="flex flex-wrap gap-1.5">
-                                {(selectedApiConversation?.topics ?? selectedConversation.topic.split(" · ").filter(Boolean).map((name) => ({ topic: { id: name, name, category: "" }, source: null, confidence: null })))
-                                  .map(({ topic, source }) => (
-                                    <span
-                                      key={topic.id}
-                                      className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200"
-                                    >
-                                      {topic.name} <span className="text-[10px] opacity-70">{source === "MANUAL" ? text.manualSource : text.autoSource}</span>
-                                    </span>
-                                  ))}
-                                {selectedApiConversation?.topics.length === 0 && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
+                                {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics.filter(({ source }) => source === "RULE") ?? [])
+                                  .map((topic) => {
+                                    const topicId = "topic" in topic ? topic.topic.id : topic.id;
+                                    const topicName = "topic" in topic ? topic.topic.name : topic.name;
+                                    return <span key={topicId} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">{topicName} <span className="text-[10px] opacity-70">{text.autoSource}</span></span>;
+                                  })}
+                                {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
                               </div>
                             </div>
                           </section>

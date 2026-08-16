@@ -1,6 +1,6 @@
 import { ConversationSourceChannel, ProductGroup } from "@prisma/client";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from "class-validator";
+import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from "class-validator";
 
 export class MobileConversationQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -23,6 +23,13 @@ export class UpdateMobileConversationTagsDto {
   @IsOptional() @IsBoolean() isInstallment?: boolean;
   @IsOptional() @IsUUID("4") productId?: string | null;
   @IsOptional() @IsUUID("4") variantId?: string | null;
+}
+
+export class UpdateMobilePurchaseInformationDto {
+  @IsOptional() @ArrayMaxSize(2) @IsEnum(ConversationSourceChannel, { each: true }) purchaseChannel?: ConversationSourceChannel[];
+  @IsOptional() @IsIn(["INSTALLMENT"]) paymentMethod?: "INSTALLMENT" | null;
+  @IsOptional() @IsUUID("4") productModelId?: string | null;
+  @IsOptional() @IsUUID("4") productVariantId?: string | null;
 }
 
 export class MobileProductVariantQueryDto {

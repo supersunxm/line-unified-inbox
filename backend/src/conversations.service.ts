@@ -10,11 +10,13 @@ import { LineMessagingService } from "./line-messaging/line-messaging.service";
 import { MediaStorageService } from "./media/media-storage";
 import { createMediaPublicUrl } from "./media/media-public-url";
 import type { AuthUser } from "./auth/auth.guard";
+import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
 
 const conversationBaseInclude = {
   customer: true,
   store: { include: { storeMaster: true } },
   lineOfficialAccount: true,
+  purchaseRecordedBy: { select: { id: true, displayName: true } },
   products: { include: { productModel: { include: { productSeries: true } } } },
   topics: { include: { topic: true } },
 } satisfies Prisma.ConversationInclude;
@@ -51,11 +53,23 @@ export class ConversationsService {
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
-    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, ...conversation } = item;
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, ...conversation } = item;
+    void _purchaseRecordedById;
+    void _purchaseRecordedAt;
     const { storeMaster, ...store } = rawStore;
     const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
     const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
-    return { ...conversation, resolvedLineOaManagerUrl, lineOfficialAccount, store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" }, customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null }, messages: item.messages.map((message) => this.safeMessage(message)) };
+    return {
+      ...conversation,
+      resolvedLineOaManagerUrl,
+      lineOfficialAccount,
+      store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" },
+      customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null },
+      messages: item.messages.map((message) => this.safeMessage(message)),
+      purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy }),
+      aiInsight: buildAiInsight(item),
+      operationalState: buildOperationalState({ replyStatus: item.bmReplyStatus, priority: item.priority }),
+    };
   }
 
   private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {

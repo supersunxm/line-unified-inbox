@@ -14,7 +14,9 @@ test("chat detail customer identity and action hierarchy use the active handlers
   assert.match(detail, /data-chat-detail-secondary-action[\s\S]*refreshProfile\(\)/);
   assert.match(detail, /data-chat-detail-secondary-action[\s\S]*setShowTranslation\(!showTranslation\)/);
   assert.match(detail, /data-chat-detail-secondary-action[\s\S]*reanalyzeConversation\(\)/);
-  assert.match(detail, /data-chat-detail-secondary-action[\s\S]*editConversationTags\(\)/);
+  assert.doesNotMatch(detail, /editConversationTags\(\)/);
+  assert.match(detail, /data-chat-detail-secondary-action[\s\S]*editPurchaseInformation\(\)/);
+  assert.match(detail, /selectedApiConversation\?\.purchaseInformation\?\.recordState/);
   assert.match(detail, /showTranslation\s*\? text\.showOriginal\s*:\s*text\.translateMessage/);
 });
 
@@ -48,6 +50,21 @@ test("insights consolidate product intent and topics while the internal note rem
   assert.match(detail, /onBlur=\{\(\) => void saveInternalNote\(\)\}/);
   assert.match(detail, /placeholder=\{text\.notePlaceholder\}/);
   assert.match(detail, /text\.noteSaveHint/);
+});
+
+test("customer purchase and AI insight remain semantically separated", () => {
+  const purchaseStart = detail.indexOf("data-purchase-information-card");
+  const insightStart = detail.indexOf("data-product-intent-card", purchaseStart);
+  assert.ok(purchaseStart >= 0);
+  assert.ok(insightStart > purchaseStart);
+  const purchaseSection = detail.slice(purchaseStart, insightStart);
+  const insightSection = detail.slice(insightStart);
+  assert.match(purchaseSection, /purchaseInformation/);
+  assert.match(purchaseSection, /recordState/);
+  assert.doesNotMatch(purchaseSection, /confidence|purchaseIntent|mentionedProducts|aiInsight/);
+  assert.match(insightSection, /aiInsight/);
+  assert.match(insightSection, /mentionedProducts/);
+  assert.match(insightSection, /purchaseIntent/);
 });
 
 test("Store Follow-up bottom panel is removed from Chat Detail while shared status handlers remain intact", () => {

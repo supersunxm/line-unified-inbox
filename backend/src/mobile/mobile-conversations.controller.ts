@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, 
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { AuthRequest } from "../auth/auth.guard";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateMobileConversationTagsDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
 import { MobileConversationsService } from "./mobile-conversations.service";
 
 @Controller("mobile/conversations")
@@ -20,6 +20,9 @@ export class MobileConversationsController {
 
   @Patch(":id/tags")
   updateTags(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: UpdateMobileConversationTagsDto) { return this.conversations.updateTags(request.user!, id, dto); }
+
+  @Patch(":id/purchase-information")
+  updatePurchaseInformation(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: UpdateMobilePurchaseInformationDto) { return this.conversations.updatePurchaseInformation(request.user!, id, dto); }
 
   @Post(":id/messages")
   send(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: SendConversationMessageDto) { return this.conversations.send(request.user!, id, dto); }

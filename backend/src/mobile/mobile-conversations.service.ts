@@ -5,9 +5,22 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, UpdateMobileConversationTagsDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
+import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+
+function purchaseSnapshot(input: {
+  sourceChannels: readonly string[];
+  isInstallment: boolean;
+  products?: readonly { productModelId: string; productVariantId: string | null }[];
+}) {
+  return {
+    purchaseChannel: [...input.sourceChannels],
+    paymentMethod: input.isInstallment ? "INSTALLMENT" : null,
+    products: (input.products ?? []).map((product) => ({ productModelId: product.productModelId, productVariantId: product.productVariantId })),
+  };
+}
 
 @Injectable()
 export class MobileConversationsService {
@@ -50,6 +63,10 @@ export class MobileConversationsService {
           bmReplyStatus: item.bmReplyStatus,
           followUpStatus: item.followUpStatus,
           unreadCount: item._count.pushNotifications,
+          operationalState: buildOperationalState({
+            replyStatus: item.bmReplyStatus,
+            unread: item._count.pushNotifications,
+          }),
           lastMessage: message ? { id: message.id, direction: message.direction, messageType: message.messageType, preview: previewText(message.originalText), sentAt: message.sentAt } : null,
         };
       }),
@@ -70,16 +87,31 @@ export class MobileConversationsService {
         latestMessageAt: true,
         bmReplyStatus: true,
         followUpStatus: true,
+        priority: true,
         sourceChannels: true,
         isInstallment: true,
+        productRelationship: true,
+        purchaseIntent: true,
+        purchaseRecordedAt: true,
+        purchaseRecordedBy: { select: { id: true, displayName: true } },
         customer: { select: { id: true, displayName: true } },
         store: { select: { id: true, name: true, code: true } },
         products: {
-          where: { source: "MANUAL" },
-          take: 1,
           select: {
+            source: true,
+            confidence: true,
+            matchedPhrase: true,
+            detectionMethod: true,
+            sourceMessageId: true,
             productModel: { select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } } },
             productVariant: { select: { id: true, ram: true, rom: true, color: true } },
+          },
+        },
+        topics: {
+          select: {
+            source: true,
+            confidence: true,
+            topic: { select: { id: true, name: true, category: true } },
           },
         },
         messages: {
@@ -95,6 +127,11 @@ export class MobileConversationsService {
     const hasEarlier = conversation.messages.length > query.limit;
     const pageMessages = conversation.messages.slice(0, query.limit).reverse();
     const oldest = pageMessages[0];
+    const products = conversation.products ?? [];
+    const topics = conversation.topics ?? [];
+    // Only an explicitly MANUAL product can participate in the legacy tags
+    // compatibility field. Unattributed rows must not look like purchase data.
+    const manualProduct = products.find((product) => product.source === "MANUAL");
     return {
       id: conversation.id,
       customer: conversation.customer,
@@ -105,16 +142,28 @@ export class MobileConversationsService {
       tags: {
         sourceChannels: conversation.sourceChannels,
         isInstallment: conversation.isInstallment,
-        product: conversation.products?.[0]
+        product: manualProduct
           ? {
-              id: conversation.products[0].productModel.id,
-              productName: conversation.products[0].productModel.name,
-              category: conversation.products[0].productModel.productSeries.productGroup,
-              seriesName: conversation.products[0].productModel.productSeries.name,
+              id: manualProduct.productModel.id,
+              productName: manualProduct.productModel.name,
+              category: manualProduct.productModel.productSeries.productGroup,
+              seriesName: manualProduct.productModel.productSeries.name,
             }
           : null,
-        variant: conversation.products?.[0]?.productVariant ?? null,
+        variant: manualProduct?.productVariant ?? null,
       },
+      purchaseInformation: buildPurchaseInformation({ ...conversation, products, purchaseRecordedBy: conversation.purchaseRecordedBy, purchaseRecordedAt: conversation.purchaseRecordedAt }),
+      aiInsight: buildAiInsight({
+        products,
+        topics,
+        productRelationship: conversation.productRelationship,
+        purchaseIntent: conversation.purchaseIntent,
+      }),
+      operationalState: buildOperationalState({
+        replyStatus: conversation.bmReplyStatus,
+        priority: conversation.priority,
+        unread: conversation._count.pushNotifications,
+      }),
       unreadCount: conversation._count.pushNotifications,
       nextCursor: hasEarlier && oldest ? encodeCursor(oldest.sentAt, oldest.id) : null,
       messages: pageMessages.map((message) => ({
@@ -179,11 +228,24 @@ export class MobileConversationsService {
     return { items: variants };
   }
 
-  async updateTags(user: AuthUser, conversationId: string, dto: UpdateMobileConversationTagsDto) {
+  async updateTags(user: AuthUser, conversationId: string, dto: UpdateMobileConversationTagsDto, recordPurchaseBy?: AuthUser) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
     await this.prisma.$transaction(async (tx) => {
-      const conversation = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true, sourceChannels: true, isInstallment: true } });
+      const conversation = await tx.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          id: true,
+          sourceChannels: true,
+          isInstallment: true,
+          products: { where: { source: "MANUAL" }, select: { productModelId: true, productVariantId: true } },
+        },
+      });
       if (!conversation) throw new NotFoundException("Conversation not found");
+      const previousPurchase = purchaseSnapshot({
+        sourceChannels: conversation.sourceChannels ?? [],
+        isInstallment: conversation.isInstallment ?? false,
+        products: conversation.products ?? [],
+      });
 
       let productModel: { id: string } | null = null;
       let productVariant: { id: string; productModelId: string } | null = null;
@@ -210,9 +272,14 @@ export class MobileConversationsService {
         }
       }
 
-      const conversationUpdate: { sourceChannels?: typeof dto.sourceChannels; isInstallment?: boolean } = {};
+      const conversationUpdate: Prisma.ConversationUpdateInput = {};
       if (dto.sourceChannels !== undefined) conversationUpdate.sourceChannels = dto.sourceChannels;
       if (dto.isInstallment !== undefined) conversationUpdate.isInstallment = dto.isInstallment;
+      const recordedAt = recordPurchaseBy ? new Date() : null;
+      if (recordPurchaseBy) {
+        conversationUpdate.purchaseRecordedAt = recordedAt;
+        conversationUpdate.purchaseRecordedBy = { connect: { id: recordPurchaseBy.id } };
+      }
       if (Object.keys(conversationUpdate).length > 0) await tx.conversation.update({ where: { id: conversationId }, data: conversationUpdate });
 
       if (dto.productId !== undefined) {
@@ -225,8 +292,45 @@ export class MobileConversationsService {
         if (!manual) throw new BadRequestException("A product must be selected before choosing a variant");
         await tx.conversationProduct.update({ where: { conversationId_productModelId: { conversationId, productModelId: manual.productModelId } }, data: { productVariantId: productVariant?.id ?? null } });
       }
+
+      if (recordPurchaseBy) {
+        const updated = await tx.conversation.findUnique({
+          where: { id: conversationId },
+          select: {
+            sourceChannels: true,
+            isInstallment: true,
+            products: { where: { source: "MANUAL" }, select: { productModelId: true, productVariantId: true } },
+          },
+        });
+        const nextPurchase = purchaseSnapshot({
+          sourceChannels: updated?.sourceChannels ?? conversation.sourceChannels ?? [],
+          isInstallment: updated?.isInstallment ?? conversation.isInstallment ?? false,
+          products: updated?.products ?? conversation.products ?? [],
+        });
+        if (JSON.stringify(previousPurchase) !== JSON.stringify(nextPurchase)) {
+          await tx.activityHistory.create({
+            data: {
+              conversationId,
+              actionType: "PURCHASE_INFORMATION_UPDATED",
+              description: "Purchase information updated",
+              createdByUserId: recordPurchaseBy.id,
+              createdByName: recordPurchaseBy.displayName?.trim() || recordPurchaseBy.email,
+              metadata: { category: "PURCHASE_INFORMATION", oldValue: previousPurchase, newValue: nextPurchase },
+            },
+          });
+        }
+      }
     });
     return this.get(user, conversationId);
+  }
+
+  async updatePurchaseInformation(user: AuthUser, conversationId: string, dto: UpdateMobilePurchaseInformationDto) {
+    return this.updateTags(user, conversationId, {
+      sourceChannels: dto.purchaseChannel,
+      isInstallment: dto.paymentMethod === undefined ? undefined : dto.paymentMethod === "INSTALLMENT",
+      productId: dto.productModelId,
+      variantId: dto.productVariantId,
+    }, user);
   }
 
   async send(user: AuthUser, conversationId: string, dto: SendConversationMessageDto) {
