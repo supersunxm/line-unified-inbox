@@ -1,6 +1,26 @@
 # AI progress
 
-## Current task: Android Production APK Release v1.0.1+2
+## Current task: Android Release v1.0.2 (Pilot Messaging Release)
+
+- **Release Overview & Features**:
+  - **Version & Build**: `v1.0.2+3` (`oppo-line-oa-chat-v1.0.2-production.apk`).
+  - **Image Preview Before Sending**: Dedicated fullscreen modal preview (`_ImagePreviewPage`) with interactive pinch-to-zoom before user confirms with `[Send]` or aborts with `[Cancel]`.
+  - **Camera Capture & Gallery Attachment**: Modal attachment sheet (`Take Photo` via `ImageSource.camera` / `Gallery` via `ImageSource.gallery`).
+  - **Client-Side Compression**: Auto-scales large camera/gallery images (`maxWidth: 2048`, `maxHeight: 2048`, `imageQuality: 85`) keeping uploads fast and within limits.
+  - **Image Delivery Reliability**: Upgraded `ApiClient._extractErrorMessage` to extract real server error messages and handle session expiry, eliminated artificial S3 restriction in backend, and added detailed LINE push message error logging.
+- **Binary & Distribution**:
+  - Binary File: `frontend/public/downloads/oppo-line-oa-chat-v1.0.2-production.apk` (56,118,743 bytes, ~56.1 MB).
+  - SHA256: `4811ca85df647b39eaa04f51fec5e03a48c851102a7563edfbd3cee4626b8258`.
+  - Download Page: Updated at `/download` with release badge `Version 1.0.2+3 (Pilot Messaging Release) · 56.1 MB`.
+- **Validation & Verification**:
+  - Flutter analyze: `0 issues`.
+  - Flutter test suite: `79 / 79 passed (100%)`.
+  - Backend test suite: `1,215 / 1,215 passed (100%)`.
+  - Frontend test suite: `344 / 344 passed (100%)`.
+  - Next.js production build: Succeeded with `/download` static route.
+  - Real device / emulator: Installed on `emulator-5554` and verified inbox, chat detail, attachment bottom sheet, and image preview actions.
+
+## Previous task: Android Production APK Release v1.0.1+2
 
 - **App Version & Build**:
   - Incremented version in `android_app/pubspec.yaml` to `1.0.1+2`.
