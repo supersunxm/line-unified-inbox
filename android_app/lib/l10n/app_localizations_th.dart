@@ -88,7 +88,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get you => 'คุณ';
 
   @override
-  String get store => 'หน้าร้าน';
+  String get store => 'ร้านค้า';
 
   @override
   String get online => 'ออนไลน์';
@@ -325,10 +325,10 @@ class AppLocalizationsTh extends AppLocalizations {
   String get password => 'รหัสผ่าน';
 
   @override
-  String get createBmAccount => 'สร้างบัญชี BM';
+  String get createBmAccount => 'สมัครสมาชิก';
 
   @override
-  String get name => 'ชื่อ';
+  String get name => 'ชื่อ-สกุล ภาษาอังกฤษเท่านั้น';
 
   @override
   String get employeeId => 'รหัสพนักงาน';
@@ -340,25 +340,33 @@ class AppLocalizationsTh extends AppLocalizations {
   String get confirmPassword => 'ยืนยันรหัสผ่าน';
 
   @override
-  String get passwordRequirement => 'รหัสผ่าน (อย่างน้อย 12 ตัวอักษร)';
+  String get passwordRequirement => 'รหัสผ่าน';
 
   @override
-  String get submitRegistration => 'ส่งคำขอลงทะเบียน';
+  String get passwordConditionsTitle => 'เงื่อนไขรหัสผ่าน';
 
   @override
-  String get staff => 'พนักงาน';
+  String get passwordConditions =>
+      '✓ ความยาวอย่างน้อย 12 ตัวอักษร\n✓ มีตัวอักษรภาษาอังกฤษตัวใหญ่ (A-Z) อย่างน้อย 1 ตัว\n✓ มีตัวอักษรภาษาอังกฤษตัวเล็ก (a-z) อย่างน้อย 1 ตัว\n✓ มีตัวเลข (0-9) อย่างน้อย 1 ตัว\n✓ มีอักขระพิเศษ (@#\$%^&*...) อย่างน้อย 1 ตัว';
 
   @override
-  String get storeManager => 'ผู้จัดการร้าน';
+  String get submitRegistration => 'ยืนยันการสมัครสมาชิก';
 
   @override
-  String get pendingApproval => 'รอการอนุมัติ';
+  String get staff => 'PC';
 
   @override
-  String get pendingApprovalMessage => 'ส่งคำขอแล้วและกำลังรอผู้ดูแลอนุมัติ';
+  String get storeManager => 'BM';
 
   @override
-  String get backToLogin => 'กลับเข้าสู่ระบบ';
+  String get pendingApproval => 'อยู่ในขั้นตอนการอนุมัติ';
+
+  @override
+  String get pendingApprovalMessage =>
+      'บัญชีของคุณอยู่ในช่วงรอการอนุมัติ\n\nใช้เวลาไม่เกิน 1 วัน\n\nหากต้องการให้อนุมัติเร็วที่สุด\nติดต่อ LINE ID:\n\nsunny_typee\n\nหรือ Scan QR Code';
+
+  @override
+  String get backToLogin => 'กลับไปหน้าเข้าสู่ระบบ';
 
   @override
   String get waitingForApproval => 'รอการอนุมัติ';

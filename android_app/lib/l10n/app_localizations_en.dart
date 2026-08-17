@@ -329,10 +329,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get password => 'Password';
 
   @override
-  String get createBmAccount => 'Create BM account';
+  String get createBmAccount => 'Create account';
 
   @override
-  String get name => 'Name';
+  String get name => 'Name (English only)';
 
   @override
   String get employeeId => 'Employee ID';
@@ -344,23 +344,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get confirmPassword => 'Confirm password';
 
   @override
-  String get passwordRequirement => 'Password (12+ characters)';
+  String get passwordRequirement => 'Password';
 
   @override
-  String get submitRegistration => 'Submit registration';
+  String get passwordConditionsTitle => 'Password requirements';
 
   @override
-  String get staff => 'Staff';
+  String get passwordConditions =>
+      '✓ At least 12 characters\n✓ At least 1 uppercase letter (A-Z)\n✓ At least 1 lowercase letter (a-z)\n✓ At least 1 number (0-9)\n✓ At least 1 special character (@#\$%^&*...)';
 
   @override
-  String get storeManager => 'Store manager';
+  String get submitRegistration => 'Create account';
+
+  @override
+  String get staff => 'PC';
+
+  @override
+  String get storeManager => 'BM';
 
   @override
   String get pendingApproval => 'Pending approval';
 
   @override
   String get pendingApprovalMessage =>
-      'Your account has been submitted and is waiting for administrator approval.';
+      'Your account is waiting for approval.\n\nThis usually takes up to one day.\n\nFor faster approval, contact LINE ID:\n\nsunny_typee\n\nOr scan the QR code.';
 
   @override
   String get backToLogin => 'Back to login';

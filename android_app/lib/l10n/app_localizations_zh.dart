@@ -324,10 +324,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get password => '密码';
 
   @override
-  String get createBmAccount => '创建 BM 账号';
+  String get createBmAccount => '注册账号';
 
   @override
-  String get name => '姓名';
+  String get name => '姓名（仅限英文）';
 
   @override
   String get employeeId => '员工编号';
@@ -339,22 +339,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get confirmPassword => '确认密码';
 
   @override
-  String get passwordRequirement => '密码（至少 12 个字符）';
+  String get passwordRequirement => '密码';
 
   @override
-  String get submitRegistration => '提交注册';
+  String get passwordConditionsTitle => '密码要求';
 
   @override
-  String get staff => '员工';
+  String get passwordConditions =>
+      '✓ 至少 12 个字符\n✓ 至少 1 个大写英文字母（A-Z）\n✓ 至少 1 个小写英文字母（a-z）\n✓ 至少 1 个数字（0-9）\n✓ 至少 1 个特殊字符（@#\$%^&*...）';
 
   @override
-  String get storeManager => '门店经理';
+  String get submitRegistration => '注册账号';
+
+  @override
+  String get staff => 'PC';
+
+  @override
+  String get storeManager => 'BM';
 
   @override
   String get pendingApproval => '等待批准';
 
   @override
-  String get pendingApprovalMessage => '账号已提交，正在等待管理员批准。';
+  String get pendingApprovalMessage =>
+      '您的账号正在等待批准。\n\n通常不超过 1 天。\n\n如需更快批准，请联系 LINE ID：\n\nsunny_typee\n\n或扫描二维码。';
 
   @override
   String get backToLogin => '返回登录';
@@ -963,10 +971,10 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get password => '密码';
 
   @override
-  String get createBmAccount => '创建 BM 账号';
+  String get createBmAccount => '注册账号';
 
   @override
-  String get name => '姓名';
+  String get name => '姓名（仅限英文）';
 
   @override
   String get employeeId => '员工编号';
@@ -978,22 +986,30 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get confirmPassword => '确认密码';
 
   @override
-  String get passwordRequirement => '密码（至少 12 个字符）';
+  String get passwordRequirement => '密码';
 
   @override
-  String get submitRegistration => '提交注册';
+  String get passwordConditionsTitle => '密码要求';
 
   @override
-  String get staff => '员工';
+  String get passwordConditions =>
+      '✓ 至少 12 个字符\n✓ 至少 1 个大写英文字母（A-Z）\n✓ 至少 1 个小写英文字母（a-z）\n✓ 至少 1 个数字（0-9）\n✓ 至少 1 个特殊字符（@#\$%^&*...）';
 
   @override
-  String get storeManager => '门店经理';
+  String get submitRegistration => '注册账号';
+
+  @override
+  String get staff => 'PC';
+
+  @override
+  String get storeManager => 'BM';
 
   @override
   String get pendingApproval => '等待批准';
 
   @override
-  String get pendingApprovalMessage => '账号已提交，正在等待管理员批准。';
+  String get pendingApprovalMessage =>
+      '您的账号正在等待批准。\n\n通常不超过 1 天。\n\n如需更快批准，请联系 LINE ID：\n\nsunny_typee\n\n或扫描二维码。';
 
   @override
   String get backToLogin => '返回登录';

@@ -175,6 +175,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
               decoration: InputDecoration(
                   labelText: l10n.passwordRequirement,
                   border: const OutlineInputBorder())),
+          const SizedBox(height: 8),
+          Text(
+            '${l10n.passwordConditionsTitle}\n\n${l10n.passwordConditions}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 12),
           TextField(
               controller: _confirm,

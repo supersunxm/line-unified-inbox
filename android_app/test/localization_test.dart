@@ -46,6 +46,57 @@ void main() {
     expect(find.text('OPPO Find N6'), findsOneWidget);
   });
 
+  testWidgets('auth copy is localized for registration and approval',
+      (tester) async {
+    for (final testCase in const [
+      (
+        Locale('en'),
+        'Create account',
+        'Name (English only)',
+        'PC',
+        'BM',
+        'Pending approval',
+      ),
+      (
+        Locale('th'),
+        'สมัครสมาชิก',
+        'ชื่อ-สกุล ภาษาอังกฤษเท่านั้น',
+        'PC',
+        'BM',
+        'อยู่ในขั้นตอนการอนุมัติ',
+      ),
+      (
+        Locale('zh', 'CN'),
+        '注册账号',
+        '姓名（仅限英文）',
+        'PC',
+        'BM',
+        '等待批准',
+      ),
+    ]) {
+      await tester.pumpWidget(_localizedApp(
+        testCase.$1,
+        Builder(
+          builder: (context) => Column(
+            children: [
+              Text(appLocalizations(context).createBmAccount),
+              Text(appLocalizations(context).name),
+              Text(appLocalizations(context).staff),
+              Text(appLocalizations(context).storeManager),
+              Text(appLocalizations(context).pendingApproval),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text(testCase.$2), findsOneWidget);
+      expect(find.text(testCase.$3), findsOneWidget);
+      expect(find.text(testCase.$4), findsOneWidget);
+      expect(find.text(testCase.$5), findsOneWidget);
+      expect(find.text(testCase.$6), findsOneWidget);
+    }
+  });
+
   test('language selection persists in device-local storage', () async {
     SharedPreferences.setMockInitialValues({});
     final controller = AppLanguageController(systemLocale: const Locale('en'));

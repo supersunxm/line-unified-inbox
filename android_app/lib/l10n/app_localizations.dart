@@ -710,13 +710,13 @@ abstract class AppLocalizations {
   /// No description provided for @createBmAccount.
   ///
   /// In en, this message translates to:
-  /// **'Create BM account'**
+  /// **'Create account'**
   String get createBmAccount;
 
   /// No description provided for @name.
   ///
   /// In en, this message translates to:
-  /// **'Name'**
+  /// **'Name (English only)'**
   String get name;
 
   /// No description provided for @employeeId.
@@ -740,25 +740,37 @@ abstract class AppLocalizations {
   /// No description provided for @passwordRequirement.
   ///
   /// In en, this message translates to:
-  /// **'Password (12+ characters)'**
+  /// **'Password'**
   String get passwordRequirement;
+
+  /// No description provided for @passwordConditionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Password requirements'**
+  String get passwordConditionsTitle;
+
+  /// No description provided for @passwordConditions.
+  ///
+  /// In en, this message translates to:
+  /// **'✓ At least 12 characters\n✓ At least 1 uppercase letter (A-Z)\n✓ At least 1 lowercase letter (a-z)\n✓ At least 1 number (0-9)\n✓ At least 1 special character (@#\$%^&*...)'**
+  String get passwordConditions;
 
   /// No description provided for @submitRegistration.
   ///
   /// In en, this message translates to:
-  /// **'Submit registration'**
+  /// **'Create account'**
   String get submitRegistration;
 
   /// No description provided for @staff.
   ///
   /// In en, this message translates to:
-  /// **'Staff'**
+  /// **'PC'**
   String get staff;
 
   /// No description provided for @storeManager.
   ///
   /// In en, this message translates to:
-  /// **'Store manager'**
+  /// **'BM'**
   String get storeManager;
 
   /// No description provided for @pendingApproval.
@@ -770,7 +782,7 @@ abstract class AppLocalizations {
   /// No description provided for @pendingApprovalMessage.
   ///
   /// In en, this message translates to:
-  /// **'Your account has been submitted and is waiting for administrator approval.'**
+  /// **'Your account is waiting for approval.\n\nThis usually takes up to one day.\n\nFor faster approval, contact LINE ID:\n\nsunny_typee\n\nOr scan the QR code.'**
   String get pendingApprovalMessage;
 
   /// No description provided for @backToLogin.
