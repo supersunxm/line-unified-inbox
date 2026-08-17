@@ -47,12 +47,34 @@ void test("pushText maps credential and network failures without exposing tokens
   await assert.rejects(() => new LineMessagingService().pushText(input), (error: unknown) => error instanceof ServiceUnavailableException && !error.message.includes(input.accessToken));
 });
 
-void test("pushImage sends original and preview URLs with the retry key", async (t) => {
+void test("pushText distinguishes monthly quota limit from temporary rate limit on 429", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "You have reached your monthly limit." }), { status: 429 });
+  await assert.rejects(
+    () => new LineMessagingService().pushText(input),
+    (error: unknown) => error instanceof Error && error.message.includes("โควต้าการส่งข้อความฟรีรายเดือนของ LINE OA ร้านนี้เต็มแล้ว"),
+  );
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "Too many requests" }), { status: 429 });
+  await assert.rejects(
+    () => new LineMessagingService().pushText(input),
+    (error: unknown) => error instanceof Error && error.message.includes("LINE จำกัดจำนวนการส่งชั่วคราว"),
+  );
+});
+
+void test("pushImage sends original and preview URLs with the retry key and diagnostic context", async (t) => {
   const originalFetch = globalThis.fetch;
   let request: RequestInit | undefined;
   globalThis.fetch = (async (_input, init) => { request = init; return new Response(JSON.stringify({ sentMessages: [{ id: "line-image" }] }), { status: 200, headers: { "content-type": "application/json", "x-line-request-id": "request" } }); }) as typeof fetch;
   try {
-    const result = await new LineMessagingService().pushImage({ accessToken: "token", lineUserId: "Ucustomer", originalContentUrl: "https://backend.example.com/messages/media/public?a", previewImageUrl: "https://backend.example.com/messages/media/public?a", retryKey: "123e4567-e89b-42d3-a456-426614174000" });
+    const result = await new LineMessagingService().pushImage({
+      accessToken: "token",
+      lineUserId: "Ucustomer",
+      originalContentUrl: "https://backend.example.com/messages/media/public?a",
+      previewImageUrl: "https://backend.example.com/messages/media/public?a",
+      retryKey: "123e4567-e89b-42d3-a456-426614174000",
+      context: { userId: "u-1", storeId: "s-1", storeName: "OBS", channelId: "oa-obs", messageType: "IMAGE" },
+    });
     assert.equal(result.externalMessageId, "line-image");
     assert.deepEqual(JSON.parse(request?.body as string), { to: "Ucustomer", messages: [{ type: "image", originalContentUrl: "https://backend.example.com/messages/media/public?a", previewImageUrl: "https://backend.example.com/messages/media/public?a" }] });
   } finally { globalThis.fetch = originalFetch; }
@@ -136,5 +158,83 @@ void test("multicast treats LINE 409 with acceptedRequestId as idempotent succes
 
   assert.equal(result.duplicateAccepted, true);
   assert.equal(result.acceptedRequestId, "accepted-999");
+});
+
+void test("replyText sends messages to LINE reply endpoint and handles success", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  let requestUrl = "";
+  let requestInit: RequestInit | undefined;
+  globalThis.fetch = async (url, init) => {
+    requestUrl = String(url);
+    requestInit = init;
+    return new Response(JSON.stringify({ sentMessages: [{ id: "line-reply-msg-1" }] }), {
+      status: 200,
+      headers: { "x-line-request-id": "reply-req-1" },
+    });
+  };
+
+  const result = await new LineMessagingService().replyText({
+    accessToken: "test-token",
+    replyToken: "reply-tok-123",
+    text: "ข้อความตอบกลับ",
+    context: { conversationId: "c-1", storeId: "s-1", replyTokenAgeMs: 12000 },
+  });
+
+  assert.equal(requestUrl, "https://api.line.me/v2/bot/message/reply");
+  assert.equal(new Headers(requestInit?.headers).get("Authorization"), "Bearer test-token");
+  assert.deepEqual(JSON.parse(requestInit?.body as string), {
+    replyToken: "reply-tok-123",
+    messages: [{ type: "text", text: "ข้อความตอบกลับ" }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.requestId, "reply-req-1");
+  assert.equal(result.externalMessageId, "line-reply-msg-1");
+});
+
+void test("replyText identifies invalid reply token from LINE 400 response", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "Invalid reply token" }), {
+    status: 400,
+    headers: { "x-line-request-id": "invalid-req" },
+  });
+
+  const result = await new LineMessagingService().replyText({
+    accessToken: "test-token",
+    replyToken: "stale-reply-tok",
+    text: "ข้อความ",
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.invalidReplyToken, true);
+  assert.equal(result.requestId, "invalid-req");
+});
+
+void test("replyImage sends image objects to LINE reply endpoint", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  let requestInit: RequestInit | undefined;
+  globalThis.fetch = async (_url, init) => {
+    requestInit = init;
+    return new Response(JSON.stringify({ sentMessages: [{ id: "line-reply-img-1" }] }), {
+      status: 200,
+      headers: { "x-line-request-id": "reply-img-req" },
+    });
+  };
+
+  const result = await new LineMessagingService().replyImage({
+    accessToken: "test-token",
+    replyToken: "reply-tok-img",
+    originalContentUrl: "https://example.com/image.jpg",
+    previewImageUrl: "https://example.com/image.jpg",
+  });
+
+  assert.deepEqual(JSON.parse(requestInit?.body as string), {
+    replyToken: "reply-tok-img",
+    messages: [{ type: "image", originalContentUrl: "https://example.com/image.jpg", previewImageUrl: "https://example.com/image.jpg" }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.externalMessageId, "line-reply-img-1");
 });
 

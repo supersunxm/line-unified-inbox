@@ -193,7 +193,24 @@ export class LineWebhookService {
       }
 
       const storedMessageType = messageTypeMap[message.type] ?? MessageType.UNSUPPORTED;
-      const storedMessage = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: message.id, direction: MessageDirection.INBOUND, messageType: storedMessageType, originalText: messagePlaceholder(message), sentAt, rawPayload, fileName, latitude, longitude } });
+      const encryptedLineReplyToken = event.replyToken?.trim() ? this.encryption.encrypt(event.replyToken.trim()) : null;
+      const lineReplyTokenReceivedAt = encryptedLineReplyToken ? new Date() : null;
+      const storedMessage = await tx.message.create({
+        data: {
+          conversationId: conversation.id,
+          externalMessageId: message.id,
+          direction: MessageDirection.INBOUND,
+          messageType: storedMessageType,
+          originalText: messagePlaceholder(message),
+          sentAt,
+          rawPayload,
+          fileName,
+          latitude,
+          longitude,
+          encryptedLineReplyToken,
+          lineReplyTokenReceivedAt,
+        },
+      });
       if (this.notifications) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
       const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });

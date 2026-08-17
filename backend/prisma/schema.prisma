@@ -805,6 +805,9 @@ model Message {
   fileName            String?
   latitude            Float?
   longitude           Float?
+  encryptedLineReplyToken  String?
+  lineReplyTokenReceivedAt DateTime?
+  lineReplyTokenUsedAt     DateTime?
   sentAt              DateTime
   createdAt           DateTime                     @default(now())
   conversation        Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -814,6 +817,7 @@ model Message {
   pushNotifications   PushNotification[]
 
   @@index([conversationId, sentAt])
+  @@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])
   @@index([senderUserId])
 }
 

@@ -77,7 +77,10 @@ export class ConversationsService {
   }
 
   private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
-    const { media, senderUserId, senderDisplayName, ...safe } = message;
+    const { media, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
+    void _encToken;
+    void _tokenRecv;
+    void _tokenUsed;
     const sender = safe.direction === MessageDirection.OUTBOUND
       ? { userId: senderUserId ?? null, displayName: senderDisplayName ?? "Store" }
       : null;
@@ -500,6 +503,51 @@ export class ConversationsService {
     return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
+  private async claimEligibleReplyToken(conversationId: string): Promise<{ messageId: string; replyToken: string; ageMs: number } | null> {
+    if (typeof this.prisma.message?.findFirst !== "function" || typeof this.prisma.message?.updateMany !== "function") {
+      return null;
+    }
+    const maxAgeMs = Number(process.env.LINE_REPLY_TOKEN_MAX_AGE_MS) || 45_000;
+    const minReceivedAt = new Date(Date.now() - maxAgeMs);
+
+    const eligible = await this.prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: MessageDirection.INBOUND,
+        encryptedLineReplyToken: { not: null },
+        lineReplyTokenUsedAt: null,
+        lineReplyTokenReceivedAt: { gte: minReceivedAt },
+      },
+      orderBy: { lineReplyTokenReceivedAt: "desc" },
+      select: { id: true, encryptedLineReplyToken: true, lineReplyTokenReceivedAt: true },
+    });
+
+    if (eligible?.encryptedLineReplyToken && eligible.lineReplyTokenReceivedAt) {
+      const claimedAt = new Date();
+      const updateResult = await this.prisma.message.updateMany({
+        where: {
+          id: eligible.id,
+          lineReplyTokenUsedAt: null,
+        },
+        data: {
+          lineReplyTokenUsedAt: claimedAt,
+        },
+      });
+
+      if (updateResult.count === 1) {
+        try {
+          const replyToken = this.encryption.decrypt(eligible.encryptedLineReplyToken);
+          const ageMs = claimedAt.getTime() - eligible.lineReplyTokenReceivedAt.getTime();
+          return { messageId: eligible.id, replyToken, ageMs };
+        } catch {
+          Logger.warn(`Failed to decrypt reply token for message ${eligible.id}`, "ConversationsService");
+        }
+      }
+    }
+
+    return null;
+  }
+
   async sendMessage(id: string, dto: SendConversationMessageDto, operator: AuthUser) {
     const text = dto.text.trim();
     if (!text) throw new BadRequestException("กรุณาพิมพ์ข้อความ");
@@ -523,12 +571,69 @@ export class ConversationsService {
     try { accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken); }
     catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
 
-    const lineResult = await this.lineMessaging.pushText({
-      accessToken,
-      lineUserId: conversation.customer.lineUserId,
-      text,
-      retryKey: dto.idempotencyKey,
-    });
+    const claimed = await this.claimEligibleReplyToken(conversation.id);
+    let lineResult: { requestId: string | null; acceptedRequestId: string | null; externalMessageId: string | null; duplicateAccepted: boolean };
+    let deliveryMethod: "REPLY" | "PUSH" = "PUSH";
+
+    if (claimed) {
+      const replyRes = await this.lineMessaging.replyText({
+        accessToken,
+        replyToken: claimed.replyToken,
+        text,
+        context: {
+          conversationId: conversation.id,
+          userId: operator.id,
+          storeId: conversation.storeId,
+          storeName: conversation.store?.name,
+          channelId: oa.channelId || oa.id,
+          replyTokenAgeMs: claimed.ageMs,
+        },
+      });
+
+      if (replyRes.success) {
+        lineResult = {
+          requestId: replyRes.requestId,
+          acceptedRequestId: null,
+          externalMessageId: replyRes.externalMessageId,
+          duplicateAccepted: false,
+        };
+        deliveryMethod = "REPLY";
+      } else if (replyRes.invalidReplyToken) {
+        lineResult = await this.lineMessaging.pushText({
+          accessToken,
+          lineUserId: conversation.customer.lineUserId,
+          text,
+          retryKey: dto.idempotencyKey,
+          context: {
+            conversationId: conversation.id,
+            userId: operator.id,
+            storeId: conversation.storeId,
+            storeName: conversation.store?.name,
+            channelId: oa.channelId || oa.id,
+            fallbackReason: "INVALID_REPLY_TOKEN",
+          },
+        });
+        deliveryMethod = "PUSH";
+      } else {
+        throw new ServiceUnavailableException("ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
+    } else {
+      lineResult = await this.lineMessaging.pushText({
+        accessToken,
+        lineUserId: conversation.customer.lineUserId,
+        text,
+        retryKey: dto.idempotencyKey,
+        context: {
+          conversationId: conversation.id,
+          userId: operator.id,
+          storeId: conversation.storeId,
+          storeName: conversation.store?.name,
+          channelId: oa.channelId || oa.id,
+        },
+      });
+      deliveryMethod = "PUSH";
+    }
+
     const sentAt = new Date();
     try {
       const message = await this.prisma.$transaction(async (tx) => {
@@ -544,6 +649,7 @@ export class ConversationsService {
             senderDisplayName: operator.displayName?.trim() || "Store",
             rawPayload: {
               provider: "LINE",
+              deliveryMethod,
               providerMessageId: lineResult.externalMessageId,
               requestId: lineResult.requestId,
               acceptedRequestId: lineResult.acceptedRequestId,
@@ -563,7 +669,7 @@ export class ConversationsService {
             previousBmReplyStatus: conversation.bmReplyStatus,
             newBmReplyStatus: BmReplyStatus.REPLIED,
             createdByName: operator.displayName,
-            description: `Customer message sent via LINE; storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
+            description: `Customer message sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
           },
         });
         return created;
@@ -591,20 +697,91 @@ export class ConversationsService {
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
     if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
     if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
-    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true } });
+    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true } });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
     if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
     if (!conversation.lineOfficialAccount?.isActive || conversation.lineOfficialAccount.archivedAt || !conversation.lineOfficialAccount.encryptedChannelAccessToken) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
     let accessToken: string; try { accessToken = this.encryption.decrypt(conversation.lineOfficialAccount.encryptedChannelAccessToken); } catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
     const objectKey = `line-media/outbound/${conversation.id}/${idempotencyKey}.${extensions[mime]}`;
     const stored = await this.media.put(objectKey, file.buffer, mime);
-    if (stored.provider !== "s3") throw new ServiceUnavailableException("Outbound image delivery requires S3-compatible media storage");
+    if (!stored.fileId && !stored.provider) throw new ServiceUnavailableException("Media storage failed to persist outbound image");
     try {
       const imageUrl = createMediaPublicUrl(objectKey);
-      const lineResult = await this.lineMessaging.pushImage({ accessToken, lineUserId: conversation.customer.lineUserId, originalContentUrl: imageUrl, previewImageUrl: imageUrl, retryKey: idempotencyKey });
+      let domain: string | undefined;
+      try { domain = new URL(imageUrl).hostname; } catch { /* ignore */ }
+
+      const claimed = await this.claimEligibleReplyToken(conversation.id);
+      let lineResult: { requestId: string | null; acceptedRequestId: string | null; externalMessageId: string | null; duplicateAccepted: boolean };
+      let deliveryMethod: "REPLY" | "PUSH" = "PUSH";
+
+      if (claimed) {
+        const replyRes = await this.lineMessaging.replyImage({
+          accessToken,
+          replyToken: claimed.replyToken,
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl,
+          context: {
+            conversationId: conversation.id,
+            userId: operator.id,
+            storeId: conversation.storeId,
+            storeName: conversation.store?.name,
+            channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
+            replyTokenAgeMs: claimed.ageMs,
+            imageUrlDomain: domain,
+          },
+        });
+
+        if (replyRes.success) {
+          lineResult = {
+            requestId: replyRes.requestId,
+            acceptedRequestId: null,
+            externalMessageId: replyRes.externalMessageId,
+            duplicateAccepted: false,
+          };
+          deliveryMethod = "REPLY";
+        } else if (replyRes.invalidReplyToken) {
+          lineResult = await this.lineMessaging.pushImage({
+            accessToken,
+            lineUserId: conversation.customer.lineUserId,
+            originalContentUrl: imageUrl,
+            previewImageUrl: imageUrl,
+            retryKey: idempotencyKey,
+            context: {
+              conversationId: conversation.id,
+              userId: operator.id,
+              storeId: conversation.storeId,
+              storeName: conversation.store?.name,
+              channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
+              imageUrlDomain: domain,
+              fallbackReason: "INVALID_REPLY_TOKEN",
+            },
+          });
+          deliveryMethod = "PUSH";
+        } else {
+          throw new ServiceUnavailableException("ส่งรูปภาพไม่สำเร็จ กรุณาลองอีกครั้ง");
+        }
+      } else {
+        lineResult = await this.lineMessaging.pushImage({
+          accessToken,
+          lineUserId: conversation.customer.lineUserId,
+          originalContentUrl: imageUrl,
+          previewImageUrl: imageUrl,
+          retryKey: idempotencyKey,
+          context: {
+            conversationId: conversation.id,
+            userId: operator.id,
+            storeId: conversation.storeId,
+            storeName: conversation.store?.name,
+            channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
+            imageUrlDomain: domain,
+          },
+        });
+        deliveryMethod = "PUSH";
+      }
+
       const sentAt = new Date();
       const created = await this.prisma.$transaction(async (tx) => {
-        const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
+        const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", deliveryMethod, providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
         await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: stored.mimeType, objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
         await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
         return message;

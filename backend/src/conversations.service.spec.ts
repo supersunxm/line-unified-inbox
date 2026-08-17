@@ -589,3 +589,260 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
     { id: "store-3", storeId: "store-3", masterStoreId: null, externalStoreId: null, storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
   ]);
 });
+
+void test("sendMessage uses Reply API when a fresh unused replyToken is available", async () => {
+  let replyCalled = false;
+  let pushCalled = false;
+  let claimedTokenId: string | null = null;
+  let persistedRawPayload: Record<string, unknown> | undefined;
+
+  const conversation = {
+    id: "conv-reply-1",
+    storeId: "store-1",
+    customer: { lineUserId: "Ucust1" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
+    store: { id: "store-1", name: "Store 1" },
+  };
+
+  const prisma = {
+    conversation: { findUnique: async () => conversation },
+    message: {
+      findUnique: async () => null,
+      findFirst: async (args: any) => {
+        if (args?.where?.lineReplyTokenUsedAt === null) {
+          return { id: "msg-inbound-1", encryptedLineReplyToken: "enc-reply-tok", lineReplyTokenReceivedAt: new Date(Date.now() - 5000) };
+        }
+        return null;
+      },
+      updateMany: async ({ where, data }: { where: any; data: any }) => {
+        if (where.id === "msg-inbound-1" && where.lineReplyTokenUsedAt === null) {
+          claimedTokenId = where.id;
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+    },
+    $transaction: async (cb: any) => cb({
+      message: {
+        create: async ({ data }: { data: any }) => {
+          persistedRawPayload = data.rawPayload;
+          return { id: "out-msg-1", ...data };
+        },
+      },
+      conversation: { update: async ({ data }: { data: any }) => data },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = {
+    decrypt: (val: string) => (val === "enc-reply-tok" ? "raw-reply-tok-123" : "channel-access-tok"),
+  } as CredentialEncryptionService;
+
+  const lineMessaging = {
+    replyText: async (input: any) => {
+      assert.equal(input.replyToken, "raw-reply-tok-123");
+      assert.equal(input.text, "ตอบกลับเร็ว");
+      replyCalled = true;
+      return { success: true, requestId: "req-reply-1", externalMessageId: "line-msg-reply" };
+    },
+    pushText: async () => {
+      pushCalled = true;
+      return { requestId: "req-push-1", acceptedRequestId: null, externalMessageId: "line-msg-push", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+  const result = await service.sendMessage(
+    conversation.id,
+    { text: "ตอบกลับเร็ว", idempotencyKey: "123e4567-e89b-42d3-a456-426614174099" },
+    { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(replyCalled, true);
+  assert.equal(pushCalled, false);
+  assert.equal(claimedTokenId, "msg-inbound-1");
+  assert.equal(persistedRawPayload?.deliveryMethod, "REPLY");
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
+void test("sendMessage falls back to Push API when replyToken is expired or already used", async () => {
+  let replyCalled = false;
+  let pushCalled = false;
+
+  const conversation = {
+    id: "conv-push-fallback",
+    storeId: "store-1",
+    customer: { lineUserId: "Ucust1" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
+    store: { id: "store-1", name: "Store 1" },
+  };
+
+  const prisma = {
+    conversation: { findUnique: async () => conversation },
+    message: {
+      findUnique: async () => null,
+      findFirst: async () => null, // No eligible fresh reply token
+    },
+    $transaction: async (cb: any) => cb({
+      message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-push", ...data }) },
+      conversation: { update: async ({ data }: { data: any }) => data },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "channel-access-tok" } as CredentialEncryptionService;
+  const lineMessaging = {
+    replyText: async () => { replyCalled = true; return { success: true, requestId: "r", externalMessageId: "m" }; },
+    pushText: async () => {
+      pushCalled = true;
+      return { requestId: "req-push-fallback", acceptedRequestId: null, externalMessageId: "line-msg-push", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+  const result = await service.sendMessage(
+    conversation.id,
+    { text: "ข้อความหลัง 45 วินาที", idempotencyKey: "123e4567-e89b-42d3-a456-426614174098" },
+    { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(replyCalled, false);
+  assert.equal(pushCalled, true);
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
+void test("sendMessage falls back to Push API when LINE explicitly reports invalid reply token", async () => {
+  let replyCalled = false;
+  let pushCalled = false;
+  let persistedRawPayload: Record<string, unknown> | undefined;
+
+  const conversation = {
+    id: "conv-invalid-token",
+    storeId: "store-1",
+    customer: { lineUserId: "Ucust1" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
+    store: { id: "store-1", name: "Store 1" },
+  };
+
+  const prisma = {
+    conversation: { findUnique: async () => conversation },
+    message: {
+      findUnique: async () => null,
+      findFirst: async () => ({ id: "msg-inbound-stale", encryptedLineReplyToken: "enc-stale", lineReplyTokenReceivedAt: new Date() }),
+      updateMany: async () => ({ count: 1 }),
+    },
+    $transaction: async (cb: any) => cb({
+      message: {
+        create: async ({ data }: { data: any }) => {
+          persistedRawPayload = data.rawPayload;
+          return { id: "out-msg-invalid-fallback", ...data };
+        },
+      },
+      conversation: { update: async ({ data }: { data: any }) => data },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "token" } as CredentialEncryptionService;
+  const lineMessaging = {
+    replyText: async () => {
+      replyCalled = true;
+      return { success: false, invalidReplyToken: true, requestId: "req-invalid", externalMessageId: null };
+    },
+    pushText: async () => {
+      pushCalled = true;
+      return { requestId: "req-push-fallback", acceptedRequestId: null, externalMessageId: "line-msg-pushed", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+  const result = await service.sendMessage(
+    conversation.id,
+    { text: "ข้อความทดสอบ", idempotencyKey: "123e4567-e89b-42d3-a456-426614174097" },
+    { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(replyCalled, true);
+  assert.equal(pushCalled, true);
+  assert.equal(persistedRawPayload?.deliveryMethod, "PUSH");
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
+void test("sendImage uses Reply API when fresh reply token is available", async () => {
+  let replyCalled = false;
+  let pushCalled = false;
+
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const conversation = {
+    id: "conv-img-reply",
+    storeId: "store-1",
+    customer: { lineUserId: "Ucust1" },
+    lineOfficialAccount: { channelId: "oa-ch", isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
+    store: { id: "store-1", name: "Store 1" },
+  };
+
+  const prisma = {
+    conversation: { findUnique: async () => conversation },
+    message: {
+      findUnique: async () => null,
+      findFirst: async () => ({ id: "msg-inbound-img", encryptedLineReplyToken: "enc-reply-img", lineReplyTokenReceivedAt: new Date() }),
+      updateMany: async () => ({ count: 1 }),
+    },
+    $transaction: async (cb: any) => cb({
+      message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-img-reply", ...data }) },
+      messageMedia: { create: async () => ({}) },
+      conversation: { update: async ({ data }: { data: any }) => data },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "token" } as CredentialEncryptionService;
+  const lineMessaging = {
+    replyImage: async (input: any) => {
+      assert.ok(input.originalContentUrl.includes("/messages/media/public"));
+      replyCalled = true;
+      return { success: true, requestId: "req-img-reply", externalMessageId: "line-img-replied" };
+    },
+    pushImage: async () => {
+      pushCalled = true;
+      return { requestId: "r", acceptedRequestId: null, externalMessageId: "m", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(
+    prisma,
+    noopOperations,
+    encryption,
+    lineMessaging,
+    { put: async (_k: string, _b: Buffer, mime: string) => ({ provider: "local", fileId: "f-1", mimeType: mime, size: png.length }) } as any,
+  );
+
+  const result = await service.sendImage(
+    conversation.id,
+    { buffer: png, mimetype: "image/png", size: png.length },
+    "123e4567-e89b-42d3-a456-426614174096",
+    { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(replyCalled, true);
+  assert.equal(pushCalled, false);
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
+void test("replyToken fields are never exposed in safeMessage", () => {
+  const service = new ConversationsService({} as any, noopOperations);
+  const msgWithTokens = {
+    id: "msg-1",
+    direction: "INBOUND" as const,
+    originalText: "test",
+    encryptedLineReplyToken: "secret-token-ciphertext",
+    lineReplyTokenReceivedAt: new Date(),
+    lineReplyTokenUsedAt: new Date(),
+    media: null,
+  };
+
+  const safe: any = (service as any).safeMessage(msgWithTokens);
+  assert.equal(safe.encryptedLineReplyToken, undefined);
+  assert.equal(safe.lineReplyTokenReceivedAt, undefined);
+  assert.equal(safe.lineReplyTokenUsedAt, undefined);
+  assert.equal(safe.id, "msg-1");
+});

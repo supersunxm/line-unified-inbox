@@ -1,6 +1,46 @@
 # AI progress
 
-## Current task: Android Release v1.0.2 (Pilot Messaging Release)
+## Current task: Phase 10C.11 — LINE Reply-First Delivery Strategy Complete
+
+- **Overview & Architecture**:
+  - Implemented quota-saving **Reply-First → Push Fallback** outbound delivery strategy across both Web Admin and Mobile APK clients for both text and image messages.
+  - LINE Reply API (`POST https://api.line.me/v2/bot/message/reply`) uses the `replyToken` provided in inbound customer webhooks and consumes **0 push message quota** (free).
+  - Conservative multi-instance safety window: `LINE_REPLY_TOKEN_MAX_AGE_MS=45000` (45 seconds).
+  - Outbound calls automatically fall back to Push API (`POST /v2/bot/message/push`) if a token is absent, older than 45 seconds, already claimed, or explicitly rejected by LINE with `HTTP 400 Invalid reply token`.
+  - Concurrency protected by atomic PostgreSQL conditional update `UPDATE "Message" SET "lineReplyTokenUsedAt" = now() WHERE id = $id AND "lineReplyTokenUsedAt" IS NULL`.
+- **Database & Migration**:
+  - Schema additions to `Message`: `encryptedLineReplyToken`, `lineReplyTokenReceivedAt`, `lineReplyTokenUsedAt`, and composite index `@@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])`.
+  - Applied migration: `20260817170000_add_line_reply_token_fields`.
+- **Security & Privacy**:
+  - AES-256-GCM encryption for all stored reply tokens via `CredentialEncryptionService`.
+  - Reply token fields strictly stripped from `safeMessage()` and external API payloads.
+  - Zero raw tokens, secret credentials, or customer personal data emitted in logs.
+- **Verification & Test Results**:
+  - Backend test suite: `1,224 / 1,224 passed (100%)` (including fresh token reply, expired token push, invalid token fallback, concurrency race safety, image reply, and token security).
+  - Backend build: Compiled cleanly with NestJS & Prisma (`prisma generate && nest build`).
+  - Frontend test suite: `344 / 344 passed (100%)`.
+  - Flutter analyze: `0 issues`.
+  - Flutter test suite: `79 / 79 passed (100%)`.
+
+## Previous task: Investigation of Production APK Image & Message Sending Diagnostics
+
+- **Investigation Findings**:
+  - **Environment Difference**:
+    - Simulator (Device A): Connected to local backend (`http://10.0.2.2:3001`), using local mock stores or store with active/unrestricted quota. Both text and images send successfully.
+    - Production APK (Device B): Connected to Railway production (`https://line-unified-inbox-production-544f.up.railway.app`), using real store tokens (Store: OBS).
+  - **Root Cause of "LINE จำกัดจำนวนการส่งชั่วคราว"**:
+    - When LINE Messaging API returns `HTTP 429 Too Many Requests`, it indicates either a burst rate limit OR **Monthly Free Message Quota Exhaustion** (`{"message":"You have reached your monthly limit."}`).
+    - The backend previously threw a generic Thai message `"LINE จำกัดจำนวนการส่งชั่วคราว กรุณาลองอีกครั้ง"` for all 429 status codes without parsing the body.
+    - For Store OBS, the LINE OA free tier monthly push quota (500 messages/month) was reached, causing LINE to reject all push requests (both text and image) with HTTP 429.
+  - **Structured Diagnostic Logging & Quota Detection**:
+    - Updated `LineMessagingService` (`pushText`, `pushImage`, `multicast`) with structured JSON logs containing `userId`, `storeId`, `storeName`, `channelIdMasked`, `messageType`, `imageUrlDomain`, `statusCode`, and `errorBody`.
+    - Added automatic classification on HTTP 429: if the error message contains `monthly limit` or `quota`, the backend explicitly responds with `"โควต้าการส่งข้อความฟรีรายเดือนของ LINE OA ร้านนี้เต็มแล้ว กรุณาอัปเกรดแพ็กเกจใน LINE Official Account Manager"`.
+  - **Verification**:
+    - Backend test suite: `1,216 / 1,216 passed (100%)`.
+    - Frontend test suite: `344 / 344 passed (100%)`.
+    - Signed media URL generation and verification tested and intact.
+
+## Previous task: Android Release v1.0.2 (Pilot Messaging Release)
 
 - **Release Overview & Features**:
   - **Version & Build**: `v1.0.2+3` (`oppo-line-oa-chat-v1.0.2-production.apk`).

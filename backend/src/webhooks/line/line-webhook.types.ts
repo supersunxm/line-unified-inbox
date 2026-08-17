@@ -17,6 +17,7 @@ type LineEventBase = {
   type: string;
   timestamp: number;
   source: LineSource;
+  replyToken?: string;
   webhookEventId?: string;
   deliveryContext?: { isRedelivery?: boolean };
 };
