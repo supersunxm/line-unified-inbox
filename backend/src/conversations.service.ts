@@ -36,6 +36,15 @@ export const conversationDetailInclude = {
 } satisfies Prisma.ConversationInclude;
 type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conversationDetailInclude }>;
 
+export function getReplyTokenAgeBucket(ageMs: number): string {
+  if (ageMs < 30_000) return "< 30 seconds";
+  if (ageMs < 60_000) return "30-60 seconds";
+  if (ageMs < 120_000) return "1-2 minutes";
+  if (ageMs < 300_000) return "2-5 minutes";
+  if (ageMs < 600_000) return "5-10 minutes";
+  return "> 10 minutes";
+}
+
 export function detectImageMime(buffer: Buffer): string | null {
   if (buffer.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))) return "image/jpeg";
   if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "image/png";
@@ -503,12 +512,10 @@ export class ConversationsService {
     return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
-  private async claimEligibleReplyToken(conversationId: string): Promise<{ messageId: string; replyToken: string; ageMs: number } | null> {
+  private async claimEligibleReplyToken(conversationId: string): Promise<{ messageId: string; replyToken: string; ageMs: number; ageBucket: string } | null> {
     if (typeof this.prisma.message?.findFirst !== "function" || typeof this.prisma.message?.updateMany !== "function") {
       return null;
     }
-    const maxAgeMs = Number(process.env.LINE_REPLY_TOKEN_MAX_AGE_MS) || 45_000;
-    const minReceivedAt = new Date(Date.now() - maxAgeMs);
 
     const eligible = await this.prisma.message.findFirst({
       where: {
@@ -516,13 +523,12 @@ export class ConversationsService {
         direction: MessageDirection.INBOUND,
         encryptedLineReplyToken: { not: null },
         lineReplyTokenUsedAt: null,
-        lineReplyTokenReceivedAt: { gte: minReceivedAt },
       },
-      orderBy: { lineReplyTokenReceivedAt: "desc" },
-      select: { id: true, encryptedLineReplyToken: true, lineReplyTokenReceivedAt: true },
+      orderBy: [{ lineReplyTokenReceivedAt: "desc" }, { sentAt: "desc" }, { id: "desc" }],
+      select: { id: true, encryptedLineReplyToken: true, lineReplyTokenReceivedAt: true, sentAt: true },
     });
 
-    if (eligible?.encryptedLineReplyToken && eligible.lineReplyTokenReceivedAt) {
+    if (eligible?.encryptedLineReplyToken) {
       const claimedAt = new Date();
       const updateResult = await this.prisma.message.updateMany({
         where: {
@@ -537,8 +543,10 @@ export class ConversationsService {
       if (updateResult.count === 1) {
         try {
           const replyToken = this.encryption.decrypt(eligible.encryptedLineReplyToken);
-          const ageMs = claimedAt.getTime() - eligible.lineReplyTokenReceivedAt.getTime();
-          return { messageId: eligible.id, replyToken, ageMs };
+          const receivedAt = eligible.lineReplyTokenReceivedAt ?? eligible.sentAt ?? claimedAt;
+          const ageMs = Math.max(0, claimedAt.getTime() - receivedAt.getTime());
+          const ageBucket = getReplyTokenAgeBucket(ageMs);
+          return { messageId: eligible.id, replyToken, ageMs, ageBucket };
         } catch {
           Logger.warn(`Failed to decrypt reply token for message ${eligible.id}`, "ConversationsService");
         }
@@ -587,6 +595,7 @@ export class ConversationsService {
           storeName: conversation.store?.name,
           channelId: oa.channelId || oa.id,
           replyTokenAgeMs: claimed.ageMs,
+          replyTokenAgeBucket: claimed.ageBucket,
         },
       });
 
@@ -610,6 +619,8 @@ export class ConversationsService {
             storeId: conversation.storeId,
             storeName: conversation.store?.name,
             channelId: oa.channelId || oa.id,
+            replyTokenAgeMs: claimed.ageMs,
+            replyTokenAgeBucket: claimed.ageBucket,
             fallbackReason: "INVALID_REPLY_TOKEN",
           },
         });
@@ -727,6 +738,7 @@ export class ConversationsService {
             storeName: conversation.store?.name,
             channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
             replyTokenAgeMs: claimed.ageMs,
+            replyTokenAgeBucket: claimed.ageBucket,
             imageUrlDomain: domain,
           },
         });
@@ -753,6 +765,8 @@ export class ConversationsService {
               storeName: conversation.store?.name,
               channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
               imageUrlDomain: domain,
+              replyTokenAgeMs: claimed.ageMs,
+              replyTokenAgeBucket: claimed.ageBucket,
               fallbackReason: "INVALID_REPLY_TOKEN",
             },
           });

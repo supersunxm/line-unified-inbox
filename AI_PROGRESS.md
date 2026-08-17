@@ -1,26 +1,23 @@
 # AI progress
 
-## Current task: Phase 10C.11 — LINE Reply-First Delivery Strategy Complete
+## Current task: Phase 10C.11.1 — Remove Reply Token Age Cutoff (Always Attempt Unused LINE replyToken Before Push)
 
 - **Overview & Architecture**:
-  - Implemented quota-saving **Reply-First → Push Fallback** outbound delivery strategy across both Web Admin and Mobile APK clients for both text and image messages.
-  - LINE Reply API (`POST https://api.line.me/v2/bot/message/reply`) uses the `replyToken` provided in inbound customer webhooks and consumes **0 push message quota** (free).
-  - Conservative multi-instance safety window: `LINE_REPLY_TOKEN_MAX_AGE_MS=45000` (45 seconds).
-  - Outbound calls automatically fall back to Push API (`POST /v2/bot/message/push`) if a token is absent, older than 45 seconds, already claimed, or explicitly rejected by LINE with `HTTP 400 Invalid reply token`.
-  - Concurrency protected by atomic PostgreSQL conditional update `UPDATE "Message" SET "lineReplyTokenUsedAt" = now() WHERE id = $id AND "lineReplyTokenUsedAt" IS NULL`.
-- **Database & Migration**:
-  - Schema additions to `Message`: `encryptedLineReplyToken`, `lineReplyTokenReceivedAt`, `lineReplyTokenUsedAt`, and composite index `@@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])`.
-  - Applied migration: `20260817170000_add_line_reply_token_fields`.
-- **Security & Privacy**:
-  - AES-256-GCM encryption for all stored reply tokens via `CredentialEncryptionService`.
-  - Reply token fields strictly stripped from `safeMessage()` and external API payloads.
-  - Zero raw tokens, secret credentials, or customer personal data emitted in logs.
+  - Removed application-defined 45-second replyToken cutoff window.
+  - New selection algorithm: queries newest unused replyToken (`encryptedLineReplyToken IS NOT NULL`, `lineReplyTokenUsedAt IS NULL`, `ORDER BY lineReplyTokenReceivedAt DESC LIMIT 1`) with zero age filter.
+  - Reply API is always attempted first whenever an unused token exists. LINE determines token acceptance or rejection.
+  - Explicit LINE token rejection (`invalidReplyToken: true`) falls back cleanly to Push API with single send.
+  - Ambiguous network failures (timeout, socket error, 5xx) fail safely without duplicate push attempts.
+  - Concurrency protected by atomic PostgreSQL conditional update (`lineReplyTokenUsedAt = now() WHERE id = $id AND lineReplyTokenUsedAt IS NULL`).
+  - Added empirical age bucketing in structured telemetry: `< 30 seconds`, `30-60 seconds`, `1-2 minutes`, `2-5 minutes`, `5-10 minutes`, `> 10 minutes`.
 - **Verification & Test Results**:
-  - Backend test suite: `1,224 / 1,224 passed (100%)` (including fresh token reply, expired token push, invalid token fallback, concurrency race safety, image reply, and token security).
-  - Backend build: Compiled cleanly with NestJS & Prisma (`prisma generate && nest build`).
-  - Frontend test suite: `344 / 344 passed (100%)`.
+  - Backend tests: `1,225 / 1,225 passed (100%)`.
+  - Backend build: Compiled cleanly (`prisma generate && nest build`).
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Frontend build: Compiled cleanly (19 routes).
   - Flutter analyze: `0 issues`.
-  - Flutter test suite: `79 / 79 passed (100%)`.
+  - Flutter tests: `79 / 79 passed (100%)`.
+  - Git diff check: Clean whitespace.
 
 ## Previous task: Investigation of Production APK Image & Message Sending Diagnostics
 

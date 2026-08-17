@@ -642,6 +642,7 @@ void test("sendMessage uses Reply API when a fresh unused replyToken is availabl
     replyText: async (input: any) => {
       assert.equal(input.replyToken, "raw-reply-tok-123");
       assert.equal(input.text, "ตอบกลับเร็ว");
+      assert.equal(input.context?.replyTokenAgeBucket, "< 30 seconds");
       replyCalled = true;
       return { success: true, requestId: "req-reply-1", externalMessageId: "line-msg-reply" };
     },
@@ -665,53 +666,63 @@ void test("sendMessage uses Reply API when a fresh unused replyToken is availabl
   assert.equal(result.bmReplyStatus, "REPLIED");
 });
 
-void test("sendMessage falls back to Push API when replyToken is expired or already used", async () => {
+void test("sendMessage attempts Reply API on token older than 45s and >1 minute without age cutoff", async () => {
   let replyCalled = false;
   let pushCalled = false;
+  let passedTokenAgeMs: number | undefined;
+  let passedAgeBucket: string | undefined;
 
   const conversation = {
-    id: "conv-push-fallback",
+    id: "conv-reply-old",
     storeId: "store-1",
     customer: { lineUserId: "Ucust1" },
     lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
     store: { id: "store-1", name: "Store 1" },
   };
 
+  // 90 seconds old token
+  const receivedAt90sAgo = new Date(Date.now() - 90_000);
+
   const prisma = {
     conversation: { findUnique: async () => conversation },
     message: {
       findUnique: async () => null,
-      findFirst: async () => null, // No eligible fresh reply token
+      findFirst: async () => ({ id: "msg-inbound-old", encryptedLineReplyToken: "enc-old-tok", lineReplyTokenReceivedAt: receivedAt90sAgo }),
+      updateMany: async () => ({ count: 1 }),
     },
     $transaction: async (cb: any) => cb({
-      message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-push", ...data }) },
+      message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-1", ...data }) },
       conversation: { update: async ({ data }: { data: any }) => data },
       activityHistory: { create: async () => ({}) },
     }),
   } as unknown as PrismaService;
 
-  const encryption = { decrypt: () => "channel-access-tok" } as CredentialEncryptionService;
+  const encryption = { decrypt: (val: string) => (val === "enc-old-tok" ? "raw-old-token-90s" : "channel-access-tok") } as CredentialEncryptionService;
   const lineMessaging = {
-    replyText: async () => { replyCalled = true; return { success: true, requestId: "r", externalMessageId: "m" }; },
-    pushText: async () => {
-      pushCalled = true;
-      return { requestId: "req-push-fallback", acceptedRequestId: null, externalMessageId: "line-msg-push", duplicateAccepted: false };
+    replyText: async (input: any) => {
+      replyCalled = true;
+      passedTokenAgeMs = input.context?.replyTokenAgeMs;
+      passedAgeBucket = input.context?.replyTokenAgeBucket;
+      return { success: true, requestId: "req-reply-old", externalMessageId: "line-msg-old" };
     },
+    pushText: async () => { pushCalled = true; return { requestId: "r", acceptedRequestId: null, externalMessageId: "m", duplicateAccepted: false }; },
   } as unknown as LineMessagingService;
 
   const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
   const result = await service.sendMessage(
     conversation.id,
-    { text: "ข้อความหลัง 45 วินาที", idempotencyKey: "123e4567-e89b-42d3-a456-426614174098" },
+    { text: "ข้อความตอบกลับหลัง 90 วินาที", idempotencyKey: "123e4567-e89b-42d3-a456-426614174098" },
     { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
   );
 
-  assert.equal(replyCalled, false);
-  assert.equal(pushCalled, true);
+  assert.equal(replyCalled, true, "Reply API must be attempted even after 90 seconds (no age cutoff)");
+  assert.equal(pushCalled, false);
+  assert.ok((passedTokenAgeMs ?? 0) >= 89_000, "Token age should reflect actual elapsed time");
+  assert.equal(passedAgeBucket, "1-2 minutes");
   assert.equal(result.bmReplyStatus, "REPLIED");
 });
 
-void test("sendMessage falls back to Push API when LINE explicitly reports invalid reply token", async () => {
+void test("sendMessage falls back to Push API when LINE explicitly reports invalid or expired reply token", async () => {
   let replyCalled = false;
   let pushCalled = false;
   let persistedRawPayload: Record<string, unknown> | undefined;
@@ -728,7 +739,7 @@ void test("sendMessage falls back to Push API when LINE explicitly reports inval
     conversation: { findUnique: async () => conversation },
     message: {
       findUnique: async () => null,
-      findFirst: async () => ({ id: "msg-inbound-stale", encryptedLineReplyToken: "enc-stale", lineReplyTokenReceivedAt: new Date() }),
+      findFirst: async () => ({ id: "msg-inbound-stale", encryptedLineReplyToken: "enc-stale", lineReplyTokenReceivedAt: new Date(Date.now() - 400_000) }),
       updateMany: async () => ({ count: 1 }),
     },
     $transaction: async (cb: any) => cb({
@@ -749,8 +760,10 @@ void test("sendMessage falls back to Push API when LINE explicitly reports inval
       replyCalled = true;
       return { success: false, invalidReplyToken: true, requestId: "req-invalid", externalMessageId: null };
     },
-    pushText: async () => {
+    pushText: async (input: any) => {
       pushCalled = true;
+      assert.equal(input.context?.fallbackReason, "INVALID_REPLY_TOKEN");
+      assert.equal(input.context?.replyTokenAgeBucket, "5-10 minutes");
       return { requestId: "req-push-fallback", acceptedRequestId: null, externalMessageId: "line-msg-pushed", duplicateAccepted: false };
     },
   } as unknown as LineMessagingService;
@@ -768,7 +781,53 @@ void test("sendMessage falls back to Push API when LINE explicitly reports inval
   assert.equal(result.bmReplyStatus, "REPLIED");
 });
 
-void test("sendImage uses Reply API when fresh reply token is available", async () => {
+void test("sendMessage routes directly to Push API when conversation has no unused tokens", async () => {
+  let replyCalled = false;
+  let pushCalled = false;
+
+  const conversation = {
+    id: "conv-no-token",
+    storeId: "store-1",
+    customer: { lineUserId: "Ucust1" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "enc-tok" },
+    store: { id: "store-1", name: "Store 1" },
+  };
+
+  const prisma = {
+    conversation: { findUnique: async () => conversation },
+    message: {
+      findUnique: async () => null,
+      findFirst: async () => null, // No unused reply token
+    },
+    $transaction: async (cb: any) => cb({
+      message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-push", ...data }) },
+      conversation: { update: async ({ data }: { data: any }) => data },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "channel-access-tok" } as CredentialEncryptionService;
+  const lineMessaging = {
+    replyText: async () => { replyCalled = true; return { success: true, requestId: "r", externalMessageId: "m" }; },
+    pushText: async () => {
+      pushCalled = true;
+      return { requestId: "req-push-direct", acceptedRequestId: null, externalMessageId: "line-msg-push", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+  const result = await service.sendMessage(
+    conversation.id,
+    { text: "ข้อความโดยตรง", idempotencyKey: "123e4567-e89b-42d3-a456-426614174095" },
+    { id: "op-1", email: "op@test.com", displayName: "Operator", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(replyCalled, false);
+  assert.equal(pushCalled, true);
+  assert.equal(result.bmReplyStatus, "REPLIED");
+});
+
+void test("sendImage uses Reply API when unused reply token is available", async () => {
   let replyCalled = false;
   let pushCalled = false;
 
@@ -785,7 +844,7 @@ void test("sendImage uses Reply API when fresh reply token is available", async 
     conversation: { findUnique: async () => conversation },
     message: {
       findUnique: async () => null,
-      findFirst: async () => ({ id: "msg-inbound-img", encryptedLineReplyToken: "enc-reply-img", lineReplyTokenReceivedAt: new Date() }),
+      findFirst: async () => ({ id: "msg-inbound-img", encryptedLineReplyToken: "enc-reply-img", lineReplyTokenReceivedAt: new Date(Date.now() - 300_000) }),
       updateMany: async () => ({ count: 1 }),
     },
     $transaction: async (cb: any) => cb({
@@ -799,6 +858,7 @@ void test("sendImage uses Reply API when fresh reply token is available", async 
   const lineMessaging = {
     replyImage: async (input: any) => {
       assert.ok(input.originalContentUrl.includes("/messages/media/public"));
+      assert.equal(input.context?.replyTokenAgeBucket, "5-10 minutes");
       replyCalled = true;
       return { success: true, requestId: "req-img-reply", externalMessageId: "line-img-replied" };
     },

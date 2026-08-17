@@ -20,6 +20,7 @@ export type LinePushDiagnosticContext = {
   messageType?: string;
   imageUrlDomain?: string;
   replyTokenAgeMs?: number;
+  replyTokenAgeBucket?: string;
   deliveryMethod?: "REPLY" | "PUSH";
   fallbackReason?: string;
 };
@@ -181,6 +182,7 @@ export class LineMessagingService {
         messageType: context?.messageType ?? "UNKNOWN",
         deliveryMethod: "REPLY",
         replyTokenAgeMs: context?.replyTokenAgeMs ?? null,
+        replyTokenAgeBucket: context?.replyTokenAgeBucket ?? null,
         statusCode: response.status,
         requestId: response.headers.get("x-line-request-id"),
       }),
@@ -399,6 +401,8 @@ export class LineMessagingService {
         messageType: context?.messageType ?? "UNKNOWN",
         deliveryMethod: "PUSH",
         fallbackReason: context?.fallbackReason ?? null,
+        replyTokenAgeMs: context?.replyTokenAgeMs ?? null,
+        replyTokenAgeBucket: context?.replyTokenAgeBucket ?? null,
         statusCode: response.status,
         requestId: response.headers.get("x-line-request-id"),
       }),
