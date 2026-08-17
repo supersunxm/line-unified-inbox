@@ -1,6 +1,27 @@
 # AI progress
 
-## Current task: Phase 10C.10 — Bulk "Mark as Replied" Pagination Independence & Filter-Based Execution
+## Current task: Android Production APK Release v1.0.1+2
+
+- **App Version & Build**:
+  - Incremented version in `android_app/pubspec.yaml` to `1.0.1+2`.
+  - Built release APK with Flutter 3.4.0 & Dart defines: `API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app`, `APP_ENV=production`.
+  - APK Binary: `oppo-line-oa-chat-v1.0.1-production.apk` (56,183,971 bytes, ~56.2 MB).
+  - SHA256 Checksum: `e8d06e4b7249a5b4ee06b0e7717fd4af437884e7a2e2d1b813aafee9b1eb93b4`.
+- **Validation on Real Android Device / Emulator**:
+  - Clean install via `adb install -r android_app/build/app/outputs/flutter-apk/app-release.apk` on `emulator-5554`.
+  - Verified official app branding ("OPPO LINE OA Chat" with OPPO Brand Shop logo).
+  - Verified compact Inbox layout with 5+ conversation cards visible above the fold.
+  - Verified reordered filter chips: `[All] ➔ [Need Reply] ➔ [Completed] ➔ [Priority]`.
+  - Verified thread view, customer slip image rendering, message replies, and purchase information tagging.
+- **Distribution Package**:
+  - Placed distribution APK at `frontend/public/downloads/oppo-line-oa-chat-v1.0.1-production.apk`.
+  - Updated download portal `frontend/src/app/download/page.tsx` with version `1.0.1+2`, updated filename, SHA256 checksum, and installation guide.
+- **Verification & Test Results**:
+  - `flutter analyze`: 0 issues.
+  - `flutter test`: 77 / 77 passed (100%).
+  - Next.js build: Compiled cleanly with `/download` route generated.
+
+## Previous task: Phase 10C.10 — Bulk "Mark as Replied" Pagination Independence & Filter-Based Execution
 
 - **Pagination Independence & Scalability Audit**:
   - Identified risk in initial client-ID passing where frontend only provided loaded page IDs (e.g. 50 items) rather than the full database queue (1,466+ conversations).
