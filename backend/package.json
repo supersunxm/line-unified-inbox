@@ -21,7 +21,7 @@
     "store-master:import": "tsx --env-file=.env scripts/store-master.ts import",
     "store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate",
     "store-master:sync-connected-line-oa": "tsx --env-file=.env scripts/sync-connected-line-oa-store-master.ts",
-    "tiktok:sync-daily-metrics": "tsx --env-file=.env scripts/sync-tiktok-daily-metrics.ts",
+    "tiktok:sync-daily-metrics": "tsx scripts/sync-tiktok-daily-metrics.ts",
     "user:create-admin": "tsx --env-file=.env scripts/create-admin.ts",
     "auth:status": "tsx --env-file=.env scripts/auth-status.ts",
     "product-catalog:validate": "tsx scripts/product-catalog.ts validate",
