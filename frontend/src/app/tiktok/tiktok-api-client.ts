@@ -3,6 +3,7 @@ import {
   DEFAULT_TIKTOK_REDIRECT_URI,
 } from "./connect/tiktok-oauth.ts";
 import type {
+  SafeTikTokSyncedAccountResponse,
   TikTokBulkMetricsSummaryResponse,
   TikTokHistoricalMetricsData,
   TikTokStoreData,
@@ -465,7 +466,9 @@ export interface SyncTikTokAccountParams {
  * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend API.
  * Forwards user session authentication as canonical Authorization: Bearer <sessionToken>.
  */
-export async function syncTikTokAccountToBackend(params: SyncTikTokAccountParams): Promise<void> {
+export async function syncTikTokAccountToBackend(
+  params: SyncTikTokAccountParams
+): Promise<SafeTikTokSyncedAccountResponse> {
   const sessionToken = params.sessionToken?.trim() || null;
   const sessionTokenPresent = Boolean(sessionToken);
 
@@ -531,6 +534,87 @@ export async function syncTikTokAccountToBackend(params: SyncTikTokAccountParams
   if (!response.ok) {
     throw new Error(`Failed to sync TikTok account to backend database (HTTP ${response.status})`);
   }
+
+  const data = (await response.json()) as SafeTikTokSyncedAccountResponse;
+  return data;
+}
+
+/**
+ * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend internal sync API.
+ * Uses dedicated server-to-server internal secret (X-Internal-TikTok-Secret) for secure OAuth callback sync.
+ * NEVER exposed to client-side browser JavaScript.
+ */
+export async function syncTikTokAccountInternallyToBackend(
+  params: SyncTikTokAccountParams
+): Promise<SafeTikTokSyncedAccountResponse> {
+  const internalSecret = process.env.TIKTOK_INTERNAL_SYNC_SECRET?.trim();
+  if (!internalSecret) {
+    console.error("[TikTok Internal Sync Diagnostic]", {
+      backendSyncStatus: "missing_internal_secret",
+    });
+    throw new Error("Missing internal TikTok sync secret configuration");
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Internal-TikTok-Secret": internalSecret,
+  };
+
+  const mappedVideos = (params.videos || []).map((v) => ({
+    id: v.id,
+    createTime: v.create_time,
+    create_time: v.create_time,
+    title: v.title,
+    videoDescription: v.video_description,
+    video_description: v.video_description,
+    coverImageUrl: v.cover_image_url,
+    cover_image_url: v.cover_image_url,
+    shareUrl: v.share_url,
+    share_url: v.share_url,
+    duration: v.duration,
+    viewCount: v.view_count,
+    view_count: v.view_count,
+    likeCount: v.like_count,
+    like_count: v.like_count,
+    commentCount: v.comment_count,
+    comment_count: v.comment_count,
+    shareCount: v.share_count,
+    share_count: v.share_count,
+  }));
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/tiktok/internal/sync`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        accessToken: params.accessToken,
+        refreshToken: params.refreshToken,
+        expiresIn: params.expiresIn,
+        refreshExpiresIn: params.refreshExpiresIn,
+        grantedScopes: params.grantedScopes,
+        profile: params.profile,
+        videos: mappedVideos,
+        storeMasterId: params.storeMasterId,
+      }),
+    });
+  } catch (netErr) {
+    console.error("[TikTok Internal Sync Diagnostic]", {
+      backendSyncStatus: "network_error",
+    });
+    throw netErr;
+  }
+
+  console.info("[TikTok Internal Sync Diagnostic]", {
+    backendSyncStatus: response.status,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to sync TikTok account via internal backend API (HTTP ${response.status})`);
+  }
+
+  const data = (await response.json()) as SafeTikTokSyncedAccountResponse;
+  return data;
 }
 
 export interface FetchTikTokAccountOptions {

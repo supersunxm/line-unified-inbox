@@ -1,3 +1,12 @@
+# Dedicated Public TikTok Store Authorization Flow with Internal Service Authentication (2026-08-17)
+
+- **Decoupled Public Store Authorization (`/tiktok/connect` & `/tiktok/callback`)**: Retail store staff across ~150 stores need to authorize their store's TikTok account without administrative access to the OPPO LINE OA Monitor system. `/tiktok/connect` is a public Next.js route handler that generates a 32-byte cryptographic OAuth state stored in a secure HttpOnly cookie (`tiktok_oauth_state`, SameSite=Lax, 10 min maxAge) and immediately 302 redirects to TikTok OAuth with read-only scopes.
+- **Dedicated Internal Backend Sync Endpoint (`POST /tiktok/internal/sync`) Protected by Shared Secret**: Unrestricted anonymous access to `POST /tiktok/sync` was reverted. Instead, a dedicated `POST /tiktok/internal/sync` endpoint is protected by `InternalTikTokSyncGuard`, requiring the `X-Internal-TikTok-Secret` header verified via constant-time `crypto.timingSafeEqual` against `TIKTOK_INTERNAL_SYNC_SECRET`. The Next.js server-side OAuth callback dispatches this internal request without exposing the secret to the browser.
+- **Success Page Cookie-Based State Integrity**: Instead of relying on tamperable URL query parameters for connection proof, `/tiktok/callback` writes a short-lived (60s), HttpOnly, SameSite=Lax cookie `tiktok_connect_result` scoped to `/tiktok/connect/success`. The public success page verifies the cookie server-side to render store details, or renders a generic confirmation if unverified.
+- **Strict StoreMaster Binding & Ambiguity Routing**: Normalized username matching (lowercase, whitespace trimmed, leading `@` stripped) binds incoming TikTok accounts directly to `StoreMaster`. If 0 stores match, the user is redirected to `/tiktok/connect/error?reason=store_not_found`. If duplicate store records exist in StoreMaster (>1 matches), the user is redirected to `/tiktok/connect/error?reason=duplicate_store_mapping`.
+- **Public Mobile-First Success and Error Experience**: Standalone success (`/tiktok/connect/success`) and error (`/tiktok/connect/error`) pages feature Thai & English messaging, display verified store and account metadata, provide retry mechanisms, and strictly omit admin shells, sidebars, and navigation.
+- **Preserved Admin Dashboard Flow**: Admin users navigating to `/tiktok/connect` while authenticated with `oppo_session` are redirected back to the admin dashboard (`/tiktok/dashboard/[accountId]`) upon completing OAuth.
+
 # Multi-Account TikTok Store Routing & Account-Specific Isolation (2026-08-14)
 
 - **Dedicated Dynamic Dashboard Route (`/tiktok/dashboard/[accountId]`)**: To support multi-account scaling across ~150 retail stores without conflating store metrics, individual account dashboards are decoupled to `/tiktok/dashboard/[accountId]`. The base `/tiktok/dashboard` route redirects to the primary account dashboard if accounts exist or renders an empty state if no stores are connected.
@@ -813,3 +822,57 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Response-cycle semantics and the ten verified answered-cycle threshold are unchanged. Duration comparisons use a human semantic delta (faster/slower), while distribution comparisons use percentage points; unavailable comparison data remains neutral.
 - Customer source analytics use mutually exclusive `storeOnly`, `onlineOnly`, `storeAndOnline`, and `untagged` buckets. Product analytics include only `MANUAL` ConversationProduct rows, aggregate one model row per conversation, and retain variant dimensions together to avoid cross-model color claims.
 - The query-based implementation reuses existing authorized conversation/message/tag data and adds no migration, cache, warehouse, or background aggregation until measured production latency demonstrates a need.
+
+# Phase 8D.1 customer tag semantics (2026-08-16)
+
+- `Conversation.isInstallment` remains the storage/API field and is interpreted as a customer attribute: the customer has installment purchase history. No schema migration or API rename is needed.
+- Source channels remain a mutually exclusive analytics bucket only when aggregated (`STORE`, `ONLINE`, or both); the mobile editor continues to allow both source chips plus the independent installment status chip.
+- Product and variant tags stay manual and are presented alongside source/status under one Customer Tags surface. Summary wording uses “Installment customers” and explicitly describes percentages as tagged-customer status, never customer intent.
+
+# Phase 8D runtime correction (2026-08-15)
+
+- Summary month navigation uses the one-based month accepted by Dart's `DateTime.utc` constructor. The prior `month - 1 + delta` calculation skipped a month and made forward navigation a no-op; the minimal correction is `month + delta`, covered by a widget regression assertion.
+
+# Operational priority queue foundation (2026-08-16)
+
+- Operational priority is intentionally separate from `Conversation.priority`, which remains the existing classification/manual field. The new calculation is dynamic and chronology-based, so a new inbound message after a completed reply is actionable even when the persisted reply status has not yet changed.
+- The mobile list receives an additive `priority` object for its already-authorized page. Internal score is never exposed; no persistence, index, migration, auto-reply, AI, webhook, SSE, unread, or notification behavior is introduced in this phase.
+
+# Flutter priority queue UI (2026-08-16)
+
+- Priority remains backend-authoritative: Flutter decodes level, waiting duration, waiting timestamp, and reason codes but never calculates or displays the internal score/formula. The Priority tab filters actionable non-completed conversations and sorts urgent/high/normal, then oldest waiting first.
+- Reply/realtime reconciliation preserves existing state ownership. A successful reply clears the local priority presentation when the authoritative detail status is `REPLIED`; no new refresh, SSE, notification, unread, or persistence path was added.
+
+# Phase 9D.1 Purchase Information contract (2026-08-16)
+
+- Preserve existing Prisma storage and expose semantic API sections: MANUAL `ConversationProduct` rows are purchase information; RULE rows and classification fields are AI insight; reply/unread/priority remain operational state.
+- Additive `purchaseInformation` and `aiInsight` fields preserve legacy response fields. A semantic `PATCH /mobile/conversations/:id/purchase-information` route is added while `/tags` remains backward compatible.
+- Historical MANUAL records are not auto-verified and RULE records are never converted into purchases. Customer-level purchase history remains deferred until repeat-purchase requirements are approved.
+
+# Phase 9D.2 purchase provenance (2026-08-16)
+
+- Store provenance at conversation level because the current purchase editor saves one coherent purchase-information snapshot: `purchaseRecordedById` and `purchaseRecordedAt` are additive and nullable for legacy rows.
+- Extend existing `ActivityHistory` with `createdByUserId` and JSON `metadata`; purchase updates use `PURCHASE_INFORMATION_UPDATED` and record old/new semantic snapshots without storing credentials or customer LINE identifiers.
+- The API exposes the recorder display name and ISO timestamp while retaining the stable MANUAL/RULE separation. No historical MANUAL row is automatically promoted to verified purchase data.
+
+# Purchase intelligence and admin operation layer (2026-08-16)
+
+- Verified purchase analytics are query-time projections over provenance-backed `Conversation` snapshots; no CustomerPurchaseHistory or aggregate table is introduced. A record is eligible only when `purchaseRecordedAt` exists and the selected relation rows are `MANUAL`.
+- `GET /admin/purchase-analytics` reuses `StoreAccessService`: ADMIN has global scope, store members are constrained to active assigned stores, and an explicit `storeId` is rejected when it falls outside that scope. Active/non-archived store filtering remains server-side.
+- Web Admin separates Recorded Purchase Information from AI Insight and uses neutral “Verified Purchase Records” terminology. RULE classifications, scores, and internal reason codes are never counted or displayed as purchases.
+
+# Purchase ownership and legacy provenance (2026-08-16)
+
+- `ConversationProduct.source = MANUAL` is necessary but not sufficient for verified purchase information. The additive `purchaseInformation.recordState` marks rows as `VERIFIED` only when the BM purchase save has provenance, `LEGACY_MANUAL` when historical manual fields lack provenance, and `NONE` otherwise.
+- Existing MANUAL/RULE rows are preserved. Legacy MANUAL data is not shown as a verified purchase and is not included in provenance-backed analytics; RULE data remains AI Insight only.
+- The Web Admin purchase section is verified-only for display. Its older generic tag-edit action was removed from the UI; explicit edits use the purchase-information contract so only provenance-backed saves are shown as verified purchase records. The legacy endpoint remains for compatibility and produces no verified provenance by itself.
+
+# Web purchase editing contract (2026-08-16)
+
+- Web Admin now uses the existing authenticated `/mobile/conversations/:id/purchase-information` contract for explicit purchase edits, including product model, variant, channel, and installment fields. It no longer calls the generic `/conversations/:id/tags` endpoint from the purchase section.
+- The backend contract remains unchanged: the authenticated actor and store scope are resolved server-side, and every successful edit records provenance and activity history through the existing mobile service.
+
+# Production semantic-contract deployment finding (2026-08-16)
+
+- Railway backend and frontend are both still deployed from `9312961`, so local uncommitted semantic-alignment code is not in production.
+- The production database is also missing the already-authored additive purchase-provenance migration. Legacy MANUAL records remain unverified by design; deployment must apply the migration, and a BM must explicitly re-save a record to establish provenance.

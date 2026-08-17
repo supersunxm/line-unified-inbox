@@ -1,6 +1,26 @@
 # AI progress
 
-## Current task: Multi-Account 2-Store Test Preparation & Account-Specific Dashboard
+## Current task: Dedicated Public TikTok Store Authorization Flow with Internal Service Authentication
+
+- **Security Remediation & Architecture**:
+  - Reverted unrestricted `@Public()` on general `POST /tiktok/sync`. Normal `POST /tiktok/sync` remains protected by session `AuthGuard`.
+  - Created dedicated internal service-to-service endpoint: `POST /tiktok/internal/sync` protected by `InternalTikTokSyncGuard` (`backend/src/tiktok/internal-sync.guard.ts`).
+  - `InternalTikTokSyncGuard` requires and validates the `X-Internal-TikTok-Secret` header using constant-time `crypto.timingSafeEqual` against `process.env.TIKTOK_INTERNAL_SYNC_SECRET`. Fails closed if the secret is missing or mismatched. Secrets are never leaked into responses, URLs, or logs.
+  - Server-side Next.js OAuth callback (`frontend/src/app/tiktok/callback/route.ts`) calls `syncTikTokAccountInternallyToBackend` using `process.env.TIKTOK_INTERNAL_SYNC_SECRET` strictly on the server side. Fails safely and redirects to the error page if the secret is unconfigured.
+  - **Success Page Integrity**: Replaced URL query parameters with a short-lived (60s), HttpOnly cookie `tiktok_connect_result` scoped to `/tiktok/connect/success`. The public success page reads and verifies the cookie server-side, preventing arbitrary URL parameter tampering or false connection confirmations.
+- **Public Authorization Routes**:
+  - `GET /tiktok/connect`: Public entry route handler. Generates 32-byte cryptographic OAuth state, sets HttpOnly cookie (`tiktok_oauth_state`, SameSite=Lax, 10 min maxAge), and immediately 302 redirects to TikTok OAuth with read-only scopes `user.info.basic,user.info.profile,user.info.stats,video.list`.
+  - `GET /tiktok/callback`: Public callback. Validates state cookie, exchanges code server-side, fetches profile & video data, syncs via internal backend endpoint, and handles StoreMaster routing.
+  - `GET /tiktok/connect/success`: Mobile-first standalone page with bilingual Thai and English confirmation, displaying verified store information from short-lived cookie without admin navigation.
+  - `GET /tiktok/connect/error`: Mobile-first standalone page handling error reasons (`authorization_denied`, `invalid_state`, `store_not_found`, `duplicate_store_mapping`, `oauth_failed`).
+  - **Admin Protection Preserved**: `/tiktok`, `/tiktok/dashboard`, `/tiktok/dashboard/[accountId]`, and admin backend APIs remain strictly authenticated via `oppo_session`.
+- **Verification**:
+  - Backend tests: `1,185 / 1,185 passed (100%)`.
+  - Backend build: `prisma generate && nest build` completed cleanly.
+  - Frontend tests: `340 / 340 passed (100%)`.
+  - Frontend build: `next build` (Turbopack) completed cleanly with all routes generated.
+
+## Previous task: Multi-Account 2-Store Test Preparation & Account-Specific Dashboard
 
 - **Multi-Account Overview (`/tiktok`)**:
   - Updated `frontend/src/app/tiktok/page.tsx` and `tiktok-overview-view.tsx` to fetch `GET /tiktok/accounts` list from backend.
@@ -1308,6 +1328,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Final validation: `flutter analyze`, full Flutter tests (47), production-configured debug APK build, install on `emulator-5554`, and `git diff --check` pass. The registration form's two dropdowns also received `isExpanded: true` after runtime QA exposed a pre-existing narrow-layout overflow marker.
 - Runtime QA on the authenticated production-configured APK exercised Inbox boundaries, OBS-Sunx2 chat boundaries, and Profile scrolling; no stretch/glow/bounce, Flutter exception, ANR, or RenderFlex overflow remained in the final run. The final install timestamp was 2026-08-15 20:28:10.
 
+# Current task: Phase 8D final authenticated runtime acceptance (2026-08-15)
+
+- Authenticated the approved QA BM on the production-configured APK and verified Summary V2 in English, Thai, and Simplified Chinese, including activity metrics, response collection state, low tag coverage messaging, source/installment sections, comparison state, and scrolling.
+- Railway HTTP logs show successful `GET /mobile/summary/monthly` responses; emulator logs show no Flutter exception or RenderFlex overflow during the runtime checks.
+- Runtime QA exposed and fixed a Summary month-navigation off-by-one. August → July → August now works and is covered by a regression assertion; focused/full Flutter tests, analyzer, APK build/install, and diff check pass.
+
 # Current task: Phase 8A bottom navigation, profile hub, and employee ID (2026-08-15)
 
 - Added persistent authenticated Inbox / Summary / Profile bottom navigation with an IndexedStack so Inbox state remains mounted while switching tabs. Chat remains a pushed detail route and does not inherit the bottom navigation.
@@ -1346,3 +1372,62 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Installed the exact APK on `emulator-5554` with app data preserved (`lastUpdateTime=2026-08-14 17:59:20`). An approved signed inbound event through the normal LINE webhook moved OBS-Sunx2 from Completed to Need Reply and updated the Inbox preview/counts in realtime.
 - Sent `BM preview runtime test` through the mobile reply API (HTTP 201). Production verification found exactly one persisted OUTBOUND message and `REPLIED`; returning to Inbox issued only the targeted detail GET, patched the card to `Completed`, rendered `You: BM preview runtime test` with the outbound timestamp, and changed overview counts from 16/11 to 15/12 without a full Inbox GET.
 - Runtime filter verification confirmed OBS-Sunx2 is absent from Need Reply and present under Completed after reply. Reopening Chat showed the persisted message once, customer-only persistent header context, and no Flutter/RenderFlex exception.
+
+# Current task: Phase 8D.1 customer tag semantic correction (2026-08-16)
+
+- Kept `Conversation.isInstallment` and the existing mobile API contract; corrected its meaning to customer installment purchase status rather than installment interest.
+- Grouped source/status/product/variant controls under Customer Tags, localized Customer Status and installment-customer analytics in English, Thai, and Simplified Chinese, and added focused semantic tests.
+- Backend full tests (1152), Prisma validation/generation/build, changed-file ESLint, Flutter analyze, full Flutter tests (67), production APK build/install, runtime tag persistence, Summary wording, and diff check pass. Repository-wide backend lint remains blocked by pre-existing unrelated errors.
+- Applied the requested English title-case copy (`Customer Tags`, `Customer Tag Coverage`, `Installment Customer Analytics`, `Installment Customers`), regenerated l10n, and reran Flutter analyze, all 67 Flutter tests, and the production-configured APK build successfully.
+
+# Current task: Phase 9B.1 backend priority queue foundation (2026-08-16)
+
+- Added a dynamic, operational priority calculator and isolated `PriorityService`. It derives waiting work from message chronology (latest inbound after the latest human outbound), applies the approved age/installment/manual-product/multiple-inbound weighting, and returns only public priority level, waiting age, timestamp, and reason codes.
+- Enriched the existing `GET /mobile/conversations` response for the returned page without adding a route, table, migration, or client/UI changes. Priority context is loaded in one batched query and remains store-authorized through `StoreAccessService`.
+- Added focused calculator, authorization, scoping, product-source, and score-cap tests. Full backend tests (1167), changed-file ESLint, Prisma validation/generation, backend build, and diff checks pass.
+
+# Current task: Phase 9B.2 Flutter priority queue UI (2026-08-16)
+
+- Added safe `ConversationPriority` decoding, an Inbox `Priority` tab, backend-authoritative level/waiting display, and level-then-oldest-waiting sorting. Completed conversations are excluded from the priority view; the existing filters, reconciliation, realtime, pagination, unread, notification, and reply flows remain intact.
+- Added English, Thai, and Simplified Chinese priority labels, responsive priority badges/cards, and focused model/sorting/widget/localization/overflow tests. `flutter analyze`, the full Flutter suite (73), production-configured debug APK build, and `git diff --check` pass.
+
+# Current task: Phase 9D.1 Purchase Information contract (2026-08-16)
+
+- Added an additive backend conversation projection separating `purchaseInformation` (MANUAL records), `aiInsight` (RULE records), and `operationalState`. Existing `tags`, products, topics, status, and authorization behavior remain compatible.
+- Added `PATCH /mobile/conversations/:id/purchase-information`; the legacy `/tags` route remains available. Store access is still resolved server-side through `StoreAccessService`.
+- Updated Mobile parsing and conversation editor terminology from Customer Tags to Purchase Information without adding a confirmation workflow. Web Admin now has separate Customer Purchase and AI Insight sections when additive fields are available.
+- No Prisma migration or historical data conversion was performed. Legacy MANUAL provenance remains unresolved; RULE data is never treated as purchase data.
+- Focused backend contract/mobile tests, full backend tests (1171), backend build, Flutter analyze/tests, frontend build, and changed-file lint pass. Repository-wide lint still contains pre-existing unrelated errors.
+
+# Current task: Phase 9D.2 purchase provenance and Web Admin parity (2026-08-16)
+
+- Added additive purchase provenance on conversations (`purchaseRecordedById`, `purchaseRecordedAt`) and activity audit metadata/actor fields. Existing MANUAL/RULE product storage remains unchanged.
+- Mobile purchase saves now persist the authenticated BM and timestamp and create `PURCHASE_INFORMATION_UPDATED` activity entries with old/new snapshots. Store authorization remains server-side through `StoreAccessService`.
+- Mobile and Web Admin now display the same `recordedBy`/`recordedAt` contract. Historical records without provenance remain legacy unknown; no historical conversion was performed.
+- Local additive migrations are applied and the schema is up to date. Backend tests (1173), build, Flutter analyze/tests, Flutter APK build, frontend tests/build, changed-file lint, and diff checks pass. No deployment was performed.
+
+# Current task: Phase 9D.3 purchase intelligence and admin operation layer (2026-08-16)
+
+- Added an authenticated `GET /admin/purchase-analytics` service/controller over the existing conversation purchase snapshot. It scopes active, non-archived stores through `StoreAccessService`, supports ISO date ranges and an optional authorized store filter, and treats provenance-backed records as verified.
+- Analytics include verified-record totals, MANUAL-only product/variant/color rankings, channel/payment breakdowns, store ranking, and BM recording activity. RULE product rows are excluded at the Prisma relation filter and defensively at the service boundary; records without provenance remain outside the verified dataset.
+- Added the Web Admin Purchase Intelligence dashboard with overview, products, variants, channels, payment, colors, store performance, and BM recording activity sections. BM users do not receive a global store selector; their API result is membership-scoped. No schema migration or historical conversion was needed.
+- Focused purchase analytics tests (5), full backend tests (1178), Prisma validation, backend build, changed-file ESLint, Flutter analyze/tests, frontend tests (328), frontend changed-file ESLint, and frontend production build pass. No deployment was performed.
+
+# Current task: Phase 9D purchase ownership and legacy-record semantics (2026-08-16)
+
+- Added `purchaseInformation.recordState`: `VERIFIED` requires purchase provenance, `LEGACY_MANUAL` keeps historical MANUAL rows explicitly unverified, and `NONE` represents no manual purchase record. RULE products remain AI Insight only.
+- Web Admin Customer Purchase is read-only and no longer exposes the legacy tag-edit action that could create unprovenanced purchase rows. Legacy records are labeled as unverified; verified purchase details remain separate from AI Insight.
+- Flutter preserves the existing BM purchase editor, but legacy records are not rendered as verified purchase data. Saving through the BM purchase-information route continues to attach recorder and timestamp provenance.
+- No migration or historical rewrite was performed. Backend tests (1179), backend build, Prisma validation, changed-file ESLint, frontend tests (328), frontend build, Flutter analyze/tests, APK build, and diff checks pass. Deployment/runtime QA remains pending.
+
+# Current task: Web Admin purchase contract alignment (2026-08-16)
+
+- Verified the existing Web and Mobile conversation services already return the additive `purchaseInformation`, `aiInsight`, and `operationalState` contract; no backend changes were needed.
+- Web Customer Purchase now renders verified purchase data only, keeps RULE detection/confidence/intent/topics under AI Insight, labels legacy records safely, and exposes `Edit Purchase Information` through the existing authenticated mobile purchase-information contract rather than the legacy generic tag endpoint.
+- Frontend API types and client methods now cover the purchase contract, product variants, and purchase-information update. Web tests (329, including an explicit Customer Purchase/AI Insight separation regression), frontend build, changed-file lint, and diff checks pass. Production runtime comparison remains pending.
+
+# Current audit: production Web Admin semantic contract (2026-08-16)
+
+- Railway backend and frontend are both running commit `9312961`; the semantic-alignment changes remain uncommitted locally and are therefore absent from production.
+- Production OBS-Sunx2 still has legacy MANUAL purchase fields (`sourceChannels`, `isInstallment`, product/variant) but no provenance columns. The production Prisma client rejects `purchaseRecordedAt` as an unknown Conversation field, and `_prisma_migrations` does not contain the authored purchase-provenance migration.
+- The deployed frontend commit still renders Product Insight from legacy product/classification fields. No browser-cache issue was established; deployment of the backend contract, prerequisite additive migration, and frontend bundle is required. Historical records must be re-saved through the purchase-information flow to become VERIFIED; no automatic conversion is planned.

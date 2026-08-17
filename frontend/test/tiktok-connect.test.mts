@@ -11,25 +11,24 @@ import {
   generateOAuthState,
 } from "../src/app/tiktok/connect/tiktok-oauth.ts";
 
-const pageSource = readFileSync(new URL("../src/app/tiktok/connect/page.tsx", import.meta.url), "utf8");
-const formSource = readFileSync(new URL("../src/app/tiktok/connect/connect-form.tsx", import.meta.url), "utf8");
-const actionSource = readFileSync(new URL("../src/app/tiktok/connect/actions.ts", import.meta.url), "utf8");
+const connectRouteSource = readFileSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url), "utf8");
+const successPageSource = readFileSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url), "utf8");
+const errorPageSource = readFileSync(new URL("../src/app/tiktok/connect/error/page.tsx", import.meta.url), "utf8");
 const oauthSource = readFileSync(new URL("../src/app/tiktok/connect/tiktok-oauth.ts", import.meta.url), "utf8");
-const authorizeRouteSource = readFileSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
-test("TikTok connect route files exist", () => {
-  assert.ok(existsSync(new URL("../src/app/tiktok/connect/page.tsx", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/tiktok/connect/connect-form.tsx", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/tiktok/connect/actions.ts", import.meta.url)));
+test("Public TikTok store authorization route files exist", () => {
+  assert.ok(existsSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/connect/error/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/tiktok-oauth.ts", import.meta.url)));
-  assert.ok(existsSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url)));
 });
 
-test("TikTok connect page has appropriate metadata and noindex robots directive", () => {
-  assert.match(pageSource, /title:\s*"Connect TikTok Account \| OPPO Retail TikTok Monitor"/);
-  assert.match(pageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
-  assert.match(pageSource, /<h1[^>]*>\s*Connect TikTok Account\s*<\/h1>/);
+test("Public success and error pages have appropriate metadata and noindex robots directive", () => {
+  assert.match(successPageSource, /title:\s*"TikTok Connected Successfully \| OPPO Retail Operations"/);
+  assert.match(successPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
+  assert.match(errorPageSource, /title:\s*"Unable to Connect TikTok \| OPPO Retail Operations"/);
+  assert.match(errorPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
 });
 
 test("TikTok OAuth requests all 4 required read-only scopes", () => {
@@ -56,7 +55,6 @@ test("buildTikTokAuthUrl constructs valid TikTok authorization URL with exact ma
   assert.equal(url.searchParams.get("scope"), "user.info.basic,user.info.profile,user.info.stats,video.list");
   assert.equal(url.searchParams.get("response_type"), "code");
   assert.equal(url.searchParams.get("redirect_uri"), "https://lineoppo.click/tiktok/callback");
-  // The state in the authorization URL must be exactly identical to the generated state
   assert.equal(url.searchParams.get("state"), state);
 });
 
@@ -91,26 +89,38 @@ test("Cookie configuration for OAuth state is secure, HttpOnly, and accessible t
   assert.equal(TIKTOK_STATE_COOKIE_OPTIONS.maxAge, 600); // 10 minutes
 });
 
-test("Authorize route handler sets cookie on 302 redirect response", () => {
-  assert.match(authorizeRouteSource, /response\.cookies\.set\(TIKTOK_OAUTH_STATE_COOKIE/);
-  assert.match(authorizeRouteSource, /NextResponse\.redirect\(authUrl,\s*302\)/);
-  assert.match(formSource, /action="\/api\/tiktok\/authorize"/);
+test("Public /tiktok/connect route handler sets cookie on 302 redirect response directly to TikTok", () => {
+  assert.match(connectRouteSource, /response\.cookies\.set\(TIKTOK_OAUTH_STATE_COOKIE/);
+  assert.match(connectRouteSource, /NextResponse\.redirect\(authUrl,\s*302\)/);
+  assert.doesNotMatch(connectRouteSource, /redirect\(["']\/login["']\)/);
 });
 
-test("UI emphasizes read-only monitoring and clearly states no video publishing permissions requested", () => {
-  assert.match(pageSource, /read-only/i);
-  assert.match(pageSource, /does not request permission to publish/i);
-  assert.match(formSource, /Connect TikTok/);
+test("Public success page renders standalone layout with Thai and English confirmation", () => {
+  assert.match(successPageSource, /เชื่อมต่อ TikTok สำเร็จ/);
+  assert.match(successPageSource, /TikTok Account Connected/);
+  assert.match(successPageSource, /คุณสามารถปิดหน้านี้ได้/);
+  assert.doesNotMatch(successPageSource, /TopNavigation/);
+  assert.doesNotMatch(successPageSource, /sidebar/i);
+});
+
+test("Public error page handles authorization denied, invalid state, store not found, and duplicate mapping", () => {
+  assert.match(errorPageSource, /authorization_denied/);
+  assert.match(errorPageSource, /store_not_found/);
+  assert.match(errorPageSource, /duplicate_store_mapping/);
+  assert.match(errorPageSource, /invalid_state/);
+  assert.match(errorPageSource, /ลองใหม่อีกครั้ง/);
+  assert.doesNotMatch(errorPageSource, /TopNavigation/);
 });
 
 test("Security: Client Secret is strictly server-side and never exposed to frontend code", () => {
-  assert.doesNotMatch(pageSource, /TIKTOK_CLIENT_SECRET/);
-  assert.doesNotMatch(formSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(connectRouteSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(successPageSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(errorPageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(oauthSource, /TIKTOK_CLIENT_SECRET/);
-  assert.doesNotMatch(authorizeRouteSource, /TIKTOK_CLIENT_SECRET/);
 });
 
-test("TikTok Connect route is NOT linked from existing TopNavigation", () => {
+test("Public store authorization routes are NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/connect"/);
+  assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
   assert.doesNotMatch(topNavSource, /TikTok/);
 });

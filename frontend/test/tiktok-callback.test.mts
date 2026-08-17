@@ -145,9 +145,9 @@ test("getPublicAppUrl resolves public application domain and excludes internal c
 
 test("Callback route handler constructs result redirects with public application origin", () => {
   assert.match(routeSource, /const\s+publicOrigin\s*=\s*getPublicAppUrl\(\)/);
-  assert.match(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*publicOrigin\)/);
-  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*request\.url\)/);
-  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/callback\/result",\s*request\.nextUrl\)/);
+  assert.match(routeSource, /new\s+URL\("\/tiktok\/connect\/error",\s*publicOrigin\)/);
+  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/connect\/error",\s*request\.url\)/);
+  assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/connect\/error",\s*request\.nextUrl\)/);
   assert.doesNotMatch(routeSource, /0\.0\.0\.0/);
   assert.doesNotMatch(routeSource, /localhost/);
 });
@@ -157,7 +157,7 @@ test("Route handler clears state cookie in the 302 redirect response without cli
   assert.match(routeSource, /maxAge:\s*0/);
   assert.match(routeSource, /httpOnly:\s*true/);
   assert.match(routeSource, /sameSite:\s*"lax"/);
-  assert.match(routeSource, /\/tiktok\/callback\/result/);
+  assert.match(routeSource, /\/tiktok\/connect\/error/);
 });
 
 test("No client-side useEffect, POST request, or Server Action triggered from callback view", () => {

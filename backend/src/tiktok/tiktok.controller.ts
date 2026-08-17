@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
-import { Roles } from "../auth/auth.decorators";
+import { Public, Roles } from "../auth/auth.decorators";
 import { TikTokService } from "./tiktok.service";
+import { InternalTikTokSyncGuard } from "./internal-sync.guard";
 import {
   ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
@@ -15,7 +16,22 @@ export class TikTokController {
   constructor(private readonly tiktokService: TikTokService) {}
 
   /**
-   * Syncs authorized TikTok account and video metrics into PostgreSQL.
+   * Internal server-to-server endpoint for OAuth callback account synchronization.
+   * Protected by internal shared secret (X-Internal-TikTok-Secret header).
+   * Bypasses user session AuthGuard via @Public() but strictly enforces InternalTikTokSyncGuard.
+   */
+  @Public()
+  @UseGuards(InternalTikTokSyncGuard)
+  @Post("internal/sync")
+  @HttpCode(HttpStatus.OK)
+  async internalSyncAccount(
+    @Body() dto: SyncTikTokAccountDto
+  ): Promise<SafeTikTokAccountOverviewResponse> {
+    return this.tiktokService.upsertTikTokAccount(dto);
+  }
+
+  /**
+   * User-session authenticated sync endpoint (for admin-triggered syncs).
    */
   @Post("sync")
   @HttpCode(HttpStatus.OK)

@@ -71,6 +71,37 @@ export interface TikTokAccountListItem {
   } | null;
 }
 
+export interface SafeTikTokSyncedAccountResponse {
+  id: string;
+  openId: string;
+  unionId?: string | null;
+  username?: string | null;
+  displayName: string;
+  avatarUrl?: string | null;
+  avatarUrl100?: string | null;
+  avatarLargeUrl?: string | null;
+  bioDescription?: string | null;
+  profileDeepLink?: string | null;
+  profileWebLink?: string | null;
+  isVerified?: boolean;
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  connectionStatus: string;
+  connectedAt: string;
+  lastSyncedAt: string;
+  storeMasterId?: string | null;
+  bindingStatus?: "MATCHED" | "STORE_NOT_FOUND" | "AMBIGUOUS_STORE_MATCH" | "PRESERVED_EXISTING" | "NO_USERNAME";
+  storeMaster?: {
+    id: string;
+    storeName: string;
+    accountName: string;
+    province?: string | null;
+    region?: string | null;
+  } | null;
+}
+
 export interface TikTokStoreData {
   id?: string;
   profile: TikTokUserProfile;

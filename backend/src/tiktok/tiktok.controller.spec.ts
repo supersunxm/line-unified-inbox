@@ -400,4 +400,20 @@ test("TikTokController requires authentication and rejects unauthenticated sync 
   assert.equal(bulkMetricsRes.accounts.length, 1);
   assert.equal(bulkMetricsRes.accounts[0].accountId, "acc-1");
   assert.equal(bulkMetricsRes.accounts[0].growth.sevenDays.followers, 286);
+
+  // 15. POST /tiktok/internal/sync invokes upsertTikTokAccount when guarded
+  const internalSyncResult = await controller.internalSyncAccount({
+    accessToken: "act.token_internal_123",
+    profile: {
+      open_id: "_000sample_open_id",
+      display_name: "OPPO Central World",
+      follower_count: 52000,
+      following_count: 120,
+      likes_count: 1420000,
+      video_count: 85,
+      is_verified: true,
+    },
+    videos: [],
+  });
+  assert.equal(internalSyncResult.openId, "_000sample_open_id");
 });

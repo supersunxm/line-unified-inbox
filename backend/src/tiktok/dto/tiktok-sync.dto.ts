@@ -85,6 +85,7 @@ export interface SafeTikTokAccountOverviewResponse {
   connectedAt: string;
   lastSyncedAt: string;
   storeMasterId?: string | null;
+  bindingStatus?: "MATCHED" | "STORE_NOT_FOUND" | "AMBIGUOUS_STORE_MATCH" | "PRESERVED_EXISTING" | "NO_USERNAME";
   storeMaster?: {
     id: string;
     storeName: string;

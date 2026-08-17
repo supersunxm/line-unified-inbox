@@ -282,12 +282,15 @@ export class TikTokService {
     });
 
     let effectiveStoreMasterId: string | null = null;
+    let bindingStatus: StoreBindingDiagnostic = "NO_USERNAME";
     if (existingAccount?.storeMasterId) {
       // 1. Immutable store binding: preserve existing binding unconditionally during OAuth sync
       effectiveStoreMasterId = existingAccount.storeMasterId;
+      bindingStatus = "PRESERVED_EXISTING";
     } else {
       // 2. Auto-resolve store binding by normalized TikTok username only when currently unlinked
       const matchResult = await this.resolveStoreMasterIdByTikTokUsername(profile.username);
+      bindingStatus = matchResult.status;
       if (matchResult.status === "MATCHED" && matchResult.storeMasterId) {
         effectiveStoreMasterId = matchResult.storeMasterId;
       }
@@ -431,7 +434,10 @@ export class TikTokService {
     if (!safeAccount) {
       throw new Error("Failed to retrieve upserted TikTok account overview");
     }
-    return safeAccount;
+    return {
+      ...safeAccount,
+      bindingStatus,
+    };
   }
 
   /**
