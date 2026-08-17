@@ -13,6 +13,7 @@ export type AuthUser = {
   role: UserRole;
   isActive: boolean;
   status?: string;
+  mustChangePassword?: boolean;
   phone?: string | null;
   firstName?: string | null;
   lastName?: string | null;

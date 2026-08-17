@@ -241,6 +241,7 @@ model User {
   normalizedEmail               String                       @unique
   displayName                   String
   passwordHash                  String?
+  mustChangePassword            Boolean                      @default(false)
   role                          UserRole                     @default(VIEWER)
   status                        UserStatus                   @default(ACTIVE)
   isActive                      Boolean                      @default(true)

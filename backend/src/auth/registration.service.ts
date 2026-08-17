@@ -59,6 +59,33 @@ export class RegistrationService {
     });
   }
 
+  async approved() {
+    const memberships = await this.prisma.userStoreMembership.findMany({
+      where: { status: MembershipStatus.ACTIVE, user: { role: UserRole.VIEWER, status: UserStatus.ACTIVE, isActive: true } },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        approvedAt: true,
+        approvedBy: { select: { id: true, displayName: true, email: true } },
+        user: { select: { id: true, displayName: true, employeeId: true, email: true } },
+        store: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: { approvedAt: "desc" },
+    });
+    return memberships.map((membership) => ({
+      id: membership.id,
+      userId: membership.userId,
+      name: membership.user.displayName,
+      employeeId: membership.user.employeeId,
+      email: membership.user.email,
+      store: membership.store,
+      role: membership.role,
+      approvedAt: membership.approvedAt,
+      approvedBy: membership.approvedBy,
+    }));
+  }
+
   async approve(registrationId: string, adminUserId: string, ipAddress?: string, userAgent?: string) { return this.setApproval(registrationId, adminUserId, MembershipStatus.ACTIVE, ipAddress, userAgent); }
   async reject(registrationId: string, adminUserId: string, ipAddress?: string, userAgent?: string) { return this.setApproval(registrationId, adminUserId, MembershipStatus.REJECTED, ipAddress, userAgent); }
 

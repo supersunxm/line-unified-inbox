@@ -59,3 +59,27 @@ void test("authenticated mobile profile includes stores, membership roles, and d
   assert.deepEqual(result?.stores, [{ id: "store-1", name: "Store 1", code: "S1" }]);
   assert.deepEqual(result?.profile, { firstName: "First", lastName: "Last", employeeId: "EMP-1", position: "PC", phone: "+66812345678" });
 });
+
+void test("admin password reset stores only a hash, forces a change, expires sessions, and audits safely", async () => {
+  const updates: any[] = [];
+  const auditEntries: any[] = [];
+  const tx: any = {
+    user: {
+      findFirst: async () => ({ id: "user-1" }),
+      update: async ({ data }: any) => { updates.push(data); return data; },
+    },
+    session: { deleteMany: async ({ where }: any) => { updates.push({ sessionDelete: where }); return { count: 1 }; } },
+  };
+  const service = new AuthService({ $transaction: async (callback: any) => callback(tx) } as any, { hash: async (password: string) => `hash:${password}` } as any, undefined, { record: async (entry: any) => auditEntries.push(entry) } as any);
+  const result = await service.resetPassword("user-1", "admin-1");
+  assert.match(result.temporaryPassword, /[A-Z]/);
+  assert.match(result.temporaryPassword, /[a-z]/);
+  assert.match(result.temporaryPassword, /[0-9]/);
+  assert.match(result.temporaryPassword, /[@#$%^&*]/);
+  assert.ok(result.temporaryPassword.length >= 12);
+  assert.equal(updates[0].mustChangePassword, true);
+  assert.equal(updates[0].passwordHash.startsWith("hash:"), true);
+  assert.equal(updates.some((entry) => entry.sessionDelete?.userId === "user-1"), true);
+  assert.equal(auditEntries[0].action, "PASSWORD_RESET");
+  assert.equal("temporaryPassword" in auditEntries[0], false);
+});

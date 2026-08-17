@@ -89,3 +89,24 @@ void test("approval activates both user and membership atomically", async () => 
   assert.equal((requestUpdate?.data as any).status, "APPROVED");
   assert.equal(auditEntries[0].action, "ADMIN_APPROVE_REGISTRATION");
 });
+
+void test("approved accounts include employee, store, role, and approver provenance", async () => {
+  const service = new RegistrationService({
+    userStoreMembership: {
+      findMany: async () => [{
+        id: "membership-1",
+        userId: "user-1",
+        role: "STORE_MANAGER",
+        approvedAt: new Date("2026-08-17T00:00:00.000Z"),
+        approvedBy: { id: "admin-1", displayName: "OPPO Admin", email: "admin@example.test" },
+        user: { id: "user-1", displayName: "Somchai ABC", employeeId: "OP00123", email: "somchai@example.test" },
+        store: { id: "store-1", name: "Central World", code: "CW" },
+      }],
+    },
+  } as any, {} as any);
+  const [account] = await service.approved();
+  assert.equal(account.role, "STORE_MANAGER");
+  assert.equal(account.employeeId, "OP00123");
+  assert.equal(account.approvedBy?.displayName, "OPPO Admin");
+  assert.equal(account.store.name, "Central World");
+});

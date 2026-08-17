@@ -34,6 +34,18 @@ export type PendingRegistration = {
   createdAt: string;
 };
 
+export type ApprovedAccount = {
+  id: string;
+  userId: string;
+  name: string;
+  employeeId: string | null;
+  email: string;
+  store: { id: string; name: string; code: string | null };
+  role: "STAFF" | "STORE_MANAGER";
+  approvedAt: string | null;
+  approvedBy: { id: string; displayName: string; email: string } | null;
+};
+
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {
   id: string;
@@ -129,8 +141,14 @@ export const api = {
     const response = await request<{ registrations?: PendingRegistration[] } | PendingRegistration[]>("/admin/registrations/pending");
     return Array.isArray(response) ? response : response.registrations ?? [];
   },
+  getApprovedAccounts: async () => {
+    const response = await request<{ accounts?: ApprovedAccount[] } | ApprovedAccount[]>("/admin/registrations/approved");
+    return Array.isArray(response) ? response : response.accounts ?? [];
+  },
   approveRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
   rejectRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
+  resetUserPassword: (userId: string) => request<{ userId: string; temporaryPassword: string }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reset-password`, { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   purchaseAnalytics: (params?: { from?: string; to?: string; storeId?: string }) => {
     const query = new URLSearchParams();
     if (params?.from) query.set("from", params.from);

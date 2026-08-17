@@ -1,6 +1,6 @@
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { createHash, randomBytes } from "node:crypto";
-import { Prisma, SessionType, UserStatus } from "@prisma/client";
+import { createHash, randomBytes, randomInt } from "node:crypto";
+import { MembershipStatus, Prisma, SessionType, UserRole, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
@@ -11,7 +11,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService) {}
   private tokenHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
-  private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; status?: string; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
+  private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; status?: string; mustChangePassword?: boolean; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
     const memberships = user.memberships?.map((membership) => ({ id: membership.id, storeId: membership.storeId, role: membership.role, store: membership.store })) ?? [];
     return {
       id: user.id,
@@ -20,6 +20,7 @@ export class AuthService {
       role: user.role,
       isActive: user.isActive,
       status: user.status,
+      mustChangePassword: user.mustChangePassword ?? false,
       phone: user.phone,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -71,5 +72,47 @@ export class AuthService {
     const session = await this.prisma.session.findUnique({ where: { tokenHash: this.tokenHash(token) }, select: { userId: true, sessionType: true } });
     await this.prisma.session.deleteMany({ where: { tokenHash: this.tokenHash(token), sessionType: SessionType.MOBILE } });
     if (session?.sessionType === SessionType.MOBILE) await this.audit?.record({ actorUserId: session.userId, action: "USER_LOGOUT" });
+  }
+
+  private temporaryPassword() {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "@#$%^&*";
+    const pick = (chars: string) => chars[randomInt(chars.length)];
+    const required = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    const all = upper + lower + digits + symbols;
+    while (required.length < 14) required.push(pick(all));
+    for (let index = required.length - 1; index > 0; index -= 1) {
+      const swapIndex = randomInt(index + 1);
+      [required[index], required[swapIndex]] = [required[swapIndex], required[index]];
+    }
+    return required.join("");
+  }
+
+  async resetPassword(targetUserId: string, adminUserId: string, ipAddress?: string, userAgent?: string) {
+    const temporaryPassword = this.temporaryPassword();
+    const passwordHash = await this.passwords.hash(temporaryPassword);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findFirst({
+        where: { id: targetUserId, role: UserRole.VIEWER, status: UserStatus.ACTIVE, isActive: true, memberships: { some: { status: MembershipStatus.ACTIVE } } },
+        select: { id: true },
+      });
+      if (!user) throw new UnauthorizedException("Account reset is unavailable");
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: true } });
+      await tx.session.deleteMany({ where: { userId: user.id } });
+      return { userId: user.id };
+    });
+    await this.audit?.record({ actorUserId: adminUserId, action: "PASSWORD_RESET", targetUserId: result.userId, metadata: { reason: "ADMIN_RESET_PASSWORD" }, ipAddress, userAgent });
+    return { userId: result.userId, temporaryPassword };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, passwordHash: true } });
+    if (!user?.passwordHash || !(await this.passwords.verify(currentPassword, user.passwordHash))) throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Current password is incorrect" });
+    const passwordHash = await this.passwords.hash(newPassword);
+    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false } });
+    await this.audit?.record({ actorUserId: user.id, action: "PASSWORD_CHANGED" });
+    return { success: true };
   }
 }
