@@ -31,8 +31,7 @@ export class StoreAccessService {
       throw new ForbiddenException("User account is not active");
     }
 
-    // Existing VIEWER accounts predate store memberships and retain their read-only scope.
-    if (account.memberships.length === 0) return null;
+    if (account.memberships.length === 0) throw new ForbiddenException("No active store membership");
 
     const storeIds = account.memberships
       .filter((membership) => membership.status === "ACTIVE" && membership.store.isActive && !membership.store.archivedAt)

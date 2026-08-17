@@ -15,9 +15,13 @@ export class ConversationsController {
     if (query.storeId) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
     return this.service.list(query, storeIds);
   }
-  @Get("bm-reply-status-summary") bmReplyStatusSummary() { return this.service.getBmReplyStatusSummary(); }
-  @Get("store-priority-summary") async storePrioritySummary() {
-    const summary = await this.service.getBmReplyStatusSummary();
+  @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Req() req: AuthRequest) {
+    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
+    return this.service.getBmReplyStatusSummary(accessibleStoreIds);
+  }
+  @Get("store-priority-summary") async storePrioritySummary(@Req() req: AuthRequest) {
+    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
+    const summary = await this.service.getBmReplyStatusSummary(accessibleStoreIds);
     return {
       stores: summary.stores.map((s) => ({
         id: s.storeId,

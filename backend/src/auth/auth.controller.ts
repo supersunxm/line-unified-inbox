@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
-import { IsEmail, IsIn, IsNotEmpty, IsString, Length, MinLength } from "class-validator";
+import { IsEmail, IsIn, IsNotEmpty, IsString, Length, Matches, MinLength } from "class-validator";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { Public } from "./auth.decorators";
@@ -9,12 +9,13 @@ import { sessionCookieOptions } from "./session-cookie";
 import { MobilePasswordLoginDto, MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
 import { SessionType } from "@prisma/client";
 import { MobileAuthService } from "./mobile-auth.service";
+import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_PATTERN } from "./password-policy";
 
 class LoginDto { @IsString() @IsNotEmpty() identifier!: string; @IsString() @IsNotEmpty() password!: string; }
-class SetupRequestDto { @IsString() @IsNotEmpty() displayName!: string; @IsEmail() email!: string; @IsString() @MinLength(12) password!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
+class SetupRequestDto { @IsString() @IsNotEmpty() displayName!: string; @IsEmail() email!: string; @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) password!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
 class SetupVerifyDto extends SetupRequestDto { @IsString() challengeId!: string; @IsString() @Length(6, 6) otp!: string; }
 class ResendDto { @IsString() challengeId!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
-class ChangePasswordDto { @IsString() @IsNotEmpty() currentPassword!: string; @IsString() @MinLength(12) newPassword!: string; }
+class ChangePasswordDto { @IsString() @IsNotEmpty() currentPassword!: string; @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) newPassword!: string; }
 
 @Controller("auth")
 export class AuthController {

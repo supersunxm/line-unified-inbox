@@ -48,13 +48,28 @@ void test("inactive users, pending or rejected memberships, and inactive stores 
   await assert.rejects(() => serviceFor({ isActive: true, status: "ACTIVE", memberships: [{ storeId: "store-a", status: "ACTIVE", store: { isActive: false, archivedAt: null } }] }).accessibleStoreIds(manager), ForbiddenException);
 });
 
-void test("legacy VIEWER accounts preserve read-only scope and unauthenticated requests return 401", async () => {
+void test("users without store memberships are forbidden and unauthenticated requests return 401", async () => {
   const legacyViewer = serviceFor({ isActive: true, status: "ACTIVE", memberships: [] });
-  assert.equal(await legacyViewer.accessibleStoreIds(manager), null);
-  assert.equal(await legacyViewer.canWriteAsStoreUser(manager), false);
+  await assert.rejects(() => legacyViewer.accessibleStoreIds(manager), ForbiddenException);
+  await assert.rejects(() => legacyViewer.canWriteAsStoreUser(manager), ForbiddenException);
 
   const guard = new AuthGuard(new Reflector(), { authenticate: async () => null } as never);
   const request = { method: "GET", path: "/conversations", headers: {} };
   const context = { getHandler: () => ({}), getClass: () => ({}), switchToHttp: () => ({ getRequest: () => request }) };
   await assert.rejects(() => guard.canActivate(context as never), UnauthorizedException);
+});
+
+void test("store access is scoped to the assigned active store", async () => {
+  const service = serviceFor(activeMembership("store-a"));
+  await service.assertStoreAccess(manager, "store-a");
+  await assert.rejects(() => service.assertStoreAccess(manager, "store-b"), ForbiddenException);
+});
+
+void test("inactive membership cannot access its store", async () => {
+  const service = serviceFor({
+    isActive: true,
+    status: "ACTIVE",
+    memberships: [{ storeId: "store-a", status: "SUSPENDED", store: { isActive: true, archivedAt: null } }],
+  });
+  await assert.rejects(() => service.assertStoreAccess(manager, "store-a"), ForbiddenException);
 });

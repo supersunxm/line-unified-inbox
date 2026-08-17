@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { StoresController } from "./stores.controller";
+import { REQUIRED_ROLES } from "./auth/auth.decorators";
 
 test("StoresController.list returns operationalConversationCount (total) and operationalNotRepliedCount (waiting badge)", async () => {
   const resetAt = new Date("2026-08-05T12:00:00Z");
@@ -32,8 +33,9 @@ test("StoresController.list returns operationalConversationCount (total) and ope
     },
   };
 
-  const controller = new StoresController(fakePrisma, fakeOperations);
-  const result = await controller.list();
+  const storeAccess = { accessibleStoreIds: async () => null } as never;
+  const controller = new StoresController(fakePrisma, fakeOperations, storeAccess);
+  const result = await controller.list(undefined, { user: { role: "ADMIN" } } as never);
 
   assert.equal(result.length, 1);
   assert.equal(result[0]._count.conversations, 40); // Historical total preserved
@@ -64,8 +66,9 @@ test("StoresController.summary uses bmReplyStatus and excludes pre-reset convers
     },
   };
 
-  const controller = new StoresController(fakePrisma, fakeOperations);
-  const summary = await controller.summary("s-1");
+  const storeAccess = { assertStoreAccess: async () => undefined } as never;
+  const controller = new StoresController(fakePrisma, fakeOperations, storeAccess);
+  const summary = await controller.summary("s-1", { user: { role: "ADMIN" } } as never);
 
   assert.equal(summary.notReplied, 5);
   assert.equal(summary.notifiedBm, 3);
@@ -76,4 +79,27 @@ test("StoresController.summary uses bmReplyStatus and excludes pre-reset convers
     NOTIFIED_BM: 3,
     REPLIED: 10,
   });
+});
+
+test("StoresController.list scopes store reads to the authenticated user's active stores", async () => {
+  let capturedWhere: unknown;
+  let capturedConversationWhere: any;
+  const fakeOperations: any = { getOperationalConversationFilter: async () => ({}) };
+  const fakePrisma: any = {
+    store: { findMany: async (options: { where: unknown }) => { capturedWhere = options.where; return []; } },
+    conversation: { groupBy: async (options: { where: unknown }) => { capturedConversationWhere = options.where; return []; } },
+  };
+  const storeAccess = { accessibleStoreIds: async () => ["s-1"] } as never;
+  const controller = new StoresController(fakePrisma, fakeOperations, storeAccess);
+
+  await controller.list(undefined, { user: { role: "VIEWER" } } as never);
+
+  assert.deepEqual(capturedWhere, { id: { in: ["s-1"] }, archivedAt: null });
+  assert.deepEqual(capturedConversationWhere.store, { archivedAt: null, id: { in: ["s-1"] } });
+});
+
+test("store mutations require ADMIN role metadata", () => {
+  assert.deepEqual(Reflect.getMetadata(REQUIRED_ROLES, StoresController.prototype.archive), ["ADMIN"]);
+  assert.deepEqual(Reflect.getMetadata(REQUIRED_ROLES, StoresController.prototype.restore), ["ADMIN"]);
+  assert.deepEqual(Reflect.getMetadata(REQUIRED_ROLES, StoresController.prototype.remove), ["ADMIN"]);
 });

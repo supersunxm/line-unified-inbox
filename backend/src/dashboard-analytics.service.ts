@@ -170,12 +170,11 @@ export class DashboardAnalyticsService {
     yesterdayStart.setUTCDate(yesterdayStart.getUTCDate() - 1);
     const yesterdayEnd = new Date(startDate);
 
-    // Permission-based store filter (RBAC enforcement at DB level)
-    const isRestrictedStoreView = userRole === "STORE_MANAGER" || userRole === "AREA_MANAGER";
-    const storeWhereClause =
-      isRestrictedStoreView && allowedStoreIds && allowedStoreIds.length > 0
-        ? { id: { in: allowedStoreIds }, archivedAt: null }
-        : { archivedAt: null };
+    // The controller derives allowedStoreIds from StoreAccessService. An explicit empty
+    // scope must remain empty rather than falling back to the global query.
+    const storeWhereClause = allowedStoreIds === undefined
+      ? { isActive: true, archivedAt: null }
+      : { id: { in: allowedStoreIds }, isActive: true, archivedAt: null };
 
     // Fetch active stores scoped to permissions
     const activeStores = await this.prisma.store.findMany({
@@ -194,7 +193,7 @@ export class DashboardAnalyticsService {
     // 1. Fetch conversations created within period strictly scoped to user allowed store IDs
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
+        storeId: { in: activeStoreIds },
         createdAt: { gte: startDate },
       },
       include: {
@@ -219,7 +218,7 @@ export class DashboardAnalyticsService {
     // Fetch yesterday conversations for comparison
     const yesterdayConversations = await this.prisma.conversation.findMany({
       where: {
-        storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
+        storeId: { in: activeStoreIds },
         createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
       },
       include: {
@@ -285,12 +284,12 @@ export class DashboardAnalyticsService {
         pending: 0,
         count24hReplied: 0,
         durations: [] as number[],
-        hourlyMsgs: new Array(24).fill(0),
+        hourlyMsgs: new Array<number>(24).fill(0),
         maxWaitingHours: 0,
       });
     }
 
-    const hourlyCounts = new Array(24).fill(0);
+    const hourlyCounts = new Array<number>(24).fill(0);
 
     for (const conv of conversations) {
       const storeId = conv.storeId;
@@ -305,7 +304,7 @@ export class DashboardAnalyticsService {
         pending: 0,
         count24hReplied: 0,
         durations: [] as number[],
-        hourlyMsgs: new Array(24).fill(0),
+        hourlyMsgs: new Array<number>(24).fill(0),
         maxWaitingHours: 0,
       };
 
@@ -440,7 +439,7 @@ export class DashboardAnalyticsService {
 
     const trendConvs = await this.prisma.conversation.findMany({
       where: {
-        storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
+        storeId: { in: activeStoreIds },
         createdAt: { gte: sevenDaysAgo },
       },
       select: {
@@ -625,11 +624,10 @@ export class DashboardAnalyticsService {
       r.rank = idx + 1;
     });
 
-    // STORE_MANAGER RBAC: Hide network-wide rankings of other stores
-    const filteredStoreRows =
-      userRole === "STORE_MANAGER" && allowedStoreIds && allowedStoreIds.length > 0
-        ? storeRows.filter((s) => allowedStoreIds.includes(s.storeId))
-        : storeRows;
+    // Preserve the server-derived scope for every non-global or selected-store view.
+    const filteredStoreRows = allowedStoreIds === undefined
+      ? storeRows
+      : storeRows.filter((s) => allowedStoreIds.includes(s.storeId));
 
     // 8. SLA Risk Prediction Validation (Phase 3 Rule: LOW <12h waiting, MEDIUM 12-20h waiting, HIGH >20h waiting)
     const slaRiskPrediction: SlaRiskPredictionItem[] = Array.from(storeAggMap.values())
@@ -659,7 +657,7 @@ export class DashboardAnalyticsService {
     // 9. Need Action Queue with Priority Score
     const needActionQueue: NeedActionStoreItem[] = filteredStoreRows
       .filter((s) => s.status === "Improve" || s.status === "Need Attention" || s.pending > 0)
-      .map((s) => {
+      .map((s): NeedActionStoreItem => {
         const slaRiskComponent = Math.round(((100 - s.responseRate24h) / 100) * 40);
         const pendingVolComponent = Math.min(30, Math.round((s.pending / 10) * 30));
         const importanceComponent = s.messages >= 10 ? 20 : 10;
@@ -680,11 +678,11 @@ export class DashboardAnalyticsService {
           pending: s.pending,
           responseRate: s.responseRate24h,
           messages: s.messages,
-          severity: (s.responseRate24h < 70 || s.pending >= 5 ? "HIGH" : "MEDIUM") as "HIGH" | "MEDIUM",
+          severity: s.responseRate24h < 70 || s.pending >= 5 ? "HIGH" : "MEDIUM",
           problem: `${s.pending} Pending Conversations`,
           impact: s.responseRate24h < 70 ? "High SLA Risk" : "Moderate Workload Risk",
           recommendedAction: "Review evening manpower and follow up with BM",
-          status: (s.bmNotified > 0 ? "WAITING_BM" : s.responseRate24h < 70 ? "OPEN" : "BM_REPLIED") as NeedActionStoreItem["status"],
+          status: s.bmNotified > 0 ? "WAITING_BM" : s.responseRate24h < 70 ? "OPEN" : "BM_REPLIED",
           priorityScore,
           reasons: reasons.length > 0 ? reasons : ["Store pending review"],
         };
@@ -693,18 +691,31 @@ export class DashboardAnalyticsService {
       .slice(0, 5);
 
     // 10. Admin Activity History Log
-    const dbActivities = await (this.prisma as any).activityHistory?.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: { conversation: { include: { store: { select: { name: true } } } } },
-    }) ?? [];
+    type DashboardActivity = {
+      createdAt: Date;
+      actorRole?: string | null;
+      activityType?: string | null;
+      type?: string | null;
+      conversation?: { store?: { name: string } | null } | null;
+    };
+    const activityHistory = (this.prisma as unknown as {
+      activityHistory?: { findMany: (args: unknown) => Promise<DashboardActivity[]> };
+    }).activityHistory;
+    const dbActivities = activityHistory
+      ? await activityHistory.findMany({
+          where: { conversation: { storeId: { in: activeStoreIds }, store: { archivedAt: null } } },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          include: { conversation: { include: { store: { select: { name: true } } } } },
+        })
+      : [];
 
     const adminActivity: AdminActivityLogItem[] = dbActivities.length > 0
-      ? dbActivities.map((act: any) => ({
+      ? dbActivities.map((act) => ({
           timestamp: new Date(act.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
           admin: act.actorRole || "Admin Operator",
           action: (act.activityType || act.type || "ACTIVITY_LOGGED").toString().replace(/_/g, " ").toLowerCase(),
-          storeName: act.conversation.store?.name ?? "Store",
+          storeName: act.conversation?.store?.name ?? "Store",
           status: "LOGGED",
         }))
       : [
@@ -778,7 +789,7 @@ export class DashboardAnalyticsService {
           where: {
             isActive: true,
             archivedAt: null,
-            storeId: activeStoreIds.length > 0 ? { in: activeStoreIds } : undefined,
+            storeId: { in: activeStoreIds },
             store: { archivedAt: null },
           },
           select: {
@@ -904,7 +915,7 @@ export class DashboardAnalyticsService {
     // Daily Summary Header Data
     const storesNeedAttentionCount = filteredStoreRows.filter((s) => s.status !== "Excellent").length;
     const dailySummary = {
-      networkStatus: (storesNeedAttentionCount > 0 ? "⚠️ Attention Required" : "🟢 Healthy") as "🟢 Healthy" | "⚠️ Attention Required",
+      networkStatus: storesNeedAttentionCount > 0 ? "⚠️ Attention Required" : "🟢 Healthy",
       activeStoresCount: activeStores.length,
       totalMessagesToday: totalConversations,
       slaAchievementRate: overallResponseRate24h,

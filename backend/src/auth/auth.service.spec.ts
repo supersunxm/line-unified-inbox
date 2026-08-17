@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AuthService } from "./auth.service";
+import { isPasswordPolicyCompliant } from "./password-policy";
+import { PasswordService } from "./password.service";
 
 void test("login rejects pending, rejected, and suspended users", async () => {
   for (const status of ["PENDING_APPROVAL", "REJECTED", "SUSPENDED"]) {
@@ -21,6 +23,18 @@ void test("active user with an active membership can log in", async () => {
   assert.equal(result.user.id, "user-1");
   assert.ok(result.token);
   assert.equal(auditEntries[0].action, "USER_LOGIN_SUCCESS");
+});
+
+void test("existing users with legacy passwords can still log in", async () => {
+  const passwords = new PasswordService();
+  const legacyHash = await passwords.hash("legacy-password");
+  const prisma: any = {
+    user: { findFirst: async () => ({ id: "user-1", email: "bm@example.test", displayName: "BM", role: "VIEWER", status: "ACTIVE", isActive: true, passwordHash: legacyHash, memberships: [{ id: "membership-1", storeId: "store-1", role: "STAFF", store: { id: "store-1", name: "Store 1", code: "S1" } }] }), update: async () => ({}) },
+    session: { create: async () => ({}) },
+    $transaction: async (writes: Promise<unknown>[]) => Promise.all(writes),
+  };
+  const result = await new AuthService(prisma, passwords).login("bm@example.test", "legacy-password");
+  assert.equal(result.user.id, "user-1");
 });
 
 void test("failed login creates an audit record without exposing credentials", async () => {
@@ -77,9 +91,44 @@ void test("admin password reset stores only a hash, forces a change, expires ses
   assert.match(result.temporaryPassword, /[0-9]/);
   assert.match(result.temporaryPassword, /[@#$%^&*]/);
   assert.ok(result.temporaryPassword.length >= 12);
+  assert.equal(isPasswordPolicyCompliant(result.temporaryPassword), true);
   assert.equal(updates[0].mustChangePassword, true);
   assert.equal(updates[0].passwordHash.startsWith("hash:"), true);
   assert.equal(updates.some((entry) => entry.sessionDelete?.userId === "user-1"), true);
   assert.equal(auditEntries[0].action, "PASSWORD_RESET");
   assert.equal("temporaryPassword" in auditEntries[0], false);
+});
+
+void test("change password clears forced password-change state", async () => {
+  const updates: any[] = [];
+  const service = new AuthService(
+    { user: {
+      findUnique: async () => ({ id: "user-1", passwordHash: "old-hash" }),
+      update: async ({ data }: any) => { updates.push(data); return data; },
+    } } as any,
+    { verify: async () => true, hash: async () => "new-hash" },
+  );
+
+  const result = await service.changePassword("user-1", "temporary-password", "NewPassword@123");
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(updates, [{ passwordHash: "new-hash", mustChangePassword: false }]);
+});
+
+void test("change password rejects a weak replacement before hashing or updating", async () => {
+  let hashed = false;
+  let updated = false;
+  const service = new AuthService(
+    { user: {
+      findUnique: async () => ({ id: "user-1", passwordHash: "old-hash" }),
+      update: async () => { updated = true; },
+    } } as any,
+    { verify: async () => true, hash: async () => { hashed = true; return "new-hash"; } },
+  );
+
+  await assert.rejects(
+    () => service.changePassword("user-1", "temporary-password", "weak-password-1"),
+    (error: unknown) => (error as { response?: { code?: string } }).response?.code === "PASSWORD_POLICY_VIOLATION",
+  );
+  assert.equal(hashed, false);
+  assert.equal(updated, false);
 });

@@ -15,16 +15,17 @@ export class MobileApiExceptionFilter implements ExceptionFilter {
     const response = context.getResponse<Response>();
     const mobileRequest = request.path.startsWith("/mobile/") || request.path.startsWith("/auth/mobile/");
     const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
-    const code = codes[status];
-    if (!mobileRequest || !code) {
+    const fallbackCode = codes[status];
+    if (!mobileRequest || !fallbackCode) {
       const body = exception instanceof HttpException ? exception.getResponse() : { statusCode: status, message: "Internal server error" };
       response.status(status).json(body);
       return;
     }
     const body = exception instanceof HttpException ? exception.getResponse() : undefined;
+    const customCode = typeof body === "object" && body !== null && "code" in body && body.code === "PASSWORD_CHANGE_REQUIRED" ? body.code : undefined;
     const message = typeof body === "object" && body !== null && "message" in body
       ? Array.isArray(body.message) ? body.message.join(", ") : String(body.message)
-      : code === "SESSION_EXPIRED" ? "Session expired" : code === "ACCESS_DENIED" ? "Access denied" : "Resource not found";
-    response.status(status).json({ statusCode: status, code, message });
+      : fallbackCode === "SESSION_EXPIRED" ? "Session expired" : fallbackCode === "ACCESS_DENIED" ? "Access denied" : "Resource not found";
+    response.status(status).json({ statusCode: status, code: customCode ?? fallbackCode, message });
   }
 }

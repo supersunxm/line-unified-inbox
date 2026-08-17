@@ -47,7 +47,7 @@ test("PHASE 1 & 2 (Volume & Performance): Scale simulation with 100, 500, and 10
   assert.equal(result.dailySummary.totalMessagesToday, 2000);
 });
 
-test("PHASE 4 (API Security Test): STORE_MANAGER and AREA_MANAGER unauthorized store access rejected", async () => {
+test("dashboard scope is derived from StoreAccessService, not client role or store filters", async () => {
   const fakePrisma: any = {
     conversation: { findMany: async () => [] },
     store: { findMany: async () => [{ id: "s1", name: "Store 1", isActive: true }, { id: "s2", name: "Store 2", isActive: true }] },
@@ -60,27 +60,64 @@ test("PHASE 4 (API Security Test): STORE_MANAGER and AREA_MANAGER unauthorized s
   const service = new DashboardAnalyticsService(fakePrisma);
   const operationsService: any = {};
   const reportService = new OperationReportService(service);
-  const controller = new DashboardController(fakePrisma, operationsService, service, reportService);
+  const captured: unknown[][] = [];
+  const analytics = { getAnalytics: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
+  const rootCauseService = { generateRootCauseInsights: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
+  const storeAccess = { accessibleStoreIds: async () => ["s1"] } as never;
+  const controller = new DashboardController(fakePrisma, operationsService, analytics, reportService, rootCauseService, storeAccess);
 
-  // 1. STORE_MANAGER tries to access s2 when only allowed s1 -> Expect 403 ForbiddenException
+  const result = await controller.getAnalytics("today", "s2", undefined, { user: { role: "VIEWER" } } as never);
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(captured[0], ["today", "VIEWER", ["s1"]]);
+});
+
+test("ADMIN can select multiple active stores, while invalid selections are rejected", async () => {
+  const fakePrisma: any = {
+    store: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => id !== "missing").map((id) => ({ id })) },
+  };
+  const captured: unknown[][] = [];
+  const analytics = { getAnalytics: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
+  const rootCauseService = { generateRootCauseInsights: async () => ({ ok: true }) } as never;
+  const reportService = { generateDailyReport: async () => ({ ok: true }) } as never;
+  const storeAccess = { accessibleStoreIds: async () => null } as never;
+  const controller = new DashboardController(fakePrisma, {} as never, analytics, reportService, rootCauseService, storeAccess);
+
+  await controller.getAnalytics("30d", "s1,s2", undefined, { user: { role: "ADMIN" } } as never);
+  assert.deepEqual(captured[0], ["30d", "ADMIN", ["s1", "s2"]]);
   await assert.rejects(
-    async () => {
-      await controller.getAnalytics("today", "STORE_MANAGER", "s1", "s2");
-    },
-    (err: any) => err instanceof ForbiddenException && err.message.includes("STORE_MANAGER cannot access other stores"),
+    () => controller.getAnalytics("today", "s1,missing", undefined, { user: { role: "ADMIN" } } as never),
+    (error: unknown) => error instanceof ForbiddenException,
   );
+});
 
-  // 2. AREA_MANAGER tries to access s2 outside allowed region s1 -> Expect 403 ForbiddenException
+test("an explicit empty dashboard scope never falls back to global store data", async () => {
+  const storeWheres: unknown[] = [];
+  const conversationWheres: unknown[] = [];
+  let activityWhere: unknown;
+  const fakePrisma: any = {
+    store: { findMany: async ({ where }: { where: unknown }) => { storeWheres.push(where); return []; } },
+    conversation: { findMany: async ({ where }: { where: unknown }) => { conversationWheres.push(where); return []; } },
+    topic: { findMany: async () => [] },
+    productModel: { findMany: async () => [] },
+    activityHistory: { findMany: async ({ where }: { where: unknown }) => { activityWhere = where; return []; } },
+  };
+
+  await new DashboardAnalyticsService(fakePrisma).getAnalytics("today", "VIEWER", []);
+
+  assert.deepEqual(storeWheres[0], { id: { in: [] }, isActive: true, archivedAt: null });
+  assert.deepEqual((conversationWheres[0] as { storeId: unknown }).storeId, { in: [] });
+  assert.deepEqual((activityWhere as { conversation: { storeId: unknown } }).conversation.storeId, { in: [] });
+});
+
+test("inactive membership denial is enforced before dashboard services run", async () => {
+  const storeAccess = { accessibleStoreIds: async () => { throw new ForbiddenException("No active store membership"); } } as never;
+  const analytics = { getAnalytics: async () => { throw new Error("must not run"); } } as never;
+  const controller = new DashboardController({} as never, {} as never, analytics, {} as never, {} as never, storeAccess);
+
   await assert.rejects(
-    async () => {
-      await controller.getAnalytics("today", "AREA_MANAGER", "s1", "s2");
-    },
-    (err: any) => err instanceof ForbiddenException && err.message.includes("AREA_MANAGER cannot access stores outside assigned region"),
+    () => controller.getAnalytics("today", undefined, undefined, { user: { role: "VIEWER" } } as never),
+    (error: unknown) => error instanceof ForbiddenException,
   );
-
-  // 3. HEAD_OFFICE accesses all stores -> Expect success
-  const headOfficeResult = await controller.getAnalytics("today", "HEAD_OFFICE");
-  assert.ok(headOfficeResult.dailySummary);
 });
 
 test("PHASE 5 (Frontend Failure & Edge Case Handling): Empty DB handles gracefully without crash", async () => {

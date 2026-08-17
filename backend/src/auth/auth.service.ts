@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma.service";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
+import { assertPasswordPolicy } from "./password-policy";
 
 @Injectable()
 export class AuthService {
@@ -92,6 +93,7 @@ export class AuthService {
 
   async resetPassword(targetUserId: string, adminUserId: string, ipAddress?: string, userAgent?: string) {
     const temporaryPassword = this.temporaryPassword();
+    assertPasswordPolicy(temporaryPassword);
     const passwordHash = await this.passwords.hash(temporaryPassword);
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findFirst({
@@ -110,6 +112,7 @@ export class AuthService {
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, passwordHash: true } });
     if (!user?.passwordHash || !(await this.passwords.verify(currentPassword, user.passwordHash))) throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Current password is incorrect" });
+    assertPasswordPolicy(newPassword);
     const passwordHash = await this.passwords.hash(newPassword);
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false } });
     await this.audit?.record({ actorUserId: user.id, action: "PASSWORD_CHANGED" });

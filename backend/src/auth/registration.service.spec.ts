@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { RegistrationService } from "./registration.service";
 
 function dto() {
-  return { storeId: "store-1", email: "bm@example.test", name: "Bee Manager", employeeId: "emp-001", role: "STORE_MANAGER" as const, password: "strong-password-1234" };
+  return { storeId: "store-1", email: "bm@example.test", name: "Bee Manager", employeeId: "emp-001", role: "STORE_MANAGER" as const, password: "Strong-password-1234!" };
 }
 
 void test("creates a pending user and membership with a hashed password without OTP", async () => {
@@ -39,6 +39,19 @@ void test("rejects unavailable stores and duplicate emails", async () => {
   prisma.store.findUnique = async () => ({ id: "store-1", isActive: true, archivedAt: null });
   prisma.user.findUnique = async () => ({ id: "user-1" });
   await assert.rejects(() => service.request(dto()), ConflictException);
+});
+
+void test("rejects registration passwords that do not meet the shared policy", async () => {
+  const prisma: any = {
+    store: { findUnique: async () => ({ id: "store-1", isActive: true, archivedAt: null }) },
+    user: { findUnique: async () => null, findFirst: async () => null },
+    registrationRequest: { findFirst: async () => null },
+  };
+  const service = new RegistrationService(prisma, { hash: async () => "should-not-hash" } as any);
+  await assert.rejects(
+    () => service.request({ ...dto(), password: "weak-password-1" }),
+    (error: unknown) => error instanceof BadRequestException && error.getResponse().code === "PASSWORD_POLICY_VIOLATION",
+  );
 });
 
 void test("rejects a duplicate employee ID without exposing database details", async () => {

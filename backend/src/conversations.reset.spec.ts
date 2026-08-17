@@ -18,7 +18,7 @@ test("getBmReplyStatusSummary merges operational filter into groupBy where", asy
   const fakeOperations: any = { getOperationalConversationFilter: async () => ({ latestMessageAt: { gte: resetAt } }) };
   const svc = new ConversationsService(fakePrisma, fakeOperations);
   // Call the method under test
-  const result = await svc.getBmReplyStatusSummary();
+  const result = await svc.getBmReplyStatusSummary(null);
   // Ensure groupBy was called and where includes latestMessageAt.gte
   assert.ok(calls.length >= 1, "expected at least one groupBy call");
   const where = calls[0].where;

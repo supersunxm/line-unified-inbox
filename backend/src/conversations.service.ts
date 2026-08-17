@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
@@ -370,27 +370,14 @@ export class ConversationsService {
   }
 
   async updateManualTags(id: string, productModelIds: string[], topicIds: string[]) {
+    if (productModelIds.length > 0) {
+      throw new BadRequestException("Purchase products must be updated through /mobile/conversations/:id/purchase-information");
+    }
     await this.get(id);
     await this.prisma.$transaction(async (tx) => {
-      // Find prior RULE products to detect corrections
-      const priorRuleProducts = await tx.conversationProduct.findMany({
-        where: { conversationId: id, source: "RULE" },
-        include: { productModel: true },
-      });
-
-      const uniqueModelIds = [...new Set(productModelIds)];
       const uniqueTopicIds = [...new Set(topicIds)];
 
-      await tx.conversationProduct.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
       await tx.conversationTopic.deleteMany({ where: { conversationId: id, source: "MANUAL" } });
-
-      for (const productModelId of uniqueModelIds) {
-        await tx.conversationProduct.upsert({
-          where: { conversationId_productModelId: { conversationId: id, productModelId } },
-          update: { source: "MANUAL", confidence: 1 },
-          create: { conversationId: id, productModelId, source: "MANUAL", confidence: 1 },
-        });
-      }
 
       for (const topicId of uniqueTopicIds) {
         await tx.conversationTopic.upsert({
@@ -400,38 +387,19 @@ export class ConversationsService {
         });
       }
 
-      // If there were prior RULE predictions and now a manual model is assigned, log correction
-      if (priorRuleProducts.length > 0 && uniqueModelIds.length > 0) {
-        const newModels = await tx.productModel.findMany({
-          where: { id: { in: uniqueModelIds } },
-          select: { name: true },
-        });
-        const priorNames = priorRuleProducts.map((p) => p.productModel.name).join(", ");
-        const newNames = newModels.map((m) => m.name).join(", ");
-        if (priorNames !== newNames) {
-          const prior = priorRuleProducts[0];
-          const phrase = prior?.matchedPhrase ? `phrase: "${prior.matchedPhrase}"` : "";
-          const method = prior?.detectionMethod ? `method: "${prior.detectionMethod}"` : "";
-          const srcMsg = prior?.sourceMessageId ? `sourceMessageId: "${prior.sourceMessageId}"` : "";
-          const metaParts = [phrase, method, srcMsg].filter(Boolean).join(", ");
-
-          await tx.activityHistory.create({
-            data: {
-              conversationId: id,
-              actionType: ActivityActionType.CLASSIFICATION_UPDATED,
-              description: `Manual product correction: ${priorNames} → ${newNames}${metaParts ? ` (${metaParts})` : ""}`,
-              createdByName: "OPPO LINE OA Specialist",
-            },
-          });
-        }
-      }
     });
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary() {
+  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined) {
+    if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    const storeScope: Prisma.StoreWhereInput = {
+      isActive: true,
+      archivedAt: null,
+      ...(accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } }),
+    };
     const stores = await this.prisma.store.findMany({
-      where: { archivedAt: null },
+      where: storeScope,
       orderBy: { name: "asc" },
       select: {
         id: true,
@@ -444,7 +412,7 @@ export class ConversationsService {
 
     const grouped = await this.prisma.conversation.groupBy({
       by: ["storeId", "bmReplyStatus"],
-      where: { store: { archivedAt: null }, ...(resetFilter as Prisma.ConversationWhereInput) },
+      where: { store: storeScope, ...(resetFilter as Prisma.ConversationWhereInput) },
       _count: { _all: true },
     });
 
@@ -484,7 +452,7 @@ export class ConversationsService {
     const oldestUnanswered = await this.prisma.conversation.groupBy({
       by: ["storeId"],
       where: {
-        store: { archivedAt: null },
+        store: storeScope,
         bmReplyStatus: BmReplyStatus.NOT_REPLIED,
         ...(resetFilter as Prisma.ConversationWhereInput),
       },

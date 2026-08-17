@@ -230,6 +230,10 @@ export class MobileConversationsService {
 
   async updateTags(user: AuthUser, conversationId: string, dto: UpdateMobileConversationTagsDto, recordPurchaseBy?: AuthUser) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
+    const hasPurchaseFields = dto.sourceChannels !== undefined || dto.isInstallment !== undefined || dto.productId !== undefined || dto.variantId !== undefined;
+    if (hasPurchaseFields && !recordPurchaseBy) {
+      throw new BadRequestException("Purchase fields must be updated through /mobile/conversations/:id/purchase-information");
+    }
     await this.prisma.$transaction(async (tx) => {
       const conversation = await tx.conversation.findUnique({
         where: { id: conversationId },
@@ -309,19 +313,16 @@ export class MobileConversationsService {
           isInstallment: updated?.isInstallment ?? conversation.isInstallment ?? false,
           products: updated?.products ?? conversation.products ?? [],
         });
-        const provenanceChanged = Boolean(recordPurchaseBy && (!conversation.purchaseRecordedAt || conversation.purchaseRecordedById !== recordPurchaseBy.id));
-        if (provenanceChanged || JSON.stringify(previousPurchase) !== JSON.stringify(nextPurchase)) {
-          await tx.activityHistory.create({
-            data: {
-              conversationId,
-              actionType: "PURCHASE_INFORMATION_UPDATED",
-              description: "Purchase information updated",
-              createdByUserId: recordPurchaseBy.id,
-              createdByName: recordPurchaseBy.displayName?.trim() || recordPurchaseBy.email,
-              metadata: { category: "PURCHASE_INFORMATION", oldValue: previousPurchase, newValue: nextPurchase },
-            },
-          });
-        }
+        await tx.activityHistory.create({
+          data: {
+            conversationId,
+            actionType: "PURCHASE_INFORMATION_UPDATED",
+            description: "Purchase information updated",
+            createdByUserId: recordPurchaseBy.id,
+            createdByName: recordPurchaseBy.displayName?.trim() || recordPurchaseBy.email,
+            metadata: { category: "PURCHASE_INFORMATION", oldValue: previousPurchase, newValue: nextPurchase },
+          },
+        });
       }
     });
     return this.get(user, conversationId);

@@ -5,6 +5,7 @@ import { CreateRegistrationRequestDto } from "./registration.dto";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
+import { assertPasswordPolicy } from "./password-policy";
 
 @Injectable()
 export class RegistrationService {
@@ -19,6 +20,7 @@ export class RegistrationService {
     const employeeId = dto.employeeId.trim().toUpperCase();
     if (!employeeId) throw new ConflictException("Employee ID is required");
     await this.rateLimiter?.consumeRegistration(ip);
+    assertPasswordPolicy(dto.password);
     const store = await this.prisma.store.findUnique({ where: { id: dto.storeId }, select: { id: true, isActive: true, archivedAt: true } });
     if (!store || !store.isActive || store.archivedAt) throw new NotFoundException("Store is unavailable for registration");
     if (await this.prisma.user.findUnique({ where: { normalizedEmail }, select: { id: true } })) throw new ConflictException("An account with this email already exists");

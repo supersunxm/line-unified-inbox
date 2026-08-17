@@ -515,14 +515,14 @@ void test("ConversationsService getBmReplyStatusSummary and ConversationsControl
     noopOperations,
   );
 
-  const summary = await service.getBmReplyStatusSummary();
+  const summary = await service.getBmReplyStatusSummary(null);
   assert.equal(summary.stores.length, 1);
   assert.equal(summary.stores[0].storeId, "store-1");
   assert.equal(summary.stores[0].notReplied, 3);
   assert.equal((summary.stores[0].oldestWaitingMinutes ?? 0) >= 149, true);
 
-  const controller = new ConversationsController(service, {} as never, {} as never, {} as never);
-  const prioritySummary = await controller.storePrioritySummary();
+  const controller = new ConversationsController(service, {} as never, {} as never, {} as never, { accessibleStoreIds: async () => null } as never);
+  const prioritySummary = await controller.storePrioritySummary({ user: { id: "admin" } } as never);
   assert.equal(prioritySummary.stores.length, 1);
   assert.equal(prioritySummary.stores[0].id, "store-1");
   assert.equal((prioritySummary.stores[0].oldestWaitingMinutes ?? 0) >= 149, true);
@@ -574,7 +574,7 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
   } as unknown as PrismaService;
 
   const service = new ConversationsService(prisma, noopOperations);
-  const summary = await service.getBmReplyStatusSummary();
+  const summary = await service.getBmReplyStatusSummary(null);
 
   // 1. Overall aggregation across all stores (10+20=30 NOT_REPLIED, 5 NOTIFIED_BM, 1+2=3 REPLIED)
   assert.equal(summary.overview.notReplied, 30);

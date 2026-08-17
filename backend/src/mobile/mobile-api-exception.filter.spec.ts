@@ -17,3 +17,10 @@ void test("mobile authentication and authorization errors use stable contract co
   assert.deepEqual(invoke("/mobile/conversations/other", new ForbiddenException()), { statusCode: 403, body: { statusCode: 403, code: "ACCESS_DENIED", message: "Forbidden" } });
   assert.deepEqual(invoke("/mobile/conversations/missing", new NotFoundException()), { statusCode: 404, body: { statusCode: 404, code: "RESOURCE_NOT_FOUND", message: "Not Found" } });
 });
+
+void test("mobile filter preserves PASSWORD_CHANGE_REQUIRED authorization code", () => {
+  assert.deepEqual(
+    invoke("/mobile/conversations", new ForbiddenException({ code: "PASSWORD_CHANGE_REQUIRED", message: "Password change required" })),
+    { statusCode: 403, body: { statusCode: 403, code: "PASSWORD_CHANGE_REQUIRED", message: "Password change required" } },
+  );
+});
