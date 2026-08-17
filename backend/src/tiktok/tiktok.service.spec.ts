@@ -1217,3 +1217,156 @@ test("TikTokService.getBulkAccountsMetricsSummary accurately computes today, 7D,
   });
 });
 
+test("TikTokService.resetTikTokSandboxAccountByUsername safely revokes token, deletes child records and account, while preserving StoreMaster and unrelated accounts", async () => {
+  const accountsTable: any[] = [
+    {
+      id: "acc-cw",
+      openId: "open-cw",
+      username: "o_centralworld",
+      displayName: "OPPO Central World",
+      storeMasterId: "sm-cw",
+      encryptedAccessToken: "enc-access-token-123",
+      storeMaster: {
+        id: "sm-cw",
+        storeName: "OPPO Brand Shop Central World",
+        accountName: "OPPO Central World",
+        tiktokUsername: "o_centralworld",
+      },
+      _count: {
+        videos: 5,
+        dailyMetrics: 30,
+      },
+    },
+    {
+      id: "acc-paragon",
+      openId: "open-paragon",
+      username: "o_siamparagon",
+      displayName: "OPPO Siam Paragon",
+      storeMasterId: "sm-paragon",
+      encryptedAccessToken: "enc-access-token-paragon",
+      storeMaster: {
+        id: "sm-paragon",
+        storeName: "OPPO Brand Shop Siam Paragon",
+        accountName: "OPPO Siam Paragon",
+        tiktokUsername: "o_siamparagon",
+      },
+      _count: {
+        videos: 3,
+        dailyMetrics: 15,
+      },
+    },
+  ];
+
+  const videosTable: any[] = [
+    { id: "v1", tikTokAccountId: "acc-cw" },
+    { id: "v2", tikTokAccountId: "acc-cw" },
+    { id: "v3", tikTokAccountId: "acc-paragon" },
+  ];
+
+  const metricsTable: any[] = [
+    { id: "m1", tikTokAccountId: "acc-cw" },
+    { id: "m2", tikTokAccountId: "acc-cw" },
+    { id: "m3", tikTokAccountId: "acc-paragon" },
+  ];
+
+  const storeMasterTable: any[] = [
+    { id: "sm-cw", storeName: "OPPO Brand Shop Central World", tiktokUsername: "o_centralworld" },
+    { id: "sm-paragon", storeName: "OPPO Brand Shop Siam Paragon", tiktokUsername: "o_siamparagon" },
+  ];
+
+  let revokedTokens: string[] = [];
+  let shouldRevokeFail = false;
+
+  const fakePrisma: any = {
+    tikTokAccount: {
+      findMany: async () => accountsTable,
+      delete: async ({ where }: any) => {
+        const idx = accountsTable.findIndex((a) => a.id === where.id);
+        if (idx >= 0) accountsTable.splice(idx, 1);
+        return { id: where.id };
+      },
+    },
+    tikTokVideo: {
+      deleteMany: async ({ where }: any) => {
+        const initial = videosTable.length;
+        const remaining = videosTable.filter((v) => v.tikTokAccountId !== where.tikTokAccountId);
+        videosTable.length = 0;
+        videosTable.push(...remaining);
+        return { count: initial - remaining.length };
+      },
+    },
+    tikTokAccountDailyMetric: {
+      deleteMany: async ({ where }: any) => {
+        const initial = metricsTable.length;
+        const remaining = metricsTable.filter((m) => m.tikTokAccountId !== where.tikTokAccountId);
+        metricsTable.length = 0;
+        metricsTable.push(...remaining);
+        return { count: initial - remaining.length };
+      },
+    },
+    $transaction: async (fn: any) => fn(fakePrisma),
+  };
+
+  const fakeEncryption: any = {
+    decrypt: (val: string) => `decrypted-${val}`,
+  };
+
+  const service = new TikTokService(fakePrisma, fakeEncryption);
+
+  // Mock revokeTikTokToken
+  service.revokeTikTokToken = async (token: string) => {
+    if (shouldRevokeFail) {
+      throw new Error("TikTok API network failure");
+    }
+    revokedTokens.push(token);
+    return { success: true, status: 200, message: "Token successfully revoked by TikTok" };
+  };
+
+  // 1. Rejects zero matches safely
+  const noMatch = await service.resetTikTokSandboxAccountByUsername("unknown_store");
+  assert.equal(noMatch.success, false);
+  assert.equal(noMatch.revokeResult, "No matching TikTokAccount found in database");
+
+  // 2. Dry run preview does not delete rows or call revoke
+  const dryRun = await service.resetTikTokSandboxAccountByUsername("@O_CentralWorld", { dryRun: true });
+  assert.equal(dryRun.success, true);
+  assert.equal(dryRun.deletedAccountId, "acc-cw");
+  assert.equal(dryRun.deletedVideosCount, 5);
+  assert.equal(dryRun.deletedDailyMetricsCount, 30);
+  assert.equal(accountsTable.length, 2); // Unchanged
+  assert.equal(revokedTokens.length, 0); // No revoke in dry run
+
+  // 3. Revoke failure prevents database deletion
+  shouldRevokeFail = true;
+  await assert.rejects(
+    async () => service.resetTikTokSandboxAccountByUsername("o_centralworld"),
+    /TikTok token revocation failed/
+  );
+  assert.equal(accountsTable.length, 2); // DB deletion aborted
+  shouldRevokeFail = false;
+
+  // 4. Successful confirmed execution
+  const confirmed = await service.resetTikTokSandboxAccountByUsername("  @O_CENTRALWORLD  ");
+  assert.equal(confirmed.success, true);
+  assert.equal(confirmed.deletedAccountId, "acc-cw");
+  assert.equal(confirmed.username, "o_centralworld");
+  assert.equal(confirmed.displayName, "OPPO Central World");
+  assert.equal(confirmed.storeMasterName, "OPPO Brand Shop Central World");
+  assert.equal(confirmed.revokeResult, "Token successfully revoked by TikTok");
+  assert.equal(revokedTokens.length, 1);
+  assert.equal(revokedTokens[0], "decrypted-enc-access-token-123");
+
+  // 5. Account and child records deleted
+  assert.equal(accountsTable.length, 1);
+  assert.equal(accountsTable[0].id, "acc-paragon"); // acc-paragon preserved
+  assert.equal(videosTable.length, 1);
+  assert.equal(videosTable[0].tikTokAccountId, "acc-paragon"); // Central World videos removed
+  assert.equal(metricsTable.length, 1);
+  assert.equal(metricsTable[0].tikTokAccountId, "acc-paragon"); // Central World daily metrics removed
+
+  // 6. StoreMaster preserved completely
+  assert.equal(storeMasterTable.length, 2);
+  assert.equal(storeMasterTable[0].tiktokUsername, "o_centralworld");
+});
+
+

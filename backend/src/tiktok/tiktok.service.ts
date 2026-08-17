@@ -920,6 +920,201 @@ export class TikTokService {
   }
 
   /**
+   * Revokes user access token via official TikTok OAuth v2 revoke endpoint.
+   * Endpoint: POST https://open.tiktokapis.com/v2/oauth/revoke/
+   */
+  async revokeTikTokToken(token: string): Promise<{ success: boolean; status: number; message: string }> {
+    const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim();
+    const clientSecret = process.env.TIKTOK_CLIENT_SECRET?.trim();
+
+    if (!clientKey || !clientSecret) {
+      throw new Error("TIKTOK_CLIENT_KEY or TIKTOK_CLIENT_SECRET missing in environment");
+    }
+
+    const bodyParams = new URLSearchParams({
+      client_key: clientKey,
+      client_secret: clientSecret,
+      token: token.trim(),
+    });
+
+    let response: Response;
+    try {
+      response = await fetch("https://open.tiktokapis.com/v2/oauth/revoke/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Cache-Control": "no-cache",
+        },
+        body: bodyParams.toString(),
+      });
+    } catch (netErr: any) {
+      throw new TikTokTransientError(
+        `Network error during token revoke: ${netErr?.message || "connection error"}`
+      );
+    }
+
+    if (response.status === 429) {
+      throw new TikTokTransientError("TikTok rate limit exceeded during revoke (HTTP 429)", 429);
+    }
+
+    if (response.status >= 500) {
+      throw new TikTokTransientError(
+        `TikTok API server error during revoke (HTTP ${response.status})`,
+        response.status
+      );
+    }
+
+    let json: Record<string, unknown> = {};
+    try {
+      json = (await response.json()) as Record<string, unknown>;
+    } catch {
+      // response might be empty on HTTP 200 OK
+    }
+
+    if (response.ok) {
+      return { success: true, status: response.status, message: "Token successfully revoked by TikTok" };
+    }
+
+    const errCode = typeof json.error === "string" ? json.error : "";
+    const errDesc = typeof json.error_description === "string" ? json.error_description : "";
+
+    const alreadyInvalid =
+      errCode.toLowerCase().includes("invalid_token") ||
+      errCode.toLowerCase().includes("invalid_grant") ||
+      errDesc.toLowerCase().includes("not found") ||
+      errDesc.toLowerCase().includes("invalid") ||
+      errDesc.toLowerCase().includes("revoked") ||
+      errDesc.toLowerCase().includes("expired");
+
+    if (alreadyInvalid) {
+      return {
+        success: true,
+        status: response.status,
+        message: `Token already invalid or revoked on TikTok: ${errCode || errDesc}`,
+      };
+    }
+
+    throw new Error(`Unexpected TikTok revoke error (HTTP ${response.status}): ${errCode || errDesc}`);
+  }
+
+  /**
+   * Resets and deletes a single TikTok account by exact normalized username for sandbox / app review testing.
+   * Revokes live TikTok authorization first if encrypted token exists, then executes DB deletion transaction.
+   */
+  async resetTikTokSandboxAccountByUsername(
+    targetUsername: string,
+    options?: { dryRun?: boolean; skipRevoke?: boolean }
+  ): Promise<{
+    success: boolean;
+    deletedAccountId?: string;
+    username: string;
+    displayName: string;
+    storeMasterName?: string | null;
+    deletedVideosCount: number;
+    deletedDailyMetricsCount: number;
+    revokeResult?: string;
+  }> {
+    const normalizedTarget = normalizeTikTokUsernameForMatching(targetUsername);
+    if (!normalizedTarget) {
+      throw new Error(`Invalid target username provided: "${targetUsername}"`);
+    }
+
+    const allAccounts = await this.prisma.tikTokAccount.findMany({
+      include: {
+        storeMaster: {
+          select: {
+            id: true,
+            storeName: true,
+            accountName: true,
+            tiktokUsername: true,
+          },
+        },
+        _count: {
+          select: {
+            videos: true,
+            dailyMetrics: true,
+          },
+        },
+      },
+    });
+
+    const matching = allAccounts.filter((acc) => {
+      return normalizeTikTokUsernameForMatching(acc.username) === normalizedTarget;
+    });
+
+    if (matching.length === 0) {
+      return {
+        success: false,
+        username: normalizedTarget,
+        displayName: "",
+        deletedVideosCount: 0,
+        deletedDailyMetricsCount: 0,
+        revokeResult: "No matching TikTokAccount found in database",
+      };
+    }
+
+    if (matching.length > 1) {
+      throw new Error(
+        `Ambiguous target: found ${matching.length} TikTok accounts matching normalized username "${normalizedTarget}". Aborting for safety.`
+      );
+    }
+
+    const targetAccount = matching[0];
+    let revokeResult = "No token to revoke";
+
+    if (targetAccount.encryptedAccessToken && !options?.skipRevoke && !options?.dryRun) {
+      try {
+        const decryptedToken = this.encryption.decrypt(
+          targetAccount.encryptedAccessToken
+        );
+        const res = await this.revokeTikTokToken(decryptedToken);
+        revokeResult = res.message;
+      } catch (revokeErr: any) {
+        throw new Error(
+          `TikTok token revocation failed for account ${targetAccount.id}: ${revokeErr?.message || "unknown error"}. Aborting database deletion.`
+        );
+      }
+    }
+
+    if (options?.dryRun) {
+      return {
+        success: true,
+        deletedAccountId: targetAccount.id,
+        username: targetAccount.username || normalizedTarget,
+        displayName: targetAccount.displayName,
+        storeMasterName: targetAccount.storeMaster?.storeName ?? null,
+        deletedVideosCount: targetAccount._count.videos,
+        deletedDailyMetricsCount: targetAccount._count.dailyMetrics,
+        revokeResult: `[DRY-RUN] Would revoke and delete account ${targetAccount.id}`,
+      };
+    }
+
+    // Execute deletion within interactive transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tikTokVideo.deleteMany({
+        where: { tikTokAccountId: targetAccount.id },
+      });
+      await tx.tikTokAccountDailyMetric.deleteMany({
+        where: { tikTokAccountId: targetAccount.id },
+      });
+      await tx.tikTokAccount.delete({
+        where: { id: targetAccount.id },
+      });
+    });
+
+    return {
+      success: true,
+      deletedAccountId: targetAccount.id,
+      username: targetAccount.username || normalizedTarget,
+      displayName: targetAccount.displayName,
+      storeMasterName: targetAccount.storeMaster?.storeName ?? null,
+      deletedVideosCount: targetAccount._count.videos,
+      deletedDailyMetricsCount: targetAccount._count.dailyMetrics,
+      revokeResult,
+    };
+  }
+
+  /**
    * Fetches user profile and audience stats via TikTok API v2 User Info endpoint.
    * Classifies permanent vs transient errors.
    */
