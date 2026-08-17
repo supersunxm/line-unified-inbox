@@ -30,6 +30,21 @@ export class BulkUpdateBmReplyStatusDto {
   @IsEnum(BmReplyStatus) status!: BmReplyStatus;
   @IsOptional() @IsArray() @IsEnum(BmReplyStatus, { each: true }) fromStatuses?: BmReplyStatus[];
 }
+export class BulkMarkRepliedDto {
+  @IsArray()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  conversationIds!: string[];
+}
+export class BulkMarkRepliedByFilterDto {
+  @IsOptional()
+  @IsEnum(BmReplyStatus)
+  bmReplyStatus?: BmReplyStatus;
+
+  @IsOptional()
+  @IsString()
+  storeId?: string;
+}
 export class UpdatePriorityDto { @IsEnum(Priority) priority!: Priority; }
 export class CreateNoteDto {
   @IsString() @IsNotEmpty() content!: string;

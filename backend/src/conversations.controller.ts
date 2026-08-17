@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { ConversationsService } from "./conversations.service";
-import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
+import { BulkMarkRepliedByFilterDto, BulkMarkRepliedDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
@@ -32,6 +32,14 @@ export class ConversationsController {
         oldestWaitingMinutes: s.oldestWaitingMinutes,
       })),
     };
+  }
+  @Post("bulk-mark-replied")
+  async bulkMarkReplied(@Body() dto: BulkMarkRepliedDto, @Req() req: AuthRequest) {
+    return this.service.bulkMarkReplied(dto.conversationIds, req.user!);
+  }
+  @Post("bulk-mark-replied-by-filter")
+  async bulkMarkRepliedByFilter(@Body() dto: BulkMarkRepliedByFilterDto, @Req() req: AuthRequest) {
+    return this.service.bulkMarkRepliedByFilter(dto, req.user!);
   }
   @Patch("bm-reply-status/bulk")
   async bulkBmReplyStatus(@Body() dto: BulkUpdateBmReplyStatusDto, @Req() req: AuthRequest) {

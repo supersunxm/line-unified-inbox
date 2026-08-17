@@ -1,6 +1,25 @@
 # AI progress
 
-## Current task: Dedicated Public TikTok Store Authorization Flow with Internal Service Authentication
+## Current task: Phase 10C.10 — Bulk "Mark as Replied" Pagination Independence & Filter-Based Execution
+
+- **Pagination Independence & Scalability Audit**:
+  - Identified risk in initial client-ID passing where frontend only provided loaded page IDs (e.g. 50 items) rather than the full database queue (1,466+ conversations).
+  - Implemented `POST /conversations/bulk-mark-replied-by-filter` endpoint in `ConversationsController` and `ConversationsService.bulkMarkRepliedByFilter(dto, user)`.
+  - Accepts `{ bmReplyStatus?: 'NOT_REPLIED', storeId?: string }` (e.g. `storeId: 'all'` or specific store ID).
+  - Evaluates operational filters and store authorization:
+    - `ADMIN`: Authorized for `storeId: 'all'`, marks all matching database records across all accessible stores (e.g. 1,466 records).
+    - `STORE_MANAGER` / `BM`: Restricted to assigned stores (`assertStoreAccess`); requesting `storeId: 'all'` is rejected with 403 `ForbiddenException`.
+  - Transactional update: updates `bmReplyStatus = REPLIED`, `followUpStatus = COMPLETED`, `updatedAt = new Date()`, chunks `ActivityHistory` creation in batches of 100, and writes `AuditLog` entry.
+- **Frontend Integration (`/chats`)**:
+  - `handleExecuteBulkUpdate` calls `api.bulkMarkRepliedByFilter({ bmReplyStatus: 'NOT_REPLIED', storeId: bulkConfirmState.storeId === 'all' ? undefined : bulkConfirmState.storeId })`.
+  - Accurately reconciles all 1,466+ records in the database, refreshing list pagination and all KPI counters.
+- **Verification & Test Results**:
+  - Backend tests: `1,215 / 1,215 passed (100%)` including dedicated unit tests for Admin 1466-item bulk update, BM own store update, BM all-store 403 rejection, and pagination independence.
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Mobile tests: `77 / 77 passed (100%)`.
+  - TypeScript builds: Backend (`prisma generate && nest build`) and Frontend (`next build`) compiled cleanly with 0 errors.
+
+## Previous task: Dedicated Public TikTok Store Authorization Flow with Internal Service Authentication
 
 - **Security Remediation & Architecture**:
   - Reverted unrestricted `@Public()` on general `POST /tiktok/sync`. Normal `POST /tiktok/sync` remains protected by session `AuthGuard`.
@@ -1431,3 +1450,27 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Railway backend and frontend are both running commit `9312961`; the semantic-alignment changes remain uncommitted locally and are therefore absent from production.
 - Production OBS-Sunx2 still has legacy MANUAL purchase fields (`sourceChannels`, `isInstallment`, product/variant) but no provenance columns. The production Prisma client rejects `purchaseRecordedAt` as an unknown Conversation field, and `_prisma_migrations` does not contain the authored purchase-provenance migration.
 - The deployed frontend commit still renders Product Insight from legacy product/classification fields. No browser-cache issue was established; deployment of the backend contract, prerequisite additive migration, and frontend bundle is required. Historical records must be re-saved through the purchase-information flow to become VERIFIED; no automatic conversion is planned.
+
+# Current task: Phase 10B.3 backend forced password-change enforcement (2026-08-17)
+
+- Added an authenticated-route gate in `AuthGuard`: users with `mustChangePassword=true` can only access `/auth/me`, `/auth/change-password`, and logout; protected conversation, store, dashboard, analytics, and admin routes return HTTP 403 with `PASSWORD_CHANGE_REQUIRED`.
+- Preserved the existing mobile error envelope while allowing the password-change code through the mobile exception filter. Password reset, login, registration, and session architecture remain unchanged.
+- Added guard, filter, and password-state regression tests. Full backend tests, Prisma validation, build, changed-file ESLint, and diff checks pass.
+
+# Current task: Phase 10B.4 conversation summary authorization scope (2026-08-17)
+
+- Scoped both conversation reply-status summary endpoints through the authenticated request and `StoreAccessService`; ADMIN receives global active-store scope and BM/STAFF receive only active assigned stores.
+- The aggregation service now requires an explicit resolved scope, applies it to store rows, grouped conversation counts, and oldest-waiting queries, and preserves an empty scope as `IN []` rather than falling back to all stores. The mobile monthly summary was already scoped and was not changed.
+- Added controller, query-scope, inactive-membership, and cross-store regression tests. Full backend tests (1200), Prisma validation, build, changed-file ESLint, and diff checks pass.
+
+# Current task: Phase 10B.5 purchase write boundary hardening (2026-08-17)
+
+- Legacy product writes through `/conversations/:id/tags` and purchase-field writes through `/mobile/conversations/:id/tags` now fail closed. Topic-only legacy tagging remains supported.
+- Purchase edits continue through `/mobile/conversations/:id/purchase-information`; each successful update records the authenticated actor and timestamp and creates a `PURCHASE_INFORMATION_UPDATED` activity with old/new snapshots.
+- MANUAL purchase rows remain separate from RULE classification rows; no schema migration or historical conversion was performed.
+
+# Current task: Phase 10B.6 password policy alignment (2026-08-17)
+
+- Added one shared backend policy requiring 12+ characters, uppercase, lowercase, number, and special character.
+- Enforced it at BM registration, admin-generated temporary password validation, forced/normal password change, and first-admin setup validation. Existing password verification/login remains unchanged.
+- Password violations return `PASSWORD_POLICY_VIOLATION` with safe requirement text; no plaintext password or schema change was introduced.

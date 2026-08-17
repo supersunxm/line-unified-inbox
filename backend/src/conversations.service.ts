@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
-import { BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
+import { BulkMarkRepliedByFilterDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
@@ -10,6 +10,8 @@ import { LineMessagingService } from "./line-messaging/line-messaging.service";
 import { MediaStorageService } from "./media/media-storage";
 import { createMediaPublicUrl } from "./media/media-public-url";
 import type { AuthUser } from "./auth/auth.guard";
+import { StoreAccessService } from "./auth/store-access.service";
+import { AuditLogService } from "./auth/audit-log.service";
 import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
 
 const conversationBaseInclude = {
@@ -50,6 +52,8 @@ export class ConversationsService {
     private readonly encryption: CredentialEncryptionService = undefined as unknown as CredentialEncryptionService,
     private readonly lineMessaging: LineMessagingService = undefined as unknown as LineMessagingService,
     private readonly media: MediaStorageService = undefined as unknown as MediaStorageService,
+    private readonly storeAccess?: StoreAccessService,
+    private readonly auditLog?: AuditLogService,
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
@@ -230,6 +234,249 @@ export class ConversationsService {
     return {
       updated: result.count,
       status,
+    };
+  }
+
+  async bulkMarkReplied(conversationIds: string[], user: AuthUser) {
+    if (!conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+      throw new BadRequestException("conversationIds must be a non-empty array");
+    }
+
+    const uniqueIds = Array.from(new Set(conversationIds.filter((id) => typeof id === "string" && id.trim().length > 0)));
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException("conversationIds must contain at least one valid id");
+    }
+
+    const conversations = await this.prisma.conversation.findMany({
+      where: { id: { in: uniqueIds } },
+      select: {
+        id: true,
+        storeId: true,
+        bmReplyStatus: true,
+        followUpStatus: true,
+        store: { select: { id: true, name: true } },
+      },
+    });
+
+    if (conversations.length === 0) {
+      throw new NotFoundException("No conversations found");
+    }
+
+    if (conversations.length !== uniqueIds.length) {
+      throw new NotFoundException("One or more conversations not found");
+    }
+
+    const storeIds = Array.from(new Set(conversations.map((c) => c.storeId)));
+    if (storeIds.length > 1) {
+      throw new ForbiddenException("Bulk operation across multiple stores is not permitted");
+    }
+
+    const targetStoreId = storeIds[0];
+    if (this.storeAccess) {
+      await this.storeAccess.assertStoreAccess(user, targetStoreId);
+    }
+
+    const now = new Date();
+    const actorName = user.displayName || user.email || (user.role === "ADMIN" ? "Admin" : "User");
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.conversation.updateMany({
+        where: { id: { in: uniqueIds } },
+        data: {
+          bmReplyStatus: BmReplyStatus.REPLIED,
+          followUpStatus: FollowUpStatus.COMPLETED,
+          updatedAt: now,
+        },
+      });
+
+      for (const conv of conversations) {
+        await tx.activityHistory.create({
+          data: {
+            conversationId: conv.id,
+            actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+            previousBmReplyStatus: conv.bmReplyStatus,
+            newBmReplyStatus: BmReplyStatus.REPLIED,
+            ...(conv.followUpStatus !== FollowUpStatus.COMPLETED
+              ? { previousStatus: conv.followUpStatus, newStatus: FollowUpStatus.COMPLETED }
+              : {}),
+            description: "Bulk marked as replied",
+            createdByUserId: user.id,
+            createdByName: actorName,
+            metadata: {
+              actionType: "BULK_MARK_REPLIED",
+              storeId: targetStoreId,
+              actorUserId: user.id,
+            },
+          },
+        });
+      }
+    });
+
+    if (this.auditLog) {
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: "BULK_MARK_REPLIED",
+        metadata: {
+          affectedCount: conversations.length,
+          storeId: targetStoreId,
+          storeName: conversations[0]?.store?.name,
+          actorUserId: user.id,
+          conversationIds: uniqueIds,
+        },
+      });
+    }
+
+    Logger.log(
+      JSON.stringify({
+        event: "BULK_MARK_REPLIED",
+        actorUserId: user.id,
+        actorName,
+        storeId: targetStoreId,
+        storeName: conversations[0]?.store?.name,
+        affectedCount: conversations.length,
+        timestamp: now.toISOString(),
+      }),
+      "ConversationsService",
+    );
+
+    return {
+      success: true,
+      updatedCount: conversations.length,
+      affectedCount: conversations.length,
+      storeId: targetStoreId,
+      status: BmReplyStatus.REPLIED,
+    };
+  }
+
+  async bulkMarkRepliedByFilter(dto: BulkMarkRepliedByFilterDto, user: AuthUser) {
+    const targetStatus = dto.bmReplyStatus || BmReplyStatus.NOT_REPLIED;
+    const requestedStoreId = dto.storeId;
+
+    let effectiveStoreFilter: string | undefined;
+    let storeScopeName = "all";
+
+    if (this.storeAccess) {
+      const accessibleStores = await this.storeAccess.accessibleStoreIds(user);
+      if (requestedStoreId && requestedStoreId !== "all") {
+        await this.storeAccess.assertStoreAccess(user, requestedStoreId);
+        effectiveStoreFilter = requestedStoreId;
+        const store = await this.prisma.store.findUnique({ where: { id: requestedStoreId }, select: { name: true } });
+        storeScopeName = store?.name || requestedStoreId;
+      } else {
+        if (accessibleStores === null) {
+          effectiveStoreFilter = undefined;
+          storeScopeName = "all";
+        } else {
+          throw new ForbiddenException("Bulk update across all stores is restricted to ADMIN users");
+        }
+      }
+    } else {
+      if (requestedStoreId && requestedStoreId !== "all") {
+        effectiveStoreFilter = requestedStoreId;
+      }
+    }
+
+    const operationalWhere = this.operations
+      ? await this.operations.getOperationalConversationFilter()
+      : {};
+
+    const whereClause: Prisma.ConversationWhereInput = {
+      ...operationalWhere,
+      bmReplyStatus: targetStatus,
+      ...(effectiveStoreFilter ? { storeId: effectiveStoreFilter } : {}),
+    };
+
+    const matchingConversations = await this.prisma.conversation.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        storeId: true,
+        bmReplyStatus: true,
+        followUpStatus: true,
+      },
+    });
+
+    if (matchingConversations.length === 0) {
+      return {
+        success: true,
+        updatedCount: 0,
+        affectedCount: 0,
+        storeId: requestedStoreId || "all",
+        status: BmReplyStatus.REPLIED,
+      };
+    }
+
+    const matchingIds = matchingConversations.map((c) => c.id);
+    const now = new Date();
+    const actorName = user.displayName || user.email || (user.role === "ADMIN" ? "Admin" : "User");
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.conversation.updateMany({
+        where: { id: { in: matchingIds } },
+        data: {
+          bmReplyStatus: BmReplyStatus.REPLIED,
+          followUpStatus: FollowUpStatus.COMPLETED,
+          updatedAt: now,
+        },
+      });
+
+      const batchSize = 100;
+      for (let i = 0; i < matchingConversations.length; i += batchSize) {
+        const batch = matchingConversations.slice(i, i + batchSize);
+        await tx.activityHistory.createMany({
+          data: batch.map((conv) => ({
+            conversationId: conv.id,
+            actionType: ActivityActionType.BM_REPLY_STATUS_CHANGED,
+            previousBmReplyStatus: conv.bmReplyStatus,
+            newBmReplyStatus: BmReplyStatus.REPLIED,
+            previousStatus: conv.followUpStatus !== FollowUpStatus.COMPLETED ? conv.followUpStatus : undefined,
+            newStatus: FollowUpStatus.COMPLETED,
+            description: "Bulk marked as replied via filter",
+            createdByUserId: user.id,
+            createdByName: actorName,
+            metadata: {
+              actionType: "BULK_MARK_REPLIED",
+              storeId: conv.storeId,
+              actorUserId: user.id,
+            },
+          })),
+        });
+      }
+    });
+
+    if (this.auditLog) {
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: "BULK_MARK_REPLIED",
+        metadata: {
+          affectedCount: matchingConversations.length,
+          storeId: requestedStoreId || "all",
+          storeName: storeScopeName,
+          targetFilterStatus: targetStatus,
+          actorUserId: user.id,
+        },
+      });
+    }
+
+    Logger.log(
+      JSON.stringify({
+        event: "BULK_MARK_REPLIED_BY_FILTER",
+        actorUserId: user.id,
+        actorName,
+        storeId: requestedStoreId || "all",
+        storeName: storeScopeName,
+        affectedCount: matchingConversations.length,
+        timestamp: now.toISOString(),
+      }),
+      "ConversationsService",
+    );
+
+    return {
+      success: true,
+      updatedCount: matchingConversations.length,
+      affectedCount: matchingConversations.length,
+      storeId: requestedStoreId || "all",
+      status: BmReplyStatus.REPLIED,
     };
   }
 

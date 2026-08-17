@@ -1,3 +1,10 @@
+# Bulk "Mark as Replied" Operational Override Workflow (2026-08-17)
+
+- **Operational Transition Tool Without Status Mutation**: To support the pilot transition while retail staff gradually migrate from replying in external LINE OA to our application, an operational override (`POST /conversations/bulk-mark-replied`) allows marking conversations as `REPLIED` (`bmReplyStatus = 'REPLIED'`) in bulk without introducing artificial statuses. The existing enum (`NOT_REPLIED`, `NOTIFIED_BM`, `REPLIED`) remains unchanged.
+- **Strict Store Scope & Cross-Store Protection**: `StoreAccessService.assertStoreAccess` verifies user authorization against the target store. Client-provided store IDs are never blindly trusted; store IDs are derived from the target conversations. Mixed-store conversation batches are explicitly rejected with 403 `ForbiddenException` to maintain strict tenant and store isolation.
+- **Dual-Layer Audit & Traceability**: Each bulk action records an `ActivityHistory` row (`actionType: BM_REPLY_STATUS_CHANGED`, `metadata.actionType: BULK_MARK_REPLIED`) linked to individual conversations, and an `AuditLog` row (`action: BULK_MARK_REPLIED`) capturing the actor, store ID, store name, affected count, and conversation IDs.
+- **Explicit Confirmation & In-Place Reconciliation**: The web admin interface prompts for confirmation with a clear modal (`ยืนยันเปลี่ยนสถานะ` / `คุณกำลังเปลี่ยน X บทสนทนาเป็น 'ตอบแล้ว'`) and triggers optimistic list/counter reconciliation on completion.
+
 # Dedicated Public TikTok Store Authorization Flow with Internal Service Authentication (2026-08-17)
 
 - **Decoupled Public Store Authorization (`/tiktok/connect` & `/tiktok/callback`)**: Retail store staff across ~150 stores need to authorize their store's TikTok account without administrative access to the OPPO LINE OA Monitor system. `/tiktok/connect` is a public Next.js route handler that generates a 32-byte cryptographic OAuth state stored in a secure HttpOnly cookie (`tiktok_oauth_state`, SameSite=Lax, 10 min maxAge) and immediately 302 redirects to TikTok OAuth with read-only scopes.
@@ -876,3 +883,25 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Railway backend and frontend are both still deployed from `9312961`, so local uncommitted semantic-alignment code is not in production.
 - The production database is also missing the already-authored additive purchase-provenance migration. Legacy MANUAL records remain unverified by design; deployment must apply the migration, and a BM must explicitly re-save a record to establish provenance.
+
+# Forced password-change authorization (2026-08-17)
+
+- `mustChangePassword` is enforced centrally in `AuthGuard`, not only by Flutter navigation. During the forced-change state, only profile inspection, password change, and logout routes are allowlisted; every other authenticated route fails closed with HTTP 403 and `PASSWORD_CHANGE_REQUIRED`.
+- The mobile exception filter preserves this one explicit state code while retaining existing `SESSION_EXPIRED`, `ACCESS_DENIED`, and `RESOURCE_NOT_FOUND` behavior for all other mobile errors. No schema or migration change is required because the flag already exists on `User`.
+
+# Conversation summary authorization scope (2026-08-17)
+
+- Conversation reply-status and priority summaries resolve store scope in the controller from the authenticated user via `StoreAccessService`; client filters are not accepted as authorization input.
+- The summary service requires the resolved scope explicitly. `null` means ADMIN/global active-store scope, while a list means assigned stores; an empty list remains empty and can never become an all-store query. No database migration is required.
+
+# Purchase write boundary (2026-08-17)
+
+- Verified purchase fields are writeable only through the provenance-aware purchase-information service. The legacy mobile tag route rejects source, installment, product, and variant fields before opening a transaction.
+- The generic conversation tag route remains compatible for MANUAL topic tagging but rejects non-empty product IDs; it cannot delete or create purchase rows. RULE classification rows are never mutated by tagging.
+- Purchase saves always persist the authenticated recorder/timestamp and append an activity snapshot, including same-value saves, so every purchase update remains attributable without exposing credentials or customer identifiers.
+
+# Password policy boundary (2026-08-17)
+
+- Password policy is centralized in `auth/password-policy.ts` and reused by request DTOs and service methods. Hashing remains a separate concern, so existing stored passwords continue to verify normally.
+- New passwords are rejected before hashing when they lack the required length, character classes, or special character. Admin reset passwords are generated with all required classes and validated before storage.
+- No password migration is performed; users are required to satisfy the stronger policy only when creating or changing a password.

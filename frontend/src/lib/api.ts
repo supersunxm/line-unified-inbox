@@ -215,6 +215,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  bulkMarkReplied: (conversationIds: string[]) =>
+    request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied", {
+      method: "POST",
+      body: JSON.stringify({ conversationIds }),
+    }),
+  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string }) =>
+    request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied-by-filter", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   updatePriority: (id: string, priority: ApiPriority) => request<ApiConversation>(`/conversations/${id}/priority`, { method: "PATCH", body: JSON.stringify({ priority }) }),
   notes: (id: string) => request<ApiConversation["notes"]>(`/conversations/${id}/notes`),
   addNote: (id: string, content: string) => request<ApiConversation["notes"][number]>(`/conversations/${id}/notes`, { method: "POST", body: JSON.stringify({ content, createdByName: "OPPO LINE OA Specialist" }) }),
