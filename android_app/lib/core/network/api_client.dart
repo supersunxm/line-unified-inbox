@@ -18,12 +18,14 @@ class ApiClient {
   final SessionExpiredHandler? _onSessionExpired;
 
   Future<Map<String, dynamic>> get(String path, {Map<String, String>? query, bool authenticated = true}) => _request('GET', path, query: query, authenticated: authenticated);
-  Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('POST', path, body: body, authenticated: authenticated);
+  Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? body, bool authenticated = true, bool handleSessionExpiry = true}) => _request('POST', path, body: body, authenticated: authenticated, handleSessionExpiry: handleSessionExpiry);
   Future<Map<String, dynamic>> patch(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('PATCH', path, body: body, authenticated: authenticated);
   Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? body, bool authenticated = true}) => _request('DELETE', path, body: body, authenticated: authenticated);
 
   Future<Uint8List> getBytes(String path, {bool authenticated = true}) async {
-    if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
+    if (!await _connectivity.isOnline) {
+      throw ApiException(0, 'OFFLINE', 'No network connection');
+    }
     final headers = <String, String>{'Accept': 'image/*'};
     if (authenticated) {
       final token = await _tokens.read();
@@ -40,14 +42,18 @@ class ApiClient {
       Map<String, dynamic> decoded = <String, dynamic>{};
       try { decoded = jsonDecode(response.body) as Map<String, dynamic>; } catch (_) {}
       final error = ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Unable to load media');
-      if (authenticated && error.sessionExpired) await _onSessionExpired?.call();
+      if (authenticated && error.sessionExpired) {
+        await _onSessionExpired?.call();
+      }
       throw error;
     }
     return response.bodyBytes;
   }
 
   Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, String? mimeType, required Uint8List bytes, required String idempotencyKey}) async {
-    if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
+    if (!await _connectivity.isOnline) {
+      throw ApiException(0, 'OFFLINE', 'No network connection');
+    }
     final request = http.MultipartRequest('POST', AppConfig.uri(path));
     final token = await _tokens.read();
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
@@ -56,7 +62,9 @@ class ApiClient {
     late http.Response response;
     try { response = await http.Response.fromStream(await request.send()); } catch (_) { throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
     Map<String, dynamic> decoded = <String, dynamic>{}; try { decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>; } catch (_) { throw ApiException(response.statusCode, 'INVALID_RESPONSE', 'Service returned an invalid response'); }
-    if (response.statusCode < 200 || response.statusCode >= 300) throw ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
+    }
     return decoded;
   }
 
@@ -75,8 +83,10 @@ class ApiClient {
     return MediaType(parts[0], parts[1]);
   }
 
-  Future<Map<String, dynamic>> _request(String method, String path, {Map<String, String>? query, Map<String, dynamic>? body, bool authenticated = true}) async {
-    if (!await _connectivity.isOnline) throw ApiException(0, 'OFFLINE', 'No network connection');
+  Future<Map<String, dynamic>> _request(String method, String path, {Map<String, String>? query, Map<String, dynamic>? body, bool authenticated = true, bool handleSessionExpiry = true}) async {
+    if (!await _connectivity.isOnline) {
+      throw ApiException(0, 'OFFLINE', 'No network connection');
+    }
     final headers = <String, String>{'Accept': 'application/json'};
     if (body != null) headers['Content-Type'] = 'application/json';
     if (authenticated) {
@@ -101,7 +111,9 @@ class ApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
       SafeLogger.networkFailure(statusCode: error.statusCode, code: error.code);
-      if (authenticated && error.sessionExpired) await _onSessionExpired?.call();
+      if (authenticated && handleSessionExpiry && error.sessionExpired) {
+        await _onSessionExpired?.call();
+      }
       throw error;
     }
     return decoded;

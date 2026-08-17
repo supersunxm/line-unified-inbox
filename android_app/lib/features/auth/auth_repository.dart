@@ -22,6 +22,10 @@ class AuthRepository {
     await _tokens.save(result['accessToken'] as String);
   }
 
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    await _api.post('/auth/change-password', body: {'currentPassword': currentPassword, 'newPassword': newPassword}, handleSessionExpiry: false);
+  }
+
   Future<List<Store>> stores() async {
     final result = await _api.get('/registration/stores', authenticated: false);
     final items = (result['stores'] as List<dynamic>?) ?? <dynamic>[];

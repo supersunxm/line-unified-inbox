@@ -10,6 +10,7 @@ import 'core/models/models.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_scroll_behavior.dart';
 import 'features/auth/auth_repository.dart';
+import 'features/auth/change_password_page.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/registration_page.dart';
 import 'features/auth/pending_approval_page.dart';
@@ -221,6 +222,13 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
           auth: _auth,
           onLoggedIn: _finishLogin,
           onRegister: () => setState(() => _registering = true));
+    }
+    if (user.mustChangePassword) {
+      return ChangePasswordPage(
+        auth: _auth,
+        onChanged: _finishLogin,
+        onLogout: _logout,
+      );
     }
     if (user.memberships.isEmpty) {
       return WaitingApprovalPage(
