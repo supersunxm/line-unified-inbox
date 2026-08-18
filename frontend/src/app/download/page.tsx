@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function DownloadAppPage() {
   const apkFileName = "oppo-line-oa-chat-v1.0.6-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7";
+  const sha256Checksum = "52282a53fa893869180cc313808ce97f657362fba0d3778b2c22286771bac5cc";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">

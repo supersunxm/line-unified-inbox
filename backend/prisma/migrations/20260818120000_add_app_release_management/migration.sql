@@ -98,7 +98,7 @@ INSERT INTO "AppRelease" (
     false,
     'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk',
     '56.9 MB',
-    'a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7',
+    '52282a53fa893869180cc313808ce97f657362fba0d3778b2c22286771bac5cc',
     ARRAY[
         'Product selection UX improvement',
         'Explicit select confirmation',

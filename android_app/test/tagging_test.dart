@@ -390,4 +390,83 @@ void main() {
     // Picker closes, item appears in main sheet
     expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
   });
+
+  testWidgets('Regression: Open picker with existing products -> new picker must start empty', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const existingSales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'CASH',
+      products: [
+        CustomerSalesProductItem(
+          id: 'existing-p1',
+          productModelId: 'existing-model-id',
+          modelName: 'OPPO Find X9 Pro',
+          seriesName: 'Find Series',
+          category: 'SMARTPHONE',
+          ram: '16',
+          rom: '512',
+          color: 'Velvet Red',
+          quantity: 1,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: existingSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 1. Existing product is rendered under Products Purchased
+    expect(find.text('OPPO Find X9 Pro'), findsOneWidget);
+    expect(find.text('16GB RAM · 512GB ROM · Velvet Red'), findsOneWidget);
+
+    // 2. Tap + Add Product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    // 3. Verify the new product picker starts strictly empty (selectedProduct = null)
+    // Catalog must be visible with unselected indicator ○ and [Select] button
+    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+
+    // No product inside the picker should be marked 'Selected'
+    expect(find.text('Selected'), findsNothing);
+    expect(find.text('Change Product'), findsNothing);
+
+    // 4. Select the catalog product
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+
+    // 5. Now it transitions to selected state with badge and Change Product action
+    expect(find.text('Selected'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
+
+    // 6. Select variant and Add to List
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    await tester.pumpAndSettle();
+
+    // 7. Both products are now in Products Purchased
+    expect(find.text('OPPO Find X9 Pro'), findsOneWidget);
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+  });
 }
+

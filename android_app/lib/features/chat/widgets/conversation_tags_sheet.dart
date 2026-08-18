@@ -426,16 +426,31 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       _showProductPicker = true;
       _addingProduct = null;
       _addingVariant = null;
+      _catalogVariants = const [];
+      _variantError = null;
       _addingQuantity = 1;
       _searchController.clear();
     });
     _loadProducts();
   }
 
+  void _cancelAddProduct() {
+    setState(() {
+      _showProductPicker = false;
+      _addingProduct = null;
+      _addingVariant = null;
+      _catalogVariants = const [];
+      _variantError = null;
+      _addingQuantity = 1;
+      _searchController.clear();
+    });
+  }
+
   void _selectProduct(ProductSelectorItem product) {
     setState(() {
       _addingProduct = product;
       _addingVariant = null;
+      _catalogVariants = const [];
       _variantError = null;
     });
     _loadVariants(product.id);
@@ -1028,26 +1043,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          product.modelName,
-                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.withAlpha(25),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          '✓ Selected',
-                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    product.modelName,
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                   ),
                                   if (product.seriesName != null || product.category != null)
                                     Text(
@@ -1134,7 +1132,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 Text(l10n.addProduct, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                                 IconButton(
                                   icon: const Icon(Icons.close, size: 20),
-                                  onPressed: () => setState(() => _showProductPicker = false),
+                                  onPressed: _cancelAddProduct,
                                 ),
                               ],
                             ),
@@ -1258,6 +1256,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                       onPressed: () => setState(() {
                                         _addingProduct = null;
                                         _addingVariant = null;
+                                        _catalogVariants = const [];
+                                        _variantError = null;
                                       }),
                                       icon: const Icon(Icons.swap_horiz, size: 16),
                                       label: Text(l10n.changeProduct),

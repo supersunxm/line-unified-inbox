@@ -11,7 +11,7 @@ const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
   forceUpdate: false,
   apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk",
   apkSize: "56.9 MB",
-  sha256: "a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7",
+  sha256: "52282a53fa893869180cc313808ce97f657362fba0d3778b2c22286771bac5cc",
   releaseNotes: [
     "Product selection UX improvement",
     "Explicit select confirmation",

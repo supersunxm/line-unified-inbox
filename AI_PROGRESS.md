@@ -1,6 +1,6 @@
 # AI progress
 
-## Current task: Android Release v1.0.6+7 (Product Selection UX Fix Release)
+## Current task: Android Release v1.0.6+7 (Product Selection UX Fix & Picker State Reset)
 
 - **Release Overview & Purpose**:
   - Released Android APK `v1.0.6+7` with enhanced Product and Variant Selection UX in Customer Sales CRM.
@@ -9,8 +9,12 @@
   - Clear visual feedback with `✓ Selected` badge and `[ Change Product ]` action upon selection.
   - Explicit configuration chips with `○` for unselected and `✓` for selected RAM/ROM/Color variants.
   - Prominent `[ Add to List ]` action adding items into the CRM sales list.
+  - **Picker State Initialization Audit & Fix**:
+    - Removed confusing `✓ Selected` badge from existing recorded products under "Products Purchased", keeping them strictly as list items.
+    - Added `_cancelAddProduct()` and reinforced full state reset on `_openAddProduct()`, `_cancelAddProduct()`, and `Change Product` (clearing `_addingProduct`, `_addingVariant`, `_catalogVariants`, and `_variantError`).
+    - Added regression test `Regression: Open picker with existing products -> new picker must start empty` in `tagging_test.dart`.
 - **Portal & Distribution**:
-  - Production APK: `oppo-line-oa-chat-v1.0.6-production.apk` (56.9 MB, SHA256: `a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7`).
+  - Production APK: `oppo-line-oa-chat-v1.0.6-production.apk` (56.9 MB, SHA256: `52282a53fa893869180cc313808ce97f657362fba0d3778b2c22286771bac5cc`).
   - Removed outdated v1.0.5 APK binary from `frontend/public/downloads/`.
   - Updated download portal (`frontend/src/app/download/page.tsx`) with Version `1.0.6+7 (Product Selection UX Fix Release)`, checksum, and release highlights.
 - **Backend & In-App Update**:
@@ -22,7 +26,7 @@
   - Frontend tests: `344 / 344 passed (100%)`.
   - Frontend build: Compiled cleanly (19 routes).
   - Flutter analyze: `0 issues`.
-  - Flutter tests: `86 / 86 passed (100%)`.
+  - Flutter tests: `87 / 87 passed (100%)`.
   - Emulator validation: Verified on physical/emulator device with screen captures.
 
 ## Previous task: Customer Sales Product & Variant Selection UX Improvements (v1.0.5+6)
