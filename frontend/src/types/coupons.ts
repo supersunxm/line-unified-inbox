@@ -1,15 +1,24 @@
 export type CouponStoreMode = "ALL" | "SELECTED";
 export type CouponRewardType = "discount" | "free" | "gift" | "cashBack" | "others";
-export type CouponPriceType = "fixed" | "percentage";
+export type CouponPriceType = "fixed" | "percentage" | "explicit";
+
+export type CouponPriceInfo =
+  | { type: "fixed"; fixedAmount: number }
+  | { type: "percentage"; percentage: number }
+  | { type: "explicit"; originalPrice: number; priceAfterDiscount: number };
+
+export type CouponAcquisitionCondition =
+  | { type: "normal" }
+  | { type: "lottery"; lotteryProbability: number; maxAcquireCount: number };
 
 export type CouponPayload = {
   title: string;
   description?: string;
   reward:
-    | { type: "discount"; priceInfo: { type: "fixed"; fixedAmount: number } | { type: "percentage"; percentage: number } }
-    | { type: "cashBack"; priceInfo: { type: "fixed"; fixedAmount: number } | { type: "percentage"; percentage: number } }
+    | { type: "discount"; priceInfo: CouponPriceInfo }
+    | { type: "cashBack"; priceInfo: Exclude<CouponPriceInfo, { type: "explicit" }> }
     | { type: "free" | "gift" | "others" };
-  acquisitionCondition: { type: "normal" };
+  acquisitionCondition: CouponAcquisitionCondition;
   startTimestamp: number;
   endTimestamp: number;
   imageUrl?: string;
