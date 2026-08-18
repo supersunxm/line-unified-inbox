@@ -138,7 +138,7 @@ INSERT INTO "AppRelease" (
     false,
     'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk',
     '56.9 MB',
-    '648f7516b7ed20180a233f00b391a71a910caf41db5286d73a43a513fe99a197',
+    '3458e9b78e1231cf16165e5fee20c69653bde4f8227e9d58f964e0352f7b2c19',
     ARRAY[
         'Improved product tagging flow',
         'Draft Selection Flow (Select → Configure → Confirm → Save)',
