@@ -10,14 +10,13 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.7-production.apk";
-  const sha256Checksum = "f1231c418aa999e4118451e47ab61ed53710dc386443debbd4ee389ec5bfaf17";
+  const apkFileName = "oppo-line-oa-chat-v1.0.8-production.apk";
+  const sha256Checksum = "532fd6b7a706fc2c589aedab1d8e5522d2a66827cba220f75a0d8c62517b87e8";
   const apkDownloadUrl = `/downloads/${apkFileName}?sha=${sha256Checksum}`;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
       <div className="w-full max-w-md space-y-6">
-        {/* Brand Header */}
         <div className="flex items-center justify-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 font-bold text-sm text-white shadow-xs dark:bg-emerald-500">
             O
@@ -27,9 +26,7 @@ export default function DownloadAppPage() {
           </span>
         </div>
 
-        {/* Main Download Card */}
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/50 sm:p-8 dark:border-slate-800/80 dark:bg-[#12151c] dark:shadow-none">
-          {/* App Icon / Badge */}
           <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-black p-2 shadow-lg ring-1 ring-slate-200 dark:ring-slate-800">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -39,7 +36,6 @@ export default function DownloadAppPage() {
             />
           </div>
 
-          {/* Title & Version */}
           <div className="mt-5 text-center">
             <h1 className="font-bold text-xl text-slate-900 tracking-tight sm:text-2xl dark:text-white">
               OPPO LINE OA Chat
@@ -49,40 +45,38 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.7+8 (Product Tagging Final Pilot Release) · 56.9 MB
+              Version 1.0.8+9 (Tagging Persistence Hotfix) · 56.9 MB
             </div>
           </div>
 
-          {/* Release Highlights */}
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.7 (What&apos;s New in v1.0.7)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.8 (What&apos;s New in v1.0.8)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved Product Tagging Flow</strong>: ปรับปรุงขั้นตอนการ Tag สินค้าให้ราบรื่นและแม่นยำยิ่งขึ้น</span>
+                <span><strong>Immediate Tag Persistence</strong>: กด Confirm Selection แล้วระบบบันทึกสินค้าที่ Tag ลง Backend ทันที</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Draft Selection Flow</strong>: ระบบเลือกสินค้าแบบ Draft (Select → Configure → Confirm → Save) ชัดเจนแบบ POS/CRM</span>
+                <span><strong>Fixed Disappearing Tags</strong>: แก้ปัญหา Tag สินค้าหายเมื่อปิด Customer Sales Info หรือกลับไปหน้าแชต</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Fixed Product Persistence After Confirmation</strong>: แก้ไขปัญหาสินค้าไม่แสดงหลังกดยืนยัน</span>
+                <span><strong>Server Rehydration</strong>: ใช้ข้อมูลที่ Backend บันทึกสำเร็จกลับมาอัปเดตหน้าจอ ลดความคลาดเคลื่อนจาก Local State</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved Product Name Display</strong>: ปรับปรุงการแสดงชื่อสินค้ายาวไม่ให้ล้นหน้าจอ</span>
+                <span><strong>Safer Save Flow</strong>: ป้องกันการปิดหรือเปลี่ยนสินค้าในขณะที่กำลังบันทึกข้อมูล</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved CRM Multi-Product Tagging</strong>: เพิ่มความแม่นยำในการเก็บข้อมูลสินค้าหลายรายการพร้อมกัน</span>
+                <span><strong>Improved CRM Reliability</strong>: เพิ่มความเสถียรของการจดจำข้อมูล Customer Sales และ Product Tagging</span>
               </li>
             </ul>
           </div>
 
-          {/* Download Action Button */}
           <div className="mt-6">
             <a
               href={apkDownloadUrl}
@@ -96,13 +90,11 @@ export default function DownloadAppPage() {
             </a>
           </div>
 
-          {/* Checksum Details */}
           <div className="mt-4 rounded-lg bg-slate-50 p-2.5 text-center text-[10px] text-slate-400 dark:bg-slate-900/60 dark:text-slate-500">
             <span className="font-semibold uppercase tracking-wider">SHA-256 Checksum:</span>
             <div className="mt-0.5 truncate font-mono">{sha256Checksum}</div>
           </div>
 
-          {/* Step-by-Step Installation Guide */}
           <div className="mt-6 border-slate-100 border-t pt-5 dark:border-slate-800/60">
             <h2 className="font-semibold text-slate-900 text-xs uppercase tracking-wider dark:text-slate-200">
               ขั้นตอนการติดตั้งบนมือถือ / แท็บเล็ต (Installation Steps)
@@ -136,7 +128,6 @@ export default function DownloadAppPage() {
           </div>
         </div>
 
-        {/* Footer Support */}
         <div className="text-center text-slate-400 text-xs dark:text-slate-500">
           พบปัญหาการติดตั้ง? ติดต่อผู้ดูแลระบบฝ่ายปฏิบัติการ OPPO
         </div>
