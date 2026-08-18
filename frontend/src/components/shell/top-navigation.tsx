@@ -216,20 +216,19 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
     };
   }, [isOpen]);
 
-  const secondaryActive = ["purchase-analytics", "follower-insights", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
+  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages"].includes(currentSection);
   return (
-    <div ref={menuRef} className="relative 2xl:hidden">
+    <div ref={menuRef} className="relative">
       <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active bg-slate-100 dark:bg-slate-800" : ""}`}>
         {language === "th" ? "เพิ่มเติม" : language === "zh" ? "更多" : "More"} <span aria-hidden="true">⌄</span>
       </button>
       {isOpen && (
         <div role="menu" aria-label="More navigation" className="app-surface absolute left-0 top-[calc(100%+0.4rem)] z-50 min-w-56 rounded-xl border border-slate-200 dark:border-slate-800 p-1.5 shadow-xl">
-          <Link role="menuitem" href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} block lg:hidden`}>{language === "th" ? "จัดการร้านค้า" : language === "zh" ? "门店管理" : "Store Management"}</Link>
+          <Link role="menuitem" href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "จัดการร้านค้า" : language === "zh" ? "门店管理" : "Store Management"}</Link>
+          {authUser?.role === "ADMIN" && <Link role="menuitem" href="/admin/registrations" aria-current={currentSection === "admin-registrations" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "อนุมัติ BM" : language === "zh" ? "BM 审批" : "BM Approval"}</Link>}
           <Link role="menuitem" href="/admin/purchase-analytics" aria-current={currentSection === "purchase-analytics" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการซื้อ" : language === "zh" ? "购买洞察" : "Purchase Intelligence"}</Link>
-          <Link role="menuitem" href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
           {authUser?.role === "ADMIN" && <Link role="menuitem" href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
           {authUser?.role === "ADMIN" && <Link role="menuitem" href="/mass-messages" aria-current={currentSection === "mass-messages" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ส่งข้อความ" : language === "zh" ? "群发消息" : "Mass Message"}</Link>}
-          {authUser?.role === "ADMIN" && <Link role="menuitem" href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
         </div>
       )}
     </div>
@@ -258,15 +257,8 @@ export function TopNavigation(props: TopNavigationProps) {
         <nav aria-label="Primary navigation" className="app-primary-nav flex min-w-0 items-center gap-0.5">
           <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={navLinkClass}>{text.dashboard || "Dashboard"}</Link>
           <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
-          <Link href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} hidden lg:block`}>{text.storeManagement || "Stores"}</Link>
-          {authUser?.role === "ADMIN" && <Link href="/admin/registrations" aria-current={currentSection === "admin-registrations" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "อนุมัติ BM" : language === "zh" ? "BM 审批" : "BM Approval"}</Link>}
-          <Link href="/admin/purchase-analytics" aria-current={currentSection === "purchase-analytics" ? "page" : undefined} className={`${navLinkClass} hidden xl:inline-flex`}>{language === "th" ? "ข้อมูลการซื้อ" : language === "zh" ? "购买洞察" : "Purchase Intelligence"}</Link>
-          <div className="hidden items-center gap-0.5 2xl:flex">
-            <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
-            {authUser?.role === "ADMIN" && <Link href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
-            {authUser?.role === "ADMIN" && <Link href="/mass-messages" aria-current={currentSection === "mass-messages" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ส่งข้อความ" : language === "zh" ? "群发消息" : "Mass Message"}</Link>}
-            {authUser?.role === "ADMIN" && <Link href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
-          </div>
+          <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
+          {authUser?.role === "ADMIN" && <Link href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
           <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
         </nav>
       </div>
