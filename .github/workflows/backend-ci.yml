@@ -62,6 +62,42 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Smoke test backend and coupon auth guard
+        env:
+          NODE_ENV: test
+          PORT: 3001
+          FRONTEND_URL: http://localhost:3000
+          EMAIL_PROVIDER: none
+          LINE_WEBHOOK_ENABLED: "false"
+          PILOT_MODE: "false"
+        run: |
+          export LINE_CREDENTIAL_ENCRYPTION_KEY="$(printf '0123456789abcdef0123456789abcdef' | base64 | tr -d '\n')"
+          node dist/main.js > /tmp/coupon-backend.log 2>&1 &
+          BACKEND_PID=$!
+          trap 'kill "$BACKEND_PID" 2>/dev/null || true' EXIT
+
+          HEALTH_CODE="000"
+          for attempt in $(seq 1 30); do
+            HEALTH_CODE="$(curl -sS -o /tmp/health.json -w '%{http_code}' http://127.0.0.1:3001/health || true)"
+            if [ "$HEALTH_CODE" = "200" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$HEALTH_CODE" != "200" ]; then
+            cat /tmp/coupon-backend.log
+            exit 1
+          fi
+
+          COUPON_CODE="$(curl -sS -o /tmp/coupon-unauthorized.json -w '%{http_code}' http://127.0.0.1:3001/coupons || true)"
+          if [ "$COUPON_CODE" != "401" ]; then
+            echo "Expected unauthenticated GET /coupons to return 401, got $COUPON_CODE"
+            cat /tmp/coupon-unauthorized.json || true
+            cat /tmp/coupon-backend.log
+            exit 1
+          fi
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
