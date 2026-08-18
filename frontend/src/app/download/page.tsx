@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.5-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.6-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "a59f8903b9f7ad5f39173612017054f30dc00cdeafb2525e970fbe4495001bd8";
+  const sha256Checksum = "a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -49,35 +49,35 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.5+6 (In-App Update & CRM Release) · 56.9 MB
+              Version 1.0.6+7 (Product Selection UX Fix Release) · 56.9 MB
             </div>
           </div>
 
           {/* Release Highlights */}
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.5 (What&apos;s New in v1.0.5)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.6 (What&apos;s New in v1.0.6)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>In-App APK Update System</strong>: ตรวจสอบและแจ้งเตือนเวอร์ชันใหม่อัตโนมัติเมื่อเปิดแอป พร้อมปุ่มกดอัปเดตทันที</span>
+                <span><strong>Product Selection UX Improvement</strong>: รายการสินค้าเริ่มต้นเป็นค่าว่าง ไม่เลือกสินค้าตัวแรกอัตโนมัติ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Interested → Purchased Conversion</strong>: แปลงลูกค้าสนใจเป็นซื้อแล้วได้ทันทีใน 1 คลิก พร้อมเก็บสเปกเดิมครบ</span>
+                <span><strong>Explicit Select CTA</strong>: แสดงปุ่ม [เลือก] (Select) ชัดเจน พร้อมเปลี่ยนสถานะเป็น ✓ เลือกแล้ว</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Customer Sales CRM Improvement</strong>: ปรับปรุงระดับความสนใจแบบเป็นกลาง (Neutral State) และตัวเลือกที่ชัดเจนยิ่งขึ้น</span>
+                <span><strong>Change Product Action</strong>: เพิ่มปุ่ม [เปลี่ยนสินค้า] เพื่อสลับกลับไปเลือกสินค้าตัวอื่นได้ทันที</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Multi-Product Tagging & Confirmation</strong>: บันทึกสินค้าได้หลายรายการพร้อมหน้าต่างยืนยันสรุปข้อมูลก่อนบันทึก</span>
+                <span><strong>Variant Selection Indicator</strong>: สเปก RAM/ROM/Color แสดงสถานะ ○ (ยังไม่เลือก) และ ✓ (เลือกแล้ว) ชัดเจน</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Customer Sales Timeline</strong>: ติดตามประวัติการบันทึกและระยะเวลาปิดการขาย (Conversion Time) บน Web Monitor</span>
+                <span><strong>Improved CRM Tagging Accuracy</strong>: ป้องกันความสับสนในการบันทึกข้อมูลสินค้าลูกค้าสำหรับพนักงานหน้าร้าน</span>
               </li>
             </ul>
           </div>

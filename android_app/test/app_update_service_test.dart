@@ -229,5 +229,62 @@ void main() {
       expect(find.text('New Version Available'), findsNothing);
       expect(find.textContaining('You are using the latest version'), findsOneWidget);
     });
+
+    testWidgets('installed v1.0.5 (build 6) detects v1.0.6 (build 7) and triggers update dialog', (tester) async {
+      final updateService = AppUpdateService(ApiClient(TokenStore()));
+
+      final v105PackageInfo = PackageInfo(
+        appName: 'OPPO LINE OA Chat',
+        packageName: 'com.oppo.lineoahub',
+        version: '1.0.5',
+        buildNumber: '6',
+      );
+
+      const v106UpdateInfo = AppUpdateInfo(
+        latestVersion: '1.0.6',
+        buildNumber: 7,
+        minimumSupportedVersion: '1.0.3',
+        minimumSupportedBuildNumber: 4,
+        forceUpdate: false,
+        apkUrl: 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk',
+        apkSize: '56.9 MB',
+        releaseNotes: [
+          'Product selection UX improvement',
+          'Explicit select confirmation',
+          'Improved CRM tagging accuracy',
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (ctx) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => updateService.checkForUpdates(
+                  ctx,
+                  overridePackageInfo: v105PackageInfo,
+                  overrideUpdateInfo: v106UpdateInfo,
+                ),
+                child: const Text('Check'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Check'));
+      await tester.pumpAndSettle();
+
+      // Verify New Version Available dialog with v1.0.6+7 details
+      expect(find.text('New Version Available'), findsOneWidget);
+      expect(find.textContaining('1.0.6+7'), findsOneWidget);
+      expect(find.text('Product selection UX improvement'), findsOneWidget);
+      expect(find.text('Explicit select confirmation'), findsOneWidget);
+      expect(find.text('Improved CRM tagging accuracy'), findsOneWidget);
+      expect(find.text('Update Now'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+    });
   });
 }

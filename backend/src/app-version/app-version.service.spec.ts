@@ -10,15 +10,15 @@ test("AppVersionService returns active Android release with correct structure", 
       findFirst: async () => ({
         id: "rel-1",
         platform: AppPlatform.ANDROID,
-        version: "1.0.5",
-        buildNumber: 6,
+        version: "1.0.6",
+        buildNumber: 7,
         minimumSupportedVersion: "1.0.3",
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk",
+        apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk",
         apkSize: "56.9 MB",
-        sha256: "a59f8903b9f7ad5f39173612017054f30dc00cdeafb2525e970fbe4495001bd8",
-        releaseNotes: ["CRM improvements", "In-app updates"],
+        sha256: "a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7",
+        releaseNotes: ["Product selection UX improvement", "In-app updates"],
         isActive: true,
         downloadCount: 10,
       }),
@@ -31,13 +31,13 @@ test("AppVersionService returns active Android release with correct structure", 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.5");
-  assert.equal(version.buildNumber, 6);
+  assert.equal(version.latestVersion, "1.0.6");
+  assert.equal(version.buildNumber, 7);
   assert.equal(version.minimumSupportedVersion, "1.0.3");
   assert.equal(version.minimumSupportedBuildNumber, 4);
   assert.equal(version.forceUpdate, false);
-  assert.ok(version.apkUrl.includes("v1.0.5-production.apk"));
-  assert.deepEqual(version.releaseNotes, ["CRM improvements", "In-app updates"]);
+  assert.ok(version.apkUrl.includes("v1.0.6-production.apk"));
+  assert.deepEqual(version.releaseNotes, ["Product selection UX improvement", "In-app updates"]);
 });
 
 test("AppVersionService falls back safely when database returns null", async () => {
@@ -50,8 +50,8 @@ test("AppVersionService falls back safely when database returns null", async () 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.5");
-  assert.equal(version.buildNumber, 6);
+  assert.equal(version.latestVersion, "1.0.6");
+  assert.equal(version.buildNumber, 7);
   assert.ok(version.apkUrl);
 });
 
@@ -59,7 +59,7 @@ test("AppVersionService tracks download increments successfully", async () => {
   let updatedId = "";
   const fakePrisma = {
     appRelease: {
-      findFirst: async () => ({ id: "rel-1", buildNumber: 6 }),
+      findFirst: async () => ({ id: "rel-1", buildNumber: 7 }),
       update: async (args: { where: { id: string } }) => {
         updatedId = args.where.id;
         return {};
@@ -68,7 +68,7 @@ test("AppVersionService tracks download increments successfully", async () => {
   } as unknown as PrismaService;
 
   const service = new AppVersionService(fakePrisma);
-  const res = await service.trackDownload(AppPlatform.ANDROID, 6);
+  const res = await service.trackDownload(AppPlatform.ANDROID, 7);
 
   assert.equal(res.success, true);
   assert.equal(updatedId, "rel-1");

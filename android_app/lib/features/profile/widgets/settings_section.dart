@@ -64,7 +64,7 @@ class SettingsSection extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: Text(l10n.about),
-                  subtitle: const Text('OPPO LINE OA Chat · v1.0.5+6'),
+                  subtitle: const Text('OPPO LINE OA Chat · v1.0.6+7'),
                   trailing: Text(
                     l10n.checkForUpdates,
                     style: TextStyle(

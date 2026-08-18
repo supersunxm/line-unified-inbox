@@ -1,6 +1,59 @@
 # AI progress
 
-## Current task: Android Release v1.0.5+6 (In-App APK Update System Release)
+## Current task: Android Release v1.0.6+7 (Product Selection UX Fix Release)
+
+- **Release Overview & Purpose**:
+  - Released Android APK `v1.0.6+7` with enhanced Product and Variant Selection UX in Customer Sales CRM.
+  - Eliminated automatic first-product pre-selection (`selectedProduct = null` on opening).
+  - Explicit `[ Select ]` CTA button with unselected `○ Product Name` state in product catalog browser.
+  - Clear visual feedback with `✓ Selected` badge and `[ Change Product ]` action upon selection.
+  - Explicit configuration chips with `○` for unselected and `✓` for selected RAM/ROM/Color variants.
+  - Prominent `[ Add to List ]` action adding items into the CRM sales list.
+- **Portal & Distribution**:
+  - Production APK: `oppo-line-oa-chat-v1.0.6-production.apk` (56.9 MB, SHA256: `a2ae4d11ccddd8a27d626f31b757fc03162ed62256a168326550733357953ef7`).
+  - Removed outdated v1.0.5 APK binary from `frontend/public/downloads/`.
+  - Updated download portal (`frontend/src/app/download/page.tsx`) with Version `1.0.6+7 (Product Selection UX Fix Release)`, checksum, and release highlights.
+- **Backend & In-App Update**:
+  - Updated `AppRelease` active release to `v1.0.6` (build 7) in database, migration seeds, and service fallback defaults.
+  - Validated that installed v1.0.5 clients automatically detect v1.0.6 and trigger the update dialog.
+- **Verification & Test Results**:
+  - Backend tests: `1,230 / 1,230 passed (100%)`.
+  - Backend build: Compiled cleanly (`prisma generate && nest build`).
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Frontend build: Compiled cleanly (19 routes).
+  - Flutter analyze: `0 issues`.
+  - Flutter tests: `86 / 86 passed (100%)`.
+  - Emulator validation: Verified on physical/emulator device with screen captures.
+
+## Previous task: Customer Sales Product & Variant Selection UX Improvements (v1.0.5+6)
+
+- **UX Problem & Root Cause**:
+  - Previously, product catalog items lacked explicit action buttons (`[Select]`) and the initial selection state was ambiguous.
+- **Implemented Changes**:
+  - **Explicit Catalog Unselected State**:
+    - Each catalog item displays `○ Product Name` with series subtitle and category icon.
+    - Explicit trailing action button: `[ Select ]` (`[ เลือก ]` / `[ 选择 ]`).
+    - Initial state is strictly `_addingProduct = null` (no implicit auto-selection).
+  - **Selected Product Visual Confirmation**:
+    - When selected, product card transitions to a green-tinted container with a bold `✓ Selected` badge.
+    - Trailing button: `[ Change Product ]` (`[ เปลี่ยนสินค้า ]` / `[ 更换产品 ]`), allowing 1-tap return to the catalog browser.
+  - **Explicit Variant / Configuration Chips**:
+    - Unselected variants display `○ RAM / ROM / Color`.
+    - Selected variant displays `✓ RAM / ROM / Color` with brand primary highlight and border.
+  - **Clear Addition CTA**:
+    - Bottom action button changed to `[ Add to List ]` (`[ เพิ่มลงรายการ ]` / `[ 添加到列表 ]`) with cart icon, adding the item to the CRM sale list.
+  - **Multilingual Support**:
+    - Added localization across EN, TH, ZH, and ZH-CN.
+- **Verification & Test Results**:
+  - Backend tests: `1,230 / 1,230 passed (100%)`.
+  - Backend build: Compiled cleanly (`prisma generate && nest build`).
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Frontend build: Compiled cleanly (19 routes).
+  - Flutter analyze: `0 issues`.
+  - Flutter tests: `85 / 85 passed (100%)` including dedicated product selection UX widget tests.
+  - Production APK: Rebuilt and synced to download portal (`a59f8903b9f7ad5f39173612017054f30dc00cdeafb2525e970fbe4495001bd8`).
+
+## Previous task: Android Release v1.0.5+6 (In-App APK Update System Release)
 
 - **Release Overview & Features**:
   - **In-App APK Update System**:
