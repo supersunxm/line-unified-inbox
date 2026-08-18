@@ -106,17 +106,28 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
-    await tester.tap(find.text('OPPO Reno16 Pro 5G'));
+    // Verify catalog shows unselected state with ○ and explicit Select button
+    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+
+    // Tap Select button
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
     expect(repository.variantCalls, ['model-1']);
+
+    // Verify selected state badge and Change Product button
+    expect(find.text('Selected'), findsOneWidget);
+    expect(find.text('Change Product'), findsOneWidget);
 
     // Select configuration chip (starts with ○)
     await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
+    // Confirm configuration chip now shows ✓
+    expect(find.widgetWithText(ChoiceChip, '✓ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+
     // Confirm adding product to list
-    await tester.tap(find.widgetWithText(FilledButton, '+ Add Product'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
     await tester.pumpAndSettle();
 
     // Select Warm interest level (starts with ○)
@@ -175,9 +186,9 @@ void main() {
     // Add product
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OPPO Reno16 Pro 5G'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '+ Add Product'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
     await tester.pumpAndSettle();
 
     // Save entire sheet -> confirmation modal
@@ -308,6 +319,75 @@ void main() {
     expect(repository.currentSales?.paymentMethod, 'CASH');
     expect(repository.currentSales?.products.length, 1);
     expect(repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
+    expect(repository.currentSales?.products[0].status, 'PURCHASED');
+  });
+
+  testWidgets('Product & Variant Selection UX: initial unselected state, Change Product, and explicit chips', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Open Add Product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    // 1. Initial State: Catalog is shown with radio ○ and Select button.
+    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    expect(find.text('Selected'), findsNothing);
+
+    // 2. Select product via Select CTA
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+
+    // 3. Visual Confirmation: Badge shows 'Selected' and action shows 'Change Product'
+    expect(find.text('Selected'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
+
+    // 4. Test Change Product resets back to catalog
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Change Product'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+
+    // 5. Re-select product via tapping the list tile directly
+    await tester.tap(find.textContaining('○ OPPO Reno16 Pro 5G'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected'), findsOneWidget);
+
+    // 6. Variants initially unselected with ○
+    expect(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+
+    // 7. Select variant -> updates to ✓
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ChoiceChip, '✓ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+
+    // 8. Add to List
+    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    await tester.pumpAndSettle();
+
+    // Picker closes, item appears in main sheet
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
   });
 }
-

@@ -258,5 +258,9 @@
   "checkForUpdates": "ตรวจสอบการอัปเดต",
   "alreadyLatestVersion": "คุณกำลังใช้งานเวอร์ชันล่าสุดแล้ว",
   "unableToCheckUpdates": "ไม่สามารถตรวจสอบการอัปเดตได้",
-  "downloadingApk": "กำลังเปิดหน้าดาวน์โหลด APK..."
+  "downloadingApk": "กำลังเปิดหน้าดาวน์โหลด APK...",
+  "select": "เลือก",
+  "selected": "เลือกแล้ว",
+  "changeProduct": "เปลี่ยนสินค้า",
+  "confirmAddProduct": "เพิ่มลงรายการ"
 }

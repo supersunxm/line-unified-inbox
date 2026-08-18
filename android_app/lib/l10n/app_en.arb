@@ -258,5 +258,9 @@
   "checkForUpdates": "Check for updates",
   "alreadyLatestVersion": "You are using the latest version",
   "unableToCheckUpdates": "Unable to check for updates",
-  "downloadingApk": "Opening download page..."
+  "downloadingApk": "Opening download page...",
+  "select": "Select",
+  "selected": "Selected",
+  "changeProduct": "Change Product",
+  "confirmAddProduct": "Add to List"
 }

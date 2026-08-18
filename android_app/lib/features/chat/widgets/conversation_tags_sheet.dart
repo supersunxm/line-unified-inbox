@@ -1156,47 +1156,56 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 Center(child: Padding(padding: const EdgeInsets.all(16), child: Text(l10n.noMatchingProducts)))
                               else
                                 ConstrainedBox(
-                                  constraints: const BoxConstraints(maxHeight: 200),
+                                  constraints: const BoxConstraints(maxHeight: 220),
                                   child: ListView.separated(
                                     shrinkWrap: true,
                                     itemCount: _catalogProducts.length,
                                     separatorBuilder: (_, __) => const Divider(height: 1),
                                     itemBuilder: (context, idx) {
                                       final p = _catalogProducts[idx];
-                                      final isCurrent = _addingProduct?.id == p.id;
                                       return ListTile(
                                         dense: true,
-                                        leading: Icon(
-                                          isCurrent ? Icons.check_circle : Icons.radio_button_unchecked,
-                                          color: isCurrent ? Colors.green : Theme.of(context).hintColor,
-                                          size: 20,
+                                        leading: Text(
+                                          _getCategoryIcon(p.category, p.productName),
+                                          style: const TextStyle(fontSize: 20),
                                         ),
                                         title: Text(
-                                          p.productName,
-                                          style: TextStyle(
-                                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
-                                            color: isCurrent ? Theme.of(context).colorScheme.primary : null,
-                                          ),
+                                          '○ ${p.productName}',
+                                          style: const TextStyle(fontWeight: FontWeight.w600),
                                         ),
                                         subtitle: Text(p.seriesName),
+                                        trailing: OutlinedButton(
+                                          style: OutlinedButton.styleFrom(
+                                            visualDensity: VisualDensity.compact,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          onPressed: () => _selectProduct(p),
+                                          child: Text(l10n.select),
+                                        ),
                                         onTap: () => _selectProduct(p),
                                       );
                                     },
                                   ),
                                 ),
                             ] else ...[
-                              // Selected Product preview
+                              // Selected Product visual confirmation container
                               Container(
                                 padding: const EdgeInsets.all(AppSpacing.sm),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary.withAlpha(20),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(80)),
+                                  color: Colors.green.withAlpha(15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.green.withAlpha(90), width: 1.2),
                                 ),
                                 child: Row(
                                   children: [
-                                    Text(_getCategoryIcon(_addingProduct!.category, _addingProduct!.productName), style: const TextStyle(fontSize: 24)),
-                                    const SizedBox(width: 8),
+                                    Text(
+                                      _getCategoryIcon(_addingProduct!.category, _addingProduct!.productName),
+                                      style: const TextStyle(fontSize: 24),
+                                    ),
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1209,19 +1218,49 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                                   style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                                 ),
                                               ),
-                                              const Text(
-                                                '✓ Selected',
-                                                style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.withAlpha(30),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.green.withAlpha(120)),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.check_circle, size: 12, color: Colors.green),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      l10n.selected,
+                                                      style: const TextStyle(
+                                                        color: Colors.green,
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ],
                                           ),
+                                          const SizedBox(height: 2),
                                           Text(_addingProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
                                         ],
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: () => setState(() => _addingProduct = null),
-                                      child: Text(l10n.change),
+                                    const SizedBox(width: 8),
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      onPressed: () => setState(() {
+                                        _addingProduct = null;
+                                        _addingVariant = null;
+                                      }),
+                                      icon: const Icon(Icons.swap_horiz, size: 16),
+                                      label: Text(l10n.changeProduct),
                                     ),
                                   ],
                                 ),
@@ -1301,9 +1340,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                   ),
                                   const Spacer(),
                                   FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
                                     onPressed: _confirmAddProduct,
-                                    icon: const Icon(Icons.check, size: 16),
-                                    label: Text(l10n.addProduct),
+                                    icon: const Icon(Icons.add_shopping_cart, size: 16),
+                                    label: Text(l10n.confirmAddProduct),
                                   ),
                                 ],
                               ),

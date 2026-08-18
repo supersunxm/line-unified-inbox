@@ -817,4 +817,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadingApk => 'Opening download page...';
+
+  @override
+  String get select => 'Select';
+
+  @override
+  String get selected => 'Selected';
+
+  @override
+  String get changeProduct => 'Change Product';
+
+  @override
+  String get confirmAddProduct => 'Add to List';
 }

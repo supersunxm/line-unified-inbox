@@ -1648,6 +1648,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opening download page...'**
   String get downloadingApk;
+
+  /// No description provided for @select.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get select;
+
+  /// No description provided for @selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get selected;
+
+  /// No description provided for @changeProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Product'**
+  String get changeProduct;
+
+  /// No description provided for @confirmAddProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to List'**
+  String get confirmAddProduct;
 }
 
 class _AppLocalizationsDelegate

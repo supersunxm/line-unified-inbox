@@ -812,4 +812,16 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get downloadingApk => 'กำลังเปิดหน้าดาวน์โหลด APK...';
+
+  @override
+  String get select => 'เลือก';
+
+  @override
+  String get selected => 'เลือกแล้ว';
+
+  @override
+  String get changeProduct => 'เปลี่ยนสินค้า';
+
+  @override
+  String get confirmAddProduct => 'เพิ่มลงรายการ';
 }

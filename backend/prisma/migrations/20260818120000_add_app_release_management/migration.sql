@@ -58,7 +58,7 @@ INSERT INTO "AppRelease" (
     false,
     'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
     '56.9 MB',
-    'da00c1a50ef111cbf290ca2783575aaaa5d8c2088f0422a765d4b6219d8afc2f',
+    'a59f8903b9f7ad5f39173612017054f30dc00cdeafb2525e970fbe4495001bd8',
     ARRAY[
         'Interested → Purchased conversion workflow',
         'Customer Sales CRM improvement',

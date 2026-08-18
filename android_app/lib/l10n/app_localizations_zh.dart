@@ -805,6 +805,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get downloadingApk => '正在打开下载页面...';
+
+  @override
+  String get select => '选择';
+
+  @override
+  String get selected => '已选择';
+
+  @override
+  String get changeProduct => '更换产品';
+
+  @override
+  String get confirmAddProduct => '添加到列表';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1608,4 +1620,16 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get downloadingApk => '正在打开下载页面...';
+
+  @override
+  String get select => '选择';
+
+  @override
+  String get selected => '已选择';
+
+  @override
+  String get changeProduct => '更换产品';
+
+  @override
+  String get confirmAddProduct => '添加到列表';
 }

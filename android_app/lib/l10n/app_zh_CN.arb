@@ -258,5 +258,9 @@
   "checkForUpdates": "检查更新",
   "alreadyLatestVersion": "当前已是最新版本",
   "unableToCheckUpdates": "无法检查更新",
-  "downloadingApk": "正在打开下载页面..."
+  "downloadingApk": "正在打开下载页面...",
+  "select": "选择",
+  "selected": "已选择",
+  "changeProduct": "更换产品",
+  "confirmAddProduct": "添加到列表"
 }
