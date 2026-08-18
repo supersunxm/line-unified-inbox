@@ -73,7 +73,9 @@ unzip -q "$APK_PATH" 'lib/*/libapp.so' -d "$VERIFY_DIR"
 
 FOUND_URL=false
 while IFS= read -r -d '' APP_SO; do
-  if strings "$APP_SO" | grep -Fq "$PRODUCTION_API_URL"; then
+  # Do not use grep -q here: with pipefail it can terminate strings early and
+  # turn a successful match into a SIGPIPE failure from the upstream command.
+  if strings "$APP_SO" | grep -F "$PRODUCTION_API_URL" >/dev/null; then
     FOUND_URL=true
     break
   fi
