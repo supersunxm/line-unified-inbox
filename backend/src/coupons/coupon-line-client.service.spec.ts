@@ -14,15 +14,21 @@ const payload: LineCouponPayload = {
   maxUseCountPerTicket: 1,
 };
 
+function requestUrl(input: string | URL | Request): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 void test("creates a coupon and returns LINE coupon ID", async () => {
   const originalFetch = globalThis.fetch;
   let capturedUrl = "";
   let capturedAuthorization = "";
   let capturedBody = "";
   globalThis.fetch = async (input, init) => {
-    capturedUrl = String(input);
+    capturedUrl = requestUrl(input);
     capturedAuthorization = String((init?.headers as Record<string, string>).Authorization);
-    capturedBody = String(init?.body);
+    capturedBody = typeof init?.body === "string" ? init.body : "";
     return new Response(JSON.stringify({ couponId: "coupon-123" }), {
       status: 200,
       headers: { "content-type": "application/json", "x-line-request-id": "req-1" },
@@ -63,7 +69,7 @@ void test("discontinues a coupon using the close endpoint", async () => {
   let capturedUrl = "";
   let capturedMethod = "";
   globalThis.fetch = async (input, init) => {
-    capturedUrl = String(input);
+    capturedUrl = requestUrl(input);
     capturedMethod = String(init?.method);
     return new Response(null, { status: 200, headers: { "x-line-request-id": "req-close" } });
   };
