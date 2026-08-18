@@ -6,11 +6,11 @@ import {
   fetchTikTokAccountsListFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
 } from "../../tiktok-api-client";
+import { TikTokDashboardView } from "../tiktok-dashboard-view";
 import {
   getTikTokDemoGrowthMetrics,
   isTikTokDemoGrowthEnabled,
 } from "../tiktok-demo-growth";
-import { TikTokDashboardView } from "../tiktok-dashboard-view";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ export default async function TikTokAccountDashboardPage({ params }: Props) {
     redirect("/login");
   }
 
-  const [data, historicalMetrics, accounts] = await Promise.all([
+  const [data, realHistoricalMetrics, accounts] = await Promise.all([
     fetchTikTokAccountByIdFromBackend(accountId, { sessionToken }),
     fetchTikTokHistoricalMetricsFromBackend(accountId, 30, { sessionToken }),
     fetchTikTokAccountsListFromBackend({ sessionToken }),
@@ -47,14 +47,14 @@ export default async function TikTokAccountDashboardPage({ params }: Props) {
     notFound();
   }
 
-  const effectiveHistoricalMetrics = isTikTokDemoGrowthEnabled()
-    ? getTikTokDemoGrowthMetrics(data)
-    : historicalMetrics;
+  const historicalMetrics = isTikTokDemoGrowthEnabled()
+    ? getTikTokDemoGrowthMetrics(accountId)
+    : realHistoricalMetrics;
 
   return (
     <TikTokDashboardView
       data={data}
-      historicalMetrics={effectiveHistoricalMetrics}
+      historicalMetrics={historicalMetrics}
       accounts={accounts}
       currentAccountId={accountId}
     />

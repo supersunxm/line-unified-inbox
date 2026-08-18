@@ -1,6 +1,6 @@
-import { ConversationSourceChannel, ProductGroup } from "@prisma/client";
+import { ConversationSourceChannel, CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, ProductGroup } from "@prisma/client";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
 
 export class MobileConversationQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -30,6 +30,26 @@ export class UpdateMobilePurchaseInformationDto {
   @IsOptional() @IsIn(["INSTALLMENT"]) paymentMethod?: "INSTALLMENT" | null;
   @IsOptional() @IsUUID("4") productModelId?: string | null;
   @IsOptional() @IsUUID("4") productVariantId?: string | null;
+}
+
+export class SalesProductItemDto {
+  @IsOptional() @IsUUID("4") id?: string;
+  @IsUUID("4") productModelId!: string;
+  @IsOptional() @IsUUID("4") productVariantId?: string | null;
+  @IsOptional() @IsString() @MaxLength(200) customProductName?: string | null;
+  @IsOptional() @IsString() @MaxLength(50) ram?: string | null;
+  @IsOptional() @IsString() @MaxLength(50) rom?: string | null;
+  @IsOptional() @IsString() @MaxLength(50) color?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(999) quantity = 1;
+  @IsOptional() @IsEnum(CustomerSalesStatus) status?: CustomerSalesStatus;
+}
+
+export class UpdateCustomerSalesInformationDto {
+  @IsOptional() @IsEnum(CustomerSalesStatus) status?: CustomerSalesStatus | null;
+  @IsOptional() @IsEnum(CustomerInterestLevel) interestLevel?: CustomerInterestLevel | null;
+  @IsOptional() @ArrayMaxSize(2) @IsEnum(ConversationSourceChannel, { each: true }) purchaseChannel?: ConversationSourceChannel[];
+  @IsOptional() @IsEnum(PaymentMethodType) paymentMethod?: PaymentMethodType | null;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SalesProductItemDto) products?: SalesProductItemDto[];
 }
 
 export class MobileProductVariantQueryDto {

@@ -8,6 +8,12 @@ import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/features/summary/summary_page.dart';
 import 'package:line_oa_chat_hub/features/summary/summary_repository.dart';
 
+String _previousMonth(String month) {
+  final parts = month.split('-').map(int.parse).toList();
+  final previous = DateTime.utc(parts[0], parts[1] - 1);
+  return '${previous.year.toString().padLeft(4, '0')}-${previous.month.toString().padLeft(2, '0')}';
+}
+
 class FakeSummaryRepository extends SummaryRepository {
   FakeSummaryRepository(
       {this.available = false,
@@ -197,6 +203,14 @@ void main() {
       scrollable: find.byType(Scrollable),
     );
     expect(find.text('Customer insights'), findsOneWidget);
+    expect(find.text('Customer Tag Coverage'), findsOneWidget);
+    expect(find.text('Installment Customer Analytics'), findsOneWidget);
+    expect(find.text('Installment Customers'), findsOneWidget);
+    expect(
+      find.text(
+          '25% of eligible conversations have installment customer tags.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('3 / 4'), findsOneWidget);
     expect(find.text('OPPO Find X'), findsOneWidget);
     expect(find.text('Store only'), findsOneWidget);
@@ -209,10 +223,13 @@ void main() {
     await tester.pumpWidget(app(repository));
     await tester.pumpAndSettle();
     expect(repository.calls.length, 1);
+    final initialMonth = repository.calls.single;
     expect(find.byTooltip('Next month'), findsOneWidget);
     await tester.tap(find.byTooltip('Previous month'));
     await tester.pumpAndSettle();
     expect(repository.calls.length, 2);
+    final expectedPrevious = _previousMonth(initialMonth);
+    expect(repository.calls.last, expectedPrevious);
   });
 
   testWidgets('summary displays Bangkok month label', (tester) async {

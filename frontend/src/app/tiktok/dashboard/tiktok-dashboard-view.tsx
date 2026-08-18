@@ -8,6 +8,7 @@ import type {
   TikTokVideoItem,
 } from "../tiktok-types";
 import { TikTokFollowerGrowthChart } from "./tiktok-follower-chart";
+import { isTikTokDemoGrowthEnabled } from "./tiktok-demo-growth";
 
 interface TikTokDashboardViewProps {
   data: TikTokStoreData | null;
@@ -350,14 +351,21 @@ export function TikTokDashboardView({
         <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 sm:gap-4">
           <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-[#12151c]">
             <div>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Followers
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Followers
+                </span>
+                {isTikTokDemoGrowthEnabled() && (
+                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                    DEMO
+                  </span>
+                )}
+              </div>
               <p className="mt-2 text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
-                {formatNumber(profile.follower_count)}
+                {formatNumber(isTikTokDemoGrowthEnabled() ? (historicalMetrics?.summary?.currentFollowerCount ?? profile.follower_count) : profile.follower_count)}
               </p>
               <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                {formatCompactNumber(profile.follower_count)} total
+                {formatCompactNumber(isTikTokDemoGrowthEnabled() ? (historicalMetrics?.summary?.currentFollowerCount ?? profile.follower_count) : profile.follower_count)} total
               </p>
             </div>
 

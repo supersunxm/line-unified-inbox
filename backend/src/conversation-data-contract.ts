@@ -30,6 +30,51 @@ export type ConversationContractTopic = {
   topic?: { id: string; name: string; category: string } | null;
 };
 
+export type ConversationContractSalesProduct = {
+  id?: string;
+  quantity?: number;
+  status?: string;
+  customProductName?: string | null;
+  ram?: string | null;
+  rom?: string | null;
+  color?: string | null;
+  productModelId?: string;
+  productVariantId?: string | null;
+  productModel?: {
+    id: string;
+    name: string;
+    productSeries?: { name: string; productGroup?: string | null } | null;
+  } | null;
+  productVariant?: {
+    id: string;
+    ram: string | null;
+    rom: string | null;
+    color: string | null;
+  } | null;
+};
+
+export type CustomerSalesInformationContract = {
+  status: "INTERESTED" | "PURCHASED" | null;
+  interestLevel: "HOT" | "WARM" | "COLD" | null;
+  purchaseChannel: string[];
+  paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
+  products: Array<{
+    id: string;
+    productModelId: string;
+    productVariantId: string | null;
+    model: { id: string; name: string; seriesName: string | null; category: string | null };
+    variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
+    customProductName: string | null;
+    ram: string | null;
+    rom: string | null;
+    color: string | null;
+    quantity: number;
+    status: "INTERESTED" | "PURCHASED";
+  }>;
+  recordedBy: string | null;
+  recordedAt: string | null;
+};
+
 export type PurchaseInformationContract = {
   /**
    * VERIFIED is backed by a BM save with provenance. LEGACY_MANUAL keeps
@@ -75,47 +120,154 @@ export type OperationalStateContract = {
   unread: number | null;
 };
 
+export function buildCustomerSalesInformation(input: {
+  customerSalesStatus?: string | null;
+  interestLevel?: string | null;
+  sourceChannels?: readonly string[] | null;
+  paymentMethod?: string | null;
+  isInstallment?: boolean | null;
+  salesProducts?: readonly ConversationContractSalesProduct[] | null;
+  products?: readonly ConversationContractProduct[] | null;
+  salesRecordedBy?: { displayName?: string | null } | null;
+  salesRecordedAt?: Date | string | null;
+  purchaseRecordedBy?: { displayName?: string | null } | null;
+  purchaseRecordedAt?: Date | string | null;
+}): CustomerSalesInformationContract {
+  const status = (input.customerSalesStatus as "INTERESTED" | "PURCHASED") ||
+    (input.purchaseRecordedAt || input.isInstallment || (input.sourceChannels?.length ?? 0) > 0 ? "PURCHASED" : null);
+
+  const interestLevel = (input.interestLevel as "HOT" | "WARM" | "COLD") || null;
+  const purchaseChannel = status === "PURCHASED" ? [...(input.sourceChannels ?? [])] : [];
+  const paymentMethod = (input.paymentMethod as "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER") ||
+    (status === "PURCHASED" && input.isInstallment ? "INSTALLMENT" : null);
+
+  const rawRecordedAt = input.salesRecordedAt ?? input.purchaseRecordedAt;
+  const recordedAt = rawRecordedAt
+    ? rawRecordedAt instanceof Date
+      ? rawRecordedAt
+      : new Date(rawRecordedAt)
+    : null;
+  const recordedBy = (input.salesRecordedBy ?? input.purchaseRecordedBy)?.displayName?.trim() || null;
+
+  let productsList: CustomerSalesInformationContract["products"] = [];
+
+  if (input.salesProducts && input.salesProducts.length > 0) {
+    productsList = input.salesProducts
+      .filter((sp) => sp.productModel)
+      .map((sp) => {
+        const pModel = sp.productModel!;
+        const pVariant = sp.productVariant;
+        return {
+          id: sp.id || pModel.id,
+          productModelId: sp.productModelId || pModel.id,
+          productVariantId: sp.productVariantId || pVariant?.id || null,
+          model: {
+            id: pModel.id,
+            name: pModel.name,
+            seriesName: pModel.productSeries?.name ?? null,
+            category: pModel.productSeries?.productGroup ?? null,
+          },
+          variant: pVariant
+            ? {
+                id: pVariant.id,
+                ram: sp.ram ?? pVariant.ram,
+                rom: sp.rom ?? pVariant.rom,
+                color: sp.color ?? pVariant.color,
+              }
+            : (sp.ram || sp.rom || sp.color)
+              ? {
+                  id: "custom",
+                  ram: sp.ram ?? null,
+                  rom: sp.rom ?? null,
+                  color: sp.color ?? null,
+                }
+              : null,
+          customProductName: sp.customProductName ?? null,
+          ram: sp.ram ?? pVariant?.ram ?? null,
+          rom: sp.rom ?? pVariant?.rom ?? null,
+          color: sp.color ?? pVariant?.color ?? null,
+          quantity: sp.quantity ?? 1,
+          status: (sp.status as "INTERESTED" | "PURCHASED") || status || "INTERESTED",
+        };
+      });
+  } else if (input.products) {
+    const manualProducts = input.products.filter((p) => p.source === "MANUAL" && p.productModel);
+    productsList = manualProducts.map((p) => ({
+      id: p.productModel!.id,
+      productModelId: p.productModel!.id,
+      productVariantId: p.productVariant?.id ?? null,
+      model: {
+        id: p.productModel!.id,
+        name: p.productModel!.name,
+        seriesName: p.productModel!.productSeries?.name ?? null,
+        category: p.productModel!.productSeries?.productGroup ?? null,
+      },
+      variant: p.productVariant
+        ? {
+            id: p.productVariant.id,
+            ram: p.productVariant.ram,
+            rom: p.productVariant.rom,
+            color: p.productVariant.color,
+          }
+        : null,
+      customProductName: null,
+      ram: p.productVariant?.ram ?? null,
+      rom: p.productVariant?.rom ?? null,
+      color: p.productVariant?.color ?? null,
+      quantity: 1,
+      status: status || "PURCHASED",
+    }));
+  }
+
+  return {
+    status,
+    interestLevel,
+    purchaseChannel,
+    paymentMethod,
+    products: productsList,
+    recordedBy,
+    recordedAt: recordedAt && !Number.isNaN(recordedAt.getTime()) ? recordedAt.toISOString() : null,
+  };
+}
+
 export function buildPurchaseInformation(input: {
+  customerSalesStatus?: string | null;
+  salesProducts?: readonly ConversationContractSalesProduct[] | null;
   sourceChannels?: readonly string[] | null;
   isInstallment?: boolean | null;
+  paymentMethod?: string | null;
   products?: readonly ConversationContractProduct[] | null;
   purchaseRecordedBy?: { displayName?: string | null } | null;
   purchaseRecordedAt?: Date | string | null;
+  salesRecordedBy?: { displayName?: string | null } | null;
+  salesRecordedAt?: Date | string | null;
 }): PurchaseInformationContract {
   const manualProducts = (input.products ?? [])
     .filter((product) => product.source === "MANUAL" && product.productModel);
-  const recordedAt = input.purchaseRecordedAt
-    ? input.purchaseRecordedAt instanceof Date
-      ? input.purchaseRecordedAt
-      : new Date(input.purchaseRecordedAt)
+  const rawRecordedAt = input.salesRecordedAt ?? input.purchaseRecordedAt;
+  const recordedAt = rawRecordedAt
+    ? rawRecordedAt instanceof Date
+      ? rawRecordedAt
+      : new Date(rawRecordedAt)
     : null;
   const hasValidRecordedAt = recordedAt !== null && !Number.isNaN(recordedAt.getTime());
-  const hasLegacyManualData = manualProducts.length > 0 || (input.sourceChannels?.length ?? 0) > 0 || input.isInstallment === true;
+  const hasLegacyManualData = manualProducts.length > 0 || (input.sourceChannels?.length ?? 0) > 0 || input.isInstallment === true || (input.salesProducts?.length ?? 0) > 0;
   const recordState = hasValidRecordedAt ? "VERIFIED" : hasLegacyManualData ? "LEGACY_MANUAL" : "NONE";
-  const verifiedProducts = hasValidRecordedAt ? manualProducts : [];
+
+  const salesInfo = buildCustomerSalesInformation(input);
+  const verifiedProducts = hasValidRecordedAt ? salesInfo.products : [];
+
   return {
     recordState,
-    purchaseChannel: hasValidRecordedAt ? [...(input.sourceChannels ?? [])] : [],
-    paymentMethod: hasValidRecordedAt && input.isInstallment ? "INSTALLMENT" : null,
-    products: verifiedProducts.map((product) => ({
-        model: {
-          id: product.productModel!.id,
-          name: product.productModel!.name,
-          seriesName: product.productModel!.productSeries?.name ?? null,
-          category: product.productModel!.productSeries?.productGroup ?? null,
-        },
-        variant: product.productVariant
-          ? {
-              id: product.productVariant.id,
-              ram: product.productVariant.ram,
-              rom: product.productVariant.rom,
-              color: product.productVariant.color,
-            }
-          : null,
-        source: "MANUAL" as const,
-      })),
-    recordedBy: input.purchaseRecordedBy?.displayName?.trim() || null,
-    recordedAt: hasValidRecordedAt ? recordedAt.toISOString() : null,
+    purchaseChannel: hasValidRecordedAt ? salesInfo.purchaseChannel : [],
+    paymentMethod: hasValidRecordedAt && salesInfo.paymentMethod === "INSTALLMENT" ? "INSTALLMENT" : null,
+    products: verifiedProducts.map((p) => ({
+      model: p.model,
+      variant: p.variant,
+      source: "MANUAL" as const,
+    })),
+    recordedBy: hasValidRecordedAt ? salesInfo.recordedBy : null,
+    recordedAt: hasValidRecordedAt ? salesInfo.recordedAt : null,
   };
 }
 

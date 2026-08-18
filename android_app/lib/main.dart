@@ -186,7 +186,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
           controller: _language,
           child: MaterialApp(
             navigatorKey: _navigator,
-            title: 'LINE OA Chat Hub',
+            title: 'OPPO LINE OA Chat',
             locale: _language.locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,

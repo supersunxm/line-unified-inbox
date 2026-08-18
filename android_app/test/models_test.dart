@@ -126,4 +126,46 @@ void main() {
     expect(detail.tags?.sourceChannels, ['STORE']);
     expect(detail.tags?.product?.productName, 'OPPO Reno16 Pro 5G');
   });
+
+  test('conversation detail parses separated purchase and insight contracts', () {
+    final detail = ConversationDetail.fromJson({
+      'id': 'conversation-1',
+      'customer': {'displayName': 'Customer'},
+      'store': {'name': 'Store'},
+      'purchaseInformation': {
+        'recordState': 'VERIFIED',
+        'purchaseChannel': ['STORE'],
+        'paymentMethod': 'INSTALLMENT',
+        'recordedBy': 'BM Tester',
+        'recordedAt': '2026-08-16T10:00:00.000Z',
+        'products': [
+          {
+            'model': {'id': 'model-1', 'name': 'OPPO Find N6'},
+            'variant': {'id': 'variant-1', 'color': 'Titanium'},
+            'source': 'MANUAL',
+          }
+        ],
+      },
+      'aiInsight': {
+        'mentionedProducts': [],
+        'topics': [
+          {'id': 'topic-1', 'name': 'Price Inquiry', 'category': 'SALES'}
+        ],
+        'classification': {'purchaseIntent': 'High Intent'},
+      },
+      'operationalState': {
+        'replyStatus': 'NOT_REPLIED',
+        'priority': {'level': 'HIGH'},
+        'unread': 1,
+      },
+      'messages': [],
+    });
+    expect(detail.purchaseInformation?.recordState, 'VERIFIED');
+    expect(detail.purchaseInformation?.paymentMethod, 'INSTALLMENT');
+    expect(detail.purchaseInformation?.recordedBy, 'BM Tester');
+    expect(detail.purchaseInformation?.recordedAt?.toUtc().toIso8601String(), '2026-08-16T10:00:00.000Z');
+    expect(detail.purchaseInformation?.products.single['source'], 'MANUAL');
+    expect(detail.aiInsight?.topics.single['name'], 'Price Inquiry');
+    expect(detail.operationalState?.priority, 'HIGH');
+  });
 }

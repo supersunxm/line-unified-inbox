@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appName => 'LINE OA Chat Hub';
+  String get appName => 'OPPO LINE OA Chat';
 
   @override
   String get customer => '客户';
@@ -18,7 +18,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sent => '已发送';
 
   @override
-  String get interest => '兴趣';
+  String get customerStatus => '客户状态';
 
   @override
   String get unableToLoadProducts => '无法加载产品';
@@ -51,6 +51,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get total => '全部';
+
+  @override
+  String get priority => '优先处理';
+
+  @override
+  String get urgent => '紧急';
+
+  @override
+  String get attention => '需跟进';
+
+  @override
+  String get normal => '正常';
+
+  @override
+  String waitingFor(Object duration) {
+    return '等待回复 $duration';
+  }
 
   @override
   String get needReply => '待回复';
@@ -252,13 +269,94 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachImage => '添加图片';
 
   @override
+  String get takePhoto => '拍照';
+
+  @override
+  String get chooseFromGallery => '相册';
+
+  @override
+  String get cameraPermissionRequired => '需要相机权限才能拍照';
+
+  @override
   String get replyToCustomer => '回复客户';
 
   @override
   String get sendReply => '发送回复';
 
   @override
-  String get conversationTags => '会话标签';
+  String get conversationTags => '客户标签';
+
+  @override
+  String get customerTags => '客户标签';
+
+  @override
+  String get purchaseInformation => '购买信息';
+
+  @override
+  String get customerSalesInformation => '客户销售信息';
+
+  @override
+  String get statusInterested => '有意向';
+
+  @override
+  String get statusPurchased => '已购买';
+
+  @override
+  String get interestLevel => '意向程度';
+
+  @override
+  String get interestHot => '高 (Hot)';
+
+  @override
+  String get interestWarm => '中 (Warm)';
+
+  @override
+  String get interestCold => '低 (Cold)';
+
+  @override
+  String get productsInterested => '意向商品';
+
+  @override
+  String get productsPurchased => '已购商品';
+
+  @override
+  String get addProduct => '+ 添加商品';
+
+  @override
+  String get quantity => '数量';
+
+  @override
+  String get paymentCash => '现金';
+
+  @override
+  String get paymentCreditCard => '信用卡';
+
+  @override
+  String get paymentOther => '其他';
+
+  @override
+  String get noCustomerSalesInfo => '暂无销售记录';
+
+  @override
+  String get purchaseChannel => '购买渠道';
+
+  @override
+  String get paymentMethod => '支付方式';
+
+  @override
+  String get recordedBy => '记录人';
+
+  @override
+  String get recordedAt => '记录时间';
+
+  @override
+  String get aiInsight => 'AI 洞察';
+
+  @override
+  String get noPurchaseInformation => '暂无已验证的购买信息';
+
+  @override
+  String get editPurchaseInformation => '编辑销售信息';
 
   @override
   String get addTags => '+ 添加标签';
@@ -558,7 +656,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get customerInsights => '客户洞察';
 
   @override
-  String get tagCoverage => '标签覆盖率';
+  String get customerTagCoverage => '客户标签覆盖率';
 
   @override
   String get eligibleConversations => '符合条件的对话';
@@ -597,16 +695,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sourceUntagged => '未标记';
 
   @override
-  String get installmentInterest => '分期兴趣';
+  String get installmentCustomerAnalytics => '分期购买客户分析';
 
   @override
-  String get taggedInstallment => '已标记分期';
+  String get installmentCustomers => '分期购买客户';
 
   @override
-  String get eligibleRate => '占符合条件对话';
+  String installmentEligibleRate(Object percent) {
+    return '$percent 的符合条件对话具有分期购买客户标签';
+  }
 
   @override
-  String get taggedRate => '占已标记对话';
+  String installmentTaggedRate(Object percent) {
+    return '$percent 的已标记对话具有分期购买客户状态';
+  }
 
   @override
   String get topProducts => '热门产品';
@@ -656,7 +758,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   AppLocalizationsZhCn() : super('zh_CN');
 
   @override
-  String get appName => 'LINE OA Chat Hub';
+  String get appName => 'OPPO LINE OA Chat';
 
   @override
   String get customer => '客户';
@@ -665,7 +767,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get sent => '已发送';
 
   @override
-  String get interest => '兴趣';
+  String get customerStatus => '客户状态';
 
   @override
   String get unableToLoadProducts => '无法加载产品';
@@ -698,6 +800,23 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get total => '全部';
+
+  @override
+  String get priority => '优先处理';
+
+  @override
+  String get urgent => '紧急';
+
+  @override
+  String get attention => '需跟进';
+
+  @override
+  String get normal => '正常';
+
+  @override
+  String waitingFor(Object duration) {
+    return '等待回复 $duration';
+  }
 
   @override
   String get needReply => '待回复';
@@ -899,13 +1018,94 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get attachImage => '添加图片';
 
   @override
+  String get takePhoto => '拍照';
+
+  @override
+  String get chooseFromGallery => '相册';
+
+  @override
+  String get cameraPermissionRequired => '需要相机权限才能拍照';
+
+  @override
   String get replyToCustomer => '回复客户';
 
   @override
   String get sendReply => '发送回复';
 
   @override
-  String get conversationTags => '会话标签';
+  String get conversationTags => '客户标签';
+
+  @override
+  String get customerTags => '客户标签';
+
+  @override
+  String get purchaseInformation => '购买信息';
+
+  @override
+  String get customerSalesInformation => '客户销售信息';
+
+  @override
+  String get statusInterested => '有意向';
+
+  @override
+  String get statusPurchased => '已购买';
+
+  @override
+  String get interestLevel => '意向程度';
+
+  @override
+  String get interestHot => '高 (Hot)';
+
+  @override
+  String get interestWarm => '中 (Warm)';
+
+  @override
+  String get interestCold => '低 (Cold)';
+
+  @override
+  String get productsInterested => '意向商品';
+
+  @override
+  String get productsPurchased => '已购商品';
+
+  @override
+  String get addProduct => '+ 添加商品';
+
+  @override
+  String get quantity => '数量';
+
+  @override
+  String get paymentCash => '现金';
+
+  @override
+  String get paymentCreditCard => '信用卡';
+
+  @override
+  String get paymentOther => '其他';
+
+  @override
+  String get noCustomerSalesInfo => '暂无销售记录';
+
+  @override
+  String get purchaseChannel => '购买渠道';
+
+  @override
+  String get paymentMethod => '支付方式';
+
+  @override
+  String get recordedBy => '记录人';
+
+  @override
+  String get recordedAt => '记录时间';
+
+  @override
+  String get aiInsight => 'AI 洞察';
+
+  @override
+  String get noPurchaseInformation => '暂无已验证的购买信息';
+
+  @override
+  String get editPurchaseInformation => '编辑销售信息';
 
   @override
   String get addTags => '+ 添加标签';
@@ -1205,7 +1405,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get customerInsights => '客户洞察';
 
   @override
-  String get tagCoverage => '标签覆盖率';
+  String get customerTagCoverage => '客户标签覆盖率';
 
   @override
   String get eligibleConversations => '符合条件的对话';
@@ -1244,16 +1444,20 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get sourceUntagged => '未标记';
 
   @override
-  String get installmentInterest => '分期兴趣';
+  String get installmentCustomerAnalytics => '分期购买客户分析';
 
   @override
-  String get taggedInstallment => '已标记分期';
+  String get installmentCustomers => '分期购买客户';
 
   @override
-  String get eligibleRate => '占符合条件对话';
+  String installmentEligibleRate(Object percent) {
+    return '$percent 的符合条件对话具有分期购买客户标签';
+  }
 
   @override
-  String get taggedRate => '占已标记对话';
+  String installmentTaggedRate(Object percent) {
+    return '$percent 的已标记对话具有分期购买客户状态';
+  }
 
   @override
   String get topProducts => '热门产品';

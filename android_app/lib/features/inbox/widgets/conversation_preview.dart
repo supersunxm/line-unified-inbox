@@ -22,26 +22,28 @@ class ConversationPreview extends StatelessWidget {
       displayPreview = '${localizations.you}:${displayPreview!.substring(4)}';
     }
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Text(
             displayPreview?.isNotEmpty == true
                 ? displayPreview!
                 : localizations.noMessagesYet,
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textSecondary,
+                  fontSize: 12.5,
                 ),
           ),
         ),
         if (sentAt != null) ...[
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Text(
             _formatTimestamp(sentAt!.toLocal()),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppColors.textSecondary,
+                  fontSize: 11,
                 ),
           ),
         ],

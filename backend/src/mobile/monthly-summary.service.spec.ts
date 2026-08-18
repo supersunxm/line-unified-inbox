@@ -169,7 +169,7 @@ void test("tag analytics uses mutually exclusive source buckets", () => {
   assert.equal(Object.values(result.sources).reduce((sum, count) => sum + count, 0), 4);
 });
 
-void test("tag coverage counts source, installment, product, and variant tags", () => {
+void test("tag coverage counts customer installment status separately from sources", () => {
   const result = tagAnalytics([
     { sourceChannels: [], isInstallment: true, products: [] },
     { sourceChannels: [], isInstallment: false, products: [{ productModel: { id: "p1", name: "Reno" }, productVariant: null }] },
@@ -182,6 +182,8 @@ void test("tag coverage counts source, installment, product, and variant tags", 
   assert.equal(result.coverage.coverageRate, 0.8);
   assert.equal(result.coverage.quality, "STRONG");
   assert.equal(result.installment.count, 1);
+  assert.equal(result.installment.eligibleRate, 0.2);
+  assert.equal(result.installment.taggedRate, 0.25);
   assert.equal(result.topProducts[0]?.count, 2);
   assert.equal(result.topVariants[0]?.color, "Purple");
 });

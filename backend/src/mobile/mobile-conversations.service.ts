@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
-import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
-import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
+import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, SalesProductItemDto, UpdateCustomerSalesInformationDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
+import { EMPTY_OPERATIONAL_PRIORITY, PriorityService } from "../priority/priority.service";
+import type { OperationalPriority } from "../priority/priority.types";
+import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -24,7 +26,7 @@ function purchaseSnapshot(input: {
 
 @Injectable()
 export class MobileConversationsService {
-  constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService) {}
+  constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService, private readonly priority: PriorityService = undefined as unknown as PriorityService) {}
 
   async list(user: AuthUser, query: MobileConversationQueryDto) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
@@ -52,6 +54,9 @@ export class MobileConversationsService {
       }),
       this.prisma.conversation.count({ where }),
     ]);
+    const priorityById: Map<string, OperationalPriority> = this.priority
+      ? await this.priority.forConversationIds(user, items.map((item) => item.id), accessibleStoreIds)
+      : new Map<string, OperationalPriority>();
     return {
       items: items.map((item) => {
         const message = item.messages[0] ?? null;
@@ -63,8 +68,10 @@ export class MobileConversationsService {
           bmReplyStatus: item.bmReplyStatus,
           followUpStatus: item.followUpStatus,
           unreadCount: item._count.pushNotifications,
+          priority: priorityById.get(item.id) ?? EMPTY_OPERATIONAL_PRIORITY,
           operationalState: buildOperationalState({
             replyStatus: item.bmReplyStatus,
+            priority: priorityById.get(item.id)?.level,
             unread: item._count.pushNotifications,
           }),
           lastMessage: message ? { id: message.id, direction: message.direction, messageType: message.messageType, preview: previewText(message.originalText), sentAt: message.sentAt } : null,
@@ -90,12 +97,32 @@ export class MobileConversationsService {
         priority: true,
         sourceChannels: true,
         isInstallment: true,
+        customerSalesStatus: true,
+        interestLevel: true,
+        paymentMethod: true,
         productRelationship: true,
         purchaseIntent: true,
         purchaseRecordedAt: true,
         purchaseRecordedBy: { select: { id: true, displayName: true } },
+        salesRecordedAt: true,
+        salesRecordedBy: { select: { id: true, displayName: true } },
         customer: { select: { id: true, displayName: true } },
         store: { select: { id: true, name: true, code: true } },
+        salesProducts: {
+          select: {
+            id: true,
+            productModelId: true,
+            productVariantId: true,
+            customProductName: true,
+            ram: true,
+            rom: true,
+            color: true,
+            quantity: true,
+            status: true,
+            productModel: { select: { id: true, name: true, productSeries: { select: { name: true, productGroup: true } } } },
+            productVariant: { select: { id: true, ram: true, rom: true, color: true } },
+          },
+        },
         products: {
           select: {
             source: true,
@@ -127,7 +154,11 @@ export class MobileConversationsService {
     const hasEarlier = conversation.messages.length > query.limit;
     const pageMessages = conversation.messages.slice(0, query.limit).reverse();
     const oldest = pageMessages[0];
+    const priority = this.priority
+      ? (await this.priority.forConversationIds(user, [conversation.id])).get(conversation.id) ?? EMPTY_OPERATIONAL_PRIORITY
+      : EMPTY_OPERATIONAL_PRIORITY;
     const products = conversation.products ?? [];
+    const salesProducts = conversation.salesProducts ?? [];
     const topics = conversation.topics ?? [];
     // Only an explicitly MANUAL product can participate in the legacy tags
     // compatibility field. Unattributed rows must not look like purchase data.
@@ -152,7 +183,24 @@ export class MobileConversationsService {
           : null,
         variant: manualProduct?.productVariant ?? null,
       },
-      purchaseInformation: buildPurchaseInformation({ ...conversation, products, purchaseRecordedBy: conversation.purchaseRecordedBy, purchaseRecordedAt: conversation.purchaseRecordedAt }),
+      customerSalesInformation: buildCustomerSalesInformation({
+        ...conversation,
+        salesProducts,
+        products,
+        salesRecordedBy: conversation.salesRecordedBy,
+        salesRecordedAt: conversation.salesRecordedAt,
+        purchaseRecordedBy: conversation.purchaseRecordedBy,
+        purchaseRecordedAt: conversation.purchaseRecordedAt,
+      }),
+      purchaseInformation: buildPurchaseInformation({
+        ...conversation,
+        salesProducts,
+        products,
+        salesRecordedBy: conversation.salesRecordedBy,
+        salesRecordedAt: conversation.salesRecordedAt,
+        purchaseRecordedBy: conversation.purchaseRecordedBy,
+        purchaseRecordedAt: conversation.purchaseRecordedAt,
+      }),
       aiInsight: buildAiInsight({
         products,
         topics,
@@ -161,7 +209,7 @@ export class MobileConversationsService {
       }),
       operationalState: buildOperationalState({
         replyStatus: conversation.bmReplyStatus,
-        priority: conversation.priority,
+        priority: priority.level,
         unread: conversation._count.pushNotifications,
       }),
       unreadCount: conversation._count.pushNotifications,
@@ -328,13 +376,203 @@ export class MobileConversationsService {
     return this.get(user, conversationId);
   }
 
+  async updateCustomerSalesInfo(user: AuthUser, conversationId: string, dto: UpdateCustomerSalesInformationDto) {
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    await this.prisma.$transaction(async (tx) => {
+      const conversation = await tx.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          id: true,
+          customerSalesStatus: true,
+          interestLevel: true,
+          paymentMethod: true,
+          sourceChannels: true,
+          isInstallment: true,
+          products: { where: { source: "MANUAL" }, select: { productModelId: true, productVariantId: true } },
+          salesProducts: {
+            select: {
+              id: true,
+              productModelId: true,
+              productVariantId: true,
+              quantity: true,
+              status: true,
+            },
+          },
+        },
+      });
+      if (!conversation) throw new NotFoundException("Conversation not found");
+
+      const previousPurchase = purchaseSnapshot({
+        sourceChannels: conversation.sourceChannels ?? [],
+        isInstallment: conversation.isInstallment ?? false,
+        products: conversation.products ?? [],
+      });
+
+      const conversationUpdate: Prisma.ConversationUpdateInput = {};
+      const recordedAt = new Date();
+
+      if (dto.status !== undefined) {
+        conversationUpdate.customerSalesStatus = dto.status;
+      }
+      if (dto.interestLevel !== undefined) {
+        conversationUpdate.interestLevel = dto.status === "PURCHASED" ? null : dto.interestLevel;
+      }
+      if (dto.purchaseChannel !== undefined) {
+        conversationUpdate.sourceChannels = dto.purchaseChannel;
+      }
+      if (dto.paymentMethod !== undefined) {
+        conversationUpdate.paymentMethod = dto.paymentMethod;
+        conversationUpdate.isInstallment = dto.paymentMethod === "INSTALLMENT";
+      }
+
+      conversationUpdate.salesRecordedAt = recordedAt;
+      conversationUpdate.salesRecordedBy = { connect: { id: user.id } };
+      conversationUpdate.purchaseRecordedAt = recordedAt;
+      conversationUpdate.purchaseRecordedBy = { connect: { id: user.id } };
+
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: conversationUpdate,
+      });
+
+      if (dto.products !== undefined) {
+        const validatedProducts: Array<{
+          productModelId: string;
+          productVariantId: string | null;
+          customProductName: string | null;
+          ram: string | null;
+          rom: string | null;
+          color: string | null;
+          quantity: number;
+          status: CustomerSalesStatus;
+        }> = [];
+
+        for (const p of dto.products) {
+          const model = await tx.productModel.findFirst({
+            where: { id: p.productModelId, isActive: true },
+            select: { id: true, name: true },
+          });
+          if (!model) {
+            throw new BadRequestException(`Product model ${p.productModelId} is invalid or inactive`);
+          }
+
+          let variantId: string | null = null;
+          let ram: string | null = p.ram ?? null;
+          let rom: string | null = p.rom ?? null;
+          let color: string | null = p.color ?? null;
+
+          if (p.productVariantId) {
+            const variant = await tx.productVariant.findFirst({
+              where: { id: p.productVariantId, productModelId: model.id, isActive: true },
+              select: { id: true, ram: true, rom: true, color: true },
+            });
+            if (!variant) {
+              throw new BadRequestException(`Product variant ${p.productVariantId} does not belong to model ${model.name}`);
+            }
+            variantId = variant.id;
+            ram = ram ?? variant.ram;
+            rom = rom ?? variant.rom;
+            color = color ?? variant.color;
+          }
+
+          const itemStatus = p.status ?? (dto.status || CustomerSalesStatus.INTERESTED);
+
+          validatedProducts.push({
+            productModelId: model.id,
+            productVariantId: variantId,
+            customProductName: p.customProductName ?? null,
+            ram,
+            rom,
+            color,
+            quantity: p.quantity ?? 1,
+            status: itemStatus,
+          });
+        }
+
+        if (tx.conversationSalesProduct?.deleteMany) {
+          await tx.conversationSalesProduct.deleteMany({ where: { conversationId } });
+        }
+
+        if (validatedProducts.length > 0) {
+          if (tx.conversationSalesProduct?.createMany) {
+            await tx.conversationSalesProduct.createMany({
+              data: validatedProducts.map((vp) => ({
+                conversationId,
+                productModelId: vp.productModelId,
+                productVariantId: vp.productVariantId,
+                customProductName: vp.customProductName,
+                ram: vp.ram,
+                rom: vp.rom,
+                color: vp.color,
+                quantity: vp.quantity,
+                status: vp.status,
+              })),
+            });
+          }
+
+          if (tx.conversationProduct?.deleteMany) {
+            await tx.conversationProduct.deleteMany({ where: { conversationId, source: "MANUAL" } });
+          }
+          const first = validatedProducts[0];
+          if (tx.conversationProduct?.create) {
+            await tx.conversationProduct.create({
+              data: {
+                conversationId,
+                productModelId: first.productModelId,
+                productVariantId: first.productVariantId,
+                source: "MANUAL",
+                confidence: 1,
+              },
+            });
+          }
+        } else {
+          if (tx.conversationProduct?.deleteMany) {
+            await tx.conversationProduct.deleteMany({ where: { conversationId, source: "MANUAL" } });
+          }
+        }
+      }
+
+      const nextPurchase = purchaseSnapshot({
+        sourceChannels: dto.purchaseChannel ?? conversation.sourceChannels ?? [],
+        isInstallment: dto.paymentMethod === "INSTALLMENT" || (conversation.isInstallment ?? false),
+        products: dto.products ? dto.products.map((p) => ({ productModelId: p.productModelId, productVariantId: p.productVariantId ?? null })) : (conversation.products ?? []),
+      });
+
+      await tx.activityHistory.create({
+        data: {
+          conversationId,
+          actionType: (dto.status === "PURCHASED" ? "PURCHASE_INFORMATION_UPDATED" : "CUSTOMER_SALES_INFO_UPDATED") as any,
+          description: dto.status === "PURCHASED" ? "Purchase information updated" : "Customer sales information updated",
+          createdByUserId: user.id,
+          createdByName: user.displayName?.trim() || user.email,
+          metadata: {
+            category: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION" : "CUSTOMER_SALES_INFO",
+            oldValue: previousPurchase,
+            newValue: nextPurchase,
+            status: dto.status,
+            interestLevel: dto.interestLevel,
+            productCount: dto.products?.length,
+          },
+        },
+      });
+    });
+
+    return this.get(user, conversationId);
+  }
+
   async updatePurchaseInformation(user: AuthUser, conversationId: string, dto: UpdateMobilePurchaseInformationDto) {
-    return this.updateTags(user, conversationId, {
-      sourceChannels: dto.purchaseChannel,
-      isInstallment: dto.paymentMethod === undefined ? undefined : dto.paymentMethod === "INSTALLMENT",
-      productId: dto.productModelId,
-      variantId: dto.productVariantId,
-    }, user);
+    const products: SalesProductItemDto[] | undefined = dto.productModelId !== undefined
+      ? (dto.productModelId
+          ? [{ productModelId: dto.productModelId, productVariantId: dto.productVariantId, quantity: 1, status: CustomerSalesStatus.PURCHASED }]
+          : [])
+      : undefined;
+
+    return this.updateCustomerSalesInfo(user, conversationId, {
+      status: CustomerSalesStatus.PURCHASED,
+      purchaseChannel: dto.purchaseChannel,
+      paymentMethod: dto.paymentMethod === "INSTALLMENT" ? PaymentMethodType.INSTALLMENT : null,
+      products,
+    });
   }
 
   async send(user: AuthUser, conversationId: string, dto: SendConversationMessageDto) {

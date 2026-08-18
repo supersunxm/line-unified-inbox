@@ -46,6 +46,33 @@ void main() {
     expect(find.text('OPPO Find N6'), findsOneWidget);
   });
 
+  testWidgets('installment customer semantics are localized', (tester) async {
+    for (final testCase in const [
+      (Locale('en'), 'Installment Customers', 'Customer Tag Coverage'),
+      (
+        Locale('th'),
+        'ลูกค้าที่มีประวัติผ่อนสินค้า',
+        'ความครอบคลุมของข้อมูลแท็กลูกค้า'
+      ),
+      (Locale('zh', 'CN'), '分期购买客户', '客户标签覆盖率'),
+    ]) {
+      await tester.pumpWidget(_localizedApp(
+        testCase.$1,
+        Builder(
+          builder: (context) => Column(
+            children: [
+              Text(appLocalizations(context).installmentCustomers),
+              Text(appLocalizations(context).customerTagCoverage),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text(testCase.$2), findsOneWidget);
+      expect(find.text(testCase.$3), findsOneWidget);
+    }
+  });
+
   testWidgets('auth copy is localized for registration and approval',
       (tester) async {
     for (final testCase in const [
@@ -104,16 +131,15 @@ void main() {
     expect(controller.language, AppLanguage.english);
     await controller.setLanguage(AppLanguage.thai);
 
-    final restored =
-        AppLanguageController(systemLocale: const Locale('en'));
+    final restored = AppLanguageController(systemLocale: const Locale('en'));
     await restored.load();
     expect(restored.language, AppLanguage.thai);
   });
 
-  testWidgets('selecting a language updates the app immediately', (tester) async {
+  testWidgets('selecting a language updates the app immediately',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final controller =
-        AppLanguageController(systemLocale: const Locale('en'));
+    final controller = AppLanguageController(systemLocale: const Locale('en'));
     await tester.pumpWidget(
       AppLanguageScope(
         controller: controller,

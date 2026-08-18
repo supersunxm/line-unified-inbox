@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.2-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.3-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "4811ca85df647b39eaa04f51fec5e03a48c851102a7563edfbd3cee4626b8258";
+  const sha256Checksum = "1853d2649afe1f0942b53fc00f3065d803107a6a8bcb7d4c577a674dab01544a";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -49,7 +49,7 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.2+3 (Pilot Messaging Release) · 56.1 MB
+              Version 1.0.3+4 (Customer Sales CRM Release) · 56.4 MB
             </div>
           </div>
 

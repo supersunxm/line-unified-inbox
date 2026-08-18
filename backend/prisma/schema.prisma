@@ -40,6 +40,24 @@ enum ProductRelationship {
   UNKNOWN
 }
 
+enum CustomerSalesStatus {
+  INTERESTED
+  PURCHASED
+}
+
+enum CustomerInterestLevel {
+  HOT
+  WARM
+  COLD
+}
+
+enum PaymentMethodType {
+  CASH
+  INSTALLMENT
+  CREDIT_CARD
+  OTHER
+}
+
 enum ProductGroup {
   SMARTPHONE
   TABLET
@@ -125,6 +143,7 @@ enum ActivityActionType {
   CLASSIFICATION_UPDATED
   BM_REPLY_STATUS_CHANGED
   PURCHASE_INFORMATION_UPDATED
+  CUSTOMER_SALES_INFO_UPDATED
 }
 
 enum ProfileFetchStatus {
@@ -269,6 +288,7 @@ model User {
   auditLogsAsTarget             AuditLog[]                   @relation("AuditTargetUser")
   massMessageCampaigns          MassMessageCampaign[]        @relation("CreatedMassMessageCampaigns")
   purchaseRecordedConversations Conversation[]               @relation("ConversationPurchaseRecorder")
+  salesRecordedConversations    Conversation[]               @relation("ConversationSalesRecorder")
   createdActivityHistory        ActivityHistory[]            @relation("ActivityHistoryCreator")
 
   @@index([status])
@@ -755,6 +775,11 @@ model Conversation {
   bmReplyStatus         BmReplyStatus               @default(NOT_REPLIED)
   purchaseRecordedById  String?
   purchaseRecordedAt    DateTime?
+  customerSalesStatus   CustomerSalesStatus?
+  interestLevel         CustomerInterestLevel?
+  paymentMethod         PaymentMethodType?
+  salesRecordedById     String?
+  salesRecordedAt       DateTime?
   sourceChannels        ConversationSourceChannel[] @default([])
   isInstallment         Boolean                     @default(false)
   isQa                  Boolean                     @default(false)
@@ -767,10 +792,12 @@ model Conversation {
   lineOfficialAccount   LineOfficialAccount         @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
   messages              Message[]
   products              ConversationProduct[]
+  salesProducts         ConversationSalesProduct[]
   topics                ConversationTopic[]
   notes                 InternalNote[]
   activityHistory       ActivityHistory[]
   purchaseRecordedBy    User?                       @relation("ConversationPurchaseRecorder", fields: [purchaseRecordedById], references: [id], onDelete: SetNull)
+  salesRecordedBy       User?                       @relation("ConversationSalesRecorder", fields: [salesRecordedById], references: [id], onDelete: SetNull)
   pushNotifications     PushNotification[]
 
   @@index([latestMessageAt])
@@ -778,6 +805,7 @@ model Conversation {
   @@index([priority])
   @@index([storeId])
   @@index([customerId])
+  @@index([customerSalesStatus])
   @@index([createdAt])
   @@index([storeId, createdAt])
   @@index([storeId, bmReplyStatus])
@@ -908,16 +936,17 @@ model ProductSeries {
 }
 
 model ProductModel {
-  id                  String                @id @default(uuid())
-  name                String                @unique
+  id                  String                     @id @default(uuid())
+  name                String                     @unique
   productSeriesId     String
-  isActive            Boolean               @default(true)
-  classificationLevel String                @default("MODEL")
-  priority            Int                   @default(0)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  productSeries       ProductSeries         @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
+  isActive            Boolean                    @default(true)
+  classificationLevel String                     @default("MODEL")
+  priority            Int                        @default(0)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  productSeries       ProductSeries              @relation(fields: [productSeriesId], references: [id], onDelete: Restrict)
   conversations       ConversationProduct[]
+  salesProducts       ConversationSalesProduct[]
   aliases             ProductAlias[]
   signals             CustomerSignal[]
   variants            ProductVariant[]
@@ -927,17 +956,18 @@ model ProductModel {
 }
 
 model ProductVariant {
-  id             String                @id @default(uuid())
+  id             String                     @id @default(uuid())
   productModelId String
   variantKey     String
   ram            String?
   rom            String?
   color          String?
-  isActive       Boolean               @default(true)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  productModel   ProductModel          @relation(fields: [productModelId], references: [id], onDelete: Cascade)
+  isActive       Boolean                    @default(true)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  productModel   ProductModel               @relation(fields: [productModelId], references: [id], onDelete: Cascade)
   conversations  ConversationProduct[]
+  salesProducts  ConversationSalesProduct[]
 
   @@unique([productModelId, variantKey])
   @@index([productModelId, isActive])
@@ -955,6 +985,30 @@ model ProductAlias {
   productModel    ProductModel       @relation(fields: [productModelId], references: [id], onDelete: Cascade)
 
   @@index([productModelId, isActive])
+}
+
+model ConversationSalesProduct {
+  id                String              @id @default(uuid())
+  conversationId    String
+  productModelId    String
+  productVariantId  String?
+  customProductName String?
+  ram               String?
+  rom               String?
+  color             String?
+  quantity          Int                 @default(1)
+  status            CustomerSalesStatus @default(INTERESTED)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  conversation      Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  productModel      ProductModel        @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  productVariant    ProductVariant?     @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId])
+  @@index([productModelId])
+  @@index([productVariantId])
+  @@index([status])
 }
 
 model ConversationProduct {

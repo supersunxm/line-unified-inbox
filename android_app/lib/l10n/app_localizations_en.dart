@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appName => 'LINE OA Chat Hub';
+  String get appName => 'OPPO LINE OA Chat';
 
   @override
   String get customer => 'Customer';
@@ -18,7 +18,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sent => 'Sent';
 
   @override
-  String get interest => 'Interest';
+  String get customerStatus => 'Customer Status';
 
   @override
   String get unableToLoadProducts => 'Unable to load products';
@@ -51,6 +51,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get total => 'Total';
+
+  @override
+  String get priority => 'Priority';
+
+  @override
+  String get urgent => 'Urgent';
+
+  @override
+  String get attention => 'Attention';
+
+  @override
+  String get normal => 'Normal';
+
+  @override
+  String waitingFor(Object duration) {
+    return 'Waiting $duration';
+  }
 
   @override
   String get needReply => 'Need Reply';
@@ -257,13 +274,95 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachImage => 'Attach image';
 
   @override
+  String get takePhoto => 'Take Photo';
+
+  @override
+  String get chooseFromGallery => 'Gallery';
+
+  @override
+  String get cameraPermissionRequired =>
+      'Camera permission is required to take photos';
+
+  @override
   String get replyToCustomer => 'Reply to customer';
 
   @override
   String get sendReply => 'Send reply';
 
   @override
-  String get conversationTags => 'Conversation Tags';
+  String get conversationTags => 'Customer Tags';
+
+  @override
+  String get customerTags => 'Customer Tags';
+
+  @override
+  String get purchaseInformation => 'Purchase Information';
+
+  @override
+  String get customerSalesInformation => 'Customer Sales Info';
+
+  @override
+  String get statusInterested => 'Interested';
+
+  @override
+  String get statusPurchased => 'Purchased';
+
+  @override
+  String get interestLevel => 'Interest Level';
+
+  @override
+  String get interestHot => 'Hot';
+
+  @override
+  String get interestWarm => 'Warm';
+
+  @override
+  String get interestCold => 'Cold';
+
+  @override
+  String get productsInterested => 'Products Interested In';
+
+  @override
+  String get productsPurchased => 'Products Purchased';
+
+  @override
+  String get addProduct => '+ Add Product';
+
+  @override
+  String get quantity => 'Qty';
+
+  @override
+  String get paymentCash => 'Cash';
+
+  @override
+  String get paymentCreditCard => 'Credit Card';
+
+  @override
+  String get paymentOther => 'Other';
+
+  @override
+  String get noCustomerSalesInfo => 'No sales information recorded';
+
+  @override
+  String get purchaseChannel => 'Purchase Channel';
+
+  @override
+  String get paymentMethod => 'Payment Method';
+
+  @override
+  String get recordedBy => 'Recorded by';
+
+  @override
+  String get recordedAt => 'Recorded at';
+
+  @override
+  String get aiInsight => 'AI Insight';
+
+  @override
+  String get noPurchaseInformation => 'No verified purchase information';
+
+  @override
+  String get editPurchaseInformation => 'Edit Sales Information';
 
   @override
   String get addTags => '+ Add tags';
@@ -568,7 +667,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customerInsights => 'Customer insights';
 
   @override
-  String get tagCoverage => 'Tag coverage';
+  String get customerTagCoverage => 'Customer Tag Coverage';
 
   @override
   String get eligibleConversations => 'Eligible conversations';
@@ -608,16 +707,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sourceUntagged => 'Not tagged';
 
   @override
-  String get installmentInterest => 'Installment interest';
+  String get installmentCustomerAnalytics => 'Installment Customer Analytics';
 
   @override
-  String get taggedInstallment => 'Installment tagged';
+  String get installmentCustomers => 'Installment Customers';
 
   @override
-  String get eligibleRate => 'Of eligible conversations';
+  String installmentEligibleRate(Object percent) {
+    return '$percent of eligible conversations have installment customer tags.';
+  }
 
   @override
-  String get taggedRate => 'Of tagged conversations';
+  String installmentTaggedRate(Object percent) {
+    return '$percent of tagged conversations have installment customer status.';
+  }
 
   @override
   String get topProducts => 'Top products';

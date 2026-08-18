@@ -27,14 +27,19 @@ class MembershipSection extends StatelessWidget {
                   for (var index = 0; index < memberships.length; index++) ...[
                     if (index > 0) const Divider(height: 1),
                     ListTile(
-                      leading: StoreBadge(
+                      title: StoreBadge(
                         name: memberships[index].store.name,
                         code: memberships[index].store.code,
                         compact: true,
                       ),
-                      title: Text(memberships[index].store.name),
-                      subtitle: Text(
-                          localizedRoleLabel(context, memberships[index].role)),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          localizedRoleLabel(context, memberships[index].role),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
                   ],
                 ],

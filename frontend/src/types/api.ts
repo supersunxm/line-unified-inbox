@@ -2,6 +2,23 @@ export type ApiFollowUpStatus = "FOLLOW_UP" | "REMINDED" | "ACKNOWLEDGED" | "COM
 export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 
+export type ApiCustomerSalesInformation = {
+  status: "INTERESTED" | "PURCHASED" | null;
+  interestLevel: "HOT" | "WARM" | "COLD" | null;
+  purchaseChannel: string[];
+  paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
+  products: Array<{
+    id: string;
+    model: { id: string; name: string; seriesName: string | null; category: string | null };
+    variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
+    customProductName: string | null;
+    quantity: number;
+    status: "INTERESTED" | "PURCHASED";
+  }>;
+  recordedBy: string | null;
+  recordedAt: string | null;
+};
+
 export type ApiPurchaseInformation = {
   recordState: "VERIFIED" | "LEGACY_MANUAL" | "NONE";
   purchaseChannel: string[];
@@ -80,6 +97,7 @@ export type ApiConversation = {
   }>;
   products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
+  customerSalesInformation?: ApiCustomerSalesInformation;
   purchaseInformation?: ApiPurchaseInformation;
   aiInsight?: ApiAiInsight;
   operationalState?: ApiOperationalState;

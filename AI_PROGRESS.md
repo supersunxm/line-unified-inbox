@@ -1,6 +1,24 @@
 # AI progress
 
-## Current task: Phase 10C.11.1 — Remove Reply Token Age Cutoff (Always Attempt Unused LINE replyToken Before Push)
+## Current task: Customer Sales Information (CRM Evolution) Redesign
+
+- **Overview & Architectural Highlights**:
+  - Redesigned "Purchase Information" into a flexible CRM-style customer sales information module supporting leads (`INTERESTED`) and buyers (`PURCHASED`), as well as multi-product purchases.
+  - **Database Migration**: Created and deployed migration `20260818100000_add_customer_sales_crm_module` adding `CustomerSalesStatus`, `CustomerInterestLevel`, `PaymentMethodType`, `CUSTOMER_SALES_INFO_UPDATED`, and `ConversationSalesProduct` model with safe backfill of legacy data.
+  - **Data Contract & Backward Compatibility**: Implemented `CustomerSalesInformationContract` with `buildCustomerSalesInformation()` and preserved `buildPurchaseInformation()` backward compatibility.
+  - **Backend API**: Added `PATCH /mobile/conversations/:id/customer-sales-info` with atomic transaction validation for models, variants, quantities, and activity history logging.
+  - **Flutter Mobile App**: Redesigned `ConversationTagsSheet` with top segmented button `[ Interested ]` vs `[ Purchased ]`, dynamic interest levels (`Hot`, `Warm`, `Cold`), purchase channels & payment methods, multi-product cards with RAM/ROM/color specs, quantity counters, delete buttons, and inline product picker.
+  - **Web Admin Frontend**: Updated `ApiConversation` and right side panel to render status badges, interest level, channel/payment details, and multi-product cards.
+- **Verification & Test Results**:
+  - Backend tests: `1,227 / 1,227 passed (100%)`.
+  - Backend build: Compiled cleanly (`prisma generate && nest build`).
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Frontend build: Compiled cleanly (19 routes).
+  - Flutter analyze: `0 issues`.
+  - Flutter tests: `77 / 77 passed (100%)`.
+  - Git diff check: Clean whitespace.
+
+## Previous task: Phase 10C.11.1 — Remove Reply Token Age Cutoff (Always Attempt Unused LINE replyToken Before Push)
 
 - **Overview & Architecture**:
   - Removed application-defined 45-second replyToken cutoff window.

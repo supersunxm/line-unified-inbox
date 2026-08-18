@@ -181,6 +181,7 @@ const translations = {
     translateMessage: "ดูคำแปล",
     showOriginal: "ดูต้นฉบับ",
 
+    purchased: "ซื้อแล้ว",
     productInsight: "ข้อมูลสินค้า",
     customerPurchase: "ข้อมูลการซื้อของลูกค้า",
     purchaseChannel: "ช่องทางการซื้อ",
@@ -490,6 +491,7 @@ const translations = {
     translateMessage: "Show Translation",
     showOriginal: "Show Original",
 
+    purchased: "Purchased",
     productInsight: "Product Insight",
     customerPurchase: "Customer Purchase",
     purchaseChannel: "Purchase Channel",
@@ -798,6 +800,7 @@ const translations = {
     translateMessage: "查看翻译",
     showOriginal: "查看原文",
 
+    purchased: "已购买",
     productInsight: "产品信息",
     customerPurchase: "客户购买信息",
     purchaseChannel: "购买渠道",
@@ -3626,10 +3629,34 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
                           <section data-purchase-information-card data-insights-section className="pb-3 chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                              <h3 className="font-semibold">{text.customerPurchase}</h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold">{text.customerPurchase}</h3>
+                                {selectedApiConversation?.customerSalesInformation?.status === "INTERESTED" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                    🎯 {text.interested || "Interested"}{selectedApiConversation.customerSalesInformation.interestLevel ? ` · ${selectedApiConversation.customerSalesInformation.interestLevel}` : ""}
+                                  </span>
+                                )}
+                                {selectedApiConversation?.customerSalesInformation?.status === "PURCHASED" && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                    🛍️ {text.purchased || "Purchased"}
+                                  </span>
+                                )}
+                              </div>
                               <button data-chat-detail-secondary-action disabled={chatLoading || authUser.role === "VIEWER"} onClick={() => void editPurchaseInformation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editPurchaseInformation}</button>
                             </div>
-                            {selectedApiConversation?.purchaseInformation?.recordState === "LEGACY_MANUAL" ? (
+                            {selectedApiConversation?.customerSalesInformation?.products.length ? (
+                              <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                                <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ model, quantity }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${quantity > 1 ? ` (x${quantity})` : ""}`).join(", ")}</dd></div>
+                                <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ model }) => model.category?.replaceAll("_", " ")).filter(Boolean).join(", ") || "—"}</dd></div>
+                                {selectedApiConversation.customerSalesInformation.status === "PURCHASED" && (
+                                  <>
+                                    <div><dt className="app-muted text-xs">{text.purchaseChannel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.purchaseChannel.join(", ") || "—"}</dd></div>
+                                    <div><dt className="app-muted text-xs">{text.paymentMethod}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.paymentMethod ?? "—"}</dd></div>
+                                  </>
+                                )}
+                                <div className="sm:col-span-2"><dt className="app-muted text-xs">{text.variant}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ variant }) => variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "—").join(", ")}</dd></div>
+                              </dl>
+                            ) : selectedApiConversation?.purchaseInformation?.recordState === "LEGACY_MANUAL" ? (
                               <p className="text-sm text-slate-500">{text.legacyPurchaseInformation}</p>
                             ) : selectedApiConversation?.purchaseInformation?.products.length ? (
                               <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
@@ -3642,10 +3669,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             ) : (
                               <p className="text-sm text-slate-500">{text.noPurchaseInformation}</p>
                             )}
-                            {selectedApiConversation?.purchaseInformation?.recordState === "VERIFIED" && (selectedApiConversation.purchaseInformation.recordedBy || selectedApiConversation.purchaseInformation.recordedAt) && (
+                            {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.customerSalesInformation?.recordedAt || (selectedApiConversation?.purchaseInformation?.recordState === "VERIFIED" && (selectedApiConversation.purchaseInformation.recordedBy || selectedApiConversation.purchaseInformation.recordedAt))) && (
                               <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
-                                {selectedApiConversation.purchaseInformation.recordedBy && <div><dt className="app-muted text-xs">{text.recordedBy}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.recordedBy}</dd></div>}
-                                {selectedApiConversation.purchaseInformation.recordedAt && <div><dt className="app-muted text-xs">{text.recordedAt}</dt><dd className="mt-0.5 text-sm font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(selectedApiConversation.purchaseInformation.recordedAt))}</dd></div>}
+                                {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy) && <div><dt className="app-muted text-xs">{text.recordedBy}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy}</dd></div>}
+                                {(selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt) && <div><dt className="app-muted text-xs">{text.recordedAt}</dt><dd className="mt-0.5 text-sm font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date((selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt)!))}</dd></div>}
                               </dl>
                             )}
                           </section>

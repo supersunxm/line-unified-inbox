@@ -54,7 +54,7 @@ class _SummaryPageState extends State<SummaryPage> {
 
   void _moveMonth(int delta) {
     final parts = _month.split('-').map(int.parse).toList();
-    final next = DateTime.utc(parts[0], parts[1] - 1 + delta);
+    final next = DateTime.utc(parts[0], parts[1] + delta);
     final nextMonth =
         '${next.year.toString().padLeft(4, '0')}-${next.month.toString().padLeft(2, '0')}';
     if (delta > 0 && _compareMonths(nextMonth, _currentMonth()) > 0) {
@@ -134,7 +134,7 @@ class _SummaryPageState extends State<SummaryPage> {
           if (summary.dataQuality.tagAnalyticsMode != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '${appLocalizations(context).tagCoverage}: ${summary.dataQuality.tagAnalyticsMode == 'CURRENT_TAG_SNAPSHOT' ? appLocalizations(context).currentTagSnapshot : summary.dataQuality.tagAnalyticsMode}',
+              '${appLocalizations(context).customerTagCoverage}: ${summary.dataQuality.tagAnalyticsMode == 'CURRENT_TAG_SNAPSHOT' ? appLocalizations(context).currentTagSnapshot : summary.dataQuality.tagAnalyticsMode}',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -437,7 +437,7 @@ class _TagAnalyticsCard extends StatelessWidget {
             Text(appLocalizations(context).customerInsights,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: AppSpacing.md),
-            Text(appLocalizations(context).tagCoverage,
+            Text(appLocalizations(context).customerTagCoverage,
                 style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -469,16 +469,18 @@ class _TagAnalyticsCard extends StatelessWidget {
                 label: appLocalizations(context).sourceUntagged,
                 value: tags.sources.untagged),
             const Divider(height: AppSpacing.xl),
-            Text(appLocalizations(context).installmentInterest,
+            Text(appLocalizations(context).installmentCustomerAnalytics,
                 style: Theme.of(context).textTheme.titleSmall),
             _InsightRow(
-                label: appLocalizations(context).taggedInstallment,
+                label: appLocalizations(context).installmentCustomers,
                 value: tags.installment.count),
             Text(
-                '${_formatPercent(context, tags.installment.eligibleRate)} ${appLocalizations(context).eligibleRate}',
+                appLocalizations(context).installmentEligibleRate(
+                    _formatPercent(context, tags.installment.eligibleRate)),
                 style: Theme.of(context).textTheme.bodySmall),
             Text(
-                '${_formatPercent(context, tags.installment.taggedRate)} ${appLocalizations(context).taggedRate}',
+                appLocalizations(context).installmentTaggedRate(
+                    _formatPercent(context, tags.installment.taggedRate)),
                 style: Theme.of(context).textTheme.bodySmall),
             if (tags.topProducts.isNotEmpty) ...[
               const Divider(height: AppSpacing.xl),

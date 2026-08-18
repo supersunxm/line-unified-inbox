@@ -104,7 +104,7 @@ abstract class AppLocalizations {
   /// No description provided for @appName.
   ///
   /// In en, this message translates to:
-  /// **'LINE OA Chat Hub'**
+  /// **'OPPO LINE OA Chat'**
   String get appName;
 
   /// No description provided for @customer.
@@ -119,11 +119,11 @@ abstract class AppLocalizations {
   /// **'Sent'**
   String get sent;
 
-  /// No description provided for @interest.
+  /// No description provided for @customerStatus.
   ///
   /// In en, this message translates to:
-  /// **'Interest'**
-  String get interest;
+  /// **'Customer Status'**
+  String get customerStatus;
 
   /// No description provided for @unableToLoadProducts.
   ///
@@ -184,6 +184,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Total'**
   String get total;
+
+  /// No description provided for @priority.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get priority;
+
+  /// No description provided for @urgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent'**
+  String get urgent;
+
+  /// No description provided for @attention.
+  ///
+  /// In en, this message translates to:
+  /// **'Attention'**
+  String get attention;
+
+  /// No description provided for @normal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get normal;
+
+  /// No description provided for @waitingFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting {duration}'**
+  String waitingFor(Object duration);
 
   /// No description provided for @needReply.
   ///
@@ -563,6 +593,24 @@ abstract class AppLocalizations {
   /// **'Attach image'**
   String get attachImage;
 
+  /// No description provided for @takePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take Photo'**
+  String get takePhoto;
+
+  /// No description provided for @chooseFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get chooseFromGallery;
+
+  /// No description provided for @cameraPermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera permission is required to take photos'**
+  String get cameraPermissionRequired;
+
   /// No description provided for @replyToCustomer.
   ///
   /// In en, this message translates to:
@@ -578,8 +626,152 @@ abstract class AppLocalizations {
   /// No description provided for @conversationTags.
   ///
   /// In en, this message translates to:
-  /// **'Conversation Tags'**
+  /// **'Customer Tags'**
   String get conversationTags;
+
+  /// No description provided for @customerTags.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Tags'**
+  String get customerTags;
+
+  /// No description provided for @purchaseInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase Information'**
+  String get purchaseInformation;
+
+  /// No description provided for @customerSalesInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Sales Info'**
+  String get customerSalesInformation;
+
+  /// No description provided for @statusInterested.
+  ///
+  /// In en, this message translates to:
+  /// **'Interested'**
+  String get statusInterested;
+
+  /// No description provided for @statusPurchased.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchased'**
+  String get statusPurchased;
+
+  /// No description provided for @interestLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Interest Level'**
+  String get interestLevel;
+
+  /// No description provided for @interestHot.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot'**
+  String get interestHot;
+
+  /// No description provided for @interestWarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm'**
+  String get interestWarm;
+
+  /// No description provided for @interestCold.
+  ///
+  /// In en, this message translates to:
+  /// **'Cold'**
+  String get interestCold;
+
+  /// No description provided for @productsInterested.
+  ///
+  /// In en, this message translates to:
+  /// **'Products Interested In'**
+  String get productsInterested;
+
+  /// No description provided for @productsPurchased.
+  ///
+  /// In en, this message translates to:
+  /// **'Products Purchased'**
+  String get productsPurchased;
+
+  /// No description provided for @addProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'+ Add Product'**
+  String get addProduct;
+
+  /// No description provided for @quantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get quantity;
+
+  /// No description provided for @paymentCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get paymentCash;
+
+  /// No description provided for @paymentCreditCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit Card'**
+  String get paymentCreditCard;
+
+  /// No description provided for @paymentOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get paymentOther;
+
+  /// No description provided for @noCustomerSalesInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales information recorded'**
+  String get noCustomerSalesInfo;
+
+  /// No description provided for @purchaseChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase Channel'**
+  String get purchaseChannel;
+
+  /// No description provided for @paymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Method'**
+  String get paymentMethod;
+
+  /// No description provided for @recordedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by'**
+  String get recordedBy;
+
+  /// No description provided for @recordedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded at'**
+  String get recordedAt;
+
+  /// No description provided for @aiInsight.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Insight'**
+  String get aiInsight;
+
+  /// No description provided for @noPurchaseInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'No verified purchase information'**
+  String get noPurchaseInformation;
+
+  /// No description provided for @editPurchaseInformation.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Sales Information'**
+  String get editPurchaseInformation;
 
   /// No description provided for @addTags.
   ///
@@ -1163,11 +1355,11 @@ abstract class AppLocalizations {
   /// **'Customer insights'**
   String get customerInsights;
 
-  /// No description provided for @tagCoverage.
+  /// No description provided for @customerTagCoverage.
   ///
   /// In en, this message translates to:
-  /// **'Tag coverage'**
-  String get tagCoverage;
+  /// **'Customer Tag Coverage'**
+  String get customerTagCoverage;
 
   /// No description provided for @eligibleConversations.
   ///
@@ -1241,29 +1433,29 @@ abstract class AppLocalizations {
   /// **'Not tagged'**
   String get sourceUntagged;
 
-  /// No description provided for @installmentInterest.
+  /// No description provided for @installmentCustomerAnalytics.
   ///
   /// In en, this message translates to:
-  /// **'Installment interest'**
-  String get installmentInterest;
+  /// **'Installment Customer Analytics'**
+  String get installmentCustomerAnalytics;
 
-  /// No description provided for @taggedInstallment.
+  /// No description provided for @installmentCustomers.
   ///
   /// In en, this message translates to:
-  /// **'Installment tagged'**
-  String get taggedInstallment;
+  /// **'Installment Customers'**
+  String get installmentCustomers;
 
-  /// No description provided for @eligibleRate.
+  /// No description provided for @installmentEligibleRate.
   ///
   /// In en, this message translates to:
-  /// **'Of eligible conversations'**
-  String get eligibleRate;
+  /// **'{percent} of eligible conversations have installment customer tags.'**
+  String installmentEligibleRate(Object percent);
 
-  /// No description provided for @taggedRate.
+  /// No description provided for @installmentTaggedRate.
   ///
   /// In en, this message translates to:
-  /// **'Of tagged conversations'**
-  String get taggedRate;
+  /// **'{percent} of tagged conversations have installment customer status.'**
+  String installmentTaggedRate(Object percent);
 
   /// No description provided for @topProducts.
   ///

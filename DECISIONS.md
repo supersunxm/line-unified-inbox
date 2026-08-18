@@ -1,3 +1,17 @@
+# Customer Sales Information CRM Module (Interested Leads, Purchases & Multi-Product) (2026-08-18)
+
+- **Sales Lifecycle Decoupling (Leads vs Purchases)**: Redesigned the legacy single-purchase structure into a flexible CRM-style sales module. Customer conversations now track `CustomerSalesStatus` (`INTERESTED` vs `PURCHASED`), recognizing that customers in LINE OA frequently inquire and show interest before purchasing.
+- **Conditional Sales Data Model**:
+  - `INTERESTED` (Leads): Captures products of interest alongside `CustomerInterestLevel` (`HOT`, `WARM`, `COLD`). Purchase channels and payment methods are hidden.
+  - `PURCHASED` (Customers): Captures purchase channel (`STORE`, `ONLINE`), `PaymentMethodType` (`CASH`, `INSTALLMENT`, `CREDIT_CARD`, `OTHER`), and verified purchased products.
+- **Multi-Product Relation (`ConversationSalesProduct`)**: Replaced the legacy single-product limit with `ConversationSalesProduct`, capturing `productModelId`, `productVariantId` (RAM, ROM, color), `quantity` (default 1, positive int), `customProductName`, and item-level `status`.
+- **Zero Data Loss Migration & Backward Compatibility**:
+  - Created migration `20260818100000_add_customer_sales_crm_module` which backfilled all existing conversations with `sourceChannels` / `isInstallment` as `customerSalesStatus = 'PURCHASED'`, `paymentMethod = (CASE WHEN isInstallment THEN 'INSTALLMENT' ELSE NULL END)`, and migrated existing `ConversationProduct` manual rows into `ConversationSalesProduct`.
+  - Maintained full dual-projection backward compatibility in `buildPurchaseInformation()` and `buildCustomerSalesInformation()` across API responses, preventing breaks in older clients.
+- **Mobile & Web UI Modernization**:
+  - Flutter Mobile: Redesigned `ConversationTagsSheet` with top segmented button `[ 🎯 Interested ]` vs `[ 🛍️ Purchased ]`, dynamic chips for interest levels / channels / payment methods, multi-product cards with RAM/ROM/color chips, quantity controls (`- 1 +`), delete buttons, and modal catalog search.
+  - Web Admin: Enhanced side panel to render status badges, interest level, channel/payment details, and multi-product cards.
+
 # LINE Reply-First Delivery Strategy with Push API Fallback (2026-08-17)
 
 - **Quota Consumption Optimization via Official LINE Reply API**: To dramatically reduce LINE Official Account monthly message quota usage (which charges exclusively on Push API calls while Reply API messages are 100% quota-free), outbound messages sent by branch managers (BM) through both web and mobile clients adopt a **Reply-First → Push Fallback** delivery pattern.

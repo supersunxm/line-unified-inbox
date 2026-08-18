@@ -5,6 +5,7 @@ import '../../core/localization/localization.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/widgets/app_widgets.dart';
 import 'conversation_repository.dart';
+import 'priority.dart';
 import 'widgets/conversation_card.dart';
 import 'widgets/conversation_overview_card.dart';
 import 'widgets/inbox_filter_bar.dart';
@@ -59,18 +60,24 @@ class _InboxPageState extends State<InboxPage> {
 
   List<ConversationSummary> get _renderItems {
     final query = _searchQuery.trim().toLowerCase();
-    return _items.where((item) {
+    final items = _items.where((item) {
       final matchesQuery = query.isEmpty ||
           item.customerName.toLowerCase().contains(query) ||
           item.storeName.toLowerCase().contains(query) ||
           (item.preview?.toLowerCase().contains(query) ?? false);
       final matchesFilter = switch (_selectedFilter) {
         InboxFilter.all => true,
+        InboxFilter.priority =>
+          item.priority.isActionable && !isCompletedStatus(item.bmReplyStatus),
         InboxFilter.notReplied => isNeedReplyStatus(item.bmReplyStatus),
         InboxFilter.replied => isCompletedStatus(item.bmReplyStatus),
       };
       return matchesQuery && matchesFilter;
     }).toList(growable: false);
+    if (_selectedFilter == InboxFilter.priority) {
+      items.sort(comparePrioritySummaries);
+    }
+    return items;
   }
 
   void _updateSearch(String value) {
@@ -136,7 +143,10 @@ class _InboxPageState extends State<InboxPage> {
                 : null),
         sentAt: sentAt,
         bmReplyStatus:
-            bmReplyStatus is String ? bmReplyStatus : current.bmReplyStatus);
+            bmReplyStatus is String ? bmReplyStatus : current.bmReplyStatus,
+        priority: bmReplyStatus == 'REPLIED'
+            ? const ConversationPriority.none()
+            : current.priority);
     if (_sameSummary(current, updated) && index == 0) return true;
     final items = [..._items]..removeAt(index);
     items.insert(0, updated);
@@ -157,7 +167,10 @@ class _InboxPageState extends State<InboxPage> {
         sentAt: latest is String ? DateTime.tryParse(latest) : null,
         bmReplyStatus: conversation['bmReplyStatus'] is String
             ? conversation['bmReplyStatus'] as String
-            : current.bmReplyStatus);
+            : current.bmReplyStatus,
+        priority: conversation['bmReplyStatus'] == 'REPLIED'
+            ? const ConversationPriority.none()
+            : current.priority);
     if (_sameSummary(current, updated)) return;
     setState(() => _items[index] = updated);
   }
@@ -169,7 +182,8 @@ class _InboxPageState extends State<InboxPage> {
       left.unreadCount == right.unreadCount &&
       left.bmReplyStatus == right.bmReplyStatus &&
       left.preview == right.preview &&
-      left.sentAt == right.sentAt;
+      left.sentAt == right.sentAt &&
+      left.priority == right.priority;
 
   int _nextGeneration(String conversationId) {
     final generation = ++_generation;
@@ -201,8 +215,11 @@ class _InboxPageState extends State<InboxPage> {
                   direction: latestMessage.direction,
                   messageType: latestMessage.messageType),
           sentAt: latestMessage?.sentAt ?? current.sentAt);
-      if (!_sameSummary(current, updated)) {
-        setState(() => _items[index] = updated);
+      final reconciled = detail.bmReplyStatus == 'REPLIED'
+          ? updated.copyWith(priority: const ConversationPriority.none())
+          : updated;
+      if (!_sameSummary(current, reconciled)) {
+        setState(() => _items[index] = reconciled);
       }
     } catch (_) {
       // The event patch remains visible; the next explicit refresh reconciles it.
@@ -268,8 +285,11 @@ class _InboxPageState extends State<InboxPage> {
                       direction: latestMessage.direction,
                       messageType: latestMessage.messageType),
               sentAt: latestMessage?.sentAt ?? current.sentAt);
-          if (!_sameSummary(current, updated)) {
-            setState(() => _items[index] = updated);
+          final reconciled = detail.bmReplyStatus == 'REPLIED'
+              ? updated.copyWith(priority: const ConversationPriority.none())
+              : updated;
+          if (!_sameSummary(current, reconciled)) {
+            setState(() => _items[index] = reconciled);
           }
         }
       } catch (_) {
@@ -367,9 +387,9 @@ class _InboxPageState extends State<InboxPage> {
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
         itemCount: renderItems.length + (_loadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, __) => const SizedBox(height: 6),
         itemBuilder: (context, index) {
           if (index == renderItems.length) {
             return const Padding(

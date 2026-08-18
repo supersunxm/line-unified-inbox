@@ -216,7 +216,7 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
     };
   }, [isOpen]);
 
-  const secondaryActive = ["classification-insights", "follower-insights", "friend-source-links", "mass-messages"].includes(currentSection);
+  const secondaryActive = ["purchase-analytics", "classification-insights", "follower-insights", "friend-source-links", "mass-messages"].includes(currentSection);
   return (
     <div ref={menuRef} className="relative 2xl:hidden">
       <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active bg-slate-100 dark:bg-slate-800" : ""}`}>
@@ -225,6 +225,7 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
       {isOpen && (
         <div role="menu" aria-label="More navigation" className="app-surface absolute left-0 top-[calc(100%+0.4rem)] z-50 min-w-56 rounded-xl border border-slate-200 dark:border-slate-800 p-1.5 shadow-xl">
           <Link role="menuitem" href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} block lg:hidden`}>{language === "th" ? "จัดการร้านค้า" : language === "zh" ? "门店管理" : "Store Management"}</Link>
+          <Link role="menuitem" href="/admin/purchase-analytics" aria-current={currentSection === "purchase-analytics" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการซื้อ" : language === "zh" ? "购买洞察" : "Purchase Intelligence"}</Link>
           <Link role="menuitem" href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
           <Link role="menuitem" href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
           {authUser?.role === "ADMIN" && <Link role="menuitem" href="/friend-source-links" aria-current={currentSection === "friend-source-links" ? "page" : undefined} className={`${navLinkClass} block`}>{language === "th" ? "ลิงก์เพิ่มเพื่อน" : language === "zh" ? "加好友来源链接" : "Friend Source Links"}</Link>}
@@ -259,6 +260,7 @@ export function TopNavigation(props: TopNavigationProps) {
           <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
           <Link href="/stores" aria-current={currentSection === "stores" ? "page" : undefined} className={`${navLinkClass} hidden lg:block`}>{text.storeManagement || "Stores"}</Link>
           {authUser?.role === "ADMIN" && <Link href="/admin/registrations" aria-current={currentSection === "admin-registrations" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "อนุมัติ BM" : language === "zh" ? "BM 审批" : "BM Approval"}</Link>}
+          <Link href="/admin/purchase-analytics" aria-current={currentSection === "purchase-analytics" ? "page" : undefined} className={`${navLinkClass} hidden xl:inline-flex`}>{language === "th" ? "ข้อมูลการซื้อ" : language === "zh" ? "购买洞察" : "Purchase Intelligence"}</Link>
           <div className="hidden items-center gap-0.5 2xl:flex">
             <Link href="/classification-insights" aria-current={currentSection === "classification-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลการจัดหมวดหมู่" : language === "zh" ? "分类洞察" : "Classification Insights"}</Link>
             <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>

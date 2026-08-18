@@ -40,12 +40,12 @@ test("business: sidebar operational count scenario and historical preservation",
 
   // Before reset: expect 100 notReplied
   currentReset = null;
-  const before = await svc.getBmReplyStatusSummary();
+  const before = await svc.getBmReplyStatusSummary(null);
   assert.equal(before.overview.notReplied, 100, "expected 100 notReplied before reset");
 
   // Create reset at 16:00
   currentReset = resetDate;
-  const after = await svc.getBmReplyStatusSummary();
+  const after = await svc.getBmReplyStatusSummary(null);
   assert.equal(after.overview.notReplied, 1, "expected 1 notReplied after reset");
 
   // Historical fetch: conversation A (15:59) should still be retrievable via controller.get
@@ -75,20 +75,20 @@ test("business: store-priority-summary consistency across sidebar, dashboard, an
   let currentReset: Date | null = null;
   const fakeOperations: any = { getOperationalConversationFilter: async () => (currentReset ? { latestMessageAt: { gte: currentReset } } : {}) };
   const svc = new ConversationsService(fakePrisma, fakeOperations);
-  const controller = new ConversationsController(svc, null as any, null as any, null as any, null as any);
+  const controller = new ConversationsController(svc, null as any, null as any, null as any, { accessibleStoreIds: async () => null } as any);
 
   currentReset = null;
-  const before = await svc.getBmReplyStatusSummary();
+  const before = await svc.getBmReplyStatusSummary(null);
   const sidebarBefore = before.stores.find((s: any) => s.storeId === "storeA");
   assert.equal(sidebarBefore.notReplied, 100);
 
   currentReset = resetDate;
-  const after = await svc.getBmReplyStatusSummary();
+  const after = await svc.getBmReplyStatusSummary(null);
   const sidebarAfter = after.stores.find((s: any) => s.storeId === "storeA");
   assert.equal(sidebarAfter.notReplied, 2);
 
   // store-priority-summary endpoint uses getBmReplyStatusSummary internally — call controller
-  const priority = await controller.storePrioritySummary();
+  const priority = await controller.storePrioritySummary({ user: { id: "admin" } } as any);
   const priorityStore = priority.stores.find((s: any) => s.id === "storeA");
   assert.equal(priorityStore.notReplied, 2, "priority summary should match sidebar/dashboard operational counts after reset");
 });

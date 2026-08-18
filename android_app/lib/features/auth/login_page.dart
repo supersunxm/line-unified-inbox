@@ -63,8 +63,18 @@ class _LoginPageState extends State<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
-              const Icon(Icons.support_agent, size: 72),
-              const SizedBox(height: 24),
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/images/LOGO_OBS.png',
+                    height: 80,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.business, size: 72),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               Text(localizations.appName,
                   style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center),

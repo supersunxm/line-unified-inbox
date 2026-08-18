@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { TikTokDailyMetricItem, TikTokGrowthSummary } from "../tiktok-types";
+import { isTikTokDemoGrowthEnabled } from "./tiktok-demo-growth";
 
 interface TikTokFollowerChartProps {
   history: TikTokDailyMetricItem[];
@@ -138,6 +139,11 @@ export function TikTokFollowerGrowthChart({
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-50">
               Follower Growth History (30 Days)
             </h2>
+            {isTikTokDemoGrowthEnabled() && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/60">
+                DEMO MODE
+              </span>
+            )}
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {accountDisplayName ? `${accountDisplayName} · ` : ""}

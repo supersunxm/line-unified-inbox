@@ -111,7 +111,8 @@ class ConversationSummary {
       required this.unreadCount,
       required this.bmReplyStatus,
       this.preview,
-      this.sentAt});
+      this.sentAt,
+      this.priority = const ConversationPriority.none()});
   final String id;
   final String customerName;
   final String storeName;
@@ -119,6 +120,7 @@ class ConversationSummary {
   final String bmReplyStatus;
   final String? preview;
   final DateTime? sentAt;
+  final ConversationPriority priority;
 
   ConversationSummary copyWith({
     String? id,
@@ -128,6 +130,7 @@ class ConversationSummary {
     String? bmReplyStatus,
     String? preview,
     DateTime? sentAt,
+    ConversationPriority? priority,
   }) =>
       ConversationSummary(
           id: id ?? this.id,
@@ -136,7 +139,8 @@ class ConversationSummary {
           unreadCount: unreadCount ?? this.unreadCount,
           bmReplyStatus: bmReplyStatus ?? this.bmReplyStatus,
           preview: preview ?? this.preview,
-          sentAt: sentAt ?? this.sentAt);
+          sentAt: sentAt ?? this.sentAt,
+          priority: priority ?? this.priority);
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
     final message = json['lastMessage'] as Map<String, dynamic>?;
@@ -156,7 +160,82 @@ class ConversationSummary {
               ),
         sentAt: message?['sentAt'] == null
             ? null
-            : DateTime.parse(message!['sentAt'] as String));
+            : DateTime.parse(message!['sentAt'] as String),
+        priority: ConversationPriority.fromJson(json['priority']));
+  }
+}
+
+class ConversationPriority {
+  const ConversationPriority({
+    required this.level,
+    required this.waitingSeconds,
+    required this.waitingSince,
+    required this.reasons,
+  });
+
+  const ConversationPriority.none()
+      : level = 'NONE',
+        waitingSeconds = 0,
+        waitingSince = null,
+        reasons = const [];
+
+  final String level;
+  final int waitingSeconds;
+  final DateTime? waitingSince;
+  final List<String> reasons;
+
+  bool get isActionable => level != 'NONE';
+
+  int get severityRank => switch (level) {
+        'URGENT' => 3,
+        'HIGH' => 2,
+        'NORMAL' => 1,
+        _ => 0,
+      };
+
+  factory ConversationPriority.fromJson(Object? value) {
+    if (value is! Map) return const ConversationPriority.none();
+    final rawLevel = value['level'];
+    final level = rawLevel is String ? rawLevel.toUpperCase() : 'NONE';
+    final normalizedLevel = switch (level) {
+      'URGENT' || 'HIGH' || 'NORMAL' || 'NONE' => level,
+      _ => 'NONE',
+    };
+    final rawWaitingSeconds = value['waitingSeconds'];
+    final waitingSeconds = rawWaitingSeconds is num
+        ? rawWaitingSeconds.toInt().clamp(0, 2147483647).toInt()
+        : 0;
+    final rawWaitingSince = value['waitingSince'];
+    return ConversationPriority(
+      level: normalizedLevel,
+      waitingSeconds: waitingSeconds,
+      waitingSince:
+          rawWaitingSince is String ? DateTime.tryParse(rawWaitingSince) : null,
+      reasons: (value['reasons'] is List)
+          ? (value['reasons'] as List)
+              .whereType<String>()
+              .toList(growable: false)
+          : const [],
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ConversationPriority &&
+      other.level == level &&
+      other.waitingSeconds == waitingSeconds &&
+      other.waitingSince == waitingSince &&
+      _listEquals(other.reasons, reasons);
+
+  @override
+  int get hashCode => Object.hash(level, waitingSeconds, waitingSince, reasons);
+
+  static bool _listEquals(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 }
 

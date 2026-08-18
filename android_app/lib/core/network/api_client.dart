@@ -40,8 +40,11 @@ class ApiClient {
     catch (_) { throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       Map<String, dynamic> decoded = <String, dynamic>{};
-      try { decoded = jsonDecode(response.body) as Map<String, dynamic>; } catch (_) {}
-      final error = ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Unable to load media');
+      try {
+        final parsed = jsonDecode(response.body);
+        if (parsed is Map<String, dynamic>) decoded = parsed;
+      } catch (_) {}
+      final error = ApiException(response.statusCode, decoded['code'] as String?, _extractErrorMessage(response.statusCode, decoded, response.body));
       if (authenticated && error.sessionExpired) {
         await _onSessionExpired?.call();
       }
@@ -50,20 +53,40 @@ class ApiClient {
     return response.bodyBytes;
   }
 
-  Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, String? mimeType, required Uint8List bytes, required String idempotencyKey}) async {
+  Future<Map<String, dynamic>> postMultipart(String path, {required String field, required String filename, String? mimeType, required Uint8List bytes, required String idempotencyKey, bool authenticated = true}) async {
     if (!await _connectivity.isOnline) {
       throw ApiException(0, 'OFFLINE', 'No network connection');
     }
     final request = http.MultipartRequest('POST', AppConfig.uri(path));
-    final token = await _tokens.read();
-    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    if (authenticated) {
+      final token = await _tokens.read();
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    }
     request.fields['idempotencyKey'] = idempotencyKey;
     request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: _imageMediaType(mimeType, filename)));
     late http.Response response;
-    try { response = await http.Response.fromStream(await request.send()); } catch (_) { throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
-    Map<String, dynamic> decoded = <String, dynamic>{}; try { decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>; } catch (_) { throw ApiException(response.statusCode, 'INVALID_RESPONSE', 'Service returned an invalid response'); }
+    try {
+      response = await http.Response.fromStream(await _http.send(request));
+    } catch (_) {
+      SafeLogger.networkFailure(code: 'NETWORK_ERROR');
+      throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service');
+    }
+    Map<String, dynamic> decoded = <String, dynamic>{};
+    if (response.body.isNotEmpty) {
+      try {
+        final parsed = jsonDecode(response.body);
+        if (parsed is Map<String, dynamic>) decoded = parsed;
+      } catch (_) {
+        // Non-JSON response body (e.g. gateway error or plain text)
+      }
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
+      final error = ApiException(response.statusCode, decoded['code'] as String?, _extractErrorMessage(response.statusCode, decoded, response.body));
+      SafeLogger.networkFailure(statusCode: error.statusCode, code: error.code);
+      if (authenticated && error.sessionExpired) {
+        await _onSessionExpired?.call();
+      }
+      throw error;
     }
     return decoded;
   }
@@ -81,6 +104,28 @@ class ApiClient {
     if (value == null) return null;
     final parts = value.split('/');
     return MediaType(parts[0], parts[1]);
+  }
+
+  String _extractErrorMessage(int statusCode, Map<String, dynamic> decoded, String rawBody) {
+    final msg = decoded['message'];
+    if (msg is String && msg.trim().isNotEmpty) return msg.trim();
+    if (msg is List && msg.isNotEmpty) {
+      final joined = msg.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).join(', ');
+      if (joined.isNotEmpty) return joined;
+    }
+    final error = decoded['error'];
+    if (error is String && error.trim().isNotEmpty) return error.trim();
+    if (statusCode == 413) return 'Image file is too large to upload';
+    if (statusCode == 401) return 'Session expired, please log in again';
+    if (statusCode == 403) return 'You do not have permission to perform this action';
+    if (statusCode == 404) return 'Conversation not found';
+    if (statusCode == 502 || statusCode == 503 || statusCode == 504) {
+      return 'Service is temporarily unavailable, please try again';
+    }
+    if (rawBody.isNotEmpty && rawBody.length < 200 && !rawBody.contains('<html') && !rawBody.contains('<!DOCTYPE')) {
+      return rawBody.trim();
+    }
+    return 'Request failed ($statusCode)';
   }
 
   Future<Map<String, dynamic>> _request(String method, String path, {Map<String, String>? query, Map<String, dynamic>? body, bool authenticated = true, bool handleSessionExpiry = true}) async {
@@ -105,11 +150,17 @@ class ApiClient {
     late http.Response response;
     try { response = await http.Response.fromStream(await _http.send(request)); }
     catch (_) { SafeLogger.networkFailure(code: 'NETWORK_ERROR'); throw ApiException(0, 'NETWORK_ERROR', 'Unable to reach the service'); }
-    Map<String, dynamic> decoded;
-    try { decoded = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>; }
-    catch (_) { SafeLogger.networkFailure(statusCode: response.statusCode, code: 'INVALID_RESPONSE'); throw ApiException(response.statusCode, 'INVALID_RESPONSE', 'Service returned an invalid response'); }
+    Map<String, dynamic> decoded = <String, dynamic>{};
+    if (response.body.isNotEmpty) {
+      try {
+        final parsed = jsonDecode(response.body);
+        if (parsed is Map<String, dynamic>) decoded = parsed;
+      } catch (_) {
+        // Non-JSON response
+      }
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = ApiException(response.statusCode, decoded['code'] as String?, decoded['message']?.toString() ?? 'Request failed');
+      final error = ApiException(response.statusCode, decoded['code'] as String?, _extractErrorMessage(response.statusCode, decoded, response.body));
       SafeLogger.networkFailure(statusCode: error.statusCode, code: error.code);
       if (authenticated && handleSessionExpiry && error.sessionExpired) {
         await _onSessionExpired?.call();

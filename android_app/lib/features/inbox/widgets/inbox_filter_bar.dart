@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
 import '../../../core/localization/localization.dart';
 
-enum InboxFilter { all, notReplied, replied }
+enum InboxFilter { all, notReplied, replied, priority }
 
 class InboxFilterBar extends StatelessWidget {
   const InboxFilterBar({
@@ -18,20 +17,37 @@ class InboxFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         child: Row(
           children: InboxFilter.values.map((filter) {
             final isSelected = filter == selected;
             return Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              padding: const EdgeInsets.only(right: 6),
               child: FilterChip(
                 selected: isSelected,
                 label: Text(_label(context, filter)),
-                avatar: Icon(_icon(filter), size: 16),
+                labelStyle: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                ),
+                avatar: Icon(
+                  _icon(filter),
+                  size: 14,
+                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                ),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                materialTapTargetSize: MaterialTapTargetSize.padded,
                 selectedColor: AppColors.primaryContainer,
                 checkmarkColor: AppColors.primary,
+                showCheckmark: false,
                 side: BorderSide(
                   color: isSelected ? AppColors.primary : AppColors.border,
+                  width: isSelected ? 1.2 : 1.0,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 onSelected: (value) {
                   if (!value) return;
@@ -47,11 +63,13 @@ class InboxFilterBar extends StatelessWidget {
         InboxFilter.all => appLocalizations(context).all,
         InboxFilter.notReplied => appLocalizations(context).needReply,
         InboxFilter.replied => appLocalizations(context).completed,
+        InboxFilter.priority => appLocalizations(context).priority,
       };
 
   IconData _icon(InboxFilter filter) => switch (filter) {
         InboxFilter.all => Icons.inbox_outlined,
         InboxFilter.notReplied => Icons.reply_outlined,
         InboxFilter.replied => Icons.check_circle_outline,
+        InboxFilter.priority => Icons.priority_high,
       };
 }

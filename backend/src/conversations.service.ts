@@ -12,13 +12,15 @@ import { createMediaPublicUrl } from "./media/media-public-url";
 import type { AuthUser } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { AuditLogService } from "./auth/audit-log.service";
-import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
+import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
 
 const conversationBaseInclude = {
   customer: true,
   store: { include: { storeMaster: true } },
   lineOfficialAccount: true,
   purchaseRecordedBy: { select: { id: true, displayName: true } },
+  salesRecordedBy: { select: { id: true, displayName: true } },
+  salesProducts: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },
 } satisfies Prisma.ConversationInclude;
@@ -66,9 +68,11 @@ export class ConversationsService {
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
-    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, ...conversation } = item;
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
     void _purchaseRecordedById;
     void _purchaseRecordedAt;
+    void _salesRecordedById;
+    void _salesRecordedAt;
     const { storeMaster, ...store } = rawStore;
     const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
     const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
@@ -79,7 +83,8 @@ export class ConversationsService {
       store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" },
       customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null },
       messages: item.messages.map((message) => this.safeMessage(message)),
-      purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy }),
+      customerSalesInformation: buildCustomerSalesInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
+      purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
       aiInsight: buildAiInsight(item),
       operationalState: buildOperationalState({ replyStatus: item.bmReplyStatus, priority: item.priority }),
     };

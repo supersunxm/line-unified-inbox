@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/localization/localization.dart';
 import '../../core/models/models.dart';
@@ -133,9 +133,18 @@ class _ChatPageState extends State<ChatPage> {
       conversationId: detail.id,
       repository: widget.repository,
       initialTags: detail.tags ?? const ConversationTags(),
+      initialSalesInfo: detail.customerSalesInformation,
+      initialPurchaseInfo: detail.purchaseInformation,
     );
     if (mounted && updated != null && _detail != null) {
-      setState(() => _detail = _detail!.copyWith(tags: updated));
+      setState(() => _detail = _detail!.copyWith(
+            tags: updated.tags,
+            customerSalesInformation: updated.customerSalesInformation,
+            purchaseInformation: updated.purchaseInformation,
+            operationalState: updated.operationalState,
+            unreadCount: updated.unreadCount,
+            bmReplyStatus: updated.bmReplyStatus,
+          ));
     }
   }
 
@@ -341,30 +350,78 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _pickImage() async {
+    final l10n = appLocalizations(context);
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFF0F8A5F)),
+                title: Text(l10n.takePhoto, style: const TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: Color(0xFF0F8A5F)),
+                title: Text(l10n.chooseFromGallery, style: const TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null || !mounted) return;
+
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 85,
+      );
       if (picked == null || !mounted) return;
       final bytes = await picked.readAsBytes();
       if (!mounted) return;
-      final send = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-                  title: Text(appLocalizations(context).sendImageQuestion),
-                  content:
-                      Image.memory(bytes, height: 220, fit: BoxFit.contain),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(appLocalizations(context).cancel)),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(appLocalizations(context).send))
-                  ]));
-      if (send == true) {
+      final confirmSend = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => _ImagePreviewPage(
+            bytes: bytes,
+            filename: picked.name,
+          ),
+        ),
+      );
+      if (confirmSend == true && mounted) {
         await _sendImage(bytes, picked.name, mimeType: picked.mimeType);
       }
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = (e.code == 'camera_access_denied' || e.code.toLowerCase().contains('permission'))
+              ? l10n.cameraPermissionRequired
+              : (e.message ?? l10n.imageUnavailable);
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Unable to choose this image');
+      if (mounted) setState(() => _error = l10n.imageUnavailable);
     }
   }
 
@@ -494,7 +551,10 @@ class _ChatPageState extends State<ChatPage> {
                     onProfile: _showCustomerProfile),
                 body: Column(children: [
                   ConversationTagsBar(
-                      tags: detail.tags, onPressed: _showConversationTags),
+                      tags: detail.tags,
+                      customerSalesInformation: detail.customerSalesInformation,
+                      purchaseInformation: detail.purchaseInformation,
+                      onPressed: _showConversationTags),
                   Expanded(
                       child: MessageTimeline(
                           controller: _scroll,
@@ -561,4 +621,123 @@ class _ImageViewer extends StatelessWidget {
       body: Center(
           child: InteractiveViewer(
               child: Image.memory(bytes, fit: BoxFit.contain))));
+}
+
+class _ImagePreviewPage extends StatelessWidget {
+  const _ImagePreviewPage({
+    required this.bytes,
+    required this.filename,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = appLocalizations(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF11141A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF11141A),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        title: Text(
+          l10n.sendImageQuestion,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 3.0,
+                      child: Image.memory(
+                        bytes,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1F2B),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: const BorderSide(color: Colors.white24),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: Text(
+                        l10n.cancel,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F8A5F),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      icon: const Icon(Icons.send_rounded, size: 18),
+                      label: Text(
+                        l10n.send,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -9,7 +9,7 @@ class AppLocalizationsTh extends AppLocalizations {
   AppLocalizationsTh([String locale = 'th']) : super(locale);
 
   @override
-  String get appName => 'LINE OA Chat Hub';
+  String get appName => 'OPPO LINE OA Chat';
 
   @override
   String get customer => 'ลูกค้า';
@@ -18,7 +18,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get sent => 'ส่งแล้ว';
 
   @override
-  String get interest => 'ความสนใจ';
+  String get customerStatus => 'สถานะลูกค้า';
 
   @override
   String get unableToLoadProducts => 'โหลดสินค้าไม่ได้';
@@ -51,6 +51,23 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get total => 'ทั้งหมด';
+
+  @override
+  String get priority => 'คิวเร่งด่วน';
+
+  @override
+  String get urgent => 'เร่งด่วน';
+
+  @override
+  String get attention => 'ต้องติดตาม';
+
+  @override
+  String get normal => 'ปกติ';
+
+  @override
+  String waitingFor(Object duration) {
+    return 'รอการตอบกลับ $duration';
+  }
 
   @override
   String get needReply => 'รอตอบ';
@@ -253,13 +270,95 @@ class AppLocalizationsTh extends AppLocalizations {
   String get attachImage => 'แนบรูปภาพ';
 
   @override
+  String get takePhoto => 'ถ่ายภาพ';
+
+  @override
+  String get chooseFromGallery => 'เลือกจากคลังภาพ';
+
+  @override
+  String get cameraPermissionRequired =>
+      'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูปในการตั้งค่า';
+
+  @override
   String get replyToCustomer => 'ตอบลูกค้า';
 
   @override
   String get sendReply => 'ส่งคำตอบ';
 
   @override
-  String get conversationTags => 'แท็กบทสนทนา';
+  String get conversationTags => 'แท็กลูกค้า';
+
+  @override
+  String get customerTags => 'แท็กลูกค้า';
+
+  @override
+  String get purchaseInformation => 'ข้อมูลการซื้อ';
+
+  @override
+  String get customerSalesInformation => 'ข้อมูลการขาย';
+
+  @override
+  String get statusInterested => 'สนใจสินค้า';
+
+  @override
+  String get statusPurchased => 'ซื้อแล้ว';
+
+  @override
+  String get interestLevel => 'ระดับความสนใจ';
+
+  @override
+  String get interestHot => 'Hot (สูง)';
+
+  @override
+  String get interestWarm => 'Warm (กลาง)';
+
+  @override
+  String get interestCold => 'Cold (ต่ำ)';
+
+  @override
+  String get productsInterested => 'สินค้าที่สนใจ';
+
+  @override
+  String get productsPurchased => 'สินค้าที่ซื้อ';
+
+  @override
+  String get addProduct => '+ เพิ่มสินค้า';
+
+  @override
+  String get quantity => 'จำนวน';
+
+  @override
+  String get paymentCash => 'เงินสด';
+
+  @override
+  String get paymentCreditCard => 'บัตรเครดิต';
+
+  @override
+  String get paymentOther => 'อื่นๆ';
+
+  @override
+  String get noCustomerSalesInfo => 'ยังไม่มีข้อมูลการขาย';
+
+  @override
+  String get purchaseChannel => 'ช่องทางการซื้อ';
+
+  @override
+  String get paymentMethod => 'วิธีชำระเงิน';
+
+  @override
+  String get recordedBy => 'บันทึกโดย';
+
+  @override
+  String get recordedAt => 'บันทึกเมื่อ';
+
+  @override
+  String get aiInsight => 'ข้อมูลเชิงลึกจาก AI';
+
+  @override
+  String get noPurchaseInformation => 'ยังไม่มีข้อมูลการซื้อที่ยืนยัน';
+
+  @override
+  String get editPurchaseInformation => 'แก้ไขข้อมูลการขาย';
 
   @override
   String get addTags => '+ เพิ่มแท็ก';
@@ -561,7 +660,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get customerInsights => 'ข้อมูลเชิงลูกค้า';
 
   @override
-  String get tagCoverage => 'ความครอบคลุมของแท็ก';
+  String get customerTagCoverage => 'ความครอบคลุมของข้อมูลแท็กลูกค้า';
 
   @override
   String get eligibleConversations => 'บทสนทนาที่เข้าเกณฑ์';
@@ -601,16 +700,21 @@ class AppLocalizationsTh extends AppLocalizations {
   String get sourceUntagged => 'ยังไม่แท็ก';
 
   @override
-  String get installmentInterest => 'ความสนใจผ่อนชำระ';
+  String get installmentCustomerAnalytics =>
+      'ข้อมูลลูกค้าที่มีประวัติผ่อนสินค้า';
 
   @override
-  String get taggedInstallment => 'แท็กความสนใจผ่อนชำระ';
+  String get installmentCustomers => 'ลูกค้าที่มีประวัติผ่อนสินค้า';
 
   @override
-  String get eligibleRate => 'จากบทสนทนาที่เข้าเกณฑ์';
+  String installmentEligibleRate(Object percent) {
+    return '$percent ของบทสนทนาที่เข้าเกณฑ์มีแท็กลูกค้าที่มีประวัติผ่อนสินค้า';
+  }
 
   @override
-  String get taggedRate => 'จากบทสนทนาที่มีแท็ก';
+  String installmentTaggedRate(Object percent) {
+    return '$percent ของบทสนทนาที่มีแท็กมีสถานะลูกค้าที่มีประวัติผ่อนสินค้า';
+  }
 
   @override
   String get topProducts => 'สินค้ายอดนิยม';
