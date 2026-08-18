@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/localization/localization.dart';
+import '../debug/runtime_config_page.dart';
 import 'auth_repository.dart';
 
 class LoginPage extends StatefulWidget {
@@ -70,7 +71,8 @@ class _LoginPageState extends State<LoginPage> {
                     'assets/images/LOGO_OBS.png',
                     height: 80,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.business, size: 72),
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.business, size: 72),
                   ),
                 ),
               ),
@@ -108,6 +110,17 @@ class _LoginPageState extends State<LoginPage> {
               TextButton(
                   onPressed: _loading ? null : widget.onRegister,
                   child: Text(localizations.createBmAccount)),
+              TextButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const RuntimeConfigPage(),
+                          ),
+                        ),
+                icon: const Icon(Icons.developer_mode, size: 18),
+                label: const Text('Runtime diagnostics'),
+              ),
               const Spacer(),
             ],
           ),
