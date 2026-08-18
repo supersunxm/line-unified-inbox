@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nest
 import { UserRole } from "@prisma/client";
 import { Roles } from "../auth/auth.decorators";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
+import { CouponExecutionPolicyService } from "./coupon-execution-policy.service";
 import { CouponService } from "./coupon.service";
 import type { CouponCreateInput, CouponPreviewInput } from "./coupon.types";
 
@@ -9,26 +10,38 @@ import type { CouponCreateInput, CouponPreviewInput } from "./coupon.types";
 @UseGuards(AuthGuard)
 @Roles(UserRole.ADMIN)
 export class CouponController {
-  constructor(private readonly service: CouponService) {}
+  constructor(
+    private readonly service: CouponService,
+    private readonly executionPolicy: CouponExecutionPolicyService,
+  ) {}
 
   @Post("preview")
   preview(@Body() body: CouponPreviewInput, @Req() req: AuthRequest) {
+    this.executionPolicy.assertSelection(body.storeSelection);
     return this.service.preview(body, req.user!);
   }
 
   @Post()
   create(@Body() body: CouponCreateInput, @Req() req: AuthRequest) {
+    this.executionPolicy.assertSelection(body.storeSelection);
     return this.service.create(body, req.user!);
   }
 
   @Post(":id/retry-failed")
-  retryFailed(@Param("id") id: string) {
+  async retryFailed(@Param("id") id: string) {
+    await this.executionPolicy.assertCampaign(id);
     return this.service.retryFailed(id);
   }
 
   @Post(":id/discontinue")
-  discontinue(@Param("id") id: string) {
+  async discontinue(@Param("id") id: string) {
+    await this.executionPolicy.assertCampaign(id);
     return this.service.discontinue(id);
+  }
+
+  @Get("execution-mode")
+  executionMode() {
+    return { mode: this.executionPolicy.getMode() };
   }
 
   @Get(":id")
