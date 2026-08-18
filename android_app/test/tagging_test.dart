@@ -13,6 +13,7 @@ class _FakeTagRepository extends ConversationRepository {
   CustomerSalesInformation? currentSales;
   bool failNextVariants = false;
   final List<String> variantCalls = [];
+  int saveCallCount = 0;
 
   @override
   Future<List<ProductSelectorItem>> fetchProducts(
@@ -59,6 +60,7 @@ class _FakeTagRepository extends ConversationRepository {
     Object? paymentMethod = const Object(),
     Object? products = const Object(),
   }) async {
+    saveCallCount++;
     currentSales = CustomerSalesInformation(
       status: status is String ? status : 'INTERESTED',
       interestLevel: interestLevel is String ? interestLevel : null,
@@ -711,6 +713,239 @@ void main() {
     // Specs and series are rendered as separate fields
     expect(find.text('Find Series · SMARTPHONE'), findsOneWidget);
     expect(find.text('16GB RAM · 512GB ROM · Midnight Black'), findsOneWidget);
+  });
+
+  testWidgets('Scenario 1: Confirm selection in UI, but close sheet without save -> backend not called', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 1. User selects product in draft
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+
+    // 2. Tap Confirm Selection
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    // 3. Product appears in UI
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+
+    // 4. User cancels / dismisses sheet without saving (close button in sheet header)
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pumpAndSettle();
+
+    // 5. Verification: Backend did NOT receive the product and update wasn't called
+    expect(repository.saveCallCount, 0);
+    expect(repository.currentSales, isNull);
+  });
+
+  testWidgets('Scenario 2: User selects product -> Confirm Selection -> Save -> backend receives full product schema', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Switch to Purchased
+    await tester.tap(find.text('Purchased'));
+    await tester.pumpAndSettle();
+
+    // 1. Select product and variant
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+
+    // 2. Confirm Selection
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    // 3. Save CRM
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    // 4. Expected: Backend receives product with modelName, seriesName, category, RAM, ROM, color, quantity, status
+    expect(repository.saveCallCount, 1);
+    final savedProduct = repository.currentSales!.products.first;
+    expect(savedProduct.productModelId, 'model-1');
+    expect(savedProduct.modelName, 'OPPO Reno16 Pro 5G');
+    expect(savedProduct.seriesName, 'Reno16');
+    expect(savedProduct.category, 'SMARTPHONE');
+    expect(savedProduct.ram, '16');
+    expect(savedProduct.rom, '512');
+    expect(savedProduct.color, 'Graphite');
+    expect(savedProduct.quantity, 1);
+    expect(savedProduct.status, 'PURCHASED');
+  });
+
+  testWidgets('Scenario 3: Existing product + add new product -> UI shows both before save -> Backend contains both after save', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const existingSales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'CASH',
+      products: [
+        CustomerSalesProductItem(
+          id: 'existing-p1',
+          productModelId: 'existing-model-id',
+          modelName: 'OPPO Find X9 Pro',
+          seriesName: 'Find Series',
+          category: 'SMARTPHONE',
+          ram: '16',
+          rom: '512',
+          color: 'Velvet Red',
+          quantity: 1,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: existingSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 1. Add second product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    // Expected before Save: UI shows both products
+    expect(find.text('OPPO Find X9 Pro'), findsOneWidget);
+    expect(find.text('16GB RAM · 512GB ROM · Velvet Red'), findsOneWidget);
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+
+    // Save CRM
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    // Expected after Save: Backend contains both products
+    expect(repository.currentSales?.products.length, 2);
+    expect(repository.currentSales?.products[0].modelName, 'OPPO Find X9 Pro');
+    expect(repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
+  });
+
+  testWidgets('Scenario 4: User opens Add Product and cancels -> No changes to selectedProducts', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const initialSales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'CASH',
+      products: [
+        CustomerSalesProductItem(
+          id: 'initial-p1',
+          productModelId: 'initial-model-id',
+          modelName: 'OPPO Find N6',
+          seriesName: 'Find Series',
+          category: 'FOLDABLE',
+          ram: '16',
+          rom: '1024',
+          color: 'Cosmic Gold',
+          quantity: 2,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: initialSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 1. Initial product present
+    expect(find.text('OPPO Find N6'), findsOneWidget);
+
+    // 2. Open Add Product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    // 3. User selects a draft product inside picker
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+
+    // 4. User cancels the inline picker using the close button
+    await tester.tap(find.byIcon(Icons.close).last);
+    await tester.pumpAndSettle();
+
+    // 5. Expected: No changes to selectedProducts (only original product remains)
+    expect(find.text('OPPO Find N6'), findsOneWidget);
+    expect(find.text('16GB RAM · 1024GB ROM · Cosmic Gold'), findsOneWidget);
+    expect(find.text('OPPO Reno16 Pro 5G'), findsNothing);
+    expect(find.text('Draft Selection'), findsNothing);
   });
 }
 
