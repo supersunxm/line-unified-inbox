@@ -547,7 +547,7 @@ export class MobileConversationsService {
       await tx.activityHistory.create({
         data: {
           conversationId,
-          actionType: (dto.status === "PURCHASED" ? "PURCHASE_INFORMATION_UPDATED" : "CUSTOMER_SALES_INFO_UPDATED") as any,
+          actionType: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION_UPDATED" : "CUSTOMER_SALES_INFO_UPDATED",
           description: isConversion
             ? "Converted from Interested lead to Purchased customer"
             : dto.status === "PURCHASED"
@@ -555,8 +555,6 @@ export class MobileConversationsService {
               : "Customer sales information updated",
           createdByUserId: user.id,
           createdByName: user.displayName?.trim() || user.email,
-          previousStatus: conversation.customerSalesStatus as any,
-          newStatus: dto.status as any,
           metadata: {
             category: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION" : "CUSTOMER_SALES_INFO",
             oldValue: previousPurchase,
