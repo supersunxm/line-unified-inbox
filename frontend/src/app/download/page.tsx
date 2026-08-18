@@ -61,23 +61,23 @@ export default function DownloadAppPage() {
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Product Selection UX Improvement</strong>: รายการสินค้าเริ่มต้นเป็นค่าว่าง ไม่เลือกสินค้าตัวแรกอัตโนมัติ</span>
+                <span><strong>Product Selection UX Improvement</strong>: รายการสินค้าเริ่มต้นเป็นค่าว่าง ไม่เลือกสินค้าอัตโนมัติ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Explicit Select CTA</strong>: แสดงปุ่ม [เลือก] (Select) ชัดเจน พร้อมเปลี่ยนสถานะเป็น ✓ เลือกแล้ว</span>
+                <span><strong>Draft Selection Flow</strong>: ระบบเลือกสินค้าแบบ Draft (Select → Configure → Confirm → Save) ชัดเจนแบบ POS/CRM</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Change Product Action</strong>: เพิ่มปุ่ม [เปลี่ยนสินค้า] เพื่อสลับกลับไปเลือกสินค้าตัวอื่นได้ทันที</span>
+                <span><strong>Prevent Accidental Product Tagging</strong>: ป้องกันการบันทึกสินค้าผิดพลาดโดยไม่ตั้งใจ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Variant Selection Indicator</strong>: สเปก RAM/ROM/Color แสดงสถานะ ○ (ยังไม่เลือก) และ ✓ (เลือกแล้ว) ชัดเจน</span>
+                <span><strong>Improved CRM Tagging Accuracy</strong>: เพิ่มความแม่นยำในการเก็บข้อมูลการขายและความสนใจของลูกค้า</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved CRM Tagging Accuracy</strong>: ป้องกันความสับสนในการบันทึกข้อมูลสินค้าลูกค้าสำหรับพนักงานหน้าร้าน</span>
+                <span><strong>Multi-Product Sales Tagging Support</strong>: รองรับการเลือกและบันทึกสินค้าหลายรายการได้อย่างราบรื่น</span>
               </li>
             </ul>
           </div>

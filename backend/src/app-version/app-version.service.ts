@@ -13,9 +13,11 @@ const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
   apkSize: "56.9 MB",
   sha256: "6a6290a3bf54859303fed8fc3d37dad727dce455ffa38508df7c931d11499d6c",
   releaseNotes: [
-    "Product selection UX improvement",
-    "Explicit select confirmation",
+    "Product Selection UX improvement",
+    "Draft Selection Flow (Select → Configure → Confirm → Save)",
+    "Prevent accidental product tagging",
     "Improved CRM tagging accuracy",
+    "Multi-product customer sales tagging support",
   ],
 };
 

@@ -100,13 +100,14 @@ INSERT INTO "AppRelease" (
     '56.9 MB',
     '6a6290a3bf54859303fed8fc3d37dad727dce455ffa38508df7c931d11499d6c',
     ARRAY[
-        'Product selection UX improvement',
-        'Explicit select confirmation',
-        'Improved CRM tagging accuracy'
-    ]::TEXT[],
+        'Product Selection UX improvement',
+        'Draft Selection Flow (Select → Configure → Confirm → Save)',
+        'Prevent accidental product tagging',
+        'Improved CRM tagging accuracy',
+        'Multi-product customer sales tagging support'
+    ]::text[],
     true,
     0,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 ) ON CONFLICT DO NOTHING;
-
