@@ -137,6 +137,10 @@ class _ChatPageState extends State<ChatPage> {
       initialPurchaseInfo: detail.purchaseInformation,
     );
     if (mounted && updated != null && _detail != null) {
+      final wasInterested = _detail?.customerSalesInformation?.isInterested == true;
+      final isNowPurchased = updated.customerSalesInformation?.isPurchased == true;
+      final isConversion = wasInterested && isNowPurchased;
+
       setState(() => _detail = _detail!.copyWith(
             tags: updated.tags,
             customerSalesInformation: updated.customerSalesInformation,
@@ -145,6 +149,36 @@ class _ChatPageState extends State<ChatPage> {
             unreadCount: updated.unreadCount,
             bmReplyStatus: updated.bmReplyStatus,
           ));
+
+      final l10n = appLocalizations(context);
+      final message = isConversion
+          ? '✓ ${l10n.convertedToPurchasedNotice}'
+          : '✓ ${l10n.customerInfoSaved}';
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isNowPurchased ? Icons.shopping_bag : Icons.check_circle,
+                color: Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: isNowPurchased ? Colors.green.shade700 : Colors.blue.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 

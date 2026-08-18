@@ -182,8 +182,11 @@ const translations = {
     showOriginal: "ดูต้นฉบับ",
 
     purchased: "ซื้อแล้ว",
+    customerSalesInformation: "ข้อมูลการขาย (CRM)",
+    productsInterested: "สินค้าที่สนใจ",
+    productsPurchased: "สินค้าที่ซื้อ",
     productInsight: "ข้อมูลสินค้า",
-    customerPurchase: "ข้อมูลการซื้อของลูกค้า",
+    customerPurchase: "ข้อมูลการขายของลูกค้า",
     purchaseChannel: "ช่องทางการซื้อ",
     paymentMethod: "วิธีชำระเงิน",
     recordedBy: "บันทึกโดย",
@@ -492,8 +495,11 @@ const translations = {
     showOriginal: "Show Original",
 
     purchased: "Purchased",
+    customerSalesInformation: "Customer Sales Information",
+    productsInterested: "Interested Products",
+    productsPurchased: "Purchased Products",
     productInsight: "Product Insight",
-    customerPurchase: "Customer Purchase",
+    customerPurchase: "Customer Sales Information",
     purchaseChannel: "Purchase Channel",
     paymentMethod: "Payment Method",
     recordedBy: "Recorded by",
@@ -801,8 +807,11 @@ const translations = {
     showOriginal: "查看原文",
 
     purchased: "已购买",
+    customerSalesInformation: "客户销售信息",
+    productsInterested: "意向商品",
+    productsPurchased: "已购商品",
     productInsight: "产品信息",
-    customerPurchase: "客户购买信息",
+    customerPurchase: "客户销售信息",
     purchaseChannel: "购买渠道",
     paymentMethod: "支付方式",
     recordedBy: "记录人",
@@ -3629,33 +3638,86 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
                           <section data-purchase-information-card data-insights-section className="pb-3 chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-semibold">{text.customerPurchase}</h3>
                                 {selectedApiConversation?.customerSalesInformation?.status === "INTERESTED" && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                    🎯 {text.interested || "Interested"}{selectedApiConversation.customerSalesInformation.interestLevel ? ` · ${selectedApiConversation.customerSalesInformation.interestLevel}` : ""}
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    🎯 {text.interested || "Interested"}{selectedApiConversation.customerSalesInformation.interestLevel ? ` · ${selectedApiConversation.customerSalesInformation.interestLevel === "HOT" ? "🔥 Hot" : selectedApiConversation.customerSalesInformation.interestLevel === "WARM" ? "⚡ Warm" : selectedApiConversation.customerSalesInformation.interestLevel === "COLD" ? "❄️ Cold" : selectedApiConversation.customerSalesInformation.interestLevel}` : " · Not specified"}
                                   </span>
                                 )}
                                 {selectedApiConversation?.customerSalesInformation?.status === "PURCHASED" && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                     🛍️ {text.purchased || "Purchased"}
                                   </span>
                                 )}
+                                {(() => {
+                                  const convAct = selectedApiConversation?.activityHistory?.find(
+                                    (a) => a.actionType === "CUSTOMER_SALES_INFO_UPDATED" && (a.metadata as any)?.isConversion
+                                  );
+                                  if (!convAct) return null;
+                                  const ms = (convAct.metadata as any)?.conversionTimeMs as number | undefined;
+                                  const durationText = ms
+                                    ? (() => {
+                                        const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+                                        const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                        if (days > 0) return `${days}d ${hours}h`;
+                                        if (hours > 0) return `${hours}h`;
+                                        return "< 1h";
+                                      })()
+                                    : null;
+                                  return (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                      🎯 → 🛍️ {durationText ? `(${durationText})` : ""}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <button data-chat-detail-secondary-action disabled={chatLoading || authUser.role === "VIEWER"} onClick={() => void editPurchaseInformation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editPurchaseInformation}</button>
                             </div>
+
                             {selectedApiConversation?.customerSalesInformation?.products.length ? (
-                              <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                                <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ model, quantity }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${quantity > 1 ? ` (x${quantity})` : ""}`).join(", ")}</dd></div>
-                                <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ model }) => model.category?.replaceAll("_", " ")).filter(Boolean).join(", ") || "—"}</dd></div>
+                              <div className="space-y-3">
                                 {selectedApiConversation.customerSalesInformation.status === "PURCHASED" && (
-                                  <>
-                                    <div><dt className="app-muted text-xs">{text.purchaseChannel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.purchaseChannel.join(", ") || "—"}</dd></div>
-                                    <div><dt className="app-muted text-xs">{text.paymentMethod}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.paymentMethod ?? "—"}</dd></div>
-                                  </>
+                                  <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 rounded-lg bg-slate-50/70 p-2.5 text-xs dark:bg-slate-900/50">
+                                    <div><dt className="app-muted font-medium">{text.purchaseChannel}</dt><dd className="mt-0.5 font-semibold">{selectedApiConversation.customerSalesInformation.purchaseChannel.map(c => c === "STORE" ? "🏪 Store" : c === "ONLINE" ? "🌐 Online" : c).join(", ") || "—"}</dd></div>
+                                    <div><dt className="app-muted font-medium">{text.paymentMethod}</dt><dd className="mt-0.5 font-semibold">{selectedApiConversation.customerSalesInformation.paymentMethod === "CASH" ? "💵 Cash" : selectedApiConversation.customerSalesInformation.paymentMethod === "INSTALLMENT" ? "💳 Installment" : selectedApiConversation.customerSalesInformation.paymentMethod === "CREDIT_CARD" ? "💳 Credit Card" : selectedApiConversation.customerSalesInformation.paymentMethod === "OTHER" ? "🏷️ Other" : (selectedApiConversation.customerSalesInformation.paymentMethod ?? "—")}</dd></div>
+                                  </dl>
                                 )}
-                                <div className="sm:col-span-2"><dt className="app-muted text-xs">{text.variant}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.customerSalesInformation.products.map(({ variant }) => variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "—").join(", ")}</dd></div>
-                              </dl>
+
+                                <div>
+                                  <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wider">
+                                    {selectedApiConversation.customerSalesInformation.status === "PURCHASED" ? (text.productsPurchased || "Purchased Products") : (text.productsInterested || "Interested Products")}
+                                  </h4>
+                                  <div className="space-y-1.5">
+                                    {selectedApiConversation.customerSalesInformation.products.map(({ model, variant, quantity }, pIdx) => {
+                                      const cat = (model.category ?? "").toUpperCase();
+                                      const mName = model.name.toUpperCase();
+                                      const icon = cat.includes("AUDIO") || cat.includes("ENCO") || cat.includes("EARPHONE") ? "🎧"
+                                        : cat.includes("PAD") || cat.includes("TABLET") ? "💻"
+                                        : cat.includes("WATCH") ? "⌚"
+                                        : (cat.includes("PHONE") || mName.includes("FIND") || mName.includes("RENO") || mName.includes("OPPO") || !cat) ? "📱" : "📦";
+                                      const variantSpecs = variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "";
+
+                                      return (
+                                        <div key={pIdx} className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 text-xs shadow-2xs">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <span className="text-base shrink-0">{icon}</span>
+                                            <div className="truncate">
+                                              <p className="font-semibold text-slate-900 truncate dark:text-slate-100">{model.seriesName ? `${model.seriesName} · ` : ""}{model.name}</p>
+                                              {variantSpecs && <p className="text-[11px] text-slate-500 truncate dark:text-slate-400">{variantSpecs}</p>}
+                                            </div>
+                                          </div>
+                                          {quantity > 1 && (
+                                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-700 text-[10px] dark:bg-slate-800 dark:text-slate-300">
+                                              x{quantity}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
                             ) : selectedApiConversation?.purchaseInformation?.recordState === "LEGACY_MANUAL" ? (
                               <p className="text-sm text-slate-500">{text.legacyPurchaseInformation}</p>
                             ) : selectedApiConversation?.purchaseInformation?.products.length ? (
@@ -3669,10 +3731,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             ) : (
                               <p className="text-sm text-slate-500">{text.noPurchaseInformation}</p>
                             )}
+
                             {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.customerSalesInformation?.recordedAt || (selectedApiConversation?.purchaseInformation?.recordState === "VERIFIED" && (selectedApiConversation.purchaseInformation.recordedBy || selectedApiConversation.purchaseInformation.recordedAt))) && (
-                              <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
-                                {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy) && <div><dt className="app-muted text-xs">{text.recordedBy}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy}</dd></div>}
-                                {(selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt) && <div><dt className="app-muted text-xs">{text.recordedAt}</dt><dd className="mt-0.5 text-sm font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date((selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt)!))}</dd></div>}
+                              <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-[var(--border)] pt-2 text-[11px] sm:grid-cols-2">
+                                {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy) && <div><dt className="app-muted">{text.recordedBy}</dt><dd className="mt-0.5 font-medium">{selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy}</dd></div>}
+                                {(selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt) && <div><dt className="app-muted">{text.recordedAt}</dt><dd className="mt-0.5 font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date((selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt)!))}</dd></div>}
                               </dl>
                             )}
                           </section>

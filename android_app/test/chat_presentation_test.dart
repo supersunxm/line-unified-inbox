@@ -69,7 +69,9 @@ void main() {
         ),
       ),
     ));
-    expect(find.text('🎯 Interested · 🔥 Hot · 📱 OPPO Find N6'), findsOneWidget);
+    expect(find.text('🎯 Interested'), findsOneWidget);
+    expect(find.text('🔥 Hot'), findsOneWidget);
+    expect(find.text('📱 OPPO Find N6'), findsOneWidget);
   });
 
   testWidgets('camera and gallery picker strings localize in TH, EN, and ZH', (tester) async {

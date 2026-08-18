@@ -5,6 +5,16 @@ import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../inbox/conversation_repository.dart';
 
+String _getCategoryIcon(String? category, [String? modelName]) {
+  final cat = (category ?? '').toUpperCase();
+  final model = (modelName ?? '').toUpperCase();
+  if (cat.contains('AUDIO') || cat.contains('EARPHONE') || cat.contains('ENCO') || cat.contains('HEADPHONE')) return '🎧';
+  if (cat.contains('PAD') || cat.contains('TABLET') || cat.contains('PC')) return '💻';
+  if (cat.contains('WATCH') || cat.contains('WEARABLE')) return '⌚';
+  if (cat.contains('PHONE') || cat.contains('SMARTPHONE') || model.contains('FIND') || model.contains('RENO') || model.contains('OPPO') || cat.isEmpty) return '📱';
+  return '📦';
+}
+
 class ConversationTagsBar extends StatelessWidget {
   const ConversationTagsBar({
     super.key,
@@ -48,17 +58,29 @@ class ConversationTagsBar extends StatelessWidget {
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(70),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withAlpha(50),
+            ),
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                sales?.isPurchased == true
-                    ? Icons.shopping_bag_outlined
-                    : Icons.flag_outlined,
-                size: 17,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  sales?.isPurchased == true
+                      ? Icons.shopping_bag_outlined
+                      : Icons.flag_outlined,
+                  size: 18,
+                  color: sales?.isPurchased == true ? Colors.green : Colors.blue,
+                ),
               ),
-              const SizedBox(width: AppSpacing.xs),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,87 +88,131 @@ class ConversationTagsBar extends StatelessWidget {
                     if (isLegacy)
                       Text(
                         appLocalizations(context).noPurchaseInformation,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
-                    if (hasSalesData)
-                      Text(
-                        _salesLabel(context, sales),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge,
-                      )
-                    else if (!current.isEmpty)
+                    if (hasSalesData) ...[
+                      // Status & Interest Level badges
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: sales.isPurchased
+                                  ? Colors.green.withAlpha(35)
+                                  : Colors.blue.withAlpha(35),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              sales.isPurchased
+                                  ? '🛍️ ${appLocalizations(context).statusPurchased}'
+                                  : '🎯 ${appLocalizations(context).statusInterested}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: sales.isPurchased ? Colors.green.shade800 : Colors.blue.shade800,
+                              ),
+                            ),
+                          ),
+                          if (sales.isInterested && sales.interestLevel != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                switch (sales.interestLevel) {
+                                  'HOT' => '🔥 ${appLocalizations(context).interestHot}',
+                                  'WARM' => '⚡ ${appLocalizations(context).interestWarm}',
+                                  'COLD' => '❄️ ${appLocalizations(context).interestCold}',
+                                  _ => sales.interestLevel!,
+                                },
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          if (sales.isPurchased) ...[
+                            ...sales.purchaseChannel.map((src) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    src == 'STORE'
+                                        ? '🏪 ${appLocalizations(context).store}'
+                                        : '🌐 ${appLocalizations(context).online}',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                                  ),
+                                )),
+                            if (sales.paymentMethod != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  switch (sales.paymentMethod) {
+                                    'INSTALLMENT' => '💳 ${appLocalizations(context).installment}',
+                                    'CASH' => '💵 ${appLocalizations(context).paymentCash}',
+                                    'CREDIT_CARD' => '💳 ${appLocalizations(context).paymentCreditCard}',
+                                    'OTHER' => '🏷️ ${appLocalizations(context).paymentOther}',
+                                    _ => sales.paymentMethod!,
+                                  },
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                      // Products summary
+                      if (sales.products.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        ...sales.products.map((p) {
+                          final icon = _getCategoryIcon(p.category, p.modelName);
+                          final qty = p.quantity > 1 ? ' (x${p.quantity})' : '';
+                          final variant = p.variantLabel;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '$icon ${p.modelName}$qty${variant.isNotEmpty ? ' · $variant' : ''}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                      ],
+                    ] else if (!current.isEmpty)
                       Text(
                         _legacyTagsLabel(context, current),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
-                    if (hasProvenance)
+                    if (hasProvenance) ...[
+                      const SizedBox(height: 3),
                       Text(
                         _provenanceLabel(context, sales, purchaseInformation),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).hintColor,
+                              fontSize: 10.5,
+                            ),
                       ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.xs),
               const Icon(Icons.edit_outlined, size: 16),
             ],
           ),
         ),
       ),
     );
-  }
-
-  String _salesLabel(BuildContext context, CustomerSalesInformation sales) {
-    final statusPrefix = sales.isPurchased
-        ? '🛍️ ${appLocalizations(context).statusPurchased}'
-        : '🎯 ${appLocalizations(context).statusInterested}';
-
-    final parts = <String>[statusPrefix];
-
-    if (sales.isInterested && sales.interestLevel != null) {
-      final level = switch (sales.interestLevel) {
-        'HOT' => '🔥 ${appLocalizations(context).interestHot}',
-        'WARM' => '⚡ ${appLocalizations(context).interestWarm}',
-        'COLD' => '❄️ ${appLocalizations(context).interestCold}',
-        _ => sales.interestLevel!,
-      };
-      parts.add(level);
-    }
-
-    if (sales.products.isNotEmpty) {
-      final productNames = sales.products.map((p) {
-        final qty = p.quantity > 1 ? ' (x${p.quantity})' : '';
-        return '${p.modelName}$qty';
-      }).join(', ');
-      parts.add('📱 $productNames');
-    }
-
-    if (sales.isPurchased) {
-      for (final src in sales.purchaseChannel) {
-        parts.add(switch (src) {
-          'STORE' => '🏪 ${appLocalizations(context).store}',
-          'ONLINE' => '🌐 ${appLocalizations(context).online}',
-          _ => src,
-        });
-      }
-      if (sales.paymentMethod != null) {
-        parts.add(switch (sales.paymentMethod) {
-          'INSTALLMENT' => '💳 ${appLocalizations(context).installment}',
-          'CASH' => '💵 ${appLocalizations(context).paymentCash}',
-          'CREDIT_CARD' => '💳 ${appLocalizations(context).paymentCreditCard}',
-          'OTHER' => '🏷️ ${appLocalizations(context).paymentOther}',
-          _ => sales.paymentMethod!,
-        });
-      }
-    }
-
-    return parts.join(' · ');
   }
 
   String _legacyTagsLabel(BuildContext context, ConversationTags value) {
@@ -234,7 +300,7 @@ class ConversationTagsSheet extends StatefulWidget {
 
 class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   late String _status; // 'INTERESTED' or 'PURCHASED'
-  late String? _interestLevel;
+  String? _interestLevel; // Nullable neutral state (no default 'HOT')
   late Set<String> _sourceChannels;
   late String? _paymentMethod;
   late List<CustomerSalesProductItem> _selectedProducts;
@@ -261,7 +327,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     final sales = widget.initialSalesInfo;
     if (sales != null && !sales.isEmpty) {
       _status = sales.status ?? 'INTERESTED';
-      _interestLevel = sales.interestLevel ?? 'HOT';
+      _interestLevel = sales.interestLevel; // Neutral state if null
       _sourceChannels = sales.purchaseChannel.toSet();
       _paymentMethod = sales.paymentMethod;
       _selectedProducts = List.from(sales.products);
@@ -292,7 +358,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
             : [];
       } else {
         _status = 'INTERESTED';
-        _interestLevel = 'HOT';
+        _interestLevel = null; // No default selection
         _sourceChannels = <String>{};
         _paymentMethod = null;
         _selectedProducts = [];
@@ -429,12 +495,168 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _clearAll() {
     setState(() {
       _status = 'INTERESTED';
-      _interestLevel = 'HOT';
+      _interestLevel = null;
       _sourceChannels = <String>{};
       _paymentMethod = null;
       _selectedProducts = [];
       _showProductPicker = false;
     });
+  }
+
+  Future<void> _promptSaveConfirmation() async {
+    final l10n = appLocalizations(context);
+    final isConverting = widget.initialSalesInfo?.isInterested == true && _status == 'PURCHASED';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              isConverting ? Icons.shopping_bag_outlined : Icons.fact_check_outlined,
+              color: isConverting ? Colors.green : Colors.blueAccent,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isConverting ? l10n.confirmPurchase : l10n.confirmCustomerInfo,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isConverting) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withAlpha(25),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('🎯 Interested', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                      const Text(' → ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text('🛍️ Purchased', style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Customer Status
+              Text(l10n.customerStatus, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(
+                _status == 'PURCHASED' ? '🛍️ ${l10n.statusPurchased}' : '🎯 ${l10n.statusInterested}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+
+              // Interest Level (if Interested)
+              if (_status == 'INTERESTED') ...[
+                Text(l10n.interestLevel, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(
+                  _interestLevel == 'HOT'
+                      ? '🔥 ${l10n.interestHot}'
+                      : _interestLevel == 'WARM'
+                          ? '⚡ ${l10n.interestWarm}'
+                          : _interestLevel == 'COLD'
+                              ? '❄️ ${l10n.interestCold}'
+                              : l10n.interestNotSpecified,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Purchase Channel & Payment (if Purchased)
+              if (_status == 'PURCHASED') ...[
+                if (_sourceChannels.isNotEmpty) ...[
+                  Text(l10n.purchaseChannel, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(
+                    _sourceChannels.map((s) => s == 'STORE' ? '🏪 ${l10n.store}' : '🌐 ${l10n.online}').join(', '),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_paymentMethod != null) ...[
+                  Text(l10n.paymentMethod, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(
+                    switch (_paymentMethod) {
+                      'CASH' => '💵 ${l10n.paymentCash}',
+                      'INSTALLMENT' => '💳 ${l10n.installment}',
+                      'CREDIT_CARD' => '💳 ${l10n.paymentCreditCard}',
+                      'OTHER' => '🏷️ ${l10n.paymentOther}',
+                      _ => _paymentMethod!,
+                    },
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
+
+              // Products
+              Text(
+                _status == 'PURCHASED' ? l10n.productsPurchased : l10n.productsInterested,
+                style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              if (_selectedProducts.isEmpty)
+                Text(l10n.noCustomerSalesInfo, style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).hintColor, fontSize: 13))
+              else
+                ..._selectedProducts.asMap().entries.map((e) {
+                  final idx = e.key + 1;
+                  final p = e.value;
+                  final icon = _getCategoryIcon(p.category, p.modelName);
+                  final variantText = p.variantLabel;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$idx. ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('$icon ${p.modelName}${p.quantity > 1 ? ' (x${p.quantity})' : ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              if (variantText.isNotEmpty)
+                                Text(variantText, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            style: isConverting ? FilledButton.styleFrom(backgroundColor: Colors.green.shade700) : null,
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: Text(isConverting ? l10n.confirmPurchase : l10n.confirmSave),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _save();
+    }
   }
 
   Future<void> _save() async {
@@ -481,6 +703,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final l10n = appLocalizations(context);
+    final isExistingInterested = widget.initialSalesInfo?.isInterested == true;
 
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -521,7 +744,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                       const SizedBox(width: AppSpacing.xs),
                       FilledButton(
-                        onPressed: _saving ? null : _save,
+                        onPressed: _saving ? null : _promptSaveConfirmation,
                         child: _saving
                             ? const SizedBox(
                                 width: 16,
@@ -533,6 +756,73 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
+
+                  // Conversion Banner (if already Interested lead and currently in Interested view)
+                  if (isExistingInterested && _status == 'INTERESTED') ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withAlpha(20),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.withAlpha(80)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shopping_bag_outlined, color: Colors.green, size: 22),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  l10n.convertToPurchased,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+                                ),
+                                Text(
+                                  _selectedProducts.isNotEmpty
+                                      ? '${_selectedProducts.length} ${l10n.product} (${_selectedProducts.map((p) => p.modelName).join(', ')})'
+                                      : l10n.statusPurchased,
+                                  style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green.shade700,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _status = 'PURCHASED';
+                                _selectedProducts = _selectedProducts
+                                    .map((p) => CustomerSalesProductItem(
+                                          id: p.id,
+                                          productModelId: p.productModelId,
+                                          productVariantId: p.productVariantId,
+                                          modelName: p.modelName,
+                                          seriesName: p.seriesName,
+                                          category: p.category,
+                                          ram: p.ram,
+                                          rom: p.rom,
+                                          color: p.color,
+                                          quantity: p.quantity,
+                                          status: 'PURCHASED',
+                                        ))
+                                    .toList();
+                              });
+                            },
+                            icon: const Icon(Icons.arrow_forward, size: 14),
+                            label: Text(l10n.convertToPurchased, style: const TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   // 1. Mandatory Customer Status Segment Control
                   Text(l10n.customerStatus,
@@ -559,37 +849,50 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           : (selection) {
                               setState(() {
                                 _status = selection.first;
-                                if (_status == 'INTERESTED' && _interestLevel == null) {
-                                  _interestLevel = 'HOT';
-                                }
                               });
                             },
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
 
-                  // 2. Conditional Fields: If INTERESTED -> Interest Level
+                  // 2. Conditional Fields: If INTERESTED -> Interest Level (with neutral state)
                   if (_status == 'INTERESTED') ...[
-                    Text(l10n.interestLevel,
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(l10n.interestLevel,
+                            style: Theme.of(context).textTheme.titleMedium),
+                        if (_interestLevel == null)
+                          Text(
+                            '(${l10n.interestNotSpecified})',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).hintColor,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.xs),
                     Wrap(
                       spacing: AppSpacing.sm,
                       children: [
                         ChoiceChip(
-                          label: Text('🔥 ${l10n.interestHot}'),
+                          showCheckmark: false,
+                          label: Text(_interestLevel == 'HOT' ? '✓ 🔥 ${l10n.interestHot}' : '○ 🔥 ${l10n.interestHot}'),
                           selected: _interestLevel == 'HOT',
-                          onSelected: _saving ? null : (_) => setState(() => _interestLevel = 'HOT'),
+                          onSelected: _saving ? null : (selected) => setState(() => _interestLevel = selected ? 'HOT' : null),
                         ),
                         ChoiceChip(
-                          label: Text('⚡ ${l10n.interestWarm}'),
+                          showCheckmark: false,
+                          label: Text(_interestLevel == 'WARM' ? '✓ ⚡ ${l10n.interestWarm}' : '○ ⚡ ${l10n.interestWarm}'),
                           selected: _interestLevel == 'WARM',
-                          onSelected: _saving ? null : (_) => setState(() => _interestLevel = 'WARM'),
+                          onSelected: _saving ? null : (selected) => setState(() => _interestLevel = selected ? 'WARM' : null),
                         ),
                         ChoiceChip(
-                          label: Text('❄️ ${l10n.interestCold}'),
+                          showCheckmark: false,
+                          label: Text(_interestLevel == 'COLD' ? '✓ ❄️ ${l10n.interestCold}' : '○ ❄️ ${l10n.interestCold}'),
                           selected: _interestLevel == 'COLD',
-                          onSelected: _saving ? null : (_) => setState(() => _interestLevel = 'COLD'),
+                          onSelected: _saving ? null : (selected) => setState(() => _interestLevel = selected ? 'COLD' : null),
                         ),
                       ],
                     ),
@@ -605,7 +908,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       spacing: AppSpacing.sm,
                       children: [
                         FilterChip(
-                          label: Text('🏪 ${l10n.store}'),
+                          showCheckmark: false,
+                          label: Text(_sourceChannels.contains('STORE') ? '✓ 🏪 ${l10n.store}' : '○ 🏪 ${l10n.store}'),
                           selected: _sourceChannels.contains('STORE'),
                           onSelected: _saving
                               ? null
@@ -618,7 +922,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                   }),
                         ),
                         FilterChip(
-                          label: Text('🌐 ${l10n.online}'),
+                          showCheckmark: false,
+                          label: Text(_sourceChannels.contains('ONLINE') ? '✓ 🌐 ${l10n.online}' : '○ 🌐 ${l10n.online}'),
                           selected: _sourceChannels.contains('ONLINE'),
                           onSelected: _saving
                               ? null
@@ -641,22 +946,26 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       spacing: AppSpacing.sm,
                       children: [
                         ChoiceChip(
-                          label: Text('💵 ${l10n.paymentCash}'),
+                          showCheckmark: false,
+                          label: Text(_paymentMethod == 'CASH' ? '✓ 💵 ${l10n.paymentCash}' : '○ 💵 ${l10n.paymentCash}'),
                           selected: _paymentMethod == 'CASH',
                           onSelected: _saving ? null : (selected) => setState(() => _paymentMethod = selected ? 'CASH' : null),
                         ),
                         ChoiceChip(
-                          label: Text('💳 ${l10n.installment}'),
+                          showCheckmark: false,
+                          label: Text(_paymentMethod == 'INSTALLMENT' ? '✓ 💳 ${l10n.installment}' : '○ 💳 ${l10n.installment}'),
                           selected: _paymentMethod == 'INSTALLMENT',
                           onSelected: _saving ? null : (selected) => setState(() => _paymentMethod = selected ? 'INSTALLMENT' : null),
                         ),
                         ChoiceChip(
-                          label: Text('💳 ${l10n.paymentCreditCard}'),
+                          showCheckmark: false,
+                          label: Text(_paymentMethod == 'CREDIT_CARD' ? '✓ 💳 ${l10n.paymentCreditCard}' : '○ 💳 ${l10n.paymentCreditCard}'),
                           selected: _paymentMethod == 'CREDIT_CARD',
                           onSelected: _saving ? null : (selected) => setState(() => _paymentMethod = selected ? 'CREDIT_CARD' : null),
                         ),
                         ChoiceChip(
-                          label: Text('🏷️ ${l10n.paymentOther}'),
+                          showCheckmark: false,
+                          label: Text(_paymentMethod == 'OTHER' ? '✓ 🏷️ ${l10n.paymentOther}' : '○ 🏷️ ${l10n.paymentOther}'),
                           selected: _paymentMethod == 'OTHER',
                           onSelected: _saving ? null : (selected) => setState(() => _paymentMethod = selected ? 'OTHER' : null),
                         ),
@@ -697,23 +1006,48 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     final index = entry.key;
                     final product = entry.value;
                     final variantText = product.variantLabel;
+                    final icon = _getCategoryIcon(product.category, product.modelName);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: Theme.of(context).dividerColor.withAlpha(80),
+                        ),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(AppSpacing.sm),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                            Text(icon, style: const TextStyle(fontSize: 22)),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    product.modelName,
-                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          product.modelName,
+                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withAlpha(25),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          '✓ Selected',
+                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   if (product.seriesName != null || product.category != null)
                                     Text(
@@ -723,33 +1057,51 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                   if (variantText.isNotEmpty)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        variantText,
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          variantText,
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                                        ),
                                       ),
                                     ),
                                 ],
                               ),
                             ),
-                            // Quantity Controls
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline, size: 20),
-                                  onPressed: _saving ? null : () => _updateQuantity(index, -1),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                Text(
-                                  '${product.quantity}',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                                  onPressed: _saving ? null : () => _updateQuantity(index, 1),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              ],
+                            const SizedBox(width: AppSpacing.xs),
+                            // Quantity Stepper
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Theme.of(context).dividerColor.withAlpha(100)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove, size: 16),
+                                    onPressed: _saving ? null : () => _updateQuantity(index, -1),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  ),
+                                  Text(
+                                    '${product.quantity}',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add, size: 16),
+                                    onPressed: _saving ? null : () => _updateQuantity(index, 1),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                  ),
+                                ],
+                              ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
@@ -769,7 +1121,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Theme.of(context).colorScheme.primary.withAlpha(100)),
+                        side: BorderSide(color: Theme.of(context).colorScheme.primary.withAlpha(120), width: 1.5),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(AppSpacing.md),
@@ -779,7 +1131,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(l10n.addProduct, style: Theme.of(context).textTheme.titleMedium),
+                                Text(l10n.addProduct, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                                 IconButton(
                                   icon: const Icon(Icons.close, size: 20),
                                   onPressed: () => setState(() => _showProductPicker = false),
@@ -804,15 +1156,28 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 Center(child: Padding(padding: const EdgeInsets.all(16), child: Text(l10n.noMatchingProducts)))
                               else
                                 ConstrainedBox(
-                                  constraints: const BoxConstraints(maxHeight: 180),
-                                  child: ListView.builder(
+                                  constraints: const BoxConstraints(maxHeight: 200),
+                                  child: ListView.separated(
                                     shrinkWrap: true,
                                     itemCount: _catalogProducts.length,
+                                    separatorBuilder: (_, __) => const Divider(height: 1),
                                     itemBuilder: (context, idx) {
                                       final p = _catalogProducts[idx];
+                                      final isCurrent = _addingProduct?.id == p.id;
                                       return ListTile(
                                         dense: true,
-                                        title: Text(p.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        leading: Icon(
+                                          isCurrent ? Icons.check_circle : Icons.radio_button_unchecked,
+                                          color: isCurrent ? Colors.green : Theme.of(context).hintColor,
+                                          size: 20,
+                                        ),
+                                        title: Text(
+                                          p.productName,
+                                          style: TextStyle(
+                                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
+                                            color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+                                          ),
+                                        ),
                                         subtitle: Text(p.seriesName),
                                         onTap: () => _selectProduct(p),
                                       );
@@ -821,26 +1186,47 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 ),
                             ] else ...[
                               // Selected Product preview
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone_android, color: Colors.blueAccent),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(_addingProduct!.productName, style: Theme.of(context).textTheme.titleSmall),
-                                        Text(_addingProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
-                                      ],
+                              Container(
+                                padding: const EdgeInsets.all(AppSpacing.sm),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(80)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(_getCategoryIcon(_addingProduct!.category, _addingProduct!.productName), style: const TextStyle(fontSize: 24)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  _addingProduct!.productName,
+                                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                              const Text(
+                                                '✓ Selected',
+                                                style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                          Text(_addingProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => setState(() => _addingProduct = null),
-                                    child: Text(l10n.change),
-                                  ),
-                                ],
+                                    TextButton(
+                                      onPressed: () => setState(() => _addingProduct = null),
+                                      child: Text(l10n.change),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const Divider(),
+                              const SizedBox(height: AppSpacing.sm),
                               if (_loadingVariants)
                                 const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
                               else if (_variantError != null)
@@ -849,45 +1235,75 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                   child: Text(_variantError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                                 )
                               else if (_catalogVariants.isNotEmpty) ...[
-                                Text(l10n.configuration, style: Theme.of(context).textTheme.labelLarge),
-                                const SizedBox(height: 4),
+                                Text(l10n.configuration, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 6),
                                 Wrap(
                                   spacing: AppSpacing.xs,
                                   runSpacing: AppSpacing.xs,
                                   children: _catalogVariants.map((v) {
                                     final labelParts = [
-                                      if (v.ram?.isNotEmpty == true) '${v.ram}GB',
-                                      if (v.rom?.isNotEmpty == true) '${v.rom}GB',
+                                      if (v.ram?.isNotEmpty == true) '${v.ram}GB RAM',
+                                      if (v.rom?.isNotEmpty == true) '${v.rom}GB ROM',
                                       if (v.color?.isNotEmpty == true) v.color!,
                                     ];
                                     final isSelected = _addingVariant?.id == v.id;
+                                    final prefix = isSelected ? '✓ ' : '○ ';
                                     return ChoiceChip(
-                                      label: Text(labelParts.join(' · ')),
+                                      showCheckmark: false,
+                                      label: Text('$prefix${labelParts.join(' · ')}'),
                                       selected: isSelected,
+                                      selectedColor: Theme.of(context).colorScheme.primary.withAlpha(35),
+                                      side: BorderSide(
+                                        color: isSelected
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).dividerColor,
+                                        width: isSelected ? 1.5 : 1,
+                                      ),
                                       onSelected: (selected) => setState(() => _addingVariant = selected ? v : null),
                                     );
                                   }).toList(),
                                 ),
                               ],
-                              const SizedBox(height: AppSpacing.sm),
+                              const SizedBox(height: AppSpacing.md),
                               // Quantity selection for adding item
                               Row(
                                 children: [
                                   Text('${l10n.quantity}:', style: Theme.of(context).textTheme.labelLarge),
-                                  const SizedBox(width: 12),
-                                  IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline, size: 20),
-                                    onPressed: _addingQuantity > 1 ? () => setState(() => _addingQuantity--) : null,
-                                  ),
-                                  Text('$_addingQuantity', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                                    onPressed: () => setState(() => _addingQuantity++),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Theme.of(context).dividerColor),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.remove, size: 16),
+                                          onPressed: _addingQuantity > 1 ? () => setState(() => _addingQuantity--) : null,
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                                          child: Text('$_addingQuantity', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.add, size: 16),
+                                          onPressed: () => setState(() => _addingQuantity++),
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                   const Spacer(),
-                                  FilledButton(
+                                  FilledButton.icon(
                                     onPressed: _confirmAddProduct,
-                                    child: Text(l10n.save),
+                                    icon: const Icon(Icons.check, size: 16),
+                                    label: Text(l10n.addProduct),
                                   ),
                                 ],
                               ),

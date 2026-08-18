@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.3-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.4-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "1853d2649afe1f0942b53fc00f3065d803107a6a8bcb7d4c577a674dab01544a";
+  const sha256Checksum = "4068576a687d328f5b4843105dfc63d904832e835014db8f129fdba26729221b";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -49,31 +49,35 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.3+4 (Customer Sales CRM Release) · 56.4 MB
+              Version 1.0.4+5 (CRM UX Improvement Release) · 56.8 MB
             </div>
           </div>
 
           {/* Release Highlights */}
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.3 (What&apos;s New in v1.0.3)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.4 (What&apos;s New in v1.0.4)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Customer Sales CRM</strong>: แยกสถานะลูกค้าสนใจ (Interested Lead) และลูกค้าซื้อแล้ว (Purchased)</span>
+                <span><strong>Interested → Purchased Conversion Workflow</strong>: แปลงลูกค้าสนใจเป็นซื้อแล้วได้ทันทีใน 1 คลิก โดยเก็บข้อมูลสินค้าเดิมไว้ครบถ้วน</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Multi-Product Tagging</strong>: บันทึกสินค้าได้หลายรายการพร้อมกัน พร้อมระบุจำนวน (Quantity)</span>
+                <span><strong>Customer Sales CRM Improvement</strong>: ปรับปรุงระดับความสนใจแบบเป็นกลาง (Neutral State) และตัวเลือกที่ชัดเจนยิ่งขึ้น</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Interest Level</strong>: ระบุระดับความสนใจ (Hot / Warm / Cold) สำหรับวางแผนติดตามลูกค้า</span>
+                <span><strong>Multi-Product Tagging</strong>: บันทึกสินค้าได้หลายรายการพร้อมสเปก RAM, ROM, สี และจำนวนอย่างแม่นยำ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Product Specs Configuration</strong>: เลือกสเปก RAM, ROM และสีตัวเครื่องได้อย่างครบถ้วน</span>
+                <span><strong>CRM Confirmation Flow</strong>: แสดงหน้าต่างยืนยันสรุปข้อมูลก่อนบันทึก พร้อมแจ้งเตือนผลลัพธ์ทันที</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Customer Sales Timeline</strong>: ติดตามประวัติการบันทึกและระยะเวลาปิดการขาย (Conversion Time) บน Web Monitor</span>
               </li>
             </ul>
           </div>

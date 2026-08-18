@@ -1,21 +1,21 @@
 # AI progress
 
-## Current task: Customer Sales Information (CRM Evolution) Redesign
+## Current task: Android Release v1.0.4+5 (CRM UX Improvement Release)
 
-- **Overview & Architectural Highlights**:
-  - Redesigned "Purchase Information" into a flexible CRM-style customer sales information module supporting leads (`INTERESTED`) and buyers (`PURCHASED`), as well as multi-product purchases.
-  - **Database Migration**: Created and deployed migration `20260818100000_add_customer_sales_crm_module` adding `CustomerSalesStatus`, `CustomerInterestLevel`, `PaymentMethodType`, `CUSTOMER_SALES_INFO_UPDATED`, and `ConversationSalesProduct` model with safe backfill of legacy data.
-  - **Data Contract & Backward Compatibility**: Implemented `CustomerSalesInformationContract` with `buildCustomerSalesInformation()` and preserved `buildPurchaseInformation()` backward compatibility.
-  - **Backend API**: Added `PATCH /mobile/conversations/:id/customer-sales-info` with atomic transaction validation for models, variants, quantities, and activity history logging.
-  - **Flutter Mobile App**: Redesigned `ConversationTagsSheet` with top segmented button `[ Interested ]` vs `[ Purchased ]`, dynamic interest levels (`Hot`, `Warm`, `Cold`), purchase channels & payment methods, multi-product cards with RAM/ROM/color specs, quantity counters, delete buttons, and inline product picker.
-  - **Web Admin Frontend**: Updated `ApiConversation` and right side panel to render status badges, interest level, channel/payment details, and multi-product cards.
+- **Release Overview & Features**:
+  - **Interested → Purchased Conversion Flow**: Added quick-action banner `[ 🛍️ Convert to Purchased ]` for existing Interested leads, automatically preserving existing products & variants while switching status to `PURCHASED`.
+  - **Conversion Telemetry & Timeline**: Backend captures `isConversion: true`, `conversionTimeMs`, and `interestRecordedAt` in `ActivityHistory.metadata`. Web Monitor renders conversion badges `🎯 → 🛍️ (2d 4h)`.
+  - **Instant Save Feedback**: Mobile chat page displays a floating `SnackBar` notification (`✓ Customer sales information saved` / `✓ Customer converted to Purchased`).
+  - **Pilot Ergonomics (3-5 Taps)**: Clean chip visual states (`✓ Option` vs `○ Option`), neutral temperature selection (`Not specified`), and pre-save confirmation modal.
+  - **Portal Update**: Updated download page (`frontend/src/app/download/page.tsx`) to `Version 1.0.4+5 (CRM UX Improvement Release) · 56.8 MB` with SHA256 checksum `4068576a687d328f5b4843105dfc63d904832e835014db8f129fdba26729221b`.
 - **Verification & Test Results**:
   - Backend tests: `1,227 / 1,227 passed (100%)`.
   - Backend build: Compiled cleanly (`prisma generate && nest build`).
   - Frontend tests: `344 / 344 passed (100%)`.
   - Frontend build: Compiled cleanly (19 routes).
   - Flutter analyze: `0 issues`.
-  - Flutter tests: `77 / 77 passed (100%)`.
+  - Flutter tests: `78 / 78 passed (100%)`.
+  - Android emulator smoke test: APK installed and verified on `emulator-5554`.
   - Git diff check: Clean whitespace.
 
 ## Previous task: Phase 10C.11.1 — Remove Reply Token Age Cutoff (Always Attempt Unused LINE replyToken Before Push)

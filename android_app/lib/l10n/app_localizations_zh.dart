@@ -314,6 +314,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get interestCold => '低 (Cold)';
 
   @override
+  String get interestNotSpecified => '未指定';
+
+  @override
+  String get confirmCustomerInfo => '确认客户信息';
+
+  @override
+  String get confirmSave => '确认保存';
+
+  @override
+  String get confirmPurchase => '确认购买';
+
+  @override
+  String get convertToPurchased => '转为已购买';
+
+  @override
+  String get customerInfoSaved => '客户销售信息已保存';
+
+  @override
+  String get convertedToPurchasedNotice => '客户状态已转为已购买';
+
+  @override
+  String get conversionTime => '转化耗时';
+
+  @override
   String get productsInterested => '意向商品';
 
   @override
@@ -1061,6 +1085,30 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get interestCold => '低 (Cold)';
+
+  @override
+  String get interestNotSpecified => '未指定';
+
+  @override
+  String get confirmCustomerInfo => '确认客户信息';
+
+  @override
+  String get confirmSave => '确认保存';
+
+  @override
+  String get confirmPurchase => '确认购买';
+
+  @override
+  String get convertToPurchased => '转为已购买';
+
+  @override
+  String get customerInfoSaved => '客户销售信息已保存';
+
+  @override
+  String get convertedToPurchasedNotice => '客户状态已转为已购买';
+
+  @override
+  String get conversionTime => '转化耗时';
 
   @override
   String get productsInterested => '意向商品';

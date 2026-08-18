@@ -683,6 +683,54 @@ abstract class AppLocalizations {
   /// **'Cold'**
   String get interestCold;
 
+  /// No description provided for @interestNotSpecified.
+  ///
+  /// In en, this message translates to:
+  /// **'Not specified'**
+  String get interestNotSpecified;
+
+  /// No description provided for @confirmCustomerInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Customer Information'**
+  String get confirmCustomerInfo;
+
+  /// No description provided for @confirmSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Save'**
+  String get confirmSave;
+
+  /// No description provided for @confirmPurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Purchase'**
+  String get confirmPurchase;
+
+  /// No description provided for @convertToPurchased.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert to Purchased'**
+  String get convertToPurchased;
+
+  /// No description provided for @customerInfoSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer sales information saved'**
+  String get customerInfoSaved;
+
+  /// No description provided for @convertedToPurchasedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer converted to Purchased'**
+  String get convertedToPurchasedNotice;
+
+  /// No description provided for @conversionTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversion Time'**
+  String get conversionTime;
+
   /// No description provided for @productsInterested.
   ///
   /// In en, this message translates to:

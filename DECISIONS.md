@@ -1,16 +1,18 @@
-# Customer Sales Information CRM Module (Interested Leads, Purchases & Multi-Product) (2026-08-18)
+# Customer Sales Information CRM Module & Conversion Workflow (v1.0.4+5) (2026-08-18)
 
-- **Sales Lifecycle Decoupling (Leads vs Purchases)**: Redesigned the legacy single-purchase structure into a flexible CRM-style sales module. Customer conversations now track `CustomerSalesStatus` (`INTERESTED` vs `PURCHASED`), recognizing that customers in LINE OA frequently inquire and show interest before purchasing.
+- **Sales Lifecycle Decoupling (Leads vs Purchases)**: Redesigned the legacy single-purchase structure into a flexible CRM-style sales module. Customer conversations track `CustomerSalesStatus` (`INTERESTED` vs `PURCHASED`), recognizing that customers in LINE OA frequently inquire and show interest before purchasing.
+- **Interested → Purchased Conversion Ergonomics**: Added 1-click `[ 🛍️ Convert to Purchased ]` workflow for existing Interested leads. When converting, all existing selected products and configured variants (RAM, ROM, Color, Quantity) are seamlessly preserved and transitioned to `PURCHASED`, requiring only 2-3 additional taps for Store/Online channel and Payment Method.
+- **Conversion Duration & Audit Telemetry**: Backend automatically detects transition from `INTERESTED` to `PURCHASED`, calculating `conversionTimeMs` from the original lead creation date, and recording `isConversion: true`, `conversionTimeMs`, and `interestRecordedAt` in `ActivityHistory.metadata`. Both mobile bar and Web Monitor render conversion duration badges (`🎯 → 🛍️ (2d 4h)`).
 - **Conditional Sales Data Model**:
   - `INTERESTED` (Leads): Captures products of interest alongside `CustomerInterestLevel` (`HOT`, `WARM`, `COLD`). Purchase channels and payment methods are hidden.
   - `PURCHASED` (Customers): Captures purchase channel (`STORE`, `ONLINE`), `PaymentMethodType` (`CASH`, `INSTALLMENT`, `CREDIT_CARD`, `OTHER`), and verified purchased products.
-- **Multi-Product Relation (`ConversationSalesProduct`)**: Replaced the legacy single-product limit with `ConversationSalesProduct`, capturing `productModelId`, `productVariantId` (RAM, ROM, color), `quantity` (default 1, positive int), `customProductName`, and item-level `status`.
-- **Zero Data Loss Migration & Backward Compatibility**:
-  - Created migration `20260818100000_add_customer_sales_crm_module` which backfilled all existing conversations with `sourceChannels` / `isInstallment` as `customerSalesStatus = 'PURCHASED'`, `paymentMethod = (CASE WHEN isInstallment THEN 'INSTALLMENT' ELSE NULL END)`, and migrated existing `ConversationProduct` manual rows into `ConversationSalesProduct`.
-  - Maintained full dual-projection backward compatibility in `buildPurchaseInformation()` and `buildCustomerSalesInformation()` across API responses, preventing breaks in older clients.
-- **Mobile & Web UI Modernization**:
-  - Flutter Mobile: Redesigned `ConversationTagsSheet` with top segmented button `[ 🎯 Interested ]` vs `[ 🛍️ Purchased ]`, dynamic chips for interest levels / channels / payment methods, multi-product cards with RAM/ROM/color chips, quantity controls (`- 1 +`), delete buttons, and modal catalog search.
-  - Web Admin: Enhanced side panel to render status badges, interest level, channel/payment details, and multi-product cards.
+- **Multi-Product Relation (`ConversationSalesProduct`)**: Captures `productModelId`, `productVariantId` (RAM, ROM, color), `quantity` (default 1, positive int), `customProductName`, and item-level `status`.
+- **Zero Data Loss Migration & Backward Compatibility**: Maintained dual-projection backward compatibility across API responses.
+- **Mobile & Web UI Usability & Pilot Readiness**:
+  - **Neutral Interest Level**: Defaults `interestLevel` to `null` (`Not specified` / `ยังไม่ระบุ`) with deselect toggle.
+  - **Explicit Selection Visual States**: Unambiguous prefixes (`✓ Option` vs `○ Option`) with `showCheckmark: false` avoiding duplicate icons.
+  - **Pre-Save Review & Confirmation Modal**: Clear breakdown before commit with dynamic action buttons (`Confirm Save` vs `Confirm Purchase`).
+  - **Instant Save Feedback**: Non-blocking floating SnackBar (`✓ Customer sales information saved` / `✓ Customer converted to Purchased`).
 
 # LINE Reply-First Delivery Strategy with Push API Fallback (2026-08-17)
 

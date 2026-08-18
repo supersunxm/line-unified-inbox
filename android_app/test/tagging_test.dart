@@ -103,7 +103,7 @@ void main() {
     expect(find.text('Purchased'), findsOneWidget);
 
     // Tap + Add Product
-    await tester.tap(find.text('+ Add Product'));
+    await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
     expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
@@ -111,20 +111,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.variantCalls, ['model-1']);
 
-    // Select configuration chip
-    await tester.tap(find.widgetWithText(ChoiceChip, '16GB · 512GB · Graphite'));
+    // Select configuration chip (starts with ○)
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
     // Confirm adding product to list
-    await tester.tap(find.text('Save').last);
+    await tester.tap(find.widgetWithText(FilledButton, '+ Add Product'));
     await tester.pumpAndSettle();
 
-    // Select Warm interest level
-    await tester.tap(find.widgetWithText(ChoiceChip, '⚡ Warm'));
+    // Select Warm interest level (starts with ○)
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ ⚡ Warm'));
     await tester.pumpAndSettle();
 
-    // Save entire sheet
-    await tester.tap(find.text('Save').first);
+    // Save entire sheet -> shows confirmation dialog
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    // Verify confirmation modal
+    expect(find.text('Confirm Customer Information'), findsOneWidget);
+    expect(find.text('Confirm Save'), findsOneWidget);
+
+    // Tap Confirm Save
+    await tester.tap(find.text('Confirm Save'));
     await tester.pumpAndSettle();
 
     expect(repository.currentSales?.status, 'INTERESTED');
@@ -160,20 +168,24 @@ void main() {
     await tester.pumpAndSettle();
 
     // Select Store channel and Installment payment
-    await tester.tap(find.widgetWithText(FilterChip, '🏪 Store'));
-    await tester.tap(find.widgetWithText(ChoiceChip, '💳 Installment'));
+    await tester.tap(find.widgetWithText(FilterChip, '○ 🏪 Store'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 💳 Installment'));
     await tester.pumpAndSettle();
 
     // Add product
-    await tester.tap(find.text('+ Add Product'));
+    await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('OPPO Reno16 Pro 5G'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save').last);
+    await tester.tap(find.widgetWithText(FilledButton, '+ Add Product'));
     await tester.pumpAndSettle();
 
-    // Save entire sheet
-    await tester.tap(find.text('Save').first);
+    // Save entire sheet -> confirmation modal
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm Customer Information'), findsOneWidget);
+    await tester.tap(find.text('Confirm Save'));
     await tester.pumpAndSettle();
 
     expect(repository.currentSales?.status, 'PURCHASED');
@@ -226,4 +238,76 @@ void main() {
     expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
   });
+
+  testWidgets('Interested lead converts to Purchased with preserved products and confirmation', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const interestedLead = CustomerSalesInformation(
+      status: 'INTERESTED',
+      interestLevel: 'HOT',
+      purchaseChannel: [],
+      products: [
+        CustomerSalesProductItem(
+          id: 'sp-1',
+          productModelId: 'model-1',
+          modelName: 'OPPO Reno16 Pro 5G',
+          seriesName: 'Reno16',
+          category: 'SMARTPHONE',
+          ram: '16',
+          rom: '512',
+          color: 'Graphite',
+          quantity: 1,
+          status: 'INTERESTED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: interestedLead,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Verify Convert to Purchased button is displayed
+    expect(find.text('Convert to Purchased'), findsAtLeastNWidgets(1));
+
+    // Tap Convert to Purchased
+    await tester.tap(find.widgetWithText(FilledButton, 'Convert to Purchased'));
+    await tester.pumpAndSettle();
+
+    // Verify it switched to Purchased while keeping the product
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+
+    // Select Store channel and Cash payment
+    await tester.tap(find.widgetWithText(FilterChip, '○ 🏪 Store'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 💵 Cash'));
+    await tester.pumpAndSettle();
+
+    // Save -> shows Confirm Purchase modal
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm Purchase'), findsAtLeastNWidgets(1));
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Purchase'));
+    await tester.pumpAndSettle();
+
+    expect(repository.currentSales?.status, 'PURCHASED');
+    expect(repository.currentSales?.purchaseChannel, ['STORE']);
+    expect(repository.currentSales?.paymentMethod, 'CASH');
+    expect(repository.currentSales?.products.length, 1);
+    expect(repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
+  });
 }
+

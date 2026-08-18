@@ -538,20 +538,35 @@ export class MobileConversationsService {
         products: dto.products ? dto.products.map((p) => ({ productModelId: p.productModelId, productVariantId: p.productVariantId ?? null })) : (conversation.products ?? []),
       });
 
+      const isConversion = conversation.customerSalesStatus === CustomerSalesStatus.INTERESTED && dto.status === CustomerSalesStatus.PURCHASED;
+      const conversionTimeMs = isConversion && conversation.customerSalesRecordedAt
+        ? (new Date().getTime() - new Date(conversation.customerSalesRecordedAt).getTime())
+        : null;
+
       await tx.activityHistory.create({
         data: {
           conversationId,
           actionType: (dto.status === "PURCHASED" ? "PURCHASE_INFORMATION_UPDATED" : "CUSTOMER_SALES_INFO_UPDATED") as any,
-          description: dto.status === "PURCHASED" ? "Purchase information updated" : "Customer sales information updated",
+          description: isConversion
+            ? "Converted from Interested lead to Purchased customer"
+            : dto.status === "PURCHASED"
+              ? "Purchase information updated"
+              : "Customer sales information updated",
           createdByUserId: user.id,
           createdByName: user.displayName?.trim() || user.email,
+          previousStatus: conversation.customerSalesStatus as any,
+          newStatus: dto.status as any,
           metadata: {
             category: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION" : "CUSTOMER_SALES_INFO",
             oldValue: previousPurchase,
             newValue: nextPurchase,
             status: dto.status,
+            previousStatus: conversation.customerSalesStatus,
             interestLevel: dto.interestLevel,
             productCount: dto.products?.length,
+            isConversion,
+            conversionTimeMs,
+            interestRecordedAt: isConversion ? conversation.customerSalesRecordedAt : null,
           },
         },
       });

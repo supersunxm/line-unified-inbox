@@ -316,6 +316,31 @@ class AppLocalizationsTh extends AppLocalizations {
   String get interestCold => 'Cold (ต่ำ)';
 
   @override
+  String get interestNotSpecified => 'ยังไม่ระบุ';
+
+  @override
+  String get confirmCustomerInfo => 'ยืนยันข้อมูลลูกค้า';
+
+  @override
+  String get confirmSave => 'ยืนยันการบันทึก';
+
+  @override
+  String get confirmPurchase => 'ยืนยันการซื้อ';
+
+  @override
+  String get convertToPurchased => 'เปลี่ยนเป็นลูกค้าที่ซื้อแล้ว';
+
+  @override
+  String get customerInfoSaved => 'บันทึกข้อมูลลูกค้าสำเร็จ';
+
+  @override
+  String get convertedToPurchasedNotice =>
+      'เปลี่ยนสถานะลูกค้าเป็นซื้อแล้วสำเร็จ';
+
+  @override
+  String get conversionTime => 'ระยะเวลาตัดสินใจซื้อ';
+
+  @override
   String get productsInterested => 'สินค้าที่สนใจ';
 
   @override

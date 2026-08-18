@@ -320,6 +320,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get interestCold => 'Cold';
 
   @override
+  String get interestNotSpecified => 'Not specified';
+
+  @override
+  String get confirmCustomerInfo => 'Confirm Customer Information';
+
+  @override
+  String get confirmSave => 'Confirm Save';
+
+  @override
+  String get confirmPurchase => 'Confirm Purchase';
+
+  @override
+  String get convertToPurchased => 'Convert to Purchased';
+
+  @override
+  String get customerInfoSaved => 'Customer sales information saved';
+
+  @override
+  String get convertedToPurchasedNotice => 'Customer converted to Purchased';
+
+  @override
+  String get conversionTime => 'Conversion Time';
+
+  @override
   String get productsInterested => 'Products Interested In';
 
   @override
