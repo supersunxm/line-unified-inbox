@@ -17,7 +17,7 @@ test("AppVersionService returns active Android release with correct structure", 
         forceUpdate: false,
         apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk",
         apkSize: "56.9 MB",
-        sha256: "3458e9b78e1231cf16165e5fee20c69653bde4f8227e9d58f964e0352f7b2c19",
+        sha256: "f1231c418aa999e4118451e47ab61ed53710dc386443debbd4ee389ec5bfaf17",
         releaseNotes: [
           "Improved product tagging flow",
           "Draft Selection Flow (Select → Configure → Confirm → Save)",
@@ -64,6 +64,10 @@ test("AppVersionService falls back safely when database returns null", async () 
   assert.equal(version.latestVersion, "1.0.7");
   assert.equal(version.buildNumber, 8);
   assert.ok(version.apkUrl);
+  assert.equal(
+    version.sha256,
+    "f1231c418aa999e4118451e47ab61ed53710dc386443debbd4ee389ec5bfaf17",
+  );
 });
 
 test("AppVersionService tracks download increments successfully", async () => {
