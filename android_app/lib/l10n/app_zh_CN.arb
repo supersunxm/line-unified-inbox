@@ -262,5 +262,6 @@
   "select": "选择",
   "selected": "已选择",
   "changeProduct": "更换产品",
-  "confirmAddProduct": "添加到列表"
+  "confirmAddProduct": "添加到列表",
+  "confirmSelection": "确认选择"
 }

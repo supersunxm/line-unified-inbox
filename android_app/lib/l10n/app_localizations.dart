@@ -1672,6 +1672,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add to List'**
   String get confirmAddProduct;
+
+  /// No description provided for @confirmSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Selection'**
+  String get confirmSelection;
 }
 
 class _AppLocalizationsDelegate

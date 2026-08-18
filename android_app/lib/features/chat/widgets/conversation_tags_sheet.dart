@@ -303,14 +303,17 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   String? _interestLevel; // Nullable neutral state (no default 'HOT')
   late Set<String> _sourceChannels;
   late String? _paymentMethod;
+  // Existing CRM products list (persisted in CRM)
   late List<CustomerSalesProductItem> _selectedProducts;
 
   final _searchController = TextEditingController();
   List<ProductSelectorItem> _catalogProducts = const [];
   List<ProductVariantSelectorItem> _catalogVariants = const [];
-  ProductSelectorItem? _addingProduct;
-  ProductVariantSelectorItem? _addingVariant;
-  int _addingQuantity = 1;
+
+  // Isolated Temporary Draft State for Product Picker (does not modify _selectedProducts until confirmed)
+  ProductSelectorItem? _draftProduct;
+  ProductVariantSelectorItem? _draftVariant;
+  int _draftQuantity = 1;
 
   bool _loadingProducts = false;
   bool _loadingVariants = false;
@@ -407,9 +410,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       setState(() {
         _catalogVariants = variants;
         _loadingVariants = false;
-        if (_addingVariant != null &&
-            !_catalogVariants.any((candidate) => candidate.id == _addingVariant!.id)) {
-          _addingVariant = null;
+        if (_draftVariant != null &&
+            !_catalogVariants.any((candidate) => candidate.id == _draftVariant!.id)) {
+          _draftVariant = null;
         }
       });
     } catch (_) {
@@ -424,11 +427,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _openAddProduct() {
     setState(() {
       _showProductPicker = true;
-      _addingProduct = null;
-      _addingVariant = null;
+      _draftProduct = null;
+      _draftVariant = null;
+      _draftQuantity = 1;
       _catalogVariants = const [];
       _variantError = null;
-      _addingQuantity = 1;
       _searchController.clear();
     });
     _loadProducts();
@@ -437,47 +440,84 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _cancelAddProduct() {
     setState(() {
       _showProductPicker = false;
-      _addingProduct = null;
-      _addingVariant = null;
+      _draftProduct = null;
+      _draftVariant = null;
+      _draftQuantity = 1;
       _catalogVariants = const [];
       _variantError = null;
-      _addingQuantity = 1;
       _searchController.clear();
     });
   }
 
-  void _selectProduct(ProductSelectorItem product) {
+  void _selectDraftProduct(ProductSelectorItem product) {
     setState(() {
-      _addingProduct = product;
-      _addingVariant = null;
+      _draftProduct = product;
+      _draftVariant = null;
+      _draftQuantity = 1;
       _catalogVariants = const [];
       _variantError = null;
     });
     _loadVariants(product.id);
   }
 
-  void _confirmAddProduct() {
-    if (_addingProduct == null) return;
+  void _changeDraftProduct() {
+    setState(() {
+      _draftProduct = null;
+      _draftVariant = null;
+      _draftQuantity = 1;
+      _catalogVariants = const [];
+      _variantError = null;
+    });
+  }
+
+  void _selectDraftVariant(ProductVariantSelectorItem? variant) {
+    setState(() {
+      _draftVariant = variant;
+    });
+  }
+
+  void _updateDraftQuantity(int delta) {
+    setState(() {
+      final next = _draftQuantity + delta;
+      if (next >= 1) {
+        _draftQuantity = next;
+      }
+    });
+  }
+
+  bool get _canConfirmSelection {
+    if (_draftProduct == null) return false;
+    if (_loadingVariants) return false;
+    // If product has variants available, a variant must be selected
+    if (_catalogVariants.isNotEmpty && _draftVariant == null) return false;
+    return true;
+  }
+
+  void _confirmDraftSelection() {
+    if (!_canConfirmSelection || _draftProduct == null) return;
     final item = CustomerSalesProductItem(
       id: '',
-      productModelId: _addingProduct!.id,
-      productVariantId: _addingVariant?.id,
-      modelName: _addingProduct!.productName,
-      seriesName: _addingProduct!.seriesName,
-      category: _addingProduct!.category,
-      ram: _addingVariant?.ram,
-      rom: _addingVariant?.rom,
-      color: _addingVariant?.color,
-      quantity: _addingQuantity,
+      productModelId: _draftProduct!.id,
+      productVariantId: _draftVariant?.id,
+      modelName: _draftProduct!.productName,
+      seriesName: _draftProduct!.seriesName,
+      category: _draftProduct!.category,
+      ram: _draftVariant?.ram,
+      rom: _draftVariant?.rom,
+      color: _draftVariant?.color,
+      quantity: _draftQuantity,
       status: _status,
     );
 
     setState(() {
       _selectedProducts.add(item);
       _showProductPicker = false;
-      _addingProduct = null;
-      _addingVariant = null;
-      _addingQuantity = 1;
+      _draftProduct = null;
+      _draftVariant = null;
+      _draftQuantity = 1;
+      _catalogVariants = const [];
+      _variantError = null;
+      _searchController.clear();
     });
   }
 
@@ -1136,7 +1176,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 ),
                               ],
                             ),
-                            if (_addingProduct == null) ...[
+                            if (_draftProduct == null) ...[
                               TextField(
                                 controller: _searchController,
                                 onChanged: _loadProducts,
@@ -1180,16 +1220,16 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                           ),
-                                          onPressed: () => _selectProduct(p),
+                                          onPressed: () => _selectDraftProduct(p),
                                           child: Text(l10n.select),
                                         ),
-                                        onTap: () => _selectProduct(p),
+                                        onTap: () => _selectDraftProduct(p),
                                       );
                                     },
                                   ),
                                 ),
                             ] else ...[
-                              // Selected Product visual confirmation container
+                              // Selected Draft Product visual confirmation container
                               Container(
                                 padding: const EdgeInsets.all(AppSpacing.sm),
                                 decoration: BoxDecoration(
@@ -1200,7 +1240,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 child: Row(
                                   children: [
                                     Text(
-                                      _getCategoryIcon(_addingProduct!.category, _addingProduct!.productName),
+                                      _getCategoryIcon(_draftProduct!.category, _draftProduct!.productName),
                                       style: const TextStyle(fontSize: 24),
                                     ),
                                     const SizedBox(width: 10),
@@ -1212,7 +1252,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  _addingProduct!.productName,
+                                                  _draftProduct!.productName,
                                                   style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                                 ),
                                               ),
@@ -1242,7 +1282,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                             ],
                                           ),
                                           const SizedBox(height: 2),
-                                          Text(_addingProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
+                                          Text(_draftProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
                                         ],
                                       ),
                                     ),
@@ -1253,12 +1293,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      onPressed: () => setState(() {
-                                        _addingProduct = null;
-                                        _addingVariant = null;
-                                        _catalogVariants = const [];
-                                        _variantError = null;
-                                      }),
+                                      onPressed: _changeDraftProduct,
                                       icon: const Icon(Icons.swap_horiz, size: 16),
                                       label: Text(l10n.changeProduct),
                                     ),
@@ -1285,7 +1320,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                       if (v.rom?.isNotEmpty == true) '${v.rom}GB ROM',
                                       if (v.color?.isNotEmpty == true) v.color!,
                                     ];
-                                    final isSelected = _addingVariant?.id == v.id;
+                                    final isSelected = _draftVariant?.id == v.id;
                                     final prefix = isSelected ? '✓ ' : '○ ';
                                     return ChoiceChip(
                                       showCheckmark: false,
@@ -1298,13 +1333,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                             : Theme.of(context).dividerColor,
                                         width: isSelected ? 1.5 : 1,
                                       ),
-                                      onSelected: (selected) => setState(() => _addingVariant = selected ? v : null),
+                                      onSelected: (selected) => _selectDraftVariant(selected ? v : null),
                                     );
                                   }).toList(),
                                 ),
                               ],
                               const SizedBox(height: AppSpacing.md),
-                              // Quantity selection for adding item
+                              // Quantity selection for draft item
                               Row(
                                 children: [
                                   Text('${l10n.quantity}:', style: Theme.of(context).textTheme.labelLarge),
@@ -1319,18 +1354,18 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                       children: [
                                         IconButton(
                                           icon: const Icon(Icons.remove, size: 16),
-                                          onPressed: _addingQuantity > 1 ? () => setState(() => _addingQuantity--) : null,
+                                          onPressed: _draftQuantity > 1 ? () => _updateDraftQuantity(-1) : null,
                                           visualDensity: VisualDensity.compact,
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                                         ),
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                                          child: Text('$_addingQuantity', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                                          child: Text('$_draftQuantity', style: const TextStyle(fontWeight: FontWeight.bold)),
                                         ),
                                         IconButton(
                                           icon: const Icon(Icons.add, size: 16),
-                                          onPressed: () => setState(() => _addingQuantity++),
+                                          onPressed: () => _updateDraftQuantity(1),
                                           visualDensity: VisualDensity.compact,
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -1338,17 +1373,24 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                       ],
                                     ),
                                   ),
-                                  const Spacer(),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: _confirmAddProduct,
-                                    icon: const Icon(Icons.add_shopping_cart, size: 16),
-                                    label: Text(l10n.confirmAddProduct),
-                                  ),
                                 ],
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              // Confirm Selection Full-Width CTA Button
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: _canConfirmSelection ? _confirmDraftSelection : null,
+                                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                                  label: Text(
+                                    l10n.confirmSelection,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
                               ),
                             ],
                           ],

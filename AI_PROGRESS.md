@@ -1,33 +1,38 @@
 # AI progress
 
-## Current task: Android Release v1.0.6+7 (Product Selection UX Fix & Picker State Reset)
+## Current task: Android Release v1.0.6+7 (POS/CRM Draft Selection UX Flow)
 
-- **Release Overview & Purpose**:
-  - Released Android APK `v1.0.6+7` with enhanced Product and Variant Selection UX in Customer Sales CRM.
-  - Eliminated automatic first-product pre-selection (`selectedProduct = null` on opening).
-  - Explicit `[ Select ]` CTA button with unselected `○ Product Name` state in product catalog browser.
-  - Clear visual feedback with `✓ Selected` badge and `[ Change Product ]` action upon selection.
-  - Explicit configuration chips with `○` for unselected and `✓` for selected RAM/ROM/Color variants.
-  - Prominent `[ Add to List ]` action adding items into the CRM sales list.
-  - **Picker State Initialization Audit & Fix**:
-    - Removed confusing `✓ Selected` badge from existing recorded products under "Products Purchased", keeping them strictly as list items.
-    - Added `_cancelAddProduct()` and reinforced full state reset on `_openAddProduct()`, `_cancelAddProduct()`, and `Change Product` (clearing `_addingProduct`, `_addingVariant`, `_catalogVariants`, and `_variantError`).
-    - Added regression test `Regression: Open picker with existing products -> new picker must start empty` in `tagging_test.dart`.
-- **Portal & Distribution**:
-  - Production APK: `oppo-line-oa-chat-v1.0.6-production.apk` (56.9 MB, SHA256: `52282a53fa893869180cc313808ce97f657362fba0d3778b2c22286771bac5cc`).
-  - Removed outdated v1.0.5 APK binary from `frontend/public/downloads/`.
-  - Updated download portal (`frontend/src/app/download/page.tsx`) with Version `1.0.6+7 (Product Selection UX Fix Release)`, checksum, and release highlights.
-- **Backend & In-App Update**:
-  - Updated `AppRelease` active release to `v1.0.6` (build 7) in database, migration seeds, and service fallback defaults.
-  - Validated that installed v1.0.5 clients automatically detect v1.0.6 and trigger the update dialog.
+- **Release Overview & Architecture**:
+  - Implemented **Draft Selection Flow (POS / CRM paradigm: Select → Configure → Confirm → Save CRM)** in `ConversationTagsSheet`.
+  - **Strict State Separation**:
+    - `_selectedProducts`: strictly stores committed customer CRM products (`List<CustomerSalesProductItem>`).
+    - `_draftProduct`: `ProductSelectorItem?` (temporary picker draft).
+    - `_draftVariant`: `ProductVariantSelectorItem?` (temporary picker draft variant).
+    - `_draftQuantity`: `int` (temporary picker quantity stepper, default 1).
+    - Decoupled completely so the temporary picker NEVER mutates or shares state with existing CRM items until explicitly committed.
+  - **Draft Flow Mechanics**:
+    - Tapping `+ Add Product` opens catalog with `_draftProduct = null`, `_draftVariant = null`, `_draftQuantity = 1`.
+    - User selects product → transitions to Draft Configuration view with `✓ Selected` badge and `[ Change Product ]` action.
+    - User selects variant & adjusts quantity.
+    - `[ Confirm Selection ]` button (`_canConfirmSelection`) is disabled until required product and variant configurations are selected.
+    - Tapping `[ Confirm Selection ]` commits the draft item to `_selectedProducts`, resets all draft fields, and closes the picker.
+    - Canceling or closing picker without confirming leaves `_selectedProducts` completely untouched.
+- **Multilingual Support**:
+  - Added localized strings for `confirmSelection`:
+    - English (`app_en.arb`): `"Confirm Selection"`
+    - Thai (`app_th.arb`): `"ยืนยันการเลือก"`
+    - Chinese (`app_zh.arb`, `app_zh_CN.arb`): `"确认选择"`
+- **Distribution & Checksums**:
+  - Production APK: `oppo-line-oa-chat-v1.0.6-production.apk` (56.9 MB, SHA256: `6a6290a3bf54859303fed8fc3d37dad727dce455ffa38508df7c931d11499d6c`).
+  - Synced to `frontend/public/downloads/`, download portal (`frontend/src/app/download/page.tsx`), database `AppRelease`, and `AppVersionService`.
 - **Verification & Test Results**:
   - Backend tests: `1,230 / 1,230 passed (100%)`.
   - Backend build: Compiled cleanly (`prisma generate && nest build`).
   - Frontend tests: `344 / 344 passed (100%)`.
   - Frontend build: Compiled cleanly (19 routes).
   - Flutter analyze: `0 issues`.
-  - Flutter tests: `87 / 87 passed (100%)`.
-  - Emulator validation: Verified on physical/emulator device with screen captures.
+  - Flutter tests: `89 / 89 passed (100%)` (including 8 dedicated POS/CRM Draft Selection and regression tests).
+  - Emulator validation: Verified on Android emulator (`emulator-5554`) with screen captures.
 
 ## Previous task: Customer Sales Product & Variant Selection UX Improvements (v1.0.5+6)
 

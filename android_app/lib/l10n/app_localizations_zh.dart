@@ -817,6 +817,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get confirmAddProduct => '添加到列表';
+
+  @override
+  String get confirmSelection => '确认选择';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1632,4 +1635,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get confirmAddProduct => '添加到列表';
+
+  @override
+  String get confirmSelection => '确认选择';
 }

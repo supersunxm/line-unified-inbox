@@ -127,7 +127,7 @@ void main() {
     expect(find.widgetWithText(ChoiceChip, '✓ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
 
     // Confirm adding product to list
-    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
 
     // Select Warm interest level (starts with ○)
@@ -188,7 +188,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
 
     // Save entire sheet -> confirmation modal
@@ -322,7 +324,7 @@ void main() {
     expect(repository.currentSales?.products[0].status, 'PURCHASED');
   });
 
-  testWidgets('Product & Variant Selection UX: initial unselected state, Change Product, and explicit chips', (tester) async {
+  testWidgets('Product & Variant Selection UX: draft selection flow with Confirm Selection', (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -359,36 +361,144 @@ void main() {
     expect(find.text('Selected'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
 
-    // 4. Test Change Product resets back to catalog
+    // 4. Confirm Selection button is disabled before variant is chosen
+    final confirmBtnBeforeVariant = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    expect(confirmBtnBeforeVariant.onPressed, isNull);
+
+    // 5. Test Change Product resets back to catalog
     await tester.tap(find.widgetWithText(OutlinedButton, 'Change Product'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
 
-    // 5. Re-select product via tapping the list tile directly
+    // 6. Re-select product via tapping the list tile directly
     await tester.tap(find.textContaining('○ OPPO Reno16 Pro 5G'));
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
 
-    // 6. Variants initially unselected with ○
+    // 7. Variants initially unselected with ○
     expect(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
 
-    // 7. Select variant -> updates to ✓
+    // 8. Select variant -> updates to ✓ and enables Confirm Selection
     await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(ChoiceChip, '✓ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
 
-    // 8. Add to List
-    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    final confirmBtnAfterVariant = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    expect(confirmBtnAfterVariant.onPressed, isNotNull);
+
+    // 9. Tap Confirm Selection
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
 
     // Picker closes, item appears in main sheet
     expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+  });
+
+  testWidgets('Draft selection flow: unconfirmed draft product is NOT added to CRM list', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Open Add Product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    // Select product and variant in draft
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+
+    // Close / Cancel picker without confirming
+    await tester.tap(find.byIcon(Icons.close).last);
+    await tester.pumpAndSettle();
+
+    // CRM product list remains empty
+    expect(find.text('No sales information recorded'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsNothing);
+  });
+
+  testWidgets('Multiple products POS/CRM flow: adding multiple items sequentially', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Switch to Purchased
+    await tester.tap(find.text('Purchased'));
+    await tester.pumpAndSettle();
+
+    // 1. Add First Product (OPPO Reno16 Pro 5G - 12GB)
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+
+    // 2. Add Second Product (OPPO Reno16 Pro 5G - 16GB)
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    // Picker starts empty (draftProduct = null)
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    // 3. Both items are now in CRM list
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+    expect(find.text('16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+
+    // 4. Save CRM
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.currentSales?.products.length, 2);
   });
 
   testWidgets('Regression: Open picker with existing products -> new picker must start empty', (tester) async {
@@ -440,7 +550,7 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    // 3. Verify the new product picker starts strictly empty (selectedProduct = null)
+    // 3. Verify the new product picker starts strictly empty (draftProduct = null)
     // Catalog must be visible with unselected indicator ○ and [Select] button
     expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
@@ -453,14 +563,14 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
 
-    // 5. Now it transitions to selected state with badge and Change Product action
+    // 5. Now it transitions to selected draft state with badge and Change Product action
     expect(find.text('Selected'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
 
-    // 6. Select variant and Add to List
+    // 6. Select variant and Confirm Selection
     await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Add to List'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
 
     // 7. Both products are now in Products Purchased

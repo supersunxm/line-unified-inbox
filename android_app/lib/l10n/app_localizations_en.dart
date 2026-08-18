@@ -829,4 +829,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get confirmAddProduct => 'Add to List';
+
+  @override
+  String get confirmSelection => 'Confirm Selection';
 }

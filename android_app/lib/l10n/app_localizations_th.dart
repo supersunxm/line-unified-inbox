@@ -824,4 +824,7 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get confirmAddProduct => 'เพิ่มลงรายการ';
+
+  @override
+  String get confirmSelection => 'ยืนยันการเลือก';
 }

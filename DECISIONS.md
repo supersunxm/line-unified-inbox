@@ -1,3 +1,18 @@
+# POS / CRM Draft Selection UX Flow Architecture (v1.0.6+7) (2026-08-18)
+
+- **POS / CRM Draft Selection Paradigm (Select → Configure → Confirm → Save CRM)**: Replaced direct catalog addition with an isolated 4-step draft selection model in `ConversationTagsSheet`. Staff select a catalog product into an isolated draft container, configure RAM/ROM/color variants and quantities, explicitly tap `[ Confirm Selection ]` (`[ ยืนยันการเลือก ]` / `[ 确认选择 ]`) to commit to the customer's CRM list, and finally save the overall CRM sheet.
+- **Strict State Decoupling & Immutability**:
+  - `_selectedProducts`: strictly stores committed customer CRM products (`List<CustomerSalesProductItem>`).
+  - `_draftProduct`: `ProductSelectorItem?` (temporary picker draft).
+  - `_draftVariant`: `ProductVariantSelectorItem?` (temporary picker draft variant).
+  - `_draftQuantity`: `int` (temporary picker quantity stepper, default 1).
+  - The draft state is completely decoupled from existing CRM items. Opening the product picker always starts empty (`_draftProduct = null`, `_draftVariant = null`, `_draftQuantity = 1`) regardless of whether 0, 1, or 5 products already exist in the CRM list.
+- **Conditional Confirmation Gate (`_canConfirmSelection`)**:
+  - `[ Confirm Selection ]` is disabled (`onPressed: null`) while the draft product is unselected or while variant choices remain unselected for multi-variant products.
+  - Tapping `[ Confirm Selection ]` atomically commits the item to `_selectedProducts`, resets all temporary draft variables, and closes the picker.
+  - Canceling (`IconButton(Icons.close)` or `_cancelAddProduct()`) aborts the draft with zero side-effects on existing CRM items.
+- **Full-Width Action Ergonomics**: The `[ Confirm Selection ]` button is placed as a full-width action at the bottom of the draft card with a checkmark icon, eliminating horizontal text clipping or overflow across English, Thai, and Chinese translations.
+
 # In-App APK Update System Architecture (v1.0.5+6) (2026-08-18)
 
 - **Decoupled Version Management Backend**: Implemented dedicated `AppVersionModule` with `AppRelease` PostgreSQL persistence and public version query API (`GET /app/version/android` and `GET /app/version/:platform`).

@@ -262,5 +262,6 @@
   "select": "Select",
   "selected": "Selected",
   "changeProduct": "Change Product",
-  "confirmAddProduct": "Add to List"
+  "confirmAddProduct": "Add to List",
+  "confirmSelection": "Confirm Selection"
 }
