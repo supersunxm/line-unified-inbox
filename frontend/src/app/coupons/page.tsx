@@ -1,5 +1,5 @@
-import { CouponManagementView } from "./coupon-management-view";
+import { CouponManagerAlignedView } from "./coupon-manager-aligned-view";
 
 export default function CouponsPage() {
-  return <CouponManagementView />;
+  return <CouponManagerAlignedView />;
 }
