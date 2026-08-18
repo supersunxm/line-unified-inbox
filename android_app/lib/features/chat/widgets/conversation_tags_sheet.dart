@@ -91,7 +91,6 @@ class ConversationTagsBar extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
                     if (hasSalesData) ...[
-                      // Status & Interest Level badges
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
@@ -168,7 +167,6 @@ class ConversationTagsBar extends StatelessWidget {
                           ],
                         ],
                       ),
-                      // Products summary
                       if (sales.products.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         ...sales.products.map((p) {
@@ -299,18 +297,16 @@ class ConversationTagsSheet extends StatefulWidget {
 }
 
 class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
-  late String _status; // 'INTERESTED' or 'PURCHASED'
-  String? _interestLevel; // Nullable neutral state (no default 'HOT')
+  late String _status;
+  String? _interestLevel;
   late Set<String> _sourceChannels;
   late String? _paymentMethod;
-  // Existing CRM products list (persisted in CRM)
   late List<CustomerSalesProductItem> _selectedProducts;
 
   final _searchController = TextEditingController();
   List<ProductSelectorItem> _catalogProducts = const [];
   List<ProductVariantSelectorItem> _catalogVariants = const [];
 
-  // Isolated Temporary Draft State for Product Picker (does not modify _selectedProducts until confirmed)
   ProductSelectorItem? _draftProduct;
   ProductVariantSelectorItem? _draftVariant;
   int _draftQuantity = 1;
@@ -323,6 +319,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   String? _variantError;
   int _searchGeneration = 0;
   int _variantGeneration = 0;
+  ConversationDetail? _lastSavedDetail;
 
   @override
   void initState() {
@@ -330,12 +327,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     final sales = widget.initialSalesInfo;
     if (sales != null && !sales.isEmpty) {
       _status = sales.status ?? 'INTERESTED';
-      _interestLevel = sales.interestLevel; // Neutral state if null
+      _interestLevel = sales.interestLevel;
       _sourceChannels = sales.purchaseChannel.toSet();
       _paymentMethod = sales.paymentMethod;
       _selectedProducts = List.from(sales.products);
     } else {
-      // Fallback from legacy tags if present
       final tags = widget.initialTags;
       if (tags.product != null || tags.isInstallment || tags.sourceChannels.isNotEmpty) {
         _status = 'PURCHASED';
@@ -361,7 +357,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
             : [];
       } else {
         _status = 'INTERESTED';
-        _interestLevel = null; // No default selection
+        _interestLevel = null;
         _sourceChannels = <String>{};
         _paymentMethod = null;
         _selectedProducts = [];
@@ -488,13 +484,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   bool get _canConfirmSelection {
     if (_draftProduct == null) return false;
     if (_loadingVariants) return false;
-    // If product has variants available, a variant must be selected
     if (_catalogVariants.isNotEmpty && _draftVariant == null) return false;
     return true;
   }
 
-  void _confirmDraftSelection() {
-    if (!_canConfirmSelection || _draftProduct == null) return;
+  Future<void> _confirmDraftSelection() async {
+    if (!_canConfirmSelection || _draftProduct == null || _saving) return;
+
     final item = CustomerSalesProductItem(
       id: '',
       productModelId: _draftProduct!.id,
@@ -509,16 +505,60 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       status: _status,
     );
 
+    final nextProducts = [..._selectedProducts, item];
+    final payloadProducts = nextProducts
+        .map((p) => CustomerSalesProductItem(
+              id: p.id,
+              productModelId: p.productModelId,
+              productVariantId: p.productVariantId,
+              modelName: p.modelName,
+              seriesName: p.seriesName,
+              category: p.category,
+              ram: p.ram,
+              rom: p.rom,
+              color: p.color,
+              quantity: p.quantity,
+              status: _status,
+            ))
+        .toList();
+
     setState(() {
-      _selectedProducts.add(item);
-      _showProductPicker = false;
-      _draftProduct = null;
-      _draftVariant = null;
-      _draftQuantity = 1;
-      _catalogVariants = const [];
-      _variantError = null;
-      _searchController.clear();
+      _saving = true;
+      _error = null;
     });
+
+    try {
+      final detail = await widget.repository.updateCustomerSalesInfo(
+        widget.conversationId,
+        status: _status,
+        interestLevel: _status == 'INTERESTED' ? _interestLevel : null,
+        purchaseChannel: _status == 'PURCHASED' ? _sourceChannels.toList() : [],
+        paymentMethod: _status == 'PURCHASED' ? _paymentMethod : null,
+        products: payloadProducts,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _selectedProducts = List<CustomerSalesProductItem>.from(
+          detail.customerSalesInformation?.products ?? payloadProducts,
+        );
+        _showProductPicker = false;
+        _draftProduct = null;
+        _draftVariant = null;
+        _draftQuantity = 1;
+        _catalogVariants = const [];
+        _variantError = null;
+        _searchController.clear();
+        _saving = false;
+        _lastSavedDetail = detail;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = appLocalizations(context).unableToSaveTags;
+      });
+    }
   }
 
   void _removeProduct(int index) {
@@ -603,8 +643,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   ),
                 ),
               ],
-
-              // Customer Status
               Text(l10n.customerStatus, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 2),
               Text(
@@ -612,8 +650,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-
-              // Interest Level (if Interested)
               if (_status == 'INTERESTED') ...[
                 Text(l10n.interestLevel, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
@@ -629,8 +665,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 ),
                 const SizedBox(height: 12),
               ],
-
-              // Purchase Channel & Payment (if Purchased)
               if (_status == 'PURCHASED') ...[
                 if (_sourceChannels.isNotEmpty) ...[
                   Text(l10n.purchaseChannel, style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold)),
@@ -657,8 +691,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   const SizedBox(height: 12),
                 ],
               ],
-
-              // Products
               Text(
                 _status == 'PURCHASED' ? l10n.productsPurchased : l10n.productsInterested,
                 style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor, fontWeight: FontWeight.bold),
@@ -754,6 +786,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
         products: payloadProducts,
       );
       if (!mounted) return;
+      _lastSavedDetail = detail;
       Navigator.of(context).pop(detail);
     } catch (_) {
       if (!mounted) return;
@@ -785,11 +818,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Top Header Actions
                   Row(
                     children: [
                       IconButton(
-                        onPressed: _saving ? null : () => Navigator.pop(context),
+                        onPressed: _saving ? null : () => Navigator.pop(context, _lastSavedDetail),
                         icon: const Icon(Icons.close),
                         tooltip: l10n.close,
                         visualDensity: VisualDensity.compact,
@@ -821,8 +853,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
-
-                  // Conversion Banner (if already Interested lead and currently in Interested view)
                   if (isExistingInterested && _status == 'INTERESTED') ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -888,8 +918,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                     ),
                   ],
-
-                  // 1. Mandatory Customer Status Segment Control
                   Text(l10n.customerStatus,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: AppSpacing.xs),
@@ -919,8 +947,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-
-                  // 2. Conditional Fields: If INTERESTED -> Interest Level (with neutral state)
                   if (_status == 'INTERESTED') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -963,8 +989,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
-
-                  // 3. Conditional Fields: If PURCHASED -> Channel & Payment Method
                   if (_status == 'PURCHASED') ...[
                     Text(l10n.purchaseChannel,
                         style: Theme.of(context).textTheme.titleMedium),
@@ -1003,7 +1027,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
-
                     Text(l10n.paymentMethod,
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.xs),
@@ -1038,8 +1061,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
-
-                  // 4. Products List (Multi-Product)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1056,7 +1077,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xs),
-
                   if (_selectedProducts.isEmpty && !_showProductPicker)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -1065,14 +1085,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
                       ),
                     ),
-
-                  // Multi-Product Selected Cards
                   ..._selectedProducts.asMap().entries.map((entry) {
                     final index = entry.key;
                     final product = entry.value;
                     final variantText = product.variantLabel;
                     final icon = _getCategoryIcon(product.category, product.modelName);
-
                     return Card(
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                       elevation: 1,
@@ -1127,7 +1144,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.xs),
-                            // Quantity Stepper
                             Container(
                               decoration: BoxDecoration(
                                 border: Border.all(color: Theme.of(context).dividerColor.withAlpha(100)),
@@ -1167,8 +1183,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                     );
                   }),
-
-                  // Inline Product Picker Box when adding
                   if (_showProductPicker) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Card(
@@ -1188,7 +1202,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 Text(l10n.addProduct, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                                 IconButton(
                                   icon: const Icon(Icons.close, size: 20),
-                                  onPressed: _cancelAddProduct,
+                                  onPressed: _saving ? null : _cancelAddProduct,
                                 ),
                               ],
                             ),
@@ -1242,16 +1256,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                           ),
-                                          onPressed: () => _selectDraftProduct(p),
+                                          onPressed: _saving ? null : () => _selectDraftProduct(p),
                                           child: Text(l10n.select),
                                         ),
-                                        onTap: () => _selectDraftProduct(p),
+                                        onTap: _saving ? null : () => _selectDraftProduct(p),
                                       );
                                     },
                                   ),
                                 ),
                             ] else ...[
-                              // Selected Draft Product visual confirmation container
                               Container(
                                 padding: const EdgeInsets.all(AppSpacing.sm),
                                 decoration: BoxDecoration(
@@ -1323,7 +1336,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
-                                      onPressed: _changeDraftProduct,
+                                      onPressed: _saving ? null : _changeDraftProduct,
                                       icon: const Icon(Icons.swap_horiz, size: 16),
                                       label: Text(l10n.changeProduct),
                                     ),
@@ -1363,13 +1376,12 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                             : Theme.of(context).dividerColor,
                                         width: isSelected ? 1.5 : 1,
                                       ),
-                                      onSelected: (selected) => _selectDraftVariant(selected ? v : null),
+                                      onSelected: _saving ? null : (selected) => _selectDraftVariant(selected ? v : null),
                                     );
                                   }).toList(),
                                 ),
                               ],
                               const SizedBox(height: AppSpacing.md),
-                              // Quantity selection for draft item
                               Row(
                                 children: [
                                   Text('${l10n.quantity}:', style: Theme.of(context).textTheme.labelLarge),
@@ -1384,7 +1396,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                       children: [
                                         IconButton(
                                           icon: const Icon(Icons.remove, size: 16),
-                                          onPressed: _draftQuantity > 1 ? () => _updateDraftQuantity(-1) : null,
+                                          onPressed: !_saving && _draftQuantity > 1 ? () => _updateDraftQuantity(-1) : null,
                                           visualDensity: VisualDensity.compact,
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -1395,7 +1407,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         ),
                                         IconButton(
                                           icon: const Icon(Icons.add, size: 16),
-                                          onPressed: () => _updateDraftQuantity(1),
+                                          onPressed: _saving ? null : () => _updateDraftQuantity(1),
                                           visualDensity: VisualDensity.compact,
                                           padding: EdgeInsets.zero,
                                           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -1406,7 +1418,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 ],
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              // Confirm Selection Full-Width CTA Button
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton.icon(
@@ -1414,8 +1425,14 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
-                                  onPressed: _canConfirmSelection ? _confirmDraftSelection : null,
-                                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                                  onPressed: !_saving && _canConfirmSelection ? _confirmDraftSelection : null,
+                                  icon: _saving
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.check_circle_outline, size: 18),
                                   label: Text(
                                     l10n.confirmSelection,
                                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -1428,7 +1445,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                     ),
                   ],
-
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
