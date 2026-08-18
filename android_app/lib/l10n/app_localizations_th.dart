@@ -766,9 +766,6 @@ class AppLocalizationsTh extends AppLocalizations {
   String get volumeComparison => 'กิจกรรมเทียบกับช่วงก่อนหน้า';
 
   @override
-  String get responseComparison => 'การตอบเทียบกับช่วงก่อนหน้า';
-
-  @override
   String get comparisonUnavailable => 'ไม่มีข้อมูลเปรียบเทียบสำหรับช่วงเวลานี้';
 
   @override
@@ -782,4 +779,37 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get overTwentyFourHours => '≥ 24 ชม.';
+
+  @override
+  String get newVersionAvailable => 'มีเวอร์ชันใหม่พร้อมให้อัปเดต';
+
+  @override
+  String get updateRequired => 'จำเป็นต้องอัปเดตแอปพลิเคชัน';
+
+  @override
+  String get updateNow => 'อัปเดตทันที';
+
+  @override
+  String get later => 'ไว้ภายหลัง';
+
+  @override
+  String get whatsNew => 'มีอะไรใหม่ในเวอร์ชันนี้';
+
+  @override
+  String get currentVersion => 'เวอร์ชันปัจจุบัน';
+
+  @override
+  String get latestVersion => 'เวอร์ชันล่าสุด';
+
+  @override
+  String get checkForUpdates => 'ตรวจสอบการอัปเดต';
+
+  @override
+  String get alreadyLatestVersion => 'คุณกำลังใช้งานเวอร์ชันล่าสุดแล้ว';
+
+  @override
+  String get unableToCheckUpdates => 'ไม่สามารถตรวจสอบการอัปเดตได้';
+
+  @override
+  String get downloadingApk => 'กำลังเปิดหน้าดาวน์โหลด APK...';
 }

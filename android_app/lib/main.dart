@@ -9,6 +9,7 @@ import 'core/storage/token_store.dart';
 import 'core/models/models.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_scroll_behavior.dart';
+import 'core/services/app_update_service.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/change_password_page.dart';
 import 'features/auth/login_page.dart';
@@ -45,6 +46,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   late final RealtimeService _realtime;
   late final NotificationService _notifications;
   late final AppLanguageController _language;
+  late final AppUpdateService _updateService;
   CurrentUser? _user;
   bool _registering = false;
   bool _pendingApproval = false;
@@ -63,6 +65,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     _realtime = RealtimeService(_tokens);
     _notifications = NotificationService(_api, _tokens);
     _language = AppLanguageController();
+    _updateService = AppUpdateService(_api);
     unawaited(_language.load());
     _restore();
   }
@@ -78,9 +81,15 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _user != null) {
+    if (state == AppLifecycleState.resumed) {
       SafeLogger.lifecycle('resumed');
-      _refreshSession();
+      if (_user != null) {
+        _refreshSession();
+      }
+      final ctx = _navigator.currentContext;
+      if (ctx != null) {
+        unawaited(_updateService.checkForUpdates(ctx));
+      }
     }
   }
 
@@ -97,6 +106,12 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       unawaited(_notifications.initialize(_openConversation));
       _realtime.connect();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _navigator.currentContext;
+      if (ctx != null) {
+        unawaited(_updateService.checkForUpdates(ctx));
+      }
+    });
   }
 
   Future<void> _openConversation(String id, [String? notificationId]) async {
@@ -242,6 +257,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         summary: _summary,
         events: _realtime.events,
         onLogout: _logout,
-        onConversationOpened: _notifications.clearConversationNotifications);
+        onConversationOpened: _notifications.clearConversationNotifications,
+        updateService: _updateService);
   }
 }

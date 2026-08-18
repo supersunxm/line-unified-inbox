@@ -1,6 +1,33 @@
 # AI progress
 
-## Current task: Android Release v1.0.4+5 (CRM UX Improvement Release)
+## Current task: Android Release v1.0.5+6 (In-App APK Update System Release)
+
+- **Release Overview & Features**:
+  - **In-App APK Update System**:
+    - Automatic version check upon app launch (`_restore()`) and app resume (`didChangeAppLifecycleState: resumed`).
+    - Manual "Check for updates" option in `SettingsSection` (Profile tab).
+    - Compares integer `buildNumber` rather than version strings for reliable progression.
+    - Dialog with version badge (`Version 1.0.5+6 · 56.9 MB`), release highlights list, and "Update Now" action.
+    - Supports both Optional Update (dismissible, "Update Now" / "Later") and Forced Update (non-dismissible barrier, `currentBuildNumber < minimumSupportedBuildNumber` or `forceUpdate: true`).
+    - Non-silent download via verified HTTPS URL (`launchUrl` external intent) respecting Android enterprise security policies.
+    - Download count tracking endpoint (`POST /app/version/track-download`).
+  - **Backend Version API & Persistence**:
+    - Created `AppPlatform` enum and `AppRelease` model in PostgreSQL schema (`backend/prisma/migrations/20260818120000_add_app_release_management`).
+    - Created `AppVersionModule` exposing public endpoint `GET /app/version/android` (and parametric `GET /app/version/:platform`) with fallback defaults for zero-downtime resilience.
+    - Admin management routes (`GET /app/releases`, `POST /app/releases`, `PATCH /app/releases/:id`).
+  - **Portal & APK Distribution**:
+    - Built production APK `oppo-line-oa-chat-v1.0.5-production.apk` (56.9 MB, SHA256: `da00c1a50ef111cbf290ca2783575aaaa5d8c2088f0422a765d4b6219d8afc2f`).
+    - Updated download portal (`frontend/src/app/download/page.tsx`) with new badge, highlights, and exact checksum.
+- **Verification & Test Results**:
+  - Backend tests: `1,230 / 1,230 passed (100%)`.
+  - Backend build: Compiled cleanly (`prisma generate && nest build`).
+  - Frontend tests: `344 / 344 passed (100%)`.
+  - Frontend build: Compiled cleanly (19 routes).
+  - Flutter analyze: `0 issues`.
+  - Flutter tests: `84 / 84 passed (100%)`.
+  - Local API endpoint test: `GET /app/version/android` returning 200 with complete JSON metadata.
+
+## Previous task: Android Release v1.0.4+5 (CRM UX Improvement Release)
 
 - **Release Overview & Features**:
   - **Interested → Purchased Conversion Flow**: Added quick-action banner `[ 🛍️ Convert to Purchased ]` for existing Interested leads, automatically preserving existing products & variants while switching status to `PURCHASED`.

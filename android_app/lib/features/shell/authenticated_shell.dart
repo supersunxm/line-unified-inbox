@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/models.dart';
 import '../../core/localization/localization.dart';
+import '../../core/services/app_update_service.dart';
 import '../auth/admin_approval_page.dart';
 import '../auth/auth_repository.dart';
 import '../chat/chat_page.dart';
@@ -22,6 +23,7 @@ class AuthenticatedShell extends StatefulWidget {
     required this.summary,
     required this.onLogout,
     required this.onConversationOpened,
+    this.updateService,
   });
 
   final CurrentUser user;
@@ -31,6 +33,7 @@ class AuthenticatedShell extends StatefulWidget {
   final SummaryRepository summary;
   final VoidCallback onLogout;
   final Future<void> Function(String conversationId) onConversationOpened;
+  final AppUpdateService? updateService;
 
   @override
   AuthenticatedShellState createState() => AuthenticatedShellState();
@@ -89,6 +92,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
               onApprovals:
                   widget.user.role == 'ADMIN' ? _openAdminApprovals : null,
               onPersonalInformation: _openPersonalInformation,
+              updateService: widget.updateService,
             ),
           ],
         ),

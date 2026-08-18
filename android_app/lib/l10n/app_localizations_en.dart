@@ -771,9 +771,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get volumeComparison => 'Activity vs previous period';
 
   @override
-  String get responseComparison => 'Response vs previous period';
-
-  @override
   String get comparisonUnavailable => 'Comparison unavailable for this period';
 
   @override
@@ -787,4 +784,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overTwentyFourHours => '≥ 24h';
+
+  @override
+  String get newVersionAvailable => 'New Version Available';
+
+  @override
+  String get updateRequired => 'Update Required';
+
+  @override
+  String get updateNow => 'Update Now';
+
+  @override
+  String get later => 'Later';
+
+  @override
+  String get whatsNew => 'What\'s new';
+
+  @override
+  String get currentVersion => 'Current version';
+
+  @override
+  String get latestVersion => 'Latest version';
+
+  @override
+  String get checkForUpdates => 'Check for updates';
+
+  @override
+  String get alreadyLatestVersion => 'You are using the latest version';
+
+  @override
+  String get unableToCheckUpdates => 'Unable to check for updates';
+
+  @override
+  String get downloadingApk => 'Opening download page...';
 }

@@ -1553,12 +1553,6 @@ abstract class AppLocalizations {
   /// **'Activity vs previous period'**
   String get volumeComparison;
 
-  /// No description provided for @responseComparison.
-  ///
-  /// In en, this message translates to:
-  /// **'Response vs previous period'**
-  String get responseComparison;
-
   /// No description provided for @comparisonUnavailable.
   ///
   /// In en, this message translates to:
@@ -1588,6 +1582,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'≥ 24h'**
   String get overTwentyFourHours;
+
+  /// No description provided for @newVersionAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'New Version Available'**
+  String get newVersionAvailable;
+
+  /// No description provided for @updateRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Required'**
+  String get updateRequired;
+
+  /// No description provided for @updateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Now'**
+  String get updateNow;
+
+  /// No description provided for @later.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get later;
+
+  /// No description provided for @whatsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new'**
+  String get whatsNew;
+
+  /// No description provided for @currentVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Current version'**
+  String get currentVersion;
+
+  /// No description provided for @latestVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest version'**
+  String get latestVersion;
+
+  /// No description provided for @checkForUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get checkForUpdates;
+
+  /// No description provided for @alreadyLatestVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'You are using the latest version'**
+  String get alreadyLatestVersion;
+
+  /// No description provided for @unableToCheckUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to check for updates'**
+  String get unableToCheckUpdates;
+
+  /// No description provided for @downloadingApk.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening download page...'**
+  String get downloadingApk;
 }
 
 class _AppLocalizationsDelegate

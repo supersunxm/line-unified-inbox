@@ -759,9 +759,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get volumeComparison => '与上一期间的活动对比';
 
   @override
-  String get responseComparison => '与上一期间的回复对比';
-
-  @override
   String get comparisonUnavailable => '此期间没有可用的对比数据';
 
   @override
@@ -775,6 +772,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get overTwentyFourHours => '≥ 24小时';
+
+  @override
+  String get newVersionAvailable => '发现新版本';
+
+  @override
+  String get updateRequired => '需要更新应用';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get later => '稍后';
+
+  @override
+  String get whatsNew => '更新内容';
+
+  @override
+  String get currentVersion => '当前版本';
+
+  @override
+  String get latestVersion => '最新版本';
+
+  @override
+  String get checkForUpdates => '检查更新';
+
+  @override
+  String get alreadyLatestVersion => '当前已是最新版本';
+
+  @override
+  String get unableToCheckUpdates => '无法检查更新';
+
+  @override
+  String get downloadingApk => '正在打开下载页面...';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1532,9 +1562,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get volumeComparison => '与上一期间的活动对比';
 
   @override
-  String get responseComparison => '与上一期间的回复对比';
-
-  @override
   String get comparisonUnavailable => '此期间没有可用的对比数据';
 
   @override
@@ -1548,4 +1575,37 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get overTwentyFourHours => '≥ 24小时';
+
+  @override
+  String get newVersionAvailable => '发现新版本';
+
+  @override
+  String get updateRequired => '需要更新应用';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get later => '稍后';
+
+  @override
+  String get whatsNew => '更新内容';
+
+  @override
+  String get currentVersion => '当前版本';
+
+  @override
+  String get latestVersion => '最新版本';
+
+  @override
+  String get checkForUpdates => '检查更新';
+
+  @override
+  String get alreadyLatestVersion => '当前已是最新版本';
+
+  @override
+  String get unableToCheckUpdates => '无法检查更新';
+
+  @override
+  String get downloadingApk => '正在打开下载页面...';
 }

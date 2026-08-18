@@ -1511,3 +1511,31 @@ model TikTokVideo {
   @@index([createTime])
   @@index([viewCount])
 }
+
+enum AppPlatform {
+  ANDROID
+  IOS
+}
+
+model AppRelease {
+  id                          String      @id @default(uuid())
+  platform                    AppPlatform @default(ANDROID)
+  version                     String      // e.g. "1.0.5"
+  buildNumber                 Int         // e.g. 6
+  minimumSupportedVersion     String      @default("1.0.3")
+  minimumSupportedBuildNumber Int         @default(4)
+  forceUpdate                 Boolean     @default(false)
+  apkUrl                      String      // e.g. "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk"
+  apkSize                     String?     // e.g. "57 MB"
+  sha256                      String?     // e.g. "4068576a..."
+  releaseNotes                String[]    @default([])
+  isActive                    Boolean     @default(true)
+  downloadCount               Int         @default(0)
+  createdAt                   DateTime    @default(now())
+  updatedAt                   DateTime    @updatedAt
+
+  @@unique([platform, buildNumber])
+  @@index([platform, isActive])
+  @@index([platform, buildNumber])
+}
+

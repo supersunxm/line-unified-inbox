@@ -384,6 +384,7 @@ export class MobileConversationsService {
         select: {
           id: true,
           customerSalesStatus: true,
+          salesRecordedAt: true,
           interestLevel: true,
           paymentMethod: true,
           sourceChannels: true,
@@ -539,8 +540,8 @@ export class MobileConversationsService {
       });
 
       const isConversion = conversation.customerSalesStatus === CustomerSalesStatus.INTERESTED && dto.status === CustomerSalesStatus.PURCHASED;
-      const conversionTimeMs = isConversion && conversation.customerSalesRecordedAt
-        ? (new Date().getTime() - new Date(conversation.customerSalesRecordedAt).getTime())
+      const conversionTimeMs = isConversion && conversation.salesRecordedAt
+        ? (new Date().getTime() - new Date(conversation.salesRecordedAt).getTime())
         : null;
 
       await tx.activityHistory.create({
@@ -566,7 +567,7 @@ export class MobileConversationsService {
             productCount: dto.products?.length,
             isConversion,
             conversionTimeMs,
-            interestRecordedAt: isConversion ? conversation.customerSalesRecordedAt : null,
+            interestRecordedAt: isConversion ? conversation.salesRecordedAt : null,
           },
         },
       });

@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.4-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.5-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "4068576a687d328f5b4843105dfc63d904832e835014db8f129fdba26729221b";
+  const sha256Checksum = "da00c1a50ef111cbf290ca2783575aaaa5d8c2088f0422a765d4b6219d8afc2f";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -49,19 +49,23 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.4+5 (CRM UX Improvement Release) · 56.8 MB
+              Version 1.0.5+6 (In-App Update & CRM Release) · 56.9 MB
             </div>
           </div>
 
           {/* Release Highlights */}
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.4 (What&apos;s New in v1.0.4)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.5 (What&apos;s New in v1.0.5)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Interested → Purchased Conversion Workflow</strong>: แปลงลูกค้าสนใจเป็นซื้อแล้วได้ทันทีใน 1 คลิก โดยเก็บข้อมูลสินค้าเดิมไว้ครบถ้วน</span>
+                <span><strong>In-App APK Update System</strong>: ตรวจสอบและแจ้งเตือนเวอร์ชันใหม่อัตโนมัติเมื่อเปิดแอป พร้อมปุ่มกดอัปเดตทันที</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Interested → Purchased Conversion</strong>: แปลงลูกค้าสนใจเป็นซื้อแล้วได้ทันทีใน 1 คลิก พร้อมเก็บสเปกเดิมครบ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
@@ -69,11 +73,7 @@ export default function DownloadAppPage() {
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Multi-Product Tagging</strong>: บันทึกสินค้าได้หลายรายการพร้อมสเปก RAM, ROM, สี และจำนวนอย่างแม่นยำ</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>CRM Confirmation Flow</strong>: แสดงหน้าต่างยืนยันสรุปข้อมูลก่อนบันทึก พร้อมแจ้งเตือนผลลัพธ์ทันที</span>
+                <span><strong>Multi-Product Tagging & Confirmation</strong>: บันทึกสินค้าได้หลายรายการพร้อมหน้าต่างยืนยันสรุปข้อมูลก่อนบันทึก</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>

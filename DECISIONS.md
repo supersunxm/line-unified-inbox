@@ -1,3 +1,15 @@
+# In-App APK Update System Architecture (v1.0.5+6) (2026-08-18)
+
+- **Decoupled Version Management Backend**: Implemented dedicated `AppVersionModule` with `AppRelease` PostgreSQL persistence and public version query API (`GET /app/version/android` and `GET /app/version/:platform`).
+- **Integer-Based Build Number Progression**: Version comparison strictly utilizes monotonic integer `buildNumber` rather than fragile semantic string comparisons, preventing issues where `1.0.4+5` vs `1.0.5+6` could evaluate ambiguously.
+- **Fail-Safe Dynamic Configuration & Resilience**: `AppVersionService` returns active PostgreSQL releases ordered by `buildNumber DESC`, backed by safe compile-time / environment defaults if the database query returns empty, guaranteeing 100% API availability.
+- **Three-Tier User Experience Model**:
+  - **Tier 1: Up to date (`currentBuildNumber >= latestBuildNumber`)**: Silent operation without modal interruption during launch/resume; explicit confirmation SnackBar on manual check in Profile Settings.
+  - **Tier 2: Optional update (`currentBuildNumber < latestBuildNumber && !isForced`)**: Dismissible dialog showing release notes, version badge, "Update Now", and "Later".
+  - **Tier 3: Forced update (`currentBuildNumber < minimumSupportedBuildNumber || forceUpdate: true`)**: Non-dismissible barrier dialog with `PopScope(canPop: false)`, blocking app usage until the critical update is applied.
+- **Enterprise-Grade Intent-Based APK Installation**: In compliance with Android enterprise security policies and permission sandboxing, the app triggers verified HTTPS downloads via the Android system browser/download manager using `url_launcher` (`LaunchMode.externalApplication`), strictly rejecting silent background APK overwrites.
+- **Automated Lifecycle Integration**: Update checks execute seamlessly on app initialization (`_restore()`) and on app resume (`didChangeAppLifecycleState: resumed`), plus on-demand in the Profile settings section.
+
 # Customer Sales Information CRM Module & Conversion Workflow (v1.0.4+5) (2026-08-18)
 
 - **Sales Lifecycle Decoupling (Leads vs Purchases)**: Redesigned the legacy single-purchase structure into a flexible CRM-style sales module. Customer conversations track `CustomerSalesStatus` (`INTERESTED` vs `PURCHASED`), recognizing that customers in LINE OA frequently inquire and show interest before purchasing.

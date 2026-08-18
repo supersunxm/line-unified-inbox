@@ -243,10 +243,20 @@
   "slower": "slower",
   "percentagePoints": "pp",
   "volumeComparison": "Activity vs previous period",
-  "responseComparison": "Response vs previous period",
-  "comparisonUnavailable": "Comparison unavailable for this period"
-  ,"underFourHours": "< 4h"
-  ,"fourToTwelveHours": "4–12h"
-  ,"twelveToTwentyFourHours": "12–24h"
-  ,"overTwentyFourHours": "≥ 24h"
+  "comparisonUnavailable": "Comparison unavailable for this period",
+  "underFourHours": "< 4h",
+  "fourToTwelveHours": "4–12h",
+  "twelveToTwentyFourHours": "12–24h",
+  "overTwentyFourHours": "≥ 24h",
+  "newVersionAvailable": "New Version Available",
+  "updateRequired": "Update Required",
+  "updateNow": "Update Now",
+  "later": "Later",
+  "whatsNew": "What's new",
+  "currentVersion": "Current version",
+  "latestVersion": "Latest version",
+  "checkForUpdates": "Check for updates",
+  "alreadyLatestVersion": "You are using the latest version",
+  "unableToCheckUpdates": "Unable to check for updates",
+  "downloadingApk": "Opening download page..."
 }

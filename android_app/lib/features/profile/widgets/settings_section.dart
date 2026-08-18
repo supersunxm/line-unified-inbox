@@ -3,18 +3,22 @@ import 'package:flutter/material.dart';
 import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 
+import '../../../core/services/app_update_service.dart';
+
 class SettingsSection extends StatelessWidget {
-  const SettingsSection({super.key, this.onPersonalInformation});
+  const SettingsSection({super.key, this.onPersonalInformation, this.updateService});
 
   final VoidCallback? onPersonalInformation;
+  final AppUpdateService? updateService;
 
   @override
   Widget build(BuildContext context) {
     final languageController = AppLanguageScope.maybeOf(context);
+    final l10n = appLocalizations(context);
     return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(appLocalizations(context).settings,
+          Text(l10n.settings,
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Card(
@@ -23,14 +27,14 @@ class SettingsSection extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.badge_outlined),
                   title:
-                      Text(appLocalizations(context).personalInformation),
+                      Text(l10n.personalInformation),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: onPersonalInformation,
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.language),
-                  title: Text(appLocalizations(context).language),
+                  leading: const Icon(Icons.language),
+                  title: Text(l10n.language),
                   subtitle: Text(languageController?.language.nativeName ??
                       AppLanguage.english.nativeName),
                   onTap: languageController == null
@@ -39,28 +43,39 @@ class SettingsSection extends StatelessWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.notifications_none),
-                  title: Text(appLocalizations(context).notifications),
-                  subtitle: Text(appLocalizations(context).comingSoon),
+                  leading: const Icon(Icons.notifications_none),
+                  title: Text(l10n.notifications),
+                  subtitle: Text(l10n.comingSoon),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.palette_outlined),
-                  title: Text(appLocalizations(context).appearance),
-                  subtitle: Text(appLocalizations(context).comingSoon),
+                  leading: const Icon(Icons.palette_outlined),
+                  title: Text(l10n.appearance),
+                  subtitle: Text(l10n.comingSoon),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.security_outlined),
-                  title: Text(appLocalizations(context).accountSecurity),
+                  leading: const Icon(Icons.security_outlined),
+                  title: Text(l10n.accountSecurity),
                   subtitle:
-                      Text(appLocalizations(context).managedByOrganization),
+                      Text(l10n.managedByOrganization),
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text(appLocalizations(context).about),
-                  subtitle: Text(appLocalizations(context).appName),
+                  leading: const Icon(Icons.info_outline),
+                  title: Text(l10n.about),
+                  subtitle: const Text('OPPO LINE OA Chat · v1.0.5+6'),
+                  trailing: Text(
+                    l10n.checkForUpdates,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  onTap: updateService == null
+                      ? null
+                      : () => updateService!.checkForUpdates(context, isManual: true),
                 ),
               ],
             ),

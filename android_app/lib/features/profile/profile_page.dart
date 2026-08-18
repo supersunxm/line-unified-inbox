@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/models.dart';
 import '../../core/localization/localization.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/app_update_service.dart';
 import 'widgets/account_section.dart';
 import 'widgets/admin_tools_section.dart';
 import 'widgets/membership_section.dart';
@@ -16,12 +17,14 @@ class ProfilePage extends StatelessWidget {
     required this.onLogout,
     this.onApprovals,
     this.onPersonalInformation,
+    this.updateService,
   });
 
   final CurrentUser user;
   final VoidCallback onLogout;
   final VoidCallback? onApprovals;
   final VoidCallback? onPersonalInformation;
+  final AppUpdateService? updateService;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -35,7 +38,10 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             MembershipSection(memberships: user.memberships),
             const SizedBox(height: AppSpacing.xl),
-            SettingsSection(onPersonalInformation: onPersonalInformation),
+            SettingsSection(
+              onPersonalInformation: onPersonalInformation,
+              updateService: updateService,
+            ),
             if (onApprovals != null) ...[
               const SizedBox(height: AppSpacing.xl),
               AdminToolsSection(onApprovals: onApprovals),

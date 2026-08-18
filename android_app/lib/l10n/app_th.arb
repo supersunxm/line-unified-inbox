@@ -243,10 +243,20 @@
   "slower": "ช้าลง",
   "percentagePoints": "จุดเปอร์เซ็นต์",
   "volumeComparison": "กิจกรรมเทียบกับช่วงก่อนหน้า",
-  "responseComparison": "การตอบเทียบกับช่วงก่อนหน้า",
-  "comparisonUnavailable": "ไม่มีข้อมูลเปรียบเทียบสำหรับช่วงเวลานี้"
-  ,"underFourHours": "< 4 ชม."
-  ,"fourToTwelveHours": "4–12 ชม."
-  ,"twelveToTwentyFourHours": "12–24 ชม."
-  ,"overTwentyFourHours": "≥ 24 ชม."
+  "comparisonUnavailable": "ไม่มีข้อมูลเปรียบเทียบสำหรับช่วงเวลานี้",
+  "underFourHours": "< 4 ชม.",
+  "fourToTwelveHours": "4–12 ชม.",
+  "twelveToTwentyFourHours": "12–24 ชม.",
+  "overTwentyFourHours": "≥ 24 ชม.",
+  "newVersionAvailable": "มีเวอร์ชันใหม่พร้อมให้อัปเดต",
+  "updateRequired": "จำเป็นต้องอัปเดตแอปพลิเคชัน",
+  "updateNow": "อัปเดตทันที",
+  "later": "ไว้ภายหลัง",
+  "whatsNew": "มีอะไรใหม่ในเวอร์ชันนี้",
+  "currentVersion": "เวอร์ชันปัจจุบัน",
+  "latestVersion": "เวอร์ชันล่าสุด",
+  "checkForUpdates": "ตรวจสอบการอัปเดต",
+  "alreadyLatestVersion": "คุณกำลังใช้งานเวอร์ชันล่าสุดแล้ว",
+  "unableToCheckUpdates": "ไม่สามารถตรวจสอบการอัปเดตได้",
+  "downloadingApk": "กำลังเปิดหน้าดาวน์โหลด APK..."
 }

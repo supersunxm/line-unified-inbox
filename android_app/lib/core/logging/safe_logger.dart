@@ -54,4 +54,8 @@ class SafeLogger {
       _write('logout_notification_cleanup_failed');
   static void logoutSessionCleared() => _write('logout_session_cleared');
   static void logoutCompleted() => _write('logout_completed');
+  static void updateCheckFailed(String errorType) =>
+      _write('update_check_failed errorType=$errorType');
+  static void updateDownloadFailed(String errorType) =>
+      _write('update_download_failed errorType=$errorType');
 }
