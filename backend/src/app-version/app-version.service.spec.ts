@@ -17,7 +17,7 @@ test("AppVersionService returns active Android release with correct structure", 
         forceUpdate: false,
         apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk",
         apkSize: "56.9 MB",
-        sha256: "6a6290a3bf54859303fed8fc3d37dad727dce455ffa38508df7c931d11499d6c",
+        sha256: "fbdebd187c41107973f9dc5de8d72050719a9bdff7ee82ff2fe2d5c9df36d819",
         releaseNotes: [
           "Product Selection UX improvement",
           "Draft Selection Flow (Select → Configure → Confirm → Save)",

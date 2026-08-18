@@ -55,9 +55,9 @@ class ConversationTagsBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.xs),
-      child: InkWell(
+      child: GestureDetector(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
+        behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
@@ -682,9 +682,19 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('$icon ${p.modelName}${p.quantity > 1 ? ' (x${p.quantity})' : ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text(
+                                '$icon ${p.modelName}${p.quantity > 1 ? ' (x${p.quantity})' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
                               if (variantText.isNotEmpty)
-                                Text(variantText, style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+                                Text(
+                                  variantText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+                                ),
                             ],
                           ),
                         ),
@@ -1085,11 +1095,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 children: [
                                   Text(
                                     product.modelName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  if (product.seriesName != null || product.category != null)
+                                  if ((product.seriesName?.isNotEmpty ?? false) || (product.category?.isNotEmpty ?? false))
                                     Text(
-                                      [product.seriesName, product.category].whereType<String>().join(' · '),
+                                      [product.seriesName, product.category].whereType<String>().where((s) => s.isNotEmpty).join(' · '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                                     ),
                                   if (variantText.isNotEmpty)
@@ -1103,6 +1117,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         ),
                                         child: Text(
                                           variantText,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                                         ),
                                       ),
@@ -1209,9 +1225,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         ),
                                         title: Text(
                                           '○ ${p.productName}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(fontWeight: FontWeight.w600),
                                         ),
-                                        subtitle: Text(p.seriesName),
+                                        subtitle: Text(
+                                          [p.seriesName, p.category].where((s) => s.isNotEmpty).join(' · '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                         trailing: OutlinedButton(
                                           style: OutlinedButton.styleFrom(
                                             visualDensity: VisualDensity.compact,
@@ -1253,6 +1275,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                               Expanded(
                                                 child: Text(
                                                   _draftProduct!.productName,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                   style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                                 ),
                                               ),
@@ -1282,7 +1306,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                             ],
                                           ),
                                           const SizedBox(height: 2),
-                                          Text(_draftProduct!.seriesName, style: Theme.of(context).textTheme.bodySmall),
+                                          if (_draftProduct!.seriesName.isNotEmpty || _draftProduct!.category.isNotEmpty)
+                                            Text(
+                                              [_draftProduct!.seriesName, _draftProduct!.category].where((s) => s.isNotEmpty).join(' · '),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context).textTheme.bodySmall,
+                                            ),
                                         ],
                                       ),
                                     ),

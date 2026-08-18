@@ -578,5 +578,139 @@ void main() {
     expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
     expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
   });
+
+  testWidgets('Regression: Full confirmation flow with existing product + save to backend', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const existingSales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'CASH',
+      products: [
+        CustomerSalesProductItem(
+          id: 'existing-p1',
+          productModelId: 'existing-model-id',
+          modelName: 'OPPO Find X9 Pro',
+          seriesName: 'Find Series',
+          category: 'SMARTPHONE',
+          ram: '16',
+          rom: '512',
+          color: 'Velvet Red',
+          quantity: 1,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: existingSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 1. Existing product is in the CRM list
+    expect(find.text('OPPO Find X9 Pro'), findsOneWidget);
+
+    // 2. Tap + Add Product
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    // 3. Select product in draft
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.pumpAndSettle();
+
+    // Select variant in draft
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.pumpAndSettle();
+
+    // Step: Before tapping Confirm Selection, Reno16 Pro must NOT appear in CRM list
+    // Only the draft card shows it inside the picker
+    expect(find.widgetWithText(FilledButton, 'Confirm Selection'), findsOneWidget);
+
+    // 4. Tap Confirm Selection
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    // 5. Newly confirmed product appears immediately in Products Purchased
+    expect(find.text('OPPO Find X9 Pro'), findsOneWidget);
+    expect(find.text('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
+
+    // 6. Save CRM
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    // 7. Verify backend payload receives both products
+    expect(repository.currentSales?.status, 'PURCHASED');
+    expect(repository.currentSales?.products.length, 2);
+    expect(repository.currentSales?.products[0].modelName, 'OPPO Find X9 Pro');
+    expect(repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
+    expect(repository.currentSales?.products[1].ram, '12');
+  });
+
+  testWidgets('Product Card UX: long product name renders with ellipsis and maxLines 1', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const longNameSales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'CASH',
+      products: [
+        CustomerSalesProductItem(
+          id: 'p-long-1',
+          productModelId: 'm-long',
+          modelName: 'OPPO Find X9 Pro 5G Smartphone Limited Edition Midnight Black Premium Edition',
+          seriesName: 'Find Series',
+          category: 'SMARTPHONE',
+          ram: '16',
+          rom: '512',
+          color: 'Midnight Black',
+          quantity: 1,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: longNameSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final textWidget = tester.widget<Text>(find.text(
+      'OPPO Find X9 Pro 5G Smartphone Limited Edition Midnight Black Premium Edition',
+    ));
+    expect(textWidget.maxLines, 1);
+    expect(textWidget.overflow, TextOverflow.ellipsis);
+    // Specs and series are rendered as separate fields
+    expect(find.text('Find Series · SMARTPHONE'), findsOneWidget);
+    expect(find.text('16GB RAM · 512GB ROM · Midnight Black'), findsOneWidget);
+  });
 }
 
