@@ -16,7 +16,6 @@ APP_ENV="production"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FLUTTER_DIR="$(cd "${SCRIPT_DIR}/../android_app" && pwd)"
 DOWNLOADS_DIR="$(cd "${SCRIPT_DIR}/../frontend/public/downloads" && pwd)"
-RELEASE_FILENAME="oppo-line-oa-chat-v1.0.7-production.apk"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -34,6 +33,15 @@ cd "$FLUTTER_DIR"
 command -v flutter >/dev/null 2>&1 || fail "flutter is not on PATH."
 command -v unzip >/dev/null 2>&1 || fail "unzip is required for APK verification."
 command -v strings >/dev/null 2>&1 || fail "strings is required for APK verification."
+
+APP_VERSION="$(awk '$1 == "version:" { print $2; exit }' pubspec.yaml)"
+[[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]] || fail "pubspec.yaml version must use x.y.z+build format; got '${APP_VERSION}'."
+VERSION_NAME="${APP_VERSION%%+*}"
+BUILD_NUMBER="${APP_VERSION##*+}"
+RELEASE_FILENAME="oppo-line-oa-chat-v${VERSION_NAME}-production.apk"
+
+info "Release version: ${VERSION_NAME}+${BUILD_NUMBER}"
+info "Release artifact: ${RELEASE_FILENAME}"
 
 info "Step 1/9: Cleaning previous build artifacts..."
 flutter clean
@@ -99,6 +107,7 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  VERIFIED PRODUCTION APK BUILD COMPLETE"
 echo "═══════════════════════════════════════════════════════════"
+echo "  Version:   ${VERSION_NAME}+${BUILD_NUMBER}"
 echo "  APK:       ${PUBLISHED_APK}"
 echo "  Size:      ${APK_SIZE_MB} MB (${APK_SIZE_BYTES} bytes)"
 echo "  SHA-256:   ${APK_SHA256}"
