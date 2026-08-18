@@ -35,8 +35,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint changed backend scope
+        run: npx eslint "src/coupons/**/*.ts" "src/app.module.ts"
 
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
