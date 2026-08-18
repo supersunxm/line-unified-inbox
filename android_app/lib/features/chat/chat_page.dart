@@ -31,6 +31,17 @@ class PendingImage {
   ReplyState state = ReplyState.sending;
 }
 
+Future<ConversationDetail?> resolveConversationTagsDetailAfterDismiss(
+    ConversationDetail? sheetResult,
+    Future<ConversationDetail> Function() reload) async {
+  if (sheetResult != null) return sheetResult;
+  try {
+    return await reload();
+  } catch (_) {
+    return null;
+  }
+}
+
 class ChatPage extends StatefulWidget {
   const ChatPage(
       {super.key,
@@ -128,7 +139,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _showConversationTags() async {
     final detail = _detail;
     if (detail == null || !mounted) return;
-    final updated = await ConversationTagsSheet.show(
+    final sheetResult = await ConversationTagsSheet.show(
       context: context,
       conversationId: detail.id,
       repository: widget.repository,
@@ -136,50 +147,61 @@ class _ChatPageState extends State<ChatPage> {
       initialSalesInfo: detail.customerSalesInformation,
       initialPurchaseInfo: detail.purchaseInformation,
     );
-    if (mounted && updated != null && _detail != null) {
-      final wasInterested = _detail?.customerSalesInformation?.isInterested == true;
-      final isNowPurchased = updated.customerSalesInformation?.isPurchased == true;
-      final isConversion = wasInterested && isNowPurchased;
 
-      setState(() => _detail = _detail!.copyWith(
-            tags: updated.tags,
-            customerSalesInformation: updated.customerSalesInformation,
-            purchaseInformation: updated.purchaseInformation,
-            operationalState: updated.operationalState,
-            unreadCount: updated.unreadCount,
-            bmReplyStatus: updated.bmReplyStatus,
-          ));
+    final updated = await resolveConversationTagsDetailAfterDismiss(
+      sheetResult,
+      () => widget.repository.detail(widget.conversationId),
+    );
+    if (!mounted || updated == null || _detail == null) return;
 
-      final l10n = appLocalizations(context);
-      final message = isConversion
-          ? '✓ ${l10n.convertedToPurchasedNotice}'
-          : '✓ ${l10n.customerInfoSaved}';
+    final wasInterested = _detail?.customerSalesInformation?.isInterested == true;
+    final isNowPurchased = updated.customerSalesInformation?.isPurchased == true;
+    final isConversion = wasInterested && isNowPurchased;
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                isNowPurchased ? Icons.shopping_bag : Icons.check_circle,
-                color: Colors.white,
-                size: 18,
+    setState(() => _detail = _detail!.copyWith(
+          tags: updated.tags,
+          customerSalesInformation: updated.customerSalesInformation,
+          purchaseInformation: updated.purchaseInformation,
+          operationalState: updated.operationalState,
+          unreadCount: updated.unreadCount,
+          bmReplyStatus: updated.bmReplyStatus,
+        ));
+
+    // A null sheet result means the route was dismissed with Android Back,
+    // drag, or barrier tap. The authoritative refresh above is intentionally
+    // silent; only an explicit save/close result should show a success notice.
+    if (sheetResult == null) return;
+
+    final l10n = appLocalizations(context);
+    final message = isConversion
+        ? '✓ ${l10n.convertedToPurchasedNotice}'
+        : '✓ ${l10n.customerInfoSaved}';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isNowPurchased ? Icons.shopping_bag : Icons.check_circle,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: isNowPurchased ? Colors.green.shade700 : Colors.blue.shade700,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
+            ),
+          ],
         ),
-      );
-    }
+        backgroundColor:
+            isNowPurchased ? Colors.green.shade700 : Colors.blue.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   void _handleRealtimeEvent(Map<String, dynamic> event) {
@@ -407,13 +429,17 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFF0F8A5F)),
-                title: Text(l10n.takePhoto, style: const TextStyle(fontWeight: FontWeight.w600)),
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: Color(0xFF0F8A5F)),
+                title: Text(l10n.takePhoto,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, ImageSource.camera),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: Color(0xFF0F8A5F)),
-                title: Text(l10n.chooseFromGallery, style: const TextStyle(fontWeight: FontWeight.w600)),
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: Color(0xFF0F8A5F)),
+                title: Text(l10n.chooseFromGallery,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               ),
             ],
@@ -449,7 +475,8 @@ class _ChatPageState extends State<ChatPage> {
     } on PlatformException catch (e) {
       if (mounted) {
         setState(() {
-          _error = (e.code == 'camera_access_denied' || e.code.toLowerCase().contains('permission'))
+          _error = (e.code == 'camera_access_denied' ||
+                  e.code.toLowerCase().contains('permission'))
               ? l10n.cameraPermissionRequired
               : (e.message ?? l10n.imageUnavailable);
         });
@@ -695,7 +722,8 @@ class _ImagePreviewPage extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Center(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
@@ -712,7 +740,8 @@ class _ImagePreviewPage extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1F2B),
                 border: Border(
