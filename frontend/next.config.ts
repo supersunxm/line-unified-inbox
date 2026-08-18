@@ -23,6 +23,19 @@ export function createBackendRewrite(apiBaseUrl: string) {
 }
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        source: "/downloads/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate, max-age=0",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       createFriendSourceLinkRewrite(API_BASE_URL),
