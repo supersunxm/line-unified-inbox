@@ -2,107 +2,110 @@
 #
 # build-production-apk.sh
 #
-# Build the OPPO LINE OA Chat production APK with required dart-defines.
-# This script ensures the APK is built with API_BASE_URL and APP_ENV
-# so that the app can connect to the production backend.
+# Build and publish the OPPO LINE OA Chat production APK with required
+# compile-time dart-defines. The script fails closed if the expected
+# production API URL cannot be found in the compiled Flutter AOT binary.
 #
 # Usage:
 #   ./scripts/build-production-apk.sh
 #
-# The built APK will be at:
-#   android_app/build/app/outputs/flutter-apk/app-release.apk
-#
 set -euo pipefail
 
-# ── Configuration ──────────────────────────────────────────────
 PRODUCTION_API_URL="https://line-unified-inbox-production-544f.up.railway.app"
 APP_ENV="production"
-FLUTTER_DIR="$(cd "$(dirname "$0")/../android_app" && pwd)"
-DOWNLOADS_DIR="$(cd "$(dirname "$0")/../frontend/public/downloads" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+FLUTTER_DIR="$(cd "${SCRIPT_DIR}/../android_app" && pwd)"
+DOWNLOADS_DIR="$(cd "${SCRIPT_DIR}/../frontend/public/downloads" && pwd)"
+RELEASE_FILENAME="oppo-line-oa-chat-v1.0.7-production.apk"
 
-# ── Color helpers ──────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
-ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
+info() { echo -e "${CYAN}[INFO]${NC}  $*"; }
+ok()   { echo -e "${GREEN}[OK]${NC}    $*"; }
+fail() { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 
-# ── Pre-flight checks ─────────────────────────────────────────
-info "Working directory: ${FLUTTER_DIR}"
+info "Flutter project: ${FLUTTER_DIR}"
 cd "$FLUTTER_DIR"
 
-if ! command -v flutter &>/dev/null; then
-  fail "flutter is not on PATH. Install Flutter SDK first."
-fi
+[ -f pubspec.yaml ] || fail "pubspec.yaml not found in ${FLUTTER_DIR}; refusing to build from the wrong directory."
+command -v flutter >/dev/null 2>&1 || fail "flutter is not on PATH."
+command -v unzip >/dev/null 2>&1 || fail "unzip is required for APK verification."
+command -v strings >/dev/null 2>&1 || fail "strings is required for APK verification."
 
-# ── Step 1: Clean ──────────────────────────────────────────────
-info "Step 1/7: Cleaning previous build artifacts..."
+info "Step 1/9: Cleaning previous build artifacts..."
 flutter clean
 ok "Clean complete."
 
-# ── Step 2: Dependencies ───────────────────────────────────────
-info "Step 2/7: Installing dependencies..."
+info "Step 2/9: Installing dependencies..."
 flutter pub get
 ok "Dependencies resolved."
 
-# ── Step 3: Localization ───────────────────────────────────────
-info "Step 3/7: Generating localization files..."
+info "Step 3/9: Generating localization files..."
 flutter gen-l10n
 ok "Localization generated."
 
-# ── Step 4: Static analysis ────────────────────────────────────
-info "Step 4/7: Running static analysis..."
-flutter analyze || fail "Static analysis found issues. Fix them before releasing."
-ok "No analysis issues."
+info "Step 4/9: Running static analysis..."
+flutter analyze || fail "Static analysis found issues."
+ok "Static analysis passed."
 
-# ── Step 5: Tests ──────────────────────────────────────────────
-info "Step 5/7: Running test suite..."
-flutter test || fail "Tests failed. Fix failing tests before releasing."
-ok "All tests passed."
+info "Step 5/9: Running tests..."
+flutter test || fail "Tests failed."
+ok "Tests passed."
 
-# ── Step 6: Production build ───────────────────────────────────
-info "Step 6/7: Building production APK with dart-defines..."
-info "  API_BASE_URL = ${PRODUCTION_API_URL}"
-info "  APP_ENV      = ${APP_ENV}"
-
+info "Step 6/9: Building release APK with production dart-defines..."
+printf '  API_BASE_URL = %s\n' "$PRODUCTION_API_URL"
+printf '  APP_ENV      = %s\n' "$APP_ENV"
 flutter build apk --release \
   --dart-define="API_BASE_URL=${PRODUCTION_API_URL}" \
   --dart-define="APP_ENV=${APP_ENV}"
 
 APK_PATH="${FLUTTER_DIR}/build/app/outputs/flutter-apk/app-release.apk"
-
-if [ ! -f "$APK_PATH" ]; then
-  fail "APK not found at ${APK_PATH}"
-fi
+[ -f "$APK_PATH" ] || fail "APK not found at ${APK_PATH}"
 ok "APK built: ${APK_PATH}"
 
-# ── Step 7: Artifact info ─────────────────────────────────────
-info "Step 7/7: Computing release artifact metadata..."
+info "Step 7/9: Verifying production URL exists in compiled Flutter AOT binary..."
+VERIFY_DIR="$(mktemp -d)"
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+unzip -q "$APK_PATH" 'lib/*/libapp.so' -d "$VERIFY_DIR"
 
-APK_SIZE_BYTES=$(stat -f '%z' "$APK_PATH" 2>/dev/null || stat -c '%s' "$APK_PATH")
+FOUND_URL=false
+while IFS= read -r -d '' APP_SO; do
+  if strings "$APP_SO" | grep -Fq "$PRODUCTION_API_URL"; then
+    FOUND_URL=true
+    break
+  fi
+done < <(find "$VERIFY_DIR" -type f -name libapp.so -print0)
+
+[ "$FOUND_URL" = true ] || fail "Compiled APK does not contain ${PRODUCTION_API_URL}. dart-define injection cannot be verified; artifact will NOT be published."
+ok "Compiled APK contains the expected production API URL."
+
+info "Step 8/9: Publishing the exact verified APK to the download artifact..."
+PUBLISHED_APK="${DOWNLOADS_DIR}/${RELEASE_FILENAME}"
+cp -f "$APK_PATH" "$PUBLISHED_APK"
+cmp -s "$APK_PATH" "$PUBLISHED_APK" || fail "Published APK does not match the verified build output."
+ok "Published APK: ${PUBLISHED_APK}"
+
+info "Step 9/9: Computing release artifact metadata..."
+APK_SIZE_BYTES=$(stat -f '%z' "$PUBLISHED_APK" 2>/dev/null || stat -c '%s' "$PUBLISHED_APK")
 APK_SIZE_MB=$(python3 -c "print(f'{${APK_SIZE_BYTES} / 1_000_000:.1f}')")
-APK_SHA256=$(shasum -a 256 "$APK_PATH" | awk '{print $1}')
+APK_SHA256=$(shasum -a 256 "$PUBLISHED_APK" | awk '{print $1}')
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
-echo "  PRODUCTION APK BUILD COMPLETE"
+echo "  VERIFIED PRODUCTION APK BUILD COMPLETE"
 echo "═══════════════════════════════════════════════════════════"
+echo "  APK:       ${PUBLISHED_APK}"
+echo "  Size:      ${APK_SIZE_MB} MB (${APK_SIZE_BYTES} bytes)"
+echo "  SHA-256:   ${APK_SHA256}"
+echo "  API URL:   ${PRODUCTION_API_URL}"
+echo "  APP_ENV:   ${APP_ENV}"
+echo "  AOT check: PASS"
 echo ""
-echo "  APK:      ${APK_PATH}"
-echo "  Size:     ${APK_SIZE_MB} MB (${APK_SIZE_BYTES} bytes)"
-echo "  SHA-256:  ${APK_SHA256}"
-echo "  API URL:  ${PRODUCTION_API_URL}"
-echo "  APP_ENV:  ${APP_ENV}"
-echo ""
-echo "  Next steps:"
-echo "    1. Copy APK to frontend/public/downloads/"
-echo "    2. Update download page checksum and size"
-echo "    3. Update backend AppRelease record"
-echo "    4. Commit and push"
-echo ""
+echo "  Runtime verification:"
+echo "    Install this exact APK and open Runtime diagnostics on the login screen."
+echo "    Expected APP_ENV: production"
+echo "    Expected API_BASE_URL: ${PRODUCTION_API_URL}"
 echo "═══════════════════════════════════════════════════════════"
