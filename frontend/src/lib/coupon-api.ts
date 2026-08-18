@@ -49,6 +49,7 @@ async function couponRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const couponApi = {
+  executionMode: () => couponRequest<{ mode: "pilot" | "full" }>("/coupons/execution-mode"),
   preview: (input: CouponInput) =>
     couponRequest<CouponPreview>("/coupons/preview", {
       method: "POST",
