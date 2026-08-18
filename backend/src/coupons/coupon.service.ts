@@ -290,7 +290,15 @@ export class CouponService {
       eligibleStores: eligible.length,
       skippedStores: skipped.length,
       skipReasons,
-      stores: stores.map(({ encryptedChannelAccessToken: _token, ...store }) => store),
+      stores: stores.map((store) => ({
+        storeId: store.storeId,
+        storeName: store.storeName,
+        storeCode: store.storeCode,
+        lineOfficialAccountId: store.lineOfficialAccountId,
+        lineOaName: store.lineOaName,
+        isEligible: store.isEligible,
+        skipReason: store.skipReason,
+      })),
     };
   }
 
@@ -306,6 +314,8 @@ export class CouponService {
     if (!coupon || !input.storeSelection) throw new BadRequestException("Coupon and store selection are required");
     if (!coupon.title?.trim() || coupon.title.length > 60) throw new BadRequestException("Coupon title must be 1-60 characters");
     if ((coupon.description?.length ?? 0) > 1000) throw new BadRequestException("Coupon description must be at most 1000 characters");
+    if ((coupon.usageCondition?.length ?? 0) > 100) throw new BadRequestException("Coupon usage condition must be at most 100 characters");
+    if ((coupon.couponCode?.length ?? 0) > 16) throw new BadRequestException("Coupon code must be at most 16 characters");
     if (!Number.isInteger(coupon.startTimestamp) || !Number.isInteger(coupon.endTimestamp) || coupon.endTimestamp <= coupon.startTimestamp) {
       throw new BadRequestException("Coupon validity timestamps are invalid");
     }
@@ -326,8 +336,15 @@ export class CouponService {
     if (coupon.reward.type === "discount" || coupon.reward.type === "cashBack") {
       const price = coupon.reward.priceInfo;
       if (price.type === "fixed" && (!Number.isInteger(price.fixedAmount) || price.fixedAmount <= 0)) throw new BadRequestException("Fixed amount must be a positive integer");
-      if (price.type === "percentage" && (!Number.isInteger(price.percentage) || price.percentage < 1 || price.percentage > 100)) throw new BadRequestException("Percentage must be 1-100");
-      if (price.type === "explicit" && (price.originalPrice <= 0 || price.priceAfterDiscount < 0 || price.priceAfterDiscount >= price.originalPrice)) {
+      if (price.type === "percentage" && (!Number.isInteger(price.percentage) || price.percentage < 1 || price.percentage > 99)) throw new BadRequestException("Percentage must be 1-99");
+      if (
+        price.type === "explicit" &&
+        (!Number.isInteger(price.originalPrice) ||
+          !Number.isInteger(price.priceAfterDiscount) ||
+          price.originalPrice <= 0 ||
+          price.priceAfterDiscount <= 0 ||
+          price.priceAfterDiscount >= price.originalPrice)
+      ) {
         throw new BadRequestException("Explicit discount prices are invalid");
       }
     }
@@ -335,7 +352,8 @@ export class CouponService {
 
   private sanitizeError(error: unknown): { code: string; message: string } {
     if (typeof error === "object" && error !== null && "status" in error) {
-      const status = String((error as { status?: unknown }).status ?? "LINE_ERROR");
+      const rawStatus = (error as { status?: unknown }).status;
+      const status = typeof rawStatus === "string" || typeof rawStatus === "number" ? String(rawStatus) : "LINE_ERROR";
       const response = "response" in error ? (error as { response?: unknown }).response : undefined;
       const message = typeof response === "string" ? response : error instanceof Error ? error.message : "LINE Coupon API request failed";
       return { code: status, message: message.slice(0, 500) };
