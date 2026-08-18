@@ -83,11 +83,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
       </button>
 
       {isOpen && (
-        <div
-          role="dialog"
-          aria-label="Profile settings"
-          className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-xl backdrop-blur-md"
-        >
+        <div role="dialog" aria-label="Profile settings" className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-xl backdrop-blur-md">
           <div className="border-b border-slate-100 dark:border-slate-800 px-2 pb-3">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{authUser.displayName}</p>
             <div className="mt-1 flex items-center gap-2 text-xs">
@@ -245,9 +241,7 @@ export function TopNavigation(props: TopNavigationProps) {
     <header className="app-header app-surface sticky top-0 z-30 flex min-h-14 h-14 min-w-0 items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-2 sm:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-4 2xl:gap-5">
         <Link href="/dashboard" className={`${focusRing} flex items-center gap-2 min-w-max shrink-0 rounded-lg p-0.5 group`}>
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 dark:bg-emerald-500 font-bold text-[11px] text-white shadow-2xs">
-            O
-          </span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-600 dark:bg-emerald-500 font-bold text-[11px] text-white shadow-2xs">O</span>
           <div>
             <h1 className="text-base font-bold tracking-tight xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
             <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
@@ -259,6 +253,7 @@ export function TopNavigation(props: TopNavigationProps) {
           <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
           <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
           {authUser?.role === "ADMIN" && <Link href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
+          <a href="https://lineoppo.click/tiktok" target="_blank" rel="noreferrer noopener" className={navLinkClass} aria-label="Open TikTok in a new tab">TikTok <span aria-hidden="true">↗</span></a>
           <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
         </nav>
       </div>
