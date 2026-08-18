@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.6-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.7-production.apk";
   const apkDownloadUrl = `/downloads/${apkFileName}`;
-  const sha256Checksum = "fbdebd187c41107973f9dc5de8d72050719a9bdff7ee82ff2fe2d5c9df36d819";
+  const sha256Checksum = "648f7516b7ed20180a233f00b391a71a910caf41db5286d73a43a513fe99a197";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-8 text-slate-900 transition-colors duration-150 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
@@ -49,19 +49,19 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.6+7 (Product Selection UX Fix Release) · 56.9 MB
+              Version 1.0.7+8 (Product Tagging Final Pilot Release) · 56.9 MB
             </div>
           </div>
 
           {/* Release Highlights */}
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.6 (What&apos;s New in v1.0.6)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.7 (What&apos;s New in v1.0.7)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Product Selection UX Improvement</strong>: รายการสินค้าเริ่มต้นเป็นค่าว่าง ไม่เลือกสินค้าอัตโนมัติ</span>
+                <span><strong>Improved Product Tagging Flow</strong>: ปรับปรุงขั้นตอนการ Tag สินค้าให้ราบรื่นและแม่นยำยิ่งขึ้น</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
@@ -69,15 +69,15 @@ export default function DownloadAppPage() {
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Prevent Accidental Product Tagging</strong>: ป้องกันการบันทึกสินค้าผิดพลาดโดยไม่ตั้งใจ</span>
+                <span><strong>Fixed Product Persistence After Confirmation</strong>: แก้ไขปัญหาสินค้าไม่แสดงหลังกดยืนยัน</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved CRM Tagging Accuracy</strong>: เพิ่มความแม่นยำในการเก็บข้อมูลการขายและความสนใจของลูกค้า</span>
+                <span><strong>Improved Product Name Display</strong>: ปรับปรุงการแสดงชื่อสินค้ายาวไม่ให้ล้นหน้าจอ</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Multi-Product Sales Tagging Support</strong>: รองรับการเลือกและบันทึกสินค้าหลายรายการได้อย่างราบรื่น</span>
+                <span><strong>Improved CRM Multi-Product Tagging</strong>: เพิ่มความแม่นยำในการเก็บข้อมูลสินค้าหลายรายการพร้อมกัน</span>
               </li>
             </ul>
           </div>

@@ -4,20 +4,20 @@ import { PrismaService } from "../prisma.service";
 import { AppVersionResponseDto, CreateAppReleaseDto, UpdateAppReleaseDto } from "./app-version.dto";
 
 const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
-  latestVersion: "1.0.6",
-  buildNumber: 7,
+  latestVersion: "1.0.7",
+  buildNumber: 8,
   minimumSupportedVersion: "1.0.3",
   minimumSupportedBuildNumber: 4,
   forceUpdate: false,
-  apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk",
+  apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk",
   apkSize: "56.9 MB",
-  sha256: "fbdebd187c41107973f9dc5de8d72050719a9bdff7ee82ff2fe2d5c9df36d819",
+  sha256: "648f7516b7ed20180a233f00b391a71a910caf41db5286d73a43a513fe99a197",
   releaseNotes: [
-    "Product Selection UX improvement",
+    "Improved product tagging flow",
     "Draft Selection Flow (Select → Configure → Confirm → Save)",
-    "Prevent accidental product tagging",
-    "Improved CRM tagging accuracy",
-    "Multi-product customer sales tagging support",
+    "Fixed product persistence issue after confirmation",
+    "Improved product name display and overflow handling",
+    "Improved CRM accuracy for multi-product tagging",
   ],
 };
 

@@ -10,20 +10,20 @@ test("AppVersionService returns active Android release with correct structure", 
       findFirst: async () => ({
         id: "rel-1",
         platform: AppPlatform.ANDROID,
-        version: "1.0.6",
-        buildNumber: 7,
+        version: "1.0.7",
+        buildNumber: 8,
         minimumSupportedVersion: "1.0.3",
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk",
+        apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk",
         apkSize: "56.9 MB",
-        sha256: "fbdebd187c41107973f9dc5de8d72050719a9bdff7ee82ff2fe2d5c9df36d819",
+        sha256: "648f7516b7ed20180a233f00b391a71a910caf41db5286d73a43a513fe99a197",
         releaseNotes: [
-          "Product Selection UX improvement",
+          "Improved product tagging flow",
           "Draft Selection Flow (Select → Configure → Confirm → Save)",
-          "Prevent accidental product tagging",
-          "Improved CRM tagging accuracy",
-          "Multi-product customer sales tagging support",
+          "Fixed product persistence issue after confirmation",
+          "Improved product name display and overflow handling",
+          "Improved CRM accuracy for multi-product tagging",
         ],
         isActive: true,
         downloadCount: 10,
@@ -37,17 +37,17 @@ test("AppVersionService returns active Android release with correct structure", 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.6");
-  assert.equal(version.buildNumber, 7);
+  assert.equal(version.latestVersion, "1.0.7");
+  assert.equal(version.buildNumber, 8);
   assert.equal(version.minimumSupportedVersion, "1.0.3");
   assert.equal(version.minimumSupportedBuildNumber, 4);
   assert.equal(version.forceUpdate, false);
   assert.deepEqual(version.releaseNotes, [
-    "Product Selection UX improvement",
+    "Improved product tagging flow",
     "Draft Selection Flow (Select → Configure → Confirm → Save)",
-    "Prevent accidental product tagging",
-    "Improved CRM tagging accuracy",
-    "Multi-product customer sales tagging support",
+    "Fixed product persistence issue after confirmation",
+    "Improved product name display and overflow handling",
+    "Improved CRM accuracy for multi-product tagging",
   ]);
 });
 
@@ -61,8 +61,8 @@ test("AppVersionService falls back safely when database returns null", async () 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.6");
-  assert.equal(version.buildNumber, 7);
+  assert.equal(version.latestVersion, "1.0.7");
+  assert.equal(version.buildNumber, 8);
   assert.ok(version.apkUrl);
 });
 
@@ -70,7 +70,7 @@ test("AppVersionService tracks download increments successfully", async () => {
   let updatedId = "";
   const fakePrisma = {
     appRelease: {
-      findFirst: async () => ({ id: "rel-1", buildNumber: 7 }),
+      findFirst: async () => ({ id: "rel-1", buildNumber: 8 }),
       update: async (args: { where: { id: string } }) => {
         updatedId = args.where.id;
         return {};

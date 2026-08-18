@@ -106,8 +106,51 @@ INSERT INTO "AppRelease" (
         'Improved CRM tagging accuracy',
         'Multi-product customer sales tagging support'
     ]::text[],
+    false,
+    0,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO "AppRelease" (
+    "id",
+    "platform",
+    "version",
+    "buildNumber",
+    "minimumSupportedVersion",
+    "minimumSupportedBuildNumber",
+    "forceUpdate",
+    "apkUrl",
+    "apkSize",
+    "sha256",
+    "releaseNotes",
+    "isActive",
+    "downloadCount",
+    "createdAt",
+    "updatedAt"
+) VALUES (
+    'app-release-android-1-0-7-8',
+    'ANDROID',
+    '1.0.7',
+    8,
+    '1.0.3',
+    4,
+    false,
+    'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk',
+    '56.9 MB',
+    '648f7516b7ed20180a233f00b391a71a910caf41db5286d73a43a513fe99a197',
+    ARRAY[
+        'Improved product tagging flow',
+        'Draft Selection Flow (Select → Configure → Confirm → Save)',
+        'Fixed product persistence issue after confirmation',
+        'Improved product name display and overflow handling',
+        'Improved CRM accuracy for multi-product tagging'
+    ]::text[],
     true,
     0,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 ) ON CONFLICT DO NOTHING;
+
+-- Deactivate previous releases so only v1.0.7 is active
+UPDATE "AppRelease" SET "isActive" = false WHERE "platform" = 'ANDROID' AND "buildNumber" < 8;
