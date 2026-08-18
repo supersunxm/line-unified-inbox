@@ -55,13 +55,16 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Lint changed backend scope
-        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/app.module.ts"
+        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/app.module.ts"
 
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
 
       - name: App version unit tests
         run: npx tsx --test src/app-version/app-version.service.spec.ts
+
+      - name: Mobile sales audit regression tests
+        run: npx tsx --test src/mobile/mobile-customer-sales-activity.spec.ts
 
       - name: Build
         run: npm run build
