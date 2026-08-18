@@ -53,6 +53,31 @@ export default function DownloadAppPage() {
             </div>
           </div>
 
+          {/* Release Highlights */}
+          <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200">
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.3 (What&apos;s New in v1.0.3)
+            </h3>
+            <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Customer Sales CRM</strong>: แยกสถานะลูกค้าสนใจ (Interested Lead) และลูกค้าซื้อแล้ว (Purchased)</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Multi-Product Tagging</strong>: บันทึกสินค้าได้หลายรายการพร้อมกัน พร้อมระบุจำนวน (Quantity)</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Interest Level</strong>: ระบุระดับความสนใจ (Hot / Warm / Cold) สำหรับวางแผนติดตามลูกค้า</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-emerald-500 font-bold">•</span>
+                <span><strong>Product Specs Configuration</strong>: เลือกสเปก RAM, ROM และสีตัวเครื่องได้อย่างครบถ้วน</span>
+              </li>
+            </ul>
+          </div>
+
           {/* Download Action Button */}
           <div className="mt-6">
             <a
