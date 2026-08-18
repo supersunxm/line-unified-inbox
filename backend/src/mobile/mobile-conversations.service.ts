@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
+import { CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
