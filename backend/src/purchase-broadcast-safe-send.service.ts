@@ -380,7 +380,7 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
         messagePayload: {
           ...payload,
           sendReview: review,
-        } as Prisma.InputJsonValue,
+        },
       },
     });
 
@@ -497,7 +497,7 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
             ...payload,
             sendReview: null,
             executionSource: execution,
-          } as Prisma.InputJsonValue,
+          },
           storeCount: preflight.stores.length,
           eligibleStoreCount: preflight.stores.length,
           skippedStoreCount: 0,
@@ -928,7 +928,7 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
           messagePayload: {
             ...payload,
             executionSource: { ...execution, state: "RUNNING" },
-          } as Prisma.InputJsonValue,
+          },
         },
       });
     }
