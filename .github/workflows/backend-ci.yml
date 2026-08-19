@@ -55,7 +55,7 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Lint changed backend scope
-        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/app.module.ts"
+        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/purchase-broadcast-safe-send.service.ts" "src/purchase-broadcast-safe-send.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/app.module.ts"
 
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
@@ -70,7 +70,7 @@ jobs:
         run: npx tsx --test src/mobile/mobile-customer-sales-activity.spec.ts
 
       - name: Purchase intelligence and broadcast audience regression tests
-        run: npx tsx --test src/purchase-analytics.service.spec.ts src/purchase-broadcast-audience.service.spec.ts src/purchase-broadcast-composer.service.spec.ts src/mass-message/mass-message-selected-users-guard.spec.ts
+        run: npx tsx --test src/purchase-analytics.service.spec.ts src/purchase-broadcast-audience.service.spec.ts src/purchase-broadcast-composer.service.spec.ts src/purchase-broadcast-safe-send.service.spec.ts src/mass-message/mass-message-selected-users-guard.spec.ts
 
       - name: Build
         run: npm run build
@@ -131,10 +131,10 @@ jobs:
         run: npm ci
 
       - name: Lint coupon frontend scope
-        run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx"
+        run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/purchase-broadcast-safe-send.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/app/mass-messages/drafts/[campaignId]/review/page.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx"
 
       - name: Purchase broadcast audience UI regression tests
-        run: node --test --experimental-strip-types test/purchase-broadcast-audience.test.mts test/purchase-broadcast-composer.test.mts
+        run: node --test --experimental-strip-types test/purchase-broadcast-audience.test.mts test/purchase-broadcast-composer.test.mts test/purchase-broadcast-safe-send.test.mts
 
       - name: Build
         run: npm run build
