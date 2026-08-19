@@ -15,6 +15,11 @@
   background-color: #00a651 !important;
 }
 
+/* The legacy KPI row is superseded by the richer store-level KPI set. */
+.scope :global(.app-content-section [class*='md:grid-cols-5']) {
+  display: none !important;
+}
+
 /* Keep chart gridlines quiet so the data stays dominant. */
 .scope :global(.app-content-section svg line) {
   opacity: 0.72;
