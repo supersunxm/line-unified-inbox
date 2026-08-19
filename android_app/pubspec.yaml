@@ -1,7 +1,7 @@
 name: line_oa_chat_hub
 description: Android client for OPPO LINE OA Chat.
 publish_to: none
-version: 1.0.10+11
+version: 1.0.11+12
 
 environment:
   sdk: ^3.4.0
@@ -38,4 +38,3 @@ flutter:
   generate: true
   assets:
     - assets/images/line_contact_qr.jpg
-    - assets/images/LOGO_OBS.png
