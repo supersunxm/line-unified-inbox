@@ -73,7 +73,7 @@ export default function DownloadAppPage() {
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
                 <span>
-                  <strong>Quantity & Clear All Persistence</strong>:
+                  <strong>Quantity &amp; Clear All Persistence</strong>:
                   จำนวนสินค้าและ Clear all จะ sync ไปยัง Backend อย่างถูกต้อง
                 </span>
               </li>
