@@ -4,9 +4,11 @@ import { Roles } from "./auth/auth.decorators";
 import type { AuthRequest } from "./auth/auth.guard";
 import {
   CreatePurchaseBroadcastDraftDto,
+  ExecutePurchaseBroadcastDto,
   UpdatePurchaseBroadcastDraftDto,
 } from "./purchase-broadcast-audience.dto";
 import { PurchaseBroadcastAudienceService } from "./purchase-broadcast-audience.service";
+import { PurchaseBroadcastSafeSendService } from "./purchase-broadcast-safe-send.service";
 import { PurchaseAnalyticsQueryDto } from "./purchase-analytics.dto";
 import { PurchaseAnalyticsService } from "./purchase-analytics.service";
 
@@ -16,6 +18,7 @@ export class PurchaseAnalyticsController {
   constructor(
     private readonly analytics: PurchaseAnalyticsService,
     private readonly broadcastAudience: PurchaseBroadcastAudienceService,
+    private readonly safeSend: PurchaseBroadcastSafeSendService,
   ) {}
 
   @Get()
@@ -57,5 +60,33 @@ export class PurchaseAnalyticsController {
     @Body() body: UpdatePurchaseBroadcastDraftDto,
   ) {
     return this.broadcastAudience.updateComposer(id, body, request.user!);
+  }
+
+  @Post("audience/broadcast-draft/:id/review")
+  @Roles(UserRole.ADMIN)
+  reviewBroadcastDraft(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    return this.safeSend.review(id, request.user!);
+  }
+
+  @Post("audience/broadcast-draft/:id/send")
+  @Roles(UserRole.ADMIN)
+  sendBroadcastDraft(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+    @Body() body: ExecutePurchaseBroadcastDto,
+  ) {
+    return this.safeSend.execute(id, body, request.user!);
+  }
+
+  @Get("audience/broadcast-draft/:id/send-status")
+  @Roles(UserRole.ADMIN)
+  getBroadcastSendStatus(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    return this.safeSend.getStatus(id, request.user!);
   }
 }
