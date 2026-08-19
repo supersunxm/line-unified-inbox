@@ -133,8 +133,19 @@ export function buildCustomerSalesInformation(input: {
   purchaseRecordedBy?: { displayName?: string | null } | null;
   purchaseRecordedAt?: Date | string | null;
 }): CustomerSalesInformationContract {
-  const status = (input.customerSalesStatus as "INTERESTED" | "PURCHASED") ||
-    (input.purchaseRecordedAt || input.isInstallment || (input.sourceChannels?.length ?? 0) > 0 ? "PURCHASED" : null);
+  // A salesRecordedAt value means the conversation has entered the modern
+  // Customer Sales Info state model. From that point onward an explicit null
+  // customerSalesStatus is authoritative and must not be resurrected as
+  // PURCHASED by legacy purchase provenance. The legacy fallback remains for
+  // historical records that predate the modern sales state.
+  const hasModernSalesRecord = input.salesRecordedAt != null;
+  const hasLegacyPurchaseSignal =
+    input.purchaseRecordedAt != null ||
+    input.isInstallment === true ||
+    (input.sourceChannels?.length ?? 0) > 0;
+  const status =
+    (input.customerSalesStatus as "INTERESTED" | "PURCHASED" | null | undefined) ??
+    (!hasModernSalesRecord && hasLegacyPurchaseSignal ? "PURCHASED" : null);
 
   const interestLevel = (input.interestLevel as "HOT" | "WARM" | "COLD") || null;
   const purchaseChannel = status === "PURCHASED" ? [...(input.sourceChannels ?? [])] : [];
