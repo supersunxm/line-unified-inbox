@@ -142,14 +142,22 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* Remove the old daily table from the primary dashboard hierarchy.
-   Data remains available from the trend and store breakdown views. */
+/* Daily completeness returns as the left-side operational check.
+   Store performance stays wider on the right. */
 .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :first-child) {
-  display: none !important;
+  display: flex !important;
+  grid-column: span 1 / span 1 !important;
 }
 
 .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :last-child) {
-  grid-column: 1 / -1 !important;
+  grid-column: span 2 / span 2 !important;
+}
+
+/* Daily/store tables should remain easy to scan on narrow viewports. */
+.scope :global(.app-content-section [class*='overflow-x-auto']) {
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Store table becomes the main analytical surface */
@@ -211,6 +219,13 @@
 /* Warnings are intentionally quiet unless action is required */
 .scope :global(.app-content-section [class*='bg-amber-500\/10']) {
   box-shadow: none !important;
+}
+
+@media (max-width: 1023px) {
+  .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :first-child),
+  .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :last-child) {
+    grid-column: 1 / -1 !important;
+  }
 }
 
 @media (max-width: 900px) {
