@@ -153,6 +153,13 @@
   grid-column: span 2 / span 2 !important;
 }
 
+/* Daily/store tables should remain easy to scan on narrow viewports. */
+.scope :global(.app-content-section [class*='overflow-x-auto']) {
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Store table becomes the main analytical surface */
 .scope :global(.app-content-section table) {
   border-collapse: separate;
