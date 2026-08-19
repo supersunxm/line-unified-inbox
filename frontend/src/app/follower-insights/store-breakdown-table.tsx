@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ByStoreAccountRow } from "@/types/api";
-import { formatBkkDateTime, exportStoreCsv } from "./follower-insights-utils";
+import { exportStoreCsv } from "./follower-insights-utils";
 import { getFollowerInsightsText, type Language } from "./follower-insights-translations";
+import { StoreAnalyticsOverview } from "./store-analytics-overview";
 
 interface StoreBreakdownTableProps {
   storeData: ByStoreAccountRow[];
@@ -15,6 +16,84 @@ interface StoreBreakdownTableProps {
   onRetry: () => void;
 }
 
+type FilterKey = "all" | "zero-growth" | "high-block" | "low-reach" | "high-growth";
+type SortKey =
+  | "id"
+  | "store"
+  | "oa"
+  | "followers"
+  | "growth"
+  | "growthPct"
+  | "reach"
+  | "reachPct"
+  | "blocks"
+  | "blockPct";
+type PillTone = "high" | "mid" | "low" | "zero";
+
+type DisplayRow = {
+  source: ByStoreAccountRow;
+  id: string;
+  store: string;
+  oa: string;
+  followers: number | null;
+  growth: number | null;
+  growthPct: number | null;
+  reach: number | null;
+  reachPct: number | null;
+  blocks: number | null;
+  blockPct: number | null;
+};
+
+const PAGE_SIZE = 10;
+
+function round(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function calculatePct(numerator: number | null, denominator: number | null, decimals = 1) {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return round((numerator / denominator) * 100, decimals);
+}
+
+function getPillTone(pct: number, type: "growth" | "reach" | "block"): PillTone {
+  if (type === "growth") {
+    if (pct === 0) return "zero";
+    if (pct >= 5) return "high";
+    if (pct >= 1) return "mid";
+    return "low";
+  }
+  if (type === "reach") {
+    if (pct >= 85) return "high";
+    if (pct >= 75) return "mid";
+    return "low";
+  }
+  if (pct <= 5) return "high";
+  if (pct <= 10) return "mid";
+  return "low";
+}
+
+function pillClass(tone: PillTone) {
+  if (tone === "high") return "bg-[#E8F9EC] text-[#1E8E3E]";
+  if (tone === "mid") return "bg-[#FFF4E0] text-[#B36B00]";
+  if (tone === "low") return "bg-[#FDE8E8] text-[#C62828]";
+  return "bg-[#EEEEEE] text-[#6E6E73]";
+}
+
+function buildPages(current: number, total: number): Array<number | "ellipsis-left" | "ellipsis-right"> {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+
+  const pages: Array<number | "ellipsis-left" | "ellipsis-right"> = [1];
+  const start = Math.max(2, current - 2);
+  const end = Math.min(total - 1, current + 2);
+
+  if (start > 2) pages.push("ellipsis-left");
+  for (let page = start; page <= end; page += 1) pages.push(page);
+  if (end < total - 1) pages.push("ellipsis-right");
+  pages.push(total);
+  return pages;
+}
+
 export function StoreBreakdownTable({
   storeData,
   storeError,
@@ -24,18 +103,26 @@ export function StoreBreakdownTable({
   language = "en",
   onRetry,
 }: StoreBreakdownTableProps) {
-  // Use range key to reset table page/search state when date range changes
   return (
-    <StoreBreakdownTableInner
-      key={`${dateFrom}_${dateTo}_${language}`}
-      storeData={storeData}
-      storeError={storeError}
-      dateFrom={dateFrom}
-      dateTo={dateTo}
-      endpointsUsable={endpointsUsable}
-      language={language}
-      onRetry={onRetry}
-    />
+    <div className="space-y-4">
+      {!storeError && storeData.length > 0 && (
+        <StoreAnalyticsOverview
+          storeData={storeData}
+          endpointsUsable={endpointsUsable}
+          language={language}
+        />
+      )}
+      <StoreBreakdownTableInner
+        key={`${dateFrom}_${dateTo}_${language}`}
+        storeData={storeData}
+        storeError={storeError}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        endpointsUsable={endpointsUsable}
+        language={language}
+        onRetry={onRetry}
+      />
+    </div>
   );
 }
 
@@ -49,306 +136,329 @@ function StoreBreakdownTableInner({
   onRetry,
 }: StoreBreakdownTableProps) {
   const t = getFollowerInsightsText(language);
+  const tableTopRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState<"periodIncrease" | "followers" | "accountName">(
-    "periodIncrease"
-  );
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [sortField, setSortField] = useState<SortKey>("growth");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
 
-  const handleSearchChange = (q: string) => {
-    setSearchQuery(q);
-    setCurrentPage(1); // Reset page to 1 on search filter change
-  };
-
-  const handleSort = (field: "periodIncrease" | "followers" | "accountName") => {
-    setSortDir((d) => (sortField === field && d === "desc" ? "asc" : "desc"));
-    setSortField(field);
-  };
-
-  const filteredStores = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return storeData;
-    return storeData.filter(
-      (r) =>
-        r.storeName.toLowerCase().includes(q) ||
-        r.accountName.toLowerCase().includes(q) ||
-        r.lineOaId.toLowerCase().includes(q) ||
-        (r.masterStoreId && r.masterStoreId.toLowerCase().includes(q)) ||
-        (r.externalStoreId && r.externalStoreId.toLowerCase().includes(q))
-    );
-  }, [storeData, searchQuery]);
-
-  const sortedStores = useMemo(() => {
-    return [...filteredStores].sort((a, b) => {
-      const dirMult = sortDir === "asc" ? 1 : -1;
-      if (sortField === "accountName") {
-        return dirMult * a.accountName.localeCompare(b.accountName);
+  const labels = language === "th"
+    ? {
+        title: "ข้อมูลรายสาขา",
+        subtitle: "วิเคราะห์การเติบโต การเข้าถึง และอัตราบล็อกของ LINE OA แต่ละสาขา",
+        search: "ค้นหาชื่อสาขา, LINE OA หรือรหัสสาขา...",
+        all: "ทุกสาขา",
+        zero: "ไม่มีการเติบโต (0)",
+        highBlock: "อัตราบล็อกสูง (>10%)",
+        lowReach: "การเข้าถึงต่ำ (<80%)",
+        highGrowth: "การเติบโตสูง (>5%)",
+        count: (shown: number, total: number) => `แสดง ${shown} / ${total} สาขา`,
+        code: "รหัส",
+        store: "ร้านค้า",
+        followers: "ผู้ติดตาม",
+        growth: "เพิ่มขึ้น",
+        growthPct: "% เติบโต",
+        reach: "เข้าถึงได้",
+        reachPct: "% เข้าถึง",
+        blocks: "บล็อก",
+        blockPct: "% บล็อก",
+        noResults: "ไม่พบสาขาที่ตรงกับการค้นหาหรือตัวกรอง",
+        showing: (start: number, end: number, total: number) => `แสดงรายที่ ${start} – ${end} จากทั้งหมด ${total} ร้าน`,
       }
-      const valA = a[sortField] ?? -Infinity;
-      const valB = b[sortField] ?? -Infinity;
-      if (valA === valB) return 0;
-      return dirMult * (valA > valB ? 1 : -1);
+    : {
+        title: "Store performance",
+        subtitle: "Growth, reach and block-rate performance for each LINE OA account",
+        search: "Search store, LINE OA or store code...",
+        all: "All stores",
+        zero: "No growth (0)",
+        highBlock: "High block rate (>10%)",
+        lowReach: "Low reach (<80%)",
+        highGrowth: "High growth (>5%)",
+        count: (shown: number, total: number) => `Showing ${shown} / ${total} stores`,
+        code: "Code",
+        store: "Store",
+        followers: "Followers",
+        growth: "Growth",
+        growthPct: "Growth %",
+        reach: "Reach",
+        reachPct: "Reach %",
+        blocks: "Blocks",
+        blockPct: "Block %",
+        noResults: "No stores match the current search or filter",
+        showing: (start: number, end: number, total: number) => `Showing ${start} – ${end} of ${total} stores`,
+      };
+
+  const rows = useMemo<DisplayRow[]>(() => {
+    return storeData.map((row) => {
+      const growth = endpointsUsable ? row.periodIncrease : null;
+      return {
+        source: row,
+        id: row.masterStoreId || row.externalStoreId || row.storeId || row.lineOaId,
+        store: row.storeName,
+        oa: row.accountName,
+        followers: row.followers,
+        growth,
+        growthPct:
+          endpointsUsable && growth !== null && row.startFollowers !== null && row.startFollowers > 0
+            ? round((growth / row.startFollowers) * 100, 2)
+            : endpointsUsable && growth === 0
+              ? 0
+              : null,
+        reach: row.targetedReaches,
+        reachPct: calculatePct(row.targetedReaches, row.followers),
+        blocks: row.blocks,
+        blockPct: calculatePct(row.blocks, row.followers),
+      };
     });
-  }, [filteredStores, sortField, sortDir]);
+  }, [storeData, endpointsUsable]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedStores.length / pageSize));
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchesSearch =
+        !q ||
+        row.store.toLowerCase().includes(q) ||
+        row.oa.toLowerCase().includes(q) ||
+        row.id.toLowerCase().includes(q) ||
+        row.source.lineOaId.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+      if (filter === "zero-growth") return row.growth === 0;
+      if (filter === "high-block") return row.blockPct !== null && row.blockPct > 10;
+      if (filter === "low-reach") return row.reachPct !== null && row.reachPct < 80;
+      if (filter === "high-growth") return row.growthPct !== null && row.growthPct > 5;
+      return true;
+    });
+  }, [rows, searchQuery, filter]);
+
+  const sortedRows = useMemo(() => {
+    const getValue = (row: DisplayRow): string | number | null => {
+      if (sortField === "id") return row.id;
+      if (sortField === "store") return row.store;
+      if (sortField === "oa") return row.oa;
+      return row[sortField];
+    };
+
+    return [...filteredRows].sort((a, b) => {
+      const aValue = getValue(a);
+      const bValue = getValue(b);
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+
+      const direction = sortDir === "asc" ? 1 : -1;
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return direction * aValue.localeCompare(bValue, language === "th" ? "th" : "en");
+      }
+      return direction * (Number(aValue) - Number(bValue));
+    });
+  }, [filteredRows, sortField, sortDir, language]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const paginatedRows = sortedRows.slice(startIndex, startIndex + PAGE_SIZE);
+  const startRecord = sortedRows.length === 0 ? 0 : startIndex + 1;
+  const endRecord = Math.min(startIndex + PAGE_SIZE, sortedRows.length);
+  const pages = buildPages(safePage, totalPages);
 
-  const paginatedStores = useMemo(() => {
-    const startIdx = (safePage - 1) * pageSize;
-    return sortedStores.slice(startIdx, startIdx + pageSize);
-  }, [sortedStores, safePage, pageSize]);
+  const resetPage = () => setCurrentPage(1);
 
-  const startRecord = sortedStores.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const endRecord = Math.min(sortedStores.length, safePage * pageSize);
+  const handleSort = (field: SortKey) => {
+    setSortField((current) => {
+      if (current === field) {
+        setSortDir((direction) => (direction === "desc" ? "asc" : "desc"));
+        return current;
+      }
+      setSortDir(field === "id" || field === "store" || field === "oa" ? "asc" : "desc");
+      return field;
+    });
+    resetPage();
+  };
 
-  const formatStatusLabel = (status: string) => {
-    if (status === "ready") return t.ready;
-    if (status === "partial") return t.partial;
-    if (status === "missing") return t.missing;
-    if (status === "missing-baseline") return t.missingBaseline;
-    return status;
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+    window.requestAnimationFrame(() => {
+      tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const sortButton = (field: SortKey, label: string, align: "left" | "right" = "left") => (
+    <button
+      type="button"
+      onClick={() => handleSort(field)}
+      className={`flex w-full items-center gap-1 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--muted)] hover:text-[#00A651] ${
+        align === "right" ? "justify-end" : "justify-start"
+      }`}
+    >
+      {label}
+      {sortField === field && <span aria-hidden="true">{sortDir === "asc" ? "↑" : "↓"}</span>}
+    </button>
+  );
+
+  const pctPill = (value: number | null, type: "growth" | "reach" | "block", decimals: number) => {
+    if (value === null) return <span className="text-[var(--muted)]">—</span>;
+    return (
+      <span className={`inline-flex min-w-[58px] justify-center rounded-full px-2 py-1 text-xs font-semibold ${pillClass(getPillTone(value, type))}`}>
+        {value.toFixed(decimals)}%
+      </span>
+    );
   };
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col lg:col-span-2 shadow-sm">
-      {/* Table Header Controls */}
-      <div className="border-b border-[var(--border)] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-[var(--foreground)]">{t.storeBreakdown}</h3>
-          <p className="text-xs text-[var(--muted)]">{t.snapshotTargetDate(dateTo)}</p>
-        </div>
+    <div ref={tableTopRef} className="scroll-mt-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+      <div className="border-b border-[var(--border)] px-5 py-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <h3 className="text-[15px] font-semibold text-[var(--foreground)]">{labels.title}</h3>
+            <p className="mt-1 text-xs text-[var(--muted)]">{labels.subtitle}</p>
+          </div>
 
-        <div className="flex items-center gap-2">
           {!storeError && storeData.length > 0 && (
-            <div className="relative">
-              <input
-                type="text"
-                placeholder={t.searchStoresPlaceholder}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full sm:w-64 rounded-xl bg-[var(--input-background)] border border-[var(--border)] px-3 py-1.5 pl-9 text-xs text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:border-blue-500 transition-colors"
-              />
-              <svg
-                className="absolute left-3 top-2 h-3.5 w-3.5 text-[var(--muted)]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto xl:min-w-[650px]">
+              <div className="relative min-w-0 flex-1">
+                <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    resetPage();
+                  }}
+                  placeholder={labels.search}
+                  className="h-10 w-full rounded-[10px] border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none"
                 />
-              </svg>
+              </div>
+
+              <select
+                value={filter}
+                onChange={(event) => {
+                  setFilter(event.target.value as FilterKey);
+                  resetPage();
+                }}
+                className="h-10 rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--foreground)] focus:outline-none"
+              >
+                <option value="all">{labels.all}</option>
+                <option value="zero-growth">{labels.zero}</option>
+                <option value="high-block">{labels.highBlock}</option>
+                <option value="low-reach">{labels.lowReach}</option>
+                <option value="high-growth">{labels.highGrowth}</option>
+              </select>
+
+              <span className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[10px] bg-[#F5F5F7] px-3 text-xs font-medium text-[var(--muted)]">
+                {labels.count(filteredRows.length, rows.length)}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => exportStoreCsv(filteredRows.map((row) => row.source), dateFrom, dateTo, language)}
+                disabled={filteredRows.length === 0}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:opacity-40"
+                title={t.exportCsv}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v5m0 0-2-2m2 2 2-2" />
+                </svg>
+                {t.exportCsv}
+              </button>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={() => exportStoreCsv(filteredStores, dateFrom, dateTo, language)}
-            disabled={filteredStores.length === 0}
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
-            title={t.exportCsv}
-            aria-label={t.exportCsv}
-          >
-            <svg
-              className="h-3.5 w-3.5 text-[var(--muted)]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            <span>{t.exportCsv}</span>
-          </button>
         </div>
       </div>
 
       {storeError ? (
-        <div className="p-8 text-center text-sm text-amber-600 dark:text-amber-400 flex flex-col items-center justify-center gap-2">
+        <div className="flex flex-col items-center justify-center gap-3 p-10 text-center text-sm text-[#C62828]">
           <p>{t.errorLoadingStore}: {storeError}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="rounded-xl border border-amber-500/40 bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/30"
-          >
+          <button type="button" onClick={onRetry} className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:border-[#00A651]">
             {t.retryStore}
           </button>
         </div>
       ) : storeData.length === 0 ? (
-        <div className="p-8 text-center text-sm text-[var(--muted)]">{t.noStoreBreakdownData}</div>
+        <div className="p-10 text-center text-sm text-[var(--muted)]">{t.noStoreBreakdownData}</div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm min-w-max">
-              <thead className="bg-[var(--surface-elevated)] text-xs text-[var(--muted)] border-b border-[var(--border)]">
+            <table className="w-full min-w-[1180px] text-left text-[13px]">
+              <thead className="border-b border-[var(--border)] bg-[#FBFBFC]">
                 <tr>
-                  <th className="px-4 py-3 font-medium">{language === "th" ? "ร้านค้า" : "Store"}</th>
-                  <th
-                    className="font-medium p-0"
-                    aria-sort={
-                      sortField === "accountName"
-                        ? sortDir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 w-full h-full px-4 py-3 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                      onClick={() => handleSort("accountName")}
-                    >
-                      LINE OA {sortField === "accountName" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </th>
-                  <th
-                    className="font-medium text-right p-0"
-                    aria-sort={
-                      sortField === "followers"
-                        ? sortDir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                      onClick={() => handleSort("followers")}
-                    >
-                      {t.followers} {sortField === "followers" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 font-medium text-right text-[var(--muted)]">{t.startFollowers}</th>
-                  <th
-                    className="font-medium text-right p-0"
-                    aria-sort={
-                      sortField === "periodIncrease"
-                        ? sortDir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="flex items-center justify-end gap-1 w-full h-full px-4 py-3 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                      onClick={() => handleSort("periodIncrease")}
-                    >
-                      {t.periodIncrease} {sortField === "periodIncrease" && (sortDir === "asc" ? "↑" : "↓")}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 font-medium text-right">{t.targetedReach}</th>
-                  <th className="px-4 py-3 font-medium text-right">{t.blocks}</th>
-                  <th className="px-4 py-3 font-medium text-center">{language === "th" ? "สถานะ" : "Status"}</th>
-                  <th className="px-4 py-3 font-medium">{t.lastFetched}</th>
+                  <th className="p-0">{sortButton("id", labels.code)}</th>
+                  <th className="p-0">{sortButton("store", labels.store)}</th>
+                  <th className="p-0">{sortButton("oa", "LINE OA")}</th>
+                  <th className="p-0 text-right">{sortButton("followers", labels.followers, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("growth", labels.growth, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("growthPct", labels.growthPct, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("reach", labels.reach, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("reachPct", labels.reachPct, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("blocks", labels.blocks, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("blockPct", labels.blockPct, "right")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)] text-[var(--foreground)]">
-                {paginatedStores.map((row) => (
-                  <tr key={row.lineOaId} className="hover:bg-[var(--hover)] transition-colors">
-                    <td className="px-4 py-3 text-[var(--muted)]">
-                      {(row.masterStoreId || row.externalStoreId) && (
-                        <span className="font-mono text-xs text-slate-400 dark:text-slate-500 mr-1 opacity-80">
-                          [{row.masterStoreId ?? row.externalStoreId}]
-                        </span>
-                      )}
-                      {row.storeName}
+                {paginatedRows.map((row) => (
+                  <tr key={row.source.lineOaId} className="transition-colors hover:bg-[#F2FAF5]">
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--muted)]">{row.id}</td>
+                    <td className="max-w-[300px] whitespace-normal px-3 py-3 font-medium leading-5">{row.store}</td>
+                    <td className="max-w-[220px] whitespace-normal px-3 py-3 text-xs text-[var(--muted)]">{row.oa}</td>
+                    <td className="px-3 py-3 text-right font-medium tabular-nums">{row.followers?.toLocaleString() ?? "—"}</td>
+                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${row.growth !== null && row.growth > 0 ? "text-[#1E8E3E]" : row.growth !== null && row.growth < 0 ? "text-[#C62828]" : "text-[var(--foreground)]"}`}>
+                      {row.growth === null ? "—" : `${row.growth > 0 ? "+" : ""}${row.growth.toLocaleString()}`}
                     </td>
-                    <td className="px-4 py-3 font-medium text-[var(--foreground)]">{row.accountName}</td>
-                    <td className="px-4 py-3 text-right font-medium">
-                      {row.followers?.toLocaleString() ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right text-[var(--muted)]">
-                      {row.startFollowers?.toLocaleString() ?? "—"}
-                    </td>
-                    <td
-                      className={`px-4 py-3 text-right font-medium ${
-                        endpointsUsable && row.periodIncrease && row.periodIncrease > 0
-                          ? "text-green-600 dark:text-green-400"
-                          : endpointsUsable && row.periodIncrease && row.periodIncrease < 0
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-[var(--foreground)]"
-                      }`}
-                    >
-                      {endpointsUsable && row.periodIncrease !== null && row.periodIncrease !== undefined
-                        ? row.periodIncrease > 0
-                          ? `+${row.periodIncrease.toLocaleString()}`
-                          : row.periodIncrease.toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">{row.targetedReaches?.toLocaleString() ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">{row.blocks?.toLocaleString() ?? "—"}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          row.status === "ready"
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/20"
-                            : row.status === "missing"
-                            ? "bg-[var(--badge-background)] text-[var(--badge-foreground)]"
-                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20"
-                        }`}
-                      >
-                        {formatStatusLabel(row.status)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--muted)]">{formatBkkDateTime(row.fetchedAt, language)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{pctPill(row.growthPct, "growth", 2)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{row.reach?.toLocaleString() ?? "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{pctPill(row.reachPct, "reach", 1)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{row.blocks?.toLocaleString() ?? "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{pctPill(row.blockPct, "block", 1)}</td>
                   </tr>
                 ))}
-                {filteredStores.length === 0 && (
+                {sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-[var(--muted)]">
-                      {t.noStoresFound(searchQuery)}
-                    </td>
+                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-[var(--muted)]">{labels.noResults}</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination Controls */}
-          <div className="border-t border-[var(--border)] px-4 py-3 flex items-center justify-between text-xs text-[var(--muted)]">
-            <span>
-              {t.showingStoresText(startRecord, endRecord, filteredStores.length)}
-            </span>
-            <div className="flex items-center gap-1">
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs text-[var(--muted)]">{labels.showing(startRecord, endRecord, sortedRows.length)}</span>
+            <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => goToPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
-                className="rounded-lg border border-[var(--border)] px-2.5 py-1 hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
-                aria-label={t.previous}
+                className="h-8 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.previous}
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setCurrentPage(p)}
-                  className={`h-7 w-7 rounded-lg font-medium transition-colors ${
-                    safePage === p ? "bg-blue-600 text-white" : "hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+
+              {pages.map((page) =>
+                typeof page === "number" ? (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => goToPage(page)}
+                    className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-semibold transition-colors ${
+                      safePage === page
+                        ? "border-[#00A651] bg-[#00A651] text-white"
+                        : "border-[var(--border)] bg-white text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46]"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ) : (
+                  <span key={page} className="px-1 text-xs text-[var(--muted)]">…</span>
+                )
+              )}
+
               <button
                 type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => goToPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
-                className="rounded-lg border border-[var(--border)] px-2.5 py-1 hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
-                aria-label={t.next}
+                className="h-8 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.next}
               </button>
