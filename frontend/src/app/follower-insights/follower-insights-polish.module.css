@@ -43,6 +43,7 @@
 .scope :global(.app-content-section thead th:nth-child(4)),
 .scope :global(.app-content-section thead th:nth-child(5)) {
   min-width: 132px;
+  white-space: nowrap;
 }
 
 .scope :global(.app-content-section tbody tr:last-child td) {
