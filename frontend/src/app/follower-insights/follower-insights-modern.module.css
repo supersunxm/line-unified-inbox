@@ -142,15 +142,17 @@
   vector-effect: non-scaling-stroke;
 }
 
-/* Daily completeness returns as the left-side operational check.
-   Store performance stays wider on the right. */
+/* Keep the store table as the primary surface and move the newly restored
+   daily summary to the very bottom as a full-width section. */
 .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :first-child) {
   display: flex !important;
-  grid-column: span 1 / span 1 !important;
+  grid-column: 1 / -1 !important;
+  order: 2;
 }
 
 .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :last-child) {
-  grid-column: span 2 / span 2 !important;
+  grid-column: 1 / -1 !important;
+  order: 1;
 }
 
 /* Daily/store tables should remain easy to scan on narrow viewports. */
@@ -219,13 +221,6 @@
 /* Warnings are intentionally quiet unless action is required */
 .scope :global(.app-content-section [class*='bg-amber-500\/10']) {
   box-shadow: none !important;
-}
-
-@media (max-width: 1023px) {
-  .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :first-child),
-  .scope :global(.app-content-section [class*='lg:grid-cols-3'] > :last-child) {
-    grid-column: 1 / -1 !important;
-  }
 }
 
 @media (max-width: 900px) {
