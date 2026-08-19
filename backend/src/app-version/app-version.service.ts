@@ -8,20 +8,19 @@ import {
 } from "./app-version.dto";
 
 const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
-  latestVersion: "1.0.11",
-  buildNumber: 12,
+  latestVersion: "1.0.12",
+  buildNumber: 13,
   minimumSupportedVersion: "1.0.3",
   minimumSupportedBuildNumber: 4,
   forceUpdate: false,
   apkUrl:
-    "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.11-production.apk?sha=38b0e53d7ddb34b15fb2f1bae223048155a268d85ff0df5a0bc179c0f296f4ab",
-  apkSize: "56.8 MB",
-  sha256: "38b0e53d7ddb34b15fb2f1bae223048155a268d85ff0df5a0bc179c0f296f4ab",
+    "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.12-production.apk?sha=376a29715cf143b1d92697990d22f8261fb246b7f9e1a80de5b8c621d90da82e",
+  apkSize: "56.9 MB",
+  sha256: "376a29715cf143b1d92697990d22f8261fb246b7f9e1a80de5b8c621d90da82e",
   releaseNotes: [
-    "Customer status can now remain unset when neither Interested nor Purchased applies",
-    "Removing interest level, purchase channel, and payment method now persists correctly",
-    "Product quantity changes and Clear all now persist to the backend",
-    "Keeps Customer Sales Info consistent after close, Android Back, and reopen",
+    "Makes the Customer Sales Information header readable on narrow Android screens",
+    "Moves Clear all and Save to a second action row when horizontal space is limited",
+    "Preserves existing Customer Sales Info tagging and persistence behavior",
   ],
 };
 
