@@ -54,8 +54,8 @@ class ConversationTagsBar extends StatelessWidget {
             sales.paymentMethod != null ||
             sales.products.isNotEmpty);
     final hasProvenance = hasSalesData &&
-        (sales?.recordedBy?.trim().isNotEmpty == true ||
-            sales?.recordedAt != null ||
+        (sales.recordedBy?.trim().isNotEmpty == true ||
+            sales.recordedAt != null ||
             purchaseInformation?.recordedBy?.trim().isNotEmpty == true ||
             purchaseInformation?.recordedAt != null);
     final isLegacy =
@@ -119,7 +119,7 @@ class ConversationTagsBar extends StatelessWidget {
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (sales!.status != null)
+                          if (sales.status != null)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
