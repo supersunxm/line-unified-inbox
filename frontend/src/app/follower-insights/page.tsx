@@ -1,5 +1,10 @@
 import { ApplicationWorkspace } from "../page";
+import styles from "./follower-insights-modern.module.css";
 
 export default function FollowerInsightsPage() {
-  return <ApplicationWorkspace initialSection="follower-insights" />;
+  return (
+    <div className={styles.scope}>
+      <ApplicationWorkspace initialSection="follower-insights" />
+    </div>
+  );
 }
