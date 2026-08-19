@@ -1,5 +1,23 @@
 # AI progress
 
+## Current task: Executive Dashboard Redesign v2 (2026-08-19)
+
+- Redesigned `/dashboard` into a five-tier executive information hierarchy.
+- Tier 1: total followers hero, 7-day trend, and reply-status summary.
+- Tier 2: response-speed distribution and peak-time operational view.
+- Tier 3: unified store Watchlist with combined inactive/reach/block issues, fastest-growing stores, and partner rollup.
+- Tier 4: Top 10 follower stores versus stores needing care.
+- Tier 5: compact supplemental metrics.
+- Added authenticated `GET /dashboard/executive-store-health` based on real LINE OA follower snapshots.
+- Partner attribution is derived from the trailing `By XXX` store-name pattern; no database field or migration was added.
+- Missing reach/block snapshot values remain null rather than being classified as a problem.
+- Fixed reply-bucket percentage handling: when there are zero duration-backed replies, percentage is `null` and the UI displays a no-data state instead of misleading 0%/100%.
+- Added backend and frontend regression coverage for the executive dashboard contract and zero-reply behavior.
+- CI run #143 passed frontend lint/tests/build, backend migrations/lint/tests/build/auth smoke, and mobile analyze/tests.
+- Draft PR: #32.
+- No production deployment has occurred yet.
+
+
 ## Current task: Phase 2B Purchase Intelligence Campaign Composer (2026-08-19)
 
 - Added a dedicated ADMIN-only composer for Purchase Intelligence `DRAFT + SELECTED_USERS` campaigns.

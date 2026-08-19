@@ -1,3 +1,13 @@
+# Executive Dashboard v2 Data Integrity Boundary (2026-08-19)
+
+- `/dashboard` is organized into five visual tiers so executive attention follows business priority rather than presenting every metric with equal weight.
+- Store health Watchlist issues are combined per store into one row instead of maintaining separate reach/block/inactive lists that duplicate stores.
+- Store follower health is calculated from real LINE OA follower snapshots; HTML/mockup values are never used as production analytics data.
+- Partner attribution is derived from the existing store-name suffix pattern `By XXX`, avoiding a database migration solely for presentation grouping.
+- Reach/block metrics may be null when a valid snapshot metric is unavailable. Missing data must not be silently converted to zero or classified as healthy/unhealthy.
+- Reply-speed bucket percentages have an explicit no-denominator state. When total duration-backed replies are zero, percent is null and the UI must display “ไม่มีข้อมูล” rather than 0% or 100%.
+- The redesign adds no customer/store data mutation and requires no Prisma migration.
+
 # Purchase Intelligence Campaign Composer Boundary (Phase 2B) (2026-08-19)
 
 - Phase 2B may edit only content on an existing Purchase Intelligence `DRAFT + SELECTED_USERS` campaign; it cannot create delivery execution state or change campaign status.

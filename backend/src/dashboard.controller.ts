@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req, ForbiddenException } from "@nestjs/common"
 import { PrismaService } from "./prisma.service";
 import { OperationsService } from "./operations/operations.service";
 import { AnalyticsPeriod, DashboardAnalyticsService, UserRolePermission } from "./dashboard-analytics.service";
+import { DashboardExecutiveService } from "./dashboard-executive.service";
 import { OperationReportService } from "./operation-report.service";
 import { RootCauseService } from "./ai/root-cause.service";
 import type { AuthRequest } from "./auth/auth.guard";
@@ -13,6 +14,7 @@ export class DashboardController {
     private readonly prisma: PrismaService,
     private readonly operations: OperationsService,
     private readonly analytics: DashboardAnalyticsService,
+    private readonly executive: DashboardExecutiveService,
     private readonly reportService: OperationReportService,
     private readonly rootCauseService: RootCauseService,
     private readonly storeAccess: StoreAccessService,
@@ -69,6 +71,17 @@ export class DashboardController {
     const userRole = scope.userRole;
     const allowedStoreIds = scope.allowedStoreIds;
     return this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds);
+  }
+
+  @Get("executive-store-health")
+  async getExecutiveStoreHealth(
+    @Query("period") period?: AnalyticsPeriod,
+    @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
+    @Req() req?: AuthRequest,
+  ) {
+    const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const scope = await this.resolveScope(req, allowedStoreIdsRaw);
+    return this.executive.getStoreHealth(safePeriod, scope.allowedStoreIds);
   }
 
   @Get("root-cause-insights")
