@@ -7,9 +7,9 @@ import type { Language } from "./follower-insights-translations";
 type MetricRow = {
   store: string;
   followers: number;
-  startFollowers: number;
-  growth: number;
-  growthPct: number;
+  startFollowers: number | null;
+  growth: number | null;
+  growthPct: number | null;
   reach: number | null;
   reachPct: number | null;
   blocks: number | null;
@@ -94,14 +94,13 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
   const [showAllCharts, setShowAllCharts] = useState(true);
   const rows = useMemo<MetricRow[]>(() => storeData.flatMap((row) => {
     if (row.followers === null) return [];
-    const startFollowers = row.startFollowers ?? row.followers;
-    const growth = endpointsUsable && row.periodIncrease !== null ? row.periodIncrease : 0;
+    const canCompare = endpointsUsable && row.startFollowers !== null && row.periodIncrease !== null;
     return [{
       store: row.storeName,
       followers: row.followers,
-      startFollowers,
-      growth,
-      growthPct: endpointsUsable && startFollowers > 0 ? pct(growth, startFollowers, 2) : 0,
+      startFollowers: canCompare ? row.startFollowers : null,
+      growth: canCompare ? row.periodIncrease : null,
+      growthPct: canCompare && row.startFollowers > 0 ? pct(row.periodIncrease, row.startFollowers, 2) : canCompare && row.periodIncrease === 0 ? 0 : null,
       reach: row.targetedReaches,
       reachPct: row.targetedReaches === null ? null : pct(row.targetedReaches, row.followers, 1),
       blocks: row.blocks,
@@ -111,8 +110,9 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
 
   const totals = useMemo(() => {
     const followers = rows.reduce((sum, row) => sum + row.followers, 0);
-    const start = rows.reduce((sum, row) => sum + row.startFollowers, 0);
-    const growth = endpointsUsable ? rows.reduce((sum, row) => sum + row.growth, 0) : 0;
+    const comparableRows = rows.filter((row): row is MetricRow & { startFollowers: number; growth: number; growthPct: number } => row.startFollowers !== null && row.growth !== null && row.growthPct !== null);
+    const start = comparableRows.reduce((sum, row) => sum + row.startFollowers, 0);
+    const growth = comparableRows.reduce((sum, row) => sum + row.growth, 0);
     const reachRows = rows.filter((row): row is MetricRow & { reach: number; reachPct: number } => row.reach !== null && row.reachPct !== null);
     const blockRows = rows.filter((row): row is MetricRow & { blocks: number; blockPct: number } => row.blocks !== null && row.blockPct !== null);
     const reachFollowers = reachRows.reduce((sum, row) => sum + row.followers, 0);
@@ -122,25 +122,29 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
     return {
       followers,
       growth,
-      growthPct: endpointsUsable && start > 0 ? pct(growth, start, 2) : 0,
+      growthPct: start > 0 ? pct(growth, start, 2) : null,
       reachPct: reachFollowers > 0 ? pct(reach, reachFollowers, 1) : null,
       blockPct: blockFollowers > 0 ? pct(blocks, blockFollowers, 1) : null,
-      zeroGrowth: endpointsUsable ? rows.filter((row) => row.growth === 0).length : 0,
+      zeroGrowth: comparableRows.filter((row) => row.growth === 0).length,
       lowReach: reachRows.filter((row) => row.reachPct < 80).length,
       highBlock: blockRows.filter((row) => row.blockPct > 10).length,
+      comparableCoverage: comparableRows.length,
       reachCoverage: reachRows.length,
       blockCoverage: blockRows.length,
     };
-  }, [rows, endpointsUsable]);
+  }, [rows]);
 
-  const topGrowth = useMemo(() => [...rows].filter((row) => row.growth > 0).sort((a, b) => b.growth - a.growth).slice(0, 12).map((row) => ({ label: row.store, value: row.growth, display: `+${row.growth.toLocaleString()}` })), [rows]);
-  const topGrowthPct = useMemo(() => [...rows].filter((row) => row.growthPct > 0).sort((a, b) => b.growthPct - a.growthPct).slice(0, 12).map((row) => ({ label: row.store, value: row.growthPct, display: `${row.growthPct.toFixed(2)}%` })), [rows]);
+  const topGrowth = useMemo(() => rows.filter((row): row is MetricRow & { growth: number } => row.growth !== null && row.growth > 0).sort((a, b) => b.growth - a.growth).slice(0, 12).map((row) => ({ label: row.store, value: row.growth, display: `+${row.growth.toLocaleString()}` })), [rows]);
+  const topGrowthPct = useMemo(() => rows.filter((row): row is MetricRow & { growthPct: number } => row.growthPct !== null && row.growthPct > 0).sort((a, b) => b.growthPct - a.growthPct).slice(0, 12).map((row) => ({ label: row.store, value: row.growthPct, display: `${row.growthPct.toFixed(2)}%` })), [rows]);
   const topBlockPct = useMemo(() => rows.filter((row): row is MetricRow & { blockPct: number } => row.blockPct !== null && row.blockPct > 0).sort((a, b) => b.blockPct - a.blockPct).slice(0, 12).map((row) => ({ label: row.store, value: row.blockPct, display: `${row.blockPct.toFixed(1)}%` })), [rows]);
 
   const th = language === "th";
   const noComparable = th ? "ไม่มีข้อมูลเปรียบเทียบในช่วงที่เลือก" : "No comparable data for this period";
+  const growthValue = totals.growthPct === null ? "—" : `${totals.growth > 0 ? "+" : ""}${totals.growth.toLocaleString()}`;
+  const growthPctValue = totals.growthPct === null ? "—" : `${totals.growthPct.toFixed(2)}%`;
   const reachValue = totals.reachPct === null ? "—" : `${totals.reachPct.toFixed(1)}%`;
   const blockValue = totals.blockPct === null ? "—" : `${totals.blockPct.toFixed(1)}%`;
+  const growthTone = totals.growthPct === null ? "default" : totals.growth >= 0 ? "green" : "red";
   const reachTone = totals.reachPct === null ? "default" : totals.reachPct >= 85 ? "green" : totals.reachPct >= 75 ? "amber" : "red";
   const blockTone = totals.blockPct === null ? "default" : totals.blockPct <= 5 ? "green" : totals.blockPct <= 10 ? "amber" : "red";
 
@@ -148,8 +152,8 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label={th ? "ผู้ติดตามรวม" : "Total followers"} value={totals.followers.toLocaleString()} detail={th ? `${rows.length} LINE OA ที่มีข้อมูล` : `${rows.length} LINE OA accounts with data`} />
-        <MetricCard label={th ? "เพิ่มขึ้นในช่วง" : "Period growth"} value={endpointsUsable ? `${totals.growth > 0 ? "+" : ""}${totals.growth.toLocaleString()}` : "—"} detail={th ? `อัตราเติบโต ${totals.growthPct.toFixed(2)}%` : `${totals.growthPct.toFixed(2)}% growth rate`} tone={totals.growth >= 0 ? "green" : "red"} />
-        <MetricCard label={th ? "อัตราการเติบโต" : "Growth rate"} value={endpointsUsable ? `${totals.growthPct.toFixed(2)}%` : "—"} detail={th ? `${totals.zeroGrowth} สาขาไม่เติบโต` : `${totals.zeroGrowth} stores with no growth`} tone="green" />
+        <MetricCard label={th ? "เพิ่มขึ้นในช่วง" : "Period growth"} value={growthValue} detail={th ? `เทียบได้ ${totals.comparableCoverage}/${rows.length} สาขา` : `Comparable ${totals.comparableCoverage}/${rows.length} stores`} tone={growthTone} />
+        <MetricCard label={th ? "อัตราการเติบโต" : "Growth rate"} value={growthPctValue} detail={th ? `${totals.zeroGrowth} สาขาไม่เติบโต · เฉพาะสาขาที่เทียบได้` : `${totals.zeroGrowth} no-growth stores · comparable only`} tone={growthTone} />
         <MetricCard label={th ? "อัตราการเข้าถึง" : "Reach rate"} value={reachValue} detail={th ? `${totals.lowReach} สาขาต่ำกว่า 80% · มีข้อมูล ${totals.reachCoverage}/${rows.length}` : `${totals.lowReach} below 80% · coverage ${totals.reachCoverage}/${rows.length}`} tone={reachTone} />
         <MetricCard label={th ? "อัตราบล็อก" : "Block rate"} value={blockValue} detail={th ? `${totals.highBlock} สาขาสูงกว่า 10% · มีข้อมูล ${totals.blockCoverage}/${rows.length}` : `${totals.highBlock} above 10% · coverage ${totals.blockCoverage}/${rows.length}`} tone={blockTone} />
       </div>
@@ -168,7 +172,7 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_1fr]">
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Top สาขา — ผู้ติดตามเพิ่มขึ้น" : "Top stores — follower growth"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "เรียงตามจำนวนผู้ติดตามที่เพิ่มขึ้นสูงสุดในช่วงที่เลือก" : "Highest absolute follower growth in the selected period"}</p>
+            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "เรียงตามจำนวนผู้ติดตามที่เพิ่มขึ้นสูงสุด เฉพาะสาขาที่มี baseline ครบ" : "Highest absolute growth among stores with a valid baseline"}</p>
             <HorizontalBars data={topGrowth} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
@@ -178,7 +182,7 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Top สาขา — อัตราการเติบโต" : "Top stores — growth rate"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "วัดเทียบกับฐานผู้ติดตามต้นช่วง" : "Growth relative to each store's starting follower base"}</p>
+            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "วัดเทียบกับฐานผู้ติดตามต้นช่วง เฉพาะสาขาที่เปรียบเทียบได้" : "Growth relative to the starting base for comparable stores"}</p>
             <HorizontalBars data={topGrowthPct} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
