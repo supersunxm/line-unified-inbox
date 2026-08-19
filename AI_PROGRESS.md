@@ -1,5 +1,17 @@
 # AI progress
 
+## Current task: Android Release v1.0.12+13 (Responsive Customer Sales Header)
+
+- Fixed the narrow-screen Customer Sales Information header so the title can no longer collapse into one-character-per-line wrapping.
+- Narrow layouts place Close + title on the first row and Clear all + Save on a second right-aligned action row; wider layouts retain the single-row header.
+- Customer Sales Info tagging, persistence, nullable status, Clear all, and backend semantics are unchanged.
+- Exact production APK: `oppo-line-oa-chat-v1.0.12-production.apk`.
+- Version/build: `1.0.12+13`.
+- Size: `56.9 MB (56898658 bytes)`.
+- SHA-256: `376a29715cf143b1d92697990d22f8261fb246b7f9e1a80de5b8c621d90da82e`.
+- Production API and APP_ENV verified; AOT check PASS.
+
+
 ## Current task: Android Release v1.0.6+7 (POS/CRM Draft Selection UX Flow)
 
 - **Release Overview & Architecture**:

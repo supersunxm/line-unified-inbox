@@ -1,3 +1,10 @@
+# Responsive Customer Sales Information Header (v1.0.12+13) (2026-08-19)
+
+- Customer Sales Information header actions must not compete with the title for the same constrained horizontal space on narrow Android screens.
+- Narrow layouts use two rows: Close + readable title first, then Clear all + Save right-aligned below. Wider layouts retain the compact single-row presentation.
+- This is a presentation-only change. Customer Sales Info state ownership, persistence, backend contracts, nullable status, and tag behavior remain unchanged.
+- Android release artifacts remain immutable by version/build and are distributed with an exact SHA-256 checksum.
+
 # POS / CRM Draft Selection UX Flow Architecture (v1.0.6+7) (2026-08-18)
 
 - **POS / CRM Draft Selection Paradigm (Select → Configure → Confirm → Save CRM)**: Replaced direct catalog addition with an isolated 4-step draft selection model in `ConversationTagsSheet`. Staff select a catalog product into an isolated draft container, configure RAM/ROM/color variants and quantities, explicitly tap `[ Confirm Selection ]` (`[ ยืนยันการเลือก ]` / `[ 确认选择 ]`) to commit to the customer's CRM list, and finally save the overall CRM sheet.
