@@ -94,13 +94,24 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
   const [showAllCharts, setShowAllCharts] = useState(true);
   const rows = useMemo<MetricRow[]>(() => storeData.flatMap((row) => {
     if (row.followers === null) return [];
-    const canCompare = endpointsUsable && row.startFollowers !== null && row.periodIncrease !== null;
+
+    const startFollowers = row.startFollowers;
+    const periodIncrease = row.periodIncrease;
+    const canCompare = endpointsUsable && startFollowers !== null && periodIncrease !== null;
+    const growthPct = canCompare
+      ? startFollowers > 0
+        ? pct(periodIncrease, startFollowers, 2)
+        : periodIncrease === 0
+          ? 0
+          : null
+      : null;
+
     return [{
       store: row.storeName,
       followers: row.followers,
-      startFollowers: canCompare ? row.startFollowers : null,
-      growth: canCompare ? row.periodIncrease : null,
-      growthPct: canCompare && row.startFollowers > 0 ? pct(row.periodIncrease, row.startFollowers, 2) : canCompare && row.periodIncrease === 0 ? 0 : null,
+      startFollowers: canCompare ? startFollowers : null,
+      growth: canCompare ? periodIncrease : null,
+      growthPct,
       reach: row.targetedReaches,
       reachPct: row.targetedReaches === null ? null : pct(row.targetedReaches, row.followers, 1),
       blocks: row.blocks,
