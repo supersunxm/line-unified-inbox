@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.8-production.apk";
-  const sha256Checksum = "532fd6b7a706fc2c589aedab1d8e5522d2a66827cba220f75a0d8c62517b87e8";
+  const apkFileName = "oppo-line-oa-chat-v1.0.9-production.apk";
+  const sha256Checksum = "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
   const apkDownloadUrl = `/downloads/${apkFileName}?sha=${sha256Checksum}`;
 
   return (
@@ -45,34 +45,30 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.8+9 (Tagging Persistence Hotfix) · 56.9 MB
+              Version 1.0.9+10 (Tag Rehydration Hotfix) · 56.9 MB
             </div>
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.8 (What&apos;s New in v1.0.8)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.9 (What&apos;s New in v1.0.9)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Immediate Tag Persistence</strong>: กด Confirm Selection แล้วระบบบันทึกสินค้าที่ Tag ลง Backend ทันที</span>
+                <span><strong>Authoritative Rehydration</strong>: หลังปิด Customer Sales Info ด้วยปุ่ม Back, swipe หรือแตะนอกหน้าต่าง แอปจะโหลดข้อมูลล่าสุดจาก Backend กลับมาอัปเดตหน้า Chat</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Fixed Disappearing Tags</strong>: แก้ปัญหา Tag สินค้าหายเมื่อปิด Customer Sales Info หรือกลับไปหน้าแชต</span>
+                <span><strong>Fixed Tags Appearing Lost</strong>: แก้ปัญหา Product Tag ที่บันทึกสำเร็จแล้วแต่เมื่อเปิด Sales Info ใหม่กลับแสดง state เก่า</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Server Rehydration</strong>: ใช้ข้อมูลที่ Backend บันทึกสำเร็จกลับมาอัปเดตหน้าจอ ลดความคลาดเคลื่อนจาก Local State</span>
+                <span><strong>Sales Info Consistency</strong>: Product, Purchase Channel และ Payment Method ที่ยืนยันแล้วจะแสดงต่อเนื่องหลังเปิดหน้า Sales Info ใหม่</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Safer Save Flow</strong>: ป้องกันการปิดหรือเปลี่ยนสินค้าในขณะที่กำลังบันทึกข้อมูล</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Improved CRM Reliability</strong>: เพิ่มความเสถียรของการจดจำข้อมูล Customer Sales และ Product Tagging</span>
+                <span><strong>Tagging Reliability</strong>: รวมการแก้ไข persistence และ backend sales audit จาก hotfix ก่อนหน้า</span>
               </li>
             </ul>
           </div>
