@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.12-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.13-production.apk";
   const sha256Checksum =
-    "376a29715cf143b1d92697990d22f8261fb246b7f9e1a80de5b8c621d90da82e";
+    "05734b9dd50ba649e4db858c28a6248a5ed2b5dec7900687a15700ca253c097f";
   const apkDownloadUrl = `/downloads/${apkFileName}?sha=${sha256Checksum}`;
 
   return (
@@ -33,15 +33,15 @@ export default function DownloadAppPage() {
             <p className="mt-1 font-medium text-slate-500 text-xs dark:text-slate-400">สำหรับพนักงานขายหน้าร้าน (BM / PC)</p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.12+13 (Responsive Sales Header) · 56.9 MB
+              Version 1.0.13+14 · 57.7 MB
             </div>
           </div>
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-200">✨ มีอะไรใหม่ในเวอร์ชัน 1.0.12 (What&apos;s New in v1.0.12)</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200">✨ มีอะไรใหม่ในเวอร์ชัน 1.0.13 (What&apos;s New in v1.0.13)</h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
-              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Readable Customer Sales Header</strong>: ชื่อ Customer Sales Information ไม่ถูกบีบจนเรียงตัวอักษรแนวตั้งบนจอมือถือแคบอีกต่อไป</span></li>
-              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Responsive Actions</strong>: Clear all และ Save จะย้ายลงแถวที่สองอัตโนมัติเมื่อพื้นที่แนวนอนไม่เพียงพอ</span></li>
-              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Sales Tag Behavior Preserved</strong>: การเพิ่ม ลบ ล้าง และบันทึก Customer Sales Info ยังคงใช้ behavior เดิม</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Installation Fix</strong>: แก้ปัญหาบางเครื่องขึ้นข้อความว่าแพ็กเกจขัดแย้งและไม่สามารถติดตั้งแอปได้</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Dedicated Android Package</strong>: ใช้ package ใหม่ <span className="font-mono">click.lineoppo.chat</span> สำหรับแอปนี้โดยเฉพาะ</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-emerald-500 font-bold">•</span><span><strong>Stable Release Signing</strong>: ใช้ลายเซ็น production แบบถาวร เพื่อรองรับการอัปเดตเวอร์ชันถัดไปอย่างถูกต้อง</span></li>
             </ul>
           </div>
           <div className="mt-6">
@@ -57,10 +57,10 @@ export default function DownloadAppPage() {
           <div className="mt-6 border-slate-100 border-t pt-5 dark:border-slate-800/60">
             <h2 className="font-semibold text-slate-900 text-xs uppercase tracking-wider dark:text-slate-200">ขั้นตอนการติดตั้งบนมือถือ / แท็บเล็ต (Installation Steps)</h2>
             <ol className="mt-3 space-y-3 text-slate-600 text-xs leading-relaxed dark:text-slate-300">
-              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">1</span><span>กดปุ่ม <strong>ดาวน์โหลด APK</strong> ด้านบน และรอจนกว่าการดาวน์โหลดจะเสร็จสมบูรณ์</span></li>
-              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">2</span><span>เปิดไฟล์ที่ดาวน์โหลดมา หากขึ้นเตือนความปลอดภัย ให้เลือก <strong>&ldquo;ตั้งค่า (Settings)&rdquo;</strong> และเปิดอนุญาต <strong>&ldquo;ติดตั้งแอปจากแหล่งที่ไม่รู้จัก (Allow from this source)&rdquo;</strong></span></li>
-              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">3</span><span>กด <strong>&ldquo;ติดตั้ง (Install)&rdquo;</strong> เมื่อติดตั้งเสร็จแล้วกด <strong>&ldquo;เปิด (Open)&rdquo;</strong></span></li>
-              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">4</span><span>ลงทะเบียนบัญชีพนักงานใหม่ หรือเข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับอนุมัติ</span></li>
+              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">1</span><span>หากเคยติดตั้งแอปเวอร์ชัน 1.0.12 หรือต่ำกว่า ให้ถอนการติดตั้งเวอร์ชันเดิมก่อน เนื่องจากเวอร์ชัน 1.0.13 เปลี่ยนเป็น Android package ใหม่</span></li>
+              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">2</span><span>กดปุ่ม <strong>ดาวน์โหลด APK</strong> ด้านบน และรอจนกว่าการดาวน์โหลดจะเสร็จสมบูรณ์</span></li>
+              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">3</span><span>เปิดไฟล์ที่ดาวน์โหลดมา หากขึ้นเตือนความปลอดภัย ให้เลือก <strong>&ldquo;ตั้งค่า (Settings)&rdquo;</strong> และเปิดอนุญาต <strong>&ldquo;ติดตั้งแอปจากแหล่งที่ไม่รู้จัก (Allow from this source)&rdquo;</strong></span></li>
+              <li className="flex gap-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">4</span><span>กด <strong>&ldquo;ติดตั้ง (Install)&rdquo;</strong> เมื่อติดตั้งเสร็จแล้วกด <strong>&ldquo;เปิด (Open)&rdquo;</strong> และลงทะเบียนหรือเข้าสู่ระบบตามปกติ</span></li>
             </ol>
           </div>
         </div>

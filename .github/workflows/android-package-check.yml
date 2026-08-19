@@ -1,0 +1,111 @@
+name: Android Package Check
+
+on:
+  pull_request:
+    paths:
+      - "android_app/**"
+      - ".github/workflows/android-package-check.yml"
+      - ".github/workflows/android-production-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-package-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate localization
+        run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK with dedicated package
+        run: >-
+          flutter build apk --debug
+          --dart-define=APP_ENV=production
+          --dart-define=API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app
+
+      - name: Verify debug package ID
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-debug.apk"
+          test -f "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          AAPT="$(find "$SDK_ROOT/build-tools" -type f -name aapt -perm -111 | sort -V | tail -n 1)"
+          test -n "$AAPT"
+
+          PACKAGE_ID="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          echo "Debug package ID: $PACKAGE_ID"
+          test "$PACKAGE_ID" = "click.lineoppo.chat"
+
+      - name: Build unsigned production release candidate
+        env:
+          ORG_GRADLE_PROJECT_ciUnsignedRelease: "true"
+        run: >-
+          flutter build apk --release
+          --dart-define=APP_ENV=production
+          --dart-define=API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app
+
+      - name: Verify unsigned release package and stage Android build tools
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          BUILD_TOOLS_DIR="$(find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$BUILD_TOOLS_DIR"
+          AAPT="$BUILD_TOOLS_DIR/aapt"
+          test -x "$AAPT"
+
+          PACKAGE_ID="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          echo "Release package ID: $PACKAGE_ID"
+          test "$PACKAGE_ID" = "click.lineoppo.chat"
+
+          rm -rf build/android-build-tools
+          cp -a "$BUILD_TOOLS_DIR" build/android-build-tools
+
+      - name: Upload debug install-test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineoppo-chat-package-check
+          path: android_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload unsigned production candidate and signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineoppo-chat-v1.0.13-unsigned-candidate
+          path: |
+            android_app/build/app/outputs/flutter-apk/app-release.apk
+            android_app/build/android-build-tools/
+          if-no-files-found: error
+          retention-days: 7

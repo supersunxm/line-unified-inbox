@@ -1,0 +1,87 @@
+name: Android Production Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-signed-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate localization
+        run: flutter gen-l10n
+
+      - name: Restore permanent signing material
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/lineoppo-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=../lineoppo-release.jks
+          EOF
+
+      - name: Build signed production APK
+        run: >-
+          flutter build apk --release
+          --dart-define=APP_ENV=production
+          --dart-define=API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app
+
+      - name: Verify package ID and signing certificate
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          AAPT="$(find "$SDK_ROOT/build-tools" -type f -name aapt -perm -111 | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -perm -111 | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          test -n "$APKSIGNER"
+
+          PACKAGE_ID="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          echo "Package ID: $PACKAGE_ID"
+          test "$PACKAGE_ID" = "click.lineoppo.chat"
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
+          grep -Fq "E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14" /tmp/apk-signature.txt
+
+      - name: Rename release APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: oppo-line-oa-chat-v1.0.13-production
+          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+          if-no-files-found: error
+          retention-days: 30

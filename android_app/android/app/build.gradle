@@ -1,20 +1,49 @@
+import java.util.Properties
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    id "com.google.gms.google-services"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+def isReleaseBuild = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains("release")
+}
+def allowUnsignedRelease = project.hasProperty("ciUnsignedRelease")
+
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+} else if (isReleaseBuild && !allowUnsignedRelease) {
+    throw new GradleException(
+        "Production signing is required for release builds. " +
+        "Create android/key.properties and configure the permanent release keystore."
+    )
+}
+
 android {
-    namespace "com.oppo.lineoahub"
+    namespace "click.lineoppo.chat"
     compileSdk flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
+
     defaultConfig {
-        applicationId "com.oppo.lineoahub"
+        applicationId "click.lineoppo.chat"
         minSdk flutter.minSdkVersion
         targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
     }
 
     compileOptions {
@@ -25,7 +54,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
