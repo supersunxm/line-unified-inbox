@@ -47,6 +47,17 @@ type PurchaseAudienceResponse = {
   messageabilityDefinition: string;
   audience: PurchaseAudienceItem[];
 };
+type PurchaseBroadcastDraftResult = {
+  id: string;
+  campaignRequestId: string;
+  title: string | null;
+  status: "DRAFT";
+  recipientCount: number;
+  storeCount: number;
+  lineOaCount: number;
+  createdAt: string;
+  duplicate: boolean;
+};
 
 const number = new Intl.NumberFormat("en-US");
 const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -125,6 +136,10 @@ export default function PurchaseAnalyticsPage() {
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [onlyMessageable, setOnlyMessageable] = useState(true);
   const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"]));
+  const [draftCreating, setDraftCreating] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [createdDraft, setCreatedDraft] = useState<PurchaseBroadcastDraftResult | null>(null);
+  const [draftRequestId, setDraftRequestId] = useState<string | null>(null);
 
   const load = useCallback(async (viewer?: AuthUser) => {
     setLoading(true);
@@ -165,6 +180,9 @@ export default function PurchaseAnalyticsPage() {
     setAudienceOpen(true);
     setAudienceLoading(true);
     setAudienceError(null);
+    setDraftError(null);
+    setCreatedDraft(null);
+    setDraftRequestId(null);
     try {
       const query = new URLSearchParams();
       if (from) query.set("from", from);
@@ -189,12 +207,66 @@ export default function PurchaseAnalyticsPage() {
     return audience.audience.filter((item) => selectedStatuses.has(audienceStatus(item)) && (!onlyMessageable || item.canMessage));
   }, [audience, onlyMessageable, selectedStatuses]);
 
+  const resetDraftSelection = () => {
+    setCreatedDraft(null);
+    setDraftError(null);
+    setDraftRequestId(null);
+  };
+
   const toggleStatus = (status: AudienceStatus) => {
     setSelectedStatuses((current) => {
       const next = new Set(current);
       if (next.has(status)) next.delete(status); else next.add(status);
       return next;
     });
+    resetDraftSelection();
+  };
+
+  const handleMessageableChange = (checked: boolean) => {
+    setOnlyMessageable(checked);
+    resetDraftSelection();
+  };
+
+  const createBroadcastDraft = async () => {
+    if (
+      authUser?.role !== "ADMIN" ||
+      draftCreating ||
+      !onlyMessageable ||
+      selectedStatuses.size === 0 ||
+      filteredAudience.length === 0
+    ) return;
+
+    setDraftCreating(true);
+    setDraftError(null);
+    setCreatedDraft(null);
+    const campaignRequestId = draftRequestId ?? crypto.randomUUID();
+    if (!draftRequestId) setDraftRequestId(campaignRequestId);
+
+    try {
+      const response = await fetch("/api-backend/admin/purchase-analytics/audience/broadcast-draft", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaignRequestId,
+          from: from || undefined,
+          to: to || undefined,
+          storeId: storeId || undefined,
+          statuses: [...selectedStatuses].sort(),
+          onlyMessageable: true,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { message?: string | string[] } | null;
+        const message = Array.isArray(body?.message) ? body.message.join(", ") : body?.message;
+        throw new Error(message || `Unable to create broadcast audience (${response.status}).`);
+      }
+      setCreatedDraft(await response.json() as PurchaseBroadcastDraftResult);
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : "Unable to create broadcast audience draft.");
+    } finally {
+      setDraftCreating(false);
+    }
   };
 
   const downloadAudience = () => {
@@ -279,7 +351,7 @@ export default function PurchaseAnalyticsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="audience-title">
           <div className="app-surface max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
-              <div><h2 id="audience-title" className="text-xl font-bold">Export Customer Audience</h2><p className="app-muted mt-1 text-sm">One row per customer. Current date and store filters are applied automatically.</p></div>
+              <div><h2 id="audience-title" className="text-xl font-bold">Customer Audience</h2><p className="app-muted mt-1 text-sm">One row per customer. Current date and store filters are applied automatically.</p></div>
               <button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-sm">Close</button>
             </div>
 
@@ -293,13 +365,21 @@ export default function PurchaseAnalyticsPage() {
 
                 <fieldset><legend className="text-sm font-semibold">Customer Status</legend><div className="mt-2 flex flex-wrap gap-3">{(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => <label key={status} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedStatuses.has(status)} onChange={() => toggleStatus(status)} />{status === "NOT_SPECIFIED" ? "Not specified" : status.charAt(0) + status.slice(1).toLowerCase()}</label>)}</div></fieldset>
 
-                <label className="flex items-start gap-3 rounded-xl border p-4"><input type="checkbox" className="mt-1" checked={onlyMessageable} onChange={(event) => setOnlyMessageable(event.target.checked)} /><span><span className="block text-sm font-semibold">Only messageable users</span><span className="app-muted mt-1 block text-xs">Requires a LINE User ID and an active LINE OA in READY/CONNECTED state. This is operational eligibility, not a guarantee that the customer has not blocked the OA.</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border p-4"><input type="checkbox" className="mt-1" checked={onlyMessageable} onChange={(event) => handleMessageableChange(event.target.checked)} /><span><span className="block text-sm font-semibold">Only messageable users</span><span className="app-muted mt-1 block text-xs">Requires a LINE User ID and an active LINE OA in READY/CONNECTED state. This is operational eligibility, not a guarantee that the customer has not blocked the OA.</span></span></label>
 
-                <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900"><span className="font-semibold">{number.format(filteredAudience.length)} customers</span> will be exported. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.</div>
+                <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900"><span className="font-semibold">{number.format(filteredAudience.length)} customers</span> match the current audience selection. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.</div>
+
+                {!onlyMessageable && authUser.role === "ADMIN" && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Re-enable <strong>Only messageable users</strong> to create a Broadcast Audience draft. CSV export can still include excluded customers.</div>}
+
+                {draftError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{draftError}</div>}
+
+                {createdDraft && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"><p className="font-semibold">Broadcast Audience draft created</p><p className="mt-1">{number.format(createdDraft.recipientCount)} customers · {number.format(createdDraft.storeCount)} stores · {number.format(createdDraft.lineOaCount)} LINE OAs</p><p className="mt-2 text-xs">Status: DRAFT. No message has been sent. The selected customer snapshot is saved in Mass Message for the next campaign-composer phase.</p><button type="button" onClick={() => window.location.assign("/mass-messages")} className="mt-3 rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-semibold dark:border-emerald-800">Open Mass Message</button></div>}
 
                 <div><p className="text-sm font-semibold">CSV includes</p><p className="app-muted mt-1 text-sm">Customer name, LINE User ID, conversation, language, LINE OA, store, current sales status, products, variants, colors, quantities, purchase channels, payment methods, last purchase/message dates, BM recorder, and messageability status.</p></div>
 
-                <div className="flex justify-end gap-2"><button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold">Cancel</button><button type="button" onClick={downloadAudience} disabled={filteredAudience.length === 0} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">Download CSV</button></div>
+                <div className="rounded-xl border p-4 text-sm"><p className="font-semibold">Broadcast Audience safety</p><p className="app-muted mt-1 text-xs">Create Broadcast Audience saves an idempotent DRAFT recipient snapshot only. It does not create store deliveries, start the Mass Message processor, or send anything to LINE.</p></div>
+
+                <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold">Cancel</button><button type="button" onClick={downloadAudience} disabled={filteredAudience.length === 0} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50">Download CSV</button>{authUser.role === "ADMIN" && <button type="button" onClick={() => void createBroadcastDraft()} disabled={draftCreating || !onlyMessageable || selectedStatuses.size === 0 || filteredAudience.length === 0 || Boolean(createdDraft)} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">{draftCreating ? "Creating draft…" : createdDraft ? "Draft created" : "Create Broadcast Audience"}</button>}</div>
               </div>
             )}
           </div>

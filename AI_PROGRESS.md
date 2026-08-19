@@ -1,5 +1,20 @@
 # AI progress
 
+## Current task: Phase 2A Purchase Intelligence → Broadcast Audience Draft (2026-08-19)
+
+- Added ADMIN-only `POST /admin/purchase-analytics/audience/broadcast-draft`.
+- Purchase Intelligence can create an exact Mass Message audience draft from the current authorized date/store/status selection.
+- Broadcast draft creation requires `Only messageable users`; the backend recomputes the authorized audience rather than trusting client recipient IDs.
+- Recipient membership is snapshotted as internal `customerId`, `conversationId`, `storeId`, and `lineOfficialAccountId` references only. Customer names and LINE User IDs are not duplicated into the campaign payload.
+- Campaigns are created as `DRAFT + SELECTED_USERS` with zero store deliveries and no Mass Message processor invocation.
+- `campaignRequestId` provides retry-safe idempotency.
+- Legacy Mass Message preview/send endpoints explicitly reject `SELECTED_USERS` so the new audience type cannot fall through to a broader recipient scope.
+- No Prisma migration was required; Phase 2A reuses the existing MassMessageCampaign JSON payload and DRAFT status.
+- CI #98 passed backend lint/regressions/build/startup smoke, frontend regression/lint/build, and Flutter analyze/tests.
+- Draft PR: #28.
+- No LINE message, broadcast, or quota-consuming action is introduced in Phase 2A.
+
+
 ## Current task: Phase 1 Customer Audience Export for Purchase Intelligence (2026-08-19)
 
 - Added authenticated `GET /admin/purchase-analytics/audience` using the existing date/store authorization scope.

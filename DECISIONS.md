@@ -1,3 +1,14 @@
+# Purchase Intelligence → Broadcast Audience Draft Boundary (Phase 2A) (2026-08-19)
+
+- Phase 2A is a preparation boundary only: it may create `MassMessageCampaign` records with status `DRAFT`, but it must never dispatch LINE messages or start the Mass Message processor.
+- The server recomputes Purchase Intelligence recipients using authenticated authorization and current filters. Client-provided recipient IDs are never accepted as the source of truth.
+- Broadcast drafts require operationally messageable customers and snapshot exact membership using only internal customer, conversation, store, and LINE OA references.
+- LINE User IDs and customer display names are not duplicated into the campaign snapshot; future delivery must re-resolve current authorized delivery identity from the stored internal references.
+- `campaignRequestId` is the idempotency boundary for draft creation.
+- `MassMessageAudienceType.SELECTED_USERS` is fail-closed on the legacy preview/create-and-send endpoints until a dedicated reviewed recipient execution path is implemented.
+- Phase 2A creates no `MassMessageStoreDelivery` rows and performs no quota-consuming provider operation.
+- The existing `MassMessageCampaign.messagePayload` JSON contract is reused, so no database migration is introduced for this phase.
+
 # Purchase Intelligence Customer Audience Export (Phase 1) (2026-08-19)
 
 - Audience export is a preparation boundary only; Phase 1 does not send LINE broadcasts or create campaign/send side effects.
