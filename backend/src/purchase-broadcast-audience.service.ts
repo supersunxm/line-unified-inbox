@@ -104,6 +104,14 @@ function audienceStatus(value: string | null): PurchaseAudienceStatus {
   return PurchaseAudienceStatus.NOT_SPECIFIED;
 }
 
+function isPurchaseAudienceStatus(value: unknown): value is PurchaseAudienceStatus {
+  return (
+    value === PurchaseAudienceStatus.PURCHASED ||
+    value === PurchaseAudienceStatus.INTERESTED ||
+    value === PurchaseAudienceStatus.NOT_SPECIFIED
+  );
+}
+
 function readAudienceSource(payload: unknown): PurchaseAudienceSource | null {
   if (!isRecord(payload) || !isRecord(payload.audienceSource)) return null;
   const source = payload.audienceSource;
@@ -119,15 +127,10 @@ function readAudienceSource(payload: unknown): PurchaseAudienceSource | null {
     return null;
   }
 
+  const rawStatuses: unknown[] = source.statuses;
   const statuses: PurchaseAudienceStatus[] = [];
-  for (const status of source.statuses) {
-    if (
-      status !== PurchaseAudienceStatus.PURCHASED &&
-      status !== PurchaseAudienceStatus.INTERESTED &&
-      status !== PurchaseAudienceStatus.NOT_SPECIFIED
-    ) {
-      return null;
-    }
+  for (const status of rawStatuses) {
+    if (!isPurchaseAudienceStatus(status)) return null;
     statuses.push(status);
   }
 
@@ -141,8 +144,9 @@ function readAudienceSource(payload: unknown): PurchaseAudienceSource | null {
   const storeId = nullableString(source.filters.storeId);
   if (from === undefined || to === undefined || storeId === undefined) return null;
 
+  const rawRecipientRefs: unknown[] = source.recipientRefs;
   const recipientRefs: AudienceRecipientRef[] = [];
-  for (const item of source.recipientRefs) {
+  for (const item of rawRecipientRefs) {
     if (
       !isRecord(item) ||
       typeof item.customerId !== "string" ||
