@@ -22,7 +22,7 @@
   - `_selectedProducts`: strictly stores committed customer CRM products (`List<CustomerSalesProductItem>`).
   - `_draftProduct`: `ProductSelectorItem?` (temporary picker draft).
   - `_draftVariant`: `ProductVariantSelectorItem?` (temporary picker draft variant).
-  - `_draftQuantity`: `int` (temporary picker draft quantity stepper, default 1).
+  - `_draftQuantity`: `int` (temporary picker quantity stepper, default 1).
   - The draft state is completely decoupled from existing CRM items. Opening the product picker always starts empty (`_draftProduct = null`, `_draftVariant = null`, `_draftQuantity = 1`) regardless of whether 0, 1, or 5 products already exist in the CRM list.
 - **Conditional Confirmation Gate (`_canConfirmSelection`)**:
   - `[ Confirm Selection ]` is disabled (`onPressed: null`) while the draft product is unselected or while variant choices remain unselected for multi-variant products.
@@ -86,7 +86,7 @@
 # Multi-Account TikTok Store Routing & Account-Specific Isolation (2026-08-14)
 
 - **Dedicated Dynamic Dashboard Route (`/tiktok/dashboard/[accountId]`)**: To support multi-account scaling across ~150 retail stores without conflating store metrics, individual account dashboards are decoupled to `/tiktok/dashboard/[accountId]`. The base `/tiktok/dashboard` route redirects to the primary account dashboard if accounts exist or renders an empty state if no stores are connected.
-- **Multi-Account Store Overview (`/tiktok`)**: When 2 or more accounts are connected, `/tiktok` renders a responsive card grid displaying each store's avatar, displayName, `@username`, StoreMaster store name, province, region, followers, status badge, and direct "Open Dashboard" button.
+- **Multi-Account Store Overview (`/tiktok`)**: When 2 or more store accounts are connected, `/tiktok` renders a responsive card grid displaying each store's avatar, displayName, `@username`, StoreMaster store name, province, region, followers, status badge, and direct "Open Dashboard" button.
 - **Account-Specific Backend Data Endpoints (`GET /tiktok/accounts/:id` & `GET /tiktok/accounts/:id/metrics`)**: Endpoints strictly scope queries by `tikTokAccountId`, preventing cross-store video leakage and cross-store follower metric leakage.
 - **Duplicate & Binding Safety**: Reconnecting the same TikTok openId updates the existing account in-place without creating duplicate records. Connecting a distinct openId creates an independent second `TikTokAccount` without overwriting existing store accounts (e.g. O-Central World).
 
