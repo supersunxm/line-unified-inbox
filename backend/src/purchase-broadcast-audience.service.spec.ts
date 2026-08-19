@@ -209,6 +209,11 @@ test("same purchase draft request is idempotent and does not rebuild audience", 
       messages: [],
       audienceSource: {
         type: "PURCHASE_INTELLIGENCE",
+        version: 1,
+        filters: { from: null, to: null, storeId: null },
+        statuses: [PurchaseAudienceStatus.PURCHASED],
+        onlyMessageable: true,
+        messageabilityDefinition: "LINE_USER_ID_AND_ACTIVE_READY_OA",
         recipientRefs: [
           {
             customerId: "customer-1",
