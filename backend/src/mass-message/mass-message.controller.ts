@@ -16,6 +16,7 @@ import { UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
 import { MassMessageService } from "./mass-message.service";
+import { MassMessageAudienceType } from "./mass-message.types";
 import type {
   MassMessageCreateInput,
   MassMessagePreviewInput,
@@ -44,6 +45,7 @@ export class MassMessageController {
     @Body() body: MassMessagePreviewInput,
     @Req() req: AuthRequest,
   ) {
+    this.rejectUnsupportedSelectedUsers(body.audienceType);
     return this.service.preview(body, req.user!);
   }
 
@@ -52,6 +54,7 @@ export class MassMessageController {
     @Body() body: MassMessageCreateInput,
     @Req() req: AuthRequest,
   ) {
+    this.rejectUnsupportedSelectedUsers(body.audienceType);
     return this.service.createAndSend(body, req.user!);
   }
 
@@ -72,5 +75,15 @@ export class MassMessageController {
     const parsedLimit = Number.parseInt(limit, 10) || 20;
     const parsedOffset = Number.parseInt(offset, 10) || 0;
     return this.service.listCampaigns(parsedLimit, parsedOffset, req.user!);
+  }
+
+  private rejectUnsupportedSelectedUsers(
+    audienceType: MassMessageAudienceType | undefined,
+  ) {
+    if (audienceType === MassMessageAudienceType.SELECTED_USERS) {
+      throw new BadRequestException(
+        "SELECTED_USERS requires a reviewed recipient snapshot and cannot use the legacy send flow",
+      );
+    }
   }
 }
