@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { AppPlatform } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
-import { AppVersionResponseDto, CreateAppReleaseDto, UpdateAppReleaseDto } from "./app-version.dto";
+import {
+  AppVersionResponseDto,
+  CreateAppReleaseDto,
+  UpdateAppReleaseDto,
+} from "./app-version.dto";
 
 const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
   latestVersion: "1.0.9",
@@ -9,7 +13,8 @@ const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
   minimumSupportedVersion: "1.0.3",
   minimumSupportedBuildNumber: 4,
   forceUpdate: false,
-  apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
+  apkUrl:
+    "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
   apkSize: "56.9 MB",
   sha256: "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
   releaseNotes: [
@@ -24,7 +29,9 @@ const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
 export class AppVersionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getLatestVersion(platform: AppPlatform = AppPlatform.ANDROID): Promise<AppVersionResponseDto> {
+  async getLatestVersion(
+    platform: AppPlatform = AppPlatform.ANDROID,
+  ): Promise<AppVersionResponseDto> {
     try {
       const release = await this.prisma.appRelease.findFirst({
         where: {
@@ -56,7 +63,10 @@ export class AppVersionService {
     }
   }
 
-  async trackDownload(platform: AppPlatform = AppPlatform.ANDROID, buildNumber?: number) {
+  async trackDownload(
+    platform: AppPlatform = AppPlatform.ANDROID,
+    buildNumber?: number,
+  ) {
     try {
       const release = await this.prisma.appRelease.findFirst({
         where: buildNumber
