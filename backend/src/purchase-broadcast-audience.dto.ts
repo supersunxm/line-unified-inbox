@@ -47,3 +47,11 @@ export class UpdatePurchaseBroadcastDraftDto {
   @ArrayMaxSize(2)
   messages!: Array<Record<string, unknown>>;
 }
+
+export class ExecutePurchaseBroadcastDto {
+  @IsUUID("4")
+  reviewToken!: string;
+
+  @IsBoolean()
+  confirm!: boolean;
+}
