@@ -78,3 +78,78 @@ void test("customer sales updates keep sales statuses in metadata instead of Fol
   assert.equal(activityWrites.length, 1);
   assert.equal(activityWrites[0]?.data.actionType, "PURCHASE_INFORMATION_UPDATED");
 });
+
+void test("customer sales info can be cleared back to an unclassified empty state", async () => {
+  let conversationUpdate: Record<string, unknown> | undefined;
+  let salesDeleteCount = 0;
+  let manualDeleteCount = 0;
+
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-1",
+        customerSalesStatus: "PURCHASED",
+        salesRecordedAt: new Date("2026-08-19T02:00:00.000Z"),
+        interestLevel: null,
+        paymentMethod: "INSTALLMENT",
+        sourceChannels: ["ONLINE"],
+        isInstallment: true,
+        products: [{ productModelId: "model-1", productVariantId: "variant-1" }],
+        salesProducts: [
+          {
+            id: "sales-product-1",
+            productModelId: "model-1",
+            productVariantId: "variant-1",
+            quantity: 1,
+            status: "PURCHASED",
+          },
+        ],
+      }),
+      update: async (args: { data: Record<string, unknown> }) => {
+        conversationUpdate = args.data;
+        return {};
+      },
+    },
+    productModel: { findFirst: async () => null },
+    productVariant: { findFirst: async () => null },
+    conversationSalesProduct: {
+      deleteMany: async () => {
+        salesDeleteCount++;
+        return {};
+      },
+      createMany: async () => ({}),
+    },
+    conversationProduct: {
+      deleteMany: async () => {
+        manualDeleteCount++;
+        return {};
+      },
+      create: async () => ({}),
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const stores = { assertConversationAccess: async () => "store-1" };
+  const service = new MobileConversationsService(prisma as never, stores as never, {} as never);
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conversation-1" });
+
+  const result = await service.updateCustomerSalesInfo(user, "conversation-1", {
+    status: null,
+    interestLevel: null,
+    purchaseChannel: [],
+    paymentMethod: null,
+    products: [],
+  });
+
+  assert.deepEqual(result, { id: "conversation-1" });
+  assert.equal(conversationUpdate?.customerSalesStatus, null);
+  assert.equal(conversationUpdate?.interestLevel, null);
+  assert.deepEqual(conversationUpdate?.sourceChannels, []);
+  assert.equal(conversationUpdate?.paymentMethod, null);
+  assert.equal(conversationUpdate?.isInstallment, false);
+  assert.equal(salesDeleteCount, 1);
+  assert.equal(manualDeleteCount, 1);
+});
