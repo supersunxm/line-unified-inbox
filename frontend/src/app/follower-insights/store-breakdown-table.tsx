@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { ByStoreAccountRow } from "@/types/api";
 import { exportStoreCsv } from "./follower-insights-utils";
 import { getFollowerInsightsText, type Language } from "./follower-insights-translations";
+import { StoreAnalyticsOverview } from "./store-analytics-overview";
 
 interface StoreBreakdownTableProps {
   storeData: ByStoreAccountRow[];
@@ -103,16 +104,25 @@ export function StoreBreakdownTable({
   onRetry,
 }: StoreBreakdownTableProps) {
   return (
-    <StoreBreakdownTableInner
-      key={`${dateFrom}_${dateTo}_${language}`}
-      storeData={storeData}
-      storeError={storeError}
-      dateFrom={dateFrom}
-      dateTo={dateTo}
-      endpointsUsable={endpointsUsable}
-      language={language}
-      onRetry={onRetry}
-    />
+    <div className="space-y-4">
+      {!storeError && storeData.length > 0 && (
+        <StoreAnalyticsOverview
+          storeData={storeData}
+          endpointsUsable={endpointsUsable}
+          language={language}
+        />
+      )}
+      <StoreBreakdownTableInner
+        key={`${dateFrom}_${dateTo}_${language}`}
+        storeData={storeData}
+        storeError={storeError}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        endpointsUsable={endpointsUsable}
+        language={language}
+        onRetry={onRetry}
+      />
+    </div>
   );
 }
 
@@ -350,7 +360,8 @@ function StoreBreakdownTableInner({
                 title={t.exportCsv}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v5m0 0-2-2m2 2 2-2" />
                 </svg>
                 {t.exportCsv}
               </button>
