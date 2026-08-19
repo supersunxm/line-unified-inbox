@@ -57,6 +57,30 @@
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
 }
 
+/* Improve small-screen usability without changing desktop density. */
+@media (max-width: 640px) {
+  .scope :global(.app-content-section button) {
+    min-height: 36px;
+  }
+
+  .scope :global(.app-content-section input),
+  .scope :global(.app-content-section select) {
+    min-height: 40px;
+    font-size: 16px !important;
+  }
+
+  .scope :global(.app-content-section table) {
+    font-size: 12px;
+  }
+
+  .scope :global(.app-content-section thead th) {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #fbfbfc;
+  }
+}
+
 /* Improve density on wide desktop screens. */
 @media (min-width: 1280px) {
   .scope :global(.app-content-section > div) {
