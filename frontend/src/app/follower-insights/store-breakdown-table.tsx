@@ -21,6 +21,7 @@ type SortKey =
   | "id"
   | "store"
   | "oa"
+  | "startFollowers"
   | "followers"
   | "growth"
   | "growthPct"
@@ -35,6 +36,7 @@ type DisplayRow = {
   id: string;
   store: string;
   oa: string;
+  startFollowers: number | null;
   followers: number | null;
   growth: number | null;
   growthPct: number | null;
@@ -54,6 +56,15 @@ function round(value: number, decimals: number) {
 function calculatePct(numerator: number | null, denominator: number | null, decimals = 1) {
   if (numerator === null || denominator === null || denominator <= 0) return null;
   return round((numerator / denominator) * 100, decimals);
+}
+
+function formatSelectedDate(value: string, language: Language) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function getPillTone(pct: number, type: "growth" | "reach" | "block"): PillTone {
@@ -143,6 +154,9 @@ function StoreBreakdownTableInner({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
 
+  const startDateLabel = formatSelectedDate(dateFrom, language);
+  const endDateLabel = formatSelectedDate(dateTo, language);
+
   const labels = language === "th"
     ? {
         title: "ข้อมูลรายสาขา",
@@ -156,7 +170,8 @@ function StoreBreakdownTableInner({
         count: (shown: number, total: number) => `แสดง ${shown} / ${total} สาขา`,
         code: "รหัส",
         store: "ร้านค้า",
-        followers: "ผู้ติดตาม",
+        startFollowers: `วันเริ่มต้น · ${startDateLabel}`,
+        endFollowers: `วันสิ้นสุด · ${endDateLabel}`,
         growth: "เพิ่มขึ้น",
         growthPct: "% เติบโต",
         reach: "เข้าถึงได้",
@@ -178,7 +193,8 @@ function StoreBreakdownTableInner({
         count: (shown: number, total: number) => `Showing ${shown} / ${total} stores`,
         code: "Code",
         store: "Store",
-        followers: "Followers",
+        startFollowers: `Start · ${startDateLabel}`,
+        endFollowers: `End · ${endDateLabel}`,
         growth: "Growth",
         growthPct: "Growth %",
         reach: "Reach",
@@ -192,16 +208,18 @@ function StoreBreakdownTableInner({
   const rows = useMemo<DisplayRow[]>(() => {
     return storeData.map((row) => {
       const growth = endpointsUsable ? row.periodIncrease : null;
+      const startFollowers = endpointsUsable ? row.startFollowers : null;
       return {
         source: row,
         id: row.masterStoreId || row.externalStoreId || row.storeId || row.lineOaId,
         store: row.storeName,
         oa: row.accountName,
+        startFollowers,
         followers: row.followers,
         growth,
         growthPct:
-          endpointsUsable && growth !== null && row.startFollowers !== null && row.startFollowers > 0
-            ? round((growth / row.startFollowers) * 100, 2)
+          endpointsUsable && growth !== null && startFollowers !== null && startFollowers > 0
+            ? round((growth / startFollowers) * 100, 2)
             : endpointsUsable && growth === 0
               ? 0
               : null,
@@ -382,13 +400,14 @@ function StoreBreakdownTableInner({
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-left text-[13px]">
+            <table className="w-full min-w-[1310px] text-left text-[13px]">
               <thead className="border-b border-[var(--border)] bg-[#FBFBFC]">
                 <tr>
                   <th className="p-0">{sortButton("id", labels.code)}</th>
                   <th className="p-0">{sortButton("store", labels.store)}</th>
                   <th className="p-0">{sortButton("oa", "LINE OA")}</th>
-                  <th className="p-0 text-right">{sortButton("followers", labels.followers, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("startFollowers", labels.startFollowers, "right")}</th>
+                  <th className="p-0 text-right">{sortButton("followers", labels.endFollowers, "right")}</th>
                   <th className="p-0 text-right">{sortButton("growth", labels.growth, "right")}</th>
                   <th className="p-0 text-right">{sortButton("growthPct", labels.growthPct, "right")}</th>
                   <th className="p-0 text-right">{sortButton("reach", labels.reach, "right")}</th>
@@ -403,7 +422,8 @@ function StoreBreakdownTableInner({
                     <td className="px-3 py-3 font-mono text-[11px] text-[var(--muted)]">{row.id}</td>
                     <td className="max-w-[300px] whitespace-normal px-3 py-3 font-medium leading-5">{row.store}</td>
                     <td className="max-w-[220px] whitespace-normal px-3 py-3 text-xs text-[var(--muted)]">{row.oa}</td>
-                    <td className="px-3 py-3 text-right font-medium tabular-nums">{row.followers?.toLocaleString() ?? "—"}</td>
+                    <td className="px-3 py-3 text-right font-medium tabular-nums text-[var(--muted)]">{row.startFollowers?.toLocaleString() ?? "—"}</td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums">{row.followers?.toLocaleString() ?? "—"}</td>
                     <td className={`px-3 py-3 text-right font-semibold tabular-nums ${row.growth !== null && row.growth > 0 ? "text-[#1E8E3E]" : row.growth !== null && row.growth < 0 ? "text-[#C62828]" : "text-[var(--foreground)]"}`}>
                       {row.growth === null ? "—" : `${row.growth > 0 ? "+" : ""}${row.growth.toLocaleString()}`}
                     </td>
@@ -416,7 +436,7 @@ function StoreBreakdownTableInner({
                 ))}
                 {sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-sm text-[var(--muted)]">{labels.noResults}</td>
+                    <td colSpan={11} className="px-4 py-12 text-center text-sm text-[var(--muted)]">{labels.noResults}</td>
                   </tr>
                 )}
               </tbody>
