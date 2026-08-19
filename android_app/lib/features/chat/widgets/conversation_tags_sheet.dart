@@ -861,41 +861,74 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      IconButton(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compactHeader = constraints.maxWidth < 520;
+                      final closeButton = IconButton(
                         onPressed: _saving ? null : _closeSheet,
                         icon: const Icon(Icons.close),
                         tooltip: l10n.close,
                         visualDensity: VisualDensity.compact,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Text(
-                          l10n.customerSalesInformation,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      TextButton(
+                      );
+                      final title = Text(
+                        l10n.customerSalesInformation,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      );
+                      final clearButton = TextButton(
                         onPressed: _saving ? null : _clearAll,
                         child: Text(l10n.clearAll),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      FilledButton(
+                      );
+                      final saveButton = FilledButton(
                         onPressed: _saving ? null : _promptSaveConfirmation,
                         child: _saving
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : Text(l10n.save),
-                      ),
-                    ],
+                      );
+
+                      if (compactHeader) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                closeButton,
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(child: title),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                clearButton,
+                                const SizedBox(width: AppSpacing.xs),
+                                saveButton,
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          closeButton,
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(child: title),
+                          clearButton,
+                          const SizedBox(width: AppSpacing.xs),
+                          saveButton,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: AppSpacing.md),
                   if (isExistingInterested && _status == 'INTERESTED') ...[
