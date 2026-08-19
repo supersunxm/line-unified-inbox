@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "ดาวน์โหลดแอปพลิเคชัน OPPO LINE OA Chat (Android)",
-  description: "ดาวน์โหลดและติดตั้งแอปพลิเคชัน OPPO LINE OA Chat สำหรับพนักงานขายหน้าร้าน (BM / PC)",
+  description:
+    "ดาวน์โหลดและติดตั้งแอปพลิเคชัน OPPO LINE OA Chat สำหรับพนักงานขายหน้าร้าน (BM / PC)",
   robots: {
     index: false,
     follow: false,
@@ -11,7 +12,8 @@ export const metadata: Metadata = {
 
 export default function DownloadAppPage() {
   const apkFileName = "oppo-line-oa-chat-v1.0.9-production.apk";
-  const sha256Checksum = "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
+  const sha256Checksum =
+    "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
   const apkDownloadUrl = `/downloads/${apkFileName}?sha=${sha256Checksum}`;
 
   return (
@@ -56,19 +58,33 @@ export default function DownloadAppPage() {
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Authoritative Rehydration</strong>: หลังปิด Customer Sales Info ด้วยปุ่ม Back, swipe หรือแตะนอกหน้าต่าง แอปจะโหลดข้อมูลล่าสุดจาก Backend กลับมาอัปเดตหน้า Chat</span>
+                <span>
+                  <strong>Authoritative Rehydration</strong>:
+                  หลังปิด Customer Sales Info ด้วยปุ่ม Back, swipe หรือแตะนอกหน้าต่าง
+                  แอปจะโหลดข้อมูลล่าสุดจาก Backend กลับมาอัปเดตหน้า Chat
+                </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Fixed Tags Appearing Lost</strong>: แก้ปัญหา Product Tag ที่บันทึกสำเร็จแล้วแต่เมื่อเปิด Sales Info ใหม่กลับแสดง state เก่า</span>
+                <span>
+                  <strong>Fixed Tags Appearing Lost</strong>:
+                  แก้ปัญหา Product Tag ที่บันทึกสำเร็จแล้วแต่เมื่อเปิด Sales Info
+                  ใหม่กลับแสดง state เก่า
+                </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Sales Info Consistency</strong>: Product, Purchase Channel และ Payment Method ที่ยืนยันแล้วจะแสดงต่อเนื่องหลังเปิดหน้า Sales Info ใหม่</span>
+                <span>
+                  <strong>Sales Info Consistency</strong>: Product, Purchase Channel
+                  และ Payment Method ที่ยืนยันแล้วจะแสดงต่อเนื่องหลังเปิดหน้า Sales Info ใหม่
+                </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Tagging Reliability</strong>: รวมการแก้ไข persistence และ backend sales audit จาก hotfix ก่อนหน้า</span>
+                <span>
+                  <strong>Tagging Reliability</strong>:
+                  รวมการแก้ไข persistence และ backend sales audit จาก hotfix ก่อนหน้า
+                </span>
               </li>
             </ul>
           </div>
@@ -79,15 +95,27 @@ export default function DownloadAppPage() {
               download={apkFileName}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3.5 font-semibold text-sm text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-[0.98] dark:bg-emerald-500 dark:hover:bg-emerald-400"
             >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
               </svg>
               <span>ดาวน์โหลด APK (Download APK)</span>
             </a>
           </div>
 
           <div className="mt-4 rounded-lg bg-slate-50 p-2.5 text-center text-[10px] text-slate-400 dark:bg-slate-900/60 dark:text-slate-500">
-            <span className="font-semibold uppercase tracking-wider">SHA-256 Checksum:</span>
+            <span className="font-semibold uppercase tracking-wider">
+              SHA-256 Checksum:
+            </span>
             <div className="mt-0.5 truncate font-mono">{sha256Checksum}</div>
           </div>
 
@@ -100,25 +128,40 @@ export default function DownloadAppPage() {
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                   1
                 </span>
-                <span>กดปุ่ม <strong>ดาวน์โหลด APK</strong> ด้านบน และรอจนกว่าการดาวน์โหลดจะเสร็จสมบูรณ์</span>
+                <span>
+                  กดปุ่ม <strong>ดาวน์โหลด APK</strong> ด้านบน
+                  และรอจนกว่าการดาวน์โหลดจะเสร็จสมบูรณ์
+                </span>
               </li>
               <li className="flex gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                   2
                 </span>
-                <span>เปิดไฟล์ที่ดาวน์โหลดมา หากขึ้นเตือนความปลอดภัย ให้เลือก <strong>&ldquo;ตั้งค่า (Settings)&rdquo;</strong> และเปิดอนุญาต <strong>&ldquo;ติดตั้งแอปจากแหล่งที่ไม่รู้จัก (Allow from this source)&rdquo;</strong></span>
+                <span>
+                  เปิดไฟล์ที่ดาวน์โหลดมา หากขึ้นเตือนความปลอดภัย ให้เลือก{" "}
+                  <strong>&ldquo;ตั้งค่า (Settings)&rdquo;</strong> และเปิดอนุญาต{" "}
+                  <strong>
+                    &ldquo;ติดตั้งแอปจากแหล่งที่ไม่รู้จัก (Allow from this source)&rdquo;
+                  </strong>
+                </span>
               </li>
               <li className="flex gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                   3
                 </span>
-                <span>กด <strong>&ldquo;ติดตั้ง (Install)&rdquo;</strong> เมื่อติดตั้งเสร็จแล้วกด <strong>&ldquo;เปิด (Open)&rdquo;</strong></span>
+                <span>
+                  กด <strong>&ldquo;ติดตั้ง (Install)&rdquo;</strong> เมื่อติดตั้งเสร็จแล้วกด{" "}
+                  <strong>&ldquo;เปิด (Open)&rdquo;</strong>
+                </span>
               </li>
               <li className="flex gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-bold text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                   4
                 </span>
-                <span>ลงทะเบียนบัญชีพนักงานใหม่ หรือเข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับอนุมัติ</span>
+                <span>
+                  ลงทะเบียนบัญชีพนักงานใหม่
+                  หรือเข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับอนุมัติ
+                </span>
               </li>
             </ol>
           </div>
