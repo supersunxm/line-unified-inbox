@@ -4,20 +4,19 @@ import { PrismaService } from "../prisma.service";
 import { AppVersionResponseDto, CreateAppReleaseDto, UpdateAppReleaseDto } from "./app-version.dto";
 
 const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
-  latestVersion: "1.0.8",
-  buildNumber: 9,
+  latestVersion: "1.0.9",
+  buildNumber: 10,
   minimumSupportedVersion: "1.0.3",
   minimumSupportedBuildNumber: 4,
   forceUpdate: false,
-  apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.8-production.apk?sha=532fd6b7a706fc2c589aedab1d8e5522d2a66827cba220f75a0d8c62517b87e8",
+  apkUrl: "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
   apkSize: "56.9 MB",
-  sha256: "532fd6b7a706fc2c589aedab1d8e5522d2a66827cba220f75a0d8c62517b87e8",
+  sha256: "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
   releaseNotes: [
-    "Confirmed product selections are saved immediately",
-    "Fixed product tags disappearing after closing Customer Sales Info",
-    "Rehydrates saved product tagging from the backend response",
-    "Prevents closing or changing product selection while a save is in progress",
-    "Improved reliability of customer sales tagging persistence",
+    "Refreshes Customer Sales Info from the backend after Android Back, swipe, or sheet dismiss",
+    "Prevents stale chat state from making confirmed product tags appear missing",
+    "Keeps confirmed products, purchase channel, and payment method visible after reopening Sales Info",
+    "Includes customer sales tagging persistence and backend audit fixes",
   ],
 };
 
