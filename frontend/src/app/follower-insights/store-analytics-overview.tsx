@@ -5,16 +5,15 @@ import type { ByStoreAccountRow } from "@/types/api";
 import type { Language } from "./follower-insights-translations";
 
 type MetricRow = {
-  lineOaId: string;
   store: string;
   followers: number;
   startFollowers: number;
   growth: number;
   growthPct: number;
-  reach: number;
-  reachPct: number;
-  blocks: number;
-  blockPct: number;
+  reach: number | null;
+  reachPct: number | null;
+  blocks: number | null;
+  blockPct: number | null;
 };
 
 type BarDatum = { label: string; value: number; display: string };
@@ -41,10 +40,10 @@ function MetricCard({ label, value, detail, tone = "default" }: { label: string;
   );
 }
 
-function HorizontalBars({ data, tone }: { data: BarDatum[]; tone: "green" | "red" }) {
+function HorizontalBars({ data, tone, emptyText }: { data: BarDatum[]; tone: "green" | "red"; emptyText: string }) {
   const max = Math.max(1, ...data.map((item) => item.value));
   const barClass = tone === "green" ? "bg-[#00A651]" : "bg-[#FF3B30]";
-  if (data.length === 0) return <div className="flex h-[260px] items-center justify-center text-sm text-[#6E6E73]">No comparable data</div>;
+  if (data.length === 0) return <div className="flex h-[260px] items-center justify-center text-sm text-[#6E6E73]">{emptyText}</div>;
   return (
     <div className="space-y-2.5">
       {data.map((item) => (
@@ -61,6 +60,7 @@ function HorizontalBars({ data, tone }: { data: BarDatum[]; tone: "green" | "red
 }
 
 function ReachDistribution({ rows, language }: { rows: MetricRow[]; language: Language }) {
+  const validRows = useMemo(() => rows.filter((row): row is MetricRow & { reachPct: number } => row.reachPct !== null), [rows]);
   const buckets = useMemo(() => {
     const values = [
       { key: "lt60", label: "<60%", min: 0, max: 60, className: "bg-[#FF3B30]" },
@@ -69,9 +69,12 @@ function ReachDistribution({ rows, language }: { rows: MetricRow[]; language: La
       { key: "80to90", label: "80–90%", min: 80, max: 90, className: "bg-[#7BC67E]" },
       { key: "90to100", label: "90–100%", min: 90, max: 101, className: "bg-[#00A651]" },
     ];
-    return values.map((bucket) => ({ ...bucket, count: rows.filter((row) => row.reachPct >= bucket.min && row.reachPct < bucket.max).length }));
-  }, [rows]);
+    return values.map((bucket) => ({ ...bucket, count: validRows.filter((row) => row.reachPct >= bucket.min && row.reachPct < bucket.max).length }));
+  }, [validRows]);
   const max = Math.max(1, ...buckets.map((bucket) => bucket.count));
+  if (validRows.length === 0) {
+    return <div className="flex h-[260px] items-center justify-center text-sm text-[#6E6E73]">{language === "th" ? "ไม่มีข้อมูล Reach ในช่วงที่เลือก" : "No reach data for this period"}</div>;
+  }
   return (
     <div className="flex h-[260px] items-end justify-around gap-3 pt-5">
       {buckets.map((bucket) => (
@@ -83,7 +86,6 @@ function ReachDistribution({ rows, language }: { rows: MetricRow[]; language: La
           <span className="whitespace-nowrap text-[11px] text-[#6E6E73]">{bucket.label}</span>
         </div>
       ))}
-      <span className="sr-only">{language === "th" ? "การกระจายอัตราการเข้าถึง" : "Reach distribution"}</span>
     </div>
   );
 }
@@ -95,16 +97,15 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
     const startFollowers = row.startFollowers ?? row.followers;
     const growth = endpointsUsable && row.periodIncrease !== null ? row.periodIncrease : 0;
     return [{
-      lineOaId: row.lineOaId,
       store: row.storeName,
       followers: row.followers,
       startFollowers,
       growth,
       growthPct: endpointsUsable && startFollowers > 0 ? pct(growth, startFollowers, 2) : 0,
-      reach: row.targetedReaches ?? 0,
-      reachPct: pct(row.targetedReaches ?? 0, row.followers, 1),
-      blocks: row.blocks ?? 0,
-      blockPct: pct(row.blocks ?? 0, row.followers, 1),
+      reach: row.targetedReaches,
+      reachPct: row.targetedReaches === null ? null : pct(row.targetedReaches, row.followers, 1),
+      blocks: row.blocks,
+      blockPct: row.blocks === null ? null : pct(row.blocks, row.followers, 1),
     }];
   }), [storeData, endpointsUsable]);
 
@@ -112,41 +113,53 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
     const followers = rows.reduce((sum, row) => sum + row.followers, 0);
     const start = rows.reduce((sum, row) => sum + row.startFollowers, 0);
     const growth = endpointsUsable ? rows.reduce((sum, row) => sum + row.growth, 0) : 0;
-    const reach = rows.reduce((sum, row) => sum + row.reach, 0);
-    const blocks = rows.reduce((sum, row) => sum + row.blocks, 0);
+    const reachRows = rows.filter((row): row is MetricRow & { reach: number; reachPct: number } => row.reach !== null && row.reachPct !== null);
+    const blockRows = rows.filter((row): row is MetricRow & { blocks: number; blockPct: number } => row.blocks !== null && row.blockPct !== null);
+    const reachFollowers = reachRows.reduce((sum, row) => sum + row.followers, 0);
+    const blockFollowers = blockRows.reduce((sum, row) => sum + row.followers, 0);
+    const reach = reachRows.reduce((sum, row) => sum + row.reach, 0);
+    const blocks = blockRows.reduce((sum, row) => sum + row.blocks, 0);
     return {
       followers,
       growth,
       growthPct: endpointsUsable && start > 0 ? pct(growth, start, 2) : 0,
-      reachPct: followers > 0 ? pct(reach, followers, 1) : 0,
-      blockPct: followers > 0 ? pct(blocks, followers, 1) : 0,
+      reachPct: reachFollowers > 0 ? pct(reach, reachFollowers, 1) : null,
+      blockPct: blockFollowers > 0 ? pct(blocks, blockFollowers, 1) : null,
       zeroGrowth: endpointsUsable ? rows.filter((row) => row.growth === 0).length : 0,
-      lowReach: rows.filter((row) => row.reachPct < 80).length,
-      highBlock: rows.filter((row) => row.blockPct > 10).length,
+      lowReach: reachRows.filter((row) => row.reachPct < 80).length,
+      highBlock: blockRows.filter((row) => row.blockPct > 10).length,
+      reachCoverage: reachRows.length,
+      blockCoverage: blockRows.length,
     };
   }, [rows, endpointsUsable]);
 
   const topGrowth = useMemo(() => [...rows].filter((row) => row.growth > 0).sort((a, b) => b.growth - a.growth).slice(0, 12).map((row) => ({ label: row.store, value: row.growth, display: `+${row.growth.toLocaleString()}` })), [rows]);
   const topGrowthPct = useMemo(() => [...rows].filter((row) => row.growthPct > 0).sort((a, b) => b.growthPct - a.growthPct).slice(0, 12).map((row) => ({ label: row.store, value: row.growthPct, display: `${row.growthPct.toFixed(2)}%` })), [rows]);
-  const topBlockPct = useMemo(() => [...rows].filter((row) => row.blockPct > 0).sort((a, b) => b.blockPct - a.blockPct).slice(0, 12).map((row) => ({ label: row.store, value: row.blockPct, display: `${row.blockPct.toFixed(1)}%` })), [rows]);
+  const topBlockPct = useMemo(() => rows.filter((row): row is MetricRow & { blockPct: number } => row.blockPct !== null && row.blockPct > 0).sort((a, b) => b.blockPct - a.blockPct).slice(0, 12).map((row) => ({ label: row.store, value: row.blockPct, display: `${row.blockPct.toFixed(1)}%` })), [rows]);
 
   const th = language === "th";
+  const noComparable = th ? "ไม่มีข้อมูลเปรียบเทียบในช่วงที่เลือก" : "No comparable data for this period";
+  const reachValue = totals.reachPct === null ? "—" : `${totals.reachPct.toFixed(1)}%`;
+  const blockValue = totals.blockPct === null ? "—" : `${totals.blockPct.toFixed(1)}%`;
+  const reachTone = totals.reachPct === null ? "default" : totals.reachPct >= 85 ? "green" : totals.reachPct >= 75 ? "amber" : "red";
+  const blockTone = totals.blockPct === null ? "default" : totals.blockPct <= 5 ? "green" : totals.blockPct <= 10 ? "amber" : "red";
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard label={th ? "ผู้ติดตามรวม" : "Total followers"} value={totals.followers.toLocaleString()} detail={th ? `${rows.length} LINE OA ที่มีข้อมูล` : `${rows.length} LINE OA accounts with data`} />
         <MetricCard label={th ? "เพิ่มขึ้นในช่วง" : "Period growth"} value={endpointsUsable ? `${totals.growth > 0 ? "+" : ""}${totals.growth.toLocaleString()}` : "—"} detail={th ? `อัตราเติบโต ${totals.growthPct.toFixed(2)}%` : `${totals.growthPct.toFixed(2)}% growth rate`} tone={totals.growth >= 0 ? "green" : "red"} />
         <MetricCard label={th ? "อัตราการเติบโต" : "Growth rate"} value={endpointsUsable ? `${totals.growthPct.toFixed(2)}%` : "—"} detail={th ? `${totals.zeroGrowth} สาขาไม่เติบโต` : `${totals.zeroGrowth} stores with no growth`} tone="green" />
-        <MetricCard label={th ? "อัตราการเข้าถึง" : "Reach rate"} value={`${totals.reachPct.toFixed(1)}%`} detail={th ? `${totals.lowReach} สาขาต่ำกว่า 80%` : `${totals.lowReach} stores below 80%`} tone={totals.reachPct >= 85 ? "green" : totals.reachPct >= 75 ? "amber" : "red"} />
-        <MetricCard label={th ? "อัตราบล็อก" : "Block rate"} value={`${totals.blockPct.toFixed(1)}%`} detail={th ? `${totals.highBlock} สาขาสูงกว่า 10%` : `${totals.highBlock} stores above 10%`} tone={totals.blockPct <= 5 ? "green" : totals.blockPct <= 10 ? "amber" : "red"} />
+        <MetricCard label={th ? "อัตราการเข้าถึง" : "Reach rate"} value={reachValue} detail={th ? `${totals.lowReach} สาขาต่ำกว่า 80% · มีข้อมูล ${totals.reachCoverage}/${rows.length}` : `${totals.lowReach} below 80% · coverage ${totals.reachCoverage}/${rows.length}`} tone={reachTone} />
+        <MetricCard label={th ? "อัตราบล็อก" : "Block rate"} value={blockValue} detail={th ? `${totals.highBlock} สาขาสูงกว่า 10% · มีข้อมูล ${totals.blockCoverage}/${rows.length}` : `${totals.highBlock} above 10% · coverage ${totals.blockCoverage}/${rows.length}`} tone={blockTone} />
       </div>
 
-      <div className="flex items-center justify-between px-1 pt-1">
+      <div className="flex items-center justify-between gap-3 px-1 pt-1">
         <div>
           <h3 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Performance Analytics" : "Performance analytics"}</h3>
           <p className="mt-0.5 text-xs text-[#6E6E73]">{th ? "ดูสาขาที่เติบโตดี การกระจาย Reach และความเสี่ยงจาก Block" : "Growth leaders, reach distribution and block-rate risk"}</p>
         </div>
-        <button type="button" onClick={() => setShowAllCharts((value) => !value)} className="rounded-lg border border-[#E5E5EA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6E6E73] hover:border-[#00A651] hover:text-[#008F46]">
+        <button type="button" onClick={() => setShowAllCharts((value) => !value)} className="shrink-0 rounded-lg border border-[#E5E5EA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6E6E73] hover:border-[#00A651] hover:text-[#008F46]">
           {showAllCharts ? (th ? "ย่อกราฟ" : "Collapse") : (th ? "แสดงกราฟ" : "Show charts")}
         </button>
       </div>
@@ -156,22 +169,22 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Top สาขา — ผู้ติดตามเพิ่มขึ้น" : "Top stores — follower growth"}</h4>
             <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "เรียงตามจำนวนผู้ติดตามที่เพิ่มขึ้นสูงสุดในช่วงที่เลือก" : "Highest absolute follower growth in the selected period"}</p>
-            <HorizontalBars data={topGrowth} tone="green" />
+            <HorizontalBars data={topGrowth} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "การกระจายอัตราการเข้าถึง" : "Reach-rate distribution"}</h4>
-            <p className="mt-1 text-xs text-[#6E6E73]">{th ? "จำนวนสาขาในแต่ละช่วง % Reach" : "Number of stores in each reach-rate bucket"}</p>
+            <p className="mt-1 text-xs text-[#6E6E73]">{th ? "จำนวนสาขาในแต่ละช่วง % Reach (เฉพาะสาขาที่มีข้อมูล)" : "Stores in each reach bucket (available data only)"}</p>
             <ReachDistribution rows={rows} language={language} />
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Top สาขา — อัตราการเติบโต" : "Top stores — growth rate"}</h4>
             <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "วัดเทียบกับฐานผู้ติดตามต้นช่วง" : "Growth relative to each store's starting follower base"}</p>
-            <HorizontalBars data={topGrowthPct} tone="green" />
+            <HorizontalBars data={topGrowthPct} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[#E5E5EA] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.035)]">
             <h4 className="text-[15px] font-semibold text-[#1D1D1F]">{th ? "Top สาขา — อัตราบล็อกสูงสุด" : "Highest block-rate stores"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "ใช้สำหรับหา LINE OA ที่ควรทบทวนเนื้อหาหรือความถี่การส่ง" : "Accounts that may need content or messaging-frequency review"}</p>
-            <HorizontalBars data={topBlockPct} tone="red" />
+            <p className="mt-1 mb-5 text-xs text-[#6E6E73]">{th ? "หา LINE OA ที่ควรทบทวนเนื้อหาหรือความถี่การส่ง (เฉพาะสาขาที่มีข้อมูล)" : "Accounts that may need content or frequency review (available data only)"}</p>
+            <HorizontalBars data={topBlockPct} tone="red" emptyText={noComparable} />
           </div>
         </div>
       )}
