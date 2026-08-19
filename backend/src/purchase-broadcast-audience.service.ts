@@ -176,7 +176,7 @@ export class PurchaseBroadcastAudienceService {
           messagePayload: {
             messages: [],
             audienceSource: source,
-          } as unknown as Prisma.InputJsonValue,
+          },
           status: MassMessageCampaignStatus.DRAFT,
           createdById: user.id,
           storeCount: storeIds.length,
