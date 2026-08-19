@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 };
 
 export default function DownloadAppPage() {
-  const apkFileName = "oppo-line-oa-chat-v1.0.10-production.apk";
+  const apkFileName = "oppo-line-oa-chat-v1.0.11-production.apk";
   const sha256Checksum =
-    "50f19b2c71c003946b863bf3d23e2b4870ff2a6f4291af26c5db445249c837e5";
+    "38b0e53d7ddb34b15fb2f1bae223048155a268d85ff0df5a0bc179c0f296f4ab";
   const apkDownloadUrl = `/downloads/${apkFileName}?sha=${sha256Checksum}`;
 
   return (
@@ -47,42 +47,41 @@ export default function DownloadAppPage() {
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              Version 1.0.10+11 (Tag Delete Persistence) · 56.9 MB
+              Version 1.0.11+12 (Sales State Consistency) · 56.8 MB
             </div>
           </div>
 
           <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-xs dark:border-slate-800/80 dark:bg-slate-900/40">
             <h3 className="font-semibold text-slate-800 dark:text-slate-200">
-              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.10 (What&apos;s New in v1.0.10)
+              ✨ มีอะไรใหม่ในเวอร์ชัน 1.0.11 (What&apos;s New in v1.0.11)
             </h3>
             <ul className="mt-2 space-y-1.5 text-slate-600 dark:text-slate-300">
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
                 <span>
-                  <strong>Persistent Product Deletion</strong>:
-                  กดไอคอนถังขยะแล้วระบบจะบันทึกการลบ Product Tag ไปยัง Backend ทันที
+                  <strong>Nullable Customer Status</strong>:
+                  ลูกค้าสามารถยังไม่ถูกจัดเป็น Interested หรือ Purchased ได้
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
                 <span>
-                  <strong>Delete Last Product</strong>:
-                  เมื่อเอาสินค้าชิ้นสุดท้ายออก ระบบจะบันทึกรายการสินค้าเป็นค่าว่างจริง
-                  จึงไม่กลับมาอีกหลังเปิด Customer Sales Info ใหม่
+                  <strong>Clearable Sales Tags</strong>:
+                  การเอา Interest Level, Purchase Channel และ Payment Method ออกจะถูกบันทึกจริง
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
                 <span>
-                  <strong>Safe Failure Handling</strong>:
-                  หากการลบไม่สามารถบันทึกได้ แอปจะคืนรายการเดิมกลับมาแทนการแสดงผลว่าลบสำเร็จ
+                  <strong>Quantity &amp; Clear All Persistence</strong>:
+                  จำนวนสินค้าและ Clear all จะ sync ไปยัง Backend อย่างถูกต้อง
                 </span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-emerald-500 font-bold">•</span>
                 <span>
-                  <strong>Tagging Reliability</strong>:
-                  รวมการแก้ไข Customer Sales Info rehydration และ tagging persistence จาก hotfix ก่อนหน้า
+                  <strong>Consistent Rehydration</strong>:
+                  ปิดหน้า กด Android Back หรือเปิด Customer Sales Info ใหม่แล้วข้อมูลยังตรงกับ Backend
                 </span>
               </li>
             </ul>
