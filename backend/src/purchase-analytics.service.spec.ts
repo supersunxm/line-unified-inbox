@@ -38,6 +38,9 @@ const audienceRow = {
   purchaseRecordedBy: { id: "bm-1", displayName: "BM One" },
   salesProducts: [{
     customProductName: null,
+    ram: "12GB",
+    rom: "256GB",
+    color: "Black",
     quantity: 1,
     productModel: { id: "model-1", name: "OPPO Find", productSeries: { name: "Find" } },
     productVariant: { id: "variant-1", ram: "12GB", rom: "256GB", color: "Black" },
@@ -99,6 +102,9 @@ test("purchase audience returns one messageable row per customer", async () => {
     sourceChannels: ["ONLINE"],
     salesProducts: [{
       ...audienceRow.salesProducts[0],
+      ram: null,
+      rom: null,
+      color: null,
       quantity: 2,
       productModel: { id: "model-2", name: "OPPO Watch", productSeries: { name: "Wearable" } },
       productVariant: null,
@@ -111,6 +117,24 @@ test("purchase audience returns one messageable row per customer", async () => {
   assert.deepEqual(result.audience[0]?.purchaseChannels, ["ONLINE", "STORE"]);
   assert.equal(result.audience[0]?.products.length, 2);
   assert.equal(result.audience[0]?.products.reduce((sum, product) => sum + product.quantity, 0), 3);
+});
+
+test("purchase audience keeps recorded RAM ROM and color when no catalog variant relation exists", async () => {
+  const customConfig = {
+    ...audienceRow,
+    salesProducts: [{
+      ...audienceRow.salesProducts[0],
+      ram: "16GB",
+      rom: "512GB",
+      color: "Velvet Red",
+      productVariant: null,
+    }],
+  };
+  const result = await createService([customConfig]).service.getAudience({ id: "admin", role: "ADMIN" } as never);
+  assert.equal(result.audience[0]?.products[0]?.variantId, null);
+  assert.equal(result.audience[0]?.products[0]?.ram, "16GB");
+  assert.equal(result.audience[0]?.products[0]?.rom, "512GB");
+  assert.equal(result.audience[0]?.products[0]?.color, "Velvet Red");
 });
 
 test("purchase audience identifies customers without a usable LINE destination", async () => {
