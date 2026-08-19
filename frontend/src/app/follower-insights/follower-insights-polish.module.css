@@ -1,0 +1,61 @@
+.scope {
+  display: contents;
+}
+
+/* Replace the last generic blue remnants inside the follower trend chart. */
+.scope :global(.app-content-section svg path[stroke='#3b82f6']) {
+  stroke: #00a651 !important;
+}
+
+.scope :global(.app-content-section svg circle[fill='#3b82f6']) {
+  fill: #00a651 !important;
+}
+
+.scope :global(.app-content-section [style*='#3b82f6']) {
+  background-color: #00a651 !important;
+}
+
+/* Keep chart gridlines quiet so the data stays dominant. */
+.scope :global(.app-content-section svg line) {
+  opacity: 0.72;
+}
+
+/* Give the analytical chart more breathing room without making the page feel heavy. */
+.scope :global(.app-content-section .h-72) {
+  border-radius: 12px;
+}
+
+/* Table header controls should read as one compact toolbar. */
+.scope :global(.app-content-section table) {
+  width: 100%;
+}
+
+.scope :global(.app-content-section table button) {
+  font-weight: 600;
+}
+
+.scope :global(.app-content-section tbody tr:last-child td) {
+  border-bottom-color: transparent;
+}
+
+/* Compact status chips, closer to the supplied Apple-style prototype. */
+.scope :global(.app-content-section tbody span[class*='rounded-full']) {
+  border-radius: 999px !important;
+  padding: 3px 9px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+}
+
+/* Make selected segmented-control states feel like a native control. */
+.scope :global(.app-content-section [class*='bg-blue-600'].rounded-lg) {
+  background: #00a651 !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Improve density on wide desktop screens. */
+@media (min-width: 1280px) {
+  .scope :global(.app-content-section > div) {
+    padding-left: 34px !important;
+    padding-right: 34px !important;
+  }
+}
