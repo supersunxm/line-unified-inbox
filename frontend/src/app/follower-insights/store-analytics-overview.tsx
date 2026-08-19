@@ -24,6 +24,11 @@ function pct(numerator: number, denominator: number, decimals = 1) {
   return Math.round(((numerator / denominator) * 100) * factor) / factor;
 }
 
+function pctOrNull(numerator: number | null, denominator: number, decimals = 1) {
+  if (numerator === null || denominator <= 0) return null;
+  return pct(numerator, denominator, decimals);
+}
+
 function compactName(value: string, max = 28) {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1)}…`;
@@ -67,7 +72,7 @@ function ReachDistribution({ rows, language }: { rows: MetricRow[]; language: La
       { key: "60to70", label: "60–70%", min: 60, max: 70, className: "bg-[#FF9500]" },
       { key: "70to80", label: "70–80%", min: 70, max: 80, className: "bg-[#FFCC00]" },
       { key: "80to90", label: "80–90%", min: 80, max: 90, className: "bg-[#7BC67E]" },
-      { key: "90to100", label: "90–100%", min: 90, max: 101, className: "bg-[#00A651]" },
+      { key: "90plus", label: "90%+", min: 90, max: Number.POSITIVE_INFINITY, className: "bg-[#00A651]" },
     ];
     return values.map((bucket) => ({ ...bucket, count: validRows.filter((row) => row.reachPct >= bucket.min && row.reachPct < bucket.max).length }));
   }, [validRows]);
@@ -113,9 +118,9 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
       growth: canCompare ? periodIncrease : null,
       growthPct,
       reach: row.targetedReaches,
-      reachPct: row.targetedReaches === null ? null : pct(row.targetedReaches, row.followers, 1),
+      reachPct: pctOrNull(row.targetedReaches, row.followers, 1),
       blocks: row.blocks,
-      blockPct: row.blocks === null ? null : pct(row.blocks, row.followers, 1),
+      blockPct: pctOrNull(row.blocks, row.followers, 1),
     }];
   }), [storeData, endpointsUsable]);
 
