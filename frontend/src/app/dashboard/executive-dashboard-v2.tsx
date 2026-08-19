@@ -175,7 +175,6 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 }
 
 export function ExecutiveDashboardV2({
-  language: _language,
   getStoreDisplayName,
   onOpenStore,
   lastUpdatedAt,
@@ -211,9 +210,12 @@ export function ExecutiveDashboardV2({
   }, []);
 
   useEffect(() => {
-    void load(period);
+    const initialLoad = window.setTimeout(() => void load(period), 0);
     const interval = window.setInterval(() => void load(period), 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
   }, [load, period]);
 
   const replyBuckets = useMemo<ReplyBucket[]>(() => {
