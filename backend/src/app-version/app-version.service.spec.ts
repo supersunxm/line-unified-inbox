@@ -5,16 +5,16 @@ import { AppVersionService } from "./app-version.service";
 import { PrismaService } from "../prisma.service";
 
 const releaseNotes = [
-  "Refreshes Customer Sales Info from the backend after Android Back, swipe, or sheet dismiss",
-  "Prevents stale chat state from making confirmed product tags appear missing",
-  "Keeps confirmed products, purchase channel, and payment method visible after reopening Sales Info",
-  "Includes customer sales tagging persistence and backend audit fixes",
+  "Persists product-tag deletion immediately when the trash icon is pressed",
+  "Removing the final tagged product now saves an empty product list to the backend",
+  "Restores the previous product list if deleting a tag fails to save",
+  "Includes Customer Sales Info rehydration and tagging reliability fixes from previous hotfixes",
 ];
 
 const apkUrl =
-  "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
+  "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.10-production.apk?sha=50f19b2c71c003946b863bf3d23e2b4870ff2a6f4291af26c5db445249c837e5";
 const sha256 =
-  "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
+  "50f19b2c71c003946b863bf3d23e2b4870ff2a6f4291af26c5db445249c837e5";
 
 test("AppVersionService returns active Android release with correct structure", async () => {
   const fakePrisma = {
@@ -22,8 +22,8 @@ test("AppVersionService returns active Android release with correct structure", 
       findFirst: async () => ({
         id: "rel-1",
         platform: AppPlatform.ANDROID,
-        version: "1.0.9",
-        buildNumber: 10,
+        version: "1.0.10",
+        buildNumber: 11,
         minimumSupportedVersion: "1.0.3",
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
@@ -43,8 +43,8 @@ test("AppVersionService returns active Android release with correct structure", 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.9");
-  assert.equal(version.buildNumber, 10);
+  assert.equal(version.latestVersion, "1.0.10");
+  assert.equal(version.buildNumber, 11);
   assert.equal(version.minimumSupportedVersion, "1.0.3");
   assert.equal(version.minimumSupportedBuildNumber, 4);
   assert.equal(version.forceUpdate, false);
@@ -63,8 +63,8 @@ test("AppVersionService falls back safely when database returns null", async () 
   const service = new AppVersionService(fakePrisma);
   const version = await service.getLatestVersion(AppPlatform.ANDROID);
 
-  assert.equal(version.latestVersion, "1.0.9");
-  assert.equal(version.buildNumber, 10);
+  assert.equal(version.latestVersion, "1.0.10");
+  assert.equal(version.buildNumber, 11);
   assert.equal(version.apkUrl, apkUrl);
   assert.equal(version.sha256, sha256);
   assert.deepEqual(version.releaseNotes, releaseNotes);
@@ -74,7 +74,7 @@ test("AppVersionService tracks download increments successfully", async () => {
   let updatedId = "";
   const fakePrisma = {
     appRelease: {
-      findFirst: async () => ({ id: "rel-1", buildNumber: 10 }),
+      findFirst: async () => ({ id: "rel-1", buildNumber: 11 }),
       update: async (args: { where: { id: string } }) => {
         updatedId = args.where.id;
         return {};
@@ -83,7 +83,7 @@ test("AppVersionService tracks download increments successfully", async () => {
   } as unknown as PrismaService;
 
   const service = new AppVersionService(fakePrisma);
-  const res = await service.trackDownload(AppPlatform.ANDROID, 10);
+  const res = await service.trackDownload(AppPlatform.ANDROID, 11);
 
   assert.equal(res.success, true);
   assert.equal(updatedId, "rel-1");

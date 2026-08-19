@@ -8,20 +8,20 @@ import {
 } from "./app-version.dto";
 
 const DEFAULT_ANDROID_VERSION: AppVersionResponseDto = {
-  latestVersion: "1.0.9",
-  buildNumber: 10,
+  latestVersion: "1.0.10",
+  buildNumber: 11,
   minimumSupportedVersion: "1.0.3",
   minimumSupportedBuildNumber: 4,
   forceUpdate: false,
   apkUrl:
-    "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
+    "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.10-production.apk?sha=50f19b2c71c003946b863bf3d23e2b4870ff2a6f4291af26c5db445249c837e5",
   apkSize: "56.9 MB",
-  sha256: "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368",
+  sha256: "50f19b2c71c003946b863bf3d23e2b4870ff2a6f4291af26c5db445249c837e5",
   releaseNotes: [
-    "Refreshes Customer Sales Info from the backend after Android Back, swipe, or sheet dismiss",
-    "Prevents stale chat state from making confirmed product tags appear missing",
-    "Keeps confirmed products, purchase channel, and payment method visible after reopening Sales Info",
-    "Includes customer sales tagging persistence and backend audit fixes",
+    "Persists product-tag deletion immediately when the trash icon is pressed",
+    "Removing the final tagged product now saves an empty product list to the backend",
+    "Restores the previous product list if deleting a tag fails to save",
+    "Includes Customer Sales Info rehydration and tagging reliability fixes from previous hotfixes",
   ],
 };
 
