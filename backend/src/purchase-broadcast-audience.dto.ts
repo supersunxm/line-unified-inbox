@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   ArrayUnique,
   IsArray,
@@ -34,4 +35,15 @@ export class CreatePurchaseBroadcastDraftDto extends PurchaseAnalyticsQueryDto {
   @IsString()
   @MaxLength(120)
   title?: string;
+}
+
+export class UpdatePurchaseBroadcastDraftDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  title?: string;
+
+  @IsArray()
+  @ArrayMaxSize(2)
+  messages!: Array<Record<string, unknown>>;
 }

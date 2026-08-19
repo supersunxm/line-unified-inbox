@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { Roles } from "./auth/auth.decorators";
 import type { AuthRequest } from "./auth/auth.guard";
-import { CreatePurchaseBroadcastDraftDto } from "./purchase-broadcast-audience.dto";
+import {
+  CreatePurchaseBroadcastDraftDto,
+  UpdatePurchaseBroadcastDraftDto,
+} from "./purchase-broadcast-audience.dto";
 import { PurchaseBroadcastAudienceService } from "./purchase-broadcast-audience.service";
 import { PurchaseAnalyticsQueryDto } from "./purchase-analytics.dto";
 import { PurchaseAnalyticsService } from "./purchase-analytics.service";
@@ -35,5 +38,24 @@ export class PurchaseAnalyticsController {
     @Body() body: CreatePurchaseBroadcastDraftDto,
   ) {
     return this.broadcastAudience.createDraft(body, request.user!);
+  }
+
+  @Get("audience/broadcast-draft/:id/composer")
+  @Roles(UserRole.ADMIN)
+  getBroadcastDraftComposer(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+  ) {
+    return this.broadcastAudience.getComposer(id, request.user!);
+  }
+
+  @Patch("audience/broadcast-draft/:id/composer")
+  @Roles(UserRole.ADMIN)
+  updateBroadcastDraftComposer(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+    @Body() body: UpdatePurchaseBroadcastDraftDto,
+  ) {
+    return this.broadcastAudience.updateComposer(id, body, request.user!);
   }
 }
