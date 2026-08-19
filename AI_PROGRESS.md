@@ -1,5 +1,19 @@
 # AI progress
 
+## Current task: Phase 2B Purchase Intelligence Campaign Composer (2026-08-19)
+
+- Added a dedicated ADMIN-only composer for Purchase Intelligence `DRAFT + SELECTED_USERS` campaigns.
+- Composer loads the exact Phase 2A recipient snapshot and exposes aggregate customer/store/LINE OA counts plus store/OA breakdown without returning customer recipient references.
+- Campaign title, one text message, and one image can be edited and saved while the campaign remains `DRAFT`.
+- Image attachment reuses the existing protected Mass Message JPEG/PNG upload path and limits.
+- Save Draft preserves the existing `audienceSource` snapshot and creates no `MassMessageStoreDelivery` rows.
+- Composer editing fails closed if a campaign is no longer DRAFT/SELECTED_USERS or already has delivery records.
+- Existing Mass Message preview/send endpoints continue to reject `SELECTED_USERS`.
+- `Review & Send` is visibly disabled; Phase 2B performs no LINE API send, processor invocation, or quota-consuming action.
+- Draft PR: #30.
+- CI #111 passed backend lint/regressions/build/startup smoke, frontend composer regression/lint/build, and Flutter analyze/tests.
+
+
 ## Current task: Phase 2A Purchase Intelligence → Broadcast Audience Draft (2026-08-19)
 
 - Added ADMIN-only `POST /admin/purchase-analytics/audience/broadcast-draft`.

@@ -1,3 +1,14 @@
+# Purchase Intelligence Campaign Composer Boundary (Phase 2B) (2026-08-19)
+
+- Phase 2B may edit only content on an existing Purchase Intelligence `DRAFT + SELECTED_USERS` campaign; it cannot create delivery execution state or change campaign status.
+- The saved Phase 2A recipient snapshot is immutable from the composer. The browser cannot add, remove, or replace recipient IDs.
+- Composer read models expose aggregate recipient/store/LINE OA information and store/OA breakdown only; customer IDs, conversation IDs, and LINE User IDs remain internal to the saved snapshot.
+- Save Draft may update only campaign title and a validated message payload containing at most one text message and one image.
+- Existing protected Mass Message image upload is reused rather than introducing a second media-storage path.
+- Composer edits fail closed when the campaign is not DRAFT/SELECTED_USERS or when delivery records already exist.
+- Legacy `SELECTED_USERS` preview/send remains blocked. Phase 2C must implement explicit recipient re-validation, authorization, quota checks, idempotent delivery creation, audit, and final confirmation before any LINE execution.
+- Phase 2B itself creates no `MassMessageStoreDelivery`, starts no processor, calls no LINE send API, and consumes no message quota.
+
 # Purchase Intelligence → Broadcast Audience Draft Boundary (Phase 2A) (2026-08-19)
 
 - Phase 2A is a preparation boundary only: it may create `MassMessageCampaign` records with status `DRAFT`, but it must never dispatch LINE messages or start the Mass Message processor.
