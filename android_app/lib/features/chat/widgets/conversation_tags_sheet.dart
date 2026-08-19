@@ -561,10 +561,58 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     }
   }
 
-  void _removeProduct(int index) {
+  Future<void> _removeProduct(int index) async {
+    if (_saving || index < 0 || index >= _selectedProducts.length) return;
+
+    final previousProducts = List<CustomerSalesProductItem>.from(_selectedProducts);
     setState(() {
       _selectedProducts.removeAt(index);
+      _saving = true;
+      _error = null;
     });
+
+    final payloadProducts = _selectedProducts
+        .map((p) => CustomerSalesProductItem(
+              id: p.id,
+              productModelId: p.productModelId,
+              productVariantId: p.productVariantId,
+              modelName: p.modelName,
+              seriesName: p.seriesName,
+              category: p.category,
+              ram: p.ram,
+              rom: p.rom,
+              color: p.color,
+              quantity: p.quantity,
+              status: _status,
+            ))
+        .toList();
+
+    try {
+      final detail = await widget.repository.updateCustomerSalesInfo(
+        widget.conversationId,
+        status: _status,
+        interestLevel: _status == 'INTERESTED' ? _interestLevel : null,
+        purchaseChannel: _status == 'PURCHASED' ? _sourceChannels.toList() : [],
+        paymentMethod: _status == 'PURCHASED' ? _paymentMethod : null,
+        products: payloadProducts,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _selectedProducts = List<CustomerSalesProductItem>.from(
+          detail.customerSalesInformation?.products ?? payloadProducts,
+        );
+        _saving = false;
+        _lastSavedDetail = detail;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _selectedProducts = previousProducts;
+        _saving = false;
+        _error = appLocalizations(context).unableToSaveTags;
+      });
+    }
   }
 
   void _updateQuantity(int index, int delta) {
