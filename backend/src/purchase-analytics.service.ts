@@ -45,6 +45,9 @@ type PurchaseAudienceRecord = {
   purchaseRecordedBy: { id: string; displayName: string } | null;
   salesProducts: Array<{
     customProductName: string | null;
+    ram: string | null;
+    rom: string | null;
+    color: string | null;
     quantity: number;
     productModel: { id: string; name: string; productSeries: { name: string } };
     productVariant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
@@ -82,8 +85,6 @@ function parseDate(value: string | undefined, field: "from" | "to") {
 function dateRange(query: PurchaseAnalyticsQueryDto): DateRange {
   const from = parseDate(query.from, "from");
   let to = parseDate(query.to, "to");
-  // Date-only boundaries use the product's Asia/Bangkok reporting day and are
-  // represented as a half-open range in SQL.
   if (to && /^\d{4}-\d{2}-\d{2}$/.test(query.to ?? "")) {
     to = new Date(to.getTime() + 24 * 60 * 60 * 1000);
   }
@@ -113,7 +114,7 @@ function audienceMessageability(row: PurchaseAudienceRecord) {
 }
 
 function audienceProductKey(product: AudienceProduct) {
-  return [product.modelId, product.variantId ?? "", product.customProductName ?? ""].join(":");
+  return [product.modelId, product.variantId ?? "", product.ram ?? "", product.rom ?? "", product.color ?? "", product.customProductName ?? ""].join(":");
 }
 
 @Injectable()
@@ -246,6 +247,9 @@ export class PurchaseAnalyticsService {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
             customProductName: true,
+            ram: true,
+            rom: true,
+            color: true,
             quantity: true,
             productModel: { select: { id: true, name: true, productSeries: { select: { name: true } } } },
             productVariant: { select: { id: true, ram: true, rom: true, color: true } },
@@ -286,9 +290,9 @@ export class PurchaseAnalyticsService {
         modelName: product.productModel.name,
         seriesName: product.productModel.productSeries.name,
         variantId: product.productVariant?.id ?? null,
-        ram: product.productVariant?.ram ?? null,
-        rom: product.productVariant?.rom ?? null,
-        color: product.productVariant?.color ?? null,
+        ram: product.ram ?? product.productVariant?.ram ?? null,
+        rom: product.rom ?? product.productVariant?.rom ?? null,
+        color: product.color ?? product.productVariant?.color ?? null,
         customProductName: product.customProductName,
         quantity: product.quantity,
       }));
