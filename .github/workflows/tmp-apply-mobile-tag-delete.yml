@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - agent/fix-mobile-tag-delete
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.head_ref == 'agent/fix-mobile-tag-delete' || github.ref_name == 'agent/fix-mobile-tag-delete'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
