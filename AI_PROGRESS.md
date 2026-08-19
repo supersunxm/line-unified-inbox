@@ -1,5 +1,17 @@
 # AI progress
 
+## Current task: Phase 1 Customer Audience Export for Purchase Intelligence (2026-08-19)
+
+- Added authenticated `GET /admin/purchase-analytics/audience` using the existing date/store authorization scope.
+- Audience is deduplicated to one row per customer and aggregates purchase products, variants, quantities, channels, and payment methods while preserving latest purchase/store/OA/BM context.
+- Operational `canMessage` requires a LINE User ID plus an active, non-archived LINE OA in READY/CONNECTED state. This does not represent verified per-customer friend/block status.
+- Added Purchase Intelligence `Export audience` workflow with Purchased / Interested / Not specified filters, messageable-only default, recipient counts, and UTF-8 BOM/formula-safe CSV generation.
+- Preserved denormalized RAM/ROM/color from recorded sales items when no catalog variant relation exists.
+- CI gate now explicitly lints Purchase Analytics and runs `purchase-analytics.service.spec.ts`; final PR CI #96 passed Backend / Frontend / Mobile.
+- PR #27 merged to `main` as `ab716c25347d383e1c33d5ad5285a95772d8f6e7`.
+- Railway production deployments succeeded: backend `f67fb343-d8ce-4a1f-9c61-5d04527e7fe6`, frontend `be1f46a4-77c9-4488-9126-81df760cd566`; backend runtime logs confirm `/admin/purchase-analytics/audience` is registered and frontend production build includes `/admin/purchase-analytics`.
+- Remaining acceptance: authenticated operator download/review of a production CSV. No broadcast send action is included in Phase 1.
+
 ## Current task: Android Release v1.0.12+13 (Responsive Customer Sales Header)
 
 - Fixed the narrow-screen Customer Sales Information header so the title can no longer collapse into one-character-per-line wrapping.
@@ -1071,7 +1083,7 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added an ADMIN-only manual message-translation endpoint contract for English and Chinese targets behind `MESSAGE_TRANSLATION_ENABLED`, which defaults to false and rejects malformed boolean configuration.
 - Added a provider abstraction; disabled requests fail before database/provider access, and enabled requests remain unavailable unless an approved provider and credentials are both configured.
 - Reused existing nullable Message translation columns as durable cache and added inbound-text eligibility boundaries without changing ingestion, serialization, or schema.
-- Backend ESLint, all 459 backend tests, TypeScript production build, startup, health/readiness, unauthenticated 401, authenticated disabled-feature 503, and `git diff --check` pass.
+- Backend ESLint, all 459 backend tests, TypeScript production build, startup, health/readiness 200, unauthenticated 401, authenticated disabled-feature 503, and `git diff --check` pass.
 - Next: review the implementation report before any provider integration, commit, push, or deployment.
 
 # Current task: offline translation benchmark framework
