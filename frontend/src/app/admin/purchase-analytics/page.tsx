@@ -1,12 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AudienceStatus = "PURCHASED" | "INTERESTED" | "NOT_SPECIFIED";
+type PurchaseAudienceItem = {
+  customerId: string;
+  customerName: string;
+  lineUserId: string | null;
+  preferredLanguage: string | null;
+  conversationId: string;
+  lineOaId: string;
+  lineOaName: string;
+  lineOaBasicId: string | null;
+  storeId: string;
+  storeName: string;
+  storeCode: string | null;
+  customerStatus: string | null;
+  purchaseChannels: string[];
+  paymentMethods: string[];
+  products: Array<{
+    modelId: string;
+    modelName: string;
+    seriesName: string;
+    variantId: string | null;
+    ram: string | null;
+    rom: string | null;
+    color: string | null;
+    customProductName: string | null;
+    quantity: number;
+  }>;
+  recordedById: string | null;
+  recordedByName: string | null;
+  lastPurchaseAt: string;
+  lastMessageAt: string;
+  canMessage: boolean;
+  excludeReason: string | null;
+};
+type PurchaseAudienceResponse = {
+  filters: { from: string | null; to: string | null; storeId: string | null };
+  summary: { customers: number; messageableCustomers: number; excludedCustomers: number };
+  messageabilityDefinition: string;
+  audience: PurchaseAudienceItem[];
+};
 
 const number = new Intl.NumberFormat("en-US");
 const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -29,6 +69,46 @@ function Ranking({ title, items }: { title: string; items: Array<{ label: string
   );
 }
 
+function csvCell(value: string | number | null | undefined) {
+  let text = value === null || value === undefined ? "" : String(value);
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function audienceStatus(item: PurchaseAudienceItem): AudienceStatus {
+  if (item.customerStatus === "PURCHASED") return "PURCHASED";
+  if (item.customerStatus === "INTERESTED") return "INTERESTED";
+  return "NOT_SPECIFIED";
+}
+
+function productLabel(product: PurchaseAudienceItem["products"][number]) {
+  const variant = [product.ram, product.rom, product.color].filter(Boolean).join(" / ");
+  const name = product.customProductName || product.modelName;
+  return `${name}${variant ? ` (${variant})` : ""} x${product.quantity}`;
+}
+
+function exportAudienceCsv(items: PurchaseAudienceItem[]) {
+  const headers = [
+    "customer_name", "line_user_id", "conversation_id", "preferred_language", "line_oa_id", "line_oa_name", "line_oa_basic_id",
+    "store_id", "store_name", "store_code", "customer_status", "products", "product_series", "variants", "colors", "total_quantity",
+    "purchase_channels", "payment_methods", "last_purchase_at", "last_message_at", "recorded_by_id", "recorded_by_name", "can_message", "exclude_reason",
+  ];
+  const lines = items.map((item) => {
+    const products = item.products.map(productLabel).join(" | ");
+    const series = [...new Set(item.products.map((product) => product.seriesName).filter(Boolean))].join(" | ");
+    const variants = item.products.map((product) => [product.ram, product.rom].filter(Boolean).join(" / ")).filter(Boolean).join(" | ");
+    const colors = [...new Set(item.products.map((product) => product.color).filter((color): color is string => Boolean(color)))].join(" | ");
+    const quantity = item.products.reduce((sum, product) => sum + product.quantity, 0);
+    return [
+      item.customerName, item.lineUserId, item.conversationId, item.preferredLanguage, item.lineOaId, item.lineOaName, item.lineOaBasicId,
+      item.storeId, item.storeName, item.storeCode, item.customerStatus, products, series, variants, colors, quantity,
+      item.purchaseChannels.join(" | "), item.paymentMethods.join(" | "), item.lastPurchaseAt, item.lastMessageAt,
+      item.recordedById, item.recordedByName, item.canMessage ? "TRUE" : "FALSE", item.excludeReason,
+    ].map(csvCell).join(",");
+  });
+  return `\uFEFF${headers.map(csvCell).join(",")}\r\n${lines.join("\r\n")}\r\n`;
+}
+
 export default function PurchaseAnalyticsPage() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -39,6 +119,12 @@ export default function PurchaseAnalyticsPage() {
   const [storeId, setStoreId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [audience, setAudience] = useState<PurchaseAudienceResponse | null>(null);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const [audienceOpen, setAudienceOpen] = useState(false);
+  const [onlyMessageable, setOnlyMessageable] = useState(true);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"]));
 
   const load = useCallback(async (viewer?: AuthUser) => {
     setLoading(true);
@@ -75,6 +161,57 @@ export default function PurchaseAnalyticsPage() {
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, [load]);
 
+  const openAudience = async () => {
+    setAudienceOpen(true);
+    setAudienceLoading(true);
+    setAudienceError(null);
+    try {
+      const query = new URLSearchParams();
+      if (from) query.set("from", from);
+      if (to) query.set("to", to);
+      if (storeId) query.set("storeId", storeId);
+      const response = await fetch(`/api-backend/admin/purchase-analytics/audience${query.size ? `?${query.toString()}` : ""}`, { credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { message?: string | string[] } | null;
+        const message = Array.isArray(body?.message) ? body.message.join(", ") : body?.message;
+        throw new Error(message || `Unable to load audience (${response.status}).`);
+      }
+      setAudience(await response.json() as PurchaseAudienceResponse);
+    } catch (err) {
+      setAudienceError(err instanceof Error ? err.message : "Unable to load customer audience.");
+    } finally {
+      setAudienceLoading(false);
+    }
+  };
+
+  const filteredAudience = useMemo(() => {
+    if (!audience) return [];
+    return audience.audience.filter((item) => selectedStatuses.has(audienceStatus(item)) && (!onlyMessageable || item.canMessage));
+  }, [audience, onlyMessageable, selectedStatuses]);
+
+  const toggleStatus = (status: AudienceStatus) => {
+    setSelectedStatuses((current) => {
+      const next = new Set(current);
+      if (next.has(status)) next.delete(status); else next.add(status);
+      return next;
+    });
+  };
+
+  const downloadAudience = () => {
+    if (filteredAudience.length === 0) return;
+    const csv = exportAudienceCsv(filteredAudience);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const range = [from || "all", to || "all"].join("_to_");
+    anchor.href = url;
+    anchor.download = `purchase-audience_${range}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const logout = async () => {
     await api.logout().catch(() => undefined);
     setAuthUser(null);
@@ -103,7 +240,10 @@ export default function PurchaseAnalyticsPage() {
               <h1 className="mt-1 text-3xl font-bold tracking-tight">Purchase Intelligence</h1>
               <p className="app-muted mt-2">Verified Purchase Records and Recorded Purchase Information.</p>
             </div>
-            <button type="button" onClick={() => void load(authUser)} disabled={loading} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-60">Refresh</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void openAudience()} disabled={audienceLoading} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60">Export audience</button>
+              <button type="button" onClick={() => void load(authUser)} disabled={loading} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-60">Refresh</button>
+            </div>
           </div>
 
           <section className="app-surface mb-6 flex flex-wrap items-end gap-4 rounded-xl border p-4 shadow-sm">
@@ -134,6 +274,37 @@ export default function PurchaseAnalyticsPage() {
           )}
         </div>
       </main>
+
+      {audienceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="audience-title">
+          <div className="app-surface max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div><h2 id="audience-title" className="text-xl font-bold">Export Customer Audience</h2><p className="app-muted mt-1 text-sm">One row per customer. Current date and store filters are applied automatically.</p></div>
+              <button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-sm">Close</button>
+            </div>
+
+            {audienceLoading ? <div className="app-muted py-10 text-center">Preparing customer audience…</div> : audienceError ? <div role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{audienceError}</div> : audience && (
+              <div className="mt-5 space-y-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Customers</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.customers)}</p></div>
+                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Messageable</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.messageableCustomers)}</p></div>
+                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Excluded</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.excludedCustomers)}</p></div>
+                </div>
+
+                <fieldset><legend className="text-sm font-semibold">Customer Status</legend><div className="mt-2 flex flex-wrap gap-3">{(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => <label key={status} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedStatuses.has(status)} onChange={() => toggleStatus(status)} />{status === "NOT_SPECIFIED" ? "Not specified" : status.charAt(0) + status.slice(1).toLowerCase()}</label>)}</div></fieldset>
+
+                <label className="flex items-start gap-3 rounded-xl border p-4"><input type="checkbox" className="mt-1" checked={onlyMessageable} onChange={(event) => setOnlyMessageable(event.target.checked)} /><span><span className="block text-sm font-semibold">Only messageable users</span><span className="app-muted mt-1 block text-xs">Requires a LINE User ID and an active LINE OA in READY/CONNECTED state. This is operational eligibility, not a guarantee that the customer has not blocked the OA.</span></span></label>
+
+                <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900"><span className="font-semibold">{number.format(filteredAudience.length)} customers</span> will be exported. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.</div>
+
+                <div><p className="text-sm font-semibold">CSV includes</p><p className="app-muted mt-1 text-sm">Customer name, LINE User ID, conversation, language, LINE OA, store, current sales status, products, variants, colors, quantities, purchase channels, payment methods, last purchase/message dates, BM recorder, and messageability status.</p></div>
+
+                <div className="flex justify-end gap-2"><button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold">Cancel</button><button type="button" onClick={downloadAudience} disabled={filteredAudience.length === 0} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">Download CSV</button></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
