@@ -13,7 +13,8 @@ const releaseNotes = [
 
 const apkUrl =
   "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.9-production.apk?sha=390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
-const sha256 = "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
+const sha256 =
+  "390bf0d22afafad473724856acb33679ed809baef81019a218e47ed7748fe368";
 
 test("AppVersionService returns active Android release with correct structure", async () => {
   const fakePrisma = {
