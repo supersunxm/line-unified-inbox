@@ -1,3 +1,13 @@
+# Purchase Intelligence Customer Audience Export (Phase 1) (2026-08-19)
+
+- Audience export is a preparation boundary only; Phase 1 does not send LINE broadcasts or create campaign/send side effects.
+- Purchase Intelligence date/store filters and `StoreAccessService` authorization are reused server-side so client filters never expand a user's store scope.
+- Export identity is one row per `Customer.id`, preventing duplicate recipient rows when multiple qualifying purchase records exist. Aggregated purchase context is retained while latest purchase supplies the primary conversation/store/OA/BM context.
+- Operational `canMessage` means the customer has `lineUserId` and the selected latest OA is active, non-archived, and `READY`/`CONNECTED`. It deliberately does not claim friend/block state because the current schema has no reliable per-customer friendship truth.
+- Audience rows preserve recorded `ConversationSalesProduct` RAM/ROM/color before catalog variant fallback. Export logic must prefer the recorded sales snapshot over optional catalog linkage.
+- CSV is generated in the authenticated frontend from the authorized audience API response, uses UTF-8 BOM and formula-injection-safe cells, and defaults to messageable recipients.
+- Any future broadcast phase must consume an explicit reviewed audience and add its own preview/approval/quota/idempotency/audit controls rather than implicitly sending from the export action.
+
 # Responsive Customer Sales Information Header (v1.0.12+13) (2026-08-19)
 
 - Customer Sales Information header actions must not compete with the title for the same constrained horizontal space on narrow Android screens.
@@ -12,7 +22,7 @@
   - `_selectedProducts`: strictly stores committed customer CRM products (`List<CustomerSalesProductItem>`).
   - `_draftProduct`: `ProductSelectorItem?` (temporary picker draft).
   - `_draftVariant`: `ProductVariantSelectorItem?` (temporary picker draft variant).
-  - `_draftQuantity`: `int` (temporary picker quantity stepper, default 1).
+  - `_draftQuantity`: `int` (temporary picker draft quantity stepper, default 1).
   - The draft state is completely decoupled from existing CRM items. Opening the product picker always starts empty (`_draftProduct = null`, `_draftVariant = null`, `_draftQuantity = 1`) regardless of whether 0, 1, or 5 products already exist in the CRM list.
 - **Conditional Confirmation Gate (`_canConfirmSelection`)**:
   - `[ Confirm Selection ]` is disabled (`onPressed: null`) while the draft product is unselected or while variant choices remain unselected for multi-variant products.
@@ -76,7 +86,7 @@
 # Multi-Account TikTok Store Routing & Account-Specific Isolation (2026-08-14)
 
 - **Dedicated Dynamic Dashboard Route (`/tiktok/dashboard/[accountId]`)**: To support multi-account scaling across ~150 retail stores without conflating store metrics, individual account dashboards are decoupled to `/tiktok/dashboard/[accountId]`. The base `/tiktok/dashboard` route redirects to the primary account dashboard if accounts exist or renders an empty state if no stores are connected.
-- **Multi-Account Store Overview (`/tiktok`)**: When 2 or more store accounts are connected, `/tiktok` renders a responsive card grid displaying each store's avatar, displayName, `@username`, StoreMaster store name, province, region, followers, status badge, and direct "Open Dashboard" button.
+- **Multi-Account Store Overview (`/tiktok`)**: When 2 or more accounts are connected, `/tiktok` renders a responsive card grid displaying each store's avatar, displayName, `@username`, StoreMaster store name, province, region, followers, status badge, and direct "Open Dashboard" button.
 - **Account-Specific Backend Data Endpoints (`GET /tiktok/accounts/:id` & `GET /tiktok/accounts/:id/metrics`)**: Endpoints strictly scope queries by `tikTokAccountId`, preventing cross-store video leakage and cross-store follower metric leakage.
 - **Duplicate & Binding Safety**: Reconnecting the same TikTok openId updates the existing account in-place without creating duplicate records. Connecting a distinct openId creates an independent second `TikTokAccount` without overwriting existing store accounts (e.g. O-Central World).
 
