@@ -337,7 +337,7 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
     private readonly auditLog: AuditLogService,
   ) {}
 
-  async onModuleInit() {
+  onModuleInit() {
     if (process.env.NODE_ENV === "test") return;
     void this.recoverSelectedAudienceExecutions().catch((error) => {
       this.logger.error(
@@ -457,6 +457,12 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
     }
 
     const preflight = await this.buildPreflight(campaignId, user);
+    const currentReview = readReview(preflight.campaign.messagePayload);
+    if (!currentReview || currentReview.reviewToken !== input.reviewToken) {
+      throw new ConflictException(
+        "Safety review was replaced while validating. Run review again before sending",
+      );
+    }
     if (!preflight.safeToSend) {
       throw new ConflictException("Safety review no longer passes. Review the campaign again");
     }
@@ -1270,14 +1276,14 @@ export class PurchaseBroadcastSafeSendService implements OnModuleInit {
         status,
         completedAt: new Date(),
         messagePayload: execution
-          ? ({
+          ? {
               ...payload,
               executionSource: {
                 ...execution,
                 state: "COMPLETED",
                 completedAt: new Date().toISOString(),
               },
-            } as Prisma.InputJsonValue)
+            }
           : undefined,
       },
     });
