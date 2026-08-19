@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAiInsight, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
+import {
+  buildAiInsight,
+  buildCustomerSalesInformation,
+  buildOperationalState,
+  buildPurchaseInformation,
+} from "./conversation-data-contract";
 
 const manualProduct = {
   source: "MANUAL",
@@ -56,6 +61,40 @@ void test("legacy manual data is explicit and never presented as verified purcha
   assert.deepEqual(purchase.products, []);
   assert.equal(purchase.recordedBy, null);
   assert.equal(purchase.recordedAt, null);
+});
+
+void test("modern explicit null sales status is not resurrected as purchased", () => {
+  const sales = buildCustomerSalesInformation({
+    customerSalesStatus: null,
+    interestLevel: null,
+    sourceChannels: [],
+    isInstallment: false,
+    paymentMethod: null,
+    salesProducts: [],
+    salesRecordedBy: { displayName: "BM Tester" },
+    salesRecordedAt: new Date("2026-08-19T04:30:00.000Z"),
+    purchaseRecordedBy: { displayName: "BM Tester" },
+    purchaseRecordedAt: new Date("2026-08-19T04:30:00.000Z"),
+  });
+
+  assert.equal(sales.status, null);
+  assert.equal(sales.interestLevel, null);
+  assert.deepEqual(sales.purchaseChannel, []);
+  assert.equal(sales.paymentMethod, null);
+  assert.deepEqual(sales.products, []);
+});
+
+void test("legacy purchase provenance still falls back to purchased before modern sales state exists", () => {
+  const sales = buildCustomerSalesInformation({
+    customerSalesStatus: null,
+    sourceChannels: ["STORE"],
+    isInstallment: true,
+    purchaseRecordedAt: new Date("2026-08-16T10:00:00.000Z"),
+  });
+
+  assert.equal(sales.status, "PURCHASED");
+  assert.deepEqual(sales.purchaseChannel, ["STORE"]);
+  assert.equal(sales.paymentMethod, "INSTALLMENT");
 });
 
 void test("operational state stays separate from purchase and insight data", () => {
