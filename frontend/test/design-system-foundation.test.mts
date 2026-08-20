@@ -315,10 +315,29 @@ test("Dark Mode Normalization: Tailwind v4 custom-variant dark and dashboard sem
   assert.match(storeTable, /bg-\[var\(--app-success-soft\)\]/);
 });
 
+test("Follower Insights Dark Mode: CSS module aliases and store analytics overview use semantic tokens", () => {
+  const modernCss = readFileSync(new URL("../src/app/follower-insights/follower-insights-modern.module.css", import.meta.url), "utf8");
+  const storeAnalytics = readFileSync(new URL("../src/app/follower-insights/store-analytics-overview.tsx", import.meta.url), "utf8");
 
+  // CSS module must alias all custom properties to global --app-* tokens
+  assert.match(modernCss, /--background:\s*var\(--app-bg\);/);
+  assert.match(modernCss, /--foreground:\s*var\(--app-text-primary\);/);
+  assert.match(modernCss, /--surface:\s*var\(--app-surface\);/);
+  assert.match(modernCss, /--surface-elevated:\s*var\(--app-surface-subtle\);/);
+  assert.match(modernCss, /--input-background:\s*var\(--app-surface\);/);
+  assert.match(modernCss, /--border:\s*var\(--app-border\);/);
+  assert.match(modernCss, /--muted:\s*var\(--app-text-secondary\);/);
+  assert.match(modernCss, /--hover:\s*var\(--app-surface-hover\);/);
+  assert.match(modernCss, /--badge-background:\s*var\(--app-neutral-soft\);/);
+  assert.match(modernCss, /--badge-foreground:\s*var\(--app-text-secondary\);/);
 
+  // Root canvas background must resolve to var(--app-bg)
+  assert.match(modernCss, /var\(--app-bg\)\s*!important;/);
 
-
-
-
-
+  // Store Analytics Overview must use semantic tokens for cards and text
+  assert.doesNotMatch(storeAnalytics, /bg-white/);
+  assert.doesNotMatch(storeAnalytics, /border-\[#E5E5EA\]/);
+  assert.match(storeAnalytics, /bg-\[var\(--app-surface\)\]/);
+  assert.match(storeAnalytics, /border-\[var\(--app-border\)\]/);
+  assert.match(storeAnalytics, /text-\[var\(--app-text-primary\)\]/);
+});

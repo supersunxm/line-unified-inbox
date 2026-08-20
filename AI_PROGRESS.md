@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: Site-Wide Dark Mode Normalization Pass (2026-08-20)
+## Current task: Follower Insights Dark Mode Canvas & Scoped CSS Normalization (2026-08-20)
+
+- **Root Cause & Architectural Trace**:
+  - **Scoped CSS Module Override**: `frontend/src/app/follower-insights/follower-insights-modern.module.css` declared hardcoded light variables (`--background: #f5f5f7`, `--surface: #ffffff`, `--input-background: #ffffff`, `--border: #e5e5ea`) and applied `background: ... var(--background) !important;` directly on `.scope :global(.app-content-section)` wrapping `follower-insights-view.tsx`.
+  - In Dark Mode, this scoped rule forced the entire page canvas to remain a large light `#f5f5f7` rectangle while child cards were forced to white `#ffffff`.
+  - `frontend/src/app/follower-insights/store-analytics-overview.tsx` had hardcoded `bg-white`, `border-[#E5E5EA]`, and `text-[#1D1D1F]` styles on Performance Analytics cards.
+- **Normalization Applied**:
+  - Aliased all CSS module variables in `follower-insights-modern.module.css` to global design tokens (`--background: var(--app-bg)`, `--foreground: var(--app-text-primary)`, `--surface: var(--app-surface)`, `--surface-elevated: var(--app-surface-subtle)`, `--input-background: var(--app-surface)`, `--border: var(--app-border)`, `--muted: var(--app-text-secondary)`, `--hover: var(--app-surface-hover)`, `--badge-background: var(--app-neutral-soft)`, `--badge-foreground: var(--app-text-secondary)`).
+  - Updated card borders, inputs, selects, segmented controls, table headers, and scrollbars to semantic tokens.
+  - Normalized `store-analytics-overview.tsx` cards, metric bars, and distribution buckets to use semantic design tokens (`--app-surface`, `--app-border`, `--app-text-primary`, `--app-surface-subtle`).
+  - Normalized `StoreBreakdownTable` pagination buttons.
+- **Verification & Test Results**:
+  - Added targeted automated test assertions in `frontend/test/design-system-foundation.test.mts`.
+  - Targeted test suite: `35 / 35 passed (100%)` (`follower-insights.test.mts`, `design-system-foundation.test.mts`).
+  - Full frontend test suite: `375 / 375 passed (100%)`.
+  - Next.js Turbopack build: Succeeded cleanly across all 21 routes (`npm run build`).
+
+## Previous task: Site-Wide Dark Mode Normalization Pass (2026-08-20)
 
 - **Root Cause Analysis**:
   - **Root Cause 1 (Tailwind CSS v4 Dark Variant Disconnect)**: In Tailwind CSS v4 (`@tailwindcss/postcss: ^4`), default `dark:` variants rely exclusively on the `@media (prefers-color-scheme: dark)` media query. Because the application toggles theme via `document.documentElement.dataset.theme = "dark"`, all standard Tailwind `dark:...` utility classes across the application failed to activate whenever the user chose Dark Mode on an OS in light mode.

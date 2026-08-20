@@ -3,20 +3,20 @@
 }
 
 .scope :global(.app-content-section) {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
-  --surface: #ffffff;
-  --surface-elevated: #fafafa;
-  --input-background: #ffffff;
-  --border: #e5e5ea;
-  --muted: #6e6e73;
-  --hover: #f2f7f4;
-  --badge-background: #f1f1f3;
-  --badge-foreground: #6e6e73;
+  --background: var(--app-bg);
+  --foreground: var(--app-text-primary);
+  --surface: var(--app-surface);
+  --surface-elevated: var(--app-surface-subtle);
+  --input-background: var(--app-surface);
+  --border: var(--app-border);
+  --muted: var(--app-text-secondary);
+  --hover: var(--app-surface-hover);
+  --badge-background: var(--app-neutral-soft);
+  --badge-foreground: var(--app-text-secondary);
   background:
     radial-gradient(circle at top right, rgba(0, 166, 81, 0.055), transparent 30rem),
-    var(--background) !important;
-  color: var(--foreground) !important;
+    var(--app-bg) !important;
+  color: var(--app-text-primary) !important;
   font-family: 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -43,15 +43,15 @@
   letter-spacing: -0.012em;
 }
 
-/* Universal card language: lighter and calmer */
+/* Universal card language */
 .scope :global(.app-content-section .rounded-2xl.border) {
-  border-color: #e5e5ea !important;
+  border-color: var(--app-border) !important;
   border-radius: 18px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035) !important;
 }
 
 .scope :global(.app-content-section .rounded-xl.border) {
-  border-color: #e5e5ea;
+  border-color: var(--app-border);
   box-shadow: none;
 }
 
@@ -83,8 +83,8 @@
 
 /* Segmented controls */
 .scope :global(.app-content-section [class*='rounded-xl'][class*='p-1']) {
-  background: rgba(255, 255, 255, 0.86) !important;
-  border-color: #dedee3 !important;
+  background: var(--app-surface-subtle) !important;
+  border-color: var(--app-border) !important;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
   backdrop-filter: blur(10px);
 }
@@ -106,8 +106,8 @@
 .scope :global(.app-content-section [class*='md:grid-cols-5'] > div) {
   min-height: 126px;
   padding: 20px !important;
-  background: #ffffff !important;
-  border: 1px solid #e5e5ea !important;
+  background: var(--app-surface) !important;
+  border: 1px solid var(--app-border) !important;
   border-radius: 18px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035) !important;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
@@ -115,14 +115,14 @@
 
 .scope :global(.app-content-section [class*='md:grid-cols-5'] > div:hover) {
   transform: translateY(-1px);
-  border-color: #d9d9df !important;
+  border-color: var(--app-border-strong) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.055) !important;
 }
 
 .scope :global(.app-content-section [class*='md:grid-cols-5'] > div > p:first-child) {
   font-size: 12.5px !important;
   font-weight: 500 !important;
-  color: #6e6e73 !important;
+  color: var(--app-text-secondary) !important;
 }
 
 .scope :global(.app-content-section [class*='md:grid-cols-5'] > div > p:nth-child(2)) {
@@ -131,6 +131,7 @@
   line-height: 1.12;
   letter-spacing: -0.035em !important;
   font-variant-numeric: tabular-nums;
+  color: var(--app-text-primary) !important;
 }
 
 /* Main chart receives more visual priority */
@@ -170,12 +171,12 @@
 }
 
 .scope :global(.app-content-section thead) {
-  background: #fbfbfc !important;
+  background: var(--app-surface-subtle) !important;
 }
 
 .scope :global(.app-content-section thead th) {
   height: 42px;
-  color: #737378 !important;
+  color: var(--app-text-tertiary) !important;
   font-size: 11px !important;
   font-weight: 600 !important;
   letter-spacing: 0.045em;
@@ -193,13 +194,14 @@
 }
 
 .scope :global(.app-content-section tbody tr:hover) {
-  background: #f2faf5 !important;
+  background: var(--app-surface-hover) !important;
 }
 
 .scope :global(.app-content-section input),
 .scope :global(.app-content-section select) {
-  background: #ffffff !important;
-  border-color: #dedee3 !important;
+  background: var(--app-surface) !important;
+  border-color: var(--app-border) !important;
+  color: var(--app-text-primary) !important;
   border-radius: 10px !important;
 }
 

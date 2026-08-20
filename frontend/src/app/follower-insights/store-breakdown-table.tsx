@@ -478,7 +478,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => goToPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
-                className="h-8 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.next}
               </button>
