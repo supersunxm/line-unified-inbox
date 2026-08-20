@@ -48,6 +48,27 @@ export function AppShell({
             padding-bottom: calc(4.35rem + env(safe-area-inset-bottom));
           }
 
+          /* Chats has its own mobile navigation/header. Do not reserve the
+             global mobile-nav space while a conversation is open. */
+          .app-shell[data-mobile-chat-view="chat"] .app-mobile-scroll,
+          .app-shell[data-mobile-chat-view="info"] .app-mobile-scroll {
+            padding-bottom: 0 !important;
+            overflow-y: hidden !important;
+          }
+
+          /* On the chats list the conversation pane already provides the
+             page heading and filters. Removing the global header prevents
+             it from overlapping the list after returning from a chat. */
+          .app-shell[data-mobile-chat-view] .app-header {
+            display: none !important;
+          }
+
+          /* The bottom nav is fixed and the scroll area itself owns the
+             required inset. Avoid shrinking the app shell a second time. */
+          .app-shell.app-shell[data-mobile-chat-view="list"] {
+            padding-bottom: 0 !important;
+          }
+
           .app-header {
             width: 100%;
             max-width: 100vw;
