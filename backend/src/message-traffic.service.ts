@@ -36,6 +36,18 @@ function getBangkokMidnightUtc(date: Date = new Date()) {
   ));
 }
 
+function parseBangkokDateStart(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, -7, 0, 0, 0));
+}
+
+function parseBangkokDateEnd(value: string) {
+  const start = parseBangkokDateStart(value);
+  start.setUTCDate(start.getUTCDate() + 1);
+  start.setTime(start.getTime() - 1);
+  return start;
+}
+
 function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -51,9 +63,14 @@ export class MessageTrafficService {
     return start;
   }
 
-  async getTraffic(period: MessageTrafficPeriod = "30d", allowedStoreIds?: string[]) {
-    const rangeStart = this.getPeriodStartDate(period);
-    const rangeEnd = new Date();
+  async getTraffic(
+    period: MessageTrafficPeriod = "30d",
+    allowedStoreIds?: string[],
+    customRange?: { from: string; to: string },
+  ) {
+    const rangeStart = customRange ? parseBangkokDateStart(customRange.from) : this.getPeriodStartDate(period);
+    const rangeEnd = customRange ? parseBangkokDateEnd(customRange.to) : new Date();
+    const rangeType = customRange ? "custom" : period;
 
     const storeWhere = allowedStoreIds === undefined
       ? { isActive: true, archivedAt: null }
@@ -75,7 +92,8 @@ export class MessageTrafficService {
 
     if (activeStoreIds.length === 0) {
       return {
-        period,
+        period: rangeType,
+        customRange: customRange ?? null,
         timezone: "Asia/Bangkok",
         rangeStart: rangeStart.toISOString(),
         rangeEnd: rangeEnd.toISOString(),
@@ -176,7 +194,8 @@ export class MessageTrafficService {
     const totalConversations = allConversationIds.size;
 
     return {
-      period,
+      period: rangeType,
+      customRange: customRange ?? null,
       timezone: "Asia/Bangkok",
       rangeStart: rangeStart.toISOString(),
       rangeEnd: rangeEnd.toISOString(),
