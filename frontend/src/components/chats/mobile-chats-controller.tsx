@@ -9,20 +9,52 @@ function isMobileViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
 }
 
+function getShell() {
+  return document.querySelector<HTMLElement>(".app-shell");
+}
+
+function getDetailPane() {
+  return document.querySelector<HTMLElement>('[data-chat-pane="detail"]');
+}
+
+function hasChatPanes() {
+  return Boolean(
+    document.querySelector('[data-chat-pane="conversations"]') &&
+    document.querySelector('[data-chat-pane="detail"]'),
+  );
+}
+
 export function MobileChatsController() {
   const [view, setView] = useState<MobileChatView>("list");
   const [detailPane, setDetailPane] = useState<HTMLElement | null>(null);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
 
   useEffect(() => {
     if (!isMobileViewport()) return;
 
-    const shell = document.querySelector<HTMLElement>(".app-shell");
-    const detail = document.querySelector<HTMLElement>('[data-chat-pane="detail"]');
-    setDetailPane(detail);
-
     const params = new URLSearchParams(window.location.search);
     const hasDeepLinkedConversation = Boolean(params.get("conversationId"));
     setView(hasDeepLinkedConversation ? "chat" : "list");
+
+    const connectWorkspace = () => {
+      const shell = getShell();
+      const detail = getDetailPane();
+      const ready = Boolean(shell && detail && hasChatPanes());
+
+      setWorkspaceReady(ready);
+      if (detail) setDetailPane(detail);
+      if (ready && shell) {
+        shell.setAttribute("data-mobile-chat-view", hasDeepLinkedConversation ? "chat" : "list");
+      }
+      return ready;
+    };
+
+    connectWorkspace();
+
+    const observer = new MutationObserver(() => {
+      connectWorkspace();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     const openConversation = (event: Event) => {
       if (!isMobileViewport()) return;
@@ -38,29 +70,38 @@ export function MobileChatsController() {
     const media = window.matchMedia("(max-width: 767px)");
     const handleViewport = () => {
       if (!media.matches) {
-        shell?.removeAttribute("data-mobile-chat-view");
+        getShell()?.removeAttribute("data-mobile-chat-view");
+      } else {
+        connectWorkspace();
       }
     };
     media.addEventListener("change", handleViewport);
 
     return () => {
+      observer.disconnect();
       document.removeEventListener("click", openConversation, true);
       document.removeEventListener("keydown", openConversation, true);
       media.removeEventListener("change", handleViewport);
-      shell?.removeAttribute("data-mobile-chat-view");
+      getShell()?.removeAttribute("data-mobile-chat-view");
     };
   }, []);
 
   useEffect(() => {
-    if (!isMobileViewport()) return;
-    const shell = document.querySelector<HTMLElement>(".app-shell");
+    if (!isMobileViewport() || !workspaceReady) return;
+    const shell = getShell();
     shell?.setAttribute("data-mobile-chat-view", view);
+
     if (view === "list") {
       document.querySelector<HTMLElement>('[data-chat-pane="conversations"]')?.scrollTo({ top: 0 });
+    } else if (view === "chat") {
+      window.requestAnimationFrame(() => {
+        const messageScroll = document.querySelector<HTMLElement>("[data-chat-message-scroll]");
+        if (messageScroll) messageScroll.scrollTop = messageScroll.scrollHeight;
+      });
     }
-  }, [view]);
+  }, [view, workspaceReady]);
 
-  const toolbar = detailPane && view !== "list"
+  const toolbar = detailPane && workspaceReady && view !== "list"
     ? createPortal(
         <div data-mobile-chat-toolbar className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-2 md:hidden">
           <button
@@ -97,25 +138,28 @@ export function MobileChatsController() {
     <>
       <style>{`
         @media (max-width: 767px) {
+          .app-shell[data-mobile-chat-view] {
+            padding-bottom: 0 !important;
+          }
+
           .app-shell[data-mobile-chat-view] [data-chat-pane="sidebar"],
           .app-shell[data-mobile-chat-view] [data-chat-separator] {
             display: none !important;
           }
 
-          .app-shell[data-mobile-chat-view] *:has(> [data-chat-pane="conversations"]) {
-            display: flex !important;
+          .app-shell[data-mobile-chat-view] [data-chat-pane="conversations"],
+          .app-shell[data-mobile-chat-view] [data-chat-pane="detail"] {
             min-width: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
-            grid-template-columns: 1fr !important;
+            border-right: 0 !important;
           }
 
           .app-shell[data-mobile-chat-view="list"] [data-chat-pane="conversations"] {
             display: flex !important;
             flex: 1 1 auto !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            border-right: 0 !important;
+            height: 100% !important;
+            min-height: 0 !important;
           }
           .app-shell[data-mobile-chat-view="list"] [data-chat-pane="detail"] {
             display: none !important;
@@ -129,16 +173,33 @@ export function MobileChatsController() {
           .app-shell[data-mobile-chat-view="info"] [data-chat-pane="detail"] {
             display: flex !important;
             flex: 1 1 auto !important;
-            width: 100% !important;
-            max-width: 100% !important;
+            height: 100% !important;
             min-height: 0 !important;
           }
 
-          [data-mobile-chat-toolbar] { order: -20; }
+          .app-shell[data-mobile-chat-view="chat"] nav[aria-label="Mobile primary navigation"],
+          .app-shell[data-mobile-chat-view="info"] nav[aria-label="Mobile primary navigation"] {
+            display: none !important;
+          }
+
+          .app-shell[data-mobile-chat-view="list"] nav[aria-label="Mobile primary navigation"] {
+            display: grid !important;
+          }
+          .app-shell[data-mobile-chat-view="list"] {
+            padding-bottom: calc(4.35rem + env(safe-area-inset-bottom)) !important;
+          }
+
+          [data-mobile-chat-toolbar] {
+            order: -20;
+            position: relative;
+            z-index: 4;
+          }
+
           [data-chat-detail-workspace] {
-            height: auto !important;
+            height: 100% !important;
             flex: 1 1 auto !important;
             min-height: 0 !important;
+            overflow: hidden !important;
           }
 
           [data-chat-detail-header] {
@@ -171,17 +232,15 @@ export function MobileChatsController() {
             padding: 0.75rem !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-message-scroll] > div > div > div[class*="max-w"] {
-            max-width: 82% !important;
+            max-width: 84% !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] {
-            padding: 0.625rem 0.75rem !important;
+            padding: 0.625rem 0.75rem calc(0.625rem + env(safe-area-inset-bottom)) !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] textarea {
             font-size: 16px !important;
           }
-          .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] > p:last-child {
-            display: none !important;
-          }
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] > p:last-child,
           .app-shell[data-mobile-chat-view="chat"] [data-line-oa-manager-notice] {
             display: none !important;
           }
@@ -194,6 +253,7 @@ export function MobileChatsController() {
             flex: 1 1 auto !important;
             min-height: 0 !important;
             overflow-y: auto !important;
+            padding-bottom: env(safe-area-inset-bottom);
           }
 
           [data-chat-pane="conversations"] > div:first-child {
