@@ -17,23 +17,24 @@ const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Fri
 
 function getBangkokParts(date: Date) {
   const shifted = new Date(date.getTime() + BANGKOK_OFFSET_MS);
-  return {
-    hour: shifted.getUTCHours(),
-    dayOfWeek: shifted.getUTCDay(),
-  };
+  return { hour: shifted.getUTCHours(), dayOfWeek: shifted.getUTCDay() };
 }
 
 function getBangkokMidnightUtc(date: Date = new Date()) {
   const shifted = new Date(date.getTime() + BANGKOK_OFFSET_MS);
-  return new Date(Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth(),
-    shifted.getUTCDate(),
-    -7,
-    0,
-    0,
-    0,
-  ));
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), -7, 0, 0, 0));
+}
+
+function parseBangkokDateStart(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, -7, 0, 0, 0));
+}
+
+function parseBangkokDateEnd(value: string) {
+  const start = parseBangkokDateStart(value);
+  start.setUTCDate(start.getUTCDate() + 1);
+  start.setTime(start.getTime() - 1);
+  return start;
 }
 
 function round2(value: number) {
@@ -51,9 +52,10 @@ export class MessageTrafficService {
     return start;
   }
 
-  async getTraffic(period: MessageTrafficPeriod = "30d", allowedStoreIds?: string[]) {
-    const rangeStart = this.getPeriodStartDate(period);
-    const rangeEnd = new Date();
+  async getTraffic(period: MessageTrafficPeriod = "30d", allowedStoreIds?: string[], customRange?: { from: string; to: string }) {
+    const rangeStart = customRange ? parseBangkokDateStart(customRange.from) : this.getPeriodStartDate(period);
+    const rangeEnd = customRange ? parseBangkokDateEnd(customRange.to) : new Date();
+    const rangeType = customRange ? "custom" : period;
 
     const storeWhere = allowedStoreIds === undefined
       ? { isActive: true, archivedAt: null }
@@ -61,11 +63,7 @@ export class MessageTrafficService {
 
     const stores = await this.prisma.store.findMany({
       where: storeWhere,
-      select: {
-        id: true,
-        name: true,
-        storeMaster: { select: { externalStoreId: true } },
-      },
+      select: { id: true, name: true, storeMaster: { select: { externalStoreId: true } } },
       orderBy: { name: "asc" },
     });
 
@@ -75,7 +73,8 @@ export class MessageTrafficService {
 
     if (activeStoreIds.length === 0) {
       return {
-        period,
+        period: rangeType,
+        customRange: customRange ?? null,
         timezone: "Asia/Bangkok",
         rangeStart: rangeStart.toISOString(),
         rangeEnd: rangeEnd.toISOString(),
@@ -96,11 +95,7 @@ export class MessageTrafficService {
         sentAt: { gte: rangeStart, lte: rangeEnd },
         conversation: { storeId: { in: activeStoreIds } },
       },
-      select: {
-        conversationId: true,
-        sentAt: true,
-        conversation: { select: { storeId: true } },
-      },
+      select: { conversationId: true, sentAt: true, conversation: { select: { storeId: true } } },
       orderBy: { sentAt: "asc" },
     });
 
@@ -117,13 +112,11 @@ export class MessageTrafficService {
     }
 
     const allConversationIds = new Set<string>();
-
     for (const message of messages) {
       const { hour, dayOfWeek } = getBangkokParts(message.sentAt);
       hourlyDistribution[hour].count++;
       dayOfWeekDistribution[dayOfWeek].count++;
       allConversationIds.add(message.conversationId);
-
       const agg = storeMap.get(message.conversation.storeId);
       if (!agg) continue;
       agg.inboundMessages++;
@@ -133,18 +126,14 @@ export class MessageTrafficService {
 
     let overallPeakHour = 0;
     for (let hour = 1; hour < 24; hour++) {
-      if (hourlyDistribution[hour].count > hourlyDistribution[overallPeakHour].count) {
-        overallPeakHour = hour;
-      }
+      if (hourlyDistribution[hour].count > hourlyDistribution[overallPeakHour].count) overallPeakHour = hour;
     }
 
     const rankedStores = [...storeMap.values()]
       .filter((store) => store.inboundMessages > 0)
       .map((store) => {
         let peakHour = 0;
-        for (let hour = 1; hour < 24; hour++) {
-          if (store.hourly[hour] > store.hourly[peakHour]) peakHour = hour;
-        }
+        for (let hour = 1; hour < 24; hour++) if (store.hourly[hour] > store.hourly[peakHour]) peakHour = hour;
         const distinctConversations = store.conversationIds.size;
         return {
           storeId: store.storeId,
@@ -152,9 +141,7 @@ export class MessageTrafficService {
           externalStoreId: store.externalStoreId,
           inboundMessages: store.inboundMessages,
           distinctConversations,
-          messagesPerConversation: distinctConversations > 0
-            ? round2(store.inboundMessages / distinctConversations)
-            : 0,
+          messagesPerConversation: distinctConversations > 0 ? round2(store.inboundMessages / distinctConversations) : 0,
           peakHour: {
             hour: peakHour,
             count: store.hourly[peakHour],
@@ -174,17 +161,15 @@ export class MessageTrafficService {
 
     const totalInboundMessages = messages.length;
     const totalConversations = allConversationIds.size;
-
     return {
-      period,
+      period: rangeType,
+      customRange: customRange ?? null,
       timezone: "Asia/Bangkok",
       rangeStart: rangeStart.toISOString(),
       rangeEnd: rangeEnd.toISOString(),
       totalInboundMessages,
       totalConversations,
-      messagesPerConversation: totalConversations > 0
-        ? round2(totalInboundMessages / totalConversations)
-        : 0,
+      messagesPerConversation: totalConversations > 0 ? round2(totalInboundMessages / totalConversations) : 0,
       overallPeakHour: {
         hour: overallPeakHour,
         count: hourlyDistribution[overallPeakHour].count,
