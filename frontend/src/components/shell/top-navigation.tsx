@@ -73,9 +73,9 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className={`${focusRing} flex h-8 items-center gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5 text-xs shadow-xs transition-colors hover:bg-[var(--app-surface-hover)]`}
+        className={`${focusRing} flex h-9 items-center gap-1.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-0.5 text-xs shadow-xs transition-colors hover:bg-[var(--app-surface-hover)] md:h-8`}
       >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white shadow-xs" aria-hidden="true">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white shadow-xs md:h-5 md:w-5" aria-hidden="true">
           {authUser.displayName.charAt(0).toUpperCase()}
         </span>
         <span className="hidden max-w-28 truncate font-medium text-[var(--app-text-primary)] 2xl:inline">{authUser.displayName}</span>
@@ -83,7 +83,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
       </button>
 
       {isOpen && (
-        <div role="dialog" aria-label="Profile settings" className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-[var(--app-shadow-elevated)] backdrop-blur-md">
+        <div role="dialog" aria-label="Profile settings" className="app-surface fixed inset-x-3 top-[4.2rem] z-[70] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-[var(--app-shadow-elevated)] backdrop-blur-md md:absolute md:inset-x-auto md:right-0 md:top-[calc(100%+0.5rem)] md:w-72">
           <div className="border-b border-[var(--app-border-subtle)] px-2 pb-3">
             <p className="truncate text-sm font-semibold text-[var(--app-text-primary)]">{authUser.displayName}</p>
             <div className="mt-1 flex items-center gap-2 text-xs">
@@ -101,7 +101,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
                 value={language}
                 onChange={(event) => changeLanguage(event.target.value as Language)}
                 aria-label={text.language || "Language"}
-                className={`${focusRing} app-input h-8 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)]`}
+                className={`${focusRing} app-input h-10 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)] md:h-8`}
               >
                 <option value="th">🇹🇭 ไทย</option>
                 <option value="en">🇬🇧 English</option>
@@ -117,7 +117,7 @@ function ProfileMenu({ authUser, changeLanguage, language, logout, pilotMode, te
           <button
             type="button"
             onClick={() => void logout()}
-            className={`${focusRing} w-full rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 px-3 py-1.5 text-left text-xs font-medium text-[var(--app-danger)] transition-colors hover:bg-[var(--app-danger-soft)]`}
+            className={`${focusRing} w-full rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 px-3 py-2.5 text-left text-xs font-medium text-[var(--app-danger)] transition-colors hover:bg-[var(--app-danger-soft)] md:py-1.5`}
           >
             Logout
           </button>
@@ -168,13 +168,13 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
         title={label}
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className={`${focusRing} app-button-secondary flex h-8 w-8 items-center justify-center rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] lg:hidden text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}
+        className={`${focusRing} app-button-secondary flex h-9 w-9 items-center justify-center rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] text-sm text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] lg:hidden md:h-8 md:w-8 md:text-xs`}
       >
         <span aria-hidden="true">⌕</span>
       </button>
 
       {isOpen && (
-        <div className="app-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(20rem,calc(100vw-2rem))] rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-[var(--app-shadow-elevated)] backdrop-blur-md lg:hidden">
+        <div className="app-surface fixed inset-x-3 top-[4.2rem] z-[70] rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-[var(--app-shadow-elevated)] backdrop-blur-md lg:absolute lg:inset-x-auto lg:right-0 lg:top-[calc(100%+0.5rem)] lg:w-[min(20rem,calc(100vw-2rem))]">
           <label>
             <span className="sr-only">{label}</span>
             <input
@@ -183,7 +183,7 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
               placeholder={label}
-              className={`${focusRing} app-input h-9 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 text-xs text-[var(--app-text-primary)]`}
+              className={`${focusRing} app-input h-11 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 text-sm text-[var(--app-text-primary)] lg:h-9 lg:text-xs`}
             />
           </label>
         </div>
@@ -212,7 +212,7 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
     };
   }, [isOpen]);
 
-  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages"].includes(currentSection);
+  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "classification-insights", "friend-source-links", "mass-messages"].includes(currentSection);
   return (
     <div ref={menuRef} className="relative">
       <button type="button" aria-haspopup="menu" aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className={`${navLinkClass} ${secondaryActive ? "app-nav-active" : ""}`}>
@@ -232,6 +232,77 @@ function SecondaryNavigation({ authUser, currentSection, language }: Pick<TopNav
   );
 }
 
+function MobileNavIcon({ type }: { type: "dashboard" | "chat" | "insights" | "more" }) {
+  if (type === "dashboard") return <span aria-hidden="true" className="text-[18px] leading-none">▦</span>;
+  if (type === "chat") return <span aria-hidden="true" className="text-[18px] leading-none">◫</span>;
+  if (type === "insights") return <span aria-hidden="true" className="text-[18px] leading-none">↗</span>;
+  return <span aria-hidden="true" className="text-[20px] leading-none">•••</span>;
+}
+
+function MobileBottomNavigation({ authUser, currentSection, language }: Pick<TopNavigationProps, "authUser" | "currentSection" | "language">) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "classification-insights", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [moreOpen]);
+
+  const labels = language === "th"
+    ? { dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ข้อมูลผู้ติดตาม", more: "เพิ่มเติม", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", classification: "ข้อมูลการจำแนก", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", tiktok: "TikTok" }
+    : language === "zh"
+      ? { dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", more: "更多", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", classification: "分类洞察", friendLinks: "加好友链接", mass: "群发消息", tiktok: "TikTok" }
+      : { dashboard: "Dashboard", chats: "Chats", insights: "Followers", more: "More", traffic: "Message Traffic", coupons: "Coupons", stores: "Stores", purchase: "Purchase", classification: "Classification", friendLinks: "Friend Links", mass: "Mass Message", tiktok: "TikTok" };
+
+  const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
+  const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
+
+  return (
+    <>
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[1px] md:hidden" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+      )}
+      {moreOpen && (
+        <div ref={moreRef} role="dialog" aria-modal="true" aria-label={labels.more} className="fixed inset-x-0 bottom-0 z-50 max-h-[76dvh] overflow-y-auto rounded-t-[24px] border-t border-[var(--app-border)] bg-[var(--app-surface)] px-3 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-14px_40px_rgba(0,0,0,0.16)] md:hidden">
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--app-border-strong)]" />
+          <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.more}</div>
+          <div className="grid grid-cols-1 gap-1">
+            <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span aria-hidden="true">›</span></Link>
+            {authUser?.role === "ADMIN" && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span aria-hidden="true">›</span></Link>}
+            <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span aria-hidden="true">›</span></Link>
+            <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span aria-hidden="true">›</span></Link>
+            <Link href="/classification-insights" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.classification}</span><span aria-hidden="true">›</span></Link>
+            {authUser?.role === "ADMIN" && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span aria-hidden="true">›</span></Link>}
+            {authUser?.role === "ADMIN" && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span aria-hidden="true">›</span></Link>}
+            {authUser?.role === "ADMIN" && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>BM Approval</span><span aria-hidden="true">›</span></Link>}
+            <a href="https://lineoppo.click/tiktok" target="_blank" rel="noreferrer noopener" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.tiktok}</span><span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      )}
+
+      <nav aria-label="Mobile primary navigation" className="fixed inset-x-0 bottom-0 z-[60] grid grid-cols-4 border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
+        <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={itemClass(currentSection === "dashboard")}>
+          <MobileNavIcon type="dashboard" /><span>{labels.dashboard}</span>
+        </Link>
+        <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={itemClass(currentSection === "chats")}>
+          <MobileNavIcon type="chat" /><span>{labels.chats}</span>
+        </Link>
+        <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={itemClass(currentSection === "follower-insights")}>
+          <MobileNavIcon type="insights" /><span>{labels.insights}</span>
+        </Link>
+        <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)} className={itemClass(moreOpen || secondaryActive)}>
+          <MobileNavIcon type="more" /><span>{labels.more}</span>
+        </button>
+      </nav>
+    </>
+  );
+}
+
 export function TopNavigation(props: TopNavigationProps) {
   const { authUser, changeLanguage, currentSection, language, lastUpdatedAt, logout, pilotMode, searchText, setSearchText, text } = props;
   const updatedLabel = lastUpdatedAt
@@ -239,38 +310,51 @@ export function TopNavigation(props: TopNavigationProps) {
     : (text.lastUpdated || "Last updated");
 
   return (
-    <header className="app-header app-surface sticky top-0 z-30 flex min-h-14 h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 sm:px-5">
-      <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-4 2xl:gap-5">
-        <Link href="/dashboard" className={`${focusRing} flex items-center gap-2 min-w-max shrink-0 rounded-[var(--app-radius-md)] p-0.5 group`}>
-          <span className="flex h-6 w-6 items-center justify-center rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] font-bold text-[11px] text-white shadow-2xs">O</span>
-          <div>
-            <h1 className="text-base font-bold tracking-tight xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
-            <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
-          </div>
-        </Link>
+    <>
+      <style>{`
+        @media (max-width: 767px) {
+          .app-shell { padding-bottom: calc(4.35rem + env(safe-area-inset-bottom)); }
+          .app-header { min-height: 3.75rem !important; height: 3.75rem !important; flex-wrap: nowrap !important; padding: 0.55rem 0.75rem !important; gap: 0.5rem !important; }
+          .app-header .app-primary-nav { display: none !important; }
+          .app-header > div:first-child { width: auto !important; flex: 1 1 auto !important; }
+          .app-header-controls { flex: 0 0 auto !important; }
+        }
+      `}</style>
 
-        <nav aria-label="Primary navigation" className="app-primary-nav flex min-w-0 items-center gap-0.5">
-          <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={navLinkClass}>{text.dashboard || "Dashboard"}</Link>
-          <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
-          <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
-          {authUser?.role === "ADMIN" && <Link href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
-          <a href="https://lineoppo.click/tiktok" target="_blank" rel="noreferrer noopener" className={navLinkClass} aria-label="Open TikTok in a new tab">TikTok <span aria-hidden="true">↗</span></a>
-          <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
-        </nav>
-      </div>
+      <header className="app-header app-surface sticky top-0 z-30 flex min-h-14 h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 sm:px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-4 2xl:gap-5">
+          <Link href="/dashboard" className={`${focusRing} flex min-w-0 shrink items-center gap-2 rounded-[var(--app-radius-md)] p-0.5 group md:min-w-max md:shrink-0`}>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] font-bold text-[11px] text-white shadow-2xs md:h-6 md:w-6">O</span>
+            <div className="min-w-0">
+              <h1 className="truncate text-[15px] font-bold tracking-tight md:text-base xl:text-lg">{text.appName || "OPPO LINE OA Monitor"}</h1>
+              <p className="app-muted hidden text-xs 2xl:block">{text.appDescription || "LINE OA monitoring"}</p>
+            </div>
+          </Link>
 
-      <div className="app-header-controls flex shrink-0 items-center justify-end gap-2 ml-auto">
-        <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
-        {lastUpdatedAt && (
-          <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-8 items-center gap-1.5 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-[11px] font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)] animate-pulse" />
-            <span className="hidden xl:inline">Live</span>
-            <span className="sr-only">{updatedLabel}</span>
-          </button>
-        )}
-        <ProfileMenu authUser={authUser} changeLanguage={changeLanguage} language={language} logout={logout} pilotMode={pilotMode} text={text} />
-      </div>
-    </header>
+          <nav aria-label="Primary navigation" className="app-primary-nav hidden min-w-0 items-center gap-0.5 md:flex">
+            <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={navLinkClass}>{text.dashboard || "Dashboard"}</Link>
+            <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "แชทร้านค้า" : language === "zh" ? "门店聊天" : "Store Chats"}</Link>
+            <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "ข้อมูลผู้ติดตาม" : language === "zh" ? "关注者洞察" : "Follower Insights"}</Link>
+            {authUser?.role === "ADMIN" && <Link href="/coupons" aria-current={currentSection === "coupons" ? "page" : undefined} className={navLinkClass}>{language === "th" ? "คูปอง" : language === "zh" ? "优惠券" : "Coupons"}</Link>}
+            <a href="https://lineoppo.click/tiktok" target="_blank" rel="noreferrer noopener" className={navLinkClass} aria-label="Open TikTok in a new tab">TikTok <span aria-hidden="true">↗</span></a>
+            <SecondaryNavigation authUser={authUser} currentSection={currentSection} language={language} />
+          </nav>
+        </div>
+
+        <div className="app-header-controls flex shrink-0 items-center justify-end gap-1.5 ml-auto md:gap-2">
+          <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
+          {lastUpdatedAt && (
+            <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} app-button-secondary flex h-9 w-9 items-center justify-center rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] text-[11px] font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] md:h-8 md:w-auto md:gap-1.5 md:px-2`}>
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--app-success)] animate-pulse md:h-1.5 md:w-1.5" />
+              <span className="hidden xl:inline">Live</span>
+              <span className="sr-only">{updatedLabel}</span>
+            </button>
+          )}
+          <ProfileMenu authUser={authUser} changeLanguage={changeLanguage} language={language} logout={logout} pilotMode={pilotMode} text={text} />
+        </div>
+      </header>
+
+      <MobileBottomNavigation authUser={authUser} currentSection={currentSection} language={language} />
+    </>
   );
 }
-
