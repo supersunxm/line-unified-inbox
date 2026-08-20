@@ -3,6 +3,28 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContainer, PageHeader } from "@/components/shell";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  ErrorState,
+  Input,
+  LoadingSpinner,
+  LoadingState,
+  MetricCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { api } from "@/lib/api";
 
@@ -222,25 +244,29 @@ export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }
   };
 
   if (!authChecked) {
-    return <main className="app-shell flex min-h-screen items-center justify-center app-muted">Loading…</main>;
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-[var(--app-text-secondary)]">
+        <LoadingState message="Loading…" />
+      </main>
+    );
   }
   if (!authUser) {
     return (
-      <main className="app-shell flex min-h-screen items-center justify-center p-6">
-        <div className="app-surface rounded-xl border p-6 text-center">
-          <h1 className="text-xl font-bold">Authentication required</h1>
-          <p className="app-muted mt-2">Please sign in to open this campaign draft.</p>
-        </div>
+      <main className="flex min-h-screen items-center justify-center p-6 bg-[var(--app-bg)]">
+        <Card className="max-w-md p-6 text-center">
+          <h1 className="text-xl font-bold text-[var(--app-text-primary)]">Authentication required</h1>
+          <p className="text-xs text-[var(--app-text-secondary)] mt-2">Please sign in to open this campaign draft.</p>
+        </Card>
       </main>
     );
   }
   if (authUser.role !== "ADMIN") {
     return (
-      <main className="app-shell flex min-h-screen items-center justify-center p-6">
-        <div className="app-surface rounded-xl border p-6 text-center">
-          <h1 className="text-xl font-bold">ADMIN access required</h1>
-          <p className="app-muted mt-2">Purchase Intelligence broadcast drafts are ADMIN-only.</p>
-        </div>
+      <main className="flex min-h-screen items-center justify-center p-6 bg-[var(--app-bg)]">
+        <Card className="max-w-md p-6 text-center">
+          <h1 className="text-xl font-bold text-[var(--app-text-primary)]">ADMIN access required</h1>
+          <p className="text-xs text-[var(--app-text-secondary)] mt-2">Purchase Intelligence broadcast drafts are ADMIN-only.</p>
+        </Card>
       </main>
     );
   }
@@ -263,163 +289,275 @@ export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }
       setSearchText={() => undefined}
       logout={logout}
     >
-      <main className="app-shell min-h-screen p-5 lg:p-8">
+      <PageContainer>
         <div className="mx-auto max-w-7xl">
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
+          <PageHeader
+            tag="Mass Message · Purchase Intelligence"
+            title="Campaign Composer"
+            description="Compose content for the exact saved customer audience. Saving never sends to LINE."
+            actionSlot={
               <div className="flex flex-wrap items-center gap-2">
-                <p className="app-muted text-sm font-semibold">Mass Message · Purchase Intelligence</p>
-                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                <Badge size="md" variant="warning" dot>
                   DRAFT ONLY
-                </span>
+                </Badge>
+                <Link href="/admin/purchase-analytics">
+                  <Button variant="secondary" size="sm">
+                    Purchase Intelligence
+                  </Button>
+                </Link>
+                <Link href="/mass-messages">
+                  <Button variant="secondary" size="sm">
+                    Mass Message
+                  </Button>
+                </Link>
               </div>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight">Campaign Composer</h1>
-              <p className="app-muted mt-2">Compose content for the exact saved customer audience. Saving never sends to LINE.</p>
-            </div>
-            <div className="flex gap-2">
-              <Link href="/admin/purchase-analytics" className="app-button-secondary rounded-lg border px-3 py-2 text-sm font-semibold">
-                Purchase Intelligence
-              </Link>
-              <Link href="/mass-messages" className="app-button-secondary rounded-lg border px-3 py-2 text-sm font-semibold">
-                Mass Message
-              </Link>
-            </div>
-          </div>
+            }
+          />
 
           {loadError && (
-            <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            <div role="alert" className="mb-5 rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-4 text-sm text-[var(--app-danger)]">
               {loadError}
-              <button type="button" className="ml-3 font-semibold underline" onClick={() => void loadDraft()}>Retry</button>
+              <button type="button" className="ml-3 font-semibold underline" onClick={() => void loadDraft()}>
+                Retry
+              </button>
             </div>
           )}
 
           {loading ? (
-            <div className="app-surface rounded-xl border p-10 text-center app-muted">Loading campaign draft…</div>
+            <LoadingState message="Loading campaign draft…" />
           ) : draft ? (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
               <div className="space-y-5 xl:col-span-7">
-                <section className="app-surface rounded-xl border p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-bold">Campaign content</h2>
-                      <p className="app-muted mt-1 text-xs">Up to one text message and one image. Both remain draft content.</p>
-                    </div>
-                    <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold dark:bg-slate-800">{messages.length}/2</span>
-                  </div>
-
-                  <label className="mt-5 block text-sm font-medium">
-                    <span className="mb-1.5 block app-muted">Campaign title</span>
-                    <input
-                      value={title}
-                      maxLength={120}
-                      onChange={(event) => { setTitle(event.target.value); setSavedAt(null); }}
-                      className="app-input h-10 w-full rounded-lg border px-3"
-                      placeholder="e.g. Reno upgrade campaign"
-                    />
-                  </label>
-
-                  <label className="mt-4 block text-sm font-medium">
-                    <span className="mb-1.5 flex items-center justify-between app-muted">
-                      <span>Message</span><span>{messageText.length}/5000</span>
-                    </span>
-                    <textarea
-                      value={messageText}
-                      maxLength={5000}
-                      rows={8}
-                      onChange={(event) => { setMessageText(event.target.value); setSavedAt(null); }}
-                      className="app-input w-full resize-y rounded-lg border p-3 leading-6"
-                      placeholder="Write the message customers will eventually receive…"
-                    />
-                  </label>
-
-                  <div className="mt-4 rounded-xl border p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3 w-full">
                       <div>
-                        <p className="text-sm font-semibold">Image</p>
-                        <p className="app-muted mt-1 text-xs">JPEG/PNG, maximum 10 MB. Uses the existing protected Mass Message upload path.</p>
+                        <CardTitle>Campaign content</CardTitle>
+                        <CardDescription>Up to one text message and one image. Both remain draft content.</CardDescription>
                       </div>
-                      <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={(event) => void uploadImage(event)} />
-                      <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="app-button-secondary rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-60">
-                        {uploading ? "Uploading…" : attachedImage ? "Replace image" : "Attach image"}
-                      </button>
+                      <Badge size="sm" variant="neutral">
+                        {messages.length}/2
+                      </Badge>
                     </div>
-                    {attachedImage && (
-                      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-950">
-                        <span className="min-w-0 truncate font-medium">✓ {attachedImage.label}</span>
-                        <button type="button" onClick={() => { setAttachedImage(null); setSavedAt(null); }} className="text-xs font-semibold text-red-600 dark:text-red-400">Remove</button>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4">
+                    <label className="block text-sm font-medium">
+                      <span className="mb-1.5 block text-xs text-[var(--app-text-secondary)]">Campaign title</span>
+                      <Input
+                        value={title}
+                        maxLength={120}
+                        onChange={(event) => {
+                          setTitle(event.target.value);
+                          setSavedAt(null);
+                        }}
+                        className="h-10 w-full"
+                        placeholder="e.g. Reno upgrade campaign"
+                      />
+                    </label>
+
+                    <label className="block text-sm font-medium">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-[var(--app-text-secondary)]">
+                        <span>Message</span>
+                        <span className="font-mono">{messageText.length}/5000</span>
+                      </span>
+                      <textarea
+                        value={messageText}
+                        maxLength={5000}
+                        rows={8}
+                        onChange={(event) => {
+                          setMessageText(event.target.value);
+                          setSavedAt(null);
+                        }}
+                        className="w-full resize-y rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-xs leading-6 text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                        placeholder="Write the message customers will eventually receive…"
+                      />
+                    </label>
+
+                    <div className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] p-4 bg-[var(--app-surface-subtle)]">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--app-text-primary)]">Image</p>
+                          <p className="mt-1 text-xs text-[var(--app-text-secondary)]">JPEG/PNG, maximum 10 MB. Uses the existing protected Mass Message upload path.</p>
+                        </div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png"
+                          className="hidden"
+                          onChange={(event) => void uploadImage(event)}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={uploading}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {uploading ? "Uploading…" : attachedImage ? "Replace image" : "Attach image"}
+                        </Button>
+                      </div>
+                      {attachedImage && (
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--app-radius-md)] bg-[var(--app-surface)] border border-[var(--app-border)] p-3 text-sm">
+                          <span className="min-w-0 truncate font-medium text-[var(--app-text-primary)]">✓ {attachedImage.label}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAttachedImage(null);
+                              setSavedAt(null);
+                            }}
+                            className="text-xs font-semibold text-[var(--app-danger)] hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                      {uploadError && (
+                        <p role="alert" className="mt-2 text-xs font-medium text-[var(--app-danger)]">
+                          {uploadError}
+                        </p>
+                      )}
+                    </div>
+
+                    {saveError && (
+                      <div role="alert" className="rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">
+                        {saveError}
                       </div>
                     )}
-                    {uploadError && <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{uploadError}</p>}
-                  </div>
+                    {savedAt && (
+                      <div className="rounded-[var(--app-radius-md)] border border-[var(--app-success)]/40 bg-[var(--app-success-soft)] p-3 text-sm text-[var(--app-success)]">
+                        Draft saved · {new Date(savedAt).toLocaleString()}
+                      </div>
+                    )}
 
-                  {saveError && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{saveError}</div>}
-                  {savedAt && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">Draft saved · {new Date(savedAt).toLocaleString()}</div>}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--app-border-subtle)] pt-4">
+                      <p className="max-w-xl text-xs font-medium text-[var(--app-warning)]">
+                        Save Draft only updates content. It creates no delivery rows, starts no processor, and consumes no LINE quota.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="md"
+                        onClick={() => void saveDraft()}
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save Draft"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 dark:border-slate-800">
-                    <p className="max-w-xl text-xs font-medium text-amber-700 dark:text-amber-400">Save Draft only updates content. It creates no delivery rows, starts no processor, and consumes no LINE quota.</p>
-                    <button type="button" onClick={() => void saveDraft()} disabled={saving} className="app-button-primary rounded-lg px-4 py-2 text-sm font-bold disabled:opacity-60">
-                      {saving ? "Saving…" : "Save Draft"}
-                    </button>
-                  </div>
-                </section>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3 w-full">
+                      <CardTitle>Audience snapshot</CardTitle>
+                      <Badge size="sm" variant="success">
+                        Locked
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Recipients come from the saved Purchase Intelligence snapshot and cannot be expanded from this composer.
+                    </CardDescription>
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      <MetricCard label="Customers" value={draft.audience.recipientCount.toLocaleString()} />
+                      <MetricCard label="Stores" value={draft.audience.storeCount.toLocaleString()} />
+                      <MetricCard label="LINE OAs" value={draft.audience.lineOaCount.toLocaleString()} />
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                      {draft.audience.statuses.map((status) => (
+                        <Badge key={status} size="sm" variant="neutral">
+                          {status}
+                        </Badge>
+                      ))}
+                      {(draft.audience.filters.from || draft.audience.filters.to) && (
+                        <Badge size="sm" variant="neutral">
+                          {draft.audience.filters.from || "…"} → {draft.audience.filters.to || "…"}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <section className="app-surface rounded-xl border p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-base font-bold">Audience snapshot</h2>
-                    <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">Locked</span>
-                  </div>
-                  <p className="app-muted mt-1 text-xs">Recipients come from the saved Purchase Intelligence snapshot and cannot be expanded from this composer.</p>
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div className="rounded-lg border p-3"><p className="app-muted text-xs">Customers</p><p className="mt-1 text-xl font-bold">{draft.audience.recipientCount.toLocaleString()}</p></div>
-                    <div className="rounded-lg border p-3"><p className="app-muted text-xs">Stores</p><p className="mt-1 text-xl font-bold">{draft.audience.storeCount.toLocaleString()}</p></div>
-                    <div className="rounded-lg border p-3"><p className="app-muted text-xs">LINE OAs</p><p className="mt-1 text-xl font-bold">{draft.audience.lineOaCount.toLocaleString()}</p></div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    {draft.audience.statuses.map((status) => <span key={status} className="rounded-full bg-slate-100 px-2 py-1 font-semibold dark:bg-slate-800">{status}</span>)}
-                    {(draft.audience.filters.from || draft.audience.filters.to) && <span className="rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">{draft.audience.filters.from || "…"} → {draft.audience.filters.to || "…"}</span>}
-                  </div>
-                </section>
-
-                <section className="app-surface rounded-xl border p-5 shadow-sm">
-                  <h2 className="text-base font-bold">Store / LINE OA breakdown</h2>
-                  <div className="mt-4 overflow-x-auto rounded-lg border dark:border-slate-800">
-                    <table className="w-full min-w-[620px] text-left text-sm">
-                      <thead className="bg-slate-50 text-xs app-muted dark:bg-slate-950"><tr><th className="p-3">Store</th><th className="p-3">LINE OA</th><th className="p-3 text-right">Recipients</th></tr></thead>
-                      <tbody className="divide-y dark:divide-slate-800">
-                        {draft.audience.stores.map((store) => (
-                          <tr key={`${store.storeId}:${store.lineOfficialAccountId}`}>
-                            <td className="p-3"><p className="font-semibold">{store.externalStoreId ? `[${store.externalStoreId}] ` : ""}{store.storeName}</p>{store.storeCode && <p className="app-muted mt-0.5 text-xs">{store.storeCode}</p>}</td>
-                            <td className="p-3">{store.lineOaName}</td>
-                            <td className="p-3 text-right font-mono font-semibold">{store.recipientCount.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Store / LINE OA breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TableContainer>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Store</TableHead>
+                            <TableHead>LINE OA</TableHead>
+                            <TableHead align="right">Recipients</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {draft.audience.stores.map((store) => (
+                            <TableRow key={`${store.storeId}:${store.lineOfficialAccountId}`}>
+                              <TableCell>
+                                <p className="font-semibold text-[var(--app-text-primary)]">
+                                  {store.externalStoreId ? `[${store.externalStoreId}] ` : ""}
+                                  {store.storeName}
+                                </p>
+                                {store.storeCode && (
+                                  <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)] font-mono">
+                                    {store.storeCode}
+                                  </p>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-[var(--app-text-secondary)]">{store.lineOaName}</TableCell>
+                              <TableCell align="right" className="font-mono font-semibold text-[var(--app-text-primary)]">
+                                {store.recipientCount.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
               </div>
 
               <aside className="space-y-5 xl:col-span-5">
-                <section className="app-surface rounded-xl border p-5 shadow-sm xl:sticky xl:top-5">
-                  <h2 className="text-base font-bold">Message preview</h2>
-                  <p className="app-muted mt-1 text-xs">Content preview only. No customer request is made from this screen.</p>
-                  <div className="mt-4 min-h-52 rounded-2xl bg-[#d9e8f5] p-4 dark:bg-slate-800">
-                    <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-3 text-sm text-slate-900 shadow-sm">
-                      {messageText.trim() ? <p className="whitespace-pre-wrap break-words">{messageText}</p> : <p className="text-slate-400">Your message preview will appear here.</p>}
-                      {attachedImage && <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-xs font-semibold text-slate-500">Image attached · {attachedImage.label}</div>}
+                <Card className="xl:sticky xl:top-5">
+                  <CardHeader>
+                    <CardTitle>Message preview</CardTitle>
+                    <CardDescription>Content preview only. No customer request is made from this screen.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rounded-[var(--app-radius-xl)] bg-[var(--app-surface-subtle)] border border-[var(--app-border)] p-4 min-h-52">
+                      <div className="max-w-[90%] rounded-[var(--app-radius-lg)] bg-[var(--app-surface)] border border-[var(--app-border)] p-3 text-xs text-[var(--app-text-primary)] shadow-[var(--app-shadow-card)]">
+                        {messageText.trim() ? (
+                          <p className="whitespace-pre-wrap break-words">{messageText}</p>
+                        ) : (
+                          <p className="text-[var(--app-text-tertiary)] italic">Your message preview will appear here.</p>
+                        )}
+                        {attachedImage && (
+                          <div className="mt-3 rounded-[var(--app-radius-md)] border border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-subtle)] p-6 text-center text-xs font-semibold text-[var(--app-text-secondary)]">
+                            Image attached · {attachedImage.label}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
-                    <p className="text-sm font-bold text-amber-900 dark:text-amber-200">Send is locked in Phase 2B</p>
-                    <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">Phase 2C will add recipient re-validation, quota checks, delivery creation, idempotency and explicit final confirmation before LINE execution.</p>
-                    <button type="button" disabled className="mt-3 w-full cursor-not-allowed rounded-lg bg-slate-300 px-4 py-2 text-sm font-bold text-slate-600 opacity-70 dark:bg-slate-700 dark:text-slate-300">Review &amp; Send — Locked</button>
-                  </div>
-                </section>
+                    <div className="mt-5 rounded-[var(--app-radius-lg)] border border-[var(--app-warning)]/40 bg-[var(--app-warning-soft)] p-4">
+                      <p className="text-sm font-bold text-[var(--app-warning)]">Send is locked in Phase 2B</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--app-warning)]">
+                        Phase 2C will add recipient re-validation, quota checks, delivery creation, idempotency and explicit final confirmation before LINE execution.
+                      </p>
+                      <button type="button" disabled className="mt-3 w-full cursor-not-allowed rounded-[var(--app-radius-md)] bg-[var(--disabled-background)] px-4 py-2 text-xs font-bold text-[var(--disabled-foreground)] opacity-70 border border-transparent">
+                        Review &amp; Send — Locked
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
               </aside>
             </div>
           ) : null}
         </div>
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }

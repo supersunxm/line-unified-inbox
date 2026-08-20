@@ -2,6 +2,29 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { PageContainer, PageHeader, FilterBar } from "@/components/shell";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  MetricCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableEmptyState,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
@@ -64,19 +87,32 @@ const dateTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeSty
 
 function Ranking({ title, items }: { title: string; items: Array<{ label: string; count: number }> }) {
   return (
-    <section className="app-surface rounded-xl border p-5 shadow-sm">
-      <h2 className="text-base font-semibold">{title}</h2>
-      {items.length === 0 ? <p className="app-muted mt-4 text-sm">No recorded purchase information.</p> : (
-        <ul className="mt-4 space-y-3">
-          {items.map((item) => (
-            <li key={`${item.label}-${item.count}`} className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate">{item.label}</span>
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold dark:bg-slate-800">{number.format(item.count)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-xs text-[var(--app-text-tertiary)] italic py-2">No recorded purchase information.</p>
+        ) : (
+          <ul className="space-y-2.5">
+            {items.map((item, index) => (
+              <li key={`${item.label}-${item.count}`} className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] w-4 shrink-0">
+                    {index + 1}.
+                  </span>
+                  <span className="truncate text-[var(--app-text-primary)] font-medium">{item.label}</span>
+                </div>
+                <Badge size="sm" variant={index === 0 ? "accent" : "neutral"} className="shrink-0 font-tabular font-semibold">
+                  {number.format(item.count)}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -290,8 +326,19 @@ export default function PurchaseAnalyticsPage() {
     window.location.replace("/");
   };
 
-  if (!authChecked) return <main className="flex min-h-screen items-center justify-center app-shell app-muted">Loading…</main>;
-  if (!authUser) return <main className="flex min-h-screen items-center justify-center app-shell p-6"><div role="alert" className="app-surface rounded-xl border p-6 text-center"><h1 className="text-xl font-bold">Authentication required</h1><p className="app-muted mt-2">Please sign in to view purchase intelligence.</p></div></main>;
+  if (!authChecked) return (
+    <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-[var(--app-text-secondary)]">
+      <LoadingState message="Loading…" />
+    </main>
+  );
+  if (!authUser) return (
+    <main className="flex min-h-screen items-center justify-center p-6 bg-[var(--app-bg)]">
+      <Card className="max-w-md p-6 text-center" role="alert">
+        <h1 className="text-xl font-bold text-[var(--app-text-primary)]">Authentication required</h1>
+        <p className="text-xs text-[var(--app-text-secondary)] mt-2">Please sign in to view purchase intelligence.</p>
+      </Card>
+    </main>
+  );
 
   return (
     <AppShell
@@ -304,82 +351,386 @@ export default function PurchaseAnalyticsPage() {
       setSearchText={() => undefined}
       logout={logout}
     >
-      <main className="app-shell min-h-screen p-6 lg:p-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="app-muted text-sm font-semibold">Operations</p>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight">Purchase Intelligence</h1>
-              <p className="app-muted mt-2">Verified Purchase Records and Recorded Purchase Information.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => void openAudience()} disabled={audienceLoading} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60">Export audience</button>
-              <button type="button" onClick={() => void load(authUser)} disabled={loading} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-60">Refresh</button>
-            </div>
-          </div>
+      <PageContainer>
+        <div className="mx-auto max-w-7xl space-y-6">
+          <PageHeader
+            tag="Operations · Purchase Intelligence"
+            title="Purchase Intelligence"
+            description="Verified Purchase Records and Recorded Purchase Information."
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void openAudience()}
+                  disabled={audienceLoading}
+                >
+                  Export audience
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void load(authUser)}
+                  disabled={loading}
+                >
+                  Refresh
+                </Button>
+              </div>
+            }
+          />
 
-          <section className="app-surface mb-6 flex flex-wrap items-end gap-4 rounded-xl border p-4 shadow-sm">
-            <label className="text-sm font-medium"><span className="mb-1 block app-muted">From</span><input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="app-input h-9 rounded-lg border px-3" /></label>
-            <label className="text-sm font-medium"><span className="mb-1 block app-muted">To</span><input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="app-input h-9 rounded-lg border px-3" /></label>
-            {authUser.role === "ADMIN" && <label className="min-w-56 text-sm font-medium"><span className="mb-1 block app-muted">Store</span><select value={storeId} onChange={(event) => setStoreId(event.target.value)} className="app-input h-9 w-full rounded-lg border px-3"><option value="">All authorized stores</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}</select></label>}
-            <button type="button" onClick={() => void load(authUser)} className="app-button-primary h-9 rounded-lg px-4 text-sm font-semibold">Apply filters</button>
-          </section>
+          <FilterBar>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
+                <span>From</span>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                />
+              </label>
+              <label className="text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
+                <span>To</span>
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(event) => setTo(event.target.value)}
+                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                />
+              </label>
+              {authUser.role === "ADMIN" && (
+                <label className="min-w-48 text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
+                  <span>Store</span>
+                  <select
+                    value={storeId}
+                    onChange={(event) => setStoreId(event.target.value)}
+                    className="h-8 flex-1 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                  >
+                    <option value="">All authorized stores</option>
+                    {stores.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}{store.code ? ` (${store.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void load(authUser)}
+              >
+                Apply filters
+              </Button>
+            </div>
+          </FilterBar>
 
-          {error && <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
-          {loading && !analytics ? <div className="app-muted p-10 text-center">Loading recorded purchase information…</div> : analytics && (
+          {error && (
+            <div role="alert" className="rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-4 text-xs text-[var(--app-danger)]">
+              {error}
+            </div>
+          )}
+
+          {loading && !analytics ? (
+            <LoadingState message="Loading recorded purchase information…" />
+          ) : analytics && (
             <>
-              <section aria-label="Overview" className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[["Verified Purchase Records", analytics.overview.verifiedPurchaseRecords], ["Recorded Products", analytics.overview.recordedProducts], ["Stores", analytics.overview.stores], ["BM Recorders", analytics.overview.recordingBms]].map(([label, value]) => <div key={String(label)} className="app-surface rounded-xl border p-5 shadow-sm"><p className="app-muted text-xs font-semibold uppercase tracking-wide">{label}</p><p className="mt-2 text-3xl font-bold">{number.format(Number(value))}</p></div>)}
+              <section aria-label="Overview" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
+                  label="Verified Purchase Records"
+                  value={number.format(Number(analytics.overview.verifiedPurchaseRecords))}
+                  tone="accent"
+                />
+                <MetricCard
+                  label="Recorded Products"
+                  value={number.format(Number(analytics.overview.recordedProducts))}
+                  tone="default"
+                />
+                <MetricCard
+                  label="Stores"
+                  value={number.format(Number(analytics.overview.stores))}
+                  tone="default"
+                />
+                <MetricCard
+                  label="BM Recorders"
+                  value={number.format(Number(analytics.overview.recordingBms))}
+                  tone="info"
+                />
               </section>
 
               <div className="grid gap-5 lg:grid-cols-2">
-                <section className="app-surface rounded-xl border p-5 shadow-sm"><h2 className="text-base font-semibold">Products</h2>{analytics.products.length === 0 ? <p className="app-muted mt-4 text-sm">No recorded purchase information.</p> : <ul className="mt-4 space-y-3">{analytics.products.map((item) => <li key={item.productModelId} className="flex justify-between gap-3 text-sm"><span className="truncate">{item.name}<span className="app-muted ml-2">{item.seriesName}</span></span><span className="font-semibold">{number.format(item.count)}</span></li>)}</ul>}</section>
-                <section className="app-surface rounded-xl border p-5 shadow-sm"><h2 className="text-base font-semibold">Variants</h2>{analytics.variants.length === 0 ? <p className="app-muted mt-4 text-sm">No recorded variants.</p> : <ul className="mt-4 space-y-3">{analytics.variants.map((item) => <li key={item.productVariantId} className="flex justify-between gap-3 text-sm"><span className="truncate">{item.modelName} · {item.variant}{item.color ? ` · ${item.color}` : ""}</span><span className="font-semibold">{number.format(item.count)}</span></li>)}</ul>}</section>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Products</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.products.length === 0 ? (
+                      <p className="text-xs text-[var(--app-text-tertiary)] italic py-2">No recorded purchase information.</p>
+                    ) : (
+                      <ul className="space-y-2.5">
+                        {analytics.products.map((item, idx) => (
+                          <li key={item.productModelId} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] w-4 shrink-0">{idx + 1}.</span>
+                              <span className="truncate text-[var(--app-text-primary)] font-medium">
+                                {item.name}
+                                <span className="text-[var(--app-text-tertiary)] ml-1.5 font-normal">({item.seriesName})</span>
+                              </span>
+                            </div>
+                            <Badge size="sm" variant={idx === 0 ? "accent" : "neutral"} className="shrink-0 font-tabular font-semibold">
+                              {number.format(item.count)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Variants</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.variants.length === 0 ? (
+                      <p className="text-xs text-[var(--app-text-tertiary)] italic py-2">No recorded variants.</p>
+                    ) : (
+                      <ul className="space-y-2.5">
+                        {analytics.variants.map((item, idx) => (
+                          <li key={item.productVariantId} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] w-4 shrink-0">{idx + 1}.</span>
+                              <span className="truncate text-[var(--app-text-primary)] font-medium">
+                                {item.modelName} · {item.variant}{item.color ? ` · ${item.color}` : ""}
+                              </span>
+                            </div>
+                            <Badge size="sm" variant={idx === 0 ? "accent" : "neutral"} className="shrink-0 font-tabular font-semibold">
+                              {number.format(item.count)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <Ranking title="Channels" items={analytics.channels} />
                 <Ranking title="Payment" items={analytics.paymentMethods} />
                 <Ranking title="Colors" items={analytics.colors} />
-                <section className="app-surface rounded-xl border p-5 shadow-sm"><h2 className="text-base font-semibold">Store Performance</h2>{analytics.stores.length === 0 ? <p className="app-muted mt-4 text-sm">No authorized store records.</p> : <ul className="mt-4 space-y-3">{analytics.stores.map((item) => <li key={item.storeId} className="flex justify-between gap-3 text-sm"><span className="truncate">{item.storeName}{item.storeCode ? ` · ${item.storeCode}` : ""}</span><span className="font-semibold">{number.format(item.recordCount)}</span></li>)}</ul>}</section>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Store Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.stores.length === 0 ? (
+                      <p className="text-xs text-[var(--app-text-tertiary)] italic py-2">No authorized store records.</p>
+                    ) : (
+                      <ul className="space-y-2.5">
+                        {analytics.stores.map((item, idx) => (
+                          <li key={item.storeId} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] w-4 shrink-0">{idx + 1}.</span>
+                              <span className="truncate text-[var(--app-text-primary)] font-medium">
+                                {item.storeName}{item.storeCode ? ` · ${item.storeCode}` : ""}
+                              </span>
+                            </div>
+                            <Badge size="sm" variant={idx === 0 ? "accent" : "neutral"} className="shrink-0 font-tabular font-semibold">
+                              {number.format(item.recordCount)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
-              <section className="app-surface mt-5 rounded-xl border p-5 shadow-sm"><h2 className="text-base font-semibold">BM Recording Activity</h2>{analytics.recordingActivity.length === 0 ? <p className="app-muted mt-4 text-sm">No recording activity in this range.</p> : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b text-xs uppercase tracking-wide app-muted"><tr><th className="px-2 py-2">Recorder</th><th className="px-2 py-2">Records</th><th className="px-2 py-2">Latest recorded</th></tr></thead><tbody className="divide-y">{analytics.recordingActivity.map((item) => <tr key={item.userId ?? "unknown"}><td className="px-2 py-3">{item.displayName}</td><td className="px-2 py-3">{number.format(item.recordCount)}</td><td className="px-2 py-3">{dateTime.format(new Date(item.lastRecordedAt))}</td></tr>)}</tbody></table></div>}</section>
+              <Card className="mt-5">
+                <CardHeader>
+                  <CardTitle>BM Recording Activity</CardTitle>
+                  <CardDescription>Activity details for recording staff members</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analytics.recordingActivity.length === 0 ? (
+                    <EmptyState title="No recording activity" description="No recorded activities found in the selected range." />
+                  ) : (
+                    <TableContainer>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Recorder</TableHead>
+                            <TableHead align="right">Records</TableHead>
+                            <TableHead>Latest recorded</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {analytics.recordingActivity.map((item) => (
+                            <TableRow key={item.userId ?? "unknown"}>
+                              <TableCell className="font-medium text-[var(--app-text-primary)]">
+                                {item.displayName}
+                              </TableCell>
+                              <TableCell align="right" className="font-mono font-medium text-[var(--app-text-primary)]">
+                                {number.format(item.recordCount)}
+                              </TableCell>
+                              <TableCell className="text-[var(--app-text-secondary)] font-mono text-[11px]">
+                                {dateTime.format(new Date(item.lastRecordedAt))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </div>
-      </main>
+      </PageContainer>
 
       {audienceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="audience-title">
-          <div className="app-surface max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4" role="dialog" aria-modal="true" aria-labelledby="audience-title">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-[var(--app-shadow-modal)] space-y-5">
             <div className="flex items-start justify-between gap-4">
-              <div><h2 id="audience-title" className="text-xl font-bold">Customer Audience</h2><p className="app-muted mt-1 text-sm">One row per customer. Current date and store filters are applied automatically.</p></div>
-              <button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-sm">Close</button>
+              <div>
+                <h2 id="audience-title" className="text-lg font-bold text-[var(--app-text-primary)]">
+                  Customer Audience
+                </h2>
+                <p className="text-xs text-[var(--app-text-secondary)] mt-1">
+                  One row per customer. Current date and store filters are applied automatically.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setAudienceOpen(false)}
+              >
+                Close
+              </Button>
             </div>
 
-            {audienceLoading ? <div className="app-muted py-10 text-center">Preparing customer audience…</div> : audienceError ? <div role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{audienceError}</div> : audience && (
-              <div className="mt-5 space-y-5">
+            {audienceLoading ? (
+              <LoadingState message="Preparing customer audience…" />
+            ) : audienceError ? (
+              <div role="alert" className="rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)]">
+                {audienceError}
+              </div>
+            ) : audience && (
+              <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Customers</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.customers)}</p></div>
-                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Messageable</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.messageableCustomers)}</p></div>
-                  <div className="rounded-xl border p-3"><p className="app-muted text-xs uppercase">Excluded</p><p className="mt-1 text-2xl font-bold">{number.format(audience.summary.excludedCustomers)}</p></div>
+                  <MetricCard label="Customers" value={number.format(audience.summary.customers)} tone="default" />
+                  <MetricCard label="Messageable" value={number.format(audience.summary.messageableCustomers)} tone="success" />
+                  <MetricCard label="Excluded" value={number.format(audience.summary.excludedCustomers)} tone="warning" />
                 </div>
 
-                <fieldset><legend className="text-sm font-semibold">Customer Status</legend><div className="mt-2 flex flex-wrap gap-3">{(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => <label key={status} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedStatuses.has(status)} onChange={() => toggleStatus(status)} />{status === "NOT_SPECIFIED" ? "Not specified" : status.charAt(0) + status.slice(1).toLowerCase()}</label>)}</div></fieldset>
+                <fieldset className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] p-3.5 bg-[var(--app-surface-subtle)]">
+                  <legend className="text-xs font-semibold text-[var(--app-text-primary)] px-1">Customer Status</legend>
+                  <div className="mt-1.5 flex flex-wrap gap-4">
+                    {(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => (
+                      <label key={status} className="flex items-center gap-2 text-xs text-[var(--app-text-primary)] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedStatuses.has(status)}
+                          onChange={() => toggleStatus(status)}
+                          className="h-3.5 w-3.5 rounded accent-[var(--app-accent)]"
+                        />
+                        <span>{status === "NOT_SPECIFIED" ? "Not specified" : status.charAt(0) + status.slice(1).toLowerCase()}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
 
-                <label className="flex items-start gap-3 rounded-xl border p-4"><input type="checkbox" className="mt-1" checked={onlyMessageable} onChange={(event) => handleMessageableChange(event.target.checked)} /><span><span className="block text-sm font-semibold">Only messageable users</span><span className="app-muted mt-1 block text-xs">Requires a LINE User ID and an active LINE OA in READY/CONNECTED state. This is operational eligibility, not a guarantee that the customer has not blocked the OA.</span></span></label>
+                <label className="flex items-start gap-3 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] p-3.5 bg-[var(--app-surface-subtle)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded accent-[var(--app-accent)]"
+                    checked={onlyMessageable}
+                    onChange={(event) => handleMessageableChange(event.target.checked)}
+                  />
+                  <span>
+                    <span className="block text-xs font-semibold text-[var(--app-text-primary)]">Only messageable users</span>
+                    <span className="mt-0.5 block text-[11px] text-[var(--app-text-secondary)] leading-relaxed">
+                      Requires a LINE User ID and an active LINE OA in READY/CONNECTED state. This is operational eligibility, not a guarantee that the customer has not blocked the OA.
+                    </span>
+                  </span>
+                </label>
 
-                <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900"><span className="font-semibold">{number.format(filteredAudience.length)} customers</span> match the current audience selection. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.</div>
+                <div className="rounded-[var(--app-radius-md)] bg-[var(--app-accent-soft)]/20 border border-[var(--app-accent)]/30 p-3 text-xs text-[var(--app-text-primary)]">
+                  <span className="font-semibold">{number.format(filteredAudience.length)} customers</span> match the current audience selection. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.
+                </div>
 
-                {!onlyMessageable && authUser.role === "ADMIN" && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Re-enable <strong>Only messageable users</strong> to create a Broadcast Audience draft. CSV export can still include excluded customers.</div>}
+                {!onlyMessageable && authUser.role === "ADMIN" && (
+                  <div className="rounded-[var(--app-radius-md)] border border-[var(--app-warning)]/40 bg-[var(--app-warning-soft)] p-3 text-xs text-[var(--app-warning)]">
+                    Re-enable <strong>Only messageable users</strong> to create a Broadcast Audience draft. CSV export can still include excluded customers.
+                  </div>
+                )}
 
-                {draftError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{draftError}</div>}
+                {draftError && (
+                  <div role="alert" className="rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)]">
+                    {draftError}
+                  </div>
+                )}
 
-                {createdDraft && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"><p className="font-semibold">Broadcast Audience draft created</p><p className="mt-1">{number.format(createdDraft.recipientCount)} customers · {number.format(createdDraft.storeCount)} stores · {number.format(createdDraft.lineOaCount)} LINE OAs</p><p className="mt-2 text-xs">Status: DRAFT. No message has been sent. The selected customer snapshot is saved in Mass Message for the next campaign-composer phase.</p><button type="button" onClick={() => window.location.assign("/mass-messages")} className="mt-3 rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-semibold dark:border-emerald-800">Open Mass Message</button></div>}
+                {createdDraft && (
+                  <div className="rounded-[var(--app-radius-md)] border border-[var(--app-success)]/40 bg-[var(--app-success-soft)] p-4 text-xs text-[var(--app-success)] space-y-2">
+                    <p className="font-bold">Broadcast Audience draft created</p>
+                    <p>{number.format(createdDraft.recipientCount)} customers · {number.format(createdDraft.storeCount)} stores · {number.format(createdDraft.lineOaCount)} LINE OAs</p>
+                    <p className="text-[11px] opacity-90">
+                      Status: DRAFT. No message has been sent. The selected customer snapshot is saved in Mass Message for the next campaign-composer phase.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => window.location.assign("/mass-messages")}
+                    >
+                      Open Mass Message
+                    </Button>
+                  </div>
+                )}
 
-                <div><p className="text-sm font-semibold">CSV includes</p><p className="app-muted mt-1 text-sm">Customer name, LINE User ID, conversation, language, LINE OA, store, current sales status, products, variants, colors, quantities, purchase channels, payment methods, last purchase/message dates, BM recorder, and messageability status.</p></div>
+                <div className="space-y-1 text-xs text-[var(--app-text-secondary)]">
+                  <p className="font-semibold text-[var(--app-text-primary)]">CSV includes</p>
+                  <p className="text-[11px] leading-relaxed">
+                    Customer name, LINE User ID, conversation, language, LINE OA, store, current sales status, products, variants, colors, quantities, purchase channels, payment methods, last purchase/message dates, BM recorder, and messageability status.
+                  </p>
+                </div>
 
-                <div className="rounded-xl border p-4 text-sm"><p className="font-semibold">Broadcast Audience safety</p><p className="app-muted mt-1 text-xs">Create Broadcast Audience saves an idempotent DRAFT recipient snapshot only. It does not create store deliveries, start the Mass Message processor, or send anything to LINE.</p></div>
+                <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] p-3 text-xs text-[var(--app-text-secondary)] bg-[var(--app-surface-subtle)]">
+                  <p className="font-semibold text-[var(--app-text-primary)]">Broadcast Audience safety</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed">
+                    Create Broadcast Audience saves an idempotent DRAFT recipient snapshot only. It does not create store deliveries, start the Mass Message processor, or send anything to LINE.
+                  </p>
+                </div>
 
-                <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setAudienceOpen(false)} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold">Cancel</button><button type="button" onClick={downloadAudience} disabled={filteredAudience.length === 0} className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50">Download CSV</button>{authUser.role === "ADMIN" && <button type="button" onClick={() => void createBroadcastDraft()} disabled={draftCreating || !onlyMessageable || selectedStatuses.size === 0 || filteredAudience.length === 0 || Boolean(createdDraft)} className="app-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">{draftCreating ? "Creating draft…" : createdDraft ? "Draft created" : "Create Broadcast Audience"}</button>}</div>
+                <div className="flex flex-wrap justify-end gap-2 pt-2">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => setAudienceOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={downloadAudience}
+                    disabled={filteredAudience.length === 0}
+                  >
+                    Download CSV
+                  </Button>
+                  {authUser.role === "ADMIN" && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={() => void createBroadcastDraft()}
+                      disabled={draftCreating || !onlyMessageable || selectedStatuses.size === 0 || filteredAudience.length === 0 || Boolean(createdDraft)}
+                    >
+                      {draftCreating ? "Creating draft…" : createdDraft ? "Draft created" : "Create Broadcast Audience"}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>

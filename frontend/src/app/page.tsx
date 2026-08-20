@@ -22,7 +22,27 @@ import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { MassMessagesView } from "./mass-messages/mass-messages-view";
 import { DashboardView } from "./dashboard/dashboard-view";
-import { AppShell, ContextSidebar, PageContainer } from "@/components/shell";
+import { AppShell, ContextSidebar, PageContainer, PageHeader, FilterBar } from "@/components/shell";
+import {
+  Badge,
+  type BadgeVariant,
+  Button,
+  IconButton,
+  Card,
+  MetricCard,
+  Input,
+  SearchInput,
+  Select,
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableEmptyState,
+  ErrorState,
+} from "@/components/ui";
 import type { SidebarView } from "@/components/shell";
 import { StoreChatsOverflowMenu } from "@/components/chats/store-chats-overflow-menu";
 import { ResizableSeparator } from "./resizable-separator";
@@ -2850,95 +2870,547 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <PageContainer variant="wide">
               <section className="app-content-section col-span-2 overflow-y-auto">
                 <div className="mx-auto max-w-7xl space-y-6">
-                  <div className="flex items-start justify-between">
-                    <div><h2 className="text-2xl font-bold">{text.lineOaManagement}</h2><p className="mt-1 text-sm text-slate-500">{text.lineOaDescription}</p></div>
-                    <div className="flex flex-wrap items-center justify-end gap-3"><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedLineOas} onChange={(event) => setShowArchivedLineOas(event.target.checked)} />{text.showArchived}</label><label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchivedStores} onChange={(event) => setShowArchivedStores(event.target.checked)} />{showArchivedStores ? text.hideArchivedStores : text.showArchived}</label>{authUser.role === "ADMIN" && <><button type="button" disabled={masterSyncing} onClick={() => void syncMasterFile()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{masterSyncing ? text.syncingMasterFile : text.syncMasterFile}</button><button type="button" disabled={lineOaExporting} onClick={() => void exportLineOaCsv()} className="app-button-secondary rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}</button></>}<button onClick={() => { resetLineOaForm(); setShowLineOaForm(true); }} className="app-button-primary rounded-xl px-4 py-2.5 text-sm font-semibold">＋ {text.connectLineOa}</button></div>
-                  </div>
+                  <PageHeader
+                    tag="OPPO LINE OA · การจัดการระบบ"
+                    title={text.lineOaManagement}
+                    description={text.lineOaDescription}
+                    actions={
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-[var(--app-text-secondary)] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showArchivedLineOas}
+                            onChange={(event) => setShowArchivedLineOas(event.target.checked)}
+                            className="rounded border-[var(--app-border)] accent-[var(--app-accent)]"
+                          />
+                          {text.showArchived}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-[var(--app-text-secondary)] cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showArchivedStores}
+                            onChange={(event) => setShowArchivedStores(event.target.checked)}
+                            className="rounded border-[var(--app-border)] accent-[var(--app-accent)]"
+                          />
+                          {showArchivedStores ? text.hideArchivedStores : text.showArchived}
+                        </label>
+                        {authUser.role === "ADMIN" && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={masterSyncing}
+                              isLoading={masterSyncing}
+                              onClick={() => void syncMasterFile()}
+                            >
+                              {masterSyncing ? text.syncingMasterFile : text.syncMasterFile}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={lineOaExporting}
+                              isLoading={lineOaExporting}
+                              onClick={() => void exportLineOaCsv()}
+                            >
+                              {lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            resetLineOaForm();
+                            setShowLineOaForm(true);
+                          }}
+                        >
+                          ＋ {text.connectLineOa}
+                        </Button>
+                      </div>
+                    }
+                  />
 
-                  <div className="app-card p-4">
-                    <label className="app-muted block text-xs font-medium">{text.searchFilter}
-                      <input value={storeManagementSearch} onChange={(event) => setStoreManagementSearch(event.target.value)} placeholder={text.searchAccountName} className="app-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm" />
-                    </label>
-                  </div>
+                  <FilterBar
+                    searchSlot={
+                      <SearchInput
+                        value={storeManagementSearch}
+                        onChange={(event) => setStoreManagementSearch(event.target.value)}
+                        onClear={() => setStoreManagementSearch("")}
+                        placeholder={text.searchAccountName}
+                      />
+                    }
+                    actionSlot={
+                      <span className="text-xs text-[var(--app-text-tertiary)] font-tabular">
+                        {visibleLineOas.length} / {lineOas.length} {text.lineOaManagement}
+                      </span>
+                    }
+                  />
 
-                  {showArchivedStores && <div className="app-card p-5"><h3 className="text-sm font-semibold">{text.showArchived}</h3><div className="mt-3 space-y-2">{availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => <div key={store.id} className="app-filter-panel flex items-center justify-between rounded-xl px-3 py-2"><span className="text-sm">{store.name}</span><button onClick={() => void restoreStore(store.id)} className="app-button-secondary rounded-lg border px-3 py-1.5 text-xs">{text.restoreStore}</button></div>)}{availableStores.every(({ archivedAt }) => !archivedAt) && <p className="app-muted text-sm">{text.noStoresFound}</p>}</div></div>}
+                  {showArchivedStores && (
+                    <Card className="p-4 sm:p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+                          {text.showArchived}
+                        </h3>
+                      </div>
+                      <div className="space-y-2">
+                        {availableStores.filter(({ archivedAt }) => Boolean(archivedAt)).map((store) => (
+                          <div
+                            key={store.id}
+                            className="flex items-center justify-between rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-3.5 py-2 text-xs"
+                          >
+                            <span className="font-medium text-[var(--app-text-primary)]">{store.name}</span>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void restoreStore(store.id)}
+                            >
+                              {text.restoreStore}
+                            </Button>
+                          </div>
+                        ))}
+                        {availableStores.every(({ archivedAt }) => !archivedAt) && (
+                          <p className="app-muted text-xs">{text.noStoresFound}</p>
+                        )}
+                      </div>
+                    </Card>
+                  )}
 
-                  {lineOaError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaError}</div>}
-                  {lineOaExportError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{lineOaExportError}</div>}
+                  {lineOaError && <ErrorState message={lineOaError} />}
+                  {lineOaExportError && <ErrorState message={lineOaExportError} />}
 
                   {managementWebhookInfo && !managementWebhookInfo.webhookUrlConfigured && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-                      <h3 className="font-semibold">{text.publicWebhookSetupTitle}</h3>
-                      <p className="mt-1 text-amber-800">{text.publicWebhookRequired}</p>
+                    <Card className="border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] text-xs text-[#B25E00] dark:text-[#f6c65b]">
+                      <h3 className="font-semibold text-sm">{text.publicWebhookSetupTitle}</h3>
+                      <p className="mt-1 opacity-90">{text.publicWebhookRequired}</p>
                       <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <div><dt className="text-xs font-medium text-amber-700">{text.backendPortLabel}</dt><dd className="font-mono">{managementWebhookInfo.backendPort}</dd></div>
-                        <div><dt className="text-xs font-medium text-amber-700">{text.expectedWebhookPath}</dt><dd className="font-mono">{managementWebhookInfo.webhookPath}</dd></div>
-                        <div className="sm:col-span-2"><dt className="text-xs font-medium text-amber-700">{text.tunnelExample}</dt><dd><code className="rounded bg-amber-100 px-2 py-1">ngrok http {managementWebhookInfo.backendPort}</code></dd></div>
+                        <div>
+                          <dt className="text-xs font-medium opacity-80">{text.backendPortLabel}</dt>
+                          <dd className="font-mono">{managementWebhookInfo.backendPort}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-medium opacity-80">{text.expectedWebhookPath}</dt>
+                          <dd className="font-mono">{managementWebhookInfo.webhookPath}</dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-xs font-medium opacity-80">{text.tunnelExample}</dt>
+                          <dd>
+                            <code className="rounded bg-[var(--app-surface)]/80 px-2 py-1 font-mono text-xs border border-[var(--app-warning)]/20">
+                              ngrok http {managementWebhookInfo.backendPort}
+                            </code>
+                          </dd>
+                        </div>
                       </dl>
-                      <ol className="mt-3 list-inside list-decimal space-y-1 text-amber-800"><li>{text.setWebhookEnvironment}</li><li>{text.restartBackend}</li></ol>
-                    </div>
+                      <ol className="mt-3 list-inside list-decimal space-y-1 opacity-90">
+                        <li>{text.setWebhookEnvironment}</li>
+                        <li>{text.restartBackend}</li>
+                      </ol>
+                    </Card>
                   )}
 
                   <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                    {[
-                      [text.totalLineOa, lineOas.length],
-                      [text.activeLineOa, lineOas.filter((item) => item.isActive).length],
-                      [text.connectionIssues, lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length],
-                      [text.messagesToday, lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0)],
-                    ].map(([label, value]) => <div key={String(label)} className="app-card p-5"><p className="app-muted text-xs font-medium">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
+                    <MetricCard
+                      label={text.totalLineOa}
+                      value={lineOas.length}
+                    />
+                    <MetricCard
+                      label={text.activeLineOa}
+                      value={lineOas.filter((item) => item.isActive).length}
+                      tone="success"
+                    />
+                    <MetricCard
+                      label={text.connectionIssues}
+                      value={lineOas.filter((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED").length}
+                      tone={lineOas.some((item) => item.connectionStatus === "ERROR" || item.connectionStatus === "NOT_CONFIGURED") ? "danger" : "default"}
+                    />
+                    <MetricCard
+                      label={text.messagesToday}
+                      value={lineOas.reduce((sum, item) => sum + item.messagesReceivedToday, 0)}
+                      tone="accent"
+                    />
                   </div>
 
-                  <div className="app-card overflow-hidden">
-                    {visibleLineOas.length === 0 ? <div className="p-16 text-center text-slate-500">{text.noLineOa}</div> : (
-                      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr>{[text.lineOaManagement, text.stores, text.connectionStatus, text.webhookUrl, text.lastWebhook, text.messagesToday, text.action].map((heading) => <th key={heading} className="px-3 py-3 font-medium">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
-                        {visibleLineOas.map((account) => <tr key={account.id} className={!account.isActive ? "opacity-60" : ""}>
-                          <td className="px-3 py-4 font-medium">{account.name}</td><td className="px-3 py-4"><span className="block font-medium">{(account.store.storeId || account.store.externalStoreId) && <span className="font-mono text-xs text-slate-500 mr-1.5 opacity-80">[{account.store.storeId ?? account.store.externalStoreId}]</span>}{getStoreDisplayName(account.store.name)}</span>{account.store.accountName && <span className="block text-xs text-slate-500">{account.store.accountName}</span>}<span className="block text-xs text-slate-500">{[account.store.storeId ?? account.store.externalStoreId ? `Store ID: ${account.store.storeId ?? account.store.externalStoreId}` : null, account.store.province, account.store.region, account.store.lineId].filter(Boolean).join(" · ") || "—"}</span><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${account.store.dataSource === "MASTER" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>{account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}</span></td>
-                          <td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs ${account.connectionStatus === "CONNECTED" ? "bg-green-100 text-green-700" : account.connectionStatus === "READY" ? "bg-blue-100 text-blue-700" : account.connectionStatus === "ERROR" ? "bg-red-100 text-red-700" : account.connectionStatus === "DISABLED" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{connectionLabel(account.connectionStatus)}</span><span className={`mt-2 block text-xs ${account.credentialsHealthy ? "text-green-700" : "text-red-700"}`}>{account.credentialsHealthy ? text.credentialsReady : account.hasChannelSecret ? text.credentialDecryptionFailed : text.reenterChannelSecret}</span></td>
-                          <td className="max-w-52 px-3 py-4 text-xs">{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ? <span className="block truncate" title={webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ?? undefined}>{webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl}</span> : <span className="text-amber-700" title={text.publicWebhookRequired}>{text.webhookNotConfigured}</span>}</td><td className="px-3 py-4 text-xs">{account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}</td><td className="px-3 py-4 text-center">{account.messagesReceivedToday}</td>
-                          <td className="px-3 py-4"><div className="flex min-w-44 flex-wrap gap-1.5"><button onClick={() => openMonitoring({ lineOaId: account.id })} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.viewConversations}</button>{account.store.lineManagerUrl ? <a href={account.store.lineManagerUrl} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineManager} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineManager}</button>}{account.store.lineOaLink ? <a href={account.store.lineOaLink} target="_blank" rel="noopener noreferrer" className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.openLineOa} ↗</a> : <button disabled title={text.noMasterUrl} className="rounded border border-slate-200 px-2 py-1 text-xs opacity-50">{text.openLineOa}</button>}<button disabled={lineOaSubmitting} onClick={() => void testLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.testConnection}</button><button disabled={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl} title={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl ? text.publicWebhookRequired : undefined} onClick={() => void copyWebhookUrl(account.id, account.webhookUrl)} className="rounded border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">{text.copyWebhook}</button><button onClick={() => editLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{text.edit}</button><button disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)} className="rounded border border-slate-300 px-2 py-1 text-xs">{account.isActive ? text.disable : text.activate}</button><button disabled={lineOaSubmitting} onClick={() => void regenerateWebhookUrl(account)} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800">{text.regenerateWebhook}</button>{account.archivedAt ? <button onClick={() => void restoreLineOa(account)} className="rounded border border-green-300 px-2 py-1 text-xs text-green-700">{text.restoreLineOa}</button> : <button onClick={() => void removeLineOa(account)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">{text.removeLineOa}</button>}</div>{connectionTest?.id === account.id && <p className="mt-2 text-xs text-slate-500">{connectionTestMessage(connectionTest.result)}</p>}</td>
-                        </tr>)}
-                      </tbody></table></div>
+                  <TableContainer>
+                    {visibleLineOas.length === 0 ? (
+                      <div className="p-16 text-center text-xs text-[var(--app-text-secondary)]">{text.noLineOa}</div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <tr>
+                            <TableHead>{text.lineOaManagement}</TableHead>
+                            <TableHead>{text.stores}</TableHead>
+                            <TableHead>{text.connectionStatus}</TableHead>
+                            <TableHead>{text.webhookUrl}</TableHead>
+                            <TableHead>{text.lastWebhook}</TableHead>
+                            <TableHead align="center">{text.messagesToday}</TableHead>
+                            <TableHead align="right">{text.action}</TableHead>
+                          </tr>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleLineOas.map((account) => {
+                            const statusVariant: BadgeVariant =
+                              account.connectionStatus === "CONNECTED"
+                                ? "success"
+                                : account.connectionStatus === "READY"
+                                ? "info"
+                                : account.connectionStatus === "ERROR"
+                                ? "danger"
+                                : account.connectionStatus === "DISABLED"
+                                ? "neutral"
+                                : "warning";
+
+                            return (
+                              <TableRow key={account.id} className={!account.isActive ? "opacity-60" : ""}>
+                                <TableCell>
+                                  <span className="font-semibold text-[var(--app-text-primary)]">{account.name}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="block font-medium text-[var(--app-text-primary)]">
+                                    {(account.store.storeId || account.store.externalStoreId) && (
+                                      <span className="font-mono text-xs text-[var(--app-text-tertiary)] mr-1.5 opacity-80">
+                                        [{account.store.storeId ?? account.store.externalStoreId}]
+                                      </span>
+                                    )}
+                                    {getStoreDisplayName(account.store.name)}
+                                  </span>
+                                  {account.store.accountName && (
+                                    <span className="block text-xs text-[var(--app-text-secondary)]">{account.store.accountName}</span>
+                                  )}
+                                  <span className="block text-xs text-[var(--app-text-tertiary)]">
+                                    {[
+                                      account.store.storeId ?? account.store.externalStoreId ? `Store ID: ${account.store.storeId ?? account.store.externalStoreId}` : null,
+                                      account.store.province,
+                                      account.store.region,
+                                      account.store.lineId,
+                                    ].filter(Boolean).join(" · ") || "—"}
+                                  </span>
+                                  <span className="mt-1 inline-block">
+                                    <Badge size="sm" variant={account.store.dataSource === "MASTER" ? "success" : "neutral"} dot={account.store.dataSource === "MASTER"}>
+                                      {account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}
+                                    </Badge>
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge size="md" variant={statusVariant} dot>
+                                    {connectionLabel(account.connectionStatus)}
+                                  </Badge>
+                                  <span className={`mt-1.5 block text-xs font-medium ${account.credentialsHealthy ? "text-[var(--app-success)]" : "text-[var(--app-danger)]"}`}>
+                                    {account.credentialsHealthy ? text.credentialsReady : account.hasChannelSecret ? text.credentialDecryptionFailed : text.reenterChannelSecret}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="max-w-52">
+                                  {webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ? (
+                                    <span className="block truncate font-mono text-xs text-[var(--app-text-secondary)]" title={webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl ?? undefined}>
+                                      {webhookInfoById[account.id]?.webhookUrl ?? account.webhookUrl}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[var(--app-danger)] text-xs font-medium" title={text.publicWebhookRequired}>
+                                      {text.webhookNotConfigured}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs text-[var(--app-text-secondary)] font-tabular">
+                                  {account.lastWebhookReceivedAt ? new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(new Date(account.lastWebhookReceivedAt)) : "—"}
+                                </TableCell>
+                                <TableCell align="center" numeric className="font-semibold text-xs">
+                                  {account.messagesReceivedToday}
+                                </TableCell>
+                                <TableCell align="right">
+                                  <div className="flex min-w-44 flex-wrap justify-end gap-1.5">
+                                    <Button size="sm" variant="secondary" onClick={() => openMonitoring({ lineOaId: account.id })}>
+                                      {text.viewConversations}
+                                    </Button>
+                                    {account.store.lineManagerUrl ? (
+                                      <a
+                                        href={account.store.lineManagerUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-success)]/30 text-[var(--app-success)] hover:bg-[var(--app-success-soft)] transition-colors"
+                                      >
+                                        {text.openLineManager} ↗
+                                      </a>
+                                    ) : (
+                                      <button disabled title={text.noMasterUrl} className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-border)] text-[var(--app-text-disabled)] opacity-50 cursor-not-allowed">
+                                        {text.openLineManager}
+                                      </button>
+                                    )}
+                                    {account.store.lineOaLink ? (
+                                      <a
+                                        href={account.store.lineOaLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-success)]/30 text-[var(--app-success)] hover:bg-[var(--app-success-soft)] transition-colors"
+                                      >
+                                        {text.openLineOa} ↗
+                                      </a>
+                                    ) : (
+                                      <button disabled title={text.noMasterUrl} className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-border)] text-[var(--app-text-disabled)] opacity-50 cursor-not-allowed">
+                                        {text.openLineOa}
+                                      </button>
+                                    )}
+                                    <Button size="sm" variant="secondary" disabled={lineOaSubmitting} onClick={() => void testLineOa(account)}>
+                                      {text.testConnection}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl}
+                                      title={!webhookInfoById[account.id]?.webhookUrl && !account.webhookUrl ? text.publicWebhookRequired : undefined}
+                                      onClick={() => void copyWebhookUrl(account.id, account.webhookUrl)}
+                                    >
+                                      {text.copyWebhook}
+                                    </Button>
+                                    <Button size="sm" variant="secondary" onClick={() => editLineOa(account)}>
+                                      {text.edit}
+                                    </Button>
+                                    <Button size="sm" variant="secondary" disabled={lineOaSubmitting} onClick={() => void toggleLineOa(account)}>
+                                      {account.isActive ? text.disable : text.activate}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={lineOaSubmitting}
+                                      onClick={() => void regenerateWebhookUrl(account)}
+                                      className="text-[var(--app-warning)] border-[var(--app-warning)]/30 hover:bg-[var(--app-warning-soft)]"
+                                    >
+                                      {text.regenerateWebhook}
+                                    </Button>
+                                    {account.archivedAt ? (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => void restoreLineOa(account)}
+                                        className="text-[var(--app-success)] border-[var(--app-success)]/30 hover:bg-[var(--app-success-soft)]"
+                                      >
+                                        {text.restoreLineOa}
+                                      </Button>
+                                    ) : (
+                                      <Button size="sm" variant="danger" onClick={() => void removeLineOa(account)}>
+                                        {text.removeLineOa}
+                                      </Button>
+                                    )}
+                                  </div>
+                                  {connectionTest?.id === account.id && (
+                                    <p className="mt-1.5 text-right text-xs text-[var(--app-text-secondary)]">
+                                      {connectionTestMessage(connectionTest.result)}
+                                    </p>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     )}
-                  </div>
+                  </TableContainer>
 
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-5"><h3 className="font-semibold text-blue-900">{text.setupInstructions}</h3><ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-blue-800">{text.setupSteps.map((step) => <li key={step}>{step}</li>)}</ol></div>
+                  <Card className="border-[var(--app-info)]/20 bg-[var(--app-info-soft)] text-xs text-[#0062CC] dark:text-[#8ac5ff]">
+                    <h3 className="font-semibold text-sm text-[var(--app-text-primary)]">{text.setupInstructions}</h3>
+                    <ol className="mt-3 list-inside list-decimal space-y-1 opacity-90">
+                      {text.setupSteps.map((step) => <li key={step}>{step}</li>)}
+                    </ol>
+                  </Card>
                 </div>
 
-                {showLineOaForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6"><div role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"><div className="flex items-center justify-between"><h3 className="text-xl font-bold">{editingLineOaId ? text.edit : text.connectLineOa}</h3><button onClick={() => setShowLineOaForm(false)} className="text-xl text-slate-400">×</button></div>
-                  {lineOaError && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{lineOaError}</p>}
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    {!editingLineOaId && <div className="relative col-span-2"><label className="text-sm font-medium">{text.searchAccountName}<input role="combobox" aria-expanded={masterResults.length > 0} aria-controls="store-master-results" aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined} value={searchQuery} onKeyDown={handleMasterSearchKey} onChange={(event) => { const nextQuery = event.target.value; setSearchQuery(nextQuery); setSelectedMaster(null); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1); setLineOaForm(clearStoreMasterSelection); }} placeholder={text.selectStore} className="app-input mt-1 w-full rounded-lg border p-2" /></label>
-                      {masterSearchState.status === "loading" && <p className="mt-1 text-xs text-slate-500">{text.searchingStoreMaster}</p>}{masterSearchState.status === "error" && <div className="mt-1 flex items-center gap-2 text-xs text-red-600"><span>{masterSearchState.message}</span><button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-red-200 px-2 py-1 font-medium">{text.retry}</button></div>}
-                      {masterSearchState.status === "success" && masterSearchState.query.length > 0 && masterSearchState.suggestions.length === 0 && <div className="app-muted mt-1 text-xs"><p>{text.noMatchingAccount}</p><p>{text.manualFallbackHint}</p></div>}
-                      {masterResults.length > 0 && <div id="store-master-results" role="listbox" className="app-surface absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border shadow-xl">{masterResults.length > 1 && <p className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-800">{text.multipleMatches}</p>}{masterResults.map((item, index) => <button id={`master-result-${index}`} role="option" aria-selected={index === masterActiveIndex} key={item.id} type="button" onMouseEnter={() => setMasterActiveIndex(index)} onClick={() => selectMasterRecord(item)} className={`app-list-item block w-full border-b px-3 py-3 text-left last:border-0 ${index === masterActiveIndex ? "is-selected" : ""}`}><strong className="block text-sm">{item.accountName}</strong><span className="app-muted block text-xs">{item.storeName}</span><span className="app-muted mt-1 block text-xs">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>{item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{text.systemSuggested}</span>}</button>)}</div>}
-                    </div>}
-                    {selectedMaster && synchronizedMaster && <section className="store-master-sync-card col-span-2 p-4 text-sm" aria-labelledby="store-master-sync-title"><div className="flex items-center justify-between gap-3"><h4 id="store-master-sync-title" className="font-semibold">{text.syncedStoreMasterTitle}</h4><span className="app-chip rounded-full px-2 py-1 text-xs">{text.masterFile}</span></div><dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 text-xs sm:grid-cols-2"><div><dt className="store-master-sync-label">{text.storeIdLabel}</dt><dd>{synchronizedMaster.storeId}</dd></div><div><dt className="store-master-sync-label">{text.storeName}</dt><dd>{synchronizedMaster.storeName}</dd></div><div><dt className="store-master-sync-label">{text.accountName}</dt><dd>{synchronizedMaster.accountName}</dd></div><div><dt className="store-master-sync-label">{text.lineIdLabel}</dt><dd>{synchronizedMaster.lineId}</dd></div><div><dt className="store-master-sync-label">{text.province}</dt><dd>{synchronizedMaster.province}</dd></div><div><dt className="store-master-sync-label">{text.region}</dt><dd>{synchronizedMaster.region}</dd></div><div><dt className="store-master-sync-label">{text.openLineOa}</dt><dd>{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div><div><dt className="store-master-sync-label">{text.openLineManager}</dt><dd>{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div></dl>{selectedMaster.existingStore && <p className="mt-3 rounded bg-blue-50 p-2 text-blue-800">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}{selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-amber-700">{text.incompleteMasterData}</p>}</section>}
-                    <p className="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{text.rotateCredentialsWarning}</p>
-                    <label className="col-span-2 text-sm">{text.lineOaName} *<input value={lineOaForm.name} onChange={(event) => setLineOaForm((form) => ({ ...form, name: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
-                    <label className="text-sm">{text.channelSecret} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelSecret} onChange={(event) => setLineOaForm((form) => ({ ...form, channelSecret: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.accessToken} {editingLineOaId ? "" : "*"}<input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelAccessToken} onChange={(event) => setLineOaForm((form) => ({ ...form, channelAccessToken: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label>
-                    <button type="button" onClick={() => setShowCredentials((shown) => !shown)} className="col-span-2 text-left text-sm text-blue-700">{showCredentials ? text.hideSecret : text.showSecret}</button>
-                    <button type="button" onClick={() => setShowAdvancedLineOa((shown) => !shown)} className="col-span-2 rounded-lg border border-slate-300 px-3 py-2 text-left text-sm font-medium">{showAdvancedLineOa ? "▾" : "▸"} {text.advancedSettings}</button>
-                    {showAdvancedLineOa && <><label className="col-span-2 text-sm">{text.stores}<select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2"><option value="">{text.autoCreateStore}</option>{availableStores.map((store) => <option key={store.id} value={store.id}>{store.storeId ? `[${store.storeId}] ` : ""}{store.name}</option>)}</select></label><label className="text-sm">{text.region}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.area}<input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2 disabled:bg-slate-100" /></label><label className="text-sm">{text.basicId}<input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="text-sm">{text.channelId}<input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 p-2" /></label><label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} />{text.activeStatus}</label></>}
-                  </div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowLineOaForm(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button><button disabled={lineOaSubmitting} onClick={() => void submitLineOa()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{lineOaSubmitting ? text.loadingData : text.saveConnection}</button></div>
-                </div></div>}
-                {createdLineOa && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6">
-                    <div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-xl bg-white p-7 shadow-xl">
-                      <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-                        <h3 className="text-xl font-bold text-green-900">✓ {text.lineOaAdded}</h3>
-                        <p className="mt-2 text-sm text-green-800">{text.pasteWebhookInstruction}</p>
+                {showLineOaForm && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in duration-120">
+                    <div role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[var(--app-radius-xl)] bg-[var(--app-surface)] border border-[var(--app-border)] p-6 shadow-[var(--app-shadow-modal)] text-[var(--app-text-primary)]">
+                      <div className="flex items-center justify-between border-b border-[var(--app-border-subtle)] pb-4">
+                        <h3 className="text-lg font-bold text-[var(--app-text-primary)] tracking-tight">
+                          {editingLineOaId ? text.edit : text.connectLineOa}
+                        </h3>
+                        <IconButton size="sm" variant="ghost" aria-label="Close dialog" onClick={() => setShowLineOaForm(false)}>
+                          ×
+                        </IconButton>
                       </div>
-                      <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <p className="break-all font-mono text-sm">{createdLineOa.webhookUrl}</p>
-                        <button onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
-                          {text.copyWebhook}
+
+                      {lineOaError && (
+                        <p className="mt-4 rounded-[var(--app-radius-md)] bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)] border border-[var(--app-danger)]/20">
+                          {lineOaError}
+                        </p>
+                      )}
+
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        {!editingLineOaId && (
+                          <div className="relative col-span-2">
+                            <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.searchAccountName}
+                              <input
+                                role="combobox"
+                                aria-expanded={masterResults.length > 0}
+                                aria-controls="store-master-results"
+                                aria-activedescendant={masterActiveIndex >= 0 ? `master-result-${masterActiveIndex}` : undefined}
+                                value={searchQuery}
+                                onKeyDown={handleMasterSearchKey}
+                                onChange={(event) => {
+                                  const nextQuery = event.target.value;
+                                  setSearchQuery(nextQuery);
+                                  setSelectedMaster(null);
+                                  setMasterSearchState({ status: "idle" });
+                                  setMasterActiveIndex(-1);
+                                  setLineOaForm(clearStoreMasterSelection);
+                                }}
+                                placeholder={text.selectStore}
+                                className="app-input mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]"
+                              />
+                            </label>
+                            {masterSearchState.status === "loading" && <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">{text.searchingStoreMaster}</p>}
+                            {masterSearchState.status === "error" && (
+                              <div className="mt-1 flex items-center gap-2 text-xs text-[var(--app-danger)]">
+                                <span>{masterSearchState.message}</span>
+                                <button type="button" onClick={() => setMasterRetryNonce((value) => value + 1)} className="rounded border border-[var(--app-danger)]/30 px-2 py-0.5 font-medium">
+                                  {text.retry}
+                                </button>
+                              </div>
+                            )}
+                            {masterSearchState.status === "success" && masterSearchState.query.length > 0 && masterSearchState.suggestions.length === 0 && (
+                              <div className="app-muted mt-1 text-xs">
+                                <p>{text.noMatchingAccount}</p>
+                                <p>{text.manualFallbackHint}</p>
+                              </div>
+                            )}
+                            {masterResults.length > 0 && (
+                              <div id="store-master-results" role="listbox" className="app-surface absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-elevated)]">
+                                {masterResults.length > 1 && <p className="border-b border-[var(--app-border-subtle)] bg-[var(--app-warning-soft)] px-3 py-2 text-xs text-[var(--app-warning)]">{text.multipleMatches}</p>}
+                                {masterResults.map((item, index) => (
+                                  <button
+                                    id={`master-result-${index}`}
+                                    role="option"
+                                    aria-selected={index === masterActiveIndex}
+                                    key={item.id}
+                                    type="button"
+                                    onMouseEnter={() => setMasterActiveIndex(index)}
+                                    onClick={() => selectMasterRecord(item)}
+                                    className={`app-list-item block w-full border-b border-[var(--app-border-subtle)] px-3.5 py-3 text-left last:border-0 hover:bg-[var(--app-surface-hover)] ${index === masterActiveIndex ? "is-selected bg-[var(--app-surface-active)]" : ""}`}
+                                  >
+                                    <strong className="block text-xs font-semibold text-[var(--app-text-primary)]">{item.accountName}</strong>
+                                    <span className="app-muted block text-xs">{item.storeName}</span>
+                                    <span className="app-muted mt-0.5 block text-[11px]">{[item.province, item.region, item.externalStoreId ? `${text.storeIdLabel} ${item.externalStoreId}` : null, item.lineId].filter(Boolean).join(" · ")}</span>
+                                    {item.matchReason === "FUZZY_SUGGESTION" && <span className="mt-1 inline-block rounded-[var(--app-radius-sm)] bg-[var(--app-info-soft)] text-[var(--app-info)] border border-[var(--app-info)]/20 px-2 py-0.5 text-[10px]">{text.systemSuggested}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {selectedMaster && synchronizedMaster && (
+                          <section className="store-master-sync-card col-span-2 p-4 text-xs rounded-[var(--app-radius-lg)]" aria-labelledby="store-master-sync-title">
+                            <div className="flex items-center justify-between gap-3">
+                              <h4 id="store-master-sync-title" className="font-semibold text-xs">{text.syncedStoreMasterTitle}</h4>
+                              <span className="app-chip rounded-full px-2 py-0.5 text-[10px]">{text.masterFile}</span>
+                            </div>
+                            <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2.5 text-xs sm:grid-cols-2">
+                              <div><dt className="store-master-sync-label text-[11px]">{text.storeIdLabel}</dt><dd className="font-medium">{synchronizedMaster.storeId}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.storeName}</dt><dd className="font-medium">{synchronizedMaster.storeName}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.accountName}</dt><dd className="font-medium">{synchronizedMaster.accountName}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.lineIdLabel}</dt><dd className="font-medium">{synchronizedMaster.lineId}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.province}</dt><dd className="font-medium">{synchronizedMaster.province}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.region}</dt><dd className="font-medium">{synchronizedMaster.region}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.openLineOa}</dt><dd className="font-medium">{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.openLineManager}</dt><dd className="font-medium">{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div>
+                            </dl>
+                            {selectedMaster.existingStore && <p className="mt-3 rounded-[var(--app-radius-sm)] bg-[var(--app-info-soft)] p-2 text-[var(--app-info)] border border-[var(--app-info)]/20">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}
+                            {selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-[var(--app-warning)]">{text.incompleteMasterData}</p>}
+                          </section>
+                        )}
+
+                        <p className="col-span-2 rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)]">{text.rotateCredentialsWarning}</p>
+
+                        <label className="col-span-2 text-xs font-medium text-[var(--app-text-secondary)]">{text.lineOaName} *<input value={lineOaForm.name} onChange={(event) => setLineOaForm((form) => ({ ...form, name: event.target.value }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]" /></label>
+
+                        <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                          {text.channelSecret} {editingLineOaId ? "" : "*"}
+                          <input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelSecret} onChange={(event) => setLineOaForm((form) => ({ ...form, channelSecret: event.target.value }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]" />
+                        </label>
+
+                        <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                          {text.accessToken} {editingLineOaId ? "" : "*"}
+                          <input type={showCredentials ? "text" : "password"} autoComplete="new-password" value={lineOaForm.channelAccessToken} onChange={(event) => setLineOaForm((form) => ({ ...form, channelAccessToken: event.target.value }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]" />
+                        </label>
+
+                        <button type="button" onClick={() => setShowCredentials((shown) => !shown)} className="col-span-2 text-left text-xs font-medium text-[var(--app-accent)] hover:underline">
+                          {showCredentials ? text.hideSecret : text.showSecret}
                         </button>
+
+                        <button type="button" onClick={() => setShowAdvancedLineOa((shown) => !shown)} className="col-span-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2 text-left text-xs font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]">
+                          {showAdvancedLineOa ? "▾" : "▸"} {text.advancedSettings}
+                        </button>
+
+                        {showAdvancedLineOa && (
+                          <>
+                            <label className="col-span-2 text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.stores}
+                              <select value={lineOaForm.storeId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, storeId: event.target.value || undefined }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]">
+                                <option value="">{text.autoCreateStore}</option>
+                                {availableStores.map((store) => <option key={store.id} value={store.id}>{store.storeId ? `[${store.storeId}] ` : ""}{store.name}</option>)}
+                              </select>
+                            </label>
+                            <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.region}
+                              <input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.region ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, region: event.target.value } }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)] disabled:bg-[var(--disabled-background)] disabled:text-[var(--disabled-foreground)]" />
+                            </label>
+                            <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.area}
+                              <input disabled={Boolean(lineOaForm.storeId)} value={lineOaForm.newStore?.area ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, newStore: { name: form.name, ...form.newStore, area: event.target.value } }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)] disabled:bg-[var(--disabled-background)] disabled:text-[var(--disabled-foreground)]" />
+                            </label>
+                            <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.basicId}
+                              <input value={lineOaForm.basicId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, basicId: event.target.value }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]" />
+                            </label>
+                            <label className="text-xs font-medium text-[var(--app-text-secondary)]">
+                              {text.channelId}
+                              <input value={lineOaForm.channelId ?? ""} onChange={(event) => setLineOaForm((form) => ({ ...form, channelId: event.target.value }))} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2.5 text-xs text-[var(--app-text-primary)]" />
+                            </label>
+                            <label className="col-span-2 flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)] cursor-pointer select-none">
+                              <input type="checkbox" checked={lineOaForm.isActive} onChange={(event) => setLineOaForm((form) => ({ ...form, isActive: event.target.checked }))} className="rounded border-[var(--app-border)] accent-[var(--app-accent)]" />
+                              {text.activeStatus}
+                            </label>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mt-6 flex justify-end gap-2.5 border-t border-[var(--app-border-subtle)] pt-4">
+                        <Button size="md" variant="secondary" onClick={() => setShowLineOaForm(false)}>
+                          {text.cancel}
+                        </Button>
+                        <Button size="md" variant="primary" disabled={lineOaSubmitting} isLoading={lineOaSubmitting} onClick={() => void submitLineOa()}>
+                          {lineOaSubmitting ? text.loadingData : text.saveConnection}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {createdLineOa && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in duration-120">
+                    <div role="dialog" aria-modal="true" className="w-full max-w-2xl rounded-[var(--app-radius-xl)] bg-[var(--app-surface)] border border-[var(--app-border)] p-6 sm:p-7 shadow-[var(--app-shadow-modal)] text-[var(--app-text-primary)]">
+                      <div className="rounded-[var(--app-radius-lg)] border border-[var(--app-success)]/30 bg-[var(--app-success-soft)] p-5">
+                        <h3 className="text-lg font-bold text-[var(--app-success)] flex items-center gap-2">
+                          <span>✓</span> {text.lineOaAdded}
+                        </h3>
+                        <p className="mt-1.5 text-xs opacity-90 text-[var(--app-text-primary)]">{text.pasteWebhookInstruction}</p>
+                      </div>
+
+                      <div className="mt-4 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4">
+                        <p className="break-all font-mono text-xs text-[var(--app-text-primary)]">{createdLineOa.webhookUrl}</p>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => void copyWebhookUrl(createdLineOa.account.id, createdLineOa.webhookUrl)}
+                          className="mt-3"
+                        >
+                          {text.copyWebhook}
+                        </Button>
                       </div>
 
                       {/* Automatic Background Backfill Status */}
-                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-slate-800">
-                        <h4 className="font-semibold text-sm text-blue-900 flex items-center gap-2">
-                          <svg className="h-4 w-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <div className="mt-4 rounded-[var(--app-radius-lg)] border border-[var(--app-info)]/30 bg-[var(--app-info-soft)] p-4 text-[var(--app-text-primary)]">
+                        <h4 className="font-semibold text-xs text-[var(--app-info)] flex items-center gap-2">
+                          <svg className="h-3.5 w-3.5 animate-spin text-[var(--app-info)]" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
@@ -2947,7 +3419,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                         {backfillJob ? (
                           <div className="mt-2 text-xs space-y-1">
-                            <p className="font-medium text-slate-700">
+                            <p className="font-medium text-[var(--app-text-primary)]">
                               {backfillJob.status === "COMPLETED"
                                 ? followerInsightsTranslations[language]?.backfillStatusCompleted
                                 : backfillJob.status === "COMPLETED_WITH_ERRORS"
@@ -2956,11 +3428,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                     ? followerInsightsTranslations[language]?.backfillStatusFailed
                                     : followerInsightsTranslations[language]?.backfillStatusQueued}
                             </p>
-                            <p className="text-slate-500 font-mono">
+                            <p className="text-[var(--app-text-tertiary)] font-mono text-[11px]">
                               Range: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | Days: {backfillJob.totalDays} | Succeeded: {backfillJob.succeeded} | Skipped: {backfillJob.skipped} | Failed: {backfillJob.failed}
                             </p>
                             {backfillResult && (
-                              <p className="mt-1 text-xs font-semibold text-green-700">
+                              <p className="mt-1 text-xs font-semibold text-[var(--app-success)]">
                                 ✓ {backfillResult.succeeded ?? 0} dates updated.
                               </p>
                             )}
@@ -2970,29 +3442,30 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 onClick={() => {
                                   void api.followerInsightsRetryJob(createdLineOa.account.id);
                                 }}
-                                className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
+                                className="mt-2 rounded-[var(--app-radius-sm)] bg-[var(--app-danger)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
                               >
                                 {followerInsightsTranslations[language]?.backfillStatusFailed || "Historical backfill failed. Click to retry."}
                               </button>
                             )}
                           </div>
                         ) : (
-                          <p className="mt-1 text-xs text-slate-600">
+                          <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
                             {followerInsightsTranslations[language]?.backfillStatusQueued}
                           </p>
                         )}
                       </div>
 
-                      <ol className="mt-5 list-inside list-decimal space-y-1 text-sm text-slate-600">
+                      <ol className="mt-4 list-inside list-decimal space-y-1 text-xs text-[var(--app-text-secondary)]">
                         {text.setupSteps.slice(1, 8).map((step) => <li key={step}>{step}</li>)}
                       </ol>
-                      <div className="mt-6 flex justify-end gap-3">
-                        <button onClick={() => setCreatedLineOa(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">
+
+                      <div className="mt-6 flex justify-end gap-2.5 border-t border-[var(--app-border-subtle)] pt-4">
+                        <Button size="md" variant="secondary" onClick={() => setCreatedLineOa(null)}>
                           {text.close}
-                        </button>
-                        <button onClick={() => setCreatedLineOa(null)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">
+                        </Button>
+                        <Button size="md" variant="primary" onClick={() => setCreatedLineOa(null)}>
                           {text.goToLineOaManagement}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -3000,40 +3473,40 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                 {/* Backfill Confirmation Dialog */}
                 {backfillModalOpen && createdLineOa && (
-                  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-6">
-                    <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-                      <h3 className="text-lg font-bold text-slate-900">
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in duration-120">
+                    <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-[var(--app-radius-xl)] bg-[var(--app-surface)] border border-[var(--app-border)] p-6 shadow-[var(--app-shadow-modal)] text-[var(--app-text-primary)]">
+                      <h3 className="text-base font-bold text-[var(--app-text-primary)]">
                         {language === "th" ? "ดึงข้อมูลประวัติผู้ติดตามย้อนหลัง" : language === "zh" ? "补全历史关注者数据" : "Backfill historical follower data"}
                       </h3>
-                      <p className="mt-1 text-xs font-medium text-slate-600">
+                      <p className="mt-1 text-xs font-medium text-[var(--app-text-secondary)]">
                         {createdLineOa.account.name}
                       </p>
 
                       <div className="mt-4 space-y-3 text-xs">
                         <div>
-                          <label className="font-medium text-slate-700">
+                          <label className="font-medium text-[var(--app-text-secondary)]">
                             {language === "th" ? "วันเริ่มต้น" : language === "zh" ? "开始日期" : "Start Date"}
                           </label>
                           <input
                             type="date"
                             value={backfillDateFrom}
                             onChange={(e) => setBackfillDateFrom(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                            className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2 text-xs text-[var(--app-text-primary)]"
                           />
                         </div>
                         <div>
-                          <label className="font-medium text-slate-700">
+                          <label className="font-medium text-[var(--app-text-secondary)]">
                             {language === "th" ? "วันสิ้นสุด" : language === "zh" ? "结束日期" : "End Date"}
                           </label>
                           <input
                             type="date"
                             value={backfillDateTo}
                             onChange={(e) => setBackfillDateTo(e.target.value)}
-                            className="mt-1 w-full rounded-lg border border-slate-300 p-2"
+                            className="mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] p-2 text-xs text-[var(--app-text-primary)]"
                           />
                         </div>
 
-                        <div className="rounded-lg bg-slate-100 p-3 text-slate-700 font-medium">
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] border border-[var(--app-border)] p-3 text-[var(--app-text-secondary)] font-medium">
                           {language === "th"
                             ? `ประมาณการเรียก LINE API: ${getInclusiveCalendarDays(backfillDateFrom, backfillDateTo)} วัน สำหรับบัญชี ${createdLineOa.account.name}`
                             : language === "zh"
@@ -3042,24 +3515,28 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         </div>
 
                         {backfillError && (
-                          <div className="rounded-lg bg-rose-50 p-2 text-rose-700 border border-rose-200">
+                          <div className="rounded-[var(--app-radius-md)] bg-[var(--app-danger-soft)] p-2.5 text-xs text-[var(--app-danger)] border border-[var(--app-danger)]/20">
                             {backfillError}
                           </div>
                         )}
                       </div>
 
-                      <div className="mt-6 flex justify-end gap-3">
-                        <button
+                      <div className="mt-6 flex justify-end gap-2.5 border-t border-[var(--app-border-subtle)] pt-4">
+                        <Button
                           type="button"
+                          size="md"
+                          variant="secondary"
                           disabled={backfillLoading}
                           onClick={() => setBackfillModalOpen(false)}
-                          className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
                           {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          size="md"
+                          variant="primary"
                           disabled={backfillLoading}
+                          isLoading={backfillLoading}
                           onClick={async () => {
                             setBackfillLoading(true);
                             setBackfillError(null);
@@ -3077,12 +3554,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               setBackfillLoading(false);
                             }
                           }}
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                         >
                           {backfillLoading
                             ? (language === "th" ? "กำลังดึงข้อมูล..." : "Backfilling...")
                             : (language === "th" ? "ยืนยันการดึงข้อมูลย้อนหลัง" : language === "zh" ? "确认补全历史数据" : "Confirm Historical Backfill")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -3121,14 +3597,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             </PageContainer>
           ) : (
             <>
-              <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r border-slate-200 dark:border-slate-800">
-                <div className="border-b border-slate-200 dark:border-slate-800 p-3.5 shrink-0">
+              <section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-surface)]">
+                <div className="border-b border-[var(--app-border)] p-3.5 shrink-0">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 data-chat-list-title className="text-base font-semibold">
+                      <h2 data-chat-list-title className="text-sm font-bold text-[var(--app-text-primary)]">
                         {conversationListTitle}
                       </h2>
-                      <p className="app-muted mt-0.5 text-sm font-tabular">
+                      <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">
                         {chatTotalCount} {text.searchResults}
                       </p>
                     </div>
@@ -3158,7 +3634,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               conversationIds: targetIds.length > 0 ? targetIds : undefined,
                             });
                           }}
-                          className="rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                          className="rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 shadow-[var(--app-shadow-card)] transition-colors cursor-pointer"
                           title={language === "th" ? "เปลี่ยนสถานะเป็นตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"}
                         >
                           <span>✓</span>
@@ -3175,7 +3651,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         data-chat-filter-button
                         onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
                         aria-expanded={showFilterPanel}
-                        className="app-button-secondary rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-xs font-medium"
+                        className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2.5 py-1 text-xs font-medium transition-colors"
                       >
                         {text.moreFilters}
                       </button>
@@ -3184,52 +3660,52 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   </div>
 
                   {showFilterPanel && (
-                    <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-2xs">
-                      <label className="app-muted text-xs">
+                    <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 shadow-[var(--app-shadow-card)]">
+                      <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.storeFilter}
-                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allStores}</option>
                           {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted text-xs">
+                      <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.statusFilter}
-                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allStatuses}</option>
                           {statusOptions.map((status) => <option key={status} value={status}>{getStatusLabel(language, status)}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted text-xs">
+                      <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.priorityFilter}
-                        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as PriorityFilter)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allPriorities}</option>
                           {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority === "High" ? text.highPriority : text.normalPriority}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted text-xs">
+                      <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.seriesFilter}
-                        <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={seriesFilter} onChange={(event) => setSeriesFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allSeries}</option>
                           {seriesOptions.map((series) => <option key={series} value={series}>{series}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted col-span-2 text-xs">
+                      <label className="text-[var(--app-text-secondary)] col-span-2 text-xs font-medium">
                         {text.modelFilter}
-                        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allModels}</option>
                           {modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted col-span-2 text-xs">
+                      <label className="text-[var(--app-text-secondary)] col-span-2 text-xs font-medium">
                         {text.topicFilter}
-                        <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allTopics}</option>
                           {topicOptions.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
                         </select>
                       </label>
-                      <label className="app-muted col-span-2 text-xs">
+                      <label className="text-[var(--app-text-secondary)] col-span-2 text-xs font-medium">
                         {text.lineOaManagement}
-                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="app-input mt-1 w-full rounded-md border px-2 py-1.5 text-xs">
+                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allLineOa}</option>
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
@@ -3239,30 +3715,30 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                   {hasActiveFilters && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      {searchText.trim() && <button onClick={() => setSearchText("")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
-                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
-                      {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
-                      {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
-                      {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}
-                      {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
-                      {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
-                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="app-chip rounded-md px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
-                      <button onClick={clearAllFilters} className="text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline">{text.clearAll}</button>
+                      {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
+                      {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
+                      {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}
+                      {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
+                      {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
+                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
+                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
                     </div>
                   )}
                 </div>
 
                 {bulkSuccessToast && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/80 border-b border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
+                  <div className="bg-[var(--app-success-soft)] border-b border-[var(--app-border)] px-4 py-2 flex items-center justify-between text-xs text-[var(--app-text-primary)] shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold">✓</span>
+                      <span className="font-bold text-[var(--app-success)]">✓</span>
                       <span>{bulkSuccessToast}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setBulkSuccessToast(null)}
-                      className="text-emerald-600 hover:text-emerald-900 font-bold ml-2"
+                      className="text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)] font-bold ml-2"
                     >
                       ×
                     </button>
@@ -3342,11 +3818,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             }
                           }}
                           aria-pressed={isSelected}
-                          className={`conversation-list-row app-list-item relative w-full border-b border-slate-100 dark:border-slate-800/80 px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/40 cursor-pointer ${isSelected ? "is-selected" : ""
-                            }`}
+                          className={`conversation-list-row app-list-item relative w-full border-b border-[var(--app-border-subtle)] px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]/40 cursor-pointer ${isSelected ? "is-selected" : ""}`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p data-conversation-customer className="truncate text-base font-bold leading-5 tracking-tight flex-1 text-slate-900 dark:text-slate-100">{conversation.customer}</p>
+                            <p data-conversation-customer className="truncate text-sm font-bold leading-5 tracking-tight flex-1 text-[var(--app-text-primary)]">{conversation.customer}</p>
 
                             <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
@@ -3358,7 +3833,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   e.stopPropagation();
                                   setOpenConversationDropdownId((prev) => (prev === conversation.id ? null : conversation.id));
                                 }}
-                                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                className="p-1 rounded-[var(--app-radius-sm)] text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-subtle)] transition-colors"
                                 title={language === "th" ? "เปลี่ยนสถานะ" : language === "zh" ? "更改状态" : "Change Status"}
                               >
                                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -3367,11 +3842,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               </button>
 
                               {openConversationDropdownId === conversation.id && (
-                                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl text-xs backdrop-blur-md">
-                                  <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-1.5 shadow-[var(--app-shadow-dropdown)] text-xs backdrop-blur-md">
+                                  <div className="px-2 py-1 text-[10px] font-semibold text-[var(--app-text-tertiary)] uppercase tracking-wider">
                                     {language === "th" ? "สถานะการตอบ" : language === "zh" ? "回复状态" : "Status"}
                                   </div>
-                                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                                  <div className="my-1 border-t border-[var(--app-border-subtle)]" />
 
                                   <button
                                     type="button"
@@ -3381,12 +3856,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       setOpenConversationDropdownId(null);
                                       void updateConversationBmReplyStatus(conversation.id, "NOT_REPLIED");
                                     }}
-                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "NOT_REPLIED"
-                                        ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 font-semibold"
-                                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                      }`}
+                                    className={`w-full flex items-center gap-2 rounded-[var(--app-radius-sm)] px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                      currentBmReplyStatus === "NOT_REPLIED"
+                                        ? "bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] font-semibold"
+                                        : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-subtle)] hover:text-[var(--app-text-primary)]"
+                                    }`}
                                   >
-                                    <span className="text-slate-400 text-xs">⚪</span>
+                                    <span className="text-[var(--app-text-tertiary)] text-xs">⚪</span>
                                     <span>{bmReplyStatusLabels[language]["NOT_REPLIED"]}</span>
                                   </button>
 
@@ -3398,10 +3874,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       setOpenConversationDropdownId(null);
                                       void updateConversationBmReplyStatus(conversation.id, "NOTIFIED_BM");
                                     }}
-                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "NOTIFIED_BM"
+                                    className={`w-full flex items-center gap-2 rounded-[var(--app-radius-sm)] px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                      currentBmReplyStatus === "NOTIFIED_BM"
                                         ? "bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-semibold"
                                         : "text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                                      }`}
+                                    }`}
                                   >
                                     <span className="text-xs">🟣</span>
                                     <span>{bmReplyStatusLabels[language]["NOTIFIED_BM"]}</span>
@@ -3415,10 +3892,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       setOpenConversationDropdownId(null);
                                       void updateConversationBmReplyStatus(conversation.id, "REPLIED");
                                     }}
-                                    className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors ${currentBmReplyStatus === "REPLIED"
-                                        ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-semibold"
-                                        : "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                      }`}
+                                    className={`w-full flex items-center gap-2 rounded-[var(--app-radius-sm)] px-2.5 py-1.5 text-left font-medium transition-colors ${
+                                      currentBmReplyStatus === "REPLIED"
+                                        ? "bg-[var(--app-success-soft)] text-[var(--app-success)] font-semibold"
+                                        : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-subtle)] hover:text-[var(--app-text-primary)]"
+                                    }`}
                                   >
                                     <span className="text-xs">🟢</span>
                                     <span>{bmReplyStatusLabels[language]["REPLIED"]}</span>
@@ -3432,21 +3910,22 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             {conversation.translations[language]}
                           </p>
 
-                          <div data-conversation-metadata className="app-muted mt-2.5 flex items-center gap-1.5 text-xs font-tabular">
+                          <div data-conversation-metadata className="app-muted mt-2 flex items-center gap-1.5 text-[11px] font-tabular text-[var(--app-text-tertiary)] font-mono">
                             <span className="min-w-0 truncate">{conversation.store}</span>
                             <span aria-hidden="true">·</span>
                             <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
                           </div>
 
-                          <div className="mt-3.5 flex flex-wrap gap-1.5 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                          <div className="mt-2.5 flex flex-wrap gap-1 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
                             <span
                               data-conversation-bm-reply-status={currentBmReplyStatus}
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${currentBmReplyStatus === "REPLIED"
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                currentBmReplyStatus === "REPLIED"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
                                   : currentBmReplyStatus === "NOTIFIED_BM"
                                     ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
                                     : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                }`}
+                              }`}
                             >
                               {bmReplyStatusLabels[language][currentBmReplyStatus]}
                             </span>
@@ -3454,8 +3933,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               <span
                                 key={`${tag.kind}-${tag.label}-${index}`}
                                 data-conversation-priority={tag.kind === "priority" ? conversation.priority : undefined}
-                                className={`rounded-full px-2 py-0.5 text-xs ${tag.kind === "priority"
-                                    ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  tag.kind === "priority"
+                                    ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200 font-semibold"
                                     : tag.kind === "status"
                                       ? status === "followUp"
                                         ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
@@ -3469,13 +3949,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       : tag.kind === "product"
                                         ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
                                         : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                                  }`}
+                                }`}
                               >
                                 {tag.label}
                               </span>
                             ))}
                             {tags.hidden.length > 0 && (
-                              <span className="app-chip rounded-full px-2 py-0.5 text-xs" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
+                              <span className="app-chip rounded-full px-1.5 py-0.5 text-[10px] bg-[var(--app-surface-subtle)] text-[var(--app-text-tertiary)] border border-[var(--app-border)] font-mono" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
                                 +{tags.hidden.length}
                               </span>
                             )}
@@ -3508,33 +3988,42 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 {selectedConversation && selectedConversationState ? (
                   <div data-chat-detail-workspace className="flex h-full min-h-0 flex-col">
                     {/* ── 1. COMPACT CUSTOMER HEADER ─────────────────────── */}
-                    <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-2.5">
+                    <header data-chat-detail-header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5">
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         {selectedApiConversation?.customer.pictureUrl
-                          ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-9 w-9 shrink-0 rounded-full bg-cover bg-center ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xs" />
-                          : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-xs text-white shadow-2xs">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
+                          ? <div role="img" aria-label={selectedApiConversation.customer.displayName} style={{ backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` }} className="h-9 w-9 shrink-0 rounded-full bg-cover bg-center ring-1 ring-[var(--app-border)] shadow-[var(--app-shadow-card)]" />
+                          : <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent-soft)] font-bold text-xs text-[var(--app-accent)] shadow-[var(--app-shadow-card)]">{(selectedApiConversation?.customer.displayName ?? selectedConversation.customer).slice(0, 2).toUpperCase()}</div>
                         }
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight">
+                            <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight text-[var(--app-text-primary)]">
                               {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
                             </h2>
-                            <span className="app-muted shrink-0 text-xs font-medium">{selectedConversation.store}</span>
-                            {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-300">{text.profileUnavailable}</span>}
+                            <span className="shrink-0 text-xs font-medium text-[var(--app-text-secondary)]">{selectedConversation.store}</span>
+                            {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
                             {customerIntelligence && (
-                              <span className={`inline-flex items-center rounded-md px-1.5 py-0.2 text-[10px] font-semibold ${customerIntelligence.customerStage === "PURCHASED" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40"
-                                  : customerIntelligence.customerStage === "INTERESTED" ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40"
-                                    : customerIntelligence.customerStage === "NEW" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
-                                      : "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40"}`}>
+                              <span className={`inline-flex items-center rounded-[var(--app-radius-sm)] px-1.5 py-0.5 text-[10px] font-semibold ${
+                                customerIntelligence.customerStage === "PURCHASED"
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40"
+                                  : customerIntelligence.customerStage === "INTERESTED"
+                                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40"
+                                    : customerIntelligence.customerStage === "NEW"
+                                      ? "bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] border border-[var(--app-border)]"
+                                      : "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40"
+                              }`}>
                                 {customerIntelligence.customerStage.replaceAll("_", " ")}
                               </span>
                             )}
-                            <span className="rounded-md bg-amber-50 px-1.5 py-0.2 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200/60 dark:border-amber-900/40">
+                            <span className="rounded-[var(--app-radius-sm)] bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200/60 dark:border-amber-900/40">
                               {followUpStatusLabels[language][selectedConversationState.status]}
                             </span>
-                            <span className={`rounded-md px-1.5 py-0.2 text-[10px] font-medium ${selectedConversation.priority === "High" ? "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200 border border-red-200/60 dark:border-red-900/40" : "app-chip"}`}>
+                            <span className={`rounded-[var(--app-radius-sm)] px-1.5 py-0.5 text-[10px] font-medium ${
+                              selectedConversation.priority === "High"
+                                ? "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200 border border-red-200/60 dark:border-red-900/40 font-semibold"
+                                : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] border border-[var(--app-border)]"
+                            }`}>
                               {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
                             </span>
                             <select
@@ -3543,15 +4032,19 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               disabled={isMutating || authUser?.role === "VIEWER"}
                               value={selectedConversationState.bmReplyStatus}
                               onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                              className={`rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-0.2 text-[10px] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60 ${selectedConversationState.bmReplyStatus === "REPLIED" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM" ? "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                              className={`rounded-[var(--app-radius-sm)] border border-[var(--app-border)] px-1.5 py-0.5 text-[10px] font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                                selectedConversationState.bmReplyStatus === "REPLIED"
+                                  ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM"
+                                    ? "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
+                                    : "bg-[var(--app-surface)] text-[var(--app-text-primary)]"
+                              }`}
                             >
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
                               <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
-                            <span className="app-muted text-[10px]">{formatRelativeTime(selectedConversation.time, language)}</span>
+                            <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-mono">{formatRelativeTime(selectedConversation.time, language)}</span>
                           </div>
                         </div>
                       </div>
@@ -3561,7 +4054,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           disabled={chatLoading}
                           onClick={() => void refreshProfile()}
                           title={text.refreshLineProfile}
-                          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] px-2 py-1 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]"
                         >
                           ↻
                         </button>
@@ -3569,7 +4062,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           data-chat-detail-primary-action
                           type="button"
                           onClick={() => void openSelectedConversationInLineOa()}
-                          className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-3 py-1.5 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/50"
                           aria-label="เปิดใน LINE OA Manager"
                         >
                           เปิดใน LINE OA <span aria-hidden="true">↗</span>
@@ -3579,23 +4072,23 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                     {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
                     <div className="flex min-h-0 shrink-0 flex-col">
-                      <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-1.5">
-                        <p className="app-muted text-xs font-tabular">{chatHistory.total} {text.messagesToday}</p>
+                      <div className="flex shrink-0 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-1.5">
+                        <p className="app-muted text-xs font-tabular text-[var(--app-text-tertiary)] font-mono">{chatHistory.total} {text.messagesToday}</p>
                         <button
                           data-chat-detail-secondary-action
                           onClick={() => setShowTranslation(!showTranslation)}
-                          className="app-button-secondary rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]"
                         >
                           🌐 {showTranslation ? text.showOriginal : text.translateMessage}
                         </button>
                       </div>
-                      <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-slate-50/70 px-4 py-3 dark:bg-slate-950/60">
-                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 shadow-2xs">{text.loadEarlierMessages}</button></div>}
-                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-4 text-center text-xs text-slate-400 font-tabular">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 bg-cover bg-center text-xs font-medium">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-slate-400 font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-white border border-slate-200/80 px-4 py-2.5 shadow-2xs dark:bg-slate-900 dark:border-slate-800 text-slate-900 dark:text-slate-100" : "rounded-2xl rounded-br-xs bg-emerald-50/90 border border-emerald-200/60 px-4 py-2.5 dark:bg-emerald-950/40 dark:border-emerald-800/50 text-slate-900 dark:text-slate-100"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-slate-400 font-tabular ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
-                        {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-slate-500">{text.noMessages}</p>}
+                      <div data-chat-message-scroll className="h-[clamp(320px,48vh,540px)] min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
+                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
+                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                        {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">{text.noMessages}</p>}
                         <div ref={chatEndRef} />
                       </div>
-                      <div data-chat-reply-composer className="shrink-0 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                      <div data-chat-reply-composer className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
                         <div className="flex items-end gap-2">
                           <textarea
                             value={replyText}
@@ -3615,31 +4108,31 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 void sendReply();
                               }
                             }}
-                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60"
                           />
                           <button
                             type="button"
                             disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
                             onClick={() => void sendReply()}
-                            className="app-button-primary h-11 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                            className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {replySending ? "กำลังส่ง..." : "ส่ง"}
                           </button>
                         </div>
-                        {replyError && <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-300">{replyError}</p>}
-                        <p className="app-muted mt-1 text-right text-[10px] font-tabular">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                        {replyError && <p role="alert" className="mt-2 text-xs text-[var(--app-danger)]">{replyError}</p>}
+                        <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)] font-mono">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
                       </div>
-                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--border)] bg-slate-50/50 dark:bg-slate-900/40 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-400"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
+                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/50 px-4 py-1.5 text-xs text-[var(--app-text-tertiary)]"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                     </div>
 
                     {/* ── 3. LOWER SECTIONS ──────────────────────────────── */}
                     <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
                       <div className="px-3 py-3 sm:px-4">
-                        <div data-chat-detail-lower className="chat-detail-lower grid gap-0 py-3">
-                          <section data-purchase-information-card data-insights-section className="pb-3 chat-detail-insights">
+                        <div data-chat-detail-lower className="chat-detail-lower grid gap-3 py-2">
+                          <section data-purchase-information-card data-insights-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="font-semibold">{text.customerPurchase}</h3>
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.customerPurchase}</h3>
                                 {selectedApiConversation?.customerSalesInformation?.status === "INTERESTED" && (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                                     🎯 {text.interested || "Interested"}{selectedApiConversation.customerSalesInformation.interestLevel ? ` · ${selectedApiConversation.customerSalesInformation.interestLevel === "HOT" ? "🔥 Hot" : selectedApiConversation.customerSalesInformation.interestLevel === "WARM" ? "⚡ Warm" : selectedApiConversation.customerSalesInformation.interestLevel === "COLD" ? "❄️ Cold" : selectedApiConversation.customerSalesInformation.interestLevel}` : " · Not specified"}
@@ -3672,20 +4165,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   );
                                 })()}
                               </div>
-                              <button data-chat-detail-secondary-action disabled={chatLoading || authUser.role === "VIEWER"} onClick={() => void editPurchaseInformation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.editPurchaseInformation}</button>
+                              <button data-chat-detail-secondary-action disabled={chatLoading || authUser.role === "VIEWER"} onClick={() => void editPurchaseInformation()} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]">{text.editPurchaseInformation}</button>
                             </div>
 
                             {selectedApiConversation?.customerSalesInformation?.products.length ? (
                               <div className="space-y-3">
                                 {selectedApiConversation.customerSalesInformation.status === "PURCHASED" && (
-                                  <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 rounded-lg bg-slate-50/70 p-2.5 text-xs dark:bg-slate-900/50">
-                                    <div><dt className="app-muted font-medium">{text.purchaseChannel}</dt><dd className="mt-0.5 font-semibold">{selectedApiConversation.customerSalesInformation.purchaseChannel.map(c => c === "STORE" ? "🏪 Store" : c === "ONLINE" ? "🌐 Online" : c).join(", ") || "—"}</dd></div>
-                                    <div><dt className="app-muted font-medium">{text.paymentMethod}</dt><dd className="mt-0.5 font-semibold">{selectedApiConversation.customerSalesInformation.paymentMethod === "CASH" ? "💵 Cash" : selectedApiConversation.customerSalesInformation.paymentMethod === "INSTALLMENT" ? "💳 Installment" : selectedApiConversation.customerSalesInformation.paymentMethod === "CREDIT_CARD" ? "💳 Credit Card" : selectedApiConversation.customerSalesInformation.paymentMethod === "OTHER" ? "🏷️ Other" : (selectedApiConversation.customerSalesInformation.paymentMethod ?? "—")}</dd></div>
+                                  <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 text-xs">
+                                    <div><dt className="text-[var(--app-text-tertiary)] font-medium">{text.purchaseChannel}</dt><dd className="mt-0.5 font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.customerSalesInformation.purchaseChannel.map(c => c === "STORE" ? "🏪 Store" : c === "ONLINE" ? "🌐 Online" : c).join(", ") || "—"}</dd></div>
+                                    <div><dt className="text-[var(--app-text-tertiary)] font-medium">{text.paymentMethod}</dt><dd className="mt-0.5 font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.customerSalesInformation.paymentMethod === "CASH" ? "💵 Cash" : selectedApiConversation.customerSalesInformation.paymentMethod === "INSTALLMENT" ? "💳 Installment" : selectedApiConversation.customerSalesInformation.paymentMethod === "CREDIT_CARD" ? "💳 Credit Card" : selectedApiConversation.customerSalesInformation.paymentMethod === "OTHER" ? "🏷️ Other" : (selectedApiConversation.customerSalesInformation.paymentMethod ?? "—")}</dd></div>
                                   </dl>
                                 )}
 
                                 <div>
-                                  <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wider">
+                                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-secondary)]">
                                     {selectedApiConversation.customerSalesInformation.status === "PURCHASED" ? (text.productsPurchased || "Purchased Products") : (text.productsInterested || "Interested Products")}
                                   </h4>
                                   <div className="space-y-1.5">
@@ -3699,16 +4192,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       const variantSpecs = variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "";
 
                                       return (
-                                        <div key={pIdx} className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 text-xs shadow-2xs">
+                                        <div key={pIdx} className="flex items-center justify-between rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2 text-xs shadow-2xs">
                                           <div className="flex items-center gap-2 min-w-0">
                                             <span className="text-base shrink-0">{icon}</span>
                                             <div className="truncate">
-                                              <p className="font-semibold text-slate-900 truncate dark:text-slate-100">{model.seriesName ? `${model.seriesName} · ` : ""}{model.name}</p>
-                                              {variantSpecs && <p className="text-[11px] text-slate-500 truncate dark:text-slate-400">{variantSpecs}</p>}
+                                              <p className="font-semibold text-[var(--app-text-primary)] truncate">{model.seriesName ? `${model.seriesName} · ` : ""}{model.name}</p>
+                                              {variantSpecs && <p className="text-[11px] text-[var(--app-text-tertiary)] truncate">{variantSpecs}</p>}
                                             </div>
                                           </div>
                                           {quantity > 1 && (
-                                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-700 text-[10px] dark:bg-slate-800 dark:text-slate-300">
+                                            <span className="shrink-0 rounded-full bg-[var(--app-surface)] border border-[var(--app-border)] px-2 py-0.5 font-bold text-[var(--app-text-primary)] text-[10px]">
                                               x{quantity}
                                             </span>
                                           )}
@@ -3719,43 +4212,43 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 </div>
                               </div>
                             ) : selectedApiConversation?.purchaseInformation?.recordState === "LEGACY_MANUAL" ? (
-                              <p className="text-sm text-slate-500">{text.legacyPurchaseInformation}</p>
+                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.legacyPurchaseInformation}</p>
                             ) : selectedApiConversation?.purchaseInformation?.products.length ? (
                               <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                                <div><dt className="app-muted text-xs">{text.productModel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ model }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}`).join(", ")}</dd></div>
-                                <div><dt className="app-muted text-xs">{text.productCategory}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ model }) => model.category?.replaceAll("_", " ")).filter(Boolean).join(", ") || "—"}</dd></div>
-                                <div><dt className="app-muted text-xs">{text.purchaseChannel}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.purchaseChannel.join(", ") || "—"}</dd></div>
-                                <div><dt className="app-muted text-xs">{text.paymentMethod}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.paymentMethod ?? "—"}</dd></div>
-                                <div className="sm:col-span-2"><dt className="app-muted text-xs">{text.variant}</dt><dd className="mt-0.5 text-sm font-medium">{selectedApiConversation.purchaseInformation.products.map(({ variant }) => variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "—").join(", ")}</dd></div>
+                                <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.productModel}</dt><dd className="mt-0.5 text-xs font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.purchaseInformation.products.map(({ model }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}`).join(", ")}</dd></div>
+                                <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.productCategory}</dt><dd className="mt-0.5 text-xs font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.purchaseInformation.products.map(({ model }) => model.category?.replaceAll("_", " ")).filter(Boolean).join(", ") || "—"}</dd></div>
+                                <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseChannel}</dt><dd className="mt-0.5 text-xs font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.purchaseInformation.purchaseChannel.join(", ") || "—"}</dd></div>
+                                <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.paymentMethod}</dt><dd className="mt-0.5 text-xs font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.purchaseInformation.paymentMethod ?? "—"}</dd></div>
+                                <div className="sm:col-span-2"><dt className="text-xs text-[var(--app-text-tertiary)]">{text.variant}</dt><dd className="mt-0.5 text-xs font-semibold text-[var(--app-text-primary)]">{selectedApiConversation.purchaseInformation.products.map(({ variant }) => variant ? [variant.ram && `${variant.ram}GB RAM`, variant.rom && `${variant.rom}GB ROM`, variant.color].filter(Boolean).join(" · ") : "—").join(", ")}</dd></div>
                               </dl>
                             ) : (
-                              <p className="text-sm text-slate-500">{text.noPurchaseInformation}</p>
+                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.noPurchaseInformation}</p>
                             )}
 
                             {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.customerSalesInformation?.recordedAt || (selectedApiConversation?.purchaseInformation?.recordState === "VERIFIED" && (selectedApiConversation.purchaseInformation.recordedBy || selectedApiConversation.purchaseInformation.recordedAt))) && (
-                              <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-[var(--border)] pt-2 text-[11px] sm:grid-cols-2">
-                                {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy) && <div><dt className="app-muted">{text.recordedBy}</dt><dd className="mt-0.5 font-medium">{selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy}</dd></div>}
-                                {(selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt) && <div><dt className="app-muted">{text.recordedAt}</dt><dd className="mt-0.5 font-medium">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date((selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt)!))}</dd></div>}
+                              <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-[var(--app-border-subtle)] pt-2 text-[11px] sm:grid-cols-2">
+                                {(selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy) && <div><dt className="text-[var(--app-text-tertiary)]">{text.recordedBy}</dt><dd className="mt-0.5 font-medium text-[var(--app-text-primary)]">{selectedApiConversation?.customerSalesInformation?.recordedBy || selectedApiConversation?.purchaseInformation?.recordedBy}</dd></div>}
+                                {(selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt) && <div><dt className="text-[var(--app-text-tertiary)]">{text.recordedAt}</dt><dd className="mt-0.5 font-medium text-[var(--app-text-primary)]">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date((selectedApiConversation?.customerSalesInformation?.recordedAt || selectedApiConversation?.purchaseInformation?.recordedAt)!))}</dd></div>}
                               </dl>
                             )}
                           </section>
 
-                          <section data-product-intent-card data-insights-section className="border-t border-[var(--border)] py-3 chat-detail-insights">
+                          <section data-product-intent-card data-insights-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-insights">
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                              <h3 className="font-semibold">{text.aiInsight}</h3>
-                              <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="app-button-secondary rounded border px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{text.reanalyzeConversation}</button>
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.aiInsight}</h3>
+                              <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]">{text.reanalyzeConversation}</button>
                             </div>
                             {selectedApiConversation?.aiInsight?.mentionedProducts.length ? (
-                              <div className="mb-3"><h4 className="app-muted mb-1 text-xs font-semibold uppercase tracking-wide">{text.mentionedProduct}</h4><p className="text-sm font-medium">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
+                              <div className="mb-3"><h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.mentionedProduct}</h4><p className="mt-0.5 text-xs font-medium text-[var(--app-text-primary)]">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
                             ) : (
-                              <p className="text-sm text-slate-500">{text.noInsightAvailable}</p>
+                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.noInsightAvailable}</p>
                             )}
                             <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                              <div><dt className="app-muted text-xs">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
-                              <div><dt className="app-muted text-xs">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
+                              <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
+                              <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200 font-semibold">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
                             </dl>
-                            <div className="mt-3 border-t border-[var(--border)] pt-3">
-                              <h4 className="app-muted mb-2 text-xs font-semibold uppercase tracking-wide">{text.conversationTopics}</h4>
+                            <div className="mt-3 border-t border-[var(--app-border-subtle)] pt-3">
+                              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.conversationTopics}</h4>
                               <div className="flex flex-wrap gap-1.5">
                                 {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics.filter(({ source }) => source === "RULE") ?? [])
                                   .map((topic) => {
@@ -3763,19 +4256,19 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                     const topicName = "topic" in topic ? topic.topic.name : topic.name;
                                     return <span key={topicId} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">{topicName} <span className="text-[10px] opacity-70">{text.autoSource}</span></span>;
                                   })}
-                                {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-sm text-slate-500">{text.noTopicDetected}</span>}
+                                {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-xs text-[var(--app-text-tertiary)]">{text.noTopicDetected}</span>}
                               </div>
                             </div>
                           </section>
 
-                          <section data-topics-note-card data-internal-note-section className="border-t border-[var(--border)] py-3 chat-detail-note">
-                            <label className="mb-2 block text-sm font-semibold">{text.internalNote}</label>
-                            <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="app-input h-24 min-h-20 w-full resize-y rounded-lg border p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
-                            <p className="app-muted mt-1.5 text-xs">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                          <section data-topics-note-card data-internal-note-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-note">
+                            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.internalNote}</label>
+                            <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="max-h-32 min-h-20 w-full resize-y rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)]" />
+                            <p className="app-muted mt-1.5 text-[11px] text-[var(--app-text-tertiary)] font-mono">{isMutating ? text.loadingData : text.noteSaveHint}</p>
                           </section>
 
-                          <section data-activity-history className="border-t border-[var(--border)] pt-3 chat-detail-activity">
-                            <h3 className="mb-3 text-sm font-semibold">{text.activityHistory}</h3>
+                          <section data-activity-history className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-activity">
+                            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.activityHistory}</h3>
                             {selectedConversationState.activityHistory.length > 0 ? (
                               <div className="space-y-2">
                                 {[...selectedConversationState.activityHistory]
@@ -3783,31 +4276,31 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                   .map((activity) => (
                                     <div
                                       key={activity.id}
-                                      className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/60"
+                                      className="flex items-center justify-between gap-3 rounded-[var(--app-radius-sm)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs"
                                     >
-                                      <p className="text-sm">
+                                      <p className="text-xs text-[var(--app-text-primary)]">
                                         {activity.actionType === "messageReceived" ? (
                                           text.messageReceivedActivity
                                         ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
                                           <>
                                             {text.bmReplyStatusChangedTo}{" "}
-                                            <span className="font-semibold">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
+                                            <span className="font-semibold text-[var(--app-text-primary)]">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
                                           </>
                                         ) : activity.status ? (
                                           <>
                                             {text.statusChangedTo}{" "}
-                                            <span className="font-semibold">{getStatusLabel(language, activity.status)}</span>
+                                            <span className="font-semibold text-[var(--app-text-primary)]">{getStatusLabel(language, activity.status)}</span>
                                           </>
                                         ) : null}
                                       </p>
-                                      <time className="text-xs text-slate-500" dateTime={activity.timestamp}>
+                                      <time className="text-[10px] text-[var(--app-text-tertiary)] font-mono" dateTime={activity.timestamp}>
                                         {formatRelativeTime(activity.timestamp, language)}
                                       </time>
                                     </div>
                                   ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-slate-500">{text.noActivity}</p>
+                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.noActivity}</p>
                             )}
                           </section>
                         </div>
@@ -3815,10 +4308,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-h-full items-center justify-center text-center">
+                  <div className="flex min-h-full items-center justify-center text-center p-8">
                     <div>
-                      <p className="font-semibold">{text.noConversationsFound}</p>
-                      <p className="mt-2 text-sm text-slate-500">
+                      <p className="font-semibold text-[var(--app-text-primary)]">{text.noConversationsFound}</p>
+                      <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">
                         {text.noResultsExplanation}
                       </p>
                     </div>
@@ -3830,16 +4323,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         </div>
       </PageContainer>
       {storeRemovalPreview && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-6">
-          <div role="dialog" aria-modal="true" aria-labelledby="remove-store-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-xs p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="remove-store-title" className="w-full max-w-lg rounded-[var(--app-radius-xl)] bg-[var(--app-surface)] border border-[var(--app-border)] p-6 shadow-[var(--app-shadow-modal)] text-[var(--app-text-primary)]">
             <h2 id="remove-store-title" className="text-xl font-bold">{text.removeStore}</h2>
-            <p className="mt-2 text-sm text-slate-600">{text.removeStoreQuestion.replace("{storeName}", storeRemovalPreview.storeName)}</p>
+            <p className="mt-2 text-sm text-[var(--app-text-secondary)]">{text.removeStoreQuestion.replace("{storeName}", storeRemovalPreview.storeName)}</p>
             <dl className="mt-5 grid grid-cols-4 gap-3">
-              {[[text.lineOaAccountsCount, storeRemovalPreview.lineOfficialAccountCount], [text.conversationCountLabel, storeRemovalPreview.conversationCount], [text.messageCountLabel, storeRemovalPreview.messageCount], [text.noteActivityCountLabel, storeRemovalPreview.noteCount + storeRemovalPreview.activityCount]].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-slate-100 p-3 text-center"><dt className="text-xs text-slate-500">{label}</dt><dd className="mt-1 text-xl font-bold">{value}</dd></div>)}
+              {[[text.lineOaAccountsCount, storeRemovalPreview.lineOfficialAccountCount], [text.conversationCountLabel, storeRemovalPreview.conversationCount], [text.messageCountLabel, storeRemovalPreview.messageCount], [text.noteActivityCountLabel, storeRemovalPreview.noteCount + storeRemovalPreview.activityCount]].map(([label, value]) => <div key={String(label)} className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-3 text-center"><dt className="text-xs text-[var(--app-text-tertiary)]">{label}</dt><dd className="mt-1 text-xl font-bold text-[var(--app-text-primary)]">{value}</dd></div>)}
             </dl>
-            {!permanentDeleteStep ? <div className="mt-4 space-y-2 text-sm"><p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">{text.permanentDeleteDescription}</p><p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">{text.archiveDescription}</p></div> : <div className="mt-4"><p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{text.irreversibleWarning}</p><label className="mt-3 block text-sm">{text.typeStoreName}<input autoFocus value={permanentDeleteConfirmation} onChange={(event) => setPermanentDeleteConfirmation(event.target.value)} className="mt-1 w-full rounded-lg border border-red-300 p-2" /></label></div>}
-            {storeRemovalMessage && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{storeRemovalMessage}</p>}
-            <div className="mt-6 flex flex-wrap justify-end gap-3"><button disabled={storeRemovalLoading} onClick={() => { setStoreRemovalPreview(null); setPermanentDeleteStep(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">{text.cancel}</button>{!permanentDeleteStep ? <><button disabled={storeRemovalLoading} onClick={() => setPermanentDeleteStep(true)} className="rounded-lg bg-red-700 px-4 py-2 text-sm text-white">{text.deletePermanently}</button><button disabled={storeRemovalLoading} onClick={() => void archiveSelectedStore()} className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white">{text.archiveStore}</button></> : <button disabled={storeRemovalLoading || permanentDeleteConfirmation !== storeRemovalPreview.storeName} onClick={() => void deleteStorePermanently()} className="rounded-lg bg-red-700 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50">{storeRemovalLoading ? text.loadingData : text.deletePermanently}</button>}</div>
+            {!permanentDeleteStep ? <div className="mt-4 space-y-2 text-sm"><p className="rounded-[var(--app-radius-md)] border border-red-200 bg-red-50 p-3 text-red-800 dark:bg-red-950/40 dark:border-red-900/60 dark:text-red-300">{text.permanentDeleteDescription}</p><p className="rounded-[var(--app-radius-md)] border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:bg-amber-950/40 dark:border-amber-900/60 dark:text-amber-300">{text.archiveDescription}</p></div> : <div className="mt-4"><p className="rounded-[var(--app-radius-md)] border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800 dark:bg-red-950/40 dark:border-red-900/60 dark:text-red-300">{text.irreversibleWarning}</p><label className="mt-3 block text-sm">{text.typeStoreName}<input autoFocus value={permanentDeleteConfirmation} onChange={(event) => setPermanentDeleteConfirmation(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-md)] border border-red-300 dark:border-red-800 bg-[var(--app-surface)] p-2 text-sm" /></label></div>}
+            {storeRemovalMessage && <p role="alert" className="mt-4 rounded-[var(--app-radius-md)] bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{storeRemovalMessage}</p>}
+            <div className="mt-6 flex flex-wrap justify-end gap-3"><button disabled={storeRemovalLoading} onClick={() => { setStoreRemovalPreview(null); setPermanentDeleteStep(false); }} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-4 py-2 text-sm">{text.cancel}</button>{!permanentDeleteStep ? <><button disabled={storeRemovalLoading} onClick={() => setPermanentDeleteStep(true)} className="rounded-[var(--app-radius-md)] bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-800">{text.deletePermanently}</button><button disabled={storeRemovalLoading} onClick={() => void archiveSelectedStore()} className="rounded-[var(--app-radius-md)] bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700">{text.archiveStore}</button></> : <button disabled={storeRemovalLoading || permanentDeleteConfirmation !== storeRemovalPreview.storeName} onClick={() => void deleteStorePermanently()} className="rounded-[var(--app-radius-md)] bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50">{storeRemovalLoading ? text.loadingData : text.deletePermanently}</button>}</div>
           </div>
         </div>
       )}
@@ -3848,15 +4341,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           role="dialog"
           aria-modal="true"
           aria-labelledby="bulk-confirm-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
         >
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-[var(--app-radius-xl)] bg-[var(--app-surface)] border border-[var(--app-border)] p-6 shadow-[var(--app-shadow-modal)] space-y-4 text-[var(--app-text-primary)]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 font-bold text-base">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent-soft)] text-[var(--app-accent)] font-bold text-base">
                 ✓
               </div>
               <div className="min-w-0 flex-1">
-                <h3 id="bulk-confirm-title" className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                <h3 id="bulk-confirm-title" className="text-base font-bold text-[var(--app-text-primary)] truncate">
                   {language === "th"
                     ? "ยืนยันเปลี่ยนสถานะ"
                     : language === "zh"
@@ -3864,33 +4357,33 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       : "Confirm Status Change"}
                 </h3>
                 {bulkConfirmState.storeName && (
-                  <p className="text-xs text-slate-500 truncate">
+                  <p className="text-xs text-[var(--app-text-tertiary)] truncate">
                     {bulkConfirmState.storeName}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-4 text-sm text-slate-700 dark:text-slate-300">
+            <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] border border-[var(--app-border)] p-4 text-xs text-[var(--app-text-primary)] leading-relaxed">
               <p>
                 {language === "th" ? (
                   <>
                     คุณกำลังเปลี่ยน <strong>{bulkConfirmState.affectedCount}</strong> บทสนทนาเป็น{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-[var(--app-success)]">
                       &ldquo;ตอบแล้ว&rdquo;
                     </strong>
                   </>
                 ) : language === "zh" ? (
                   <>
                     您正在将 <strong>{bulkConfirmState.affectedCount}</strong> 条对话更改为{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-[var(--app-success)]">
                       &ldquo;已回复&rdquo;
                     </strong>
                   </>
                 ) : (
                   <>
                     You are changing <strong>{bulkConfirmState.affectedCount}</strong> conversations to{" "}
-                    <strong className="text-emerald-600 dark:text-emerald-400">
+                    <strong className="text-[var(--app-success)]">
                       &ldquo;Replied&rdquo;
                     </strong>
                   </>
@@ -3903,7 +4396,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 type="button"
                 disabled={isBulkUpdating}
                 onClick={() => setBulkConfirmState(null)}
-                className="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] px-4 py-2 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] transition-colors disabled:opacity-50"
               >
                 {language === "th" ? "ยกเลิก" : language === "zh" ? "取消" : "Cancel"}
               </button>
@@ -3911,7 +4404,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                 type="button"
                 disabled={isBulkUpdating || bulkConfirmState.affectedCount === 0}
                 onClick={() => void handleExecuteBulkUpdate()}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center gap-2"
+                className="rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] px-4 py-2 text-xs font-semibold text-white shadow-[var(--app-shadow-card)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/50 disabled:opacity-50 flex items-center gap-2"
               >
                 {isBulkUpdating && (
                   <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />

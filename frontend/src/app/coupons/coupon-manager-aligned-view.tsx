@@ -1,7 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AppShell, PageContainer } from "@/components/shell";
+import { AppShell, PageContainer, PageHeader } from "@/components/shell";
+import {
+  Badge,
+  type BadgeVariant,
+  Button,
+  Card,
+  SearchInput,
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableEmptyState,
+  ErrorState,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { couponApi } from "@/lib/coupon-api";
 import type { ApiStore } from "@/types/api";
@@ -93,11 +109,11 @@ function localValue(hours: number): string {
   return new Date(Date.now() + (7 + hours) * 60 * 60 * 1000).toISOString().slice(0, 16);
 }
 
-function statusClass(status: string): string {
-  if (["SUCCESS", "DISCONTINUED"].includes(status)) return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (["FAILED", "DISCONTINUE_FAILED"].includes(status)) return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300";
-  if (["PARTIAL", "PARTIAL_DISCONTINUE"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300";
-  return "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300";
+function getCouponBadgeVariant(status: string): BadgeVariant {
+  if (["SUCCESS", "DISCONTINUED"].includes(status)) return "success";
+  if (["FAILED", "DISCONTINUE_FAILED"].includes(status)) return "danger";
+  if (["PARTIAL", "PARTIAL_DISCONTINUE"].includes(status)) return "warning";
+  return "neutral";
 }
 
 export function CouponManagerAlignedView() {
@@ -264,37 +280,805 @@ export function CouponManagerAlignedView() {
   if (!authChecked) return <main className="app-shell flex min-h-screen items-center justify-center"><p className="app-muted text-sm">Loading…</p></main>;
   if (!authUser) return null;
 
-  const input = "app-input mt-1.5 w-full rounded-lg border px-3 py-2";
-  const radio = "h-4 w-4 accent-emerald-600";
-  const row = "grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start";
+  const inputClass = "app-input mt-1.5 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)]";
+  const radioClass = "h-4 w-4 accent-[var(--app-accent)]";
+  const rowClass = "grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start";
 
-  return <AppShell currentSection="coupons" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", appDescription: "LINE OA monitoring", dashboard: language === "th" ? "แดชบอร์ด" : "Dashboard", language: language === "th" ? "ภาษา" : "Language", searchPlaceholder: language === "th" ? "ค้นหา" : "Search" }} language={language} changeLanguage={setLanguage} searchText="" setSearchText={() => undefined} logout={logout}>
-    <PageContainer variant="full"><section className="app-content-section col-span-2 overflow-y-auto p-4 sm:p-6"><div className="mx-auto max-w-6xl">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5 dark:border-slate-800"><div><h2 className="text-2xl font-bold">{t.title}</h2><p className="app-muted mt-1 text-sm">{t.subtitle}</p></div>{isAdmin && <div className="flex rounded-xl border border-slate-200 p-1 dark:border-slate-800"><button type="button" onClick={() => setViewMode("create")} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "create" ? "bg-slate-900 text-white dark:bg-emerald-600" : "app-muted"}`}>{t.createTab}</button><button type="button" onClick={() => { setViewMode("campaigns"); void loadCampaigns(); }} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${viewMode === "campaigns" ? "bg-slate-900 text-white dark:bg-emerald-600" : "app-muted"}`}>{t.historyTab}</button></div>}</header>
-      {error && <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">{error}</div>}
-      {!isAdmin ? <div className="app-surface mt-6 rounded-2xl border p-8 text-center text-sm app-muted">{t.adminOnly}</div> : viewMode === "create" ? <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-6">
-          <section className="app-surface rounded-2xl border border-slate-200 p-5 dark:border-slate-800"><h3 className="text-lg font-semibold">{t.main}</h3><div className="mt-5 space-y-5">
-            <div className={row}><span className="text-sm font-medium">{t.acquisition}</span><div><div className="flex flex-wrap gap-4 text-sm"><label className="flex items-center gap-2"><input className={radio} type="radio" checked={acquisitionType === "normal"} onChange={() => { setAcquisitionType("normal"); invalidatePreview(); }} />{t.normal}</label><label className="flex items-center gap-2"><input className={radio} type="radio" checked={acquisitionType === "lottery"} onChange={() => { setAcquisitionType("lottery"); invalidatePreview(); }} />{t.lottery}</label><span className="app-muted">○ {t.referral} <small>({t.managerOnly})</small></span></div>{acquisitionType === "lottery" && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm">{t.probability}<input type="number" min="1" max="99" value={lotteryProbability} onChange={(e) => { setLotteryProbability(e.target.value); invalidatePreview(); }} className={input} /></label><label className="text-sm">{t.winnerLimit}<input type="number" min="-1" max="999999" value={maxAcquireCount} onChange={(e) => { setMaxAcquireCount(e.target.value); invalidatePreview(); }} className={input} /></label></div>}</div></div>
-            <div className={row}><label className="text-sm font-medium">{t.titleLabel}</label><div><input value={couponTitle} maxLength={60} onChange={(e) => { setCouponTitle(e.target.value); invalidatePreview(); }} placeholder="Ex: LINE friend exclusive coupon" className={input} /><p className="app-muted mt-1 text-right text-xs">{couponTitle.length}/60</p></div></div>
-          </div></section>
+  return (
+    <AppShell
+      currentSection="coupons"
+      authUser={authUser}
+      text={{
+        appName: "OPPO LINE OA Monitor",
+        appDescription: "LINE OA monitoring",
+        dashboard: language === "th" ? "แดชบอร์ด" : "Dashboard",
+        language: language === "th" ? "ภาษา" : "Language",
+        searchPlaceholder: language === "th" ? "ค้นหา" : "Search",
+      }}
+      language={language}
+      changeLanguage={setLanguage}
+      searchText=""
+      setSearchText={() => undefined}
+      logout={logout}
+    >
+      <PageContainer variant="wide">
+        <section className="app-content-section col-span-2 overflow-y-auto p-4 sm:p-6">
+          <div className="mx-auto max-w-6xl space-y-6">
+            <PageHeader
+              tag="OPPO LINE OA · การตลาดและโปรโมชัน"
+              title={t.title}
+              description={t.subtitle}
+              actions={
+                isAdmin ? (
+                  <div className="flex rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("create")}
+                      className={`rounded-[var(--app-radius-sm)] px-3 py-1.5 text-xs font-semibold transition-all ${
+                        viewMode === "create"
+                          ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-xs"
+                          : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                      }`}
+                    >
+                      {t.createTab}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewMode("campaigns");
+                        void loadCampaigns();
+                      }}
+                      className={`rounded-[var(--app-radius-sm)] px-3 py-1.5 text-xs font-semibold transition-all ${
+                        viewMode === "campaigns"
+                          ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-xs"
+                          : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                      }`}
+                    >
+                      {t.historyTab}
+                    </button>
+                  </div>
+                ) : undefined
+              }
+            />
 
-          <section className="app-surface rounded-2xl border border-slate-200 p-5 dark:border-slate-800"><h3 className="text-lg font-semibold">{t.settings}</h3><div className="mt-5 space-y-6">
-            <div className={row}><span className="text-sm font-medium">{t.validity}</span><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs app-muted">{t.from}<input type="datetime-local" value={startAt} onChange={(e) => { setStartAt(e.target.value); invalidatePreview(); }} className={input} /></label><label className="text-xs app-muted">{t.till}<input type="datetime-local" value={endAt} onChange={(e) => { setEndAt(e.target.value); invalidatePreview(); }} className={input} /></label><label className="text-xs app-muted sm:col-span-2">{t.timezone}<select disabled className={input}><option>(UTC+07:00) Asia/Bangkok, Jakarta</option></select></label></div></div>
-            <div className={row}><span className="text-sm font-medium">{t.image}</span><div><label className="flex h-44 w-44 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-sm font-semibold text-blue-600 dark:border-slate-700 dark:bg-slate-900">{imageUrl ? <span role="img" aria-label="Coupon preview" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${JSON.stringify(imageUrl)})` }} /> : imageUploading ? t.uploading : t.upload}<input type="file" accept="image/jpeg,image/png" className="hidden" disabled={imageUploading} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadImage(file); e.currentTarget.value = ""; }} /></label><p className="app-muted mt-2 text-xs">{t.imageHint}</p>{imageUrl && <button type="button" onClick={() => { setImageUrl(""); invalidatePreview(); }} className="mt-2 text-xs font-semibold text-rose-600">{t.clear}</button>}</div></div>
-            <div className={row}><label className="text-sm font-medium">{t.guidelines}</label><div><textarea value={guidelines} maxLength={500} rows={6} onChange={(e) => { setGuidelines(e.target.value); invalidatePreview(); }} className={input} /><p className="app-muted mt-1 text-right text-xs">{guidelines.length}/500</p></div></div>
-            <div className={row}><span className="text-sm font-medium">{t.ly}</span><div className="space-y-2 text-sm"><label className="flex items-center gap-2"><input className={radio} type="radio" checked={visibility === "UNLISTED"} onChange={() => { setVisibility("UNLISTED"); invalidatePreview(); }} />{t.exclude}</label><label className="flex items-center gap-2"><input className={radio} type="radio" checked={visibility === "PUBLIC"} onChange={() => { setVisibility("PUBLIC"); invalidatePreview(); }} />{t.include}</label></div></div>
-            <div className={row}><span className="text-sm font-medium">{t.usage}</span><div className="space-y-2 text-sm"><label className="flex items-center gap-2"><input className={radio} type="radio" checked={maxUseCount === 1} onChange={() => { setMaxUseCount(1); invalidatePreview(); }} />{t.once}</label><label className="flex items-center gap-2"><input className={radio} type="radio" checked={maxUseCount === -1} onChange={() => { setMaxUseCount(-1); invalidatePreview(); }} />{t.unlimited}</label></div></div>
-            <div className={row}><span className="text-sm font-medium">{t.code}</span><div className="space-y-2 text-sm"><label className="flex items-center gap-2"><input className={radio} type="radio" checked={!showCouponCode} onChange={() => { setShowCouponCode(false); invalidatePreview(); }} />{t.hide}</label><label className="flex items-center gap-2"><input className={radio} type="radio" checked={showCouponCode} onChange={() => { setShowCouponCode(true); invalidatePreview(); }} />{t.show}</label>{showCouponCode && <div><input value={couponCode} maxLength={16} onChange={(e) => { setCouponCode(e.target.value); invalidatePreview(); }} className={input} /><p className="app-muted mt-1 text-right text-xs">{couponCode.length}/16</p></div>}</div></div>
-            <div className={row}><span className="text-sm font-medium">{t.type}</span><div><select value={rewardType} onChange={(e) => changeRewardType(e.target.value as CouponRewardType)} className={`${input} max-w-xs`}><option value="discount">{t.discount}</option><option value="free">{t.free}</option><option value="gift">{t.gift}</option><option value="cashBack">{t.cashback}</option><option value="others">{t.others}</option></select>{(rewardType === "discount" || rewardType === "cashBack") && <div className="mt-4 space-y-3 text-sm"><label className="flex flex-wrap items-center gap-2"><input className={radio} type="radio" checked={priceType === "fixed"} onChange={() => { setPriceType("fixed"); invalidatePreview(); }} />{t.fixed}<input type="number" min="1" value={fixedAmount} disabled={priceType !== "fixed"} onChange={(e) => { setFixedAmount(e.target.value); invalidatePreview(); }} className="app-input w-32 rounded-lg border px-3 py-2 disabled:opacity-50" /> THB</label><label className="flex flex-wrap items-center gap-2"><input className={radio} type="radio" checked={priceType === "percentage"} onChange={() => { setPriceType("percentage"); invalidatePreview(); }} />{t.percent}<input type="number" min="1" max="99" value={percentage} disabled={priceType !== "percentage"} onChange={(e) => { setPercentage(e.target.value); invalidatePreview(); }} className="app-input w-24 rounded-lg border px-3 py-2 disabled:opacity-50" />%</label>{rewardType === "discount" && <label className="flex flex-wrap items-center gap-2"><input className={radio} type="radio" checked={priceType === "explicit"} onChange={() => { setPriceType("explicit"); invalidatePreview(); }} />{t.explicit}<span>{t.before}</span><input type="number" min="1" value={originalPrice} disabled={priceType !== "explicit"} onChange={(e) => { setOriginalPrice(e.target.value); invalidatePreview(); }} className="app-input w-28 rounded-lg border px-3 py-2 disabled:opacity-50" /><span>{t.after}</span><input type="number" min="1" value={discountedPrice} disabled={priceType !== "explicit"} onChange={(e) => { setDiscountedPrice(e.target.value); invalidatePreview(); }} className="app-input w-28 rounded-lg border px-3 py-2 disabled:opacity-50" /> THB</label>}</div>}</div></div>
-            <div className={row}><label className="text-sm font-medium">{t.condition}</label><div><input value={usageCondition} maxLength={30} onChange={(e) => { setUsageCondition(e.target.value); invalidatePreview(); }} placeholder="Ex: Usable for payments of ฿1,000 or more" className={input} /><p className="app-muted mt-1 text-right text-xs">{usageCondition.length}/30</p></div></div>
-          </div></section>
+            {error && <ErrorState message={error} />}
 
-          <section className="app-surface rounded-2xl border border-slate-200 p-5 dark:border-slate-800"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-semibold">{t.stores}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pilot ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"}`}>{pilot ? t.pilot : t.full}</span></div><div className="mt-4 flex gap-2"><button type="button" disabled={pilot} onClick={() => { setStoreMode("ALL"); invalidatePreview(); }} className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-35 ${storeMode === "ALL" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 dark:border-slate-800"}`}>{t.all}</button><button type="button" onClick={() => { setStoreMode("SELECTED"); invalidatePreview(); }} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${storeMode === "SELECTED" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 dark:border-slate-800"}`}>{t.selected}</button></div>{storeMode === "SELECTED" && <div className="mt-4"><input type="search" value={storeSearch} onChange={(e) => setStoreSearch(e.target.value)} placeholder={t.search} className="app-input w-full rounded-lg border px-3 py-2" /><div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800">{filteredStores.map((store) => <label key={store.id} className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 dark:border-slate-900"><input type={pilot ? "radio" : "checkbox"} name={pilot ? "coupon-pilot-store" : undefined} checked={selectedStoreIds.includes(store.id)} onChange={() => toggleStore(store.id)} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{store.name}</span><span className="app-muted text-xs">{store.code ?? store.storeId ?? "—"}</span></span></label>)}</div></div>}</section>
-        </div>
+            {!isAdmin ? (
+              <Card className="p-8 text-center text-xs text-[var(--app-text-secondary)]">
+                {t.adminOnly}
+              </Card>
+            ) : viewMode === "create" ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="space-y-6">
+                  <Card className="p-5 sm:p-6">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                      {t.main}
+                    </h3>
+                    <div className="mt-5 space-y-5">
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.acquisition}</span>
+                        <div>
+                          <div className="flex flex-wrap gap-4 text-xs">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                className={radioClass}
+                                type="radio"
+                                checked={acquisitionType === "normal"}
+                                onChange={() => {
+                                  setAcquisitionType("normal");
+                                  invalidatePreview();
+                                }}
+                              />
+                              {t.normal}
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                className={radioClass}
+                                type="radio"
+                                checked={acquisitionType === "lottery"}
+                                onChange={() => {
+                                  setAcquisitionType("lottery");
+                                  invalidatePreview();
+                                }}
+                              />
+                              {t.lottery}
+                            </label>
+                            <span className="text-[var(--app-text-tertiary)]">
+                              ○ {t.referral} <small>({t.managerOnly})</small>
+                            </span>
+                          </div>
+                          {acquisitionType === "lottery" && (
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <label className="text-xs text-[var(--app-text-secondary)] font-medium">
+                                {t.probability}
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="99"
+                                  value={lotteryProbability}
+                                  onChange={(e) => {
+                                    setLotteryProbability(e.target.value);
+                                    invalidatePreview();
+                                  }}
+                                  className={inputClass}
+                                />
+                              </label>
+                              <label className="text-xs text-[var(--app-text-secondary)] font-medium">
+                                {t.winnerLimit}
+                                <input
+                                  type="number"
+                                  min="-1"
+                                  max="999999"
+                                  value={maxAcquireCount}
+                                  onChange={(e) => {
+                                    setMaxAcquireCount(e.target.value);
+                                    invalidatePreview();
+                                  }}
+                                  className={inputClass}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start"><section className="app-surface rounded-2xl border border-slate-200 p-5 shadow-sm dark:border-slate-800"><h3 className="font-semibold">Preview</h3>{preview ? <div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-slate-100 p-3 text-center dark:bg-slate-900"><strong className="block text-xl">{preview.totalStores}</strong><small className="app-muted">{t.total}</small></div><div className="rounded-xl bg-emerald-50 p-3 text-center dark:bg-emerald-950/30"><strong className="block text-xl text-emerald-700">{preview.eligibleStores}</strong><small className="text-emerald-700">{t.ready}</small></div><div className="rounded-xl bg-amber-50 p-3 text-center dark:bg-amber-950/30"><strong className="block text-xl text-amber-700">{preview.skippedStores}</strong><small className="text-amber-700">{t.skipped}</small></div></div> : <p className="app-muted mt-3 text-sm">{t.previewRequired}</p>}<button type="button" disabled={previewLoading || creating || imageUploading} onClick={() => void runPreview()} className="mt-5 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold disabled:opacity-50 dark:border-slate-700">{previewLoading ? t.previewing : t.preview}</button><button type="button" disabled={!preview || preview.eligibleStores < 1 || creating || previewLoading || imageUploading} onClick={() => void createCoupon()} className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{creating ? t.saving : t.save}</button><button type="button" disabled title={t.draftInfo} className="mt-2 w-full rounded-lg border px-4 py-2.5 text-sm font-semibold opacity-40">{t.draft}</button><p className="app-muted mt-2 text-center text-[11px]">{t.draftInfo}</p></section>{preview && <section className="app-surface rounded-2xl border border-slate-200 p-4 dark:border-slate-800"><h4 className="text-sm font-semibold">{t.readiness}</h4><div className="mt-3 max-h-80 space-y-2 overflow-y-auto">{preview.stores.map((store) => <div key={store.storeId} className="flex items-start justify-between gap-3 text-xs"><div className="min-w-0"><div className="truncate font-medium">{store.storeName}</div><div className="app-muted truncate">{store.lineOaName ?? "No LINE OA"}</div></div><span className={store.isEligible ? "text-emerald-600" : "text-amber-600"}>{store.isEligible ? t.ready : store.skipReason}</span></div>)}</div></section>}</aside>
-      </div> : viewMode === "campaigns" ? <section className="app-surface mt-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800"><div className="flex items-center justify-between border-b p-4"><h3 className="font-semibold">{t.history}</h3><button type="button" onClick={() => void loadCampaigns()} className="text-sm font-semibold text-emerald-700">Refresh</button></div>{campaignsLoading ? <p className="app-muted p-6 text-sm">Loading…</p> : campaigns.length === 0 ? <p className="app-muted p-8 text-center text-sm">{t.noHistory}</p> : <div className="divide-y">{campaigns.map((campaign) => <button key={campaign.id} type="button" onClick={() => void openCampaign(campaign.id)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"><div><div className="font-semibold">{campaign.title}</div><div className="app-muted mt-1 text-xs">{new Date(campaign.createdAt).toLocaleString()}</div></div><span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(campaign.status)}`}>{campaign.status}</span></button>)}</div>}</section> : detail ? <div className="mt-6 space-y-5"><div className="flex items-center justify-between gap-3"><button type="button" onClick={() => { setViewMode("campaigns"); void loadCampaigns(); }} className="text-sm font-semibold text-emerald-700">← {t.back}</button><div className="flex gap-2"><button type="button" disabled={actionLoading || !(detail.summary.FAILED > 0)} onClick={() => void retryFailed()} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-40">{t.retry}</button><button type="button" disabled={actionLoading || detail.campaign.status === "DISCONTINUED"} onClick={() => void discontinue()} className="rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-40">{t.discontinue}</button></div></div><section className="app-surface rounded-2xl border p-5"><div className="flex justify-between gap-4"><div><h3 className="text-xl font-bold">{detail.campaign.title}</h3><p className="app-muted mt-2 whitespace-pre-line text-sm">{detail.campaign.description ?? "—"}</p></div><span className={`h-fit rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(detail.campaign.status)}`}>{detail.campaign.status}</span></div><div className="mt-5 space-y-2">{detail.stores.map((store) => <div key={store.id} className="grid gap-2 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-900 sm:grid-cols-[1fr_1fr_auto]"><span>{store.storeName}</span><span className="app-muted">{store.lineOaName ?? "—"}</span><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(store.status)}`}>{store.status}</span>{store.lineCouponId && <code className="text-xs sm:col-span-3">Coupon ID: {store.lineCouponId}</code>}{(store.errorMessage || store.skipReason) && <span className="text-xs text-rose-600 sm:col-span-3">{store.errorMessage ?? store.skipReason}</span>}</div>)}</div></section></div> : null}
-    </div></section></PageContainer>
-  </AppShell>;
+                      <div className={rowClass}>
+                        <label className="text-xs font-medium text-[var(--app-text-secondary)]">{t.titleLabel}</label>
+                        <div>
+                          <input
+                            value={couponTitle}
+                            maxLength={60}
+                            onChange={(e) => {
+                              setCouponTitle(e.target.value);
+                              invalidatePreview();
+                            }}
+                            placeholder="Ex: LINE friend exclusive coupon"
+                            className={inputClass}
+                          />
+                          <p className="app-muted mt-1 text-right text-[11px] font-tabular">
+                            {couponTitle.length}/60
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-5 sm:p-6">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                      {t.settings}
+                    </h3>
+                    <div className="mt-5 space-y-6">
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.validity}</span>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="text-[11px] text-[var(--app-text-secondary)] font-medium">
+                            {t.from}
+                            <input
+                              type="datetime-local"
+                              value={startAt}
+                              onChange={(e) => {
+                                setStartAt(e.target.value);
+                                invalidatePreview();
+                              }}
+                              className={inputClass}
+                            />
+                          </label>
+                          <label className="text-[11px] text-[var(--app-text-secondary)] font-medium">
+                            {t.till}
+                            <input
+                              type="datetime-local"
+                              value={endAt}
+                              onChange={(e) => {
+                                setEndAt(e.target.value);
+                                invalidatePreview();
+                              }}
+                              className={inputClass}
+                            />
+                          </label>
+                          <label className="text-[11px] text-[var(--app-text-secondary)] font-medium sm:col-span-2">
+                            {t.timezone}
+                            <select disabled className={inputClass}>
+                              <option>(UTC+07:00) Asia/Bangkok, Jakarta</option>
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.image}</span>
+                        <div>
+                          <label className="flex h-40 w-40 cursor-pointer items-center justify-center overflow-hidden rounded-[var(--app-radius-lg)] border border-dashed border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-center text-xs font-semibold text-[var(--app-accent)] hover:border-[var(--app-accent)] transition-colors">
+                            {imageUrl ? (
+                              <span
+                                role="img"
+                                aria-label="Coupon preview"
+                                className="h-full w-full bg-cover bg-center"
+                                style={{ backgroundImage: `url(${JSON.stringify(imageUrl)})` }}
+                              />
+                            ) : imageUploading ? (
+                              t.uploading
+                            ) : (
+                              t.upload
+                            )}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png"
+                              className="hidden"
+                              disabled={imageUploading}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) void uploadImage(file);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                          <p className="text-[11px] text-[var(--app-text-tertiary)] mt-2">{t.imageHint}</p>
+                          {imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImageUrl("");
+                                invalidatePreview();
+                              }}
+                              className="mt-2 text-xs font-semibold text-[var(--app-danger)] hover:underline"
+                            >
+                              {t.clear}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <label className="text-xs font-medium text-[var(--app-text-secondary)]">{t.guidelines}</label>
+                        <div>
+                          <textarea
+                            value={guidelines}
+                            maxLength={500}
+                            rows={5}
+                            onChange={(e) => {
+                              setGuidelines(e.target.value);
+                              invalidatePreview();
+                            }}
+                            className={inputClass}
+                          />
+                          <p className="app-muted mt-1 text-right text-[11px] font-tabular">
+                            {guidelines.length}/500
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.ly}</span>
+                        <div className="space-y-2 text-xs">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={visibility === "UNLISTED"}
+                              onChange={() => {
+                                setVisibility("UNLISTED");
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.exclude}
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={visibility === "PUBLIC"}
+                              onChange={() => {
+                                setVisibility("PUBLIC");
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.include}
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.usage}</span>
+                        <div className="space-y-2 text-xs">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={maxUseCount === 1}
+                              onChange={() => {
+                                setMaxUseCount(1);
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.once}
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={maxUseCount === -1}
+                              onChange={() => {
+                                setMaxUseCount(-1);
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.unlimited}
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.code}</span>
+                        <div className="space-y-2 text-xs">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={!showCouponCode}
+                              onChange={() => {
+                                setShowCouponCode(false);
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.hide}
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              className={radioClass}
+                              type="radio"
+                              checked={showCouponCode}
+                              onChange={() => {
+                                setShowCouponCode(true);
+                                invalidatePreview();
+                              }}
+                            />
+                            {t.show}
+                          </label>
+                          {showCouponCode && (
+                            <div>
+                              <input
+                                value={couponCode}
+                                maxLength={16}
+                                onChange={(e) => {
+                                  setCouponCode(e.target.value);
+                                  invalidatePreview();
+                                }}
+                                className={inputClass}
+                              />
+                              <p className="app-muted mt-1 text-right text-[11px] font-tabular">
+                                {couponCode.length}/16
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <span className="text-xs font-medium text-[var(--app-text-secondary)]">{t.type}</span>
+                        <div>
+                          <select
+                            value={rewardType}
+                            onChange={(e) => changeRewardType(e.target.value as CouponRewardType)}
+                            className={`${inputClass} max-w-xs`}
+                          >
+                            <option value="discount">{t.discount}</option>
+                            <option value="free">{t.free}</option>
+                            <option value="gift">{t.gift}</option>
+                            <option value="cashBack">{t.cashback}</option>
+                            <option value="others">{t.others}</option>
+                          </select>
+
+                          {(rewardType === "discount" || rewardType === "cashBack") && (
+                            <div className="mt-4 space-y-3 text-xs">
+                              <label className="flex flex-wrap items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  className={radioClass}
+                                  type="radio"
+                                  checked={priceType === "fixed"}
+                                  onChange={() => {
+                                    setPriceType("fixed");
+                                    invalidatePreview();
+                                  }}
+                                />
+                                {t.fixed}
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={fixedAmount}
+                                  disabled={priceType !== "fixed"}
+                                  onChange={(e) => {
+                                    setFixedAmount(e.target.value);
+                                    invalidatePreview();
+                                  }}
+                                  className="app-input w-28 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] disabled:opacity-50"
+                                />
+                                THB
+                              </label>
+
+                              <label className="flex flex-wrap items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  className={radioClass}
+                                  type="radio"
+                                  checked={priceType === "percentage"}
+                                  onChange={() => {
+                                    setPriceType("percentage");
+                                    invalidatePreview();
+                                  }}
+                                />
+                                {t.percent}
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="99"
+                                  value={percentage}
+                                  disabled={priceType !== "percentage"}
+                                  onChange={(e) => {
+                                    setPercentage(e.target.value);
+                                    invalidatePreview();
+                                  }}
+                                  className="app-input w-24 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] disabled:opacity-50"
+                                />
+                                %
+                              </label>
+
+                              {rewardType === "discount" && (
+                                <label className="flex flex-wrap items-center gap-2 cursor-pointer select-none">
+                                  <input
+                                    className={radioClass}
+                                    type="radio"
+                                    checked={priceType === "explicit"}
+                                    onChange={() => {
+                                      setPriceType("explicit");
+                                      invalidatePreview();
+                                    }}
+                                  />
+                                  {t.explicit}
+                                  <span className="text-[var(--app-text-secondary)]">{t.before}</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={originalPrice}
+                                    disabled={priceType !== "explicit"}
+                                    onChange={(e) => {
+                                      setOriginalPrice(e.target.value);
+                                      invalidatePreview();
+                                    }}
+                                    className="app-input w-24 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] disabled:opacity-50"
+                                  />
+                                  <span className="text-[var(--app-text-secondary)]">{t.after}</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={discountedPrice}
+                                    disabled={priceType !== "explicit"}
+                                    onChange={(e) => {
+                                      setDiscountedPrice(e.target.value);
+                                      invalidatePreview();
+                                    }}
+                                    className="app-input w-24 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] disabled:opacity-50"
+                                  />
+                                  THB
+                                </label>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={rowClass}>
+                        <label className="text-xs font-medium text-[var(--app-text-secondary)]">{t.condition}</label>
+                        <div>
+                          <input
+                            value={usageCondition}
+                            maxLength={30}
+                            onChange={(e) => {
+                              setUsageCondition(e.target.value);
+                              invalidatePreview();
+                            }}
+                            placeholder="Ex: Usable for payments of ฿1,000 or more"
+                            className={inputClass}
+                          />
+                          <p className="app-muted mt-1 text-right text-[11px] font-tabular">
+                            {usageCondition.length}/30
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-5 sm:p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                        {t.stores}
+                      </h3>
+                      <Badge variant={pilot ? "warning" : "success"} size="sm">
+                        {pilot ? t.pilot : t.full}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={pilot}
+                        variant={storeMode === "ALL" ? "primary" : "secondary"}
+                        onClick={() => {
+                          setStoreMode("ALL");
+                          invalidatePreview();
+                        }}
+                      >
+                        {t.all}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={storeMode === "SELECTED" ? "primary" : "secondary"}
+                        onClick={() => {
+                          setStoreMode("SELECTED");
+                          invalidatePreview();
+                        }}
+                      >
+                        {t.selected}
+                      </Button>
+                    </div>
+
+                    {storeMode === "SELECTED" && (
+                      <div className="mt-4">
+                        <SearchInput
+                          value={storeSearch}
+                          onChange={(e) => setStoreSearch(e.target.value)}
+                          onClear={() => setStoreSearch("")}
+                          placeholder={t.search}
+                        />
+                        <div className="mt-3 max-h-72 overflow-y-auto rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)]">
+                          {filteredStores.map((store) => (
+                            <label
+                              key={store.id}
+                              className="flex cursor-pointer items-center gap-3 border-b border-[var(--app-border-subtle)] px-3.5 py-2.5 last:border-b-0 hover:bg-[var(--app-surface-hover)] transition-colors"
+                            >
+                              <input
+                                type={pilot ? "radio" : "checkbox"}
+                                name={pilot ? "coupon-pilot-store" : undefined}
+                                checked={selectedStoreIds.includes(store.id)}
+                                onChange={() => toggleStore(store.id)}
+                                className="rounded border-[var(--app-border)] accent-[var(--app-accent)]"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-[var(--app-text-primary)]">
+                                  {store.name}
+                                </span>
+                                <span className="text-[11px] text-[var(--app-text-tertiary)]">
+                                  {store.code ?? store.storeId ?? "—"}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
+                  <Card className="p-5">
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-[var(--app-text-primary)]">
+                      Preview
+                    </h3>
+                    {preview ? (
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-2.5 text-center">
+                          <strong className="block text-lg font-bold font-tabular text-[var(--app-text-primary)]">
+                            {preview.totalStores}
+                          </strong>
+                          <small className="text-[11px] text-[var(--app-text-secondary)]">{t.total}</small>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] border border-[var(--app-success)]/20 bg-[var(--app-success-soft)] p-2.5 text-center">
+                          <strong className="block text-lg font-bold font-tabular text-[var(--app-success)]">
+                            {preview.eligibleStores}
+                          </strong>
+                          <small className="text-[11px] font-semibold text-[var(--app-success)]">{t.ready}</small>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] border border-[var(--app-warning)]/20 bg-[var(--app-warning-soft)] p-2.5 text-center">
+                          <strong className="block text-lg font-bold font-tabular text-[var(--app-warning)]">
+                            {preview.skippedStores}
+                          </strong>
+                          <small className="text-[11px] font-semibold text-[var(--app-warning)]">{t.skipped}</small>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-[var(--app-text-tertiary)]">{t.previewRequired}</p>
+                    )}
+
+                    <div className="mt-5 space-y-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        className="w-full"
+                        disabled={previewLoading || creating || imageUploading}
+                        isLoading={previewLoading}
+                        onClick={() => void runPreview()}
+                      >
+                        {previewLoading ? t.previewing : t.preview}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="md"
+                        className="w-full"
+                        disabled={!preview || preview.eligibleStores < 1 || creating || previewLoading || imageUploading}
+                        isLoading={creating}
+                        onClick={() => void createCoupon()}
+                      >
+                        {creating ? t.saving : t.save}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="md"
+                        className="w-full opacity-40 cursor-not-allowed"
+                        disabled
+                        title={t.draftInfo}
+                      >
+                        {t.draft}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-center text-[11px] text-[var(--app-text-tertiary)]">{t.draftInfo}</p>
+                  </Card>
+
+                  {preview && (
+                    <Card className="p-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                        {t.readiness}
+                      </h4>
+                      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+                        {preview.stores.map((store) => (
+                          <div key={store.storeId} className="flex items-start justify-between gap-3 text-xs border-b border-[var(--app-border-subtle)] pb-2 last:border-b-0 last:pb-0">
+                            <div className="min-w-0">
+                              <div className="truncate font-medium text-[var(--app-text-primary)]">{store.storeName}</div>
+                              <div className="truncate text-[11px] text-[var(--app-text-secondary)]">{store.lineOaName ?? "No LINE OA"}</div>
+                            </div>
+                            <span className={`text-[11px] font-medium ${store.isEligible ? "text-[var(--app-success)]" : "text-[var(--app-warning)]"}`}>
+                              {store.isEligible ? t.ready : store.skipReason}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+                </aside>
+              </div>
+            ) : viewMode === "campaigns" ? (
+              <TableContainer>
+                <div className="flex items-center justify-between border-b border-[var(--app-border-subtle)] p-4">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-[var(--app-text-primary)]">
+                    {t.history}
+                  </h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void loadCampaigns()}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                {campaignsLoading ? (
+                  <p className="p-8 text-center text-xs text-[var(--app-text-secondary)]">Loading…</p>
+                ) : campaigns.length === 0 ? (
+                  <TableEmptyState colSpan={3} message={t.noHistory} />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <tr>
+                        <TableHead>Campaign</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead align="right">Status</TableHead>
+                      </tr>
+                    </TableHeader>
+                    <TableBody>
+                      {campaigns.map((campaign) => (
+                        <TableRow
+                          key={campaign.id}
+                          className="cursor-pointer"
+                          onClick={() => void openCampaign(campaign.id)}
+                        >
+                          <TableCell>
+                            <span className="font-semibold text-[var(--app-text-primary)]">{campaign.title}</span>
+                          </TableCell>
+                          <TableCell className="text-xs text-[var(--app-text-secondary)] font-tabular">
+                            {new Date(campaign.createdAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Badge variant={getCouponBadgeVariant(campaign.status)} size="md" dot>
+                              {campaign.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </TableContainer>
+            ) : detail ? (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setViewMode("campaigns");
+                      void loadCampaigns();
+                    }}
+                  >
+                    ← {t.back}
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={actionLoading || !(detail.summary.FAILED > 0)}
+                      onClick={() => void retryFailed()}
+                    >
+                      {t.retry}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      disabled={actionLoading || detail.campaign.status === "DISCONTINUED"}
+                      onClick={() => void discontinue()}
+                    >
+                      {t.discontinue}
+                    </Button>
+                  </div>
+                </div>
+
+                <Card className="p-5 sm:p-6">
+                  <div className="flex justify-between gap-4 border-b border-[var(--app-border-subtle)] pb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-[var(--app-text-primary)]">{detail.campaign.title}</h3>
+                      <p className="mt-1 whitespace-pre-line text-xs text-[var(--app-text-secondary)]">
+                        {detail.campaign.description ?? "—"}
+                      </p>
+                    </div>
+                    <Badge variant={getCouponBadgeVariant(detail.campaign.status)} size="md" dot>
+                      {detail.campaign.status}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-5 space-y-2">
+                    {detail.stores.map((store) => (
+                      <div
+                        key={store.id}
+                        className="grid gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3 text-xs sm:grid-cols-[1fr_1fr_auto]"
+                      >
+                        <span className="font-medium text-[var(--app-text-primary)]">{store.storeName}</span>
+                        <span className="text-[var(--app-text-secondary)]">{store.lineOaName ?? "—"}</span>
+                        <Badge variant={getCouponBadgeVariant(store.status)} size="sm">
+                          {store.status}
+                        </Badge>
+                        {store.lineCouponId && (
+                          <code className="text-[11px] text-[var(--app-text-tertiary)] font-mono sm:col-span-3">
+                            Coupon ID: {store.lineCouponId}
+                          </code>
+                        )}
+                        {(store.errorMessage || store.skipReason) && (
+                          <span className="text-[11px] text-[var(--app-danger)] sm:col-span-3">
+                            {store.errorMessage ?? store.skipReason}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </PageContainer>
+    </AppShell>
+  );
 }

@@ -1,15 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f9fb;
-  --foreground: #0f172a;
-  --surface: #ffffff;
-  --surface-elevated: #f1f3f7;
-  --border: #e2e6ec;
-  --muted: #64748b;
+  /* Global Application Semantic Design Tokens */
+  --app-bg: #f5f5f7;
+  --app-surface: #ffffff;
+  --app-surface-subtle: #f9f9fb;
+  --app-surface-hover: #f2f4f7;
+  --app-surface-active: #e8edf5;
+  --app-border: #e5e5ea;
+  --app-border-subtle: #f0f0f4;
+  --app-border-strong: #d1d1d6;
+  --app-text-primary: #1d1d1f;
+  --app-text-secondary: #6e6e73;
+  --app-text-tertiary: #a1a1a6;
+  --app-text-disabled: #c7c7cc;
+  --app-accent: #ff6900;
+  --app-accent-hover: #e65e00;
+  --app-accent-soft: #fff1e6;
+  --app-accent-contrast: #ffffff;
+  --app-success: #34c759;
+  --app-success-soft: #e8f9ec;
+  --app-warning: #ff9500;
+  --app-warning-soft: #fff4e0;
+  --app-danger: #ff3b30;
+  --app-danger-soft: #fde8e8;
+  --app-info: #007aff;
+  --app-info-soft: #e8f2ff;
+  --app-neutral: #8e8e93;
+  --app-neutral-soft: #f2f2f7;
+  --app-radius-sm: 0.375rem;
+  --app-radius-md: 0.625rem;
+  --app-radius-lg: 1rem;
+  --app-radius-xl: 1.125rem;
+  --app-radius-full: 9999px;
+  --app-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --app-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --app-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+
+  /* Reference Page Aliases */
+  --dash-bg: var(--app-bg);
+  --dash-card: var(--app-surface);
+  --dash-accent: var(--app-accent);
+  --dash-accent-soft: var(--app-accent-soft);
+  --dash-text: var(--app-text-primary);
+  --dash-text-secondary: var(--app-text-secondary);
+  --dash-text-tertiary: var(--app-text-tertiary);
+  --dash-border: var(--app-border);
+  --dash-green: var(--app-success);
+  --dash-green-soft: var(--app-success-soft);
+  --dash-red: var(--app-danger);
+  --dash-red-soft: var(--app-danger-soft);
+  --dash-amber: var(--app-warning);
+  --dash-amber-soft: var(--app-warning-soft);
+  --dash-purple: #8e44ec;
+
+  /* Legacy Backward-Compatible Tokens */
+  --background: var(--app-bg);
+  --foreground: var(--app-text-primary);
+  --surface: var(--app-surface);
+  --surface-elevated: var(--app-surface-subtle);
+  --border: var(--app-border);
+  --muted: var(--app-text-secondary);
   --input-background: #ffffff;
-  --hover: #f1f4f9;
-  --selected: #e8eef6;
+  --hover: var(--app-surface-hover);
+  --selected: var(--app-surface-active);
   --selected-navigation: #edf2f7;
   --button-primary-bg: #007345;
   --button-primary-text: #ffffff;
@@ -20,9 +74,9 @@
   --button-secondary-foreground: #0f172a;
   --disabled-background: #f1f5f9;
   --disabled-foreground: #94a3b8;
-  --badge-background: #f1f3f7;
-  --badge-foreground: #334155;
-  --focus: #007345;
+  --badge-background: var(--app-neutral-soft);
+  --badge-foreground: var(--app-text-secondary);
+  --focus: #ff6900;
   --synced-card-background: #f0fdf4;
   --synced-card-border: #bbf7d0;
   --synced-link: #166534;
@@ -43,15 +97,69 @@
 }
 
 html[data-theme="dark"] {
-  --background: #0b0d11;
-  --foreground: #f8fafc;
-  --surface: #12151c;
-  --surface-elevated: #181c26;
-  --border: #232733;
-  --muted: #94a3b8;
+  /* Global Application Semantic Design Tokens - Dark */
+  --app-bg: #0d0f12;
+  --app-surface: #14171d;
+  --app-surface-subtle: #1a1e26;
+  --app-surface-hover: #202530;
+  --app-surface-active: #262d3a;
+  --app-border: #232733;
+  --app-border-subtle: #1b1e27;
+  --app-border-strong: #353b49;
+  --app-text-primary: #f8fafc;
+  --app-text-secondary: #94a3b8;
+  --app-text-tertiary: #64748b;
+  --app-text-disabled: #475569;
+  --app-accent: #ff6900;
+  --app-accent-hover: #ff7d1a;
+  --app-accent-soft: #2e1808;
+  --app-accent-contrast: #ffffff;
+  --app-success: #34c759;
+  --app-success-soft: #0f2916;
+  --app-warning: #ff9500;
+  --app-warning-soft: #2e1e05;
+  --app-danger: #ff3b30;
+  --app-danger-soft: #2e100f;
+  --app-info: #0a84ff;
+  --app-info-soft: #0d2038;
+  --app-neutral: #98989d;
+  --app-neutral-soft: #1c1c1e;
+  --app-radius-sm: 0.375rem;
+  --app-radius-md: 0.625rem;
+  --app-radius-lg: 1rem;
+  --app-radius-xl: 1.125rem;
+  --app-radius-full: 9999px;
+  --app-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --app-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --app-shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Reference Page Aliases - Dark */
+  --dash-bg: var(--app-bg);
+  --dash-card: var(--app-surface);
+  --dash-accent: var(--app-accent);
+  --dash-accent-soft: var(--app-accent-soft);
+  --dash-text: var(--app-text-primary);
+  --dash-text-secondary: var(--app-text-secondary);
+  --dash-text-tertiary: var(--app-text-tertiary);
+  --dash-border: var(--app-border);
+  --dash-green: var(--app-success);
+  --dash-green-soft: var(--app-success-soft);
+  --dash-red: var(--app-danger);
+  --dash-red-soft: var(--app-danger-soft);
+  --dash-amber: var(--app-warning);
+  --dash-amber-soft: var(--app-warning-soft);
+  --dash-purple: #a855f7;
+
+  /* Legacy Backward-Compatible Tokens - Dark */
+  --background: var(--app-bg);
+  --foreground: var(--app-text-primary);
+  --surface: var(--app-surface);
+  --surface-elevated: var(--app-surface-subtle);
+  --border: var(--app-border);
+  --muted: var(--app-text-secondary);
   --input-background: #141720;
-  --hover: #1b202c;
-  --selected: #182438;
+  --hover: var(--app-surface-hover);
+  --selected: var(--app-surface-active);
   --selected-navigation: #16202f;
   --button-primary-bg: #007345;
   --button-primary-text: #ffffff;
@@ -62,9 +170,9 @@ html[data-theme="dark"] {
   --button-secondary-foreground: #f8fafc;
   --disabled-background: #1c202a;
   --disabled-foreground: #64748b;
-  --badge-background: #232733;
-  --badge-foreground: #e2e8f0;
-  --focus: #059669;
+  --badge-background: var(--app-neutral-soft);
+  --badge-foreground: var(--app-text-secondary);
+  --focus: #ff6900;
   --synced-card-background: #11281d;
   --synced-card-border: #1e4a34;
   --synced-link: #86efac;
@@ -369,10 +477,17 @@ button.bg-slate-900.text-white:disabled {
 }
 
 .app-primary-nav a[aria-current="page"] {
-  background: var(--selected-navigation);
-  color: var(--button-primary-bg);
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
   font-weight: 600;
-  border: 1px solid color-mix(in srgb, var(--button-primary-bg) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-accent) 20%, transparent);
+}
+
+.app-nav-active {
+  background: var(--app-accent-soft) !important;
+  color: var(--app-accent) !important;
+  font-weight: 600 !important;
+  border: 1px solid color-mix(in srgb, var(--app-accent) 20%, transparent) !important;
 }
 
 .app-header-controls {

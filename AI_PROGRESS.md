@@ -1,6 +1,24 @@
 # AI progress
 
-## Current task: Follower Insights Trend UX & Multi-Store Comparison (2026-08-20)
+## Current task: Phase 3 — Unified Chat Inbox (/chats) Workspace Modernization (2026-08-20)
+
+- Workspace Modernization: Modernized the interaction-heavy `/chats` 3-pane operational workspace into the shared application design system while preserving high operational information density.
+- Preserved Core Layout & Interactions: Retained the desktop 5-grid track layout (`<ContextSidebar>`, `ResizableSeparator (sidebar)`, `<section data-chat-pane="conversations">`, `ResizableSeparator (conversations)`, `<section data-chat-pane="detail">`) with all resizing mechanics, minimums, maximums, and reset controls intact.
+- Conversation List Pane (`data-chat-pane="conversations"`):
+  - Upgraded pane container, header counter, bulk mark replied button, and search/filter controls with semantic tokens (`--app-surface`, `--app-border`, `--app-text-primary`, `--app-text-tertiary`).
+  - Styled `ConversationRow` items with semantic selected state (`.is-selected`), action dropdown menus, customer avatar/identity typography, and structured BM reply status badges (`NOT_REPLIED`, `NOTIFIED_BM`, `REPLIED`).
+  - Modernized toast banners for bulk status updates and incoming conversation notifications.
+- Active Conversation Detail Pane (`data-chat-pane="detail"`):
+  - Modernized compact header (`data-chat-detail-header`) with customer avatar, profile fetch indicator, stage badge, follow-up status, priority pill, `data-bm-reply-status-select`, refresh button, and primary "เปิดใน LINE OA" action.
+  - Modernized chat message timeline (`data-chat-message-scroll`) with subtle surface backdrop, inbound bubble cards, outbound accent bubble cards, date separators, and image attachment viewer.
+  - Modernized reply composer (`data-chat-reply-composer`) with duplicate-send protection, character counter, keyboard shortcut hint (`Enter` to send, `Shift+Enter` for newline), error feedback, and LINE OA manager notice.
+  - Modernized customer intelligence area (`data-chat-detail-lower`): customer purchase card, product intent & AI insight card, internal staff notes textarea, and activity timeline.
+  - Modernized bulk confirmation modal (`bulkConfirmState`) with semantic surface, backdrop blur, and accessible action buttons.
+- Verification & Test Results:
+  - 100% test pass rate across 373 frontend tests in `npm test` (including dedicated `shell-navigation.test.mts`, `bulk-mark-replied.test.mts`, `conversation-state-consistency.test.mts`, `chat-detail-hierarchy.test.mts`, and `design-system-foundation.test.mts`).
+  - Next.js Turbopack build passed cleanly (`npm run build`).
+
+## Previous task: Follower Insights Trend UX & Multi-Store Comparison (2026-08-20)
 
 - Updated Follower Insights trend comparison to default to "All accounts with available data" (`available` / `บัญชีทั้งหมดที่มีข้อมูล`).
 - Multi-store selection: replaced single-store combobox with accessible multi-select checkbox combobox supporting `ทุกร้าน`, single store name, or `Store +N`, with search filtering, `เลือกทั้งหมด`, and `ล้างการเลือก`.

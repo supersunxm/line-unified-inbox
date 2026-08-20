@@ -1,6 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FilterBar, PageHeader } from "@/components/shell";
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  SearchInput,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableEmptyState,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import type { FriendAttributionConfigDto, FriendSource, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
 import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations.ts";
@@ -366,8 +385,8 @@ export function FriendSourceLinksView({
     return (
       <section className="col-span-2 flex flex-col items-center justify-center p-12 text-center">
         <p className="text-4xl">🔒</p>
-        <h2 className="mt-4 text-xl font-bold">{t.error403}</h2>
-        <p className="mt-2 text-slate-500">{t.error403Description}</p>
+        <h2 className="mt-4 text-xl font-bold text-[var(--app-text-primary)]">{t.error403}</h2>
+        <p className="mt-2 text-xs text-[var(--app-text-secondary)]">{t.error403Description}</p>
       </section>
     );
   }
@@ -378,15 +397,7 @@ export function FriendSourceLinksView({
   if (loading && links.length === 0) {
     return (
       <section className="col-span-2 overflow-y-auto p-8">
-        <div className="flex items-center gap-3 text-slate-500">
-          <span className="animate-spin text-xl">⏳</span>
-          <span>{t.loading}</span>
-        </div>
-        <div className="mt-6 space-y-3">
-          {[...Array<unknown>(6)].map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded-lg bg-slate-200" />
-          ))}
-        </div>
+        <LoadingState message={t.loading} />
       </section>
     );
   }
@@ -397,27 +408,19 @@ export function FriendSourceLinksView({
   if (loadError && !loading) {
     return (
       <section className="col-span-2 flex flex-col items-center justify-center p-12 text-center">
-        <p className="text-4xl">⚠️</p>
-        <h2 className="mt-4 text-xl font-bold">{t.errorState}</h2>
-        <p className="mt-2 text-sm text-red-700">{loadError}</p>
-        <button
-          onClick={() => void loadData()}
-          className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
-        >
-          {t.retry}
-        </button>
+        <ErrorState message={loadError} onRetry={() => void loadData()} />
       </section>
     );
   }
 
   return (
-    <section className="col-span-2 overflow-y-auto p-6">
+    <section className="col-span-2 overflow-y-auto p-4 sm:p-6">
       {/* Toast */}
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 px-5 py-3 text-sm text-white shadow-lg"
+          className="fixed bottom-6 right-6 z-50 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-elevated)] px-4 py-3 text-xs font-semibold text-[var(--app-text-primary)] shadow-[var(--app-shadow-elevated)]"
         >
           {toast}
         </div>
@@ -429,120 +432,137 @@ export function FriendSourceLinksView({
           role="dialog"
           aria-modal="true"
           aria-label={t.deactivate}
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
         >
-          <div className="app-card w-full max-w-md rounded-2xl p-6 shadow-2xl">
-            <p className="text-sm">{t.confirmDeactivate(confirmDeactivate.shortUrl)}</p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
+          <div className="w-full max-w-md rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-[var(--app-shadow-modal)]">
+            <h3 className="text-sm font-bold text-[var(--app-text-primary)]">{t.deactivate}</h3>
+            <p className="mt-2 text-xs text-[var(--app-text-secondary)]">{t.confirmDeactivate(confirmDeactivate.shortUrl)}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setConfirmDeactivate(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
               >
                 {t.deactivateConfirmNo}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => void doToggle(confirmDeactivate.id, false)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
               >
                 {t.deactivateConfirmYes}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header with Export Button */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">{t.pageTitle}</h1>
-          <p className="mt-1 text-sm text-slate-500">{t.pageDescription}</p>
-          <p className="mt-1 text-xs text-amber-600">{t.pilotNote}</p>
-        </div>
-
-        {/* Excel Export Button & Choice Menu */}
-        <div className="relative shrink-0">
-          <button
-            id="fsl-export-button"
-            type="button"
-            disabled={loading || exporting || (links.length === 0 && kpis.totalLinks === 0)}
-            onClick={() => setExportMenuOpen((prev) => !prev)}
-            aria-expanded={exportMenuOpen}
-            aria-haspopup="true"
-            className="flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span>📊</span>
-            <span>{exporting ? t.exportRunning : t.exportExcel}</span>
-            <span className="text-xs">▼</span>
-          </button>
-
-          {exportMenuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
+      {/* Page Header with Export Button */}
+      <PageHeader
+        tag="OPPO LINE OA · การตลาดและการติดตามเพื่อน"
+        title={t.pageTitle}
+        description={
+          <div>
+            <span>{t.pageDescription}</span>
+            <span className="block mt-0.5 text-xs text-[var(--app-warning)]">{t.pilotNote}</span>
+          </div>
+        }
+        actions={
+          <div className="relative shrink-0">
+            <Button
+              id="fsl-export-button"
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={loading || exporting || (links.length === 0 && kpis.totalLinks === 0)}
+              onClick={() => setExportMenuOpen((prev) => !prev)}
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="true"
+              className="gap-2"
             >
-              <button
-                id="fsl-export-all"
-                role="menuitem"
-                onClick={() => void handleExportExcel("all")}
-                className="flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100"
-              >
-                <span className="font-semibold text-slate-900">{t.exportAll}</span>
-                <span className="text-xs text-slate-500">
-                  {language === "th"
-                    ? "ดาวน์โหลดลิงก์จากทุกร้านค้าในระบบ"
-                    : language === "zh"
-                    ? "下载系统中所有门店的链接"
-                    : "Download all links across all stores"}
-                </span>
-              </button>
+              <span>📊</span>
+              <span>{exporting ? t.exportRunning : t.exportExcel}</span>
+              <span className="text-[10px]">▼</span>
+            </Button>
 
-              <button
-                id="fsl-export-current"
-                role="menuitem"
-                onClick={() => void handleExportExcel("current")}
-                className="mt-1 flex w-full flex-col rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100"
+            {exportMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-12 z-30 w-64 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1.5 shadow-[var(--app-shadow-elevated)]"
               >
-                <span className="font-semibold text-slate-900">{t.exportCurrent}</span>
-                <span className="text-xs text-slate-500">
-                  {language === "th"
-                    ? "ดาวน์โหลดเฉพาะรายการที่ตรงกับตัวกรอง"
-                    : language === "zh"
-                    ? "仅下载符合当前筛选条件的链接"
-                    : "Download links matching active filters"}
-                </span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+                <button
+                  id="fsl-export-all"
+                  role="menuitem"
+                  onClick={() => void handleExportExcel("all")}
+                  className="flex w-full flex-col rounded-[var(--app-radius-md)] px-3 py-2 text-left text-xs hover:bg-[var(--app-surface-hover)] transition-colors"
+                >
+                  <span className="font-semibold text-[var(--app-text-primary)]">{t.exportAll}</span>
+                  <span className="text-[11px] text-[var(--app-text-secondary)]">
+                    {language === "th"
+                      ? "ดาวน์โหลดลิงก์จากทุกร้านค้าในระบบ"
+                      : language === "zh"
+                      ? "下载系统中所有门店的链接"
+                      : "Download all links across all stores"}
+                  </span>
+                </button>
+
+                <button
+                  id="fsl-export-current"
+                  role="menuitem"
+                  onClick={() => void handleExportExcel("current")}
+                  className="mt-1 flex w-full flex-col rounded-[var(--app-radius-md)] px-3 py-2 text-left text-xs hover:bg-[var(--app-surface-hover)] transition-colors"
+                >
+                  <span className="font-semibold text-[var(--app-text-primary)]">{t.exportCurrent}</span>
+                  <span className="text-[11px] text-[var(--app-text-secondary)]">
+                    {language === "th"
+                      ? "ดาวน์โหลดเฉพาะรายการที่ตรงกับตัวกรอง"
+                      : language === "zh"
+                      ? "仅下载符合当前筛选条件的链接"
+                      : "Download links matching active filters"}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        }
+      />
 
       {/* KPI cards */}
       {(() => {
         const attrKpis = calculateAttributionKPIs(links);
         return (
-          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {[
-              [t.totalClicks, attrKpis.totalClicks, "👆"],
-              [t.totalIdentifiedVisits, attrKpis.identifiedVisits, "👤"],
-              [t.totalConfirmedAdds, attrKpis.confirmedAdds, "🎉"],
-              [t.overallConversionRate, attrKpis.overallConversionRate, "📈"],
-            ].map(([label, value, icon]) => (
-              <div key={String(label)} className="app-card p-5">
-                <p className="app-muted text-xs font-medium">{label}</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight">
-                  {icon} {value}
-                </p>
-              </div>
-            ))}
+          <div className="my-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <MetricCard
+              label={t.totalClicks}
+              value={`👆 ${attrKpis.totalClicks}`}
+              tone="default"
+            />
+            <MetricCard
+              label={t.totalIdentifiedVisits}
+              value={`👤 ${attrKpis.identifiedVisits}`}
+              tone="info"
+            />
+            <MetricCard
+              label={t.totalConfirmedAdds}
+              value={`🎉 ${attrKpis.confirmedAdds}`}
+              tone="success"
+            />
+            <MetricCard
+              label={t.overallConversionRate}
+              value={`📈 ${attrKpis.overallConversionRate}`}
+              tone="accent"
+            />
           </div>
         );
       })()}
 
       {/* Generator card */}
-      <div className="app-card mb-6 rounded-2xl p-6">
-        <h2 className="text-lg font-semibold">{t.generatorTitle}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t.generatorDescription}</p>
-        <p className="mt-1 text-xs text-slate-400">{t.eligibleOnly}</p>
+      <Card className="mb-6 p-5 sm:p-6">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+          {t.generatorTitle}
+        </h2>
+        <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.generatorDescription}</p>
+        <p className="mt-0.5 text-[11px] text-[var(--app-text-tertiary)]">{t.eligibleOnly}</p>
 
         {/* Generator search */}
         <div className="mt-4">
@@ -553,38 +573,38 @@ export function FriendSourceLinksView({
             onChange={(e) => setGeneratorSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
             aria-label={t.searchPlaceholder}
-            className="app-input w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+            className="app-input w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
           />
         </div>
 
         {/* Selected count + preview */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium">
+          <span className="text-xs font-medium text-[var(--app-text-secondary)]">
             {t.selectedCount(selectedIds.length, MAX_PILOT_STORES)}
           </span>
           {selectedIds.length > 0 && (
-            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+            <Badge variant="success" size="sm">
               {t.generatorPreview(selectedIds.length, ALL_SOURCES.length, selectedIds.length * ALL_SOURCES.length)}
-            </span>
+            </Badge>
           )}
         </div>
 
         {/* Validation error */}
         {validationError && (
-          <p role="alert" className="mt-2 text-sm text-red-700">
+          <p role="alert" className="mt-2 text-xs font-medium text-[var(--app-danger)]">
             {validationError}
           </p>
         )}
 
         {/* Account list */}
         <div
-          className="mt-3 max-h-56 overflow-y-auto rounded-lg border"
+          className="mt-3 max-h-56 overflow-y-auto rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)]"
           role="listbox"
           aria-multiselectable="true"
           aria-label={t.generatorTitle}
         >
           {eligibleOas.length === 0 && (
-            <p className="p-4 text-center text-sm text-slate-500">{t.noEligibleAccounts}</p>
+            <p className="p-4 text-center text-xs text-[var(--app-text-tertiary)]">{t.noEligibleAccounts}</p>
           )}
           {filteredGeneratorOas.map((oa) => {
             const isSelected = selectedIds.includes(oa.id);
@@ -595,23 +615,23 @@ export function FriendSourceLinksView({
                 aria-selected={isSelected}
                 onClick={() => handleToggleSelection(oa.id)}
                 disabled={!isSelected && selectedIds.length >= MAX_PILOT_STORES}
-                className={`flex w-full items-center gap-3 border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isSelected ? "bg-green-50" : ""
+                className={`flex w-full items-center gap-3 border-b border-[var(--app-border-subtle)] px-4 py-2.5 text-left text-xs last:border-b-0 hover:bg-[var(--app-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors ${
+                  isSelected ? "bg-[var(--app-accent-soft)]" : ""
                 }`}
               >
                 <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-bold ${
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold ${
                     isSelected
-                      ? "border-green-600 bg-green-600 text-white"
-                      : "border-slate-300 bg-white"
+                      ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-white"
+                      : "border-[var(--app-border)] bg-[var(--app-surface)]"
                   }`}
                   aria-hidden="true"
                 >
                   {isSelected ? "✓" : ""}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{oa.store.name}</p>
-                  <p className="truncate text-xs text-slate-500">
+                  <p className="truncate font-medium text-[var(--app-text-primary)]">{oa.store.name}</p>
+                  <p className="truncate text-[11px] text-[var(--app-text-secondary)]">
                     {oa.name} · {oa.basicId}
                   </p>
                 </div>
@@ -619,221 +639,231 @@ export function FriendSourceLinksView({
             );
           })}
           {filteredGeneratorOas.length === 0 && eligibleOas.length > 0 && (
-            <p className="p-4 text-center text-sm text-slate-500">{t.noResults}</p>
+            <p className="p-4 text-center text-xs text-[var(--app-text-tertiary)]">{t.noResults}</p>
           )}
         </div>
 
         {/* Generate error */}
         {generateError && (
-          <div role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <div role="alert" className="mt-3 rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)]">
             {generateError}
           </div>
         )}
 
         {/* Generate success */}
         {generateResult && (
-          <div role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">
-            <p>{t.generateSuccess(generateResult.createdCount, generateResult.existingCount)}</p>
-            <p className="mt-1 text-xs text-green-700">{t.generateIdempotentNote}</p>
+          <div role="status" className="mt-3 rounded-[var(--app-radius-md)] border border-[var(--app-success)]/20 bg-[var(--app-success-soft)] p-3 text-xs text-[var(--app-success)]">
+            <p className="font-semibold">{t.generateSuccess(generateResult.createdCount, generateResult.existingCount)}</p>
+            <p className="mt-1 text-[11px] opacity-90">{t.generateIdempotentNote}</p>
           </div>
         )}
 
         <div className="mt-4 flex justify-end">
-          <button
+          <Button
             id="fsl-generate-button"
+            variant="primary"
+            size="md"
             onClick={() => void handleGenerate()}
             disabled={generating || selectedIds.length === 0}
-            className="rounded-lg bg-green-700 px-5 py-2 text-sm font-semibold text-white hover:bg-green-600 disabled:opacity-50"
+            isLoading={generating}
           >
             {generating ? t.generating : t.generateButton}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {/* Attribution Config Card for ADMIN */}
       {userRole === "ADMIN" && (
-        <div id="fsl-attribution-card" className="app-card mb-6 rounded-2xl p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-lg font-semibold">{t.attributionSectionTitle}</h2>
-              </div>
-              <p className="mt-1 text-sm text-slate-500">{t.attributionSectionDesc}</p>
-              <div className="mt-2">
-                <span
-                  id="fsl-attribution-summary"
-                  className="inline-block rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-                >
-                  {t.attrSummary(
-                    attrCounts.total,
-                    attrCounts.enabled,
-                    attrCounts.disabled,
-                    attrCounts.notConfigured
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <button
-              id="fsl-attribution-toggle-btn"
-              aria-expanded={attrExpanded}
-              aria-controls="fsl-attribution-content"
-              onClick={() => setAttrExpanded((prev) => !prev)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <span>{attrExpanded ? t.attrCollapse : t.attrExpand}</span>
-              <span className="text-slate-400">{attrExpanded ? "▲" : "▼"}</span>
-            </button>
-          </div>
-
-          {attrConfigsLoading ? (
-            <div role="status" className="mt-4 p-4 text-center text-sm text-slate-500">
-              {t.generating}
-            </div>
-          ) : attrConfigsError ? (
-            <div role="alert" className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">
-              <p>{attrConfigsError}</p>
-              <button
-                onClick={() => void loadAttrConfigs()}
-                className="mt-2 text-xs font-semibold underline hover:text-red-800"
-              >
-                {t.retry}
-              </button>
-            </div>
-          ) : (
-            attrExpanded && (
-              <div id="fsl-attribution-content" className="mt-4">
-                {/* Search & Filter Controls */}
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50/70 p-2.5">
-                  <input
-                    id="fsl-attribution-search"
-                    type="text"
-                    value={attrSearchQuery}
-                    onChange={(e) => setAttrSearchQuery(e.target.value)}
-                    placeholder={t.attrSearchPlaceholder}
-                    className="app-input w-full max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs"
-                  />
-
-                  <select
-                    id="fsl-attribution-status-filter"
-                    value={attrStatusFilter}
-                    onChange={(e) => setAttrStatusFilter(e.target.value as typeof attrStatusFilter)}
-                    className="app-input rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+        <div id="fsl-attribution-card">
+          <Card className="mb-6 p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                    {t.attributionSectionTitle}
+                  </h2>
+                </div>
+                <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.attributionSectionDesc}</p>
+                <div className="mt-2">
+                  <span
+                    id="fsl-attribution-summary"
+                    className="inline-block rounded-[var(--app-radius-sm)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-text-secondary)]"
                   >
-                    <option value="ALL">{t.attrFilterAll}</option>
-                    <option value="ENABLED">{t.attrFilterEnabled}</option>
-                    <option value="DISABLED">{t.attrFilterDisabled}</option>
-                    <option value="NOT_CONFIGURED">{t.attrFilterNotConfigured}</option>
-                  </select>
-                </div>
-
-                {/* Scrollable list container */}
-                <div
-                  id="fsl-attribution-list-container"
-                  className="mt-3 max-h-[440px] overflow-y-auto divide-y divide-slate-100 rounded-lg border bg-white"
-                >
-                  {filteredAttrConfigs.length === 0 ? (
-                    <div role="status" className="p-4 text-center text-xs text-slate-500">
-                      {t.noResults}
-                    </div>
-                  ) : (
-                    filteredAttrConfigs.map((cfg) => {
-                      const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
-                      const isEnabled = cfg.isEnabled;
-
-                      return (
-                        <div
-                          key={cfg.lineOaId}
-                          className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 text-xs hover:bg-slate-50/60"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-semibold text-slate-900">{cfg.storeName || cfg.lineOaName}</span>
-                              <span className="text-slate-500">
-                                ({cfg.lineOaName}{cfg.basicId ? ` · ${cfg.basicId}` : ""})
-                              </span>
-                            </div>
-                            {isConfigured && cfg.liffId && (
-                              <p className="mt-0.5 font-mono text-[11px] text-slate-500">
-                                Channel: {cfg.lineLoginChannelId || "-"} · LIFF: {cfg.liffId}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                !isConfigured
-                                  ? "bg-slate-100 text-slate-600"
-                                  : isEnabled
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {!isConfigured
-                                ? t.attrStatusNotConfigured
-                                : isEnabled
-                                ? t.attrStatusEnabled
-                                : t.attrStatusDisabled}
-                            </span>
-
-                            <button
-                              onClick={() => {
-                                setEditingConfig(cfg);
-                                setModalChannelId(cfg.lineLoginChannelId || "");
-                                setModalLiffId(cfg.liffId || "");
-                                setModalIsEnabled(cfg.isEnabled ?? true);
-                                setModalError(null);
-                              }}
-                              className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                            >
-                              {isConfigured ? t.attrEditBtn : t.attrConfigureBtn}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                    {t.attrSummary(
+                      attrCounts.total,
+                      attrCounts.enabled,
+                      attrCounts.disabled,
+                      attrCounts.notConfigured
+                    )}
+                  </span>
                 </div>
               </div>
-            )
-          )}
+
+              <Button
+                id="fsl-attribution-toggle-btn"
+                variant="secondary"
+                size="sm"
+                aria-expanded={attrExpanded}
+                aria-controls="fsl-attribution-content"
+                onClick={() => setAttrExpanded((prev) => !prev)}
+                className="gap-1.5"
+              >
+                <span>{attrExpanded ? t.attrCollapse : t.attrExpand}</span>
+                <span className="text-[10px] text-[var(--app-text-tertiary)]">{attrExpanded ? "▲" : "▼"}</span>
+              </Button>
+            </div>
+
+            {attrConfigsLoading ? (
+              <div role="status" className="mt-4 p-4 text-center text-xs text-[var(--app-text-secondary)]">
+                {t.generating}
+              </div>
+            ) : attrConfigsError ? (
+              <div role="alert" className="mt-4 rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 bg-[var(--app-danger-soft)] p-3 text-xs text-[var(--app-danger)]">
+                <p>{attrConfigsError}</p>
+                <button
+                  onClick={() => void loadAttrConfigs()}
+                  className="mt-2 text-[11px] font-semibold underline hover:opacity-80"
+                >
+                  {t.retry}
+                </button>
+              </div>
+            ) : (
+              attrExpanded && (
+                <div id="fsl-attribution-content" className="mt-4">
+                  {/* Search & Filter Controls */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-2.5">
+                    <input
+                      id="fsl-attribution-search"
+                      type="text"
+                      value={attrSearchQuery}
+                      onChange={(e) => setAttrSearchQuery(e.target.value)}
+                      placeholder={t.attrSearchPlaceholder}
+                      className="app-input w-full max-w-xs rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs text-[var(--app-text-primary)]"
+                    />
+
+                    <select
+                      id="fsl-attribution-status-filter"
+                      value={attrStatusFilter}
+                      onChange={(e) => setAttrStatusFilter(e.target.value as typeof attrStatusFilter)}
+                      className="app-input rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-primary)]"
+                    >
+                      <option value="ALL">{t.attrFilterAll}</option>
+                      <option value="ENABLED">{t.attrFilterEnabled}</option>
+                      <option value="DISABLED">{t.attrFilterDisabled}</option>
+                      <option value="NOT_CONFIGURED">{t.attrFilterNotConfigured}</option>
+                    </select>
+                  </div>
+
+                  {/* Scrollable list container */}
+                  <div
+                    id="fsl-attribution-list-container"
+                    className="mt-3 max-h-[440px] overflow-y-auto divide-y divide-[var(--app-border-subtle)] rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)]"
+                  >
+                    {filteredAttrConfigs.length === 0 ? (
+                      <div role="status" className="p-4 text-center text-xs text-[var(--app-text-tertiary)]">
+                        {t.noResults}
+                      </div>
+                    ) : (
+                      filteredAttrConfigs.map((cfg) => {
+                        const isConfigured = cfg.isConfigured || Boolean(cfg.liffId);
+                        const isEnabled = cfg.isEnabled;
+
+                        return (
+                          <div
+                            key={cfg.lineOaId}
+                            className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-xs hover:bg-[var(--app-surface-hover)] transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-semibold text-[var(--app-text-primary)]">{cfg.storeName || cfg.lineOaName}</span>
+                                <span className="text-[var(--app-text-secondary)] text-[11px]">
+                                  ({cfg.lineOaName}{cfg.basicId ? ` · ${cfg.basicId}` : ""})
+                                </span>
+                              </div>
+                              {isConfigured && cfg.liffId && (
+                                <p className="mt-0.5 font-mono text-[11px] text-[var(--app-text-tertiary)]">
+                                  Channel: {cfg.lineLoginChannelId || "-"} · LIFF: {cfg.liffId}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                size="sm"
+                                variant={
+                                  !isConfigured
+                                    ? "neutral"
+                                    : isEnabled
+                                    ? "success"
+                                    : "warning"
+                                }
+                              >
+                                {!isConfigured
+                                  ? t.attrStatusNotConfigured
+                                  : isEnabled
+                                  ? t.attrStatusEnabled
+                                  : t.attrStatusDisabled}
+                              </Badge>
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setEditingConfig(cfg);
+                                  setModalChannelId(cfg.lineLoginChannelId || "");
+                                  setModalLiffId(cfg.liffId || "");
+                                  setModalIsEnabled(cfg.isEnabled ?? true);
+                                  setModalError(null);
+                                }}
+                              >
+                                {isConfigured ? t.attrEditBtn : t.attrConfigureBtn}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+          </Card>
         </div>
       )}
 
       {/* Attribution Config Modal */}
       {editingConfig && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="app-card w-full max-w-md rounded-2xl p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold">{t.attrModalTitle(editingConfig.storeName || editingConfig.lineOaName)}</h3>
-            <p className="mt-1 text-xs text-slate-500">{editingConfig.lineOaName} ({editingConfig.basicId})</p>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-[var(--app-shadow-modal)]">
+            <h3 className="text-sm font-bold text-[var(--app-text-primary)]">{t.attrModalTitle(editingConfig.storeName || editingConfig.lineOaName)}</h3>
+            <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{editingConfig.lineOaName} ({editingConfig.basicId})</p>
 
             {modalError && (
-              <div role="alert" className="mt-3 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">
+              <div role="alert" className="mt-3 rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/20 bg-[var(--app-danger-soft)] p-2.5 text-xs text-[var(--app-danger)]">
                 {modalError}
               </div>
             )}
 
             <div className="mt-4 space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-700">{t.attrModalChannelId}</label>
+                <label className="block text-xs font-medium text-[var(--app-text-secondary)]">{t.attrModalChannelId}</label>
                 <input
                   type="text"
                   value={modalChannelId}
                   onChange={(e) => setModalChannelId(e.target.value)}
                   placeholder="e.g. 2007073384"
-                  className="app-input mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  className="app-input mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700">{t.attrModalLiffId}</label>
+                <label className="block text-xs font-medium text-[var(--app-text-secondary)]">{t.attrModalLiffId}</label>
                 <input
                   type="text"
                   value={modalLiffId}
                   onChange={(e) => setModalLiffId(e.target.value)}
                   placeholder="e.g. 2007073384-AbCdEfGh"
-                  className="app-input mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  className="app-input mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
                 />
               </div>
 
@@ -843,239 +873,253 @@ export function FriendSourceLinksView({
                   id="attr-modal-enabled"
                   checked={modalIsEnabled}
                   onChange={(e) => setModalIsEnabled(e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600"
+                  className="rounded border-[var(--app-border)] accent-[var(--app-accent)]"
                 />
-                <label htmlFor="attr-modal-enabled" className="text-xs font-medium text-slate-700">
+                <label htmlFor="attr-modal-enabled" className="text-xs font-medium text-[var(--app-text-primary)] cursor-pointer select-none">
                   {t.attrModalEnabled}
                 </label>
               </div>
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setEditingConfig(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium hover:bg-slate-50"
               >
                 {t.attrModalCancelBtn}
-              </button>
-              <button
-                onClick={() => void handleSaveAttrConfig()}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={savingConfig}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
+                isLoading={savingConfig}
+                onClick={() => void handleSaveAttrConfig()}
               >
                 {savingConfig ? t.toggleSaving : t.attrModalSaveBtn}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-3">
-        <input
-          id="fsl-filter-search"
-          type="text"
-          value={filterSearch}
-          onChange={(e) => setFilterSearch(e.target.value)}
-          placeholder={t.filterSearch}
-          aria-label={t.filterSearch}
-          className="app-input rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
+      {/* Filters Bar */}
+      <div className="mb-4">
+        <FilterBar
+          searchSlot={
+            <SearchInput
+              id="fsl-filter-search"
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              onClear={() => setFilterSearch("")}
+              placeholder={t.filterSearch}
+            />
+          }
+          filtersSlot={
+            <>
+              <select
+                id="fsl-filter-store"
+                value={filterStore}
+                onChange={(e) => setFilterStore(e.target.value)}
+                aria-label={t.filterStore}
+                className="app-input rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs font-medium text-[var(--app-text-primary)] outline-none"
+              >
+                <option value="">{t.filterStore}: {t.filterStatusAll}</option>
+                {uniqueStores.map(([storeId, storeName]) => (
+                  <option key={storeId} value={storeId}>
+                    {storeName ?? storeId}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                id="fsl-filter-source"
+                value={filterSource}
+                onChange={(e) => setFilterSource(e.target.value as FriendSource | "")}
+                aria-label={t.filterSource}
+                className="app-input rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs font-medium text-[var(--app-text-primary)] outline-none"
+              >
+                <option value="">{t.filterSource}: {t.filterStatusAll}</option>
+                {ALL_SOURCES.map((s) => (
+                  <option key={s} value={s}>
+                    {sourceLabel(s)}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                id="fsl-filter-status"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as "" | "true" | "false")}
+                aria-label={t.filterStatus}
+                className="app-input rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs font-medium text-[var(--app-text-primary)] outline-none"
+              >
+                <option value="">{t.filterStatus}: {t.filterStatusAll}</option>
+                <option value="true">{t.filterStatusActive}</option>
+                <option value="false">{t.filterStatusInactive}</option>
+              </select>
+
+              {(filterSearch || filterStore || filterSource || filterStatus) && (
+                <Button
+                  id="fsl-clear-filters"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFilterSearch("");
+                    setFilterStore("");
+                    setFilterSource("");
+                    setFilterStatus("");
+                  }}
+                >
+                  {t.clearFilters}
+                </Button>
+              )}
+            </>
+          }
         />
-
-        <select
-          id="fsl-filter-store"
-          value={filterStore}
-          onChange={(e) => setFilterStore(e.target.value)}
-          aria-label={t.filterStore}
-          className="app-input rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
-        >
-          <option value="">{t.filterStore}: {t.filterStatusAll}</option>
-          {uniqueStores.map(([storeId, storeName]) => (
-            <option key={storeId} value={storeId}>
-              {storeName ?? storeId}
-            </option>
-          ))}
-        </select>
-
-        <select
-          id="fsl-filter-source"
-          value={filterSource}
-          onChange={(e) => setFilterSource(e.target.value as FriendSource | "")}
-          aria-label={t.filterSource}
-          className="app-input rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
-        >
-          <option value="">{t.filterSource}: {t.filterStatusAll}</option>
-          {ALL_SOURCES.map((s) => (
-            <option key={s} value={s}>
-              {sourceLabel(s)}
-            </option>
-          ))}
-        </select>
-
-        <select
-          id="fsl-filter-status"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as "" | "true" | "false")}
-          aria-label={t.filterStatus}
-          className="app-input rounded-lg border px-3 py-2 text-sm outline-none focus:border-slate-500"
-        >
-          <option value="">{t.filterStatus}: {t.filterStatusAll}</option>
-          <option value="true">{t.filterStatusActive}</option>
-          <option value="false">{t.filterStatusInactive}</option>
-        </select>
-
-        {(filterSearch || filterStore || filterSource || filterStatus) && (
-          <button
-            id="fsl-clear-filters"
-            onClick={() => {
-              setFilterSearch("");
-              setFilterStore("");
-              setFilterSource("");
-              setFilterStatus("");
-            }}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-          >
-            {t.clearFilters}
-          </button>
-        )}
       </div>
 
       {/* Links table */}
       {links.length === 0 && !loading ? (
-        <div className="app-card rounded-2xl p-12 text-center">
+        <Card className="p-12 text-center">
           {filterSearch || filterStore || filterSource || filterStatus ? (
             <>
               <p className="text-4xl">🔍</p>
-              <h3 className="mt-4 text-lg font-semibold">{t.noResults}</h3>
-              <p className="mt-2 text-sm text-slate-500">{t.noResultsDescription}</p>
+              <h3 className="mt-4 text-sm font-bold text-[var(--app-text-primary)]">{t.noResults}</h3>
+              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.noResultsDescription}</p>
             </>
           ) : (
             <>
               <p className="text-4xl">🔗</p>
-              <h3 className="mt-4 text-lg font-semibold">{t.emptyState}</h3>
-              <p className="mt-2 text-sm text-slate-500">{t.emptyStateDescription}</p>
+              <h3 className="mt-4 text-sm font-bold text-[var(--app-text-primary)]">{t.emptyState}</h3>
+              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.emptyStateDescription}</p>
             </>
           )}
-        </div>
+        </Card>
       ) : (
-        <div className="app-card overflow-hidden rounded-2xl">
+        <TableContainer>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500">
+            <Table>
+              <TableHeader>
                 <tr>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableStore}</th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableLineOa}</th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableSource}</th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableShortLink}</th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableClicks}</th>
-                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipIdentified}>
+                  <TableHead>{t.tableStore}</TableHead>
+                  <TableHead>{t.tableLineOa}</TableHead>
+                  <TableHead>{t.tableSource}</TableHead>
+                  <TableHead>{t.tableShortLink}</TableHead>
+                  <TableHead align="right">{t.tableClicks}</TableHead>
+                  <TableHead align="right" title={t.tooltipIdentified}>
                     <span className="cursor-help underline decoration-dotted">{t.tableIdentifiedVisits}</span>
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipConfirmed}>
+                  </TableHead>
+                  <TableHead align="right" title={t.tooltipConfirmed}>
                     <span className="cursor-help underline decoration-dotted">{t.tableConfirmedAdds}</span>
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium" title={t.tooltipConversion}>
+                  </TableHead>
+                  <TableHead align="right" title={t.tooltipConversion}>
                     <span className="cursor-help underline decoration-dotted">{t.tableConversionRate}</span>
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableStatus}</th>
-                  <th scope="col" className="px-4 py-3 font-medium">{t.tableActions}</th>
+                  </TableHead>
+                  <TableHead align="center">{t.tableStatus}</TableHead>
+                  <TableHead align="right">{t.tableActions}</TableHead>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+              </TableHeader>
+              <TableBody>
                 {links.map((link) => (
-                  <tr key={link.id} className={link.isActive ? "" : "opacity-60"}>
-                    <td className="px-4 py-3 font-medium">{link.storeName ?? link.storeId}</td>
-                    <td className="px-4 py-3 text-slate-600">{link.lineOaName ?? link.lineOaId}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  <TableRow key={link.id} className={link.isActive ? "" : "opacity-60"}>
+                    <TableCell className="font-semibold text-[var(--app-text-primary)]">
+                      {link.storeName ?? link.storeId}
+                    </TableCell>
+                    <TableCell className="text-xs text-[var(--app-text-secondary)]">
+                      {link.lineOaName ?? link.lineOaId}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="neutral" size="sm">
                         {sourceLabel(link.source)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-slate-700">{link.shortUrl}</span>
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">{link.clickCount}</td>
-                    <td className="px-4 py-3 tabular-nums text-slate-700">{link.identifiedVisits || 0}</td>
-                    <td className="px-4 py-3 tabular-nums">
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs text-[var(--app-text-secondary)]">{link.shortUrl}</span>
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums font-medium text-[var(--app-text-primary)]">
+                      {link.clickCount}
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums text-xs text-[var(--app-text-secondary)]">
+                      {link.identifiedVisits || 0}
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums">
                       <span
                         className={
                           (link.confirmedAdds || 0) > 0
-                            ? "inline-block rounded bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800"
-                            : "text-slate-700"
+                            ? "inline-block rounded-[var(--app-radius-sm)] bg-[var(--app-success-soft)] px-2 py-0.5 font-bold text-[var(--app-success)]"
+                            : "text-[var(--app-text-secondary)]"
                         }
                       >
                         {link.confirmedAdds || 0}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 tabular-nums font-medium text-slate-900">
+                    </TableCell>
+                    <TableCell align="right" className="tabular-nums font-bold text-[var(--app-text-primary)]">
                       {formatConversionRate(
                         link.conversionRate ?? (link.clickCount > 0 ? (link.confirmedAdds || 0) / link.clickCount : 0)
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          link.isActive
-                            ? "bg-green-100 text-green-800"
-                            : "bg-slate-200 text-slate-600"
-                        }`}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Badge
+                        size="md"
+                        variant={link.isActive ? "success" : "neutral"}
+                        dot
                         aria-label={link.isActive ? t.statusActive : t.statusInactive}
                       >
-                        {link.isActive ? `● ${t.statusActive}` : `○ ${t.statusInactive}`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
+                        {link.isActive ? t.statusActive : t.statusInactive}
+                      </Badge>
+                    </TableCell>
+                    <TableCell align="right">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           aria-label={`${t.copyLink}: ${link.shortUrl}`}
                           onClick={() => void handleCopyLink(link.shortUrl)}
-                          className="rounded border border-slate-200 px-2.5 py-1 text-xs hover:bg-slate-50"
                         >
                           {t.copyLink}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           aria-label={`${t.openLink}: ${link.shortUrl}`}
                           onClick={() => handleOpenLink(link.shortUrl)}
-                          className="rounded border border-slate-200 px-2.5 py-1 text-xs hover:bg-slate-50"
                         >
                           {t.openLink}
-                        </button>
+                        </Button>
                         {link.source === "STORE_QR" && (
-                          <button
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             aria-label={t.qrDownloadSoon}
                             disabled
                             title={t.qrDownloadSoon}
-                            className="rounded border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-400 cursor-not-allowed"
+                            className="border-dashed opacity-40 cursor-not-allowed"
                           >
                             QR
-                          </button>
+                          </Button>
                         )}
-                        <button
+                        <Button
+                          size="sm"
+                          variant={link.isActive ? "danger" : "secondary"}
                           aria-label={link.isActive ? t.deactivate : t.activate}
                           onClick={() => void handleToggleActive(link, !link.isActive)}
                           disabled={togglingId === link.id}
-                          className={`rounded border px-2.5 py-1 text-xs ${
-                            togglingId === link.id
-                              ? "cursor-not-allowed opacity-50"
-                              : link.isActive
-                              ? "border-red-200 text-red-700 hover:bg-red-50"
-                              : "border-green-200 text-green-700 hover:bg-green-50"
-                          }`}
                         >
                           {togglingId === link.id
                             ? t.toggleSaving
                             : link.isActive
                             ? t.deactivate
                             : t.activate}
-                        </button>
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        </div>
+        </TableContainer>
       )}
     </section>
   );

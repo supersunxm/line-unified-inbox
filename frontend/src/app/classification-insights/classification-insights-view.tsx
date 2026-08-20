@@ -2,6 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/shell";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  LoadingSpinner,
+  LoadingState,
+  MetricCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import type {
   ClassificationInsightsResponse,
@@ -21,16 +43,6 @@ import {
 function formatDate(value: string | null, language: ClassificationInsightsLanguage) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-function MetricCard({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) {
-  return (
-    <div className="app-card p-4">
-      <p className="app-muted text-xs font-medium">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-      {subtext && <p className="app-muted mt-1 text-xs truncate">{subtext}</p>}
-    </div>
-  );
 }
 
 export function ClassificationInsightsView({ language }: { language: ClassificationInsightsLanguage }) {
@@ -132,7 +144,6 @@ export function ClassificationInsightsView({ language }: { language: Classificat
 
   // Fast Review Actions (Optimistic 3-5 sec execution)
   const handleConfirmReview = async (item: ProductReviewQueueItem) => {
-    // Optimistic removal
     setReviewItems((prev) => prev.filter((i) => i.conversationId !== item.conversationId));
     if (reviewQueueData) {
       setReviewQueueData({
@@ -151,8 +162,7 @@ export function ClassificationInsightsView({ language }: { language: Classificat
     try {
       await api.confirmProductReview(item.conversationId);
     } catch (err) {
-      console.error("Confirm review failed:", err);
-      void loadReviewQueue(selectedStoreId, selectedReason);
+      console.error("Failed to confirm review item:", err);
     }
   };
 
@@ -175,74 +185,74 @@ export function ClassificationInsightsView({ language }: { language: Classificat
     try {
       await api.confirmNoProductReview(item.conversationId);
     } catch (err) {
-      console.error("No product review failed:", err);
-      void loadReviewQueue(selectedStoreId, selectedReason);
+      console.error("Failed to mark item as no product:", err);
     }
   };
 
   const handleOpenCorrection = (item: ProductReviewQueueItem) => {
     setCorrectingItem(item);
-    setSelectedModelId(item.predictedProducts[0]?.productModelId ?? "");
+    setSelectedModelId(item.predictedProducts[0]?.productModelId || "");
   };
 
   const handleSaveCorrection = async () => {
     if (!correctingItem || !selectedModelId) return;
     setSavingCorrection(true);
-    const item = correctingItem;
-
-    // Optimistic removal
-    setReviewItems((prev) => prev.filter((i) => i.conversationId !== item.conversationId));
-    if (reviewQueueData) {
-      setReviewQueueData({
-        ...reviewQueueData,
-        summary: {
-          ...reviewQueueData.summary,
-          totalNeedsReview: Math.max(0, reviewQueueData.summary.totalNeedsReview - 1),
-          correctedCount: reviewQueueData.summary.correctedCount + 1,
-          reviewedTotal: reviewQueueData.summary.reviewedTotal + 1,
-        },
-      });
-    }
-    setCorrectingItem(null);
-    setActionMessage(text.actionSuccessCorrected);
-    window.setTimeout(() => setActionMessage(null), 3000);
-
     try {
-      await api.correctProductReview(item.conversationId, selectedModelId);
-      // Reload insights to update correction patterns
-      const [insights, corrections] = await Promise.all([
-        api.classificationInsights(),
-        api.productCorrections().catch(() => null),
-      ]);
-      setData(insights);
-      setCorrectionsData(corrections);
+      await api.correctProductReview(correctingItem.conversationId, selectedModelId);
+      setReviewItems((prev) => prev.filter((i) => i.conversationId !== correctingItem.conversationId));
+      if (reviewQueueData) {
+        setReviewQueueData({
+          ...reviewQueueData,
+          summary: {
+            ...reviewQueueData.summary,
+            totalNeedsReview: Math.max(0, reviewQueueData.summary.totalNeedsReview - 1),
+            correctedCount: reviewQueueData.summary.correctedCount + 1,
+            reviewedTotal: reviewQueueData.summary.reviewedTotal + 1,
+          },
+        });
+      }
+      setCorrectingItem(null);
+      setActionMessage(text.actionSuccessCorrected);
+      window.setTimeout(() => setActionMessage(null), 3000);
+      await load();
     } catch (err) {
-      console.error("Correction failed:", err);
-      void loadReviewQueue(selectedStoreId, selectedReason);
+      alert(err instanceof Error ? err.message : "Failed to save correction");
     } finally {
       setSavingCorrection(false);
     }
   };
 
-  // Keyboard Shortcuts (C = Confirm, E = Edit, N = No Product)
+  // Keyboard Navigation & Shortcuts for Review Queue (C = Confirm, E = Edit, N = No Product)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if typing in an input or modal is open
-      if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) return;
-      if (pendingApproval || activeEvidence || correctingItem) return;
-      if (reviewItems.length === 0) return;
+      // Ignore when inside input/select or modal is open
+      if (
+        ["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName) ||
+        pendingApproval ||
+        activeEvidence ||
+        correctingItem
+      ) {
+        return;
+      }
 
-      const currentItem = reviewItems[Math.min(selectedQueueIndex, reviewItems.length - 1)];
+      const currentItem = reviewItems[selectedQueueIndex];
       if (!currentItem) return;
 
-      const key = e.key.toLowerCase();
-      if (key === "c") {
+      if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
-        void handleConfirmReview(currentItem);
-      } else if (key === "e") {
+        setSelectedQueueIndex((prev) => Math.min(reviewItems.length - 1, prev + 1));
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setSelectedQueueIndex((prev) => Math.max(0, prev - 1));
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        if (currentItem.predictedProducts.length > 0) {
+          void handleConfirmReview(currentItem);
+        }
+      } else if (e.key === "e" || e.key === "E") {
         e.preventDefault();
         handleOpenCorrection(currentItem);
-      } else if (key === "n") {
+      } else if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         void handleNoProductReview(currentItem);
       }
@@ -291,17 +301,17 @@ export function ClassificationInsightsView({ language }: { language: Classificat
   };
 
   if (loading && !data) {
-    return <div className="app-card p-8 text-center app-muted">{text.loading}</div>;
+    return <LoadingState message={text.loading} className="app-card app-muted p-8" />;
   }
 
   if (error && !data) {
     return (
-      <div role="alert" className="app-card border-red-200 p-6 text-red-700 dark:border-red-900 dark:text-red-300">
-        <p className="font-medium">{text.error}</p>
-        <p className="mt-1 text-sm">{error}</p>
-        <button type="button" onClick={() => void load()} className="app-button-secondary mt-4 rounded-lg border px-3 py-2 text-sm">
+      <div role="alert" className="app-card rounded-[var(--app-radius-xl)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] p-6 text-xs text-[var(--app-danger)]">
+        <p className="font-bold text-sm">{text.error}</p>
+        <p className="mt-1">{error}</p>
+        <Button variant="secondary" size="sm" onClick={() => void load()} className="mt-4 app-button-secondary">
           {text.retry}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -317,55 +327,67 @@ export function ClassificationInsightsView({ language }: { language: Classificat
 
   return (
     <section data-classification-insights className="space-y-6">
-      <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{text.title}</h1>
-          <p className="app-muted mt-1 text-sm">{text.subtitle}</p>
-        </div>
-        <p className="app-muted text-xs">
-          {text.generatedAt}: <time dateTime={data.generatedAt}>{formatDate(data.generatedAt, language)}</time>
-        </p>
-      </header>
+      <PageHeader
+        tag="OPPO LINE OA · การวิเคราะห์การจำแนกประเภท"
+        title={text.title}
+        description={text.subtitle}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge size="md" variant="neutral">
+              {text.generatedAt}: <time dateTime={data.generatedAt}>{formatDate(data.generatedAt, language)}</time>
+            </Badge>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void load()}
+              className="app-button-secondary"
+            >
+              {text.retry}
+            </Button>
+          </div>
+        }
+      />
 
       {/* Action Success Toast Banner */}
       {actionMessage && (
-        <div role="status" className="fixed bottom-6 right-6 z-50 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg animate-bounce">
+        <div role="status" className="fixed bottom-6 right-6 z-50 rounded-[var(--app-radius-lg)] bg-[var(--app-success)] px-4 py-2.5 text-xs font-semibold text-white shadow-[var(--app-shadow-elevated)] animate-bounce">
           {actionMessage}
         </div>
       )}
 
       {/* Post-Approval Alert & Targeted Re-analysis Prompt */}
       {approvalSuccess && (
-        <div role="status" className="app-card border-emerald-300 bg-emerald-50/50 p-5 dark:border-emerald-800 dark:bg-emerald-950/40">
+        <div role="status" className="app-card rounded-[var(--app-radius-xl)] border border-[var(--app-success)]/40 bg-[var(--app-success-soft)] p-5">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <p className="font-semibold text-emerald-800 dark:text-emerald-200">
-                ✓ {text.aliasActivated} <code className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold dark:bg-emerald-900">{approvalSuccess.phrase}</code>
+              <p className="font-bold text-xs text-[var(--app-success)]">
+                ✓ {text.aliasActivated} <code className="rounded bg-[var(--app-surface)] border border-[var(--app-border)] px-1.5 py-0.5 font-mono text-xs">{approvalSuccess.phrase}</code>
               </p>
-              <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
-                {text.affectedConversationsPrompt}: <strong className="tabular-nums">{approvalSuccess.affectedCount}</strong>
+              <p className="mt-1 text-xs text-[var(--app-text-primary)]">
+                {text.affectedConversationsPrompt}: <strong className="tabular-nums font-mono">{approvalSuccess.affectedCount}</strong>
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
+            <div className="flex items-center gap-2.5">
+              <Button
+                variant="primary"
+                size="sm"
                 disabled={reanalyzing}
                 onClick={() => void handleReanalyze(approvalSuccess.phrase)}
-                className="app-button-primary rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
               >
                 {reanalyzing ? text.reanalyzing : text.reanalyzeAction}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setApprovalSuccess(null)}
-                className="app-button-secondary rounded-lg border px-3 py-2 text-sm"
+                className="app-button-secondary"
               >
                 {text.close}
-              </button>
+              </Button>
             </div>
           </div>
           {reanalysisResult && (
-            <div className="mt-3 border-t border-emerald-200 pt-3 text-xs text-emerald-800 dark:border-emerald-800 dark:text-emerald-200">
+            <div className="mt-3 border-t border-[var(--app-border-subtle)] pt-3 text-xs text-[var(--app-text-secondary)] font-mono">
               {text.reanalysisComplete} {text.scanned}: {reanalysisResult.scanned} · {text.changed}: {reanalysisResult.changed} · {text.manualProtected}: {reanalysisResult.manualProtected}
             </div>
           )}
@@ -374,196 +396,201 @@ export function ClassificationInsightsView({ language }: { language: Classificat
 
       {/* SMART PRODUCT REVIEW QUEUE SECTION */}
       {reviewQueueData && (
-        <section data-smart-product-review-queue className="app-card overflow-hidden space-y-4 p-5">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center border-b pb-4">
-            <div>
-              <h2 className="font-semibold text-lg">{text.smartReviewQueueTitle}</h2>
-              <p className="app-muted text-xs mt-0.5">{text.shortcutHelp}</p>
-            </div>
-            {/* Store Filter Selector */}
-            <div className="flex items-center gap-2">
-              <label htmlFor="store-filter" className="app-muted text-xs font-medium">{text.filterByStore}:</label>
-              <select
-                id="store-filter"
-                value={selectedStoreId}
-                onChange={(e) => handleStoreChange(e.target.value)}
-                className="rounded-lg border bg-background px-3 py-1.5 text-xs font-medium"
-              >
-                <option value="">{text.allStores}</option>
-                {storeList.map(([id, name]) => (
-                  <option key={id} value={id}>{name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Queue Summary KPIs */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-            <MetricCard label={text.needsReview} value={number.format(reviewQueueData.summary.totalNeedsReview)} />
-            <MetricCard label={text.unclassified} value={number.format(reviewQueueData.summary.unclassified)} />
-            <MetricCard label={text.ambiguous} value={number.format(reviewQueueData.summary.ambiguous)} />
-            <MetricCard label={text.lowConfidence} value={number.format(reviewQueueData.summary.lowConfidence)} />
-            <MetricCard label={text.seriesOnly} value={number.format(reviewQueueData.summary.seriesOnly)} />
-            <MetricCard label={text.reviewedTotal} value={number.format(reviewQueueData.summary.reviewedTotal)} />
-            <MetricCard
-              label={text.humanAccuracy}
-              value={reviewQueueData.summary.observedAccuracyPct !== null ? `${reviewQueueData.summary.observedAccuracyPct}%` : "—"}
-              subtext={reviewQueueData.summary.hasSufficientData ? "Verified sample >= 10" : "Insufficient reviewed samples"}
-            />
-          </div>
-
-          {/* Review Reason Filter Pills */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {[
-              { key: "ALL_NEEDS_REVIEW", label: `${text.allNeedsReview} (${reviewQueueData.summary.totalNeedsReview})` },
-              { key: "UNCLASSIFIED", label: `${text.unclassified} (${reviewQueueData.summary.unclassified})` },
-              { key: "AMBIGUOUS", label: `${text.ambiguous} (${reviewQueueData.summary.ambiguous})` },
-              { key: "LOW_CONFIDENCE", label: `${text.lowConfidence} (${reviewQueueData.summary.lowConfidence})` },
-              { key: "SERIES_ONLY", label: `${text.seriesOnly} (${reviewQueueData.summary.seriesOnly})` },
-              { key: "RECENTLY_CORRECTED", label: `${text.recentlyCorrected} (${reviewQueueData.summary.recentlyCorrected})` },
-            ].map((pill) => (
-              <button
-                key={pill.key}
-                type="button"
-                onClick={() => handleReasonChange(pill.key)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  selectedReason === pill.key
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                }`}
-              >
-                {pill.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Review Queue Items Table */}
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-left text-sm">
-              <thead className="app-filter-panel">
-                <tr>
-                  {[text.customer, text.store, text.latestInboundMessage, text.predictedProduct, text.reviewReason, text.action].map((label) => (
-                    <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+        <Card data-smart-product-review-queue className="app-card space-y-4">
+          <CardHeader>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center w-full">
+              <div>
+                <CardTitle className="text-base font-bold">{text.smartReviewQueueTitle}</CardTitle>
+                <CardDescription className="app-muted text-xs">{text.shortcutHelp}</CardDescription>
+              </div>
+              {/* Store Filter Selector */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="store-filter" className="app-muted text-xs font-medium text-[var(--app-text-secondary)]">{text.filterByStore}:</label>
+                <select
+                  id="store-filter"
+                  value={selectedStoreId}
+                  onChange={(e) => handleStoreChange(e.target.value)}
+                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                >
+                  <option value="">{text.allStores}</option>
+                  {storeList.map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {reviewItems.map((item, idx) => {
-                  const isFirst = idx === selectedQueueIndex;
-                  const reasonBadgeClass =
-                    item.reviewReason === "UNCLASSIFIED"
-                      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-                      : item.reviewReason === "AMBIGUOUS"
-                      ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
-                      : item.reviewReason === "LOW_CONFIDENCE"
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                      : item.reviewReason === "SERIES_ONLY"
-                      ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                      : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
+                </select>
+              </div>
+            </div>
+          </CardHeader>
 
-                  const predictedName = item.predictedProducts.map((p) => p.productModelName).join(", ") || "—";
-                  const primaryPred = item.predictedProducts[0];
+          <CardContent className="space-y-4">
+            {/* Queue Summary KPIs */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+              <MetricCard label={text.needsReview} value={number.format(reviewQueueData.summary.totalNeedsReview)} tone="warning" />
+              <MetricCard label={text.unclassified} value={number.format(reviewQueueData.summary.unclassified)} tone="danger" />
+              <MetricCard label={text.ambiguous} value={number.format(reviewQueueData.summary.ambiguous)} tone="accent" />
+              <MetricCard label={text.lowConfidence} value={number.format(reviewQueueData.summary.lowConfidence)} tone="warning" />
+              <MetricCard label={text.seriesOnly} value={number.format(reviewQueueData.summary.seriesOnly)} tone="default" />
+              <MetricCard label={text.reviewedTotal} value={number.format(reviewQueueData.summary.reviewedTotal)} tone="default" />
+              <MetricCard
+                label={text.humanAccuracy}
+                value={reviewQueueData.summary.observedAccuracyPct !== null ? `${reviewQueueData.summary.observedAccuracyPct}%` : "—"}
+                subtext={reviewQueueData.summary.hasSufficientData ? "Verified sample >= 10" : "Insufficient reviewed samples"}
+                tone="success"
+              />
+            </div>
 
-                  return (
-                    <tr
-                      key={item.conversationId}
-                      className={`transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30 ${
-                        isFirst ? "bg-blue-50/30 dark:bg-blue-950/20" : ""
-                      }`}
-                      onClick={() => setSelectedQueueIndex(idx)}
-                    >
-                      <td className="px-4 py-3 font-medium text-xs">{item.customerName}</td>
-                      <td className="app-muted px-4 py-3 text-xs">{item.storeName}</td>
-                      <td className="px-4 py-3 max-w-xs truncate text-xs italic font-sans" title={item.latestInboundText}>
-                        &ldquo;{item.latestInboundText || "—"}&rdquo;
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs">
-                          <p className="font-semibold text-foreground">{predictedName}</p>
-                          {primaryPred && primaryPred.detectionMethod && (
-                            <p className="app-muted font-mono text-[10px]">
-                              {primaryPred.detectionMethod} {primaryPred.confidence !== null ? `(${Math.round(primaryPred.confidence * 100)}%)` : ""}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${reasonBadgeClass}`}>
-                          {text.reviewReasons[item.reviewReason] ?? item.reviewReason}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          {item.predictedProducts.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => void handleConfirmReview(item)}
-                              title="Confirm current prediction (C)"
-                              className="app-button-primary rounded bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+            {/* Review Reason Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {[
+                { key: "ALL_NEEDS_REVIEW", label: `${text.allNeedsReview} (${reviewQueueData.summary.totalNeedsReview})` },
+                { key: "UNCLASSIFIED", label: `${text.unclassified} (${reviewQueueData.summary.unclassified})` },
+                { key: "AMBIGUOUS", label: `${text.ambiguous} (${reviewQueueData.summary.ambiguous})` },
+                { key: "LOW_CONFIDENCE", label: `${text.lowConfidence} (${reviewQueueData.summary.lowConfidence})` },
+                { key: "SERIES_ONLY", label: `${text.seriesOnly} (${reviewQueueData.summary.seriesOnly})` },
+                { key: "RECENTLY_CORRECTED", label: `${text.recentlyCorrected} (${reviewQueueData.summary.recentlyCorrected})` },
+              ].map((pill) => (
+                <button
+                  key={pill.key}
+                  type="button"
+                  onClick={() => handleReasonChange(pill.key)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    selectedReason === pill.key
+                      ? "bg-[var(--app-accent)] text-white"
+                      : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] border border-[var(--app-border)]"
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Review Queue Items Table */}
+            <TableContainer>
+              <Table>
+                <TableHeader className="app-filter-panel">
+                  <TableRow>
+                    {[text.customer, text.store, text.latestInboundMessage, text.predictedProduct, text.reviewReason, text.action].map((label) => (
+                      <TableHead key={label}>{label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reviewItems.map((item, idx) => {
+                    const isFirst = idx === selectedQueueIndex;
+                    const predictedName = item.predictedProducts.map((p) => p.productModelName).join(", ") || "—";
+                    const primaryPred = item.predictedProducts[0];
+
+                    return (
+                      <TableRow
+                        key={item.conversationId}
+                        className={isFirst ? "bg-[var(--app-accent-soft)]/20" : ""}
+                        onClick={() => setSelectedQueueIndex(idx)}
+                      >
+                        <TableCell className="font-semibold text-xs text-[var(--app-text-primary)]">{item.customerName}</TableCell>
+                        <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{item.storeName}</TableCell>
+                        <TableCell className="max-w-xs truncate text-xs italic font-sans" title={item.latestInboundText}>
+                          &ldquo;{item.latestInboundText || "—"}&rdquo;
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs">
+                            <p className="font-semibold text-[var(--app-text-primary)]">{predictedName}</p>
+                            {primaryPred && primaryPred.detectionMethod && (
+                              <p className="app-muted font-mono text-[10px] text-[var(--app-text-tertiary)]">
+                                {primaryPred.detectionMethod} {primaryPred.confidence !== null ? `(${Math.round(primaryPred.confidence * 100)}%)` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            size="sm"
+                            variant={
+                              item.reviewReason === "UNCLASSIFIED"
+                                ? "danger"
+                                : item.reviewReason === "AMBIGUOUS"
+                                ? "accent"
+                                : item.reviewReason === "LOW_CONFIDENCE"
+                                ? "warning"
+                                : "neutral"
+                            }
+                          >
+                            {text.reviewReasons[item.reviewReason] ?? item.reviewReason}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {item.predictedProducts.length > 0 && (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => void handleConfirmReview(item)}
+                                title="Confirm current prediction (C)"
+                              >
+                                {text.confirm}
+                              </Button>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenCorrection(item)}
+                              title="Select correct product model (E)"
+                              className="app-button-secondary"
                             >
-                              {text.confirm}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenCorrection(item)}
-                            title="Select correct product model (E)"
-                            className="app-button-secondary rounded border px-2.5 py-1 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
-                          >
-                            {text.correctProduct}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleNoProductReview(item)}
-                            title="Confirm no product in this chat (N)"
-                            className="app-button-secondary rounded border px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
-                          >
-                            {text.noProductAction}
-                          </button>
-                          <Link
-                            href={`/chats?conversationId=${encodeURIComponent(item.conversationId)}`}
-                            className="app-button-secondary rounded border px-2 py-1 text-xs app-muted"
-                          >
-                            {text.openChat}
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {reviewItems.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="app-muted px-4 py-12 text-center text-sm">
-                      ✓ {text.noItemsInQueue}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                              {text.correctProduct}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void handleNoProductReview(item)}
+                              title="Confirm no product in this chat (N)"
+                              className="app-button-secondary text-[var(--app-warning)]"
+                            >
+                              {text.noProductAction}
+                            </Button>
+                            <Link
+                              href={`/chats?conversationId=${encodeURIComponent(item.conversationId)}`}
+                              className="app-button-secondary inline-flex items-center justify-center rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs app-muted hover:bg-[var(--app-surface-hover)]"
+                            >
+                              {text.openChat}
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {reviewItems.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="app-muted px-4 py-12 text-center text-xs text-[var(--app-text-secondary)]">
+                        ✓ {text.noItemsInQueue}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Correct Product Selection Modal */}
       {correctingItem && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="app-card w-full max-w-md overflow-hidden border shadow-xl">
-            <header className="flex items-center justify-between border-b p-5 font-semibold text-lg">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="app-card w-full max-w-md rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-modal)] p-5 space-y-4">
+            <header className="flex items-center justify-between border-b border-[var(--app-border-subtle)] pb-3 font-bold text-base text-[var(--app-text-primary)]">
               <span>{text.selectModelModalTitle}</span>
-              <button type="button" onClick={() => setCorrectingItem(null)} className="app-muted hover:text-foreground text-sm font-bold">✕</button>
+              <button type="button" onClick={() => setCorrectingItem(null)} className="app-muted text-sm font-bold text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]">✕</button>
             </header>
-            <div className="p-5 space-y-4 text-sm">
-              <div className="rounded border bg-slate-50/50 p-3 text-xs dark:bg-slate-900/50 space-y-1">
-                <p className="app-muted">{text.latestInboundMessage}:</p>
-                <p className="italic font-semibold text-foreground">&ldquo;{correctingItem.latestInboundText}&rdquo;</p>
+            <div className="space-y-3 text-xs">
+              <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 space-y-1">
+                <p className="app-muted text-[var(--app-text-tertiary)]">{text.latestInboundMessage}:</p>
+                <p className="italic font-semibold text-[var(--app-text-primary)]">&ldquo;{correctingItem.latestInboundText}&rdquo;</p>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="model-select" className="text-xs font-medium app-muted">{text.targetProduct}:</label>
+                <label htmlFor="model-select" className="text-xs font-medium app-muted text-[var(--app-text-secondary)]">{text.targetProduct}:</label>
                 <select
                   id="model-select"
                   value={selectedModelId}
                   onChange={(e) => setSelectedModelId(e.target.value)}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-medium"
+                  className="w-full h-9 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-medium text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
                 >
                   <option value="">-- Choose Product Model --</option>
                   {productMetadata?.series.flatMap((s) =>
@@ -576,22 +603,23 @@ export function ClassificationInsightsView({ language }: { language: Classificat
                 </select>
               </div>
             </div>
-            <footer className="flex justify-end gap-3 border-t p-4">
-              <button
-                type="button"
+            <footer className="flex justify-end gap-2.5 border-t border-[var(--app-border-subtle)] pt-3">
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setCorrectingItem(null)}
-                className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-medium"
+                className="app-button-secondary"
               >
                 {text.cancel}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 disabled={!selectedModelId || savingCorrection}
                 onClick={() => void handleSaveCorrection()}
-                className="app-button-primary rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {savingCorrection ? "Saving..." : text.saveCorrection}
-              </button>
+              </Button>
             </footer>
           </div>
         </div>
@@ -599,406 +627,469 @@ export function ClassificationInsightsView({ language }: { language: Classificat
 
       {/* Product Intelligence Health Overview */}
       {correctionsData && (
-        <section data-product-intelligence-health className="space-y-3">
-          <h2 className="font-semibold text-lg">{text.productIntelligenceHealth}</h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            <MetricCard label={text.ruleClassified} value={number.format(data.coverage.ruleClassified)} />
-            <MetricCard label={text.manualClassified} value={number.format(data.coverage.manualClassified)} />
-            <MetricCard label={text.manualCorrections} value={number.format(correctionsData.totalManualCorrections)} />
-            <MetricCard
-              label={text.correctionRate}
-              value={data.coverage.ruleClassified > 0
-                ? `${Math.round((correctionsData.totalManualCorrections / data.coverage.ruleClassified) * 1000) / 10}%`
-                : "0.0%"}
-            />
-            <MetricCard
-              label={text.dataSufficiency}
-              value={correctionsData.dataSufficiency.hasSufficientData ? "READY" : `${correctionsData.dataSufficiency.currentSamples}/${correctionsData.dataSufficiency.minimumRequired}`}
-              subtext={correctionsData.dataSufficiency.message}
-            />
-            <MetricCard label={text.recommendationCount} value={correctionsData.aliasRecommendations.length} />
-          </div>
-        </section>
+        <Card data-product-intelligence-health className="app-card space-y-3">
+          <CardHeader>
+            <CardTitle>{text.productIntelligenceHealth}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              <MetricCard label={text.ruleClassified} value={number.format(data.coverage.ruleClassified)} tone="default" />
+              <MetricCard label={text.manualClassified} value={number.format(data.coverage.manualClassified)} tone="default" />
+              <MetricCard label={text.manualCorrections} value={number.format(correctionsData.totalManualCorrections)} tone="warning" />
+              <MetricCard
+                label={text.correctionRate}
+                value={data.coverage.ruleClassified > 0
+                  ? `${Math.round((correctionsData.totalManualCorrections / data.coverage.ruleClassified) * 1000) / 10}%`
+                  : "0.0%"}
+                tone="accent"
+              />
+              <MetricCard
+                label={text.dataSufficiency}
+                value={correctionsData.dataSufficiency.hasSufficientData ? "READY" : `${correctionsData.dataSufficiency.currentSamples}/${correctionsData.dataSufficiency.minimumRequired}`}
+                subtext={correctionsData.dataSufficiency.message}
+                tone={correctionsData.dataSufficiency.hasSufficientData ? "success" : "default"}
+              />
+              <MetricCard label={text.recommendationCount} value={correctionsData.aliasRecommendations.length} tone="info" />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Coverage KPIs */}
       <div data-insights-kpis className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label={text.textEligible} value={number.format(data.coverage.textEligibleConversations)} />
-        <MetricCard label={text.classified} value={number.format(data.coverage.classifiedConversations)} />
-        <MetricCard label={text.coverageRate} value={`${data.coverage.coverageRate}%`} />
-        <MetricCard label={text.ruleClassified} value={number.format(data.coverage.ruleClassified)} />
-        <MetricCard label={text.manualClassified} value={number.format(data.coverage.manualClassified)} />
-        <MetricCard label={text.noProduct} value={number.format(data.coverage.noProduct)} />
-        <MetricCard label={text.highIntentGap} value={number.format(data.opportunityGap.highIntentWithoutProduct)} />
-        <MetricCard label={text.compactMatches} value={number.format(data.compactMonitoring.totalCompactMatches)} />
+        <MetricCard label={text.textEligible} value={number.format(data.coverage.textEligibleConversations)} tone="default" />
+        <MetricCard label={text.classified} value={number.format(data.coverage.classifiedConversations)} tone="accent" />
+        <MetricCard label={text.coverageRate} value={`${data.coverage.coverageRate}%`} tone="success" />
+        <MetricCard label={text.ruleClassified} value={number.format(data.coverage.ruleClassified)} tone="default" />
+        <MetricCard label={text.manualClassified} value={number.format(data.coverage.manualClassified)} tone="default" />
+        <MetricCard label={text.noProduct} value={number.format(data.coverage.noProduct)} tone="default" />
+        <MetricCard label={text.highIntentGap} value={number.format(data.opportunityGap.highIntentWithoutProduct)} tone="warning" />
+        <MetricCard label={text.compactMatches} value={number.format(data.compactMonitoring.totalCompactMatches)} tone="info" />
       </div>
 
       {/* Correction Patterns */}
       {correctionsData && (
-        <section data-correction-patterns className="app-card overflow-hidden">
-          <h2 className="border-b p-5 font-semibold">{text.topCorrectionPatterns}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="app-filter-panel">
-                <tr>
-                  {[text.matchedPhrase, text.aiPredicted, text.humanCorrected, text.count, text.affectedChats, text.latestEvidence, text.action].map((label) => (
-                    <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+        <Card data-correction-patterns className="app-card">
+          <CardHeader>
+            <CardTitle>{text.topCorrectionPatterns}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TableContainer>
+              <Table>
+                <TableHeader className="app-filter-panel">
+                  <TableRow>
+                    {[text.matchedPhrase, text.aiPredicted, text.humanCorrected, text.count, text.affectedChats, text.latestEvidence, text.action].map((label) => (
+                      <TableHead key={label}>{label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {correctionsData.correctionPatterns.map((row) => (
+                    <TableRow key={`${row.phrase}:${row.predictedModel}:${row.correctedModel}`}>
+                      <TableCell className="font-semibold font-mono text-xs text-[var(--app-text-primary)]">{row.phrase}</TableCell>
+                      <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.predictedModel}</TableCell>
+                      <TableCell className="font-semibold text-xs text-[var(--app-accent)]">{row.correctedModel}</TableCell>
+                      <TableCell className="tabular-nums font-semibold text-xs text-[var(--app-text-primary)]">{number.format(row.correctionCount)}</TableCell>
+                      <TableCell className="tabular-nums app-muted text-xs text-[var(--app-text-secondary)]">{row.affectedConversations.length}</TableCell>
+                      <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{formatDate(row.lastSeen, language)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setActiveEvidence({
+                              title: `Pattern: "${row.phrase}"`,
+                              phrase: row.phrase,
+                              model: row.correctedModel,
+                              samples: row.sampleTexts,
+                              stores: row.storeNames,
+                              methods: row.detectionMethods,
+                            })
+                          }
+                          className="app-button-secondary"
+                        >
+                          {text.viewEvidence}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {correctionsData.correctionPatterns.map((row) => (
-                  <tr key={`${row.phrase}:${row.predictedModel}:${row.correctedModel}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                    <td className="px-4 py-3 font-medium font-mono text-xs">{row.phrase}</td>
-                    <td className="app-muted px-4 py-3">{row.predictedModel}</td>
-                    <td className="px-4 py-3 font-semibold text-blue-600 dark:text-blue-400">{row.correctedModel}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold">{number.format(row.correctionCount)}</td>
-                    <td className="px-4 py-3 tabular-nums app-muted">{row.affectedConversations.length}</td>
-                    <td className="app-muted px-4 py-3 text-xs">{formatDate(row.lastSeen, language)}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveEvidence({
-                            title: `Pattern: "${row.phrase}"`,
-                            phrase: row.phrase,
-                            model: row.correctedModel,
-                            samples: row.sampleTexts,
-                            stores: row.storeNames,
-                            methods: row.detectionMethods,
-                          })
-                        }
-                        className="app-button-secondary rounded-lg border px-2.5 py-1 text-xs font-medium"
-                      >
-                        {text.viewEvidence}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {correctionsData.correctionPatterns.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="app-muted px-4 py-8 text-center">{text.noCorrectionsYet}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  {correctionsData.correctionPatterns.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="app-muted px-4 py-8 text-center text-xs text-[var(--app-text-secondary)]">{text.noCorrectionsYet}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Alias Recommendations */}
       {correctionsData && (
-        <section data-alias-recommendations className="app-card overflow-hidden">
-          <h2 className="border-b p-5 font-semibold">{text.aliasRecommendations}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="app-filter-panel">
-                <tr>
-                  {[text.matchedPhrase, text.targetProduct, text.evidenceCount, text.confidence, text.risk, text.status, text.reason, text.action].map((label) => (
-                    <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {correctionsData.aliasRecommendations.map((row) => (
-                  <tr key={row.phrase} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                    <td className="px-4 py-3 font-medium font-mono text-xs">{row.phrase}</td>
-                    <td className="px-4 py-3 font-medium">{row.recommendedModel}</td>
-                    <td className="px-4 py-3 tabular-nums">{row.corrections} / {row.totalPhraseCorrections}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold">{row.dominancePct}%</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.collisionRisk === "HIGH" ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" : row.collisionRisk === "MEDIUM" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}>
-                        {row.collisionRisk}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${row.status === "APPROVED" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" : row.status === "REJECTED" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"}`}>
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="app-muted max-w-60 px-4 py-3 text-xs">{row.statusReason}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        {row.status === "SUGGESTED" && row.recommendation === "ADD_ALIAS" && (
-                          <button
-                            type="button"
-                            onClick={() => setPendingApproval(row)}
-                            className="app-button-primary rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
-                          >
-                            {text.approveAlias}
-                          </button>
-                        )}
-                        {row.status === "SUGGESTED" && (
-                          <button
-                            type="button"
-                            onClick={() => void handleReject(row)}
-                            className="app-button-secondary rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                          >
-                            {text.rejectAlias}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActiveEvidence({
-                              title: `Recommendation: "${row.phrase}"`,
-                              phrase: row.phrase,
-                              model: row.recommendedModel,
-                              samples: row.sampleTexts ?? [],
-                            })
-                          }
-                          className="app-button-secondary rounded border px-2 py-1 text-xs app-muted"
+        <Card data-alias-recommendations className="app-card">
+          <CardHeader>
+            <CardTitle>{text.aliasRecommendations}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TableContainer>
+              <Table>
+                <TableHeader className="app-filter-panel">
+                  <TableRow>
+                    {[text.matchedPhrase, text.targetProduct, text.evidenceCount, text.confidence, text.risk, text.status, text.reason, text.action].map((label) => (
+                      <TableHead key={label}>{label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {correctionsData.aliasRecommendations.map((row) => (
+                    <TableRow key={row.phrase}>
+                      <TableCell className="font-semibold font-mono text-xs text-[var(--app-text-primary)]">{row.phrase}</TableCell>
+                      <TableCell className="font-medium text-xs text-[var(--app-text-primary)]">{row.recommendedModel}</TableCell>
+                      <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{row.corrections} / {row.totalPhraseCorrections}</TableCell>
+                      <TableCell className="tabular-nums font-semibold text-xs text-[var(--app-text-primary)]">{row.dominancePct}%</TableCell>
+                      <TableCell>
+                        <Badge
+                          size="sm"
+                          variant={row.collisionRisk === "HIGH" ? "danger" : row.collisionRisk === "MEDIUM" ? "warning" : "success"}
                         >
-                          {text.viewEvidence}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {correctionsData.aliasRecommendations.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="app-muted px-4 py-8 text-center">{text.noRecommendationsYet}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                          {row.collisionRisk}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          size="sm"
+                          variant={row.status === "APPROVED" ? "accent" : row.status === "REJECTED" ? "neutral" : "success"}
+                        >
+                          {row.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="app-muted max-w-60 text-xs text-[var(--app-text-secondary)]">{row.statusReason}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {row.status === "SUGGESTED" && row.recommendation === "ADD_ALIAS" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setPendingApproval(row)}
+                            >
+                              {text.approveAlias}
+                            </Button>
+                          )}
+                          {row.status === "SUGGESTED" && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => void handleReject(row)}
+                            >
+                              {text.rejectAlias}
+                            </Button>
+                          )}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              setActiveEvidence({
+                                title: `Recommendation: "${row.phrase}"`,
+                                phrase: row.phrase,
+                                model: row.recommendedModel,
+                                samples: row.sampleTexts ?? [],
+                              })
+                            }
+                            className="app-button-secondary"
+                          >
+                            {text.viewEvidence}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {correctionsData.aliasRecommendations.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="app-muted px-4 py-8 text-center text-xs text-[var(--app-text-secondary)]">{text.noRecommendationsYet}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Product Tag Quality Monitor */}
       {accuracyData && (
-        <section data-product-quality-monitor className="app-card overflow-hidden">
-          <h2 className="border-b p-5 font-semibold">{text.productQualityMonitor}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="app-filter-panel">
-                <tr>
-                  {[text.product, text.ruleClassified, text.manualClassified, text.manualCorrections, text.correctionRate, text.detectionMethod, text.qualityStatus].map((label) => (
-                    <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {accuracyData.perModel.map((row) => {
-                  let badge: string = text.goodQuality;
-                  let badgeStyle = "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200";
+        <Card data-product-quality-monitor className="app-card">
+          <CardHeader>
+            <CardTitle>{text.productQualityMonitor}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TableContainer>
+              <Table>
+                <TableHeader className="app-filter-panel">
+                  <TableRow>
+                    {[text.product, text.ruleClassified, text.manualClassified, text.manualCorrections, text.correctionRate, text.detectionMethod, text.qualityStatus].map((label) => (
+                      <TableHead key={label}>{label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accuracyData.perModel.map((row) => {
+                    let badgeVariant: "success" | "neutral" | "danger" | "warning" = "success";
+                    let badgeLabel: string = text.goodQuality;
 
-                  if (row.ruleTagged === 0) {
-                    badge = text.insufficientData;
-                    badgeStyle = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-                  } else if (row.correctionRate !== null && row.correctionRate >= 20) {
-                    badge = text.reviewQuality;
-                    badgeStyle = "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200";
-                  } else if (row.correctionRate !== null && row.correctionRate >= 10) {
-                    badge = text.watchQuality;
-                    badgeStyle = "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-                  }
+                    if (row.ruleTagged === 0) {
+                      badgeLabel = text.insufficientData;
+                      badgeVariant = "neutral";
+                    } else if (row.correctionRate !== null && row.correctionRate >= 20) {
+                      badgeLabel = text.reviewQuality;
+                      badgeVariant = "danger";
+                    } else if (row.correctionRate !== null && row.correctionRate >= 10) {
+                      badgeLabel = text.watchQuality;
+                      badgeVariant = "warning";
+                    }
 
-                  return (
-                    <tr key={row.productModel}>
-                      <td className="px-4 py-3 font-medium">{row.productModel}</td>
-                      <td className="px-4 py-3 tabular-nums">{row.ruleTagged}</td>
-                      <td className="px-4 py-3 tabular-nums">{row.manualTagged}</td>
-                      <td className="px-4 py-3 tabular-nums">{row.manualCorrections}</td>
-                      <td className="px-4 py-3 tabular-nums font-semibold">
-                        {row.correctionRate !== null ? `${row.correctionRate}%` : "—"}
-                      </td>
-                      <td className="app-muted px-4 py-3 text-xs">{row.primaryDetectionMethod ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badgeStyle}`}>
-                          {badge}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                    return (
+                      <TableRow key={row.productModel}>
+                        <TableCell className="font-semibold text-xs text-[var(--app-text-primary)]">{row.productModel}</TableCell>
+                        <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{row.ruleTagged}</TableCell>
+                        <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{row.manualTagged}</TableCell>
+                        <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{row.manualCorrections}</TableCell>
+                        <TableCell className="tabular-nums font-semibold text-xs text-[var(--app-text-primary)]">
+                          {row.correctionRate !== null ? `${row.correctionRate}%` : "—"}
+                        </TableCell>
+                        <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.primaryDetectionMethod ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge size="sm" variant={badgeVariant}>
+                            {badgeLabel}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Coverage Funnel */}
-      <section data-coverage-funnel className="app-card p-5">
-        <h2 className="font-semibold">{text.funnel}</h2>
-        <div className="mt-4 space-y-3">
-          {data.funnel.map((step) => (
-            <div key={step.key}>
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span>{text.funnelLabels[step.key]}</span>
-                <span className="app-muted tabular-nums">
-                  {number.format(step.count)}
-                  {step.percentageOfEligible == null ? "" : ` · ${step.percentageOfEligible}%`}
-                </span>
+      <Card data-coverage-funnel className="app-card">
+        <CardHeader>
+          <CardTitle>{text.funnel}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {data.funnel.map((step) => (
+              <div key={step.key}>
+                <div className="flex items-center justify-between gap-4 text-xs">
+                  <span className="font-medium text-[var(--app-text-primary)]">{text.funnelLabels[step.key]}</span>
+                  <span className="app-muted font-mono text-[var(--app-text-secondary)]">
+                    {number.format(step.count)}
+                    {step.percentageOfEligible == null ? "" : ` · ${step.percentageOfEligible}%`}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border-subtle)] overflow-hidden">
+                  <div
+                    className="h-2 rounded-full bg-[var(--app-accent)] transition-all duration-300"
+                    style={{ width: `${Math.max(0, Math.min(100, (step.count / maximumFunnel) * 100))}%` }}
+                  />
+                </div>
               </div>
-              <div className="mt-1.5 h-2 rounded-full bg-slate-200 dark:bg-slate-800">
-                <div className="h-2 rounded-full bg-blue-600 dark:bg-blue-500" style={{ width: `${Math.max(0, Math.min(100, (step.count / maximumFunnel) * 100))}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Product Demand Ranking */}
-      <section data-product-ranking className="app-card overflow-hidden">
-        <h2 className="border-b p-5 font-semibold">{text.ranking}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="app-filter-panel">
-              <tr>
-                {[text.product, text.family, text.group, text.conversations, text.sourceSplit, text.compactMatches].map((label) => (
-                  <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+      <Card data-product-ranking className="app-card">
+        <CardHeader>
+          <CardTitle>{text.ranking}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TableContainer>
+            <Table>
+              <TableHeader className="app-filter-panel">
+                <TableRow>
+                  {[text.product, text.family, text.group, text.conversations, text.sourceSplit, text.compactMatches].map((label) => (
+                    <TableHead key={label}>{label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.productRanking.map((row) => (
+                  <TableRow key={row.productModelId}>
+                    <TableCell className="font-semibold text-xs text-[var(--app-text-primary)]">{row.modelName}</TableCell>
+                    <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.familyName}</TableCell>
+                    <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.productGroup.replaceAll("_", " ")}</TableCell>
+                    <TableCell className="tabular-nums font-semibold text-xs text-[var(--app-text-primary)]">{number.format(row.conversationCount)}</TableCell>
+                    <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{row.ruleCount} / {row.manualCount}</TableCell>
+                    <TableCell className="tabular-nums text-xs text-[var(--app-text-secondary)]">{number.format(row.compactCount)}</TableCell>
+                  </TableRow>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {data.productRanking.map((row) => (
-                <tr key={row.productModelId}>
-                  <td className="px-4 py-3 font-medium">{row.modelName}</td>
-                  <td className="app-muted px-4 py-3">{row.familyName}</td>
-                  <td className="app-muted px-4 py-3">{row.productGroup.replaceAll("_", " ")}</td>
-                  <td className="px-4 py-3 tabular-nums">{number.format(row.conversationCount)}</td>
-                  <td className="px-4 py-3 tabular-nums">{row.ruleCount} / {row.manualCount}</td>
-                  <td className="px-4 py-3 tabular-nums">{number.format(row.compactCount)}</td>
-                </tr>
-              ))}
-              {data.productRanking.length === 0 && <tr><td colSpan={6} className="app-muted px-4 py-8 text-center">{text.noData}</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                {data.productRanking.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="app-muted px-4 py-8 text-center text-xs text-[var(--app-text-secondary)]">{text.noData}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
       {/* Opportunity Review Queue */}
-      <section data-review-queue className="app-card overflow-hidden">
-        <h2 className="border-b p-5 font-semibold">{text.reviewQueue}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="app-filter-panel">
-              <tr>
-                {[text.store, text.lineOa, text.intent, text.priority, text.topics, text.reason, text.action].map((label) => (
-                  <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+      <Card data-review-queue className="app-card">
+        <CardHeader>
+          <CardTitle>{text.reviewQueue}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TableContainer>
+            <Table>
+              <TableHeader className="app-filter-panel">
+                <TableRow>
+                  {[text.store, text.lineOa, text.intent, text.priority, text.topics, text.reason, text.action].map((label) => (
+                    <TableHead key={label}>{label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.reviewQueue.map((row) => (
+                  <TableRow key={row.conversationId}>
+                    <TableCell className="font-semibold text-xs text-[var(--app-text-primary)]">{row.store.name}</TableCell>
+                    <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.lineOa.name}</TableCell>
+                    <TableCell className="text-xs text-[var(--app-text-primary)]">{row.purchaseIntent ?? "—"}</TableCell>
+                    <TableCell className="text-xs font-mono font-semibold">{row.priority}</TableCell>
+                    <TableCell className="app-muted max-w-56 text-xs text-[var(--app-text-secondary)]">{row.topics.join(", ") || "—"}</TableCell>
+                    <TableCell className="app-muted max-w-64 text-xs text-[var(--app-text-secondary)]">
+                      {row.reasonCodes.map((code) => text.reasonCodes[code as keyof typeof text.reasonCodes] ?? code).join(", ")}
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/chats?conversationId=${encodeURIComponent(row.conversationId)}`} className="app-button-secondary inline-flex items-center justify-center rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--app-surface-hover)]">
+                        {text.openConversation}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {data.reviewQueue.map((row) => (
-                <tr key={row.conversationId}>
-                  <td className="px-4 py-3 font-medium">{row.store.name}</td>
-                  <td className="app-muted px-4 py-3">{row.lineOa.name}</td>
-                  <td className="px-4 py-3">{row.purchaseIntent ?? "—"}</td>
-                  <td className="px-4 py-3">{row.priority}</td>
-                  <td className="app-muted max-w-56 px-4 py-3">{row.topics.join(", ") || "—"}</td>
-                  <td className="app-muted max-w-64 px-4 py-3">
-                    {row.reasonCodes.map((code) => text.reasonCodes[code as keyof typeof text.reasonCodes] ?? code).join(", ")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/chats?conversationId=${encodeURIComponent(row.conversationId)}`} className="app-button-secondary inline-flex rounded-lg border px-3 py-1.5 text-xs font-medium">
-                      {text.openConversation}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {data.reviewQueue.length === 0 && <tr><td colSpan={7} className="app-muted px-4 py-8 text-center">{text.noData}</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                {data.reviewQueue.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="app-muted px-4 py-8 text-center text-xs text-[var(--app-text-secondary)]">{text.noData}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
       {/* Compact Monitoring */}
-      <section data-compact-monitoring className="app-card overflow-hidden">
-        <div className="flex items-center justify-between gap-4 border-b p-5">
-          <h2 className="font-semibold">{text.compactMonitoring}</h2>
-          <span className="app-muted text-xs">{data.compactMonitoring.percentageOfRuleMatches ?? 0}% {text.ofRuleMatches}</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="app-filter-panel">
-              <tr>
-                {[text.matchedPhrase, text.canonicalModel, text.safety, text.usage, text.latestEvidence].map((label) => (
-                  <th key={label} className="px-4 py-3 text-xs font-medium">{label}</th>
+      <Card data-compact-monitoring className="app-card">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4 w-full">
+            <CardTitle>{text.compactMonitoring}</CardTitle>
+            <span className="app-muted text-xs text-[var(--app-text-secondary)]">{data.compactMonitoring.percentageOfRuleMatches ?? 0}% {text.ofRuleMatches}</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <TableContainer>
+            <Table>
+              <TableHeader className="app-filter-panel">
+                <TableRow>
+                  {[text.matchedPhrase, text.canonicalModel, text.safety, text.usage, text.latestEvidence].map((label) => (
+                    <TableHead key={label}>{label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.compactMonitoring.aliases.map((row) => (
+                  <TableRow key={`${row.modelName}:${row.matchedPhrase}`}>
+                    <TableCell className="font-semibold font-mono text-xs text-[var(--app-text-primary)]">{row.matchedPhrase}</TableCell>
+                    <TableCell className="text-xs text-[var(--app-text-primary)]">{row.modelName}</TableCell>
+                    <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{row.safetyClass}</TableCell>
+                    <TableCell className="tabular-nums font-semibold text-xs text-[var(--app-text-primary)]">{number.format(row.count)}</TableCell>
+                    <TableCell className="app-muted text-xs text-[var(--app-text-secondary)]">{formatDate(row.latestEvidenceAt, language)}</TableCell>
+                  </TableRow>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {data.compactMonitoring.aliases.map((row) => (
-                <tr key={`${row.modelName}:${row.matchedPhrase}`}>
-                  <td className="px-4 py-3 font-medium">{row.matchedPhrase}</td>
-                  <td className="px-4 py-3">{row.modelName}</td>
-                  <td className="app-muted px-4 py-3">{row.safetyClass}</td>
-                  <td className="px-4 py-3 tabular-nums">{number.format(row.count)}</td>
-                  <td className="app-muted px-4 py-3">{formatDate(row.latestEvidenceAt, language)}</td>
-                </tr>
-              ))}
-              {data.compactMonitoring.aliases.length === 0 && <tr><td colSpan={5} className="app-muted px-4 py-8 text-center">{text.noData}</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                {data.compactMonitoring.aliases.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="app-muted px-4 py-8 text-center text-xs text-[var(--app-text-secondary)]">{text.noData}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
       {/* Catalog Health */}
-      <section data-catalog-health className="app-card p-5">
-        <h2 className="font-semibold">{text.catalogHealth}</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="app-filter-panel rounded-lg p-4">
-            <p className="app-muted text-xs">{text.models}</p>
-            <p className="mt-2 font-semibold">{text.active}: {data.catalogHealth.activeModels} · {text.inactive}: {data.catalogHealth.inactiveModels}</p>
-            <p className="app-muted mt-1 text-xs">{text.withoutCatalogAlias}: {data.catalogHealth.modelsWithoutActiveCatalogAliases}</p>
+      <Card data-catalog-health className="app-card">
+        <CardHeader>
+          <CardTitle>{text.catalogHealth}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="app-filter-panel rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4">
+              <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">{text.models}</p>
+              <p className="mt-2 font-bold text-xs text-[var(--app-text-primary)]">{text.active}: {data.catalogHealth.activeModels} · {text.inactive}: {data.catalogHealth.inactiveModels}</p>
+              <p className="app-muted mt-1 text-[11px] text-[var(--app-text-secondary)]">{text.withoutCatalogAlias}: {data.catalogHealth.modelsWithoutActiveCatalogAliases}</p>
+            </div>
+            <div className="app-filter-panel rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4">
+              <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">{text.aliases}</p>
+              <p className="mt-2 font-bold text-xs text-[var(--app-text-primary)]">{text.active}: {data.catalogHealth.activeAliases} · {text.inactive}: {data.catalogHealth.inactiveAliases}</p>
+            </div>
+            <div className="app-filter-panel rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4">
+              <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">{text.ownership}</p>
+              <p className="mt-2 font-bold text-xs text-[var(--app-text-primary)]">CATALOG: {data.catalogHealth.catalogAliases} · MANUAL: {data.catalogHealth.manualAliases}</p>
+            </div>
+            <div className="app-filter-panel rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 space-y-1">
+              <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">{text.safetyDeclarations}</p>
+              <p className="text-xs text-[var(--app-text-primary)]">SAFE_EXACT: {data.catalogHealth.safeExactDeclarations}</p>
+              <p className="text-xs text-[var(--app-text-primary)]">SAFE_COMPACT: {data.catalogHealth.safeCompactDeclarations}</p>
+              <p className="text-xs text-[var(--app-text-primary)]">REVIEW_REQUIRED: {data.catalogHealth.reviewRequiredDeclarations}</p>
+              <p className="text-xs text-[var(--app-text-primary)]">BLOCKED: {data.catalogHealth.blockedDeclarations}</p>
+            </div>
           </div>
-          <div className="app-filter-panel rounded-lg p-4">
-            <p className="app-muted text-xs">{text.aliases}</p>
-            <p className="mt-2 font-semibold">{text.active}: {data.catalogHealth.activeAliases} · {text.inactive}: {data.catalogHealth.inactiveAliases}</p>
-          </div>
-          <div className="app-filter-panel rounded-lg p-4">
-            <p className="app-muted text-xs">{text.ownership}</p>
-            <p className="mt-2 font-semibold">CATALOG: {data.catalogHealth.catalogAliases} · MANUAL: {data.catalogHealth.manualAliases}</p>
-          </div>
-          <div className="app-filter-panel rounded-lg p-4">
-            <p className="app-muted text-xs">{text.safetyDeclarations}</p>
-            <p className="mt-2 text-sm">SAFE_EXACT: {data.catalogHealth.safeExactDeclarations}</p>
-            <p className="text-sm">SAFE_COMPACT: {data.catalogHealth.safeCompactDeclarations}</p>
-            <p className="text-sm">REVIEW_REQUIRED: {data.catalogHealth.reviewRequiredDeclarations}</p>
-            <p className="text-sm">BLOCKED: {data.catalogHealth.blockedDeclarations}</p>
-          </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Confirmation Modal for Alias Approval */}
       {pendingApproval && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="app-card w-full max-w-lg overflow-hidden border shadow-xl">
-            <header className="border-b p-5 font-semibold text-lg">{text.confirmApprovalTitle}</header>
-            <div className="p-5 space-y-4 text-sm">
-              <p className="text-base font-semibold text-blue-600 dark:text-blue-400">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="app-card w-full max-w-lg rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-modal)] p-6 space-y-4">
+            <header className="border-b border-[var(--app-border-subtle)] pb-3 font-bold text-base text-[var(--app-text-primary)]">
+              {text.confirmApprovalTitle}
+            </header>
+            <div className="space-y-3 text-xs">
+              <p className="text-sm font-bold text-[var(--app-accent)]">
                 &ldquo;{pendingApproval.phrase}&rdquo; → {pendingApproval.recommendedModel}
               </p>
-              <div className="rounded-lg border p-4 bg-slate-50/50 dark:bg-slate-900/50 space-y-2 text-xs">
+              <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] p-3.5 bg-[var(--app-surface-subtle)] space-y-1.5 text-xs text-[var(--app-text-primary)]">
                 <p><strong>{text.evidenceCount}:</strong> {pendingApproval.corrections} human corrections ({pendingApproval.affectedConversationsCount} affected chats)</p>
                 <p><strong>{text.confidence}:</strong> {pendingApproval.dominancePct}% dominant for {pendingApproval.recommendedModel}</p>
-                <p><strong>{text.risk}:</strong> <span className="font-semibold">{pendingApproval.collisionRisk}</span></p>
+                <p><strong>{text.risk}:</strong> <Badge size="sm" variant={pendingApproval.collisionRisk === "HIGH" ? "danger" : "warning"}>{pendingApproval.collisionRisk}</Badge></p>
                 <p><strong>{text.reason}:</strong> {pendingApproval.statusReason}</p>
               </div>
-              <p className="app-muted text-xs">
+              <p className="app-muted text-[11px] text-[var(--app-text-secondary)]">
                 Approving this alias activates it as a verified operator-approved product alias in the database.
               </p>
             </div>
-            <footer className="flex justify-end gap-3 border-t p-4">
-              <button
-                type="button"
-                disabled={approving}
+            <footer className="flex justify-end gap-2.5 border-t border-[var(--app-border-subtle)] pt-3">
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setPendingApproval(null)}
-                className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-medium"
+                className="app-button-secondary"
               >
                 {text.cancel}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 disabled={approving}
                 onClick={() => void handleApprove()}
-                className="app-button-primary rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {approving ? text.approving : text.approveAlias}
-              </button>
+              </Button>
             </footer>
           </div>
         </div>
@@ -1006,52 +1097,53 @@ export function ClassificationInsightsView({ language }: { language: Classificat
 
       {/* Evidence Details Modal */}
       {activeEvidence && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="app-card w-full max-w-lg overflow-hidden border shadow-xl">
-            <header className="flex items-center justify-between border-b p-5 font-semibold text-lg">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="app-card w-full max-w-lg rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-modal)] p-6 space-y-4">
+            <header className="flex items-center justify-between border-b border-[var(--app-border-subtle)] pb-3 font-bold text-base text-[var(--app-text-primary)]">
               <span>{activeEvidence.title}</span>
-              <button type="button" onClick={() => setActiveEvidence(null)} className="app-muted hover:text-foreground text-sm font-bold">✕</button>
+              <button type="button" onClick={() => setActiveEvidence(null)} className="app-muted text-sm font-bold text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]">✕</button>
             </header>
-            <div className="p-5 space-y-4 text-sm max-h-[60vh] overflow-y-auto">
+            <div className="space-y-3 text-xs max-h-[60vh] overflow-y-auto">
               <div>
-                <p className="app-muted text-xs">{text.targetProduct}</p>
-                <p className="font-semibold">{activeEvidence.model}</p>
+                <p className="app-muted text-[11px] text-[var(--app-text-secondary)]">{text.targetProduct}</p>
+                <p className="font-semibold text-[var(--app-text-primary)]">{activeEvidence.model}</p>
               </div>
               {activeEvidence.stores && activeEvidence.stores.length > 0 && (
                 <div>
-                  <p className="app-muted text-xs">{text.storesInvolved}</p>
-                  <p className="text-xs">{activeEvidence.stores.join(", ")}</p>
+                  <p className="app-muted text-[11px] text-[var(--app-text-secondary)]">{text.storesInvolved}</p>
+                  <p className="text-xs text-[var(--app-text-primary)]">{activeEvidence.stores.join(", ")}</p>
                 </div>
               )}
               {activeEvidence.methods && activeEvidence.methods.length > 0 && (
                 <div>
-                  <p className="app-muted text-xs">{text.detectionMethod}</p>
-                  <p className="text-xs font-mono">{activeEvidence.methods.join(", ")}</p>
+                  <p className="app-muted text-[11px] text-[var(--app-text-secondary)]">{text.detectionMethod}</p>
+                  <p className="text-xs font-mono text-[var(--app-text-primary)]">{activeEvidence.methods.join(", ")}</p>
                 </div>
               )}
               <div>
-                <p className="app-muted text-xs mb-2">{text.sampleMessages}</p>
+                <p className="app-muted text-[11px] text-[var(--app-text-secondary)] mb-2">{text.sampleMessages}</p>
                 {activeEvidence.samples.length > 0 ? (
                   <ul className="space-y-2">
                     {activeEvidence.samples.map((msg, i) => (
-                      <li key={i} className="rounded border bg-slate-50/50 p-2.5 text-xs italic dark:bg-slate-900/50">
+                      <li key={i} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 text-xs italic text-[var(--app-text-primary)]">
                         &ldquo;{msg}&rdquo;
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="app-muted text-xs italic">{text.noData}</p>
+                  <p className="app-muted text-xs italic text-[var(--app-text-tertiary)]">{text.noData}</p>
                 )}
               </div>
             </div>
-            <footer className="flex justify-end border-t p-4">
-              <button
-                type="button"
+            <footer className="flex justify-end border-t border-[var(--app-border-subtle)] pt-3">
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setActiveEvidence(null)}
-                className="app-button-secondary rounded-lg border px-4 py-2 text-sm font-medium"
+                className="app-button-secondary"
               >
                 {text.close}
-              </button>
+              </Button>
             </footer>
           </div>
         </div>

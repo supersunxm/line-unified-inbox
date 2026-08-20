@@ -16,26 +16,26 @@ export function AppShell({
   ...topNavProps
 }: AppShellProps) {
   return (
-    <div className="app-shell flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="app-shell flex flex-col min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       {/* Top Navigation */}
       <TopNavigation {...topNavProps} />
 
       {/* Global Loading Banner */}
       {isLoading && (
-        <div className="border-b border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/70 px-4 py-2 text-center text-sm font-medium text-blue-700 dark:text-blue-300">
+        <div className="border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
           {topNavProps.text.loadingData || "กำลังโหลดข้อมูลจากระบบ..."}
         </div>
       )}
 
       {/* Global API Error Banner */}
       {apiError && (
-        <div role="alert" className="flex items-center justify-center gap-3 border-b border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/70 px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300">
+        <div role="alert" className="flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
           <span>{topNavProps.text.apiError || "ไม่สามารถเชื่อมต่อระบบข้อมูลได้"}: {apiError}</span>
           {loadApplicationData && (
             <button
               type="button"
               onClick={() => void loadApplicationData()}
-              className="rounded-md border border-red-300 dark:border-red-800 bg-white dark:bg-slate-900 px-2 py-1 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-950 transition-colors focus-visible:ring-2 focus-visible:ring-red-500"
+              className="rounded-[var(--app-radius-sm)] border border-[var(--app-danger)]/30 bg-[var(--app-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger)] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-danger)]/40"
             >
               {topNavProps.text.retry || "ลองอีกครั้ง"}
             </button>
@@ -50,3 +50,4 @@ export function AppShell({
     </div>
   );
 }
+

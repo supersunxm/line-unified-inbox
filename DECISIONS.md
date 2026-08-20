@@ -1,3 +1,13 @@
+# Phase 3 — Unified Chat Inbox (/chats) Workspace Modernization (2026-08-20)
+
+- **Preservation of Dedicated Operational Density**: Unlike standard management pages that use roomy dashboard cards, the `/chats` workspace is an operational hub with dense real-time needs. The modernization retains high visual density with concise padding, compact avatars, crisp 1-pixel borders, and subtle contrast surfaces.
+- **5-Track Resizable Grid Architecture**: Preserved the grid structure containing 5 direct logical children: `<ContextSidebar>`, `separator="sidebar"`, `data-chat-pane="conversations"`, `separator="conversations"`, and `data-chat-pane="detail"`. Pane sizing bounds (`CHAT_PANE_LIMITS`), user-resizing listeners, and pane width state persistence remain untouched.
+- **Semantic State Mapping**:
+  - `bmReplyStatus`: `NOT_REPLIED` (neutral/amber alert), `NOTIFIED_BM` (purple notification), `REPLIED` (green success).
+  - Selected conversation row: `.is-selected` with semantic focus ring and background highlight (`--app-accent-soft`), preserving `data-selected` and `data-conversation-row` attributes.
+- **Composer Safety & Idempotency**: Preserved composer behavior (`Enter` to submit, `Shift+Enter` for multiline), idempotency key management (`replyIdempotencyKeyRef`), and disabled states during network mutation or viewer role access.
+- **Zero API/Schema Changes**: All backend APIs, event streams, real-time polling hooks, and query generation logic remain unchanged.
+
 # Follower Insights Trend UX & Multi-Store Comparison Architecture (2026-08-20)
 
 - **Default Comparison Mode**: Comparison mode defaults to `"available"` (`บัญชีทั้งหมดที่มีข้อมูล` / "All accounts with available data") to prioritize showing all available store metrics upon page load. `"comparable"` (`บัญชีที่เปรียบเทียบกันได้`) is an explicit choice for users requiring complete date-range historical coverage.
