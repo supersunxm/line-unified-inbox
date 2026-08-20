@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchTikTokAccountsListFromBackend } from "../tiktok-api-client";
-import { TikTokDashboardView } from "./tiktok-dashboard-view";
+import { TikTokDashboardResponsive } from "./tiktok-dashboard-responsive";
 
 export const dynamic = "force-dynamic";
 
@@ -26,16 +26,13 @@ export default async function TikTokDashboardPage() {
 
   const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
 
-  // 0 accounts connected -> render empty state
   if (accounts.length === 0) {
-    return <TikTokDashboardView data={null} />;
+    return <TikTokDashboardResponsive data={null} />;
   }
 
-  // Exactly 1 account connected -> open that account's dashboard directly
   if (accounts.length === 1) {
     redirect(`/tiktok/dashboard/${accounts[0].id}`);
   }
 
-  // 2 or more accounts connected -> redirect to /tiktok overview for explicit store selection
   redirect("/tiktok");
 }
