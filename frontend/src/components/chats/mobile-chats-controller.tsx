@@ -26,26 +26,19 @@ function hasChatPanes() {
 
 export function MobileChatsController() {
   const [view, setView] = useState<MobileChatView>("list");
-  const [detailPane, setDetailPane] = useState<HTMLElement | null>(null);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (!isMobileViewport()) return;
 
     const params = new URLSearchParams(window.location.search);
-    const hasDeepLinkedConversation = Boolean(params.get("conversationId"));
-    setView(hasDeepLinkedConversation ? "chat" : "list");
+    setView(params.get("conversationId") ? "chat" : "list");
 
     const connectWorkspace = () => {
-      const shell = getShell();
-      const detail = getDetailPane();
-      const ready = Boolean(shell && detail && hasChatPanes());
-
+      const ready = Boolean(getShell() && getDetailPane() && hasChatPanes());
       setWorkspaceReady(ready);
-      if (detail) setDetailPane(detail);
-      if (ready && shell) {
-        shell.setAttribute("data-mobile-chat-view", hasDeepLinkedConversation ? "chat" : "list");
-      }
       return ready;
     };
 
@@ -58,9 +51,14 @@ export function MobileChatsController() {
 
     const openConversation = (event: Event) => {
       if (!isMobileViewport()) return;
+      if (event.type === "keydown") {
+        const key = (event as globalThis.KeyboardEvent).key;
+        if (key !== "Enter" && key !== " ") return;
+      }
       const target = event.target as HTMLElement | null;
-      if (!target?.closest("[data-conversation-row]")) return;
-      if (target.closest("[data-conversation-action-menu]")) return;
+      const row = target?.closest<HTMLElement>("[data-conversation-row]");
+      if (!row) return;
+      if (target?.closest("[data-conversation-action-menu]")) return;
       window.setTimeout(() => setView("chat"), 0);
     };
 
@@ -101,16 +99,19 @@ export function MobileChatsController() {
     }
   }, [view, workspaceReady]);
 
-  const toolbar = detailPane && workspaceReady && view !== "list"
+  const toolbar = mounted && workspaceReady && view !== "list"
     ? createPortal(
-        <div data-mobile-chat-toolbar className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-2 md:hidden">
+        <div
+          data-mobile-chat-toolbar
+          className="fixed inset-x-0 top-0 z-[70] flex h-14 items-center justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface)]/95 px-2.5 backdrop-blur-md md:hidden"
+        >
           <button
             type="button"
             onClick={() => setView("list")}
-            className="inline-flex min-h-10 items-center gap-1 rounded-xl px-2.5 text-sm font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
+            className="inline-flex min-h-10 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-[var(--app-text-primary)] active:bg-[var(--app-surface-hover)]"
             aria-label="กลับไปยังรายการแชท"
           >
-            <span aria-hidden="true" className="text-lg">‹</span>
+            <span aria-hidden="true" className="text-2xl leading-none">‹</span>
             <span>แชททั้งหมด</span>
           </button>
           <div className="flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-0.5">
@@ -130,7 +131,7 @@ export function MobileChatsController() {
             </button>
           </div>
         </div>,
-        detailPane,
+        document.body,
       )
     : null;
 
@@ -138,10 +139,6 @@ export function MobileChatsController() {
     <>
       <style>{`
         @media (max-width: 767px) {
-          .app-shell[data-mobile-chat-view] {
-            padding-bottom: 0 !important;
-          }
-
           .app-shell[data-mobile-chat-view] [data-chat-pane="sidebar"],
           .app-shell[data-mobile-chat-view] [data-chat-separator] {
             display: none !important;
@@ -165,18 +162,13 @@ export function MobileChatsController() {
             display: none !important;
           }
 
-          .app-shell[data-mobile-chat-view="chat"] [data-chat-pane="conversations"],
-          .app-shell[data-mobile-chat-view="info"] [data-chat-pane="conversations"] {
-            display: none !important;
+          .app-shell[data-mobile-chat-view="chat"],
+          .app-shell[data-mobile-chat-view="info"] {
+            padding-top: 3.5rem !important;
+            padding-bottom: 0 !important;
           }
-          .app-shell[data-mobile-chat-view="chat"] [data-chat-pane="detail"],
-          .app-shell[data-mobile-chat-view="info"] [data-chat-pane="detail"] {
-            display: flex !important;
-            flex: 1 1 auto !important;
-            height: 100% !important;
-            min-height: 0 !important;
-          }
-
+          .app-shell[data-mobile-chat-view="chat"] .app-header,
+          .app-shell[data-mobile-chat-view="info"] .app-header,
           .app-shell[data-mobile-chat-view="chat"] nav[aria-label="Mobile primary navigation"],
           .app-shell[data-mobile-chat-view="info"] nav[aria-label="Mobile primary navigation"] {
             display: none !important;
@@ -189,10 +181,16 @@ export function MobileChatsController() {
             padding-bottom: calc(4.35rem + env(safe-area-inset-bottom)) !important;
           }
 
-          [data-mobile-chat-toolbar] {
-            order: -20;
-            position: relative;
-            z-index: 4;
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-pane="conversations"],
+          .app-shell[data-mobile-chat-view="info"] [data-chat-pane="conversations"] {
+            display: none !important;
+          }
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-pane="detail"],
+          .app-shell[data-mobile-chat-view="info"] [data-chat-pane="detail"] {
+            display: flex !important;
+            flex: 1 1 auto !important;
+            height: 100% !important;
+            min-height: 0 !important;
           }
 
           [data-chat-detail-workspace] {
@@ -203,18 +201,45 @@ export function MobileChatsController() {
           }
 
           [data-chat-detail-header] {
-            padding: 0.625rem 0.75rem !important;
+            min-height: 3.5rem !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
             gap: 0.5rem !important;
+            padding: 0.5rem 0.75rem !important;
           }
           [data-chat-detail-header] > div:first-child {
-            width: 100%;
+            width: auto !important;
+            min-width: 0 !important;
+            flex: 1 1 auto !important;
+            gap: 0.5rem !important;
+          }
+          [data-chat-detail-header] > div:first-child > div:first-child {
+            width: 2rem !important;
+            height: 2rem !important;
+          }
+          [data-chat-detail-header] > div:first-child > div:last-child > div:last-child {
+            display: none !important;
+          }
+          [data-chat-detail-customer] {
+            font-size: 1rem !important;
+            line-height: 1.25rem !important;
+          }
+          [data-chat-detail-customer] ~ span {
+            display: none !important;
           }
           [data-chat-detail-header] > div:last-child {
-            width: 100%;
-            justify-content: flex-end;
+            width: auto !important;
+            flex: 0 0 auto !important;
+            justify-content: flex-end !important;
+            gap: 0.375rem !important;
+          }
+          [data-chat-detail-secondary-action] {
+            display: none !important;
           }
           [data-chat-detail-primary-action] {
-            min-height: 2.5rem;
+            min-height: 2.25rem !important;
+            padding: 0.45rem 0.65rem !important;
+            font-size: 0.7rem !important;
           }
 
           .app-shell[data-mobile-chat-view="chat"] [data-chat-detail-scroll] {
@@ -225,6 +250,10 @@ export function MobileChatsController() {
             flex: 1 1 auto !important;
             min-height: 0 !important;
           }
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-detail-workspace] > div:has(> [data-chat-message-scroll]) > div:first-child {
+            min-height: 2.35rem !important;
+            padding: 0.3rem 0.75rem !important;
+          }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-message-scroll] {
             height: auto !important;
             min-height: 0 !important;
@@ -232,13 +261,29 @@ export function MobileChatsController() {
             padding: 0.75rem !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-message-scroll] > div > div > div[class*="max-w"] {
-            max-width: 84% !important;
+            max-width: 88% !important;
           }
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-message-scroll] button {
+            min-height: 1.75rem;
+            font-size: 0.7rem !important;
+          }
+
           .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] {
-            padding: 0.625rem 0.75rem calc(0.625rem + env(safe-area-inset-bottom)) !important;
+            padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom)) !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] textarea {
+            height: 2.75rem !important;
+            min-height: 2.75rem !important;
+            max-height: 6rem !important;
+            padding: 0.65rem 0.75rem !important;
             font-size: 16px !important;
+            line-height: 1.25rem !important;
+          }
+          .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] button {
+            height: 2.75rem !important;
+            min-width: 3.25rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
           }
           .app-shell[data-mobile-chat-view="chat"] [data-chat-reply-composer] > p:last-child,
           .app-shell[data-mobile-chat-view="chat"] [data-line-oa-manager-notice] {
