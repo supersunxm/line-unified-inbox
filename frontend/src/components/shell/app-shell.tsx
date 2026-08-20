@@ -19,23 +19,49 @@ export function AppShell({
     <div className="app-shell flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <style>{`
         @media (max-width: 767px) {
-          html, body { max-width: 100%; overflow-x: hidden; }
+          html,
+          body {
+            width: 100%;
+            max-width: 100%;
+            height: 100%;
+            overflow: hidden !important;
+            overscroll-behavior: none;
+          }
+
+          .app-shell {
+            position: relative;
+            width: 100%;
+            height: 100dvh !important;
+            min-height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
+            padding-bottom: 0 !important;
+          }
+
+          .app-mobile-scroll {
+            min-height: 0 !important;
+            flex: 1 1 auto;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            overscroll-behavior-y: none;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: calc(4.35rem + env(safe-area-inset-bottom));
+          }
+
           .app-header {
             width: 100%;
             max-width: 100vw;
-            height: auto !important;
-            min-height: 0 !important;
-            flex-wrap: wrap;
-            gap: 0.5rem !important;
-            padding: 0.65rem 0.75rem 0.5rem !important;
+            flex: 0 0 auto;
             overflow: visible;
           }
+
           .app-header > div:first-child {
             width: auto;
             min-width: 0;
             flex: 1 1 auto;
             gap: 0.5rem !important;
           }
+
           .app-header h1 {
             max-width: 11.5rem;
             overflow: hidden;
@@ -43,29 +69,22 @@ export function AppShell({
             white-space: nowrap;
             font-size: 0.95rem !important;
           }
-          .app-primary-nav {
-            order: 3;
-            flex: 0 0 100%;
-            width: 100%;
-            max-width: 100%;
-            overflow-x: auto;
-            overflow-y: visible;
-            padding: 0.15rem 0 0.1rem;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
-          }
-          .app-primary-nav::-webkit-scrollbar { display: none; }
-          .app-primary-nav > * { flex: 0 0 auto; }
+
+          .app-primary-nav { display: none !important; }
+
           .app-header-controls {
             flex: 0 0 auto;
             gap: 0.35rem !important;
             margin-left: auto !important;
           }
+
           .app-header-controls button { min-width: 2rem; }
+
           .app-shell main,
           .app-shell section,
           .app-shell article,
           .app-shell div { min-width: 0; }
+
           .app-shell img,
           .app-shell svg,
           .app-shell canvas { max-width: 100%; }
@@ -75,13 +94,13 @@ export function AppShell({
       <TopNavigation {...topNavProps} />
 
       {isLoading && (
-        <div className="border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
+        <div className="shrink-0 border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
           {topNavProps.text.loadingData || "กำลังโหลดข้อมูลจากระบบ..."}
         </div>
       )}
 
       {apiError && (
-        <div role="alert" className="flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
+        <div role="alert" className="shrink-0 flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
           <span>{topNavProps.text.apiError || "ไม่สามารถเชื่อมต่อระบบข้อมูลได้"}: {apiError}</span>
           {loadApplicationData && (
             <button
@@ -95,7 +114,7 @@ export function AppShell({
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">
+      <div className="app-mobile-scroll flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">
         {children}
       </div>
     </div>
