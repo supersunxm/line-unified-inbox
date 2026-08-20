@@ -6,7 +6,7 @@ import {
   fetchTikTokAccountsListFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
 } from "../../tiktok-api-client";
-import { TikTokDashboardView } from "../tiktok-dashboard-view";
+import { TikTokDashboardResponsive } from "../tiktok-dashboard-responsive";
 import {
   getTikTokDemoGrowthMetrics,
   isTikTokDemoGrowthEnabled,
@@ -52,7 +52,7 @@ export default async function TikTokAccountDashboardPage({ params }: Props) {
     : realHistoricalMetrics;
 
   return (
-    <TikTokDashboardView
+    <TikTokDashboardResponsive
       data={data}
       historicalMetrics={historicalMetrics}
       accounts={accounts}
