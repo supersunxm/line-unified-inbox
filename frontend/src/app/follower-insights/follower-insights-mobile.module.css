@@ -1,0 +1,192 @@
+.scope {
+  display: contents;
+}
+
+@media (max-width: 640px) {
+  .scope :global(.app-content-section) {
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .scope :global(.app-content-section > div) {
+    padding: 12px 12px 96px !important;
+    row-gap: 14px !important;
+  }
+
+  .scope :global(.app-content-section > div > div:first-child) {
+    gap: 10px !important;
+    margin-bottom: 0 !important;
+    padding: 0 0 12px !important;
+  }
+
+  .scope :global(.app-content-section h2) {
+    font-size: 22px !important;
+    letter-spacing: -0.025em !important;
+  }
+
+  .scope :global(.app-content-section h3),
+  .scope :global(.app-content-section h4) {
+    line-height: 1.35 !important;
+  }
+
+  /* Keep date controls touch-friendly but compact. */
+  .scope :global(.app-content-section > div > div:first-child > div:last-child) {
+    gap: 8px !important;
+  }
+
+  .scope :global(.app-content-section > div > div:first-child > div:last-child > *) {
+    max-width: 100%;
+  }
+
+  /* Store analytics KPI cards: one hero card + four compact cards. */
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5']) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5'] > div) {
+    min-height: 104px !important;
+    padding: 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5'] > div:first-child) {
+    grid-column: 1 / -1 !important;
+    min-height: 92px !important;
+  }
+
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5'] > div > p:first-child) {
+    font-size: 11.5px !important;
+  }
+
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5'] > div > p:nth-child(2)) {
+    margin-top: 7px !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+  }
+
+  .scope :global(.app-content-section [class*='sm:grid-cols-2'][class*='xl:grid-cols-5'] > div > p:nth-child(3)) {
+    margin-top: 7px !important;
+    font-size: 10.5px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Performance analytics cards should fit a phone screen without excessive height. */
+  .scope :global(.app-content-section [class*='xl:grid-cols-[1.3fr_1fr]']) {
+    gap: 10px !important;
+  }
+
+  .scope :global(.app-content-section [class*='xl:grid-cols-[1.3fr_1fr]'] > div),
+  .scope :global(.app-content-section [class*='rounded-[18px]'][class*='p-5']) {
+    padding: 14px !important;
+  }
+
+  .scope :global(.app-content-section [class*='grid-cols-[minmax(110px,180px)_1fr_auto]']) {
+    grid-template-columns: minmax(92px, 1.15fr) minmax(60px, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  .scope :global(.app-content-section [class*='h-[260px]']) {
+    height: 220px !important;
+  }
+
+  .scope :global(.app-content-section [class*='h-[190px]']) {
+    height: 150px !important;
+  }
+
+  .scope :global(.app-content-section .h-72) {
+    height: 230px !important;
+    min-height: 230px !important;
+  }
+
+  /* Store performance table: keep decision-making columns only on phones. */
+  .scope :global(.app-content-section table[class*='min-w-[1310px]']) {
+    min-width: 560px !important;
+    table-layout: fixed !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(1)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(1)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(3)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(3)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(4)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(4)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(6)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(6)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(8)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(8)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(10)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(10)) {
+    display: none !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(2)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(2)) {
+    width: 190px !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(5)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(5)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(7)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(7)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(9)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(9)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] th:nth-child(11)),
+  .scope :global(.app-content-section table[class*='min-w-[1310px]'] td:nth-child(11)) {
+    width: 92px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+
+  /* Daily summary: four useful columns fit without a desktop-width table. */
+  .scope :global(.app-content-section table[class*='min-w-max']) {
+    min-width: 390px !important;
+    table-layout: fixed !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-max'] th:nth-child(4)),
+  .scope :global(.app-content-section table[class*='min-w-max'] td:nth-child(4)) {
+    display: none !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-max'] th),
+  .scope :global(.app-content-section table[class*='min-w-max'] td) {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  .scope :global(.app-content-section table[class*='min-w-max'] th:first-child),
+  .scope :global(.app-content-section table[class*='min-w-max'] td:first-child) {
+    width: 112px !important;
+  }
+
+  /* Table toolbars and pagination must stay inside the viewport. */
+  .scope :global(.app-content-section [class*='xl:min-w-[650px]']) {
+    min-width: 0 !important;
+  }
+
+  .scope :global(.app-content-section [class*='border-t'][class*='justify-between']) {
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .scope :global(.app-content-section [class*='border-t'][class*='justify-between'] > span) {
+    width: 100%;
+    text-align: center;
+  }
+
+  .scope :global(.app-content-section [class*='border-t'][class*='justify-between'] > div) {
+    margin-inline: auto;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .scope :global(.app-content-section .overflow-x-auto) {
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+
+  .scope :global(.app-content-section .overflow-x-auto::-webkit-scrollbar) {
+    display: none;
+  }
+}
