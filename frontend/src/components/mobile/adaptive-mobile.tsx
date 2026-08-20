@@ -116,11 +116,17 @@ export function MobileMoreSheet({ displayName, role, onClose }: { displayName: s
     { href: "/coupons", label: "คูปอง" },
     { href: "/stores", label: "จัดการร้านค้า" },
     { href: "/classification-insights", label: "ข้อมูลการจำแนก" },
-    ...(role === "ADMIN" ? [{ href: "/admin/purchase-analytics", label: "ข้อมูลการซื้อ" }, { href: "/mass-messages", label: "ส่งข้อความ" }] : []),
+    { href: "/friend-source-links", label: "Friend Source Links" },
+    { href: "/tiktok", label: "TikTok Monitor" },
+    ...(role === "ADMIN" ? [
+      { href: "/admin/purchase-analytics", label: "ข้อมูลการซื้อ" },
+      { href: "/mass-messages", label: "ส่งข้อความ" },
+      { href: "/admin/registrations", label: "BM & PC Accounts" },
+    ] : []),
   ];
   return (
     <div className="absolute inset-0 z-50 flex items-end bg-black/35" onClick={onClose}>
-      <div className="w-full rounded-t-[1.6rem] border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 pt-3 shadow-2xl" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }} onClick={(event) => event.stopPropagation()}>
+      <div className="max-h-[78vh] w-full overflow-y-auto rounded-t-[1.6rem] border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 pt-3 shadow-2xl" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }} onClick={(event) => event.stopPropagation()}>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--app-border)]" />
         <div className="mb-3 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold">เพิ่มเติม</p><p className="mt-0.5 truncate text-xs text-[var(--app-text-tertiary)]">{displayName}</p></div><button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg">×</button></div>
         <div className="grid grid-cols-2 gap-2">{links.map((item) => <Link key={item.href} href={item.href} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-3 text-sm font-semibold">{item.label}</Link>)}</div>
