@@ -1,3 +1,15 @@
+# Site-Wide Dark Mode Normalization Architecture (2026-08-20)
+
+- **Tailwind CSS v4 Dark Variant Selector Integration**:
+  - In Tailwind CSS v4, utility variants `dark:...` default to media queries (`@media (prefers-color-scheme: dark)`). To ensure all Tailwind `dark:` classes respect manual runtime theme toggles (`html[data-theme="dark"]`), `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));` is defined globally in `globals.css`.
+- **Elimination of Inline Light Spec Overrides**:
+  - Internal dashboard views must never declare inline `style={{ "--dash-bg": "#F5F5F7", ... }}` on root containers. Instead, `--dash-*` aliases bind dynamically to `:root` and `html[data-theme="dark"]` definitions in `globals.css`, maintaining full design system consistency.
+- **Component-Level Semantic Color Tokens**:
+  - Sub-components across internal routes (tables, charts, paginations, badges, and modals) must consume semantic CSS variables (`--app-surface`, `--app-surface-subtle`, `--app-border`, `--app-text-primary`, `--app-text-secondary`, `--app-success-soft`, etc.) instead of hardcoded hex colors (`#E8F9EC`, `#FFF4E0`, `#FDE8E8`, `#F5F5F7`, `#FBFBFC`, `bg-white`).
+- **Preservation of Light Mode & Independent Surfaces**:
+  - Light mode hex tokens and visual styling remain 100% identical.
+  - Public / standalone landing pages (e.g. download, terms, privacy, TikTok OAuth callback result) retain their designated standalone presentation.
+
 # Phase 3 — Unified Chat Inbox (/chats) Workspace Modernization (2026-08-20)
 
 - **Preservation of Dedicated Operational Density**: Unlike standard management pages that use roomy dashboard cards, the `/chats` workspace is an operational hub with dense real-time needs. The modernization retains high visual density with concise padding, compact avatars, crisp 1-pixel borders, and subtle contrast surfaces.

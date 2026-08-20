@@ -301,6 +301,20 @@ test("Phase 3: Unified Chat Inbox (/chats) consumes semantic tokens and responsi
   assert.match(pageSource, /bg-\[var\(--app-accent\)\]/);
 });
 
+test("Dark Mode Normalization: Tailwind v4 custom-variant dark and dashboard semantic bindings", () => {
+  // Tailwind v4 custom variant
+  assert.match(css, /@custom-variant dark \(&:(where\(\[data-theme="dark"\]|is\(\[data-theme="dark"\])/);
+
+  // ExecutiveDashboardV2 must NOT have hardcoded inline style overrides for --dash-*
+  const dashV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(dashV2, /style=\{\{\s*"--dash-bg":/);
+
+  // Store Breakdown Table in Follower Insights must use theme variables
+  const storeTable = readFileSync(new URL("../src/app/follower-insights/store-breakdown-table.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(storeTable, /bg-\[#E8F9EC\]/);
+  assert.match(storeTable, /bg-\[var\(--app-success-soft\)\]/);
+});
+
 
 
 

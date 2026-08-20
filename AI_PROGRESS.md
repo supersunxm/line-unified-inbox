@@ -1,6 +1,25 @@
 # AI progress
 
-## Current task: Phase 3 — Unified Chat Inbox (/chats) Workspace Modernization (2026-08-20)
+## Current task: Site-Wide Dark Mode Normalization Pass (2026-08-20)
+
+- **Root Cause Analysis**:
+  - **Root Cause 1 (Tailwind CSS v4 Dark Variant Disconnect)**: In Tailwind CSS v4 (`@tailwindcss/postcss: ^4`), default `dark:` variants rely exclusively on the `@media (prefers-color-scheme: dark)` media query. Because the application toggles theme via `document.documentElement.dataset.theme = "dark"`, all standard Tailwind `dark:...` utility classes across the application failed to activate whenever the user chose Dark Mode on an OS in light mode.
+  - **Root Cause 2 (Hardcoded Inline Variable Overrides in Dashboard)**: `frontend/src/app/dashboard/executive-dashboard-v2.tsx` declared an explicit inline `style={{ "--dash-bg": "#F5F5F7", "--dash-card": "#FFFFFF", ... }}` on the root container, forcing all `--dash-*` tokens to light hex values regardless of the active theme.
+  - **Root Cause 3 (Hardcoded Sub-Component Hex Colors & Styles)**: Specific sub-components (such as `ReplyDonut` center circle, skeleton loaders, error cards, KPI badges, `StoreBreakdownTable` pagination, search input, sort buttons, and status pills) contained hardcoded hex backgrounds (`#E8F9EC`, `#FFF4E0`, `#FDE8E8`, `#F5F5F7`, `#FBFBFC`, `bg-white`) rather than semantic CSS tokens.
+- **Global & Semantic Normalization Applied**:
+  - Added `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));` to `frontend/src/app/globals.css`. This immediately unifies all Tailwind `dark:` variants across the entire repository under the `[data-theme="dark"]` attribute selector.
+  - Removed hardcoded inline styles from `frontend/src/app/dashboard/executive-dashboard-v2.tsx`, allowing `--dash-*` variables to seamlessly inherit the global `--app-*` dark mode palette (`--app-bg: #0d0f12`, `--app-surface: #14171d`, etc.).
+  - Replaced hardcoded `#F5F5F7`, `bg-white`, and hex gradients in `ReplyDonut`, loading skeletons, error states, and Watchlist KPI pills with semantic variables (`--dash-card`, `--dash-bg`, `--dash-text`, `--dash-green`, `--dash-amber`, `--dash-red`, `--dash-purple`).
+  - Normalized `frontend/src/app/follower-insights/store-breakdown-table.tsx` to use semantic variables (`--surface`, `--surface-elevated`, `--app-success-soft`, `--app-warning-soft`, `--app-danger-soft`, `--app-neutral-soft`).
+  - Normalized `frontend/src/app/components/customer/customer-signals.tsx` and `frontend/src/app/tiktok/dashboard/tiktok-follower-chart.tsx` to use `--app-*` semantic tokens.
+  - Normalized pilot checklist and system status views in `frontend/src/app/page.tsx` with `--app-bg`, `--app-surface`, `--app-border`, and `--app-text-primary`.
+- **Verification & Test Results**:
+  - Added automated test assertions in `frontend/test/design-system-foundation.test.mts` verifying that `@custom-variant dark` is declared and that no dashboard views declare inline light-mode overrides.
+  - Frontend test suite: `374 / 374 passed (100%)`.
+  - Next.js Turbopack build: Succeeded cleanly across all 20 routes (`npm run build`).
+  - Backend test suite: `1,255 / 1,255 passed (100%)`.
+
+## Previous task: Phase 3 — Unified Chat Inbox (/chats) Workspace Modernization (2026-08-20)
 
 - Workspace Modernization: Modernized the interaction-heavy `/chats` 3-pane operational workspace into the shared application design system while preserving high operational information density.
 - Preserved Core Layout & Interactions: Retained the desktop 5-grid track layout (`<ContextSidebar>`, `ResizableSeparator (sidebar)`, `<section data-chat-pane="conversations">`, `ResizableSeparator (conversations)`, `<section data-chat-pane="detail">`) with all resizing mechanics, minimums, maximums, and reset controls intact.

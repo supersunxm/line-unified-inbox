@@ -85,10 +85,10 @@ function getPillTone(pct: number, type: "growth" | "reach" | "block"): PillTone 
 }
 
 function pillClass(tone: PillTone) {
-  if (tone === "high") return "bg-[#E8F9EC] text-[#1E8E3E]";
-  if (tone === "mid") return "bg-[#FFF4E0] text-[#B36B00]";
-  if (tone === "low") return "bg-[#FDE8E8] text-[#C62828]";
-  return "bg-[#EEEEEE] text-[#6E6E73]";
+  if (tone === "high") return "bg-[var(--app-success-soft)] text-[var(--app-success)]";
+  if (tone === "mid") return "bg-[var(--app-warning-soft)] text-[var(--app-warning)]";
+  if (tone === "low") return "bg-[var(--app-danger-soft)] text-[var(--app-danger)]";
+  return "bg-[var(--app-neutral-soft)] text-[var(--app-text-secondary)]";
 }
 
 function buildPages(current: number, total: number): Array<number | "ellipsis-left" | "ellipsis-right"> {
@@ -347,7 +347,7 @@ function StoreBreakdownTableInner({
                     resetPage();
                   }}
                   placeholder={labels.search}
-                  className="h-10 w-full rounded-[10px] border border-[var(--border)] bg-white pl-10 pr-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none"
+                  className="h-10 w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] pl-10 pr-3 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -357,7 +357,7 @@ function StoreBreakdownTableInner({
                   setFilter(event.target.value as FilterKey);
                   resetPage();
                 }}
-                className="h-10 rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm text-[var(--foreground)] focus:outline-none"
+                className="h-10 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">{labels.all}</option>
                 <option value="zero-growth">{labels.zero}</option>
@@ -366,7 +366,7 @@ function StoreBreakdownTableInner({
                 <option value="high-growth">{labels.highGrowth}</option>
               </select>
 
-              <span className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[10px] bg-[#F5F5F7] px-3 text-xs font-medium text-[var(--muted)]">
+              <span className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[10px] bg-[var(--surface-elevated)] px-3 text-xs font-medium text-[var(--muted)]">
                 {labels.count(filteredRows.length, rows.length)}
               </span>
 
@@ -374,7 +374,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => exportStoreCsv(filteredRows.map((row) => row.source), dateFrom, dateTo, language)}
                 disabled={filteredRows.length === 0}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:opacity-40"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-40"
                 title={t.exportCsv}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -389,9 +389,9 @@ function StoreBreakdownTableInner({
       </div>
 
       {storeError ? (
-        <div className="flex flex-col items-center justify-center gap-3 p-10 text-center text-sm text-[#C62828]">
+        <div className="flex flex-col items-center justify-center gap-3 p-10 text-center text-sm text-[var(--app-danger)]">
           <p>{t.errorLoadingStore}: {storeError}</p>
-          <button type="button" onClick={onRetry} className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:border-[#00A651]">
+          <button type="button" onClick={onRetry} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:border-emerald-500">
             {t.retryStore}
           </button>
         </div>
@@ -401,7 +401,7 @@ function StoreBreakdownTableInner({
         <>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1310px] text-left text-[13px]">
-              <thead className="border-b border-[var(--border)] bg-[#FBFBFC]">
+              <thead className="border-b border-[var(--border)] bg-[var(--surface-elevated)]">
                 <tr>
                   <th className="p-0">{sortButton("id", labels.code)}</th>
                   <th className="p-0">{sortButton("store", labels.store)}</th>
@@ -418,13 +418,13 @@ function StoreBreakdownTableInner({
               </thead>
               <tbody className="divide-y divide-[var(--border)] text-[var(--foreground)]">
                 {paginatedRows.map((row) => (
-                  <tr key={row.source.lineOaId} className="transition-colors hover:bg-[#F2FAF5]">
+                  <tr key={row.source.lineOaId} className="transition-colors hover:bg-[var(--hover)]">
                     <td className="px-3 py-3 font-mono text-[11px] text-[var(--muted)]">{row.id}</td>
                     <td className="max-w-[300px] whitespace-normal px-3 py-3 font-medium leading-5">{row.store}</td>
                     <td className="max-w-[220px] whitespace-normal px-3 py-3 text-xs text-[var(--muted)]">{row.oa}</td>
                     <td className="px-3 py-3 text-right font-medium tabular-nums text-[var(--muted)]">{row.startFollowers?.toLocaleString() ?? "—"}</td>
                     <td className="px-3 py-3 text-right font-semibold tabular-nums">{row.followers?.toLocaleString() ?? "—"}</td>
-                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${row.growth !== null && row.growth > 0 ? "text-[#1E8E3E]" : row.growth !== null && row.growth < 0 ? "text-[#C62828]" : "text-[var(--foreground)]"}`}>
+                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${row.growth !== null && row.growth > 0 ? "text-emerald-600 dark:text-emerald-400" : row.growth !== null && row.growth < 0 ? "text-rose-600 dark:text-rose-400" : "text-[var(--foreground)]"}`}>
                       {row.growth === null ? "—" : `${row.growth > 0 ? "+" : ""}${row.growth.toLocaleString()}`}
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{pctPill(row.growthPct, "growth", 2)}</td>
@@ -450,7 +450,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => goToPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
-                className="h-8 rounded-lg border border-[var(--border)] bg-white px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46] disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.previous}
               </button>
@@ -463,8 +463,8 @@ function StoreBreakdownTableInner({
                     onClick={() => goToPage(page)}
                     className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-semibold transition-colors ${
                       safePage === page
-                        ? "border-[#00A651] bg-[#00A651] text-white"
-                        : "border-[var(--border)] bg-white text-[var(--foreground)] hover:border-[#00A651] hover:text-[#008F46]"
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600"
                     }`}
                   >
                     {page}

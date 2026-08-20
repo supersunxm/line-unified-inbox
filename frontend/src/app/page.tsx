@@ -2860,11 +2860,95 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
           {initialSection === "chats" && sidebarView === "pilotChecklist" ? (
             <PageContainer variant="full">
-              <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-bold">{text.pilotChecklist}</h2><select className="mt-4 rounded border p-2" value={pilotChecklist?.oa.id ?? ""} onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}><option value="">Select LINE OA</option>{lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}</select>{pilotChecklist && <div className="mt-5 space-y-2">{pilotChecklist.items.map((item, index) => <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-lg bg-white p-3 shadow-sm"><span className="text-sm">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span><select disabled={authUser.role !== "ADMIN"} value={item.status} onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)} className="rounded border p-2 text-sm"><option value="NOT_TESTED">Not tested</option><option value="PASSED">Passed</option><option value="FAILED">Failed</option><option value="NOT_APPLICABLE">Not applicable</option></select><input disabled={authUser.role !== "ADMIN"} defaultValue={item.note ?? ""} onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)} placeholder="Test note" className="rounded border p-2 text-sm" /></div>)}</div>}</div></section>
+              <section className="col-span-2 overflow-y-auto p-6 bg-[var(--app-bg)] text-[var(--app-text-primary)]">
+                <div className="mx-auto max-w-5xl">
+                  <h2 className="text-2xl font-bold">{text.pilotChecklist}</h2>
+                  <select
+                    className="mt-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-2 text-sm text-[var(--app-text-primary)] focus:outline-none"
+                    value={pilotChecklist?.oa.id ?? ""}
+                    onChange={(event) => event.target.value && void loadPilotChecklist(event.target.value)}
+                  >
+                    <option value="">Select LINE OA</option>
+                    {lineOas.map((oa) => <option key={oa.id} value={oa.id}>{oa.name}</option>)}
+                  </select>
+                  {pilotChecklist && (
+                    <div className="mt-5 space-y-2">
+                      {pilotChecklist.items.map((item, index) => (
+                        <div key={item.itemKey} className="grid grid-cols-[1fr_160px_2fr] items-center gap-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-xs">
+                          <span className="text-sm font-medium">{index + 1}. {item.itemKey.replaceAll("_", " ")}</span>
+                          <select
+                            disabled={authUser.role !== "ADMIN"}
+                            value={item.status}
+                            onChange={(event) => void updatePilotItem(item.itemKey, event.target.value as typeof item.status, item.note ?? undefined)}
+                            className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2 text-sm text-[var(--app-text-primary)]"
+                          >
+                            <option value="NOT_TESTED">Not tested</option>
+                            <option value="PASSED">Passed</option>
+                            <option value="FAILED">Failed</option>
+                            <option value="NOT_APPLICABLE">Not applicable</option>
+                          </select>
+                          <input
+                            disabled={authUser.role !== "ADMIN"}
+                            defaultValue={item.note ?? ""}
+                            onBlur={(event) => void updatePilotItem(item.itemKey, item.status, event.target.value)}
+                            placeholder="Test note"
+                            className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2 text-sm text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
             </PageContainer>
           ) : initialSection === "chats" && sidebarView === "systemStatus" ? (
             <PageContainer variant="full">
-              <section className="col-span-2 overflow-y-auto p-6"><div className="mx-auto max-w-5xl space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{text.systemStatus}</h2><button onClick={() => void loadSystemStatus()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">{text.refreshStatus}</button></div>{systemStatus ? <><div className="grid grid-cols-3 gap-3">{Object.entries(systemStatus).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</p><p className="mt-2 font-semibold">{typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}</p></div>)}</div><div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Recent operational errors</h3>{operationalErrors.length ? <div className="mt-3 space-y-2">{operationalErrors.map((error) => <div key={error.id} className="rounded bg-red-50 p-3 text-sm"><strong>{error.feature}</strong> · {error.summary}<span className="block text-xs text-slate-500">{new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">No recent errors</p>}</div></> : <p className="text-slate-500">{text.loadingData}</p>}</div></section>
+              <section className="col-span-2 overflow-y-auto p-6 bg-[var(--app-bg)] text-[var(--app-text-primary)]">
+                <div className="mx-auto max-w-5xl space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold">{text.systemStatus}</h2>
+                    <button
+                      onClick={() => void loadSystemStatus()}
+                      className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--app-accent-hover)] transition-colors"
+                    >
+                      {text.refreshStatus}
+                    </button>
+                  </div>
+                  {systemStatus ? (
+                    <>
+                      <div className="grid grid-cols-3 gap-3">
+                        {Object.entries(systemStatus).map(([key, value]) => (
+                          <div key={key} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-xs">
+                            <p className="text-xs text-[var(--app-text-secondary)]">{key.replaceAll(/([A-Z])/g, " $1")}</p>
+                            <p className="mt-2 font-semibold text-[var(--app-text-primary)]">
+                              {typeof value === "boolean" ? value ? "Healthy" : "Not configured" : value ?? "Not configured"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs">
+                        <h3 className="font-semibold text-[var(--app-text-primary)]">Recent operational errors</h3>
+                        {operationalErrors.length ? (
+                          <div className="mt-3 space-y-2">
+                            {operationalErrors.map((error) => (
+                              <div key={error.id} className="rounded-lg border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">
+                                <strong>{error.feature}</strong> · {error.summary}
+                                <span className="block text-xs text-[var(--app-text-tertiary)] mt-1">
+                                  {new Date(error.createdAt).toLocaleString()} · {error.resolved ? "Resolved" : "Unresolved"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-[var(--app-text-secondary)]">No recent errors</p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[var(--app-text-secondary)]">{text.loadingData}</p>
+                  )}
+                </div>
+              </section>
             </PageContainer>
           ) : initialSection === "stores" ? (
             <PageContainer variant="wide">

@@ -126,17 +126,17 @@ export function TikTokFollowerGrowthChart({
   const hoveredPoint = hoveredIndex !== null && points[hoveredIndex] ? points[hoveredIndex] : null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-colors dark:border-slate-800 dark:bg-[#12151c] sm:p-6">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm transition-colors sm:p-6">
       {/* Header section with growth summary chips */}
-      <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 dark:border-slate-800/80 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-[var(--app-border-subtle)] pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--app-success-soft)] text-[var(--app-success)]">
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
               </svg>
             </span>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-50">
+            <h2 className="text-base font-bold text-[var(--app-text-primary)]">
               Follower Growth History (30 Days)
             </h2>
             {isTikTokDemoGrowthEnabled() && (
@@ -270,18 +270,18 @@ export function TikTokFollowerGrowthChart({
             {/* Hover Tooltip Overlay */}
             {hoveredPoint && (
               <div
-                className="pointer-events-none absolute top-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs shadow-lg backdrop-blur-xs transition-all dark:border-slate-700 dark:bg-slate-900/95"
+                className="pointer-events-none absolute top-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs shadow-lg backdrop-blur-xs transition-all"
                 style={{
                   left: `${Math.min(Math.max(10, (hoveredPoint.x / chartWidth) * 100), 85)}%`,
                   transform: "translateX(-50%)",
                 }}
               >
-                <p className="font-medium text-slate-500 dark:text-slate-400">
+                <p className="font-medium text-[var(--app-text-secondary)]">
                   {formatDateLabel(hoveredPoint.item.metricDate)}
                 </p>
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                <p className="text-sm font-bold text-[var(--app-text-primary)]">
                   {formatNumber(hoveredPoint.item.followerCount)}{" "}
-                  <span className="text-[11px] font-normal text-slate-400">followers</span>
+                  <span className="text-[11px] font-normal text-[var(--app-text-tertiary)]">followers</span>
                 </p>
                 {hoveredPoint.idx > 0 && points[hoveredPoint.idx - 1] && (
                   <p className="mt-0.5 text-[11px]">

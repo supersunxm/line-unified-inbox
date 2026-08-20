@@ -78,24 +78,24 @@ export function CustomerSignals({ events, isLoading, error, language }: Customer
   const recentEvents = (events ?? []).slice(0, 5);
 
   return (
-    <div data-customer-signals-card className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+    <div data-customer-signals-card className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">
           ⚡ {currentText.title}
         </h4>
         {recentEvents.length > 0 && (
-          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">
+          <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-300">
             {recentEvents.length}
           </span>
         )}
       </div>
 
       {isLoading ? (
-        <div className="mt-3 text-xs text-slate-400 animate-pulse">{currentText.loading}</div>
+        <div className="mt-3 text-xs text-[var(--app-text-tertiary)] animate-pulse">{currentText.loading}</div>
       ) : error ? (
-        <div className="mt-3 text-xs text-red-500">{currentText.error}: {error}</div>
+        <div className="mt-3 text-xs text-[var(--app-danger)]">{currentText.error}: {error}</div>
       ) : recentEvents.length === 0 ? (
-        <div className="mt-3 text-xs text-slate-400">{currentText.noSignals}</div>
+        <div className="mt-3 text-xs text-[var(--app-text-tertiary)]">{currentText.noSignals}</div>
       ) : (
         <div className="mt-3 space-y-2.5">
           {recentEvents.map((event) => {
@@ -106,36 +106,36 @@ export function CustomerSignals({ events, isLoading, error, language }: Customer
             return (
               <div
                 key={event.id}
-                className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-xs dark:border-slate-800/80 dark:bg-slate-900/60"
+                className="rounded-2xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3 text-xs"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="font-semibold text-[var(--app-text-primary)]">
                     {event.type === "NAME_CHANGED" ? "🏷️ " : event.type === "PRODUCT_INTEREST_DETECTED" ? "📱 " : "🛒 "}
                     {eventTitle}
                   </span>
-                  <span className="text-[10px] text-slate-400">{relativeTime}</span>
+                  <span className="text-[10px] text-[var(--app-text-tertiary)]">{relativeTime}</span>
                 </div>
 
                 {event.type === "NAME_CHANGED" ? (
-                  <div className="mt-2 rounded-xl border border-slate-200/80 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="text-[11px] text-slate-400 font-normal truncate">
+                  <div className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-2.5">
+                    <div className="text-[11px] text-[var(--app-text-secondary)] font-normal truncate">
                       {event.previousValue || "LINE Customer"}
                     </div>
-                    <div className="my-1 flex items-center justify-center text-slate-400 font-bold">
+                    <div className="my-1 flex items-center justify-center text-[var(--app-text-tertiary)] font-bold">
                       ↓
                     </div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                    <div className="text-xs font-bold text-[var(--app-text-primary)] truncate">
                       {event.newValue || currentText.newName}
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-1 text-slate-600 dark:text-slate-300">
+                  <div className="mt-1 text-[var(--app-text-secondary)]">
                     {event.newValue || event.previousValue || "-"}
                   </div>
                 )}
 
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="rounded-full bg-slate-200/60 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--app-text-tertiary)]">
+                  <span className="rounded-full bg-[var(--app-neutral-soft)] px-2 py-0.5 font-medium text-[var(--app-text-secondary)]">
                     {sourceLabel}
                   </span>
                 </div>
