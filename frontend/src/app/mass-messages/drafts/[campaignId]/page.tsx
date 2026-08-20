@@ -1,4 +1,4 @@
-import { PurchaseBroadcastComposer } from "../../purchase-broadcast-composer";
+import { PurchaseBroadcastDraftResponsive } from "./draft-responsive";
 
 interface Props {
   params: Promise<{ campaignId: string }>;
@@ -6,5 +6,5 @@ interface Props {
 
 export default async function PurchaseBroadcastDraftPage({ params }: Props) {
   const { campaignId } = await params;
-  return <PurchaseBroadcastComposer campaignId={campaignId} />;
+  return <PurchaseBroadcastDraftResponsive campaignId={campaignId} />;
 }
