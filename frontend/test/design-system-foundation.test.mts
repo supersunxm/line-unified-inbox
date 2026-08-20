@@ -341,3 +341,32 @@ test("Follower Insights Dark Mode: CSS module aliases and store analytics overvi
   assert.match(storeAnalytics, /border-\[var\(--app-border\)\]/);
   assert.match(storeAnalytics, /text-\[var\(--app-text-primary\)\]/);
 });
+
+test("Brand Accent: Global --app-accent uses OPPO green and separates warning states", () => {
+  // :root accent must be OPPO green (#00a651) and NOT orange (#ff6900)
+  assert.match(css, /:root[\s\S]*--app-accent:\s*#00a651;/);
+  assert.match(css, /:root[\s\S]*--app-accent-hover:\s*#008f46;/);
+  assert.match(css, /:root[\s\S]*--app-accent-soft:\s*#e8f9ec;/);
+  assert.doesNotMatch(css, /:root[\s\S]*--app-accent:\s*#ff6900;/);
+
+  // Dark mode accent must be OPPO green (#00a651)
+  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent:\s*#00a651;/);
+  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent-soft:\s*#0d281a;/);
+
+  // Semantic warning tokens must remain distinct (#ff9500)
+  assert.match(css, /:root[\s\S]*--app-warning:\s*#ff9500;/);
+  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-warning:\s*#ff9500;/);
+
+  // TopNavigation and ContextSidebar must consume semantic accent tokens
+  const topNav = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+  const sidebar = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
+  assert.match(topNav, /aria-\[current=page\]:bg-\[var\(--app-accent-soft\)\]/);
+  assert.match(topNav, /aria-\[current=page\]:text-\[var\(--app-accent\)\]/);
+  assert.match(sidebar, /bg-\[var\(--app-accent-soft\)\]/);
+
+  // Dashboard 7-day follower trend must consume semantic accent
+  const dashV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(dashV2, /stroke="#FF6900"/);
+  assert.match(dashV2, /stroke="var\(--app-accent, #00A651\)"/);
+});
+

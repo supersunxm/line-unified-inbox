@@ -16,9 +16,9 @@
   --app-text-secondary: #6e6e73;
   --app-text-tertiary: #a1a1a6;
   --app-text-disabled: #c7c7cc;
-  --app-accent: #ff6900;
-  --app-accent-hover: #e65e00;
-  --app-accent-soft: #fff1e6;
+  --app-accent: #00a651;
+  --app-accent-hover: #008f46;
+  --app-accent-soft: #e8f9ec;
   --app-accent-contrast: #ffffff;
   --app-success: #34c759;
   --app-success-soft: #e8f9ec;
@@ -78,7 +78,7 @@
   --disabled-foreground: #94a3b8;
   --badge-background: var(--app-neutral-soft);
   --badge-foreground: var(--app-text-secondary);
-  --focus: #ff6900;
+  --focus: #00a651;
   --synced-card-background: #f0fdf4;
   --synced-card-border: #bbf7d0;
   --synced-link: #166534;
@@ -112,9 +112,9 @@ html[data-theme="dark"] {
   --app-text-secondary: #94a3b8;
   --app-text-tertiary: #64748b;
   --app-text-disabled: #475569;
-  --app-accent: #ff6900;
-  --app-accent-hover: #ff7d1a;
-  --app-accent-soft: #2e1808;
+  --app-accent: #00a651;
+  --app-accent-hover: #00bf5c;
+  --app-accent-soft: #0d281a;
   --app-accent-contrast: #ffffff;
   --app-success: #34c759;
   --app-success-soft: #0f2916;
@@ -174,7 +174,7 @@ html[data-theme="dark"] {
   --disabled-foreground: #64748b;
   --badge-background: var(--app-neutral-soft);
   --badge-foreground: var(--app-text-secondary);
-  --focus: #ff6900;
+  --focus: #00a651;
   --synced-card-background: #11281d;
   --synced-card-border: #1e4a34;
   --synced-link: #86efac;

@@ -1,6 +1,19 @@
 # AI progress
 
-## Current task: Follower Insights Dark Mode Canvas & Scoped CSS Normalization (2026-08-20)
+## Current task: Brand Accent Modernization to OPPO Green (2026-08-20)
+
+- **Audit & Implementation**:
+  - Replaced legacy orange brand tokens (`#ff6900`, `#e65e00`, `#fff1e6`, `#2e1808`) in `frontend/src/app/globals.css` with official **OPPO Green** tokens:
+    - `:root` (Light mode): `--app-accent: #00a651; --app-accent-hover: #008f46; --app-accent-soft: #e8f9ec; --focus: #00a651;`
+    - `html[data-theme="dark"]` (Dark mode): `--app-accent: #00a651; --app-accent-hover: #00bf5c; --app-accent-soft: #0d281a; --focus: #00a651;`
+  - Replaced hardcoded `#FF6900` in `frontend/src/app/dashboard/executive-dashboard-v2.tsx` Tier 1 7-day follower trend chart with `var(--app-accent, #00A651)`.
+  - Preserved semantic warning tokens (`--app-warning: #ff9500`, `--app-warning-soft: #fff4e0` in light / `#2e1e05` in dark) and error tokens (`--app-danger: #ff3b30`) strictly separate from the brand accent.
+- **Verification & Test Results**:
+  - Added automated test in `frontend/test/design-system-foundation.test.mts` verifying `--app-accent` is `#00a651`, warning tokens remain distinct, and navigation & charts consume semantic tokens.
+  - All 376 frontend unit and regression tests passing (`npm test`).
+  - Next.js Turbopack production build succeeded cleanly across all 21 routes (`npm run build`).
+
+## Previous task: Follower Insights Dark Mode Canvas & Scoped CSS Normalization (2026-08-20)
 
 - **Root Cause & Architectural Trace**:
   - **Scoped CSS Module Override**: `frontend/src/app/follower-insights/follower-insights-modern.module.css` declared hardcoded light variables (`--background: #f5f5f7`, `--surface: #ffffff`, `--input-background: #ffffff`, `--border: #e5e5ea`) and applied `background: ... var(--background) !important;` directly on `.scope :global(.app-content-section)` wrapping `follower-insights-view.tsx`.

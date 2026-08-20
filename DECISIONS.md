@@ -1,3 +1,11 @@
+# Brand Accent Modernization to OPPO Green (2026-08-20)
+
+- **Semantic Separation of Brand Accent and Warning States**:
+  - Global brand accent (`--app-accent`) is modernized from the legacy orange (`#ff6900`) to the official **OPPO Green** (`#00a651`).
+  - Active navigation highlights, primary positive call-to-actions (e.g. Save, Sync, Apply, Confirm), focus outlines, user profile markers, and the application brand mark consume `--app-accent` and `--app-accent-soft` (`#e8f9ec` in light, `#0d281a` in dark).
+  - Semantic warning states (`--app-warning: #ff9500`, `--app-warning-soft: #fff4e0` in light / `#2e1e05` in dark) remain completely distinct and uncollapsing, ensuring SLA risks, partial data notices, and attention badges retain unambiguous amber/orange warning semantics.
+  - Multi-series chart distinct lines (such as Follower Insights multi-store comparison palette) retain distinct colors for proper data visualization.
+
 # Site-Wide Dark Mode Normalization Architecture (2026-08-20)
 
 - **Tailwind CSS v4 Dark Variant Selector Integration**:
