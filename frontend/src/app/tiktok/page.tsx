@@ -7,7 +7,7 @@ import {
   fetchTikTokBulkMetricsSummaryFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
 } from "./tiktok-api-client";
-import { TikTokOverviewView } from "./tiktok-overview-view";
+import { TikTokOverviewResponsive } from "./tiktok-overview-responsive";
 import type { TikTokAccountListItem } from "./tiktok-types";
 import {
   getTikTokDemoGrowthMetrics,
@@ -98,7 +98,7 @@ export default async function TikTokOverviewPage() {
       : accounts;
 
   return (
-    <TikTokOverviewView
+    <TikTokOverviewResponsive
       accounts={overviewAccounts}
       singleAccountData={singleAccountData}
       historicalMetrics={historicalMetrics}
