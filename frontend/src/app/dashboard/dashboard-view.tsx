@@ -25,20 +25,29 @@ export function DashboardView({
     <div className="executive-dashboard-mobile min-w-0 max-w-full">
       <style>{`
         @media (max-width: 767px) {
+          html,
+          body {
+            overscroll-behavior-y: none;
+          }
+
           .executive-dashboard-mobile {
             width: 100%;
             max-width: 100vw;
+            min-height: 0 !important;
             overflow-x: hidden;
+            overscroll-behavior-y: none;
           }
 
           .executive-dashboard-mobile > div {
-            padding-bottom: 1.5rem !important;
+            min-height: 0 !important;
+            padding-bottom: 0.75rem !important;
           }
 
           .executive-dashboard-mobile > div > div {
             width: 100% !important;
             max-width: 100% !important;
-            padding: 1rem 0.75rem 1.5rem !important;
+            min-height: 0 !important;
+            padding: 1rem 0.75rem 0.75rem !important;
           }
 
           .executive-dashboard-mobile header {
@@ -170,7 +179,8 @@ export function DashboardView({
 
           .executive-dashboard-mobile footer {
             margin-top: 1rem !important;
-            padding: 0 0.5rem;
+            margin-bottom: 0 !important;
+            padding: 0 0.5rem 0.25rem;
             font-size: 0.68rem !important;
           }
         }
