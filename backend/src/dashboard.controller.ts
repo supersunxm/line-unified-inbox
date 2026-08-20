@@ -7,6 +7,7 @@ import { OperationReportService } from "./operation-report.service";
 import { RootCauseService } from "./ai/root-cause.service";
 import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
+import { MessageTrafficService } from "./message-traffic.service";
 
 @Controller("dashboard")
 export class DashboardController {
@@ -18,6 +19,7 @@ export class DashboardController {
     private readonly reportService: OperationReportService,
     private readonly rootCauseService: RootCauseService,
     private readonly storeAccess: StoreAccessService,
+    private readonly messageTraffic: MessageTrafficService,
   ) {}
 
   private parseRequestedStoreIds(raw?: string) {
@@ -70,7 +72,33 @@ export class DashboardController {
     const scope = await this.resolveScope(req, allowedStoreIdsRaw, targetStoreId);
     const userRole = scope.userRole;
     const allowedStoreIds = scope.allowedStoreIds;
-    return this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds);
+
+    const [analyticsData, traffic] = await Promise.all([
+      this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds),
+      this.messageTraffic.getTraffic(safePeriod, allowedStoreIds),
+    ]);
+
+    const peakHour = traffic.overallPeakHour.hour;
+    const peakStoreCounts = traffic.storeHourlyDistribution
+      .map((store) => ({
+        storeId: store.storeId,
+        storeName: store.storeName,
+        count: store.hourly.find((bucket) => bucket.hour === peakHour)?.count ?? 0,
+      }))
+      .filter((store) => store.count > 0)
+      .sort((a, b) => b.count - a.count || a.storeName.localeCompare(b.storeName))
+      .slice(0, 3);
+
+    return {
+      ...analyticsData,
+      peakHourAnalysis: {
+        peakWindow: traffic.overallPeakHour.window,
+        peakTrafficCount: traffic.overallPeakHour.count,
+        hourlyDistribution: traffic.hourlyDistribution.map((bucket) => bucket.count),
+        topStores: peakStoreCounts,
+        recommendation: `Plan staffing around ${traffic.overallPeakHour.window}, the highest inbound-message hour for the selected period.`,
+      },
+    };
   }
 
   @Get("executive-store-health")
