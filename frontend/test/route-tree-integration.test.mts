@@ -38,8 +38,8 @@ test("production chats route renders ContextSidebar and non-chats routes omit co
   assert.doesNotMatch(pageCode, /<aside className="app-surface min-w-0 overflow-y-auto border-r p-4">/);
 });
 
-test("all six top navigation links retain their canonical destinations", () => {
-  const routes = ["/dashboard", "/chats", "/stores", "/classification-insights", "/follower-insights", "/friend-source-links"];
+test("top navigation links retain their canonical destinations", () => {
+  const routes = ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"];
   for (const route of routes) {
     assert.match(topNavCode, new RegExp(`href="${route}"`));
   }

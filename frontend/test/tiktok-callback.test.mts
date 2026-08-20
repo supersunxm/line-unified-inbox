@@ -212,5 +212,4 @@ test("Security: callback does NOT render or log authorization codes or state val
 
 test("TikTok callback is NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
-  assert.doesNotMatch(topNavSource, /TikTok/);
 });

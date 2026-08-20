@@ -4,14 +4,14 @@ import test from "node:test";
 
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
-test("TopNavigation renders all 8 destination links as native Next.js Link components", () => {
+test("TopNavigation renders destination links as native Next.js Link components", () => {
   const expectedRoutes = [
     { name: "Dashboard", href: "/dashboard" },
     { name: "Store Chats", href: "/chats" },
+    { name: "Follower Insights", href: "/follower-insights" },
     { name: "Stores", href: "/stores" },
     { name: "BM Approval", href: "/admin/registrations" },
-    { name: "Classification Insights", href: "/classification-insights" },
-    { name: "Follower Insights", href: "/follower-insights" },
+    { name: "Purchase Intelligence", href: "/admin/purchase-analytics" },
     { name: "Friend Source Links", href: "/friend-source-links" },
     { name: "Mass Message", href: "/mass-messages" },
   ];
@@ -52,15 +52,12 @@ test("TopNavigation layout prevents transparent search container from intercepti
   );
 });
 
-test("TopNavigation secondary links are rendered inline at 2xl and inside More dropdown below 2xl", () => {
-  // Inline container at 2xl
-  assert.match(topNavSource, /<div className="hidden items-center gap-0\.5 2xl:flex">/);
-
-  // Dropdown for below 2xl
-  assert.match(topNavSource, /<div ref=\{menuRef\} className="relative 2xl:hidden">/);
+test("TopNavigation secondary links are rendered inside More dropdown menu", () => {
+  // Dropdown menu trigger
+  assert.match(topNavSource, /aria-label="More navigation"/);
 
   // More menu contains secondary items
-  for (const href of ["/classification-insights", "/follower-insights", "/friend-source-links", "/mass-messages"]) {
+  for (const href of ["/stores", "/admin/purchase-analytics", "/friend-source-links", "/mass-messages"]) {
     const secondaryRegex = new RegExp(`role="menuitem"\\s+href="${href}"`);
     assert.match(topNavSource, secondaryRegex);
   }

@@ -48,14 +48,14 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
   );
   const [showSyncMissingModal, setShowSyncMissingModal] = useState(false);
 
-  // Store-level Trend Filter State
-  const [selectedLineOaId, setSelectedLineOaId] = useState<string | null>(null);
-  const [storeTrendData, setStoreTrendData] = useState<SummaryDailyRow[]>([]);
+  // Multi-Store Trend Filter State (empty array [] = all stores)
+  const [selectedLineOaIds, setSelectedLineOaIds] = useState<string[]>([]);
+  const [storeSeriesMap, setStoreSeriesMap] = useState<Record<string, SummaryDailyRow[]>>({});
   const [storeTrendLoading, setStoreTrendLoading] = useState(false);
   const [storeTrendError, setStoreTrendError] = useState<string | null>(null);
 
-  // Comparison Mode State ("comparable" | "available")
-  const [comparisonMode, setComparisonMode] = useState<"comparable" | "available">("comparable");
+  // Comparison Mode State ("available" | "comparable")
+  const [comparisonMode, setComparisonMode] = useState<"comparable" | "available">("available");
 
   // Derive comparable accounts & summary data
   const { comparableLineOaIds, comparableSummaryData } = useMemo(() => {
@@ -162,47 +162,69 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
     return () => window.clearTimeout(timer);
   }, [dateFrom, dateTo, loadData]);
 
-  // Derive effective selected store ID (resets to null if selected store no longer exists in storeData)
-  const effectiveSelectedLineOaId = useMemo(() => {
-    if (!selectedLineOaId) return null;
-    if (storeData.length > 0 && !storeData.some((s) => s.lineOaId === selectedLineOaId)) {
-      return null;
-    }
-    return selectedLineOaId;
-  }, [selectedLineOaId, storeData]);
+  // Derive effective selected store IDs (filters out any stores no longer present in storeData)
+  const effectiveSelectedLineOaIds = useMemo(() => {
+    if (selectedLineOaIds.length === 0) return [];
+    if (storeData.length === 0) return selectedLineOaIds;
+    const availableSet = new Set(storeData.map((s) => s.lineOaId));
+    return selectedLineOaIds.filter((id) => availableSet.has(id));
+  }, [selectedLineOaIds, storeData]);
 
-  const handleSelectStore = (lineOaId: string | null) => {
-    setSelectedLineOaId(lineOaId);
-    if (lineOaId) {
-      setStoreTrendLoading(true);
-      setStoreTrendError(null);
-    }
-  };
-
+  // Fetch daily time series for each selected store in parallel
   useEffect(() => {
-    if (!effectiveSelectedLineOaId) return;
-    let isCancelled = false;
+    if (effectiveSelectedLineOaIds.length === 0) {
+      setStoreSeriesMap({});
+      setStoreTrendError(null);
+      setStoreTrendLoading(false);
+      return;
+    }
 
-    api
-      .followerInsightsSummary({ dateFrom, dateTo, lineOaId: effectiveSelectedLineOaId })
-      .then((data) => {
-        if (!isCancelled) {
-          setStoreTrendData(data);
-          setStoreTrendError(null);
-          setStoreTrendLoading(false);
+    let isCancelled = false;
+    setStoreTrendLoading(true);
+    setStoreTrendError(null);
+
+    Promise.all(
+      effectiveSelectedLineOaIds.map(async (lineOaId) => {
+        try {
+          const res = await api.followerInsightsSummary({ dateFrom, dateTo, lineOaId });
+          return { lineOaId, data: res, error: null };
+        } catch (err) {
+          return {
+            lineOaId,
+            data: [],
+            error: err instanceof Error ? err.message : t.failedToLoadStoreTrend,
+          };
         }
       })
-      .catch((err) => {
-        if (!isCancelled) {
-          setStoreTrendError(err instanceof Error ? err.message : t.failedToLoadStoreTrend);
-          setStoreTrendLoading(false);
+    )
+      .then((results) => {
+        if (isCancelled) return;
+        const newMap: Record<string, SummaryDailyRow[]> = {};
+        const errors: string[] = [];
+
+        for (const res of results) {
+          newMap[res.lineOaId] = res.data;
+          if (res.error) errors.push(res.error);
         }
+
+        setStoreSeriesMap(newMap);
+        if (errors.length > 0 && errors.length === results.length) {
+          setStoreTrendError(errors[0]);
+        } else {
+          setStoreTrendError(null);
+        }
+        setStoreTrendLoading(false);
+      })
+      .catch((err) => {
+        if (isCancelled) return;
+        setStoreTrendError(err instanceof Error ? err.message : t.failedToLoadStoreTrend);
+        setStoreTrendLoading(false);
       });
 
     return () => {
       isCancelled = true;
     };
-  }, [effectiveSelectedLineOaId, dateFrom, dateTo, t]);
+  }, [effectiveSelectedLineOaIds, dateFrom, dateTo, t]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -645,26 +667,27 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
                   </div>
                 </div>
 
-                {/* Trend Chart Component with Store Filter & Comparison Mode */}
+                {/* Trend Chart Component with Multi-Store Filter & Comparison Mode */}
                 <TrendChart
                   data={
-                    effectiveSelectedLineOaId
-                      ? storeTrendData
-                      : comparisonMode === "comparable"
+                    comparisonMode === "comparable" && effectiveSelectedLineOaIds.length === 0
                       ? comparableSummaryData
                       : summaryData
                   }
                   metric={chartMetric}
                   language={language}
                   stores={storeData}
-                  selectedLineOaId={effectiveSelectedLineOaId}
-                  isLoadingTrend={effectiveSelectedLineOaId ? storeTrendLoading : false}
-                  trendError={effectiveSelectedLineOaId ? storeTrendError : null}
+                  selectedLineOaIds={effectiveSelectedLineOaIds}
+                  storeSeriesMap={storeSeriesMap}
+                  isLoadingTrend={effectiveSelectedLineOaIds.length > 0 ? storeTrendLoading : false}
+                  trendError={effectiveSelectedLineOaIds.length > 0 ? storeTrendError : null}
                   comparisonMode={comparisonMode}
                   comparableCount={comparableLineOaIds.size}
                   onComparisonModeChange={setComparisonMode}
                   onMetricChange={setChartMetric}
-                  onSelectStore={handleSelectStore}
+                  onSelectStores={setSelectedLineOaIds}
+                  selectedLineOaId={effectiveSelectedLineOaIds.length === 1 ? effectiveSelectedLineOaIds[0] : null}
+                  onSelectStore={(id) => setSelectedLineOaIds(id ? [id] : [])}
                 />
               </div>
             )}

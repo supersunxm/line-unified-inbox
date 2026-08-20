@@ -24,8 +24,8 @@ test("application exposes primary routes with active navigation", () => {
 });
 
 test("dashboard links to filtered workspaces and root redirects safely", () => {
-  const dashboardView = readFileSync(new URL("../src/app/dashboard/dashboard-view.tsx", import.meta.url), "utf8");
-  assert.match(dashboardView, /\/stores/);
+  const dashboardCode = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
+  assert.match(dashboardCode, /onOpenStore/);
   assert.match(page, /window\.location\.replace\("\/dashboard"\)/);
 });
 

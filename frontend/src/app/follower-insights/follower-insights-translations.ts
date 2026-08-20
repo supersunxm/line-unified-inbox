@@ -91,6 +91,11 @@ export type FollowerInsightsTranslations = {
   noDataForStoreInRange: string;
   failedToLoadStoreTrend: string;
   clearStoreFilter: string;
+  selectAll: string;
+  clearSelection: string;
+  selectedStoresCount: (count: number) => string;
+  storesWithDataCount: (withData: number, total: number) => string;
+  comparableStoresCount: (comparable: number, total: number) => string;
   comparableAccounts: string;
   availableAccounts: string;
   comparableCountLabel: (count: number) => string;
@@ -198,6 +203,11 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "ไม่มีข้อมูลสำหรับร้านนี้ในช่วงวันที่เลือก",
     failedToLoadStoreTrend: "โหลดข้อมูลแนวโน้มของร้านค้าไม่สำเร็จ",
     clearStoreFilter: "ล้างตัวกรองร้านค้า",
+    selectAll: "เลือกทั้งหมด",
+    clearSelection: "ล้างการเลือก",
+    selectedStoresCount: (count) => `${count} ร้านที่เลือก`,
+    storesWithDataCount: (withData, total) => `${withData} จาก ${total} ร้านมีข้อมูลในช่วงเวลานี้`,
+    comparableStoresCount: (comparable, total) => `เปรียบเทียบได้ ${comparable} จาก ${total} ร้าน`,
     comparableAccounts: "บัญชีที่เปรียบเทียบกันได้",
     availableAccounts: "บัญชีทั้งหมดที่มีข้อมูล",
     comparableCountLabel: (count) => `${count} บัญชีที่เปรียบเทียบกันได้`,
@@ -303,6 +313,11 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "No data for this store in the selected range",
     failedToLoadStoreTrend: "Failed to load store trend",
     clearStoreFilter: "Clear store filter",
+    selectAll: "Select all",
+    clearSelection: "Clear selection",
+    selectedStoresCount: (count) => `${count} store${count === 1 ? "" : "s"} selected`,
+    storesWithDataCount: (withData, total) => `${withData} of ${total} stores have data in this period`,
+    comparableStoresCount: (comparable, total) => `Comparable ${comparable} of ${total} stores`,
     comparableAccounts: "Comparable accounts",
     availableAccounts: "Available accounts",
     comparableCountLabel: (count) => `${count} comparable accounts`,
@@ -408,6 +423,11 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     noDataForStoreInRange: "所选范围内该门店无数据",
     failedToLoadStoreTrend: "加载门店趋势数据失败",
     clearStoreFilter: "清除门店筛选",
+    selectAll: "全选",
+    clearSelection: "清除选择",
+    selectedStoresCount: (count) => `已选 ${count} 家门店`,
+    storesWithDataCount: (withData, total) => `${withData}/${total} 家门店在此期间有数据`,
+    comparableStoresCount: (comparable, total) => `可比 ${comparable}/${total} 家门店`,
     comparableAccounts: "可比账号",
     availableAccounts: "所有可用账号",
     comparableCountLabel: (count) => `${count} 个可比账号`,

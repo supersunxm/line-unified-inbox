@@ -1,3 +1,12 @@
+# Follower Insights Trend UX & Multi-Store Comparison Architecture (2026-08-20)
+
+- **Default Comparison Mode**: Comparison mode defaults to `"available"` (`บัญชีทั้งหมดที่มีข้อมูล` / "All accounts with available data") to prioritize showing all available store metrics upon page load. `"comparable"` (`บัญชีที่เปรียบเทียบกันได้`) is an explicit choice for users requiring complete date-range historical coverage.
+- **Store Selection Architecture**: Selected stores are tracked as an array of LINE OA IDs (`selectedLineOaIds: string[]`), defaulting to `[]` (`ทุกร้าน` / All stores).
+- **Parallel Multi-Store Fetching**: When stores are selected, daily time series for each store are fetched in parallel via `api.followerInsightsSummary({ dateFrom, dateTo, lineOaId })` and mapped by `lineOaId` without mutating or overwriting the aggregate network `summaryData`.
+- **Multi-Series Trend Visualization**: When 2 or more stores are selected, `TrendChart` plots one distinct line series per store with a dedicated 12-color high-contrast palette (`STORE_PALETTE`), displaying a multi-series store legend and multi-store hover tooltip. Selected stores are never aggregated into one total sum.
+- **Partial Coverage & Resilient Empty State**: When some selected stores have data and others have gaps or missing snapshots, valid series are rendered normally and accompanied by a partial coverage badge (`storesWithDataCount(active, total)` in available mode; `comparableStoresCount(comp, total)` in comparable mode). The empty state is rendered strictly when zero usable data points exist across all selected series.
+- **Localization Symmetry**: Full trilingual dictionary support across Thai (`th`), English (`en`), and Chinese (`zh`) for all new UI strings.
+
 # Executive Dashboard v2 Data Integrity Boundary (2026-08-19)
 
 - `/dashboard` is organized into five visual tiers so executive attention follows business priority rather than presenting every metric with equal weight.
