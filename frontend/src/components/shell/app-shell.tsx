@@ -16,18 +16,70 @@ export function AppShell({
   ...topNavProps
 }: AppShellProps) {
   return (
-    <div className="app-shell flex flex-col min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
-      {/* Top Navigation */}
+    <div className="app-shell flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
+      <style>{`
+        @media (max-width: 767px) {
+          html, body { max-width: 100%; overflow-x: hidden; }
+          .app-header {
+            width: 100%;
+            max-width: 100vw;
+            height: auto !important;
+            min-height: 0 !important;
+            flex-wrap: wrap;
+            gap: 0.5rem !important;
+            padding: 0.65rem 0.75rem 0.5rem !important;
+            overflow: visible;
+          }
+          .app-header > div:first-child {
+            width: auto;
+            min-width: 0;
+            flex: 1 1 auto;
+            gap: 0.5rem !important;
+          }
+          .app-header h1 {
+            max-width: 11.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.95rem !important;
+          }
+          .app-primary-nav {
+            order: 3;
+            flex: 0 0 100%;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: visible;
+            padding: 0.15rem 0 0.1rem;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+          .app-primary-nav::-webkit-scrollbar { display: none; }
+          .app-primary-nav > * { flex: 0 0 auto; }
+          .app-header-controls {
+            flex: 0 0 auto;
+            gap: 0.35rem !important;
+            margin-left: auto !important;
+          }
+          .app-header-controls button { min-width: 2rem; }
+          .app-shell main,
+          .app-shell section,
+          .app-shell article,
+          .app-shell div { min-width: 0; }
+          .app-shell img,
+          .app-shell svg,
+          .app-shell canvas { max-width: 100%; }
+        }
+      `}</style>
+
       <TopNavigation {...topNavProps} />
 
-      {/* Global Loading Banner */}
       {isLoading && (
         <div className="border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
           {topNavProps.text.loadingData || "กำลังโหลดข้อมูลจากระบบ..."}
         </div>
       )}
 
-      {/* Global API Error Banner */}
       {apiError && (
         <div role="alert" className="flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
           <span>{topNavProps.text.apiError || "ไม่สามารถเชื่อมต่อระบบข้อมูลได้"}: {apiError}</span>
@@ -43,11 +95,9 @@ export function AppShell({
         </div>
       )}
 
-      {/* Main Workspace Layout Container */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">
         {children}
       </div>
     </div>
   );
 }
-
