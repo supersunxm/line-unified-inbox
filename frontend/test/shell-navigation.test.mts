@@ -12,13 +12,13 @@ const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.u
 const separatorCode = readFileSync(new URL("../src/app/resizable-separator.tsx", import.meta.url), "utf8");
 const storeChatsOverflowCode = readFileSync(new URL("../src/components/chats/store-chats-overflow-menu.tsx", import.meta.url), "utf8");
 
-test("TopNavigation renders all 8 primary navigation links with aria-current='page'", () => {
+test("TopNavigation renders primary navigation links with aria-current='page'", () => {
   for (const route of [
     "/dashboard",
     "/chats",
     "/stores",
     "/admin/registrations",
-    "/classification-insights",
+    "/admin/purchase-analytics",
     "/follower-insights",
     "/friend-source-links",
     "/mass-messages",
@@ -138,7 +138,7 @@ test("SidebarView is shell-owned and profile controls are consolidated", () => {
 test("header responsiveness and menus preserve accessible controls", () => {
   assert.match(topNavCode, /lg:hidden/);
   assert.match(topNavCode, /w-40 lg:block xl:w-48/);
-  assert.match(topNavCode, /2xl:hidden/);
+  assert.match(topNavCode, /2xl:block/);
   assert.match(topNavCode, /aria-haspopup="dialog"/);
   assert.match(topNavCode, /aria-haspopup="menu"/);
   assert.match(topNavCode, /event\.key === "Escape"/);

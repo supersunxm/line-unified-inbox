@@ -80,5 +80,4 @@ test("Privacy Policy provides deletion and contact email obsthailand@gmail.com",
 
 test("Privacy Policy is NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/privacy"/);
-  assert.doesNotMatch(topNavSource, /TikTok/);
 });

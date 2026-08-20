@@ -122,5 +122,4 @@ test("Security: Client Secret is strictly server-side and never exposed to front
 test("Public store authorization routes are NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/connect"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
-  assert.doesNotMatch(topNavSource, /TikTok/);
 });

@@ -1,6 +1,18 @@
 # AI progress
 
-## Current task: Executive Dashboard Redesign v2 (2026-08-19)
+## Current task: Follower Insights Trend UX & Multi-Store Comparison (2026-08-20)
+
+- Updated Follower Insights trend comparison to default to "All accounts with available data" (`available` / `บัญชีทั้งหมดที่มีข้อมูล`).
+- Multi-store selection: replaced single-store combobox with accessible multi-select checkbox combobox supporting `ทุกร้าน`, single store name, or `Store +N`, with search filtering, `เลือกทั้งหมด`, and `ล้างการเลือก`.
+- Multi-series trend chart: displays one distinct SVG line series per selected store using a 12-color high-contrast palette (`STORE_PALETTE`), store legend badges, and multi-store hover tooltip.
+- Metrics switching: `followers`, `targetedReaches`, and `blocks` seamlessly update all selected store series without clearing store selections.
+- Resilient partial data and empty states: displays partial coverage indicator (`3 จาก 5 ร้านมีข้อมูลในช่วงเวลานี้` / `เปรียบเทียบได้ 3 จาก 5 ร้าน`) when some accounts have data, and only triggers empty state when zero usable data points exist across all selected series.
+- Single-store drilldown: retains store daily changes table when exactly 1 store is selected.
+- Complete localization across Thai, English, and Chinese for all new keys (`selectAll`, `clearSelection`, `selectedStoresCount`, `storesWithDataCount`, `comparableStoresCount`).
+- Verification: 100% test pass rate (360/360 frontend unit/regression tests, 1,255/1,255 backend tests), clean TypeScript compilation, Next.js build passed, NestJS build passed.
+
+
+## Previous task: Executive Dashboard Redesign v2 (2026-08-19)
 
 - Redesigned `/dashboard` into a five-tier executive information hierarchy.
 - Tier 1: total followers hero, 7-day trend, and reply-status summary.

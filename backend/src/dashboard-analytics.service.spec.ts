@@ -64,7 +64,8 @@ test("dashboard scope is derived from StoreAccessService, not client role or sto
   const analytics = { getAnalytics: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
   const rootCauseService = { generateRootCauseInsights: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
   const storeAccess = { accessibleStoreIds: async () => ["s1"] } as never;
-  const controller = new DashboardController(fakePrisma, operationsService, analytics, reportService, rootCauseService, storeAccess);
+  const executiveService = {} as never;
+  const controller = new DashboardController(fakePrisma, operationsService, analytics, executiveService, reportService, rootCauseService, storeAccess);
 
   const result = await controller.getAnalytics("today", "s2", undefined, { user: { role: "VIEWER" } } as never);
   assert.deepEqual(result, { ok: true });
@@ -80,7 +81,7 @@ test("ADMIN can select multiple active stores, while invalid selections are reje
   const rootCauseService = { generateRootCauseInsights: async () => ({ ok: true }) } as never;
   const reportService = { generateDailyReport: async () => ({ ok: true }) } as never;
   const storeAccess = { accessibleStoreIds: async () => null } as never;
-  const controller = new DashboardController(fakePrisma, {} as never, analytics, reportService, rootCauseService, storeAccess);
+  const controller = new DashboardController(fakePrisma, {} as never, analytics, {} as never, reportService, rootCauseService, storeAccess);
 
   await controller.getAnalytics("30d", "s1,s2", undefined, { user: { role: "ADMIN" } } as never);
   assert.deepEqual(captured[0], ["30d", "ADMIN", ["s1", "s2"]]);
@@ -112,7 +113,7 @@ test("an explicit empty dashboard scope never falls back to global store data", 
 test("inactive membership denial is enforced before dashboard services run", async () => {
   const storeAccess = { accessibleStoreIds: async () => { throw new ForbiddenException("No active store membership"); } } as never;
   const analytics = { getAnalytics: async () => { throw new Error("must not run"); } } as never;
-  const controller = new DashboardController({} as never, {} as never, analytics, {} as never, {} as never, storeAccess);
+  const controller = new DashboardController({} as never, {} as never, analytics, {} as never, {} as never, {} as never, storeAccess);
 
   await assert.rejects(
     () => controller.getAnalytics("today", undefined, undefined, { user: { role: "VIEWER" } } as never),

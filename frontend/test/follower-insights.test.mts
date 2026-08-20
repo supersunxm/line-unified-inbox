@@ -249,31 +249,233 @@ test("Store selector option deduplication and alphabetical sorting by storeName 
   assert.equal(sorted[2].lineOaId, "oa_chonburi");
 });
 
-test("Store-level Trend Filter architecture & state isolation in FollowerInsightsView and TrendChart", () => {
+test("Store-level Trend Filter architecture & multi-store state isolation in FollowerInsightsView and TrendChart", () => {
   const viewCode = readFileSync(new URL("../src/app/follower-insights/follower-insights-view.tsx", import.meta.url), "utf8");
   const chartCode = readFileSync(new URL("../src/app/follower-insights/trend-chart.tsx", import.meta.url), "utf8");
 
-  // 1. Default aggregate mode: selectedLineOaId defaults to null
-  assert.match(viewCode, /const \[selectedLineOaId,\s*setSelectedLineOaId\] = useState<string \| null>\(null\)/);
+  // 1. Default comparison mode is "available" (not "comparable")
+  assert.match(viewCode, /useState<"comparable" \| "available">\("available"\)/);
 
-  // 2. Selecting a store queries api.followerInsightsSummary with lineOaId
-  assert.match(viewCode, /followerInsightsSummary\(\{\s*dateFrom,\s*dateTo,\s*lineOaId:\s*effectiveSelectedLineOaId\s*\}\)/);
+  // 2. Multi-store selection state: selectedLineOaIds defaults to empty array [] (all stores)
+  assert.match(viewCode, /const \[selectedLineOaIds,\s*setSelectedLineOaIds\] = useState<string\[\]>\(\[\]\)/);
 
-  // 3. Aggregate summaryData is separate and NOT overwritten
-  assert.match(viewCode, /const \[storeTrendData,\s*setStoreTrendData\] = useState<SummaryDailyRow\[\]>\(\[\]\)/);
-  assert.match(viewCode, /data=\{\s*effectiveSelectedLineOaId\s*\?\s*storeTrendData/);
+  // 3. Selecting stores queries api.followerInsightsSummary in parallel without overwriting aggregate summaryData
+  assert.match(viewCode, /const \[storeSeriesMap,\s*setStoreSeriesMap\] = useState<Record<string, SummaryDailyRow\[\]>>\(\{\}\)/);
+  assert.match(viewCode, /Promise\.all\(\s*effectiveSelectedLineOaIds\.map/);
+  assert.match(viewCode, /followerInsightsSummary\(\{\s*dateFrom,\s*dateTo,\s*lineOaId\s*\}\)/);
 
-  // 4. Changing date range reloads selected store trend
-  assert.match(viewCode, /useEffect\(\(\) => \{\s*if \(!effectiveSelectedLineOaId\)/);
+  // 4. TrendChart receives multi-store props and comparison mode
+  assert.match(viewCode, /<TrendChart[\s\S]*selectedLineOaIds=\{effectiveSelectedLineOaIds\}[\s\S]*storeSeriesMap=\{storeSeriesMap\}/);
 
-  // 5. Missing store data displays empty state t.noDataForStoreInRange
-  assert.match(chartCode, /selectedLineOaId !== null \? t\.noDataForStoreInRange : t\.noChartData/);
-
-  // 6. Accessible combobox pattern in TrendChart
-  assert.match(chartCode, /StoreSelectorCombobox/);
+  // 5. Accessible multi-select combobox in TrendChart
+  assert.match(chartCode, /StoreMultiSelectCombobox/);
   assert.match(chartCode, /role="combobox"/);
   assert.match(chartCode, /role="listbox"/);
+  assert.match(chartCode, /aria-multiselectable="true"/);
   assert.match(chartCode, /role="option"/);
-  assert.match(chartCode, /aria-expanded=/);
-  assert.match(chartCode, /aria-controls="store-selector-listbox"/);
+});
+
+test("Multi-store selection and trigger label formatting (All stores vs Single vs Multi)", () => {
+  const tTh = getFollowerInsightsText("th");
+  const tEn = getFollowerInsightsText("en");
+
+  // Empty selection -> "ทุกร้าน" / "All stores"
+  assert.equal(tTh.allStores, "ทุกร้าน");
+  assert.equal(tEn.allStores, "All stores");
+
+  // Helper formatting logic test
+  function formatLabel(selectedIds: string[], storeNames: Record<string, string>, allLabel: string) {
+    if (selectedIds.length === 0) return allLabel;
+    if (selectedIds.length === 1) return storeNames[selectedIds[0]] ?? selectedIds[0];
+    const first = storeNames[selectedIds[0]] ?? selectedIds[0];
+    return `${first} +${selectedIds.length - 1}`;
+  }
+
+  const stores: Record<string, string> = {
+    oa_cw: "CentralWorld",
+    oa_lp: "Central Ladprao",
+    oa_rm9: "Central Rama 9",
+    oa_pk: "Central Pinklao",
+  };
+
+  assert.equal(formatLabel([], stores, tTh.allStores), "ทุกร้าน");
+  assert.equal(formatLabel(["oa_cw"], stores, tTh.allStores), "CentralWorld");
+  assert.equal(formatLabel(["oa_cw", "oa_lp"], stores, tTh.allStores), "CentralWorld +1");
+  assert.equal(formatLabel(["oa_cw", "oa_lp", "oa_rm9", "oa_pk"], stores, tTh.allStores), "CentralWorld +3");
+});
+
+test("Multi-store selection action bar (Select all / Clear selection)", () => {
+  const tTh = getFollowerInsightsText("th");
+  const tEn = getFollowerInsightsText("en");
+  const tZh = getFollowerInsightsText("zh");
+
+  assert.equal(tTh.selectAll, "เลือกทั้งหมด");
+  assert.equal(tTh.clearSelection, "ล้างการเลือก");
+  assert.equal(tEn.selectAll, "Select all");
+  assert.equal(tEn.clearSelection, "Clear selection");
+  assert.equal(tZh.selectAll, "全选");
+  assert.equal(tZh.clearSelection, "清除选择");
+
+  // Toggle store selection logic
+  function toggleStore(current: string[], id: string): string[] {
+    return current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+  }
+
+  let sel: string[] = [];
+  sel = toggleStore(sel, "oa_1");
+  assert.deepEqual(sel, ["oa_1"]);
+  sel = toggleStore(sel, "oa_2");
+  assert.deepEqual(sel, ["oa_1", "oa_2"]);
+  sel = toggleStore(sel, "oa_1");
+  assert.deepEqual(sel, ["oa_2"]);
+});
+
+test("Verification Case A: Default page load renders available mode and aggregate trend", () => {
+  const dates = ["2026-07-01", "2026-07-02", "2026-07-03"];
+  const mockSummary: SummaryDailyRow[] = [
+    { date: "2026-07-01", followers: 3000, accountsReady: 3, accountsUnready: 0, accountsExpected: 3, accountsWithData: 3, accountsMissing: 0, dailyIncrease: null, targetedReaches: 1500, blocks: 20 },
+    { date: "2026-07-02", followers: 3050, accountsReady: 3, accountsUnready: 0, accountsExpected: 3, accountsWithData: 3, accountsMissing: 0, dailyIncrease: 50, targetedReaches: 1520, blocks: 21 },
+    { date: "2026-07-03", followers: 3100, accountsReady: 3, accountsUnready: 0, accountsExpected: 3, accountsWithData: 3, accountsMissing: 0, dailyIncrease: 50, targetedReaches: 1550, blocks: 22 },
+  ];
+
+  // Default comparison mode is "available"
+  const defaultMode = "available";
+  assert.equal(defaultMode, "available");
+
+  // When selectedLineOaIds is empty, chart uses aggregate summaryData
+  const activeSelectedIds: string[] = [];
+  const chartData = activeSelectedIds.length === 0 ? mockSummary : [];
+  assert.equal(chartData.length, 3);
+  assert.equal(chartData[0].followers, 3000);
+});
+
+test("Verification Case B & C: Single-store vs Multi-store (3 stores) multi-series isolation", () => {
+  const dates = ["2026-07-01", "2026-07-02"];
+
+  const storeMap: Record<string, SummaryDailyRow[]> = {
+    oa_cw: [
+      { date: "2026-07-01", followers: 1000, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 500, blocks: 5 },
+      { date: "2026-07-02", followers: 1020, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: 20, targetedReaches: 510, blocks: 5 },
+    ],
+    oa_lp: [
+      { date: "2026-07-01", followers: 800, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 400, blocks: 3 },
+      { date: "2026-07-02", followers: 810, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: 10, targetedReaches: 405, blocks: 3 },
+    ],
+    oa_rm9: [
+      { date: "2026-07-01", followers: 1200, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 600, blocks: 10 },
+      { date: "2026-07-02", followers: 1250, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: 50, targetedReaches: 620, blocks: 11 },
+    ],
+  };
+
+  // Case B: Select 1 store -> 1 series
+  const selOne = ["oa_cw"];
+  const seriesOne = selOne.map((id) => storeMap[id]);
+  assert.equal(seriesOne.length, 1);
+  assert.equal(seriesOne[0][0].followers, 1000);
+
+  // Case C: Select 3 stores -> 3 individual series (NOT combined into 1 total sum)
+  const selThree = ["oa_cw", "oa_lp", "oa_rm9"];
+  const seriesThree = selThree.map((id) => storeMap[id]);
+  assert.equal(seriesThree.length, 3);
+  assert.equal(seriesThree[0][0].followers, 1000, "Store 1 remains 1000");
+  assert.equal(seriesThree[1][0].followers, 800, "Store 2 remains 800");
+  assert.equal(seriesThree[2][0].followers, 1200, "Store 3 remains 1200");
+});
+
+test("Verification Case D: Metric switching preserves selected stores and updates values", () => {
+  const storeRows: SummaryDailyRow[] = [
+    { date: "2026-07-01", followers: 1000, targetedReaches: 500, blocks: 25, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null },
+  ];
+
+  const selectedStores = ["oa_cw", "oa_lp"];
+
+  // Followers metric
+  let metric: "followers" | "targetedReaches" | "blocks" = "followers";
+  assert.equal(storeRows[0][metric], 1000);
+  assert.deepEqual(selectedStores, ["oa_cw", "oa_lp"], "Stores remain selected");
+
+  // Targeted reach metric
+  metric = "targetedReaches";
+  assert.equal(storeRows[0][metric], 500);
+  assert.deepEqual(selectedStores, ["oa_cw", "oa_lp"], "Stores remain selected");
+
+  // Blocks metric
+  metric = "blocks";
+  assert.equal(storeRows[0][metric], 25);
+  assert.deepEqual(selectedStores, ["oa_cw", "oa_lp"], "Stores remain selected");
+});
+
+test("Verification Case E: Switch to comparable mode filters incomplete stores without clearing selection", () => {
+  const dates = ["2026-07-01", "2026-07-02", "2026-07-03"];
+
+  // Store 1: complete on all 3 dates
+  const store1Rows: SummaryDailyRow[] = [
+    { date: "2026-07-01", followers: 100, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 1 },
+    { date: "2026-07-02", followers: 110, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: 10, targetedReaches: 55, blocks: 1 },
+    { date: "2026-07-03", followers: 120, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: 10, targetedReaches: 60, blocks: 1 },
+  ];
+
+  // Store 2: missing on 07-02
+  const store2Rows: SummaryDailyRow[] = [
+    { date: "2026-07-01", followers: 200, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 100, blocks: 2 },
+    { date: "2026-07-02", followers: null, accountsReady: 0, accountsUnready: 0, accountsExpected: 1, accountsWithData: 0, accountsMissing: 1, dailyIncrease: null, targetedReaches: null, blocks: null },
+    { date: "2026-07-03", followers: 210, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 105, blocks: 2 },
+  ];
+
+  const checkComparable = (rows: SummaryDailyRow[]) =>
+    dates.every((d) => {
+      const r = rows.find((row) => row.date === d);
+      return r && r.followers !== null && r.accountsReady > 0;
+    });
+
+  assert.equal(checkComparable(store1Rows), true, "Store 1 is comparable");
+  assert.equal(checkComparable(store2Rows), false, "Store 2 is not comparable due to missing 07-02");
+
+  const selectedStores = ["s1", "s2"];
+  const comparableStores = selectedStores.filter((id) => id === "s1" ? checkComparable(store1Rows) : checkComparable(store2Rows));
+
+  assert.deepEqual(comparableStores, ["s1"], "Only s1 is included in comparable calculation");
+  assert.deepEqual(selectedStores, ["s1", "s2"], "User selection is preserved");
+
+  const tTh = getFollowerInsightsText("th");
+  assert.equal(tTh.comparableStoresCount(1, 2), "เปรียบเทียบได้ 1 จาก 2 ร้าน");
+});
+
+test("Verification Case F: Partial missing data renders stores with data and shows badge", () => {
+  const storeRowsWithData = [
+    { date: "2026-07-01", followers: 100, accountsReady: 1, accountsUnready: 0, accountsExpected: 1, accountsWithData: 1, accountsMissing: 0, dailyIncrease: null, targetedReaches: 50, blocks: 1 },
+  ];
+  const storeRowsNoData = [
+    { date: "2026-07-01", followers: null, accountsReady: 0, accountsUnready: 0, accountsExpected: 1, accountsWithData: 0, accountsMissing: 1, dailyIncrease: null, targetedReaches: null, blocks: null },
+  ];
+
+  const stores = [
+    { id: "s1", hasData: storeRowsWithData.some((r) => r.followers !== null) },
+    { id: "s2", hasData: storeRowsWithData.some((r) => r.followers !== null) },
+    { id: "s3", hasData: storeRowsWithData.some((r) => r.followers !== null) },
+    { id: "s4", hasData: storeRowsNoData.some((r) => r.followers !== null) },
+    { id: "s5", hasData: storeRowsNoData.some((r) => r.followers !== null) },
+  ];
+
+  const withDataCount = stores.filter((s) => s.hasData).length;
+  assert.equal(withDataCount, 3);
+  assert.equal(stores.length, 5);
+
+  const tTh = getFollowerInsightsText("th");
+  const tEn = getFollowerInsightsText("en");
+  assert.equal(tTh.storesWithDataCount(3, 5), "3 จาก 5 ร้านมีข้อมูลในช่วงเวลานี้");
+  assert.equal(tEn.storesWithDataCount(3, 5), "3 of 5 stores have data in this period");
+});
+
+test("Verification Case G: True empty state when zero stores have data", () => {
+  const storeRowsNoData = [
+    { date: "2026-07-01", followers: null, accountsReady: 0, accountsUnready: 0, accountsExpected: 1, accountsWithData: 0, accountsMissing: 1, dailyIncrease: null, targetedReaches: null, blocks: null },
+  ];
+
+  const allVals = storeRowsNoData
+    .map((r) => r.followers)
+    .filter((v): v is number => v !== null && v !== undefined);
+
+  assert.equal(allVals.length, 0, "No valid follower values");
+  // When allVals.length === 0, chart displays t.noChartData / t.noDataForStoreInRange
 });

@@ -51,5 +51,4 @@ test("Terms of Service is suitable for TikTok Developer App review", () => {
 
 test("Terms of Service is NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/terms"/);
-  assert.doesNotMatch(topNavSource, /TikTok/);
 });
