@@ -1,11 +1,32 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ApplicationWorkspace } from "../page";
+import { MobileFollowerInsightsApp } from "./mobile-follower-insights-app";
 import styles from "./follower-insights-modern.module.css";
 import polish from "./follower-insights-polish.module.css";
-import mobile from "./follower-insights-mobile.module.css";
+
+type ViewportMode = "loading" | "mobile" | "desktop";
 
 export default function FollowerInsightsPage() {
+  const [mode, setMode] = useState<ViewportMode>("loading");
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const sync = () => setMode(media.matches ? "mobile" : "desktop");
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  if (mode === "loading") {
+    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลผู้ติดตาม...</main>;
+  }
+
+  if (mode === "mobile") return <MobileFollowerInsightsApp />;
+
   return (
-    <div className={`${styles.scope} ${polish.scope} ${mobile.scope}`}>
+    <div className={`${styles.scope} ${polish.scope}`}>
       <ApplicationWorkspace initialSection="follower-insights" />
     </div>
   );
