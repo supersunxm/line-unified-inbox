@@ -70,10 +70,17 @@ export function AppShell({
           }
 
           .app-header {
+            position: relative !important;
+            display: flex !important;
             width: 100%;
             max-width: 100vw;
-            flex: 0 0 auto;
+            min-height: 3.75rem !important;
+            height: 3.75rem !important;
+            flex: 0 0 3.75rem;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
             overflow: visible;
+            padding: 0.55rem 0.75rem !important;
           }
 
           .app-header > div:first-child {
@@ -81,6 +88,7 @@ export function AppShell({
             min-width: 0;
             flex: 1 1 auto;
             gap: 0.5rem !important;
+            padding-right: 3.5rem;
           }
 
           .app-header h1 {
@@ -94,9 +102,16 @@ export function AppShell({
           .app-primary-nav { display: none !important; }
 
           .app-header-controls {
+            position: absolute !important;
+            top: 50% !important;
+            right: 0.75rem !important;
+            transform: translateY(-50%) !important;
+            display: flex !important;
+            width: auto !important;
             flex: 0 0 auto;
+            align-items: center !important;
             gap: 0.35rem !important;
-            margin-left: auto !important;
+            margin: 0 !important;
           }
 
           /* Keep the mobile header clean: search and live status are desktop
