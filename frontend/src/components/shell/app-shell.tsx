@@ -103,9 +103,9 @@ export function AppShell({
 
           .app-header-controls {
             position: absolute !important;
-            top: 50% !important;
+            top: 0.75rem !important;
             right: 0.75rem !important;
-            transform: translateY(-50%) !important;
+            transform: none !important;
             display: flex !important;
             width: auto !important;
             flex: 0 0 auto;
