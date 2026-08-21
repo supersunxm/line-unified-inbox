@@ -99,6 +99,13 @@ export function AppShell({
             margin-left: auto !important;
           }
 
+          /* Keep the mobile header clean: search and live status are desktop
+             utilities. Profile remains available at the right edge. */
+          .app-header-controls > div:first-child,
+          .app-header-controls > button {
+            display: none !important;
+          }
+
           .app-header-controls button { min-width: 2rem; }
 
           .app-shell main,
