@@ -104,15 +104,25 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
 
   return (
     <aside className={`app-desktop-sidebar fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--app-border)] bg-[var(--app-surface)] transition-[width] duration-200 md:flex md:flex-col ${collapsed ? "w-[4.5rem]" : "w-64"}`}>
-      <div className={`flex h-14 shrink-0 items-center border-b border-[var(--app-border-subtle)] ${collapsed ? "justify-center px-2" : "justify-between px-3"}`}>
+      <button
+        type="button"
+        onClick={() => {
+          setCollapsed((current) => !current);
+          setAccountPanel(null);
+        }}
+        aria-label={collapsed ? t.expand : t.collapse}
+        title={collapsed ? t.expand : t.collapse}
+        className={`${focusRing} absolute -right-5 top-[4.25rem] z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] shadow-[var(--app-shadow-elevated)] transition-[background-color,color,transform] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)] active:scale-95`}
+      >
+        <span aria-hidden="true" className={`text-[24px] leading-none transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`}>›</span>
+      </button>
+
+      <div className={`flex h-14 shrink-0 items-center border-b border-[var(--app-border-subtle)] ${collapsed ? "justify-center px-2" : "px-3"}`}>
         <Link href="/dashboard" className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg`} title={collapsed ? (text.appName || "OPPO LINE OA Monitor") : undefined}>
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-xs font-bold text-white">O</span>
           {!collapsed && <div className="min-w-0"><div className="truncate text-sm font-bold text-[var(--app-text-primary)]">{text.appName || "OPPO LINE OA Monitor"}</div><div className="truncate text-[10px] text-[var(--app-text-tertiary)]">Retail Operations</div></div>}
         </Link>
-        {!collapsed && <button type="button" onClick={() => setCollapsed(true)} aria-label={t.collapse} title={t.collapse} className={`${focusRing} flex h-8 w-8 items-center justify-center rounded-lg text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)]`}>‹</button>}
       </div>
-
-      {collapsed && <button type="button" onClick={() => setCollapsed(false)} aria-label={t.expand} title={t.expand} className={`${focusRing} mx-auto mt-2 flex h-9 w-9 items-center justify-center rounded-xl text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)]`}>›</button>}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {!collapsed && <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.workspace}</div>}
