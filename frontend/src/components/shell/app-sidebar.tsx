@@ -47,7 +47,14 @@ function labels(language: Language) {
 
 export function AppSidebar({ authUser, changeLanguage, currentSection, language, logout, pilotMode, text }: SidebarProps) {
   const pathname = usePathname() || "/"; const t = labels(language); const [collapsed, setCollapsed] = useState(false); const [accountPanel, setAccountPanel] = useState<AccountPanel>(null); const [tooltip, setTooltip] = useState<SidebarTooltip>(null);
-  useEffect(() => { const next = window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1"; setCollapsed(next); document.documentElement.style.setProperty("--app-sidebar-width", next ? COMPACT_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH); return () => document.documentElement.style.removeProperty("--app-sidebar-width"); }, []);
+  useEffect(() => {
+    const next = window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
+    setCollapsed(next);
+    document.documentElement.style.setProperty("--app-sidebar-width", next ? COMPACT_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH);
+    return () => {
+      document.documentElement.style.removeProperty("--app-sidebar-width");
+    };
+  }, []);
   useEffect(() => { document.documentElement.style.setProperty("--app-sidebar-width", collapsed ? COMPACT_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH); window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "1" : "0"); setTooltip(null); }, [collapsed]);
   const primaryItems: NavItem[] = [{ href: "/dashboard", label: t.dashboard, icon: "dashboard", active: (path) => path === "/dashboard" }, { href: "/chats", label: t.chats, icon: "chat", active: (path) => path.startsWith("/chats") }, { href: "/follower-insights", label: t.followers, icon: "followers", active: (path) => path.startsWith("/follower-insights") }, { href: "/dashboard/message-traffic", label: t.traffic, icon: "traffic", active: (path) => path.startsWith("/dashboard/message-traffic") }];
   const toolItems: NavItem[] = [{ href: "/coupons", label: t.coupons, icon: "coupon", adminOnly: true }, { href: "/stores", label: t.stores, icon: "store" }, { href: "/admin/purchase-analytics", label: t.purchase, icon: "purchase" }, { href: "/friend-source-links", label: t.friendLinks, icon: "friend", adminOnly: true }, { href: "/mass-messages", label: t.mass, icon: "broadcast", adminOnly: true }, { href: "/admin/registrations", label: t.approval, icon: "approval", adminOnly: true }, { href: "/tiktok", label: "TikTok", icon: "tiktok", adminOnly: true }];
