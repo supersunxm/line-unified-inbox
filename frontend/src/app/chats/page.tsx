@@ -54,6 +54,16 @@ function MobileViewportBridge() {
   );
 }
 
+function ChatsUiOverrides() {
+  return (
+    <style>{`
+      [data-product-intent-card] {
+        display: none !important;
+      }
+    `}</style>
+  );
+}
+
 export default function ChatsPage() {
   const [mode, setMode] = useState<ViewportMode>("loading");
 
@@ -74,6 +84,6 @@ export default function ChatsPage() {
   }
 
   return mode === "mobile"
-    ? <><MobileViewportBridge /><MobileChatsApp /></>
-    : <ApplicationWorkspace initialSection="chats" />;
+    ? <><ChatsUiOverrides /><MobileViewportBridge /><MobileChatsApp /></>
+    : <><ChatsUiOverrides /><ApplicationWorkspace initialSection="chats" /></>;
 }
