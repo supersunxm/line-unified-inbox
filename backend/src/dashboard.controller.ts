@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Query, Req, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "./prisma.service";
 import { OperationsService } from "./operations/operations.service";
 import { AnalyticsPeriod, DashboardAnalyticsService, UserRolePermission } from "./dashboard-analytics.service";
@@ -26,6 +26,21 @@ export class DashboardController {
     if (!raw) return undefined;
     const ids = [...new Set(raw.split(",").map((value) => value.trim()).filter(Boolean))];
     return ids.length > 0 ? ids : undefined;
+  }
+
+  private parseDateRange(dateFrom?: string, dateTo?: string) {
+    if (!dateFrom && !dateTo) return undefined;
+    if (!dateFrom || !dateTo || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      throw new BadRequestException("dateFrom and dateTo must both use YYYY-MM-DD");
+    }
+    const from = new Date(`${dateFrom}T00:00:00Z`);
+    const to = new Date(`${dateTo}T00:00:00Z`);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
+      throw new BadRequestException("Invalid dashboard date range");
+    }
+    const days = Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
+    if (days > 90) throw new BadRequestException("Dashboard date range cannot exceed 90 days");
+    return { from: dateFrom, to: dateTo };
   }
 
   private async resolveScope(req: AuthRequest | undefined, allowedStoreIdsRaw?: string, targetStoreId?: string) {
@@ -64,18 +79,21 @@ export class DashboardController {
   @Get("analytics")
   async getAnalytics(
     @Query("period") period?: AnalyticsPeriod,
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
     @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
     @Query("targetStoreId") targetStoreId?: string,
     @Req() req?: AuthRequest,
   ) {
     const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const customRange = this.parseDateRange(dateFrom, dateTo);
     const scope = await this.resolveScope(req, allowedStoreIdsRaw, targetStoreId);
     const userRole = scope.userRole;
     const allowedStoreIds = scope.allowedStoreIds;
 
     const [analyticsData, traffic] = await Promise.all([
-      this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds),
-      this.messageTraffic.getTraffic(safePeriod, allowedStoreIds),
+      this.analytics.getAnalytics(safePeriod, userRole, allowedStoreIds, customRange),
+      this.messageTraffic.getTraffic(safePeriod, allowedStoreIds, customRange),
     ]);
 
     const peakHour = traffic.overallPeakHour.hour;
@@ -104,12 +122,15 @@ export class DashboardController {
   @Get("executive-store-health")
   async getExecutiveStoreHealth(
     @Query("period") period?: AnalyticsPeriod,
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
     @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
     @Req() req?: AuthRequest,
   ) {
     const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
+    const customRange = this.parseDateRange(dateFrom, dateTo);
     const scope = await this.resolveScope(req, allowedStoreIdsRaw);
-    return this.executive.getStoreHealth(safePeriod, scope.allowedStoreIds);
+    return this.executive.getStoreHealth(safePeriod, scope.allowedStoreIds, customRange);
   }
 
   @Get("root-cause-insights")
