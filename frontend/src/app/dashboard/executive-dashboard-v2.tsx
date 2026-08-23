@@ -45,12 +45,6 @@ interface ExecutiveDashboardV2Props {
   lastUpdatedAt: Date | null;
 }
 
-const issueLabels: Record<WatchIssue, string> = {
-  reach: "เข้าถึงต่ำ",
-  block: "บล็อกสูง",
-  inactive: "ยังไม่เปิดใช้งาน",
-};
-
 export function calcBucketPercent(bucketCount: number, totalReplied: number): number | null {
   if (totalReplied === 0) return null;
   return Math.round((bucketCount / totalReplied) * 100);
@@ -268,12 +262,6 @@ export function ExecutiveDashboardV2({
   }, [analytics]);
 
   const totalDurationReplies = replyBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
-
-  const watchlist = useMemo(() => {
-    return [...(health?.stores ?? [])]
-      .filter((store) => store.issues.length > 0)
-      .sort((a, b) => b.issues.length - a.issues.length || a.followers - b.followers);
-  }, [health]);
 
   const topGrowth = useMemo(() => {
     return [...(health?.stores ?? [])]
@@ -505,52 +493,6 @@ export function ExecutiveDashboardV2({
             </div>
           </Card>
         </div>
-
-        <SectionLabel>สาขาที่ต้องติดตาม</SectionLabel>
-        <Card className="overflow-hidden p-[22px]">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-[15px] font-bold">Watchlist — สาขาที่มีสัญญาณผิดปกติ</h2>
-            <span className="text-xs text-[var(--dash-text-tertiary)]">{watchlist.length.toLocaleString()} สาขา จาก {health.totalStoreCount.toLocaleString()} · เรียงตามความรุนแรง</span>
-          </div>
-          <div className="mb-4 mt-1 text-xs text-[var(--dash-text-secondary)]">รวมทุกปัญหาไว้ในที่เดียว — สาขาที่มีหลายปัญหาพร้อมกันจะถูกจัดไว้ด้านบน</div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-[12.5px]">
-              <thead>
-                <tr className="border-b border-[var(--dash-border)] text-left text-[10.5px] font-semibold uppercase tracking-[0.03em] text-[var(--dash-text-tertiary)]">
-                  <th className="px-2 py-2" />
-                  <th className="px-2 py-2">สาขา</th>
-                  <th className="px-2 py-2 text-right">ผู้ติดตาม</th>
-                  <th className="px-2 py-2 text-right">% เข้าถึง</th>
-                  <th className="px-2 py-2 text-right">% บล็อก</th>
-                  <th className="px-2 py-2">ปัญหาที่พบ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {watchlist.length > 0 ? watchlist.map((store) => (
-                  <tr key={store.storeId} className="border-b border-[var(--dash-border)] last:border-b-0 hover:bg-[var(--dash-accent-soft)]">
-                    <td className="px-2 py-2.5"><span className={`inline-block h-[7px] w-[7px] rounded-full ${store.issues.length >= 2 ? "bg-[var(--dash-red)]" : "bg-[var(--dash-amber)]"}`} /></td>
-                    <td className="px-2 py-2.5">
-                      <button type="button" onClick={() => onOpenStore(store.storeId)} className="text-left hover:text-[var(--dash-accent)]">
-                        <div className="font-semibold text-[var(--dash-text)]">{getStoreDisplayName(store.storeName)}</div>
-                        <div className="mt-0.5 text-[11px] text-[var(--dash-text-tertiary)]">พาร์ทเนอร์: {store.partner}</div>
-                      </button>
-                    </td>
-                    <td className="px-2 py-2.5 text-right tabular-nums text-[var(--dash-text)]">{store.followers.toLocaleString()}</td>
-                    <td className={`px-2 py-2.5 text-right tabular-nums ${store.reachPct !== null && store.reachPct < 80 ? "font-bold text-[var(--dash-red)]" : "text-[var(--dash-text-tertiary)]"}`}>{store.reachPct === null ? "—" : `${store.reachPct}%`}</td>
-                    <td className={`px-2 py-2.5 text-right tabular-nums ${store.blockPct !== null && store.blockPct > 10 ? "font-bold text-[var(--dash-amber)]" : "text-[var(--dash-text-tertiary)]"}`}>{store.blockPct === null ? "—" : `${store.blockPct}%`}</td>
-                    <td className="px-2 py-2.5">
-                      {store.issues.map((issue) => (
-                        <span key={issue} className={`mr-1 inline-block whitespace-nowrap rounded-full px-2 py-[3px] text-[10.5px] font-semibold ${issue === "reach" ? "bg-[var(--dash-red-soft)] text-[var(--dash-red)]" : issue === "block" ? "bg-[var(--dash-amber-soft)] text-[var(--dash-amber)]" : "bg-[var(--dash-bg)] text-[var(--dash-text-secondary)]"}`}>{issueLabels[issue]}</span>
-                      ))}
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={6} className="py-8 text-center text-xs text-[var(--dash-text-tertiary)]">ไม่พบสาขาที่เข้าเงื่อนไข Watchlist ในข้อมูลล่าสุด</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr]">
           <Card className="p-5">
