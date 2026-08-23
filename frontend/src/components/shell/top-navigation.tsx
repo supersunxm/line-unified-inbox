@@ -38,6 +38,7 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
 
 function sectionLabel(section: PrimarySection, language: Language) {
   const labels: Record<PrimarySection, [string, string, string]> = {
+    home: ["หน้าหลัก", "Main", "主页"],
     dashboard: ["แดชบอร์ด", "Dashboard", "仪表盘"],
     chats: ["แชทร้านค้า", "Store Chats", "门店聊天"],
     stores: ["จัดการร้านค้า", "Store Management", "门店管理"],
@@ -89,8 +90,8 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
   );
 }
 
-function MobileNavIcon({ type }: { type: "dashboard" | "chat" | "insights" | "more" }) {
-  if (type === "dashboard") return <span aria-hidden="true" className="text-[18px] leading-none">▦</span>;
+function MobileNavIcon({ type }: { type: "home" | "chat" | "insights" | "more" }) {
+  if (type === "home") return <span aria-hidden="true" className="text-[19px] leading-none">⌂</span>;
   if (type === "chat") return <span aria-hidden="true" className="text-[18px] leading-none">◫</span>;
   if (type === "insights") return <span aria-hidden="true" className="text-[18px] leading-none">↗</span>;
   return <span aria-hidden="true" className="text-[20px] leading-none">•••</span>;
@@ -98,12 +99,12 @@ function MobileNavIcon({ type }: { type: "dashboard" | "chat" | "insights" | "mo
 
 function MobileBottomNavigation({ authUser, currentSection, language, changeLanguage, logout }: Pick<TopNavigationProps, "authUser" | "currentSection" | "language" | "changeLanguage" | "logout">) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
+  const secondaryActive = ["dashboard", "stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
   const labels = language === "th"
-    ? { dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", classification: "ข้อมูลการจำแนก", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
+    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", classification: "ข้อมูลการจำแนก", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
     : language === "zh"
-      ? { dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", classification: "分类洞察", friendLinks: "加好友链接", mass: "群发消息", logout: "退出", appearance: "外观", language: "语言" }
-      : { dashboard: "Dashboard", chats: "Chats", insights: "Followers", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", coupons: "Coupons", stores: "Stores", purchase: "Purchase", classification: "Classification", friendLinks: "Friend Links", mass: "Mass Message", logout: "Logout", appearance: "Appearance", language: "Language" };
+      ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", classification: "分类洞察", friendLinks: "加好友链接", mass: "群发消息", logout: "退出", appearance: "外观", language: "语言" }
+      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Followers", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", coupons: "Coupons", stores: "Stores", purchase: "Purchase", classification: "Classification", friendLinks: "Friend Links", mass: "Mass Message", logout: "Logout", appearance: "Appearance", language: "Language" };
 
   const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
   const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
@@ -129,6 +130,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
 
           <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{labels.more}</div>
           <div className="grid grid-cols-1 gap-1">
+            <Link href="/dashboard" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.dashboard}</span><span>›</span></Link>
             <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span>›</span></Link>
             {authUser?.role === "ADMIN" && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
             <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>
@@ -155,7 +157,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
       )}
 
       <nav aria-label="Mobile primary navigation" className="fixed inset-x-0 bottom-0 z-[60] grid grid-cols-4 border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
-        <Link href="/dashboard" aria-current={currentSection === "dashboard" ? "page" : undefined} className={itemClass(currentSection === "dashboard")}><MobileNavIcon type="dashboard" /><span>{labels.dashboard}</span></Link>
+        <Link href="/home" aria-current={currentSection === "home" ? "page" : undefined} className={itemClass(currentSection === "home")}><MobileNavIcon type="home" /><span>{labels.home}</span></Link>
         <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={itemClass(currentSection === "chats")}><MobileNavIcon type="chat" /><span>{labels.chats}</span></Link>
         <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={itemClass(currentSection === "follower-insights")}><MobileNavIcon type="insights" /><span>{labels.insights}</span></Link>
         <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)} className={itemClass(moreOpen || secondaryActive)}><MobileNavIcon type="more" /><span>{labels.more}</span></button>
@@ -191,7 +193,7 @@ export function TopNavigation(props: TopNavigationProps) {
 
       <header className="app-header sticky top-0 z-30 flex h-14 min-h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-4 backdrop-blur-xl sm:px-5">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Link href="/dashboard" className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg md:hidden`}>
+          <Link href="/home" className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg md:hidden`}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-[11px] font-bold text-white">O</span>
             <span className="truncate text-[15px] font-bold">{text.appName || "OPPO LINE OA Monitor"}</span>
           </Link>
