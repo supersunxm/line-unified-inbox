@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/main-command-center
+  pull_request:
+    branches:
+      - main
 
 jobs:
   frontend-build:
