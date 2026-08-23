@@ -3,9 +3,10 @@ import { LineOaConnectionStatus } from "@prisma/client";
 import { PrismaService } from "./prisma.service";
 import type { AnalyticsPeriod } from "./dashboard-analytics.service";
 import { getPeriodDates } from "./follower-insights/follower-aggregation.helper";
-import { toUtcDateForDb } from "./follower-insights/date-utils";
+import { formatDbDateToIso, getOffsetBangkokDateString, toUtcDateForDb } from "./follower-insights/date-utils";
 
 export type DashboardWatchIssue = "reach" | "block" | "inactive";
+export type DashboardCustomRange = { from: string; to: string };
 
 export type DashboardStoreHealthRow = {
   storeId: string;
@@ -27,6 +28,8 @@ export type DashboardExecutiveHealthResponse = {
   followerTrend: Array<{ date: string; followers: number }>;
   connectedStoreCount: number;
   totalStoreCount: number;
+  effectiveTargetDate?: string;
+  effectiveBaselineDate?: string;
 };
 
 export function extractDashboardPartner(storeName: string): string {
@@ -60,6 +63,28 @@ function toBangkokDateString(date: Date): string {
   }).format(date);
 }
 
+function pickReliableDate(
+  snapshots: Array<{ lineOaId: string; snapshotDate: Date; followers: number | null }>,
+  requestedIsoDate: string,
+): string {
+  const eligible = snapshots.filter((snapshot) => formatDbDateToIso(snapshot.snapshotDate) <= requestedIsoDate && snapshot.followers !== null);
+  if (eligible.length === 0) return requestedIsoDate;
+
+  const coverage = new Map<string, Set<string>>();
+  for (const snapshot of eligible) {
+    const iso = formatDbDateToIso(snapshot.snapshotDate);
+    const set = coverage.get(iso) ?? new Set<string>();
+    set.add(snapshot.lineOaId);
+    coverage.set(iso, set);
+  }
+  const maxCoverage = Math.max(...[...coverage.values()].map((set) => set.size));
+  return [...coverage.entries()]
+    .filter(([, set]) => set.size === maxCoverage)
+    .map(([iso]) => iso)
+    .sort()
+    .at(-1) ?? requestedIsoDate;
+}
+
 @Injectable()
 export class DashboardExecutiveService {
   constructor(private readonly prisma: PrismaService) {}
@@ -67,6 +92,7 @@ export class DashboardExecutiveService {
   async getStoreHealth(
     period: AnalyticsPeriod,
     allowedStoreIds?: string[],
+    customRange?: DashboardCustomRange,
   ): Promise<DashboardExecutiveHealthResponse> {
     const stores = await this.prisma.store.findMany({
       where: {
@@ -93,19 +119,23 @@ export class DashboardExecutiveService {
     }
     const accountIds = [...accountToStore.keys()];
     const now = new Date();
-    const { targetIsoDate, baselineIsoDate } = getPeriodDates(period, now);
-    const targetDate = toUtcDateForDb(targetIsoDate);
-    const baselineDate = toUtcDateForDb(baselineIsoDate);
+    const presetDates = getPeriodDates(period, now);
+    const requestedTargetIsoDate = customRange?.to ?? presetDates.targetIsoDate;
+    const requestedBaselineIsoDate = customRange
+      ? getOffsetBangkokDateString(customRange.from, -1)
+      : presetDates.baselineIsoDate;
+    const requestedTrendStartIsoDate = customRange?.from ?? (period === "today" ? requestedTargetIsoDate : period === "7d" ? getOffsetBangkokDateString(requestedTargetIsoDate, -6) : getOffsetBangkokDateString(requestedTargetIsoDate, -29));
 
-    const recentStart = new Date(targetDate);
-    recentStart.setUTCDate(recentStart.getUTCDate() - 6);
+    const lookupStartIso = getOffsetBangkokDateString(requestedBaselineIsoDate, -14);
+    const lookupStartDate = toUtcDateForDb(lookupStartIso);
+    const requestedTargetDate = toUtcDateForDb(requestedTargetIsoDate);
 
-    const snapshots = accountIds.length > 0
+    const allSnapshots = accountIds.length > 0
       ? await this.prisma.lineOaFollowerSnapshot.findMany({
           where: {
             lineOaId: { in: accountIds },
             status: "ready",
-            snapshotDate: { gte: recentStart, lte: targetDate },
+            snapshotDate: { gte: lookupStartDate, lte: requestedTargetDate },
           },
           select: {
             lineOaId: true,
@@ -118,22 +148,10 @@ export class DashboardExecutiveService {
         })
       : [];
 
-    const periodSnapshots = accountIds.length > 0
-      ? await this.prisma.lineOaFollowerSnapshot.findMany({
-          where: {
-            lineOaId: { in: accountIds },
-            status: "ready",
-            snapshotDate: { in: [targetDate, baselineDate] },
-          },
-          select: {
-            lineOaId: true,
-            snapshotDate: true,
-            followers: true,
-            targetedReaches: true,
-            blocks: true,
-          },
-        })
-      : [];
+    const effectiveTargetIsoDate = pickReliableDate(allSnapshots, requestedTargetIsoDate);
+    const effectiveBaselineIsoDate = pickReliableDate(allSnapshots, requestedBaselineIsoDate);
+    const targetDate = toUtcDateForDb(effectiveTargetIsoDate);
+    const baselineDate = toUtcDateForDb(effectiveBaselineIsoDate);
 
     type Aggregate = {
       followers: number;
@@ -143,7 +161,7 @@ export class DashboardExecutiveService {
       hasBlocks: boolean;
     };
 
-    const aggregateByStoreAndDate = (rows: typeof periodSnapshots) => {
+    const aggregateByStoreAndDate = (rows: typeof allSnapshots) => {
       const result = new Map<string, Aggregate>();
       for (const snapshot of rows) {
         const owner = accountToStore.get(snapshot.lineOaId);
@@ -170,7 +188,7 @@ export class DashboardExecutiveService {
       return result;
     };
 
-    const periodAgg = aggregateByStoreAndDate(periodSnapshots);
+    const periodAgg = aggregateByStoreAndDate(allSnapshots);
     const rows: DashboardStoreHealthRow[] = stores.map((store) => {
       const target = periodAgg.get(`${store.id}:${targetDate.toISOString()}`) ?? {
         followers: 0,
@@ -186,7 +204,8 @@ export class DashboardExecutiveService {
         hasReach: false,
         hasBlocks: false,
       };
-      const growth = target.followers - baseline.followers;
+      const hasComparableData = target.followers > 0 && baseline.followers > 0;
+      const growth = hasComparableData ? target.followers - baseline.followers : 0;
       const reachPct = calcDashboardPercent(target.hasReach ? target.reach : null, target.followers);
       const blockPct = calcDashboardPercent(target.hasBlocks ? target.blocks : null, target.followers);
       return {
@@ -196,7 +215,7 @@ export class DashboardExecutiveService {
         followers: target.followers,
         start: baseline.followers,
         growth,
-        growthPct: baseline.followers > 0 ? Math.round((growth / baseline.followers) * 1000) / 10 : null,
+        growthPct: hasComparableData ? Math.round((growth / baseline.followers) * 1000) / 10 : null,
         reach: target.hasReach ? target.reach : null,
         reachPct,
         blocks: target.hasBlocks ? target.blocks : null,
@@ -205,16 +224,24 @@ export class DashboardExecutiveService {
       };
     });
 
-    const recentByDateAndStore = aggregateByStoreAndDate(snapshots);
+    const snapshotsByAccount = new Map<string, typeof allSnapshots>();
+    for (const snapshot of allSnapshots) {
+      const list = snapshotsByAccount.get(snapshot.lineOaId) ?? [];
+      list.push(snapshot);
+      snapshotsByAccount.set(snapshot.lineOaId, list);
+    }
+
     const followerTrend: Array<{ date: string; followers: number }> = [];
-    for (let offset = 6; offset >= 0; offset -= 1) {
-      const day = new Date(targetDate);
-      day.setUTCDate(day.getUTCDate() - offset);
+    let trendIso = requestedTrendStartIsoDate;
+    while (trendIso <= effectiveTargetIsoDate) {
       let followers = 0;
-      for (const store of stores) {
-        followers += recentByDateAndStore.get(`${store.id}:${day.toISOString()}`)?.followers ?? 0;
+      for (const accountId of accountIds) {
+        const list = snapshotsByAccount.get(accountId) ?? [];
+        const latest = [...list].reverse().find((snapshot) => formatDbDateToIso(snapshot.snapshotDate) <= trendIso && snapshot.followers !== null);
+        if (latest?.followers !== null && latest?.followers !== undefined) followers += latest.followers;
       }
-      followerTrend.push({ date: toBangkokDateString(day), followers });
+      followerTrend.push({ date: trendIso, followers });
+      trendIso = getOffsetBangkokDateString(trendIso, 1);
     }
 
     const connectedStoreCount = stores.filter((store) =>
@@ -229,6 +256,8 @@ export class DashboardExecutiveService {
       followerTrend,
       connectedStoreCount,
       totalStoreCount: stores.length,
+      effectiveTargetDate: effectiveTargetIsoDate,
+      effectiveBaselineDate: effectiveBaselineIsoDate,
     };
   }
 }
