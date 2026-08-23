@@ -8,10 +8,13 @@ import type { PrimarySection } from "@/app/primary-navigation";
 import type { Language, TopNavigationProps } from "./top-navigation";
 
 const SIDEBAR_STORAGE_KEY = "oppo-app-sidebar-collapsed";
+const EXPANDED_SIDEBAR_WIDTH = "16rem";
+const COMPACT_SIDEBAR_WIDTH = "4.25rem";
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-1";
 
 type SidebarProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "currentSection" | "language" | "logout" | "pilotMode" | "text">;
 type AccountPanel = "profile" | "settings" | null;
+type SidebarTooltip = { label: string; top: number } | null;
 
 type NavItem = {
   href: string;
@@ -55,19 +58,21 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
   const t = labels(language);
   const [collapsed, setCollapsed] = useState(false);
   const [accountPanel, setAccountPanel] = useState<AccountPanel>(null);
+  const [tooltip, setTooltip] = useState<SidebarTooltip>(null);
 
   useEffect(() => {
     const next = window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
     setCollapsed(next);
-    document.documentElement.style.setProperty("--app-sidebar-width", next ? "4.5rem" : "16rem");
+    document.documentElement.style.setProperty("--app-sidebar-width", next ? COMPACT_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH);
     return () => {
       document.documentElement.style.removeProperty("--app-sidebar-width");
     };
   }, []);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--app-sidebar-width", collapsed ? "4.5rem" : "16rem");
+    document.documentElement.style.setProperty("--app-sidebar-width", collapsed ? COMPACT_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH);
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "1" : "0");
+    setTooltip(null);
   }, [collapsed]);
 
   const primaryItems: NavItem[] = [
@@ -89,11 +94,28 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
 
   const itemClass = (active: boolean) => `${focusRing} group flex h-10 w-full items-center rounded-xl text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"}`;
   const isActive = (item: NavItem) => item.active ? item.active(pathname, currentSection) : pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const showTooltip = (label: string, element: HTMLElement) => {
+    if (!collapsed) return;
+    const rect = element.getBoundingClientRect();
+    setTooltip({ label, top: rect.top + rect.height / 2 });
+  };
+  const hideTooltip = () => setTooltip(null);
+
   const renderItem = (item: NavItem) => {
     if (item.adminOnly && authUser?.role !== "ADMIN") return null;
     const active = isActive(item);
     return (
-      <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} title={collapsed ? item.label : undefined} className={itemClass(active)}>
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        aria-label={collapsed ? item.label : undefined}
+        onMouseEnter={(event) => showTooltip(item.label, event.currentTarget)}
+        onMouseLeave={hideTooltip}
+        onFocus={(event) => showTooltip(item.label, event.currentTarget)}
+        onBlur={hideTooltip}
+        className={itemClass(active)}
+      >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[17px]" aria-hidden="true">{item.icon}</span>
         {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
       </Link>
@@ -103,25 +125,33 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
   if (!authUser) return null;
 
   return (
-    <aside className={`app-desktop-sidebar fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--app-border)] bg-[var(--app-surface)] transition-[width] duration-200 md:flex md:flex-col ${collapsed ? "w-[4.5rem]" : "w-64"}`}>
-      <button
-        type="button"
-        onClick={() => {
-          setCollapsed((current) => !current);
-          setAccountPanel(null);
-        }}
-        aria-label={collapsed ? t.expand : t.collapse}
-        title={collapsed ? t.expand : t.collapse}
-        className={`${focusRing} absolute -right-5 top-[4.25rem] z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] shadow-[var(--app-shadow-elevated)] transition-[background-color,color,transform] hover:bg-[var(--app-accent-soft)] hover:text-[var(--app-accent)] active:scale-95`}
-      >
-        <span aria-hidden="true" className={`text-[24px] leading-none transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`}>›</span>
-      </button>
+    <aside className={`app-desktop-sidebar fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--app-border)] bg-[var(--app-surface)] transition-[width] duration-200 md:flex md:flex-col ${collapsed ? "w-[4.25rem]" : "w-64"}`}>
+      {collapsed && tooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-[90] -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--app-border)] bg-[var(--app-text-primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--app-surface)] shadow-[var(--app-shadow-elevated)]"
+          style={{ left: `calc(var(--app-sidebar-width, ${COMPACT_SIDEBAR_WIDTH}) + 0.65rem)`, top: tooltip.top }}
+        >
+          {tooltip.label}
+        </div>
+      )}
 
-      <div className={`flex h-14 shrink-0 items-center border-b border-[var(--app-border-subtle)] ${collapsed ? "justify-center px-2" : "px-3"}`}>
-        <Link href="/dashboard" className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg`} title={collapsed ? (text.appName || "OPPO LINE OA Monitor") : undefined}>
+      <div className={`flex h-14 shrink-0 items-center border-b border-[var(--app-border-subtle)] ${collapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+        <Link href="/dashboard" className={`${focusRing} flex min-w-0 flex-1 items-center gap-2 rounded-lg`} aria-label={collapsed ? (text.appName || "OPPO LINE OA Monitor") : undefined}>
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-xs font-bold text-white">O</span>
           {!collapsed && <div className="min-w-0"><div className="truncate text-sm font-bold text-[var(--app-text-primary)]">{text.appName || "OPPO LINE OA Monitor"}</div><div className="truncate text-[10px] text-[var(--app-text-tertiary)]">Retail Operations</div></div>}
         </Link>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => { setCollapsed(true); setAccountPanel(null); }}
+            aria-label={t.collapse}
+            title={t.collapse}
+            className={`${focusRing} flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--app-text-tertiary)] transition-colors hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]`}
+          >
+            <span aria-hidden="true" className="text-lg leading-none">‹</span>
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
@@ -147,6 +177,21 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
               </div>
             )}
           </div>
+        )}
+
+        {collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            onMouseEnter={(event) => showTooltip(t.expand, event.currentTarget)}
+            onMouseLeave={hideTooltip}
+            onFocus={(event) => showTooltip(t.expand, event.currentTarget)}
+            onBlur={hideTooltip}
+            aria-label={t.expand}
+            className={`${itemClass(false)} mb-1`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[19px]" aria-hidden="true">›</span>
+          </button>
         )}
 
         <button type="button" onClick={() => { if (collapsed) setCollapsed(false); setAccountPanel((current) => current === "profile" ? null : "profile"); }} className={itemClass(accountPanel === "profile")} title={collapsed ? t.profile : undefined}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white">{authUser.displayName.charAt(0).toUpperCase()}</span>{!collapsed && <span className="min-w-0 flex-1 truncate text-left">{t.profile}</span>}{!collapsed && <span className="text-[11px] text-[var(--app-text-tertiary)]">{authUser.role}</span>}</button>
