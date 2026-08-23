@@ -18,6 +18,15 @@ export function AppShell({
   return (
     <div className="app-shell flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <style>{`
+        @media (min-width: 768px) {
+          .app-mobile-scroll,
+          .app-shell-status {
+            margin-left: var(--app-sidebar-width, 16rem);
+            width: calc(100% - var(--app-sidebar-width, 16rem));
+            transition: margin-left 200ms ease, width 200ms ease;
+          }
+        }
+
         @media (max-width: 767px) {
           html,
           body {
@@ -48,23 +57,16 @@ export function AppShell({
             padding-bottom: calc(4.35rem + env(safe-area-inset-bottom));
           }
 
-          /* Chats has its own mobile navigation/header. Do not reserve the
-             global mobile-nav space while a conversation is open. */
           .app-shell[data-mobile-chat-view="chat"] .app-mobile-scroll,
           .app-shell[data-mobile-chat-view="info"] .app-mobile-scroll {
             padding-bottom: 0 !important;
             overflow-y: hidden !important;
           }
 
-          /* On the chats list the conversation pane already provides the
-             page heading and filters. Removing the global header prevents
-             it from overlapping the list after returning from a chat. */
           .app-shell[data-mobile-chat-view] .app-header {
             display: none !important;
           }
 
-          /* The bottom nav is fixed and the scroll area itself owns the
-             required inset. Avoid shrinking the app shell a second time. */
           .app-shell.app-shell[data-mobile-chat-view="list"] {
             padding-bottom: 0 !important;
           }
@@ -88,40 +90,7 @@ export function AppShell({
             min-width: 0;
             flex: 1 1 auto;
             gap: 0.5rem !important;
-            padding-right: 3.5rem;
           }
-
-          .app-header h1 {
-            max-width: 11.5rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 0.95rem !important;
-          }
-
-          .app-primary-nav { display: none !important; }
-
-          .app-header-controls {
-            position: absolute !important;
-            top: 0.75rem !important;
-            right: 0.75rem !important;
-            transform: none !important;
-            display: flex !important;
-            width: auto !important;
-            flex: 0 0 auto;
-            align-items: center !important;
-            gap: 0.35rem !important;
-            margin: 0 !important;
-          }
-
-          /* Keep the mobile header clean: search and live status are desktop
-             utilities. Profile remains available at the right edge. */
-          .app-header-controls > div:first-child,
-          .app-header-controls > button {
-            display: none !important;
-          }
-
-          .app-header-controls button { min-width: 2rem; }
 
           .app-shell main,
           .app-shell section,
@@ -137,13 +106,13 @@ export function AppShell({
       <TopNavigation {...topNavProps} />
 
       {isLoading && (
-        <div className="shrink-0 border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
+        <div className="app-shell-status shrink-0 border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
           {topNavProps.text.loadingData || "กำลังโหลดข้อมูลจากระบบ..."}
         </div>
       )}
 
       {apiError && (
-        <div role="alert" className="shrink-0 flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
+        <div role="alert" className="app-shell-status shrink-0 flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
           <span>{topNavProps.text.apiError || "ไม่สามารถเชื่อมต่อระบบข้อมูลได้"}: {apiError}</span>
           {loadApplicationData && (
             <button
