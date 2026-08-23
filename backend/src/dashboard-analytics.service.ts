@@ -5,7 +5,7 @@ import {
   calculateStoreFollowerRanking,
   getPeriodDates,
 } from "./follower-insights/follower-aggregation.helper";
-import { toUtcDateForDb } from "./follower-insights/date-utils";
+import { formatDbDateToIso, getOffsetBangkokDateString, toUtcDateForDb } from "./follower-insights/date-utils";
 
 export type AnalyticsPeriod = "today" | "7d" | "30d";
 
@@ -137,6 +137,32 @@ function getBangkokMidnightUtc(date: Date = new Date()): Date {
   return new Date(Date.UTC(y, m - 1, d, -7, 0, 0, 0));
 }
 
+function getBangkokMidnightUtcFromIso(isoDate: string): Date {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, -7, 0, 0, 0));
+}
+
+function pickReliableFollowerDate(
+  snapshots: Array<{ lineOaId: string; snapshotDate: Date; followers: number | null }>,
+  requestedIsoDate: string,
+): string {
+  const eligible = snapshots.filter((snapshot) => formatDbDateToIso(snapshot.snapshotDate) <= requestedIsoDate && snapshot.followers !== null);
+  if (eligible.length === 0) return requestedIsoDate;
+  const coverage = new Map<string, Set<string>>();
+  for (const snapshot of eligible) {
+    const iso = formatDbDateToIso(snapshot.snapshotDate);
+    const accounts = coverage.get(iso) ?? new Set<string>();
+    accounts.add(snapshot.lineOaId);
+    coverage.set(iso, accounts);
+  }
+  const maxCoverage = Math.max(...[...coverage.values()].map((accounts) => accounts.size));
+  return [...coverage.entries()]
+    .filter(([, accounts]) => accounts.size === maxCoverage)
+    .map(([iso]) => iso)
+    .sort()
+    .at(-1) ?? requestedIsoDate;
+}
+
 @Injectable()
 export class DashboardAnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -161,9 +187,13 @@ export class DashboardAnalyticsService {
     period: AnalyticsPeriod = "today",
     userRole: UserRolePermission = "HEAD_OFFICE",
     allowedStoreIds?: string[],
+    customRange?: { from: string; to: string },
   ) {
-    const startDate = this.getPeriodStartDate(period);
+    const startDate = customRange ? getBangkokMidnightUtcFromIso(customRange.from) : this.getPeriodStartDate(period);
     const now = new Date();
+    const rangeEndExclusive = customRange
+      ? getBangkokMidnightUtcFromIso(getOffsetBangkokDateString(customRange.to, 1))
+      : undefined;
 
     // Yesterday start/end dates for comparison (Bangkok calendar day)
     const yesterdayStart = new Date(startDate);
@@ -194,7 +224,7 @@ export class DashboardAnalyticsService {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         storeId: { in: activeStoreIds },
-        createdAt: { gte: startDate },
+        createdAt: rangeEndExclusive ? { gte: startDate, lt: rangeEndExclusive } : { gte: startDate },
       },
       include: {
         store: {
@@ -809,15 +839,19 @@ export class DashboardAnalyticsService {
 
     const accountIds = storeFollowerAccounts.map((a) => a.id);
 
-    const { targetIsoDate, baselineIsoDate } = getPeriodDates(period, now);
-    const targetUtcDate = toUtcDateForDb(targetIsoDate);
-    const baselineUtcDate = toUtcDateForDb(baselineIsoDate);
+    const presetFollowerDates = getPeriodDates(period, now);
+    const requestedTargetIsoDate = customRange?.to ?? presetFollowerDates.targetIsoDate;
+    const requestedBaselineIsoDate = customRange
+      ? getOffsetBangkokDateString(customRange.from, -1)
+      : presetFollowerDates.baselineIsoDate;
+    const followerLookupStart = toUtcDateForDb(getOffsetBangkokDateString(requestedBaselineIsoDate, -14));
+    const requestedTargetUtcDate = toUtcDateForDb(requestedTargetIsoDate);
 
-    const periodSnapshots = this.prisma?.lineOaFollowerSnapshot && accountIds.length > 0
+    const followerSnapshotWindow = this.prisma?.lineOaFollowerSnapshot && accountIds.length > 0
       ? await this.prisma.lineOaFollowerSnapshot.findMany({
           where: {
             lineOaId: { in: accountIds },
-            snapshotDate: { in: [targetUtcDate, baselineUtcDate] },
+            snapshotDate: { gte: followerLookupStart, lte: requestedTargetUtcDate },
             status: "ready",
           },
           select: {
@@ -828,8 +862,13 @@ export class DashboardAnalyticsService {
             targetedReaches: true,
             blocks: true,
           },
+          orderBy: { snapshotDate: "asc" },
         })
       : [];
+
+    const targetIsoDate = pickReliableFollowerDate(followerSnapshotWindow, requestedTargetIsoDate);
+    const baselineIsoDate = pickReliableFollowerDate(followerSnapshotWindow, requestedBaselineIsoDate);
+    const periodSnapshots = followerSnapshotWindow;
 
     const latestSnapshots = this.prisma?.lineOaFollowerSnapshot && accountIds.length > 0
       ? await this.prisma.lineOaFollowerSnapshot.findMany({

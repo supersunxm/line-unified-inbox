@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "@/lib/api";
 import type { DashboardAnalyticsResponse } from "@/types/api";
+import { DateRangePicker } from "@/app/follower-insights/date-range-picker";
+import { getBangkokIsoDate, rangeForPreset, shiftIsoDate, type DashboardDateRange } from "./dashboard-date-range";
 
 type Language = "th" | "en" | "zh";
 type Period = "today" | "7d" | "30d";
@@ -122,14 +123,16 @@ function FollowerTrend({ data }: { data: ExecutiveStoreHealth["followerTrend"] }
           </defs>
           <polygon points={area} fill="url(#followerArea)" />
           <polyline points={polyline} fill="none" stroke="var(--app-accent, #00A651)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          {points.map((point) => (
+          {points.map((point, index) => (
             <g key={point.item.date}>
               <circle cx={point.x} cy={point.y} r="3" fill="var(--app-accent, #00A651)">
                 <title>{`${formatDateLabel(point.item.date)}: ${point.item.followers.toLocaleString()} คน`}</title>
               </circle>
-              <text x={point.x} y={height - 3} textAnchor="middle" fontSize="10" fill="#A1A1A6">
-                {formatDateLabel(point.item.date)}
-              </text>
+              {(index % Math.max(1, Math.ceil(points.length / 7)) === 0 || index === points.length - 1) && (
+                <text x={point.x} y={height - 3} textAnchor="middle" fontSize="10" fill="#A1A1A6">
+                  {formatDateLabel(point.item.date)}
+                </text>
+              )}
             </g>
           ))}
         </svg>
@@ -175,28 +178,35 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 }
 
 export function ExecutiveDashboardV2({
+  language,
   getStoreDisplayName,
   onOpenStore,
   lastUpdatedAt,
 }: ExecutiveDashboardV2Props) {
   const [period, setPeriod] = useState<Period>("7d");
+  const [dateRange, setDateRange] = useState<DashboardDateRange>(() => rangeForPreset("7d"));
+  const [customRangeActive, setCustomRangeActive] = useState(false);
   const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null);
   const [health, setHealth] = useState<ExecutiveStoreHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [lastFetchAt, setLastFetchAt] = useState<Date | null>(null);
 
-  const load = useCallback(async (nextPeriod: Period) => {
+  const load = useCallback(async (nextPeriod: Period, nextRange: DashboardDateRange) => {
     setLoading(true);
     try {
-      const [analyticsData, healthResponse] = await Promise.all([
-        api.dashboardAnalytics(nextPeriod),
-        fetch(`/api-backend/dashboard/executive-store-health?period=${encodeURIComponent(nextPeriod)}`, {
-          credentials: "include",
-          cache: "no-store",
-        }),
+      const params = new URLSearchParams({
+        period: nextPeriod,
+        dateFrom: nextRange.dateFrom,
+        dateTo: nextRange.dateTo,
+      });
+      const [analyticsResponse, healthResponse] = await Promise.all([
+        fetch(`/api-backend/dashboard/analytics?${params.toString()}`, { credentials: "include", cache: "no-store" }),
+        fetch(`/api-backend/dashboard/executive-store-health?${params.toString()}`, { credentials: "include", cache: "no-store" }),
       ]);
+      if (!analyticsResponse.ok) throw new Error(`Dashboard analytics request failed (${analyticsResponse.status})`);
       if (!healthResponse.ok) throw new Error(`Executive store health request failed (${healthResponse.status})`);
+      const analyticsData = (await analyticsResponse.json()) as DashboardAnalyticsResponse;
       const healthData = (await healthResponse.json()) as ExecutiveStoreHealth;
       setAnalytics(analyticsData);
       setHealth(healthData);
@@ -210,13 +220,40 @@ export function ExecutiveDashboardV2({
   }, []);
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => void load(period), 0);
-    const interval = window.setInterval(() => void load(period), 60_000);
+    const initialLoad = window.setTimeout(() => void load(period, dateRange), 0);
+    const interval = window.setInterval(() => void load(period, dateRange), 60_000);
     return () => {
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
-  }, [load, period]);
+  }, [load, period, dateRange]);
+
+  const applyPreset = useCallback((nextPeriod: Period) => {
+    setPeriod(nextPeriod);
+    setDateRange(rangeForPreset(nextPeriod));
+    setCustomRangeActive(false);
+  }, []);
+
+  const applyCustomRange = useCallback((dateFrom: string, dateTo: string) => {
+    setDateRange({ dateFrom, dateTo });
+    setCustomRangeActive(true);
+  }, []);
+
+  const applyQuickDays = useCallback((days: number) => {
+    const today = getBangkokIsoDate();
+    const nextRange = { dateFrom: shiftIsoDate(today, -(days - 1)), dateTo: today };
+    setDateRange(nextRange);
+    if (days === 7) {
+      setPeriod("7d");
+      setCustomRangeActive(false);
+    } else if (days === 30) {
+      setPeriod("30d");
+      setCustomRangeActive(false);
+    } else {
+      setPeriod("30d");
+      setCustomRangeActive(true);
+    }
+  }, []);
 
   const replyBuckets = useMemo<ReplyBucket[]>(() => {
     if (!analytics) return [];
@@ -284,7 +321,7 @@ export function ExecutiveDashboardV2({
         <div className="mx-auto max-w-xl rounded-[18px] border border-[var(--dash-border)] bg-[var(--dash-card)] p-6 text-center">
           <h2 className="text-base font-bold text-[var(--dash-text)]">ไม่สามารถโหลดข้อมูลแดชบอร์ดได้</h2>
           <p className="mt-2 text-sm text-[var(--dash-text-secondary)]">ข้อมูลเดิมจะไม่ถูกแทนด้วยค่าจำลอง กรุณาลองโหลดใหม่</p>
-          <button type="button" onClick={() => void load(period)} className="mt-4 rounded-lg bg-[var(--dash-accent)] px-4 py-2 text-sm font-semibold text-white">
+          <button type="button" onClick={() => void load(period, dateRange)} className="mt-4 rounded-lg bg-[var(--dash-accent)] px-4 py-2 text-sm font-semibold text-white">
             ลองใหม่
           </button>
         </div>
@@ -320,20 +357,27 @@ export function ExecutiveDashboardV2({
                 <button
                   key={item}
                   type="button"
-                  onClick={() => setPeriod(item)}
-                  className={`rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium transition ${period === item ? "bg-[var(--dash-accent)] font-semibold text-white" : "text-[var(--dash-text-secondary)] hover:bg-[var(--dash-accent-soft)]"}`}
+                  onClick={() => applyPreset(item)}
+                  className={`rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium transition ${period === item && !customRangeActive ? "bg-[var(--dash-accent)] font-semibold text-white" : "text-[var(--dash-text-secondary)] hover:bg-[var(--dash-accent-soft)]"}`}
                 >
                   {item === "today" ? "วันนี้" : item === "7d" ? "7 วัน" : "30 วัน"}
                 </button>
               ))}
             </div>
+            <DateRangePicker
+              dateFrom={dateRange.dateFrom}
+              dateTo={dateRange.dateTo}
+              language={language}
+              onApply={applyCustomRange}
+              onQuickRange={applyQuickDays}
+            />
           </div>
         </header>
 
         {fetchError && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--dash-red)]/30 bg-[var(--dash-red-soft)] px-4 py-3 text-xs text-[var(--dash-red)]">
             <span>ข้อมูลบางส่วนอาจยังไม่อัปเดต ระบบจะลองใหม่อัตโนมัติ</span>
-            <button type="button" onClick={() => void load(period)} className="font-bold underline">โหลดใหม่</button>
+            <button type="button" onClick={() => void load(period, dateRange)} className="font-bold underline">โหลดใหม่</button>
           </div>
         )}
 
