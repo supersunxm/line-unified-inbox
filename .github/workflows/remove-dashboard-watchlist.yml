@@ -1,0 +1,30 @@
+name: Remove dashboard watchlist
+
+on:
+  push:
+    paths:
+      - .github/workflows/remove-dashboard-watchlist.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply removal
+        run: python .github/scripts/remove-dashboard-watchlist.py
+      - name: Commit change and cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/remove-dashboard-watchlist.py .github/workflows/remove-dashboard-watchlist.yml
+          git add frontend/src/app/dashboard/executive-dashboard-v2.tsx
+          git commit -m "refactor(dashboard): remove watchlist section"
+          git push
