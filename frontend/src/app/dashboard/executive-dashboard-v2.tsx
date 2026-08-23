@@ -442,7 +442,7 @@ export function ExecutiveDashboardV2({
           <Card className="p-[22px]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-[15px] font-bold text-[var(--dash-text)]">ความเร็วในการตอบกลับวันนี้</h2>
+                <h2 className="text-[15px] font-bold text-[var(--dash-text)]">ความเร็วในการตอบกลับในช่วงที่เลือก</h2>
                 <div className="mt-1 text-[11.5px] text-[var(--dash-text-tertiary)]">เป้าหมาย: ตอบกลับลูกค้าภายใน 24 ชั่วโมงเสมอ</div>
               </div>
               <div className="flex gap-2">
@@ -475,7 +475,7 @@ export function ExecutiveDashboardV2({
                 );
               })}
             </div>
-            {totalDurationReplies === 0 && <div className="mt-2 text-center text-[11.5px] text-[var(--dash-text-tertiary)]">ยังไม่มีข้อความที่ตอบกลับในวันนี้</div>}
+            {totalDurationReplies === 0 && <div className="mt-2 text-center text-[11.5px] text-[var(--dash-text-tertiary)]">ยังไม่มีข้อความที่ตอบกลับในช่วงที่เลือก</div>}
           </Card>
 
           <Card className="p-[22px]">

@@ -876,6 +876,7 @@ export class DashboardAnalyticsService {
             lineOaId: { in: accountIds },
             status: "ready",
             followers: { not: null },
+            snapshotDate: { lte: toUtcDateForDb(targetIsoDate) },
           },
           orderBy: { snapshotDate: "desc" },
           select: {
