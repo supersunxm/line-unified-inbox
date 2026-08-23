@@ -1,0 +1,28 @@
+name: Finalize dashboard range consistency
+
+on:
+  push:
+    paths:
+      - .github/workflows/finalize-dashboard-range.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python .github/scripts/finalize-dashboard-range.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/finalize-dashboard-range.py .github/workflows/finalize-dashboard-range.yml
+          git add backend/src/dashboard-analytics.service.ts frontend/src/app/dashboard/executive-dashboard-v2.tsx
+          git commit -m "fix(dashboard): align custom range follower snapshots"
+          git push
