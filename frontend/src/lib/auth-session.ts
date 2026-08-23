@@ -12,7 +12,7 @@ export function shouldRedirectToLogin(status: number, pathname: string) {
 }
 
 export function routeAfterLogin(pathname: string) {
-  return pathname === "/login" ? "/dashboard" : null;
+  return pathname === "/login" ? "/home" : null;
 }
 
 export function resolveAuthRedirect({
@@ -24,26 +24,15 @@ export function resolveAuthRedirect({
   pathname: string;
   firstAdminRequired?: boolean;
 }): string | null {
-  // Never redirect while auth is still loading
-  if (authState === "loading") {
-    return null;
-  }
+  if (authState === "loading") return null;
 
-  // Authenticated user visiting /login redirects to /dashboard
   if (authState === "authenticated") {
-    return pathname === "/login" ? "/dashboard" : null;
+    return pathname === "/login" ? "/home" : null;
   }
 
-  // Unauthenticated user: if first admin setup required, do not redirect to /login
-  if (firstAdminRequired) {
-    return null;
-  }
+  if (firstAdminRequired) return null;
 
-  // Unauthenticated user visiting a protected route redirects to /login
-  if (pathname !== "/login") {
-    return "/login";
-  }
+  if (pathname !== "/login") return "/login";
 
   return null;
 }
-
