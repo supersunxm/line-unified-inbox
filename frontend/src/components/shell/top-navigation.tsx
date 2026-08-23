@@ -98,7 +98,7 @@ function MobileNavIcon({ type }: { type: "dashboard" | "chat" | "insights" | "mo
 
 function MobileBottomNavigation({ authUser, currentSection, language, changeLanguage, logout }: Pick<TopNavigationProps, "authUser" | "currentSection" | "language" | "changeLanguage" | "logout">) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "classification-insights", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
+  const secondaryActive = ["stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
   const labels = language === "th"
     ? { dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", classification: "ข้อมูลการจำแนก", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
     : language === "zh"
@@ -133,7 +133,6 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
             {authUser?.role === "ADMIN" && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
             <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>
             <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span>›</span></Link>
-            <Link href="/classification-insights" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.classification}</span><span>›</span></Link>
             {authUser?.role === "ADMIN" && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span>›</span></Link>}
             {authUser?.role === "ADMIN" && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span>›</span></Link>}
             {authUser?.role === "ADMIN" && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>BM Approval</span><span>›</span></Link>}
