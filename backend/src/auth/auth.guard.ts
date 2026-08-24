@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { UserRole } from "@prisma/client";
+import { SessionType, UserRole } from "@prisma/client";
 import { Request } from "express";
 import { AuthService } from "./auth.service";
 import { IS_PUBLIC, REQUIRED_ROLES } from "./auth.decorators";
@@ -58,11 +58,14 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [context.getHandler(), context.getClass()])) return true;
     const request = context.switchToHttp().getRequest<AuthRequest>();
-    let token = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
+    const cookieToken = request.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("oppo_session="))?.slice("oppo_session=".length);
+    let token = cookieToken;
+    let expectedSessionType: SessionType | undefined = cookieToken ? SessionType.WEB : undefined;
     if (!token && request.headers.authorization?.startsWith("Bearer ")) {
       token = request.headers.authorization.slice("Bearer ".length).trim();
+      expectedSessionType = SessionType.MOBILE;
     }
-    const user = await this.auth.authenticate(token);
+    const user = await this.auth.authenticate(token, expectedSessionType);
     if (!user) throw new UnauthorizedException("Authentication required");
     request.user = user;
     if (user.mustChangePassword && !isAllowedDuringPasswordChange(request)) {
