@@ -1,0 +1,76 @@
+name: Adaptive Auth CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/lib/authorization.ts"
+      - "frontend/test/authorization.test.mts"
+      - "frontend/src/components/shell/**"
+      - "frontend/src/app/**"
+      - "android_app/lib/core/models/authorization_extensions.dart"
+      - "android_app/lib/features/shell/**"
+      - "android_app/test/authorization_extensions_test.dart"
+      - ".github/workflows/adaptive-auth-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-adaptive-auth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint adaptive auth scope
+        run: npx eslint "src/lib/authorization.ts" "test/authorization.test.mts"
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Frontend build
+        run: npm run build
+
+  mobile-adaptive-auth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate localization
+        run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Adaptive authorization tests
+        run: flutter test test/authorization_extensions_test.dart
+
+      - name: Full mobile tests
+        run: flutter test
