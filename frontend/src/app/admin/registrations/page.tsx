@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AuthorizedSection } from "../../authorized-workspace";
 import AdminRegistrationsDesktop from "./admin-registrations-desktop";
 import { MobileAdminRegistrationsApp } from "./mobile-admin-registrations-app";
 
@@ -25,6 +26,9 @@ export default function AdminRegistrationsPage() {
     );
   }
 
-  if (mode === "mobile") return <MobileAdminRegistrationsApp />;
-  return <AdminRegistrationsDesktop />;
+  return (
+    <AuthorizedSection section="admin-registrations">
+      {mode === "mobile" ? <MobileAdminRegistrationsApp /> : <AdminRegistrationsDesktop />}
+    </AuthorizedSection>
+  );
 }
