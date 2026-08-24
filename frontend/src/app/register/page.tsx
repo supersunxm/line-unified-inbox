@@ -5,6 +5,22 @@ import { FormEvent, useEffect, useState } from "react";
 import { registrationApi, type RegistrationRole, type RegistrationStore } from "@/lib/registration-api";
 import { ThemeControl } from "../theme";
 
+function PasswordVisibilityIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M3 3l18 18" strokeLinecap="round" />
+      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" strokeLinecap="round" />
+      <path d="M9.9 4.3A10.6 10.6 0 0 1 12 4c5.2 0 8.8 4.6 9.7 6.1a3.6 3.6 0 0 1 0 3.8 15.2 15.2 0 0 1-2.8 3.4" strokeLinecap="round" />
+      <path d="M6.6 6.6A15 15 0 0 0 2.3 10a3.6 3.6 0 0 0 0 3.8C3.2 15.4 6.8 20 12 20a10.8 10.8 0 0 0 4-.8" strokeLinecap="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M2.3 10.1a3.6 3.6 0 0 0 0 3.8C3.2 15.4 6.8 20 12 20s8.8-4.6 9.7-6.1a3.6 3.6 0 0 0 0-3.8C20.8 8.6 17.2 4 12 4S3.2 8.6 2.3 10.1Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export default function RegisterPage() {
   const [stores, setStores] = useState<RegistrationStore[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
@@ -18,6 +34,8 @@ export default function RegisterPage() {
   const [role, setRole] = useState<RegistrationRole>("STAFF");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const isHq = role === "HQ";
 
   useEffect(() => {
@@ -157,12 +175,50 @@ export default function RegisterPage() {
 
           <label className="block text-sm">
             Password
-            <input type="password" required minLength={12} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700" />
+            <div className="relative mt-1">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={12}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                <PasswordVisibilityIcon visible={showPassword} />
+              </button>
+            </div>
           </label>
 
           <label className="block text-sm">
             Confirm password
-            <input type="password" required minLength={12} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700" />
+            <div className="relative mt-1">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                required
+                minLength={12}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700"
+              />
+              <button
+                type="button"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                aria-pressed={showConfirmPassword}
+                onClick={() => setShowConfirmPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                <PasswordVisibilityIcon visible={showConfirmPassword} />
+              </button>
+            </div>
           </label>
         </div>
 
