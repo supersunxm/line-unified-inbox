@@ -13,8 +13,10 @@ class AdminApprovalPage extends StatefulWidget {
 
 class _AdminApprovalPageState extends State<AdminApprovalPage> {
   List<PendingRegistration> _items = const [];
+  List<PendingHqRegistration> _hqItems = const [];
   bool _loading = true;
   String? _error;
+
   @override
   void initState() {
     super.initState();
@@ -27,7 +29,12 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
       _error = null;
     });
     try {
-      _items = await widget.auth.pendingRegistrations();
+      final results = await Future.wait([
+        widget.auth.pendingRegistrations(),
+        widget.auth.pendingHqRegistrations(),
+      ]);
+      _items = results[0] as List<PendingRegistration>;
+      _hqItems = results[1] as List<PendingHqRegistration>;
     } on ApiException catch (error) {
       _error = error.message;
     } catch (_) {
@@ -49,6 +56,79 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
     }
   }
 
+  Future<void> _actHq(PendingHqRegistration item, bool approve) async {
+    try {
+      if (approve) {
+        await widget.auth.approveHqRegistration(item.id);
+      } else {
+        await widget.auth.rejectHqRegistration(item.id);
+      }
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
+
+  Widget _hqCard(PendingHqRegistration item) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(item.displayName,
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                const Chip(label: Text('HQ · Full access')),
+              ],
+            ),
+            Text('Employee ID: ${item.employeeId ?? '—'}'),
+            Text(item.email),
+            const Text('Web + Mobile · HQ · All Stores · Accounts · Reply · Main OA'),
+            Text(item.createdAt.toLocal().toString()),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              TextButton(
+                  onPressed: () => _actHq(item, false),
+                  child: Text(appLocalizations(context).reject)),
+              FilledButton(
+                  onPressed: () => _actHq(item, true),
+                  child: const Text('Approve full access')),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _storeCard(PendingRegistration item) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.name, style: Theme.of(context).textTheme.titleMedium),
+              Text(appLocalizations(context)
+                  .employeeIdValue(item.employeeId ?? appLocalizations(context).notSet)),
+              Text(item.email),
+              Text('${item.storeName} · ${item.role.replaceAll('_', ' ')}'),
+              Text(item.createdAt.toLocal().toString()),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                TextButton(
+                    onPressed: () => _act(item, false),
+                    child: Text(appLocalizations(context).reject)),
+                FilledButton(
+                    onPressed: () => _act(item, true),
+                    child: Text(appLocalizations(context).approve)),
+              ]),
+            ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget body;
@@ -56,51 +136,32 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
       body = const Center(child: CircularProgressIndicator());
     } else if (_error != null) {
       body = Center(child: Text(_error!));
-    } else if (_items.isEmpty) {
-      body = Center(
-          child: Text(appLocalizations(context).noPendingRegistrations));
+    } else if (_items.isEmpty && _hqItems.isEmpty) {
+      body = Center(child: Text(appLocalizations(context).noPendingRegistrations));
     } else {
       body = RefreshIndicator(
         onRefresh: _load,
-        child: ListView.builder(
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(12),
-          itemCount: _items.length,
-          itemBuilder: (_, index) {
-            final item = _items[index];
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.name,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      Text(appLocalizations(context).employeeIdValue(
-                          item.employeeId ??
-                              appLocalizations(context).notSet)),
-                      Text(item.email),
-                      Text(
-                          '${item.storeName} · ${item.role.replaceAll('_', ' ')}'),
-                      Text(item.createdAt.toLocal().toString()),
-                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                        TextButton(
-                            onPressed: () => _act(item, false),
-                            child: Text(appLocalizations(context).reject)),
-                        FilledButton(
-                            onPressed: () => _act(item, true),
-                            child: Text(appLocalizations(context).approve)),
-                      ]),
-                    ]),
-              ),
-            );
-          },
+          children: [
+            if (_hqItems.isNotEmpty) ...[
+              Text('HQ approvals', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              ..._hqItems.map(_hqCard),
+              const SizedBox(height: 16),
+            ],
+            if (_items.isNotEmpty) ...[
+              Text(appLocalizations(context).pendingBmRegistrations,
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              ..._items.map(_storeCard),
+            ],
+          ],
         ),
       );
     }
     return Scaffold(
-        appBar: AppBar(
-            title: Text(appLocalizations(context).pendingBmRegistrations)),
-        body: body);
+        appBar: AppBar(title: const Text('Account approvals')), body: body);
   }
 }
