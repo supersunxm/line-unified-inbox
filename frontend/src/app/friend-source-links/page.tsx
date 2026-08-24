@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApplicationWorkspace } from "../page";
+import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { MobileFriendSourceLinksApp } from "./mobile-friend-source-links-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
@@ -18,6 +18,6 @@ export default function FriendSourceLinksPage() {
   }, []);
 
   if (mode === "loading") return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิด Friend Source Links...</main>;
-  if (mode === "mobile") return <MobileFriendSourceLinksApp />;
-  return <ApplicationWorkspace initialSection="friend-source-links" />;
+  if (mode === "mobile") return <AuthorizedSection section="friend-source-links"><MobileFriendSourceLinksApp /></AuthorizedSection>;
+  return <AuthorizedWorkspace section="friend-source-links" />;
 }
