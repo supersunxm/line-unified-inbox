@@ -4,6 +4,7 @@ import test from "node:test";
 import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+const appSidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
 const contextSidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
 const pageContainerCode = readFileSync(new URL("../src/components/shell/page-container.tsx", import.meta.url), "utf8");
 const appShellCode = readFileSync(new URL("../src/components/shell/app-shell.tsx", import.meta.url), "utf8");
@@ -12,7 +13,7 @@ const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.u
 const separatorCode = readFileSync(new URL("../src/app/resizable-separator.tsx", import.meta.url), "utf8");
 const storeChatsOverflowCode = readFileSync(new URL("../src/components/chats/store-chats-overflow-menu.tsx", import.meta.url), "utf8");
 
-test("TopNavigation renders primary navigation links with aria-current='page'", () => {
+test("AppSidebar renders primary navigation links with aria-current='page'", () => {
   for (const route of [
     "/dashboard",
     "/chats",
@@ -23,9 +24,9 @@ test("TopNavigation renders primary navigation links with aria-current='page'", 
     "/friend-source-links",
     "/mass-messages",
   ]) {
-    assert.match(topNavCode, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
+    assert.match(appSidebarCode, new RegExp(`href: "${route.replace("?", "\\?")}`));
   }
-  assert.match(topNavCode, /aria-current=\{currentSection ===/);
+  assert.match(appSidebarCode, /aria-current=\{active \?/);
   assert.match(topNavCode, /ThemeControl/);
 });
 
@@ -51,6 +52,7 @@ test("AppShell integrates TopNavigation and global loading/error banners", () =>
 
 test("primaryNavigationState maps active sections correctly", () => {
   assert.deepEqual(primaryNavigationState("dashboard"), {
+    homeActive: false,
     dashboardActive: true,
     chatsActive: false,
     storesActive: false,
@@ -60,6 +62,7 @@ test("primaryNavigationState maps active sections correctly", () => {
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("chats"), {
+    homeActive: false,
     dashboardActive: false,
     chatsActive: true,
     storesActive: false,
@@ -75,10 +78,11 @@ test("PageContainer full has min-width: 0, min-height: 0, and flex-1 behavior", 
   assert.doesNotMatch(pageContainerCode, /chat-resizable-grid|gridTemplateColumns|data-chat-pane/);
 });
 
-test("TopNavigation title and supporting text use high-contrast semantic tokens", () => {
-  assert.match(topNavCode, /<h1 className="text-base font-bold tracking-tight xl:text-lg">/);
-  assert.match(topNavCode, /<p className="app-muted hidden text-xs 2xl:block">/);
-  assert.match(topNavCode, /app-header-search app-input/);
+test("current shell header and sidebar use high-contrast semantic tokens", () => {
+  assert.match(topNavCode, /<header className="app-header/);
+  assert.match(topNavCode, /text-\[var\(--app-text-primary\)\]/);
+  assert.match(topNavCode, /app-input/);
+  assert.match(appSidebarCode, /text-\[var\(--app-text-primary\)\]/);
   assert.match(contextSidebarCode, /app-muted mb-3/);
 });
 
@@ -127,20 +131,19 @@ test("SidebarView is shell-owned and profile controls are consolidated", () => {
   assert.doesNotMatch(contextSidebarCode, /@\/app\/page/);
   assert.match(pageCode, /import type \{ SidebarView \} from "@\/components\/shell"/);
   assert.doesNotMatch(topNavCode, /Notifications|12 unread|🔔/);
-  assert.match(topNavCode, /Open profile menu for/);
-  assert.match(topNavCode, /🇬🇧 English/);
-  assert.match(topNavCode, /Appearance/);
-  assert.match(topNavCode, /Pilot/);
+  assert.match(appSidebarCode, /t\.profile/);
+  assert.match(appSidebarCode, /🇬🇧 English/);
+  assert.match(appSidebarCode, /ThemeControl/);
+  assert.match(appSidebarCode, /t\.logout/);
   assert.match(contextSidebarCode, /overview\.notReplied/);
   assert.match(contextSidebarCode, /ร้านค้าทั้งหมด/);
 });
 
 test("header responsiveness and menus preserve accessible controls", () => {
   assert.match(topNavCode, /lg:hidden/);
-  assert.match(topNavCode, /w-40 lg:block xl:w-48/);
-  assert.match(topNavCode, /2xl:block/);
-  assert.match(topNavCode, /aria-haspopup="dialog"/);
-  assert.match(topNavCode, /aria-haspopup="menu"/);
+  assert.match(topNavCode, /w-52 lg:block xl:w-64/);
+  assert.match(topNavCode, /aria-expanded=\{isOpen\}/);
+  assert.match(topNavCode, /aria-label=\{label\}/);
   assert.match(topNavCode, /event\.key === "Escape"/);
   assert.match(topNavCode, /title=\{updatedLabel\}/);
   assert.match(topNavCode, /focus-visible:ring-2/);
@@ -160,8 +163,8 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
   assert.match(topNavCode, /ref=\{searchRef\}\s+className="relative shrink-0"/);
 
   // Ensure header controls uses shrink-0 and ml-auto instead of expanding across navigation space
-  assert.doesNotMatch(topNavCode, /className="app-header-controls[^"]*lg:flex-1/);
-  assert.match(topNavCode, /className="app-header-controls flex shrink-0 items-center justify-end gap-2 ml-auto"/);
+  assert.doesNotMatch(topNavCode, /lg:flex-1/);
+  assert.match(topNavCode, /className="flex shrink-0 items-center justify-end gap-2"/);
 
   // Ensure all 8 navigation items use native <Link> tags with valid hrefs and focus rings
   for (const href of [
@@ -174,7 +177,6 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
     "/friend-source-links",
     "/mass-messages",
   ]) {
-    assert.match(topNavCode, new RegExp(`<Link[^>]*href="${href}"`));
+    assert.match(appSidebarCode, new RegExp(`href: "${href}"`));
   }
 });
-

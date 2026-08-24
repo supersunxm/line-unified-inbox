@@ -8,12 +8,12 @@ const pageCode = readFileSync(new URL("../src/app/classification-insights/page.t
 const viewCode = readFileSync(new URL("../src/app/classification-insights/classification-insights-view.tsx", import.meta.url), "utf8");
 const workspaceCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
-const topNavigationCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
 
 test("classification insights route uses the existing authenticated application shell and readable container", () => {
   assert.match(pageCode, /ApplicationWorkspace initialSection="classification-insights"/);
   assert.match(workspaceCode, /initialSection === "classification-insights"[\s\S]*PageContainer variant="readable"[\s\S]*ClassificationInsightsView/);
-  assert.match(topNavigationCode, /href="\/classification-insights"/);
+  assert.match(sidebarCode, /href: "\/classification-insights"/);
   assert.equal(primaryNavigationState("classification-insights").classificationInsightsActive, true);
 });
 

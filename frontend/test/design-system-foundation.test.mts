@@ -122,16 +122,15 @@ test("accessibility: UI primitives implement keyboard, focus, ARIA, and role sta
 
 test("Phase 2A: TopNavigation and ContextSidebar consume semantic design tokens", () => {
   const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+  const appSidebarSource = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
   const contextSidebarSource = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
   const appShellSource = readFileSync(new URL("../src/components/shell/app-shell.tsx", import.meta.url), "utf8");
 
-  // TopNavigation semantic tokens
-  assert.match(topNavSource, /--app-accent-soft/);
-  assert.match(topNavSource, /--app-accent/);
-  assert.match(topNavSource, /--app-border/);
-  assert.match(topNavSource, /--app-surface/);
-  assert.match(topNavSource, /--app-radius-md/);
-  assert.match(topNavSource, /--app-shadow-elevated/);
+  // The current global shell is AppSidebar plus the responsive TopNavigation header.
+  assert.match(topNavSource, /<AppSidebar/);
+  for (const token of ["--app-accent-soft", "--app-accent", "--app-border", "--app-surface", "--app-shadow-elevated"]) {
+    assert.match(appSidebarSource, new RegExp(token.replaceAll("-", "\\-")));
+  }
 
   // ContextSidebar semantic tokens
   assert.match(contextSidebarSource, /--app-accent-soft/);
@@ -223,8 +222,8 @@ test("Phase 2D: Mass Messages consumes shared design system components", () => {
 });
 
 test("Phase 2E: Admin Purchase Analytics and Registrations consume shared design system components", () => {
-  const purchaseAnalyticsSource = readFileSync(new URL("../src/app/admin/purchase-analytics/page.tsx", import.meta.url), "utf8");
-  const registrationsSource = readFileSync(new URL("../src/app/admin/registrations/page.tsx", import.meta.url), "utf8");
+  const purchaseAnalyticsSource = readFileSync(new URL("../src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx", import.meta.url), "utf8");
+  const registrationsSource = readFileSync(new URL("../src/app/admin/registrations/admin-registrations-desktop.tsx", import.meta.url), "utf8");
 
   // Purchase Analytics UI components
   assert.match(purchaseAnalyticsSource, /<PageHeader/);
@@ -360,8 +359,7 @@ test("Brand Accent: Global --app-accent uses OPPO green and separates warning st
   // TopNavigation and ContextSidebar must consume semantic accent tokens
   const topNav = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
   const sidebar = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
-  assert.match(topNav, /aria-\[current=page\]:bg-\[var\(--app-accent-soft\)\]/);
-  assert.match(topNav, /aria-\[current=page\]:text-\[var\(--app-accent\)\]/);
+  assert.match(topNav, /<AppSidebar/);
   assert.match(sidebar, /bg-\[var\(--app-accent-soft\)\]/);
 
   // Dashboard 7-day follower trend must consume semantic accent
@@ -369,4 +367,3 @@ test("Brand Accent: Global --app-accent uses OPPO green and separates warning st
   assert.doesNotMatch(dashV2, /stroke="#FF6900"/);
   assert.match(dashV2, /stroke="var\(--app-accent, #00A651\)"/);
 });
-

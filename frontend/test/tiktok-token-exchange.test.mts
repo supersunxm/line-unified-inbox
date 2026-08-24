@@ -313,8 +313,8 @@ test("Security: Client Secret, tokens, and authorization code are strictly serve
   assert.doesNotMatch(dashboardViewSource, /document\.cookie/);
 });
 
-test("Dashboard and callback routes are NOT linked from existing TopNavigation", () => {
-  assert.doesNotMatch(topNavSource, /href="\/tiktok"/);
+test("TikTok is linked from current shell navigation without deep callback links", () => {
+  assert.match(topNavSource, /href="\/tiktok"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/dashboard"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
 });
@@ -402,12 +402,11 @@ test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboar
   // - 2+ accounts: redirects to /tiktok overview (never arbitrarily selects accounts[0])
   const rootDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
   assert.match(rootDashboardSource, /accounts\.length === 0/);
-  assert.match(rootDashboardSource, /<TikTokDashboardView data=\{null\} \/>/);
+  assert.match(rootDashboardSource, /<TikTokDashboardResponsive data=\{null\} \/>/);
   assert.match(rootDashboardSource, /accounts\.length === 1/);
   assert.match(rootDashboardSource, /redirect\(`\/tiktok\/dashboard\/\$\{accounts\[0\]\.id\}`\)/);
   assert.match(rootDashboardSource, /redirect\(["']\/tiktok["']\)/);
   // Guarantee no arbitrary accounts[0] fallback when accounts.length > 1
   assert.doesNotMatch(rootDashboardSource, /accounts\.length > 0\s*\)\s*\{\s*redirect\(`\/tiktok\/dashboard/);
 });
-
 

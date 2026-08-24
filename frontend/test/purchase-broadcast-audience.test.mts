@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const pageCode = readFileSync(
-  new URL("../src/app/admin/purchase-analytics/page.tsx", import.meta.url),
+  new URL("../src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx", import.meta.url),
   "utf8",
 );
 

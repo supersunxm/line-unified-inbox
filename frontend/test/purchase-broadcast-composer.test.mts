@@ -11,7 +11,7 @@ const bannerCode = readFileSync(
   "utf8",
 );
 const routeCode = readFileSync(
-  new URL("../src/app/mass-messages/drafts/[campaignId]/page.tsx", import.meta.url),
+  new URL("../src/app/mass-messages/drafts/[campaignId]/draft-responsive.tsx", import.meta.url),
   "utf8",
 );
 

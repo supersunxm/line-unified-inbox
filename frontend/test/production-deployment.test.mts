@@ -36,7 +36,7 @@ test("session restoration and logout rely on the secure server cookie", async ()
   assert.match(pageSource, /setAuthUser\(await api\.me\(\)\)/);
   assert.match(pageSource, /await api\.logout\(\)/);
   assert.match(pageSource, /setAuthUser\(null\)/);
-  assert.equal(routeAfterLogin("/login"), "/dashboard");
+  assert.equal(routeAfterLogin("/login"), "/home");
   assert.equal(routeAfterLogin("/chats"), null);
   assert.doesNotMatch(pageSource, /localStorage\.(?:setItem|getItem)\([^\n]*(?:password|token|session)/i);
 });

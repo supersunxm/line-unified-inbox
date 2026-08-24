@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+const sidebarSource = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
 
 test("TopNavigation renders destination links as native Next.js Link components", () => {
   const expectedRoutes = [
@@ -39,27 +40,16 @@ test("TopNavigation layout prevents transparent search container from intercepti
     "ResponsiveSearch must have shrink-0"
   );
 
-  // 2. app-header-controls must use shrink-0 and ml-auto instead of lg:flex-1
-  assert.doesNotMatch(
-    topNavSource,
-    /className="app-header-controls[^"]*lg:flex-1[^"]*"/,
-    "app-header-controls must not have lg:flex-1 which splits header 50/50"
-  );
-  assert.match(
-    topNavSource,
-    /className="app-header-controls flex shrink-0 items-center justify-end gap-2 ml-auto"/,
-    "app-header-controls must have shrink-0 and ml-auto"
-  );
+  // The current header controls remain shrink-to-content beside the sidebar-backed header.
+  assert.doesNotMatch(topNavSource, /lg:flex-1/, "header controls must not expand across navigation space");
+  assert.match(topNavSource, /className="flex shrink-0 items-center justify-end gap-2"/);
 });
 
-test("TopNavigation secondary links are rendered inside More dropdown menu", () => {
-  // Dropdown menu trigger
-  assert.match(topNavSource, /aria-label="More navigation"/);
-
-  // More menu contains secondary items
+test("secondary links are rendered in the current sidebar and mobile More menu", () => {
+  assert.match(topNavSource, /aria-expanded=\{moreOpen\}/);
   for (const href of ["/stores", "/admin/purchase-analytics", "/friend-source-links", "/mass-messages"]) {
-    const secondaryRegex = new RegExp(`role="menuitem"\\s+href="${href}"`);
-    assert.match(topNavSource, secondaryRegex);
+    assert.match(sidebarSource, new RegExp(`href: "${href}"`));
+    assert.match(topNavSource, new RegExp(`href="${href}"`));
   }
 });
 
@@ -68,12 +58,10 @@ test("TopNavigation accessibility: focus rings, ARIA roles, and keyboard handler
   assert.match(topNavSource, /focus-visible:ring-2/);
   assert.match(topNavSource, /focus-visible:ring-emerald-500\/40/);
 
-  // ARIA current for active page
-  assert.match(topNavSource, /aria-current=\{currentSection === "[a-z-]+"\s*\?\s*"page"\s*:\s*undefined\}/);
-
   // Escape key closes menus
   assert.match(topNavSource, /event\.key === "Escape"/);
 
-  // Primary navigation landmark
-  assert.match(topNavSource, /<nav aria-label="Primary navigation"/);
+  // Sidebar navigation landmarks and active-page semantics
+  assert.match(sidebarSource, /<nav className="space-y-1" aria-label=\{t\.workspace\}/);
+  assert.match(sidebarSource, /aria-current=\{active \?/);
 });

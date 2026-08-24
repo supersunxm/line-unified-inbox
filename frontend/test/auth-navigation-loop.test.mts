@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  AUTH_UNAUTHORIZED_EVENT,
   getAuthState,
   resolveAuthRedirect,
   routeAfterLogin,
@@ -30,8 +29,8 @@ test("resolveAuthRedirect enforces deterministic, loop-free redirect rules", () 
   assert.equal(resolveAuthRedirect({ authState: "loading", pathname: "/chats" }), null);
   assert.equal(resolveAuthRedirect({ authState: "loading", pathname: "/stores" }), null);
 
-  // 2. Authenticated user on /login redirects once to /dashboard
-  assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/login" }), "/dashboard");
+  // 2. Authenticated user on /login redirects once to the Main Workspace
+  assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/login" }), "/home");
 
   // 3. Authenticated user on protected pages stays on the page (no redirect)
   assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/dashboard" }), null);
@@ -58,8 +57,8 @@ test("resolveAuthRedirect enforces deterministic, loop-free redirect rules", () 
   );
 });
 
-test("routeAfterLogin returns /dashboard for /login and null otherwise", () => {
-  assert.equal(routeAfterLogin("/login"), "/dashboard");
+test("routeAfterLogin returns /home for /login and null otherwise", () => {
+  assert.equal(routeAfterLogin("/login"), "/home");
   assert.equal(routeAfterLogin("/dashboard"), null);
   assert.equal(routeAfterLogin("/chats"), null);
 });

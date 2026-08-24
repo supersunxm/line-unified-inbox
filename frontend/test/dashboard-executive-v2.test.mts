@@ -11,28 +11,26 @@ const wrapper = readFileSync(
   "utf8",
 );
 
-test("dashboard switches to the five-tier executive v2 view", () => {
+test("dashboard renders the current executive operations sections", () => {
   assert.match(wrapper, /ExecutiveDashboardV2/);
   assert.match(code, />ตัวเลขหลัก</);
   assert.match(code, />การดำเนินงานตอบกลับลูกค้า</);
-  assert.match(code, />สาขาที่ต้องติดตาม</);
   assert.match(code, />รายละเอียดระดับสาขา</);
   assert.match(code, />ข้อมูลเสริม</);
 });
 
 test("reply bucket percentage is null when there are no replied messages", () => {
   assert.match(code, /if \(totalReplied === 0\) return null/);
-  assert.match(code, /ยังไม่มีข้อความที่ตอบกลับในวันนี้/);
+  assert.match(code, /ยังไม่มีข้อความที่ตอบกลับในช่วงที่เลือก/);
   assert.match(code, /bucket\.percent === null \? "—"/);
 });
 
-test("watchlist is one unified table with combined issue chips", () => {
-  assert.match(code, /Watchlist — สาขาที่มีสัญญาณผิดปกติ/);
-  assert.match(code, /store\.issues\.map/);
+test("dashboard keeps the current unified store comparison table", () => {
+  assert.match(code, /Top 10 สาขาผู้ติดตามสูงสุด vs สาขาที่ต้องการการดูแล/);
+  assert.match(code, /top10/);
+  assert.match(code, /bottom10/);
   assert.match(code, /overflow-x-auto/);
-  assert.match(code, /min-w-\[720px\]/);
-  assert.doesNotMatch(code, /ResponseRateCard/);
-  assert.doesNotMatch(code, /StorePerformanceOverview/);
+  assert.doesNotMatch(code, /Watchlist|store\.issues\.map/);
 });
 
 test("dashboard uses live executive store health instead of HTML mock values", () => {

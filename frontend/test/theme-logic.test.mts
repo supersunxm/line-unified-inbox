@@ -136,6 +136,7 @@ test("switching dark to light to dark also clears stale root state", () => {
 
 test("primary workspaces expose one active navigation state", () => {
   assert.deepEqual(primaryNavigationState("dashboard"), {
+    homeActive: false,
     dashboardActive: true,
     chatsActive: false,
     storesActive: false,
@@ -145,6 +146,7 @@ test("primary workspaces expose one active navigation state", () => {
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("chats"), {
+    homeActive: false,
     dashboardActive: false,
     chatsActive: true,
     storesActive: false,
@@ -154,6 +156,7 @@ test("primary workspaces expose one active navigation state", () => {
     showStoreManagementAction: false,
   });
   assert.deepEqual(primaryNavigationState("stores"), {
+    homeActive: false,
     dashboardActive: false,
     chatsActive: false,
     storesActive: true,

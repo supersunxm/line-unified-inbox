@@ -4,7 +4,7 @@ import test from "node:test";
 import { translations, getMassMessagesText } from "../src/app/mass-messages/mass-messages-translations.ts";
 
 const viewCode = readFileSync(new URL("../src/app/mass-messages/mass-messages-view.tsx", import.meta.url), "utf8");
-const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
 const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 const routePageCode = readFileSync(new URL("../src/app/mass-messages/page.tsx", import.meta.url), "utf8");
 
@@ -24,10 +24,9 @@ test("Mass Message translations exist with identical keys in Thai, English, and 
   assert.equal(zhText.pageTitle, "群发消息");
 });
 
-test("TopNavigation renders Mass Message link for ADMIN and restricts for VIEWER", () => {
-  // Verifies that /mass-messages link exists and is guarded by authUser?.role === 'ADMIN'
-  assert.match(topNavCode, /authUser\?\.role === "ADMIN" && <Link [^>]*href="\/mass-messages"/);
-  assert.match(topNavCode, /authUser\?\.role === "ADMIN" && <Link role="menuitem" [^>]*href="\/mass-messages"/);
+test("AppSidebar renders Mass Message only for ADMIN", () => {
+  assert.match(sidebarCode, /\{ href: "\/mass-messages", label: t\.mass, icon: "broadcast", adminOnly: true \}/);
+  assert.match(sidebarCode, /if \(item\.adminOnly && authUser\?\.role !== "ADMIN"\) return null/);
 });
 
 test("Mass Message route entrypoint delegates to ApplicationWorkspace with mass-messages section", () => {

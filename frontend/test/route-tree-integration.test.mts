@@ -10,8 +10,9 @@ const classificationInsightsPageCode = readFileSync(new URL("../src/app/classifi
 const followerInsightsPageCode = readFileSync(new URL("../src/app/follower-insights/page.tsx", import.meta.url), "utf8");
 const friendSourceLinksPageCode = readFileSync(new URL("../src/app/friend-source-links/page.tsx", import.meta.url), "utf8");
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
 
-test("all 6 route entrypoints delegate to ApplicationWorkspace with matching section key", () => {
+test("all workspace route entrypoints delegate to ApplicationWorkspace with matching section key", () => {
   assert.match(dashboardPageCode, /ApplicationWorkspace initialSection="dashboard"/);
   assert.match(chatsPageCode, /ApplicationWorkspace initialSection="chats"/);
   assert.match(storesPageCode, /ApplicationWorkspace initialSection="stores"/);
@@ -38,10 +39,10 @@ test("production chats route renders ContextSidebar and non-chats routes omit co
   assert.doesNotMatch(pageCode, /<aside className="app-surface min-w-0 overflow-y-auto border-r p-4">/);
 });
 
-test("top navigation links retain their canonical destinations", () => {
-  const routes = ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"];
+test("sidebar links retain their canonical workspace destinations", () => {
+  const routes = ["/home", "/dashboard", "/chats", "/follower-insights", "/classification-insights", "/stores", "/friend-source-links"];
   for (const route of routes) {
-    assert.match(topNavCode, new RegExp(`href="${route}"`));
+    assert.match(sidebarCode, new RegExp(`href: "${route}"`));
   }
 });
 

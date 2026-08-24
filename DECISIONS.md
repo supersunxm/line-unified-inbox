@@ -1077,3 +1077,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - `origin/main` remains the source of truth for the existing Main Workspace, AppSidebar, top navigation, homepage, and navigation structure. Main OA is integrated into that shell rather than restoring the older top-navigation-only layout.
 - Main OA remains a distinct `HEAD_OFFICE` capability-gated workspace. Its sidebar entry is rendered only for `canAccessMainOa` users, it never enters Store selection, and its page/API paths continue to enforce the same capability and account-type boundaries.
 - The rebase preserved the three local Main OA commits and added only follow-up integration/test-fixture changes. The backup branch is intentionally untouched. No push, deployment, database mutation, credential change, or webhook configuration was performed.
+
+# Frontend verification-gate baseline (2026-08-24)
+
+- The detached `origin/main` baseline reproduced every one of the original 27 frontend failures; none was introduced by the Main OA rebase. The failures were stale assertions around the `/home` entry route, AppSidebar replacing primary TopNavigation, responsive wrapper entrypoints, current dashboard copy, and current TikTok/purchase route composition.
+- Tests were updated to assert the current architecture rather than restoring obsolete UI behavior. The missing Classification Insights route was treated as a real product gap because it was referenced by the workspace and route tests; a minimal authenticated `ApplicationWorkspace` entrypoint and matching sidebar link were added.
+- The resulting frontend suite is green at 378/378 while preserving AppSidebar, Main Workspace, Store/Main OA separation, and Main OA capability gating.
