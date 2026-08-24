@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { ThemeControl } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
+import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser } from "@/lib/authorization";
 import type { Language, TopNavigationProps } from "./top-navigation";
 
 const SIDEBAR_STORAGE_KEY = "oppo-app-sidebar-collapsed";
@@ -22,8 +23,8 @@ type NavItem = {
   href: string;
   label: string;
   icon: IconName;
-  adminOnly?: boolean;
-  mainOaOnly?: boolean;
+  section?: PrimarySection;
+  tool?: "message-traffic" | "tiktok";
   active?: (pathname: string, section: PrimarySection) => boolean;
 };
 
@@ -88,23 +89,23 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
   };
 
   const primaryItems: NavItem[] = [
-    { href: "/home", label: t.home, icon: "home", active: (path) => path === "/home" },
-    { href: "/dashboard", label: t.dashboard, icon: "dashboard", active: (path) => path === "/dashboard" },
-    { href: "/chats", label: t.chats, icon: "chat", active: (path) => path.startsWith("/chats") },
-    { href: "/follower-insights", label: t.followers, icon: "followers", active: (path) => path.startsWith("/follower-insights") },
-    { href: "/dashboard/message-traffic", label: t.traffic, icon: "traffic", active: (path) => path.startsWith("/dashboard/message-traffic") },
+    { href: "/home", label: t.home, icon: "home", section: "home", active: (path) => path === "/home" },
+    { href: "/dashboard", label: t.dashboard, icon: "dashboard", section: "dashboard", active: (path) => path === "/dashboard" },
+    { href: "/chats", label: t.chats, icon: "chat", section: "chats", active: (path) => path.startsWith("/chats") },
+    { href: "/follower-insights", label: t.followers, icon: "followers", section: "follower-insights", active: (path) => path.startsWith("/follower-insights") },
+    { href: "/dashboard/message-traffic", label: t.traffic, icon: "traffic", tool: "message-traffic", active: (path) => path.startsWith("/dashboard/message-traffic") },
   ];
   const toolItems: NavItem[] = [
-    { href: "/coupons", label: t.coupons, icon: "coupon", adminOnly: true },
-    { href: "/stores", label: t.stores, icon: "store" },
-    { href: "/admin/purchase-analytics", label: t.purchase, icon: "purchase" },
-    { href: "/friend-source-links", label: t.friendLinks, icon: "friend", adminOnly: true },
-    { href: "/mass-messages", label: t.mass, icon: "broadcast", adminOnly: true },
-    { href: "/admin/registrations", label: t.approval, icon: "approval", adminOnly: true },
-    { href: "/tiktok", label: "TikTok", icon: "tiktok", adminOnly: true },
+    { href: "/coupons", label: t.coupons, icon: "coupon", section: "coupons" },
+    { href: "/stores", label: t.stores, icon: "store", section: "stores" },
+    { href: "/admin/purchase-analytics", label: t.purchase, icon: "purchase", section: "purchase-analytics" },
+    { href: "/friend-source-links", label: t.friendLinks, icon: "friend", section: "friend-source-links" },
+    { href: "/mass-messages", label: t.mass, icon: "broadcast", section: "mass-messages" },
+    { href: "/admin/registrations", label: t.approval, icon: "approval", section: "admin-registrations" },
+    { href: "/tiktok", label: "TikTok", icon: "tiktok", tool: "tiktok" },
   ];
   const mainOaItems: NavItem[] = [
-    { href: "/main-oa", label: t.mainOa, icon: "main-oa", mainOaOnly: true, active: (path) => path.startsWith("/main-oa") },
+    { href: "/main-oa", label: t.mainOa, icon: "main-oa", section: "main-oa", active: (path) => path.startsWith("/main-oa") },
   ];
 
   const itemClass = (active: boolean) => `${focusRing} group flex h-10 w-full items-center rounded-xl text-sm font-medium transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"}`;
@@ -112,8 +113,9 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
   const showTooltip = (label: string, element: HTMLElement) => { if (!collapsed) return; const rect = element.getBoundingClientRect(); setTooltip({ label, top: rect.top + rect.height / 2 }); };
   const hideTooltip = () => setTooltip(null);
   const renderItem = (item: NavItem) => {
-    if (item.adminOnly && authUser?.role !== "ADMIN") return null;
-    if (item.mainOaOnly && !authUser?.permissions?.canAccessMainOa) return null;
+    if (!authUser) return null;
+    if (item.section && !canAccessPrimarySection(authUser, item.section)) return null;
+    if (item.tool && !canAccessWebTool(authUser, item.tool)) return null;
     const active = isActive(item);
     return (
       <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} aria-label={collapsed ? item.label : undefined} onMouseEnter={(e) => showTooltip(item.label, e.currentTarget)} onMouseLeave={hideTooltip} onFocus={(e) => showTooltip(item.label, e.currentTarget)} onBlur={hideTooltip} className={itemClass(active)}>
@@ -124,13 +126,15 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
   };
 
   if (!authUser) return null;
+  const defaultRoute = defaultRouteForUser(authUser);
+  const canUseMainOa = canAccessPrimarySection(authUser, "main-oa");
 
   return (
     <aside className={`app-desktop-sidebar fixed inset-y-0 left-0 z-40 hidden border-r border-[var(--app-border)] bg-[var(--app-surface)] transition-[width] duration-200 md:flex md:flex-col ${collapsed ? "w-[4.25rem]" : "w-64"}`}>
       {collapsed && tooltip && <div role="tooltip" className="pointer-events-none fixed z-[90] -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--app-border)] bg-[var(--app-text-primary)] px-2.5 py-1.5 text-xs font-semibold text-[var(--app-surface)] shadow-[var(--app-shadow-elevated)]" style={{ left: `calc(var(--app-sidebar-width, ${COMPACT_SIDEBAR_WIDTH}) + 0.65rem)`, top: tooltip.top }}>{tooltip.label}</div>}
 
       <div className={`flex h-14 shrink-0 items-center border-b border-[var(--app-border-subtle)] ${collapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
-        <Link href="/home" className={`${focusRing} flex min-w-0 flex-1 items-center gap-2 rounded-lg`} aria-label={collapsed ? (text.appName || "OPPO LINE OA Monitor") : undefined}>
+        <Link href={defaultRoute} className={`${focusRing} flex min-w-0 flex-1 items-center gap-2 rounded-lg`} aria-label={collapsed ? (text.appName || "OPPO LINE OA Monitor") : undefined}>
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-xs font-bold text-white">O</span>
           {!collapsed && <div className="min-w-0"><div className="truncate text-sm font-bold text-[var(--app-text-primary)]">{text.appName || "OPPO LINE OA Monitor"}</div><div className="truncate text-[10px] text-[var(--app-text-tertiary)]">Retail Operations</div></div>}
         </Link>
@@ -140,7 +144,7 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {!collapsed && <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.workspace}</div>}
         <nav className="space-y-1" aria-label={t.workspace}>{primaryItems.map(renderItem)}</nav>
-        {authUser.permissions?.canAccessMainOa && <>
+        {canUseMainOa && <>
           <div className="my-3 border-t border-[var(--app-border-subtle)]" />
           {!collapsed && <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.mainOa}</div>}
           <nav className="space-y-1" aria-label={t.mainOa}>{mainOaItems.map(renderItem)}</nav>
