@@ -56,7 +56,7 @@ function unique(values: string[]) {
  *
  * Stage 2 responses include `authorization`, but this fallback keeps an older
  * cached/session response usable during a rolling deployment. Client UI must
- * consume this normalized context rather than hard-coded role checks.
+ * consume this normalized context rather than scattered role checks.
  */
 export function authorizationFor(user: AuthUser): AuthorizationContext {
   if (user.authorization) return user.authorization;
@@ -91,19 +91,28 @@ export function authorizationFor(user: AuthUser): AuthorizationContext {
   };
 }
 
+function hasBackendAdminAccess(auth: AuthorizationContext) {
+  // These features are still protected by @Roles(ADMIN) on the backend.
+  // Keep that policy centralized here until the backend exposes dedicated
+  // capabilities for them; do not let individual UI components re-invent it.
+  return auth.workspaces.hq && auth.identity.platformRole === "ADMIN";
+}
+
 export function canAccessPrimarySection(user: AuthUser, section: PrimarySection) {
   const auth = authorizationFor(user);
   switch (section) {
     case "home":
     case "dashboard":
+      return auth.workspaces.hq;
     case "stores":
     case "purchase-analytics":
+      return auth.workspaces.hq || auth.workspaces.store;
     case "friend-source-links":
     case "mass-messages":
     case "coupons":
-      return auth.workspaces.hq;
+      return hasBackendAdminAccess(auth);
     case "admin-registrations":
-      return auth.capabilities.manageAccounts;
+      return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;
     case "chats":
       return auth.workspaces.store;
     case "follower-insights":
@@ -115,7 +124,9 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
 
 export function canAccessWebTool(user: AuthUser, tool: "message-traffic" | "tiktok") {
   const auth = authorizationFor(user);
-  return tool === "message-traffic" || tool === "tiktok" ? auth.workspaces.hq : false;
+  if (tool === "message-traffic") return auth.workspaces.hq;
+  if (tool === "tiktok") return hasBackendAdminAccess(auth);
+  return false;
 }
 
 export function defaultRouteForUser(user: AuthUser) {
