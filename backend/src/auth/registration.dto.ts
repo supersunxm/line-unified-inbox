@@ -10,3 +10,10 @@ export class CreateRegistrationRequestDto {
   @IsEnum(StoreMembershipRole) role: StoreMembershipRole = StoreMembershipRole.STAFF;
   @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) password!: string;
 }
+
+export class CreateHqRegistrationRequestDto {
+  @IsEmail() email!: string;
+  @IsString() @IsNotEmpty() name!: string;
+  @IsString() @IsNotEmpty() @Length(1, 64) employeeId!: string;
+  @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) password!: string;
+}
