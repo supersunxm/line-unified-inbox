@@ -18,7 +18,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _email = TextEditingController();
+  final _identifier = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
   String? _error;
@@ -30,7 +30,7 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      await widget.auth.login(_email.text, _password.text);
+      await widget.auth.login(_identifier.text, _password.text);
       widget.onLoggedIn();
     } on ApiException catch (error) {
       setState(() => _error = switch (error.code) {
@@ -48,7 +48,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _email.dispose();
+    _identifier.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -84,10 +84,12 @@ class _LoginPageState extends State<LoginPage> {
               Text(localizations.signInApproved, textAlign: TextAlign.center),
               const SizedBox(height: 24),
               TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: _identifier,
+                  keyboardType: TextInputType.text,
+                  autocorrect: false,
+                  textCapitalization: TextCapitalization.none,
                   decoration: InputDecoration(
-                      labelText: localizations.email,
+                      labelText: '${localizations.email} / Username',
                       border: const OutlineInputBorder())),
               const SizedBox(height: 12),
               TextField(
