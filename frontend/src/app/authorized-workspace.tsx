@@ -1,12 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { PrimarySection } from "./primary-navigation";
 import { ApplicationWorkspace } from "./page";
 import { ApiError, api } from "@/lib/api";
 import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
 
-export function AuthorizedWorkspace({ section }: { section: PrimarySection }) {
+export function AuthorizedSection({ section, children }: { section: PrimarySection; children: ReactNode }) {
   const [allowed, setAllowed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,5 +50,13 @@ export function AuthorizedWorkspace({ section }: { section: PrimarySection }) {
     return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Checking workspace access…</main>;
   }
 
-  return <ApplicationWorkspace initialSection={section} />;
+  return children;
+}
+
+export function AuthorizedWorkspace({ section }: { section: PrimarySection }) {
+  return (
+    <AuthorizedSection section={section}>
+      <ApplicationWorkspace initialSection={section} />
+    </AuthorizedSection>
+  );
 }
