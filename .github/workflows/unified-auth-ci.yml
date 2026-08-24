@@ -6,6 +6,7 @@ on:
       - "backend/src/auth/**"
       - "backend/prisma/schema.prisma"
       - "backend/prisma/migrations/**"
+      - "android_app/lib/features/auth/**"
       - "frontend/src/app/login/page.tsx"
       - "frontend/src/app/register/**"
       - "frontend/src/lib/registration-api.ts"
@@ -64,7 +65,9 @@ jobs:
           "src/auth/auth.guard.ts"
           "src/auth/permission-context.ts"
           "src/auth/permission-context.spec.ts"
+          "src/auth/mobile-auth.dto.ts"
           "src/auth/mobile-auth.service.ts"
+          "src/auth/mobile-login-identifier.spec.ts"
           "src/auth/store-access.service.ts"
           "src/auth/registration.service.ts"
           "src/auth/unified-auth-stage2.spec.ts"
@@ -76,6 +79,7 @@ jobs:
           src/auth/auth.service.spec.ts
           src/auth/auth.guard.spec.ts
           src/auth/mobile-auth.service.spec.ts
+          src/auth/mobile-login-identifier.spec.ts
           src/auth/store-access.service.spec.ts
           src/auth/registration.service.spec.ts
           src/auth/unified-auth-stage2.spec.ts
