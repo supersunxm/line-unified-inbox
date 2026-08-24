@@ -41,7 +41,7 @@ export class AuthService {
 
   private authorizationFor(user: AuthUserSource) {
     return buildPermissionContext({
-      role: user.role as UserRole,
+      role: user.role,
       canAccessWeb: user.canAccessWeb,
       canAccessMobile: user.canAccessMobile,
       canAccessHq: user.canAccessHq,
