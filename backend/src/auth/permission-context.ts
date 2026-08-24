@@ -7,13 +7,19 @@ export type PermissionContextMembership = {
 
 export type PermissionContextInput = {
   role: UserRole;
+  canAccessWeb?: boolean;
+  canAccessMobile?: boolean;
+  canAccessHq?: boolean;
+  canAccessAllStores?: boolean;
+  canManageAccounts?: boolean;
+  canReply?: boolean;
   canAccessMainOa?: boolean;
   canManageMainOa?: boolean;
   memberships?: PermissionContextMembership[];
 };
 
 export type PermissionContext = {
-  version: 1;
+  version: 2;
   identity: {
     platformRole: UserRole;
     membershipRoles: string[];
@@ -40,47 +46,56 @@ export type PermissionContext = {
 };
 
 /**
- * Stage 1 compatibility projection.
+ * Stage 2 authorization projection.
  *
- * This converts the current role/membership model into one normalized
- * authorization context without changing runtime access decisions yet.
- * Explicit persisted web/mobile/HQ grants are intentionally deferred to
- * Stage 2 so the rollout is backwards-compatible with existing users.
+ * Platform/workspace/capability grants are persisted on User. Optional-input
+ * fallbacks preserve compatibility for tests, old fixtures, and rollout code
+ * that has not yet supplied the new columns. ADMIN remains the super-admin
+ * security role and therefore retains HQ/all-store/account-management access.
  */
 export function buildPermissionContext(input: PermissionContextInput): PermissionContext {
   const memberships = input.memberships ?? [];
   const membershipRoles = [...new Set(memberships.map((membership) => membership.role))];
   const storeIds = [...new Set(memberships.map((membership) => membership.storeId))];
   const isAdmin = input.role === UserRole.ADMIN;
+
+  const canAccessWeb = input.canAccessWeb ?? true;
+  const canAccessMobile = input.canAccessMobile ?? true;
+  const canAccessHq = isAdmin || (input.canAccessHq ?? false);
+  const canAccessAllStores = isAdmin || (input.canAccessAllStores ?? false);
+  const canManageAccounts = isAdmin || (input.canManageAccounts ?? false);
+  const canReply = isAdmin || (input.canReply ?? storeIds.length > 0);
   const canAccessMainOa = input.canAccessMainOa ?? false;
-  const canManageMainOa = input.canManageMainOa ?? false;
+  const canManageMainOa = canAccessMainOa && (input.canManageMainOa ?? false);
 
   return {
-    version: 1,
+    version: 2,
     identity: {
       platformRole: input.role,
       membershipRoles,
     },
-    // Preserve current behavior in Stage 1: any authenticated account may use
-    // either client type. Stage 2 will make these explicit persisted grants.
     platforms: {
-      web: true,
-      mobile: true,
+      web: canAccessWeb,
+      mobile: canAccessMobile,
     },
     workspaces: {
-      hq: isAdmin,
+      hq: canAccessHq,
       store: storeIds.length > 0,
       mainOa: canAccessMainOa,
     },
     scope: {
-      allStores: isAdmin,
+      allStores: canAccessAllStores,
       storeIds,
     },
     capabilities: {
-      manageAccounts: isAdmin,
-      reply: isAdmin || storeIds.length > 0,
+      manageAccounts: canManageAccounts,
+      reply: canReply,
       accessMainOa: canAccessMainOa,
       manageMainOa: canManageMainOa,
     },
   };
+}
+
+export function hasWorkspaceAccess(context: PermissionContext) {
+  return context.workspaces.hq || context.workspaces.store || context.workspaces.mainOa || context.scope.allStores;
 }

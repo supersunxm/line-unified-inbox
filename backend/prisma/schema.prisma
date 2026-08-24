@@ -270,6 +270,12 @@ model User {
   role                          UserRole                     @default(VIEWER)
   status                        UserStatus                   @default(ACTIVE)
   isActive                      Boolean                      @default(true)
+  canAccessWeb                  Boolean                      @default(true)
+  canAccessMobile               Boolean                      @default(true)
+  canAccessHq                   Boolean                      @default(false)
+  canAccessAllStores            Boolean                      @default(false)
+  canManageAccounts             Boolean                      @default(false)
+  canReply                      Boolean                      @default(false)
   canAccessMainOa               Boolean                      @default(false)
   canManageMainOa               Boolean                      @default(false)
   phone                         String?                      @unique
@@ -830,32 +836,32 @@ model Conversation {
 }
 
 model Message {
-  id                  String                       @id @default(uuid())
-  conversationId      String
-  externalMessageId   String?                      @unique
-  direction           MessageDirection
-  messageType         MessageType                  @default(TEXT)
-  originalText        String
-  originalLanguage    String?
-  translatedThai      String?
-  translatedEnglish   String?
-  translatedChinese   String?
-  rawPayload          Json?
-  senderUserId        String?
-  senderDisplayName   String?
-  fileName            String?
-  latitude            Float?
-  longitude           Float?
+  id                       String                       @id @default(uuid())
+  conversationId           String
+  externalMessageId        String?                      @unique
+  direction                MessageDirection
+  messageType              MessageType                  @default(TEXT)
+  originalText             String
+  originalLanguage         String?
+  translatedThai           String?
+  translatedEnglish        String?
+  translatedChinese        String?
+  rawPayload               Json?
+  senderUserId             String?
+  senderDisplayName        String?
+  fileName                 String?
+  latitude                 Float?
+  longitude                Float?
   encryptedLineReplyToken  String?
   lineReplyTokenReceivedAt DateTime?
   lineReplyTokenUsedAt     DateTime?
-  sentAt              DateTime
-  createdAt           DateTime                     @default(now())
-  conversation        Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender              User?                        @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
-  media               MessageMedia?
-  translationFeedback MessageTranslationFeedback[]
-  pushNotifications   PushNotification[]
+  sentAt                   DateTime
+  createdAt                DateTime                     @default(now())
+  conversation             Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender                   User?                        @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  media                    MessageMedia?
+  translationFeedback      MessageTranslationFeedback[]
+  pushNotifications        PushNotification[]
 
   @@index([conversationId, sentAt])
   @@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])
@@ -1014,9 +1020,9 @@ model ConversationSalesProduct {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  conversation      Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  productModel      ProductModel        @relation(fields: [productModelId], references: [id], onDelete: Restrict)
-  productVariant    ProductVariant?     @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  productModel   ProductModel    @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
 
   @@index([conversationId])
   @@index([productModelId])
@@ -1378,7 +1384,7 @@ model MassMessageCampaign {
 }
 
 model MassMessageStoreDelivery {
-  id                    String                         @id @default(uuid())
+  id                    String                          @id @default(uuid())
   campaignId            String
   storeId               String
   lineOfficialAccountId String?
@@ -1499,7 +1505,7 @@ model TikTokAccountDailyMetric {
 }
 
 model TikTokVideo {
-  id               String    @id @default(uuid())
+  id               String   @id @default(uuid())
   tikTokAccountId  String
   tikTokVideoId    String
   title            String?
@@ -1508,13 +1514,13 @@ model TikTokVideo {
   coverImageUrl    String?
   shareUrl         String?
   duration         Int?
-  viewCount        Int       @default(0)
-  likeCount        Int       @default(0)
-  commentCount     Int       @default(0)
-  shareCount       Int       @default(0)
-  lastSyncedAt     DateTime  @default(now())
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  viewCount        Int      @default(0)
+  likeCount        Int      @default(0)
+  commentCount     Int      @default(0)
+  shareCount       Int      @default(0)
+  lastSyncedAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   tikTokAccount TikTokAccount @relation(fields: [tikTokAccountId], references: [id], onDelete: Cascade)
 
@@ -1533,14 +1539,14 @@ enum AppPlatform {
 model AppRelease {
   id                          String      @id @default(uuid())
   platform                    AppPlatform @default(ANDROID)
-  version                     String      // e.g. "1.0.5"
-  buildNumber                 Int         // e.g. 6
+  version                     String
+  buildNumber                 Int
   minimumSupportedVersion     String      @default("1.0.3")
   minimumSupportedBuildNumber Int         @default(4)
   forceUpdate                 Boolean     @default(false)
-  apkUrl                      String      // e.g. "https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk"
-  apkSize                     String?     // e.g. "57 MB"
-  sha256                      String?     // e.g. "4068576a..."
+  apkUrl                      String
+  apkSize                     String?
+  sha256                      String?
   releaseNotes                String[]    @default([])
   isActive                    Boolean     @default(true)
   downloadCount               Int         @default(0)

@@ -2,22 +2,19 @@
 
 ## Goal
 
-Web and mobile are two clients of the same OPPO LINE OA Monitor account system.
+Web and Mobile are two clients of the same OPPO LINE OA Monitor account system. A person has one `User` identity and one credential set. Web and Mobile sessions are separate sessions, but both resolve to the same user record, lifecycle state, memberships, scopes, and capabilities.
 
-A person has one `User` identity. Web and mobile sessions may be different, but they resolve to the same user record, credentials, lifecycle state, memberships, and authorization context.
-
-The target architecture separates four concerns that were previously partially mixed together:
+The authorization model separates:
 
 1. **Identity** — who the user is.
-2. **Platform access** — whether the user may use Web and/or Mobile.
-3. **Workspace/capability access** — what product areas the user may use.
-4. **Scope** — which stores or global data the user may access.
+2. **Platform access** — Web and/or Mobile.
+3. **Workspace access** — HQ, Store, and Main OA.
+4. **Scope** — all stores or selected Store memberships.
+5. **Capabilities** — actions such as reply, account management, and Main OA management.
 
-## Stage 1: normalized authorization context
+## Stage 1 — normalized authorization context
 
-Stage 1 is intentionally backwards-compatible. It does **not** change who can currently log in or which protected routes currently allow access.
-
-The backend now projects the existing role/membership model into one normalized context returned by authentication and `/auth/me`.
+Stage 1 is merged and deployed. It introduced one normalized authorization contract without changing production access decisions.
 
 ```text
 User
@@ -42,71 +39,96 @@ User
         └── manageMainOa
 ```
 
-The legacy flat `permissions` keys remain present so existing Web and Flutter clients continue to work. The same normalized values are also exposed under `authorization` and nested permission fields for future clients.
+Legacy flat `permissions` keys remain available for current clients.
 
-### Stage 1 compatibility mapping
+## Stage 2 — unified authentication and registration
 
-| Existing state | Normalized result |
-| --- | --- |
-| `UserRole.ADMIN` | HQ workspace, all-store scope, account-management capability |
-| Active Store membership | Store workspace and membership-scoped store IDs |
-| `canAccessMainOa` | Main OA workspace/access capability |
-| `canManageMainOa` | Main OA management capability |
-| Existing authenticated user | Web + Mobile platform access remain enabled |
+Stage 2 persists the access model on the existing `User` record. It does not introduce separate Web and Mobile user tables.
 
-The final row is deliberate: Stage 1 must not introduce a login regression. Explicit persisted Web/Mobile grants are deferred to Stage 2.
+### Persisted User grants
 
-## Stage 2: unified authentication and registration
+- `canAccessWeb`
+- `canAccessMobile`
+- `canAccessHq`
+- `canAccessAllStores`
+- `canManageAccounts`
+- `canReply`
+- existing `canAccessMainOa`
+- existing `canManageMainOa`
 
-Stage 2 will make platform/workspace grants explicit and persisted, while continuing to use one `User` identity.
+`UserRole.ADMIN` remains the super-admin/security role. An ADMIN retains HQ, all-store, account-management, and reply authority. Non-admin HQ users can instead receive explicit capabilities without being promoted to ADMIN.
 
-Target examples:
+### Registration identity rule
+
+The public Store registration endpoint is shared by Web and Mobile. A new registration creates exactly one pending `User` and one pending Store membership.
+
+New Store users receive both platform grants by default:
 
 ```text
-BM
-- Web: false (default policy, configurable)
-- Mobile: true
-- Store workspace: true
-- Store scope: assigned membership(s)
-- HQ workspace: false
-
-HQ analyst
-- Web: true
-- Mobile: true
-- HQ workspace: true
-- All-store/read analytics capabilities as granted
-- Account management: false unless explicitly granted
-
-HQ administrator
-- Web: true
-- Mobile: true
-- HQ workspace: true
-- Account management: true
-- Other capabilities as explicitly granted
+canAccessWeb    = true
+canAccessMobile = true
 ```
 
-Registration from Web or Mobile must create/reuse the same account identity flow. There must not be separate WebUser and MobileUser records.
+Approval activates that same User and membership and enables Store reply capability. Therefore a person who registered from Mobile can use the same email/password on Web, and a person who registered from Web can use the same credentials on Mobile, unless an administrator later removes a platform grant.
 
-Mobile OTP eligibility must stop assuming that every mobile user requires a Store membership; HQ users with mobile access must be supported.
+No account synchronization is required because there is only one account identity.
 
-## Stage 3: adaptive client experience
+### Platform-aware sessions
 
-Web and Flutter should render navigation and home/workspace experiences from the normalized authorization context rather than hard-coding `ADMIN`, `VIEWER`, BM, or PC assumptions.
+Authentication creates a session appropriate to the client:
+
+```text
+User
+├── WEB Session
+└── MOBILE Session
+```
+
+- Web login creates `SessionType.WEB` and uses the Web session cookie.
+- Mobile password or OTP login creates `SessionType.MOBILE` and uses a bearer token.
+- A Web cookie cannot be reused as a Mobile bearer session, and vice versa.
+- Current User grants are checked again while authenticating an existing session. Revoking a platform grant therefore blocks that platform on the next authenticated request without changing the User identity.
+
+Valid credentials with a missing platform grant are distinguished from bad credentials:
+
+- `WEB_ACCESS_NOT_GRANTED`
+- `MOBILE_ACCESS_NOT_GRANTED`
+- `WORKSPACE_ACCESS_NOT_GRANTED`
+
+### HQ Mobile access
+
+Mobile OTP eligibility no longer assumes that every Mobile user owns a Store membership. An active HQ user with Mobile access and a valid workspace can authenticate on Mobile even when the user has no Store membership.
+
+This is required for future HQ-specific Mobile experiences.
+
+### Store scope and reply permission
+
+Store visibility and write authority are independent:
+
+- `canAccessAllStores` can grant all-store scope without making the user ADMIN.
+- Store memberships continue to define membership-scoped Store access.
+- `canReply` determines whether a non-admin user can perform Store write/reply actions.
+
+Main OA continues to use its existing explicit access/manage capabilities.
+
+### Migration/backfill
+
+The Stage 2 migration keeps existing production behavior during rollout:
+
+- existing non-deleted users retain Web and Mobile access;
+- existing ADMIN users are backfilled with HQ/all-store/account-management/reply grants;
+- existing users with active Store memberships receive reply capability;
+- deleted users receive no Web, Mobile, or reply access;
+- existing Main OA flags are unchanged.
+
+## Stage 3 — adaptive client experience
+
+Stage 3 will make Web and Flutter navigation and home/workspace presentation derive from the normalized authorization context.
 
 Examples:
 
-- BM/PC mobile: store-focused home, chats, notifications, profile.
-- HQ mobile: HQ overview, store network, analytics, alerts, optional Main OA.
-- Users with multiple scopes: workspace selection without creating a second account.
+- BM/PC Mobile: Store-focused home, chats, notifications, profile.
+- HQ Mobile: HQ overview, Store network, analytics, alerts, optional Main OA.
+- Mixed-scope users: workspace switching without a second account.
+- Web navigation: features appear according to capabilities instead of relying only on `ADMIN`/`VIEWER` labels.
 
-## Compatibility rules
-
-Until Stage 2 explicitly changes enforcement:
-
-- `AuthGuard` role checks remain authoritative where already used.
-- `StoreAccessService` keeps its current ADMIN-versus-membership behavior.
-- `MainOaAccessService` keeps its current capability checks.
-- Web and Mobile login behavior remains unchanged.
-- No Prisma migration is required for Stage 1.
-
-This avoids changing production authorization semantics before the new permission model has been validated by tests and clients.
+Stage 3 will also be the appropriate place for administrator-facing controls that change individual platform/workspace capabilities.
