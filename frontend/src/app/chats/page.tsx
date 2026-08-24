@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MobileChatsApp } from "@/components/chats/mobile-chats-app";
-import { ApplicationWorkspace } from "../page";
+import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
@@ -83,7 +83,20 @@ export default function ChatsPage() {
     );
   }
 
-  return mode === "mobile"
-    ? <><ChatsUiOverrides /><MobileViewportBridge /><MobileChatsApp /></>
-    : <><ChatsUiOverrides /><ApplicationWorkspace initialSection="chats" /></>;
+  if (mode === "mobile") {
+    return (
+      <AuthorizedSection section="chats">
+        <ChatsUiOverrides />
+        <MobileViewportBridge />
+        <MobileChatsApp />
+      </AuthorizedSection>
+    );
+  }
+
+  return (
+    <>
+      <ChatsUiOverrides />
+      <AuthorizedWorkspace section="chats" />
+    </>
+  );
 }
