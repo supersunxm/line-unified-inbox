@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:oppo_line_oa_chat/core/models/authorization_extensions.dart';
-import 'package:oppo_line_oa_chat/core/models/models.dart';
+import 'package:line_oa_chat_hub/core/models/authorization_extensions.dart';
+import 'package:line_oa_chat_hub/core/models/models.dart';
 
 CurrentUser makeUser({
   String role = 'VIEWER',
