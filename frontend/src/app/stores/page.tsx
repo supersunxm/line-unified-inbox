@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApplicationWorkspace } from "../page";
+import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { MobileStoresApp } from "./mobile-stores-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
@@ -21,6 +21,8 @@ export default function StoresPage() {
     return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลร้านค้า...</main>;
   }
 
-  if (mode === "mobile") return <MobileStoresApp />;
-  return <ApplicationWorkspace initialSection="stores" />;
+  if (mode === "mobile") {
+    return <AuthorizedSection section="stores"><MobileStoresApp /></AuthorizedSection>;
+  }
+  return <AuthorizedWorkspace section="stores" />;
 }
