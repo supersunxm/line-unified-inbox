@@ -36,8 +36,8 @@ function HqApprovalContent() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const result = await request<{ registrations: PendingHq[] }>("/admin/registrations/hq-pending");
@@ -45,11 +45,24 @@ function HqApprovalContent() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load HQ registrations");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    void request<{ registrations: PendingHq[] }>("/admin/registrations/hq-pending")
+      .then((result) => {
+        if (!cancelled) setItems(result.registrations);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load HQ registrations");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   async function act(id: string, action: "approve" | "reject") {
     setActing(id);
@@ -58,7 +71,7 @@ function HqApprovalContent() {
     try {
       await request(`/admin/registrations/hq-users/${id}/${action}`, { method: "PATCH" });
       setNotice(action === "approve" ? "HQ account approved with full access." : "HQ registration rejected.");
-      await load();
+      await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Action failed");
     } finally {
