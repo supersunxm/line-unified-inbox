@@ -36,6 +36,10 @@ class AuthRepository {
     await _api.post('/registration/request', body: {'name': name, 'employeeId': employeeId.trim(), 'email': email.trim(), 'storeId': storeId, 'role': role, 'password': password}, authenticated: false);
   }
 
+  Future<void> registerHq({required String name, required String employeeId, required String email, required String password}) async {
+    await _api.post('/registration/hq-request', body: {'name': name, 'employeeId': employeeId.trim(), 'email': email.trim(), 'password': password}, authenticated: false);
+  }
+
   Future<List<PendingRegistration>> pendingRegistrations() async {
     final result = await _api.get('/admin/registrations/pending');
     final items = (result['registrations'] as List<dynamic>?) ?? <dynamic>[];
