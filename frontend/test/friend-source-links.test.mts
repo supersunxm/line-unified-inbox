@@ -106,9 +106,10 @@ function mockLink(overrides?: Partial<FriendSourceLink>): FriendSourceLink {
 // ──────────────────────────────────────────────────────────────────────
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
-test("canRoleAccessFriendSourceLinks returns true for ADMIN role", () => {
+test("canRoleAccessFriendSourceLinks returns true for ADMIN role and navigation uses normalized section authorization", () => {
   assert.equal(canRoleAccessFriendSourceLinks("ADMIN"), true);
-  assert.match(topNavCode, /authUser\?\.role === "ADMIN"/);
+  assert.match(topNavCode, /canAccessPrimarySection\(authUser,\s*section\)/);
+  assert.match(topNavCode, /can\("friend-source-links"\)/);
   assert.match(topNavCode, /href="\/friend-source-links"/);
 });
 
