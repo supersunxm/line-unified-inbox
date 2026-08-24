@@ -1065,3 +1065,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Let the existing backend pre-deploy command own production migration execution (`npx prisma migrate deploy`), then verify the migration record and account-type constraints before application smoke tests.
 - Use only temporary existing-user sessions and minimum capability grants for authorization smoke testing. Restore flags and delete sessions before completion; never create a production HEAD_OFFICE account or add credentials in Stage 1.
 - Treat changes in dynamic conversation/message totals during the deployment window as live traffic unless database evidence shows a deployment write or data loss. Store account/follower/friend-source scope counts are the regression invariants.
+
+# Main OA production Stage 2 safety boundary (2026-08-24)
+
+- Do not create or activate the production `HEAD_OFFICE` account until the approved secure environment provides all real Main OA inputs (Channel ID, channel secret, channel access token, display name, and Basic ID). Missing credentials are a hard stop; generic/local LINE variables are not assumed to identify the Main OA.
+- Stage 2 remains incremental: create exactly one null-Store/null-Store-Master account only after the credential audit and baseline, verify LINE identity read-only, then configure the existing account-specific webhook before controlled internal inbound/outbound tests. Never print, log, or persist plaintext credentials outside the existing encrypted columns.
+- The current audit stopped before any external write. The recorded production baseline and missing-input evidence are the rollback-safe handoff for the next Stage 2 attempt.
