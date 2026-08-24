@@ -45,13 +45,15 @@ void test("Main OA capability is independent from store membership", () => {
   assert.equal(context.capabilities.manageAccounts, false);
 });
 
-void test("Stage 1 does not introduce platform restrictions", () => {
-  const admin = buildPermissionContext({ role: UserRole.ADMIN });
-  const storeUser = buildPermissionContext({ role: UserRole.VIEWER, memberships: [{ storeId: "store-a", role: "STAFF" }] });
-  const mainOaUser = buildPermissionContext({ role: UserRole.VIEWER, canAccessMainOa: true });
+void test("Stage 2 platform grants are explicit when provided", () => {
+  const context = buildPermissionContext({
+    role: UserRole.VIEWER,
+    canAccessWeb: false,
+    canAccessMobile: true,
+    memberships: [{ storeId: "store-a", role: "STAFF" }],
+  });
 
-  for (const context of [admin, storeUser, mainOaUser]) {
-    assert.equal(context.platforms.web, true);
-    assert.equal(context.platforms.mobile, true);
-  }
+  assert.equal(context.version, 2);
+  assert.equal(context.platforms.web, false);
+  assert.equal(context.platforms.mobile, true);
 });
