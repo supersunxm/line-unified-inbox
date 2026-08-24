@@ -46,8 +46,18 @@ class AuthRepository {
     return items.map((item) => PendingRegistration.fromJson(item as Map<String, dynamic>)).toList();
   }
 
+  Future<List<PendingHqRegistration>> pendingHqRegistrations() async {
+    final result = await _api.get('/admin/registrations/hq-pending');
+    final items = (result['registrations'] as List<dynamic>?) ?? <dynamic>[];
+    return items
+        .map((item) => PendingHqRegistration.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> approveRegistration(String id) => _api.patch('/admin/registrations/$id/approve').then((_) {});
   Future<void> rejectRegistration(String id) => _api.patch('/admin/registrations/$id/reject').then((_) {});
+  Future<void> approveHqRegistration(String userId) => _api.patch('/admin/registrations/hq-users/$userId/approve').then((_) {});
+  Future<void> rejectHqRegistration(String userId) => _api.patch('/admin/registrations/hq-users/$userId/reject').then((_) {});
 
   Future<CurrentUser> me() async => CurrentUser.fromJson(await _api.get('/auth/me'));
   Future<void> logout() async { try { await _api.post('/auth/mobile/logout'); } finally { await _tokens.clear(); } }
@@ -58,4 +68,29 @@ class OtpChallenge {
   OtpChallenge(this.id, this.expiresAt);
   final String id;
   final DateTime expiresAt;
+}
+
+class PendingHqRegistration {
+  PendingHqRegistration({
+    required this.id,
+    required this.displayName,
+    required this.employeeId,
+    required this.email,
+    required this.createdAt,
+  });
+
+  factory PendingHqRegistration.fromJson(Map<String, dynamic> json) =>
+      PendingHqRegistration(
+        id: json['id'] as String,
+        displayName: json['displayName'] as String,
+        employeeId: json['employeeId'] as String?,
+        email: json['email'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+      );
+
+  final String id;
+  final String displayName;
+  final String? employeeId;
+  final String email;
+  final DateTime createdAt;
 }
