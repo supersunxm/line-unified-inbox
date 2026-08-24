@@ -9,14 +9,19 @@ type StoreAccessScope = string[] | null;
 export class StoreAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private contextHasAllStores(user: AuthUser) {
+    return user.role === UserRole.ADMIN || user.authorization?.scope.allStores === true || user.permissions?.canAccessAllStores === true;
+  }
+
   async accessibleStoreIds(user: AuthUser): Promise<StoreAccessScope> {
-    if (user.role === UserRole.ADMIN) return null;
+    if (this.contextHasAllStores(user)) return null;
 
     const account = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: {
         isActive: true,
         status: true,
+        canAccessAllStores: true,
         memberships: {
           select: {
             storeId: true,
@@ -31,6 +36,7 @@ export class StoreAccessService {
       throw new ForbiddenException("User account is not active");
     }
 
+    if (account.canAccessAllStores) return null;
     if (account.memberships.length === 0) throw new ForbiddenException("No active store membership");
 
     const storeIds = account.memberships
@@ -42,7 +48,11 @@ export class StoreAccessService {
 
   async canWriteAsStoreUser(user: AuthUser) {
     if (user.role === UserRole.ADMIN) return true;
-    return (await this.accessibleStoreIds(user)) !== null;
+    const canReply = user.authorization?.capabilities.reply ?? user.permissions?.canReply;
+    if (canReply === false) return false;
+    const scope = await this.accessibleStoreIds(user);
+    if (canReply === true) return true;
+    return scope !== null;
   }
 
   async assertStoreAccess(user: AuthUser, storeId: string) {
