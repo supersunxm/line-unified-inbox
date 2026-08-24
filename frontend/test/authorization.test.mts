@@ -21,17 +21,36 @@ function user(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("HQ users receive HQ navigation and default to Main", () => {
+test("full-access HQ users receive HQ navigation, all branch chats, and default to Main", () => {
   const hq = user({
+    role: "ADMIN" as const,
     authorization: {
       ...user().authorization,
-      workspaces: { hq: true, store: false, mainOa: false },
+      identity: { platformRole: "ADMIN" as const, membershipRoles: [] },
+      workspaces: { hq: true, store: false, mainOa: true },
       scope: { allStores: true, storeIds: [] },
+      capabilities: { manageAccounts: true, reply: true, accessMainOa: true, manageMainOa: true },
     },
   });
   assert.equal(defaultRouteForUser(hq), "/home");
   assert.equal(canAccessPrimarySection(hq, "dashboard"), true);
   assert.equal(canAccessPrimarySection(hq, "stores"), true);
+  assert.equal(canAccessPrimarySection(hq, "chats"), true);
+  assert.equal(canAccessPrimarySection(hq, "friend-source-links"), true);
+  assert.equal(canAccessPrimarySection(hq, "mass-messages"), true);
+  assert.equal(canAccessPrimarySection(hq, "coupons"), true);
+  assert.equal(canAccessPrimarySection(hq, "admin-registrations"), true);
+  assert.equal(canAccessPrimarySection(hq, "main-oa"), true);
+});
+
+test("limited HQ without all-store scope cannot open branch chats", () => {
+  const hq = user({
+    authorization: {
+      ...user().authorization,
+      workspaces: { hq: true, store: false, mainOa: false },
+      scope: { allStores: false, storeIds: [] },
+    },
+  });
   assert.equal(canAccessPrimarySection(hq, "chats"), false);
 });
 
