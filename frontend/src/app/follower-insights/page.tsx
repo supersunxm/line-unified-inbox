@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApplicationWorkspace } from "../page";
+import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { MobileFollowerInsightsApp } from "./mobile-follower-insights-app";
 import styles from "./follower-insights-modern.module.css";
 import polish from "./follower-insights-polish.module.css";
@@ -23,11 +23,15 @@ export default function FollowerInsightsPage() {
     return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลผู้ติดตาม...</main>;
   }
 
-  if (mode === "mobile") return <MobileFollowerInsightsApp />;
+  if (mode === "mobile") {
+    return <AuthorizedSection section="follower-insights"><MobileFollowerInsightsApp /></AuthorizedSection>;
+  }
 
   return (
-    <div className={`${styles.scope} ${polish.scope}`}>
-      <ApplicationWorkspace initialSection="follower-insights" />
-    </div>
+    <AuthorizedSection section="follower-insights">
+      <div className={`${styles.scope} ${polish.scope}`}>
+        <AuthorizedWorkspace section="follower-insights" />
+      </div>
+    </AuthorizedSection>
   );
 }

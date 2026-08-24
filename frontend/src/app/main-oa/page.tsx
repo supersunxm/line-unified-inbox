@@ -5,10 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell";
 import { api } from "@/lib/api";
+import { authorizationFor, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
 import type { ApiConversation } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
-type AuthUser = Awaited<ReturnType<typeof api.me>>;
 
 export default function MainOaPage() {
   const router = useRouter();
@@ -35,10 +35,12 @@ export default function MainOaPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void api.me().then((user) => {
+    void api.me().then((rawUser) => {
       if (cancelled) return;
-      if (!user.permissions?.canAccessMainOa) {
-        router.replace("/home");
+      const user = rawUser as AuthUser;
+      const authorization = authorizationFor(user);
+      if (!authorization.workspaces.mainOa || !authorization.capabilities.accessMainOa) {
+        router.replace(defaultRouteForUser(user));
         return;
       }
       setAuthUser(user);
@@ -81,6 +83,8 @@ export default function MainOaPage() {
     return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Main OA…</main>;
   }
 
+  const authorization = authorizationFor(authUser);
+
   return (
     <AppShell
       currentSection="main-oa"
@@ -99,7 +103,7 @@ export default function MainOaPage() {
             <h1 className="text-2xl font-bold">Main OA</h1>
             <p className="text-sm text-[var(--app-text-secondary)]">Head office inbox — isolated from Store Operations</p>
           </div>
-          <Link href="/chats" className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm font-medium">Switch to Branch Stores</Link>
+          {authorization.workspaces.store && <Link href="/chats" className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm font-medium">Switch to Branch Stores</Link>}
         </header>
         {error && <div role="alert" className="mx-auto mb-3 max-w-7xl rounded-lg bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">{error}</div>}
         <div className="mx-auto grid max-w-7xl overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-sm)] md:grid-cols-[360px_1fr]">

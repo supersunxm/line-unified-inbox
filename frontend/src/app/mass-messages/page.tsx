@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApplicationWorkspace } from "../page";
+import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { MobileMassMessagesApp } from "./mobile-mass-messages-app";
 import { PurchaseBroadcastDraftBanner } from "./purchase-broadcast-draft-banner";
 
@@ -26,12 +26,12 @@ export default function MassMessagesPage() {
     );
   }
 
-  if (mode === "mobile") return <MobileMassMessagesApp />;
+  if (mode === "mobile") return <AuthorizedSection section="mass-messages"><MobileMassMessagesApp /></AuthorizedSection>;
 
   return (
     <>
-      <ApplicationWorkspace initialSection="mass-messages" />
-      <PurchaseBroadcastDraftBanner />
+      <AuthorizedWorkspace section="mass-messages" />
+      <AuthorizedSection section="mass-messages"><PurchaseBroadcastDraftBanner /></AuthorizedSection>
     </>
   );
 }

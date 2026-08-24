@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AuthorizedSection } from "../authorized-workspace";
 import { CouponManagerAlignedView } from "./coupon-manager-aligned-view";
 import { MobileCouponsApp } from "./mobile-coupons-app";
 
@@ -21,6 +22,9 @@ export default function CouponsPage() {
     return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดคูปอง...</main>;
   }
 
-  if (mode === "mobile") return <MobileCouponsApp />;
-  return <CouponManagerAlignedView />;
+  return (
+    <AuthorizedSection section="coupons">
+      {mode === "mobile" ? <MobileCouponsApp /> : <CouponManagerAlignedView />}
+    </AuthorizedSection>
+  );
 }
