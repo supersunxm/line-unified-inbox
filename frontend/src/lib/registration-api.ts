@@ -5,6 +5,7 @@ export type RegistrationStore = {
 };
 
 export type StoreRegistrationRole = "STAFF" | "STORE_MANAGER";
+export type RegistrationRole = StoreRegistrationRole | "HQ";
 
 export type StoreRegistrationInput = {
   name: string;
@@ -15,10 +16,18 @@ export type StoreRegistrationInput = {
   password: string;
 };
 
+export type HqRegistrationInput = {
+  name: string;
+  employeeId: string;
+  email: string;
+  password: string;
+};
+
 type RegistrationResponse = {
-  registrationId: string;
+  registrationId?: string;
   userId: string;
   status: "PENDING_APPROVAL" | string;
+  accountType?: "HQ" | string;
 };
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -51,6 +60,10 @@ export const registrationApi = {
     return result.stores;
   },
   register: (input: StoreRegistrationInput) => publicRequest<RegistrationResponse>("/registration/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  }),
+  registerHq: (input: HqRegistrationInput) => publicRequest<RegistrationResponse>("/registration/hq-request", {
     method: "POST",
     body: JSON.stringify(input),
   }),

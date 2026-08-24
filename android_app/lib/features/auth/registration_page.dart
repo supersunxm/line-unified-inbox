@@ -33,6 +33,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
   bool _loading = true;
   String? _error;
 
+  bool get _isHq => _role == 'HQ';
+
   @override
   void initState() {
     super.initState();
@@ -68,7 +70,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       setState(() => _error = localizations.employeeIdRequired);
       return;
     }
-    if (_storeId == null) {
+    if (!_isHq && _storeId == null) {
       setState(() => _error = localizations.selectStore);
       return;
     }
@@ -77,14 +79,23 @@ class _RegistrationPageState extends State<RegistrationPage> {
       _error = null;
     });
     try {
-      await widget.auth.register(
-        name: _name.text,
-        employeeId: _employeeId.text,
-        email: _email.text,
-        storeId: _storeId!,
-        role: _role,
-        password: _password.text,
-      );
+      if (_isHq) {
+        await widget.auth.registerHq(
+          name: _name.text,
+          employeeId: _employeeId.text,
+          email: _email.text,
+          password: _password.text,
+        );
+      } else {
+        await widget.auth.register(
+          name: _name.text,
+          employeeId: _employeeId.text,
+          email: _email.text,
+          storeId: _storeId!,
+          role: _role,
+          password: _password.text,
+        );
+      }
       widget.onSubmitted();
     } on ApiException catch (error) {
       setState(() => _error = error.code == 'DUPLICATE_EMPLOYEE_ID'
@@ -112,12 +123,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
     final l10n = appLocalizations(context);
     if (_loading && _stores.isEmpty) {
       return Scaffold(
-          appBar: AppBar(title: Text(l10n.createBmAccount)),
+          appBar: AppBar(title: const Text('Create account')),
           body: const Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.createBmAccount),
+        title: const Text('Create account'),
         leading: IconButton(
             onPressed: widget.onBack,
             tooltip: l10n.back,
@@ -146,18 +157,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             isExpanded: true,
-            initialValue: _storeId,
-            decoration: InputDecoration(
-                labelText: l10n.store, border: const OutlineInputBorder()),
-            items: _stores
-                .map((store) =>
-                    DropdownMenuItem(value: store.id, child: Text(store.name)))
-                .toList(),
-            onChanged: (value) => setState(() => _storeId = value),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
             initialValue: _role,
             decoration: InputDecoration(
                 labelText: l10n.role, border: const OutlineInputBorder()),
@@ -165,9 +164,34 @@ class _RegistrationPageState extends State<RegistrationPage> {
               DropdownMenuItem(value: 'STAFF', child: Text(l10n.staff)),
               DropdownMenuItem(
                   value: 'STORE_MANAGER', child: Text(l10n.storeManager)),
+              const DropdownMenuItem(
+                  value: 'HQ', child: Text('HQ / Head Office — Full access')),
             ],
             onChanged: (value) => setState(() => _role = value ?? 'STAFF'),
           ),
+          const SizedBox(height: 12),
+          if (!_isHq)
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: _storeId,
+              decoration: InputDecoration(
+                  labelText: l10n.store, border: const OutlineInputBorder()),
+              items: _stores
+                  .map((store) => DropdownMenuItem(
+                      value: store.id, child: Text(store.name)))
+                  .toList(),
+              onChanged: (value) => setState(() => _storeId = value),
+            )
+          else
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'HQ accounts are not attached to a store. After approval they receive Web + Mobile access, HQ workspace, all stores, account management, reply, and Main OA permissions.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           TextField(
               controller: _password,

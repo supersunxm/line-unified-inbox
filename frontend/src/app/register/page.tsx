@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { registrationApi, type RegistrationStore, type StoreRegistrationRole } from "@/lib/registration-api";
+import { registrationApi, type RegistrationRole, type RegistrationStore } from "@/lib/registration-api";
 import { ThemeControl } from "../theme";
 
 export default function RegisterPage() {
@@ -15,9 +15,10 @@ export default function RegisterPage() {
   const [employeeId, setEmployeeId] = useState("");
   const [email, setEmail] = useState("");
   const [storeId, setStoreId] = useState("");
-  const [role, setRole] = useState<StoreRegistrationRole>("STAFF");
+  const [role, setRole] = useState<RegistrationRole>("STAFF");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const isHq = role === "HQ";
 
   useEffect(() => {
     let active = true;
@@ -47,21 +48,30 @@ export default function RegisterPage() {
       setError("Password must contain at least 12 characters");
       return;
     }
-    if (!storeId) {
+    if (!isHq && !storeId) {
       setError("Please select a store");
       return;
     }
 
     setSubmitting(true);
     try {
-      await registrationApi.register({
-        name: name.trim(),
-        employeeId: employeeId.trim(),
-        email: email.trim(),
-        storeId,
-        role,
-        password,
-      });
+      if (isHq) {
+        await registrationApi.registerHq({
+          name: name.trim(),
+          employeeId: employeeId.trim(),
+          email: email.trim(),
+          password,
+        });
+      } else {
+        await registrationApi.register({
+          name: name.trim(),
+          employeeId: employeeId.trim(),
+          email: email.trim(),
+          storeId,
+          role,
+          password,
+        });
+      }
       setSubmitted(true);
       setPassword("");
       setConfirmPassword("");
@@ -96,7 +106,7 @@ export default function RegisterPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Create OPPO LINE OA Monitor account</h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">BM / PC registration</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">HQ / BM / PC registration</p>
           </div>
           <Link href="/login" className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-400">Sign in</Link>
         </div>
@@ -120,21 +130,30 @@ export default function RegisterPage() {
           </label>
 
           <label className="block text-sm sm:col-span-2">
-            Store
-            <select required disabled={storesLoading || stores.length === 0} value={storeId} onChange={(event) => setStoreId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700">
-              {storesLoading && <option value="">Loading stores…</option>}
-              {!storesLoading && stores.length === 0 && <option value="">No stores available</option>}
-              {stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}
+            Role
+            <select value={role} onChange={(event) => setRole(event.target.value as RegistrationRole)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700">
+              <option value="STAFF">PC / Staff</option>
+              <option value="STORE_MANAGER">BM / Store Manager</option>
+              <option value="HQ">HQ / Head Office — Full access</option>
             </select>
           </label>
 
-          <label className="block text-sm sm:col-span-2">
-            Role
-            <select value={role} onChange={(event) => setRole(event.target.value as StoreRegistrationRole)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700">
-              <option value="STAFF">PC / Staff</option>
-              <option value="STORE_MANAGER">BM / Store Manager</option>
-            </select>
-          </label>
+          {!isHq && (
+            <label className="block text-sm sm:col-span-2">
+              Store
+              <select required disabled={storesLoading || stores.length === 0} value={storeId} onChange={(event) => setStoreId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700">
+                {storesLoading && <option value="">Loading stores…</option>}
+                {!storesLoading && stores.length === 0 && <option value="">No stores available</option>}
+                {stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}
+              </select>
+            </label>
+          )}
+
+          {isHq && (
+            <div className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              HQ accounts are not attached to a store. After approval they receive Web + Mobile access, HQ workspace, all stores, account management, reply, and Main OA permissions.
+            </div>
+          )}
 
           <label className="block text-sm">
             Password
@@ -148,9 +167,9 @@ export default function RegisterPage() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Password must contain at least 12 characters.</p>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">One approved account is used for both Web and Mobile. Access to each platform is controlled by permissions.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">One approved account is used for both Web and Mobile. HQ requests require approval from an existing full-access administrator.</p>
 
-        <button disabled={submitting || storesLoading || !storeId} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900">
+        <button disabled={submitting || (!isHq && (storesLoading || !storeId))} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900">
           {submitting ? "Submitting…" : "Submit registration"}
         </button>
       </form>

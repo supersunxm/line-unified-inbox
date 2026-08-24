@@ -9,6 +9,7 @@ on:
       - "android_app/lib/features/auth/**"
       - "frontend/src/app/login/page.tsx"
       - "frontend/src/app/register/**"
+      - "frontend/src/app/admin/registrations/**"
       - "frontend/src/lib/registration-api.ts"
       - ".github/workflows/unified-auth-ci.yml"
   workflow_dispatch:
@@ -70,6 +71,8 @@ jobs:
           "src/auth/mobile-login-identifier.spec.ts"
           "src/auth/store-access.service.ts"
           "src/auth/registration.service.ts"
+          "src/auth/hq-registration.service.ts"
+          "src/auth/hq-registration.service.spec.ts"
           "src/auth/unified-auth-stage2.spec.ts"
 
       - name: Unified auth regression tests
@@ -82,6 +85,7 @@ jobs:
           src/auth/mobile-login-identifier.spec.ts
           src/auth/store-access.service.spec.ts
           src/auth/registration.service.spec.ts
+          src/auth/hq-registration.service.spec.ts
           src/auth/unified-auth-stage2.spec.ts
 
       - name: Backend build
@@ -107,7 +111,7 @@ jobs:
         run: npm ci
 
       - name: Lint Web registration scope
-        run: npx eslint "src/app/login/page.tsx" "src/app/register/page.tsx" "src/lib/registration-api.ts"
+        run: npx eslint "src/app/login/page.tsx" "src/app/register/page.tsx" "src/app/admin/registrations/page.tsx" "src/app/admin/registrations/hq/page.tsx" "src/lib/registration-api.ts"
 
       - name: Frontend build
         run: npm run build

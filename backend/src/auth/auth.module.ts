@@ -13,6 +13,7 @@ import { StoreAccessService } from "./store-access.service";
 import { MainOaAccessService } from "./main-oa-access.service";
 import { OtpChallengeService } from "./otp-challenge.service";
 import { RegistrationService } from "./registration.service";
+import { HqRegistrationService } from "./hq-registration.service";
 import { RegistrationController } from "./registration.controller";
 import { AdminRegistrationController } from "./admin-registration.controller";
 import { MobileAuthService } from "./mobile-auth.service";
@@ -24,5 +25,5 @@ import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
 import { AdminAuditLogController } from "./admin-audit-log.controller";
 
-@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, MainOaAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService, MainOaAccessService, AuditLogService] })
+@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, MainOaAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, HqRegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService, MainOaAccessService, AuditLogService] })
 export class AuthModule {}
