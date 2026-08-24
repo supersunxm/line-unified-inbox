@@ -114,7 +114,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;
     case "chats":
-      return auth.workspaces.store;
+      return auth.workspaces.store || auth.scope.allStores;
     case "follower-insights":
       return auth.workspaces.hq || auth.workspaces.store;
     case "main-oa":
