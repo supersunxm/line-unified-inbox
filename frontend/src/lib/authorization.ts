@@ -114,7 +114,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;
     case "chats":
-      return auth.workspaces.store;
+      return auth.workspaces.store || auth.scope.allStores;
     case "follower-insights":
       return auth.workspaces.hq || auth.workspaces.store;
     case "main-oa":
@@ -132,7 +132,7 @@ export function canAccessWebTool(user: AuthUser, tool: "message-traffic" | "tikt
 export function defaultRouteForUser(user: AuthUser) {
   const auth = authorizationFor(user);
   if (auth.workspaces.hq) return "/home";
-  if (auth.workspaces.store) return "/chats";
+  if (auth.workspaces.store || auth.scope.allStores) return "/chats";
   if (auth.workspaces.mainOa && auth.capabilities.accessMainOa) return "/main-oa";
   return "/login";
 }
