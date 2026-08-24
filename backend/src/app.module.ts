@@ -56,10 +56,11 @@ import { MessageTrafficController } from "./message-traffic.controller";
 import { MessageTrafficService } from "./message-traffic.service";
 
 import { AppVersionModule } from "./app-version/app-version.module";
+import { MainOaController } from "./main-oa.controller";
 
 @Module({
   imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule],
-  controllers: [HealthController, StoresController, ConversationsController, ActivityController, DashboardController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
+  controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
   providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
 export class AppModule {}

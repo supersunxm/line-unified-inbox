@@ -12,7 +12,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService) {}
   private tokenHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
-  private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; status?: string; mustChangePassword?: boolean; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
+  private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; canAccessMainOa?: boolean; canManageMainOa?: boolean; status?: string; mustChangePassword?: boolean; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
     const memberships = user.memberships?.map((membership) => ({ id: membership.id, storeId: membership.storeId, role: membership.role, store: membership.store })) ?? [];
     return {
       id: user.id,
@@ -35,6 +35,8 @@ export class AuthService {
         membershipRoles: [...new Set(memberships.map((membership) => membership.role))],
         canAccessAllStores: user.role === "ADMIN",
         canReply: user.role === "ADMIN" || memberships.length > 0,
+        canAccessMainOa: user.canAccessMainOa ?? false,
+        canManageMainOa: user.canManageMainOa ?? false,
       },
     };
   }
@@ -45,7 +47,7 @@ export class AuthService {
     const user = await this.prisma.user.findFirst({ where: { OR: [{ normalizedEmail: identifier }, { username: identifier }] }, include: this.userInclude });
     if (!user || !user.passwordHash || !(await this.passwords.verify(password, user.passwordHash))) { await this.rateLimiter?.recordLoginFailure(ip, identifier); await this.audit?.record({ action: "USER_LOGIN_FAILED", targetUserId: user?.id, ipAddress: ip, userAgent }); this.logger.warn(JSON.stringify({ event: "login_failure", reason: "invalid_credentials" })); throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Invalid email or password" }); }
     const activeMemberships = user.memberships ?? [];
-    if (user.status === UserStatus.PENDING_APPROVAL || activeMemberships.length === 0 && user.role !== "ADMIN") { await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_REJECTED", metadata: { reason: user.status === UserStatus.PENDING_APPROVAL ? "PENDING_APPROVAL" : "NO_ACTIVE_STORE_ACCESS" }, ipAddress: ip, userAgent }); throw new UnauthorizedException({ code: "ACCOUNT_PENDING_APPROVAL", message: "Account is pending approval" }); }
+    if (user.status === UserStatus.PENDING_APPROVAL || activeMemberships.length === 0 && user.role !== "ADMIN" && !user.canAccessMainOa) { await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_REJECTED", metadata: { reason: user.status === UserStatus.PENDING_APPROVAL ? "PENDING_APPROVAL" : "NO_WORKSPACE_ACCESS" }, ipAddress: ip, userAgent }); throw new UnauthorizedException({ code: "ACCOUNT_PENDING_APPROVAL", message: "Account is pending approval" }); }
     if (user.status === UserStatus.REJECTED) { await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_REJECTED", metadata: { reason: "REJECTED" }, ipAddress: ip, userAgent }); throw new UnauthorizedException({ code: "ACCOUNT_REJECTED", message: "Account has been rejected" }); }
     if (!user.isActive || user.status === UserStatus.SUSPENDED) { await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_REJECTED", metadata: { reason: user.status === UserStatus.SUSPENDED ? "SUSPENDED" : "INACTIVE" }, ipAddress: ip, userAgent }); throw new UnauthorizedException({ code: "ACCOUNT_SUSPENDED", message: "Account is suspended" }); }
     const { token, expiresAt } = await this.createSession(user.id, sessionType);
@@ -56,7 +58,7 @@ export class AuthService {
   async authenticate(token?: string) {
     if (!token) return null;
     const session = await this.prisma.session.findUnique({ where: { tokenHash: this.tokenHash(token) }, include: { user: { include: this.userInclude } } });
-    if (!session || session.expiresAt <= new Date() || !session.user.isActive || session.user.status !== UserStatus.ACTIVE || (session.user.role !== "ADMIN" && session.user.memberships.length === 0)) return null;
+    if (!session || session.expiresAt <= new Date() || !session.user.isActive || session.user.status !== UserStatus.ACTIVE || (session.user.role !== "ADMIN" && session.user.memberships.length === 0 && !session.user.canAccessMainOa)) return null;
     return this.safeUser(session.user);
   }
   async logout(token?: string, ip?: string, userAgent?: string) { if (token) { const session = await this.prisma.session.findUnique({ where: { tokenHash: this.tokenHash(token) }, select: { userId: true } }); await this.prisma.session.deleteMany({ where: { tokenHash: this.tokenHash(token) } }); if (session) await this.audit?.record({ actorUserId: session.userId, action: "USER_LOGOUT", ipAddress: ip, userAgent }); } }

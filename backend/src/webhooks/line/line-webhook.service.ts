@@ -41,7 +41,7 @@ export class LineWebhookService {
   async resolveSignatureCredentialByWebhookKey(webhookKey: string): Promise<LineCredentialResolution> {
     const oa = await this.prisma.lineOfficialAccount.findUnique({ where: { webhookKey }, include: { store: true } });
     if (!oa) return { source: "none", reason: "webhook key not mapped", channelSecretStored: false, channelSecretDecryptable: false };
-    const safeOa = { id: oa.id, name: oa.name, store: oa.store.name, isActive: oa.isActive, isArchived: Boolean(oa.archivedAt) };
+    const safeOa = { id: oa.id, name: oa.name, store: oa.store?.name ?? "Main OA", isActive: oa.isActive, isArchived: Boolean(oa.archivedAt) };
     if (!oa.isActive) return { source: "none", oa: safeOa, reason: "webhook key not mapped", channelSecretStored: Boolean(oa.encryptedChannelSecret), channelSecretDecryptable: false };
     if (!oa.encryptedChannelSecret) return { source: "none", oa: safeOa, reason: "channel secret missing", channelSecretStored: false, channelSecretDecryptable: false };
     try { return { secret: this.encryption.decrypt(oa.encryptedChannelSecret), source: "database OA credential", oa: safeOa, channelSecretStored: true, channelSecretDecryptable: true }; }
@@ -211,7 +211,7 @@ export class LineWebhookService {
           lineReplyTokenReceivedAt,
         },
       });
-      if (this.notifications) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
+      if (this.notifications && conversation.storeId) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
       const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
       if (shouldResetBm && prevBmStatus) {

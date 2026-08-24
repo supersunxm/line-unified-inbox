@@ -22,7 +22,7 @@ export type AuthUser = {
   memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }>;
   stores?: Array<{ id: string; name: string; code: string | null }>;
   profile?: { firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; phone?: string | null };
-  permissions?: { platformRole: UserRole; membershipRoles: string[]; canAccessAllStores: boolean; canReply: boolean };
+  permissions?: { platformRole: UserRole; membershipRoles: string[]; canAccessAllStores: boolean; canReply: boolean; canAccessMainOa: boolean; canManageMainOa: boolean };
 };
 export type AuthRequest = Request & { user?: AuthUser };
 

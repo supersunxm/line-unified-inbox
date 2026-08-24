@@ -4,8 +4,9 @@ export type StoreMasterSyncReport = { processed: number; updated: number; unchan
 
 export async function syncConnectedLineOaMetadata(prisma: PrismaClient, dryRun: boolean): Promise<StoreMasterSyncReport> {
   const report: StoreMasterSyncReport = { processed: 0, updated: 0, unchanged: 0, missingStoreMaster: 0, failed: 0 };
-  const accounts = await prisma.lineOfficialAccount.findMany({ where: { archivedAt: null }, select: { id: true, store: { select: { id: true, code: true, name: true, region: true, area: true, storeMasterId: true } } } });
+  const accounts = await prisma.lineOfficialAccount.findMany({ where: { archivedAt: null, accountType: "STORE", storeId: { not: null } }, select: { id: true, store: { select: { id: true, code: true, name: true, region: true, area: true, storeMasterId: true } } } });
   for (const account of accounts) {
+    if (!account.store) continue;
     report.processed++;
     try {
       const stableStoreId = account.store.code?.trim();

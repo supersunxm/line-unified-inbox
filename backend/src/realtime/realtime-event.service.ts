@@ -5,7 +5,7 @@ export type RealtimeEvent = {
   type: "conversation.updated" | "message.created" | "message.media.updated";
   version: 1;
   conversationId: string;
-  storeId: string;
+  storeId: string | null;
   message?: { id: string; direction: string; messageType: string; text: string; sentAt: string; media: null | { processingStatus: string } };
   conversation?: { id: string; latestMessageAt: string; bmReplyStatus: string };
 };

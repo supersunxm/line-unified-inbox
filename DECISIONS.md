@@ -1045,3 +1045,16 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Password policy is centralized in `auth/password-policy.ts` and reused by request DTOs and service methods. Hashing remains a separate concern, so existing stored passwords continue to verify normally.
 - New passwords are rejected before hashing when they lack the required length, character classes, or special character. Admin reset passwords are generated with all required classes and validated before storage.
 - No password migration is performed; users are required to satisfy the stronger policy only when creating or changing a password.
+# Main OA tenant and authorization boundary (2026-08-24)
+
+- `LineOfficialAccount.accountType` is the authoritative workspace discriminator. Names, Store Master codes, and frontend filtering are never authorization or tenancy inputs.
+- `Conversation.lineOfficialAccountId` remains the message tenant boundary. `Conversation.storeId` and `LineOfficialAccount.storeId` are nullable only for `HEAD_OFFICE`; a database check enforces the valid combinations so Main OA needs no fake Store or Store Master.
+- Existing store endpoints fail closed to `STORE`, while `/main-oa/*` fails closed to `HEAD_OFFICE`. Detail operations verify the conversation's OA type before returning data.
+- Main OA access is capability-based (`canAccessMainOa`, `canManageMainOa`) and defaults false for every existing user, including ADMIN. Manage implies access through a database constraint.
+- The existing per-OA webhook key/signature flow is reused. Store push notifications remain store-only; shared conversation persistence and LINE reply/push delivery are reused for Main OA.
+
+# Main OA local verification boundary (2026-08-24)
+
+- Runtime verification uses only the local PostgreSQL container, an encrypted dummy temporary HEAD_OFFICE fixture, and signed synthetic webhook payloads. No real LINE credential, external webhook, deployment, or production data mutation is part of this audit.
+- Temporary capability grants and fixtures are created and removed in the same verification run; final database counts and invariants must match the pre-test baseline before reporting completion.
+- Rolling-window tests derive fixture dates from the service's public date helper so the test remains deterministic as the calendar advances; production date behavior is unchanged.

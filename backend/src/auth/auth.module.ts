@@ -10,6 +10,7 @@ import { EmailModule } from "../email/email.module";
 import { DevAdminService } from "./dev-admin.service";
 import { PilotAdminBootstrapService } from "./pilot-admin-bootstrap.service";
 import { StoreAccessService } from "./store-access.service";
+import { MainOaAccessService } from "./main-oa-access.service";
 import { OtpChallengeService } from "./otp-challenge.service";
 import { RegistrationService } from "./registration.service";
 import { RegistrationController } from "./registration.controller";
@@ -23,5 +24,5 @@ import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
 import { AdminAuditLogController } from "./admin-audit-log.controller";
 
-@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService, AuditLogService] })
+@Module({ imports: [EmailModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, MainOaAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService, MainOaAccessService, AuditLogService] })
 export class AuthModule {}

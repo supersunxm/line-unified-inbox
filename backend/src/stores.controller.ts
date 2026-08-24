@@ -33,6 +33,7 @@ export class StoresController {
 
     const storeCountsMap = new Map<string, { total: number; notReplied: number }>();
     for (const item of operationalGroups) {
+      if (!item.storeId) continue;
       const current = storeCountsMap.get(item.storeId) ?? { total: 0, notReplied: 0 };
       const count = item._count._all;
       current.total += count;

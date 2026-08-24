@@ -232,8 +232,8 @@ export class ProductCorrectionInsightService {
         sampleText,
         correctedAt: act.createdAt,
         actorName: act.createdByName,
-        storeId: act.conversation.storeId,
-        storeName: act.conversation.store.name,
+        storeId: act.conversation.storeId ?? undefined,
+        storeName: act.conversation.store?.name,
       });
     }
 

@@ -224,6 +224,7 @@ export class DashboardAnalyticsService {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         storeId: { in: activeStoreIds },
+        lineOfficialAccount: { accountType: "STORE" },
         createdAt: rangeEndExclusive ? { gte: startDate, lt: rangeEndExclusive } : { gte: startDate },
       },
       include: {
@@ -249,6 +250,7 @@ export class DashboardAnalyticsService {
     const yesterdayConversations = await this.prisma.conversation.findMany({
       where: {
         storeId: { in: activeStoreIds },
+        lineOfficialAccount: { accountType: "STORE" },
         createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
       },
       include: {
@@ -323,6 +325,7 @@ export class DashboardAnalyticsService {
 
     for (const conv of conversations) {
       const storeId = conv.storeId;
+      if (!storeId) continue;
       const agg = storeAggMap.get(storeId) ?? {
         storeId,
         masterStoreId: conv.store?.storeMaster?.externalStoreId ?? null,

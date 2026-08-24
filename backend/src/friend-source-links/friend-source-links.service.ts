@@ -48,6 +48,8 @@ export class FriendSourceLinksService {
     const accounts = await this.prisma.lineOfficialAccount.findMany({
       where: {
         id: { in: distinctIds },
+        accountType: "STORE",
+        storeId: { not: null },
         isActive: true,
         store: { isActive: true },
       },
@@ -75,6 +77,7 @@ export class FriendSourceLinksService {
     const ALL_SOURCES = [FriendSource.STORE_QR, FriendSource.TIKTOK, FriendSource.FACEBOOK, FriendSource.INSTAGRAM];
 
     for (const acc of accounts) {
+      if (!acc.storeId) continue;
       const destinationUrl = deriveDefaultDestinationUrl(acc.basicId!);
 
       for (const source of ALL_SOURCES) {

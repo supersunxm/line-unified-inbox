@@ -222,8 +222,8 @@ export class ProductReviewQueueService {
       allItems.push({
         conversationId: conv.id,
         customerName: conv.customer?.displayName ?? "OPPO Customer",
-        storeId: conv.storeId,
-        storeName: conv.store.name,
+        storeId: conv.storeId ?? "",
+        storeName: conv.store?.name ?? "Main OA",
         latestInboundText,
         predictedProducts,
         reviewReason: reason,

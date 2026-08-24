@@ -1296,7 +1296,7 @@ export default function Home() {
 
 export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
   const { widths: chatPaneWidths, containerRef: chatContainerRef, resize: resizeChatPanes, reset: resetChatPanes } = useResizablePanes(initialSection === "chats");
-  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
+  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
   const [setupStatusError, setSetupStatusError] = useState<string | null>(null);

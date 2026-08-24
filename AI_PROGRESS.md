@@ -1809,3 +1809,20 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added one shared backend policy requiring 12+ characters, uppercase, lowercase, number, and special character.
 - Enforced it at BM registration, admin-generated temporary password validation, forced/normal password change, and first-admin setup validation. Existing password verification/login remains unchanged.
 - Password violations return `PASSWORD_POLICY_VIOLATION` with safe requirement text; no plaintext password or schema change was introduced.
+# Current task: Main LINE OA Workspace (2026-08-24)
+
+- Audit found `LineOfficialAccount` is the OA credential/account model. It was required to belong to `Store`; `Conversation` redundantly required both `storeId` and `lineOfficialAccountId`. Webhooks already resolve a unique OA by `webhookKey`, preserve raw request bytes for signature verification, and isolate a user's conversations by OA ID.
+- Added backward-compatible `LineAccountType` (`STORE` default, `HEAD_OFFICE` explicit), nullable store relationships for Main OA, database checks preventing STORE-without-store and HEAD_OFFICE-with-store, and explicit user capabilities for Main OA view/manage access.
+- Store conversation/account/follower paths now query `STORE` scope; Main OA has dedicated capability-protected account, inbox, detail, message, reply-status, and send routes. The frontend has a dedicated `/main-oa` workspace and only shows its navigation entry when the session capability is present.
+- Existing data remains `STORE` through the enum default. No Main OA or fake Store record was created, no credentials were connected, and no deployment was performed.
+- Prisma validation, backend build, focused Main OA/store isolation tests, changed-file lint, all 377 frontend tests, and the frontend production build pass. The rolling-window follower fixture was subsequently made calendar-safe and the full backend suite now passes 1,258/1,258. Repository-wide backend lint still reports pre-existing unrelated errors.
+- Initial Docker availability was transient; the local PostgreSQL container was started later in this audit and the committed migration was applied and verified in the closure section below.
+
+# Current verification closure: Main LINE OA Workspace (2026-08-24)
+
+- Started Docker Desktop and the local PostgreSQL 16 container; applied all 9 pending committed migrations, including `20260824093000_add_main_oa_workspace`. Prisma reports the database schema up to date.
+- Baseline and post-cleanup counts match exactly: 7 LINE OA accounts, 6 stores, 156 Store Master rows, 23 conversations, 37 messages, and 6 users. Final invariants are clean: no STORE account without a store, no HEAD_OFFICE account with a store, no temporary account/customers, and both test users have `canAccessMainOa=false` and `canManageMainOa=false`.
+- Database probes passed for valid STORE and HEAD_OFFICE rows and rejected both invalid account/store combinations. Both Main OA capability constraints are present; the migration record is finished and not rolled back.
+- Runtime checks passed: backend health/readiness 200; unauthenticated Main OA 401; ADMIN Main OA account/list/detail/status paths authorized; VIEWER Main OA reads authorized but status writes return 403; store and analytics endpoints report no HEAD_OFFICE leakage; signed webhook events route separately to temporary HEAD_OFFICE and STORE accounts and were deleted after verification.
+- Backend full tests pass 1,258/1,258. The rolling-window follower test now derives its fixture dates from `getAutoBackfillDates()` instead of a stale July 2026 literal. Main OA/date-fix ESLint, Prisma validation, backend build, frontend tests (377), frontend build, frontend Main OA ESLint, and `git diff --check` pass.
+- Repository-wide backend lint still reports 320 existing violations outside this focused change set; repository-wide frontend lint still reports existing errors/warnings outside Main OA. No deployment or real LINE OA credential connection was performed.

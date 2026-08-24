@@ -15,7 +15,7 @@ export class RealtimeController {
     return merge(
       of<MessageEvent>({ type: "connected", data: { version: 1 } }),
       this.events.stream().pipe(
-        filter((event) => storeIds === null || storeIds.includes(event.storeId)),
+        filter((event) => event.storeId !== null && (storeIds === null || storeIds.includes(event.storeId))),
         map((event) => ({ type: event.type, data: event })),
       ),
       interval(25_000).pipe(map(() => ({ type: "heartbeat", data: { version: 1 } }))),

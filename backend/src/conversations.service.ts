@@ -73,8 +73,9 @@ export class ConversationsService {
     void _purchaseRecordedAt;
     void _salesRecordedById;
     void _salesRecordedAt;
-    const { storeMaster, ...store } = rawStore;
-    const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
+    const storeMaster = rawStore?.storeMaster ?? null;
+    const store = rawStore ? ((value) => { const { storeMaster: omittedStoreMaster, ...safeStore } = value; void omittedStoreMaster; return safeStore; })(rawStore) : { id: "", name: "Main OA", code: null, region: null, area: null, isActive: true, archivedAt: null, createdAt: item.createdAt, updatedAt: item.updatedAt, storeMasterId: null, provinceSource: null, regionSource: null };
+    const resolvedLineOaManagerUrl = rawStore ? resolveLineOaManagerUrl(rawStore, latestManagerUrls) : null;
     const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
     return {
       ...conversation,
@@ -101,14 +102,15 @@ export class ConversationsService {
     return { ...safe, sender, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
-  async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null) {
+  async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null, accountType: "STORE" | "HEAD_OFFICE" = "STORE") {
     const search = query.search?.trim();
     const storeFilter = accessibleStoreIds === null
       ? query.storeId
       : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
     const where: Prisma.ConversationWhereInput = {
-      store: { archivedAt: null },
+      store: accountType === "STORE" ? { archivedAt: null } : undefined,
+      lineOfficialAccount: { accountType },
       ...resetFilter,
       storeId: storeFilter,
       lineOfficialAccountId: query.lineOaId,
@@ -161,14 +163,14 @@ export class ConversationsService {
       this.prisma.conversation.findMany({ where, include: conversationListInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
       this.prisma.conversation.count({ where }),
     ]);
-    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, items.map(({ store }) => store.code));
+    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, items.flatMap(({ store }) => store ? [store.code] : []));
     return { items: items.map((item) => this.safe(item, latestManagerUrls)), total, page: query.page, pageSize };
   }
 
   async get(id: string) {
     const item = await this.prisma.conversation.findUnique({ where: { id }, include: conversationDetailInclude });
     if (!item) throw new NotFoundException("Conversation not found");
-    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, [item.store.code]);
+    const latestManagerUrls = await loadLatestManagerUrls(this.prisma, item.store ? [item.store.code] : []);
     return this.safe(item, latestManagerUrls);
   }
 
@@ -283,7 +285,8 @@ export class ConversationsService {
       throw new NotFoundException("One or more conversations not found");
     }
 
-    const storeIds = Array.from(new Set(conversations.map((c) => c.storeId)));
+    const storeIds = Array.from(new Set(conversations.map((c) => c.storeId).filter((id): id is string => Boolean(id))));
+    if (storeIds.length === 0) throw new NotFoundException("One or more conversations not found");
     if (storeIds.length > 1) {
       throw new ForbiddenException("Bulk operation across multiple stores is not permitted");
     }
@@ -596,7 +599,7 @@ export class ConversationsService {
         context: {
           conversationId: conversation.id,
           userId: operator.id,
-          storeId: conversation.storeId,
+          storeId: conversation.storeId ?? undefined,
           storeName: conversation.store?.name,
           channelId: oa.channelId || oa.id,
           replyTokenAgeMs: claimed.ageMs,
@@ -621,7 +624,7 @@ export class ConversationsService {
           context: {
             conversationId: conversation.id,
             userId: operator.id,
-            storeId: conversation.storeId,
+            storeId: conversation.storeId ?? undefined,
             storeName: conversation.store?.name,
             channelId: oa.channelId || oa.id,
             replyTokenAgeMs: claimed.ageMs,
@@ -642,7 +645,7 @@ export class ConversationsService {
         context: {
           conversationId: conversation.id,
           userId: operator.id,
-          storeId: conversation.storeId,
+          storeId: conversation.storeId ?? undefined,
           storeName: conversation.store?.name,
           channelId: oa.channelId || oa.id,
         },
@@ -739,7 +742,7 @@ export class ConversationsService {
           context: {
             conversationId: conversation.id,
             userId: operator.id,
-            storeId: conversation.storeId,
+            storeId: conversation.storeId ?? undefined,
             storeName: conversation.store?.name,
             channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
             replyTokenAgeMs: claimed.ageMs,
@@ -766,7 +769,7 @@ export class ConversationsService {
             context: {
               conversationId: conversation.id,
               userId: operator.id,
-              storeId: conversation.storeId,
+              storeId: conversation.storeId ?? undefined,
               storeName: conversation.store?.name,
               channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
               imageUrlDomain: domain,
@@ -789,7 +792,7 @@ export class ConversationsService {
           context: {
             conversationId: conversation.id,
             userId: operator.id,
-            storeId: conversation.storeId,
+            storeId: conversation.storeId ?? undefined,
             storeName: conversation.store?.name,
             channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
             imageUrlDomain: domain,
@@ -855,7 +858,7 @@ export class ConversationsService {
 
     const grouped = await this.prisma.conversation.groupBy({
       by: ["storeId", "bmReplyStatus"],
-      where: { store: storeScope, ...(resetFilter as Prisma.ConversationWhereInput) },
+      where: { store: storeScope, lineOfficialAccount: { accountType: "STORE" }, ...(resetFilter as Prisma.ConversationWhereInput) },
       _count: { _all: true },
     });
 
@@ -880,7 +883,7 @@ export class ConversationsService {
         overview.replied += count;
       }
 
-      const storeCounts = storeMap.get(item.storeId);
+      const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
       if (storeCounts) {
         if (item.bmReplyStatus === BmReplyStatus.NOT_REPLIED) {
           storeCounts.notReplied += count;
@@ -896,6 +899,7 @@ export class ConversationsService {
       by: ["storeId"],
       where: {
         store: storeScope,
+        lineOfficialAccount: { accountType: "STORE" },
         bmReplyStatus: BmReplyStatus.NOT_REPLIED,
         ...(resetFilter as Prisma.ConversationWhereInput),
       },
@@ -907,7 +911,7 @@ export class ConversationsService {
     for (const item of oldestUnanswered) {
       if (item._min && item._min.latestMessageAt) {
         const elapsedMinutes = Math.max(0, Math.floor((now - new Date(item._min.latestMessageAt).getTime()) / 60000));
-        oldestMap.set(item.storeId, elapsedMinutes);
+        if (item.storeId) oldestMap.set(item.storeId, elapsedMinutes);
       }
     }
 

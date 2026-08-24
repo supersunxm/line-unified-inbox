@@ -51,8 +51,9 @@ export class StoreAccessService {
   }
 
   async assertConversationAccess(user: AuthUser, conversationId: string) {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { storeId: true } });
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { storeId: true, lineOfficialAccount: { select: { accountType: true } } } });
     if (!conversation) throw new NotFoundException("Conversation not found");
+    if (conversation.lineOfficialAccount?.accountType === "HEAD_OFFICE" || !conversation.storeId) throw new NotFoundException("Conversation not found");
     await this.assertStoreAccess(user, conversation.storeId);
     return conversation.storeId;
   }

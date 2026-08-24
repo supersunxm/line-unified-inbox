@@ -133,7 +133,7 @@ export const api = {
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
   me: () =>
-    request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>(
+    request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa: boolean; canManageMainOa: boolean } }>(
       "/auth/me",
       { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ),
@@ -177,6 +177,14 @@ export const api = {
     const qStr = query.toString();
     return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`);
   },
+  mainOaAccounts: () => request<Array<{ id: string; name: string; connectionStatus: string; isActive: boolean; _count: { conversations: number } }>>("/main-oa/accounts"),
+  mainOaConversations: (params?: Record<string, string | number | boolean | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) if (value !== undefined && value !== "") query.set(key, String(value));
+    return request<ConversationListResponse>(`/main-oa/conversations?${query.toString()}`);
+  },
+  mainOaConversation: (id: string) => request<ApiConversation>(`/main-oa/conversations/${encodeURIComponent(id)}`),
+  sendMainOaMessage: (id: string, text: string, idempotencyKey: string) => request<SendConversationMessageResponse>(`/main-oa/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", body: JSON.stringify({ text, idempotencyKey }) }),
   bmReplyStatusSummary: () => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary"),
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),

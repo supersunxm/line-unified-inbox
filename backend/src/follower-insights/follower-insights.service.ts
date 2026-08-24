@@ -314,6 +314,8 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
     // Accounts ordered by lastBackfillReconciledAt (nulls first), then id ASC
     const pageBatch = await this.prisma.lineOfficialAccount.findMany({
       where: {
+        accountType: "STORE",
+        storeId: { not: null },
         isActive: true,
         archivedAt: null,
       },
@@ -518,6 +520,8 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
 
     const accounts = await this.prisma.lineOfficialAccount.findMany({
       where: {
+        accountType: "STORE",
+        storeId: { not: null },
         isActive: true,
         archivedAt: null,
         encryptedChannelAccessToken: { not: null },
@@ -693,6 +697,8 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
     const dates = getDateRangeArray(dateFrom, dateTo);
 
     const accountsWhereClause: Record<string, unknown> = {
+      accountType: "STORE",
+      storeId: { not: null },
       isActive: true,
       archivedAt: null,
       ...(query.lineOaId ? { id: query.lineOaId } : {}),
@@ -1128,6 +1134,8 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
 
     const accounts = await this.prisma.lineOfficialAccount.findMany({
       where: {
+        accountType: "STORE",
+        storeId: { not: null },
         isActive: true,
         archivedAt: null,
       },
@@ -1151,6 +1159,7 @@ export class FollowerInsightsService implements OnModuleInit, OnApplicationBoots
     const rows: ByStoreAccountRow[] = [];
 
     for (const account of accounts) {
+      if (!account.store) continue;
       const endSnap = account.followerSnapshots.find(s => formatDbDateToIso(s.snapshotDate) === targetIsoDate);
       const isReady = endSnap?.status === "ready";
       const currentFollowers = isReady && endSnap.followers !== null ? endSnap.followers : null;

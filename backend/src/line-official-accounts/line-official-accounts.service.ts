@@ -64,6 +64,7 @@ export class LineOfficialAccountsService {
   }
 
   private safe(item: IncludedOa, latestManagerUrls: LatestManagerUrlMap, messagesReceivedToday = 0) {
+    if (!item.store || item.accountType === "HEAD_OFFICE") throw new InternalServerErrorException("Store LINE OA is missing its store relationship");
     const webhook = this.webhookConfiguration(item.webhookKey);
     const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
     return {
@@ -81,10 +82,10 @@ export class LineOfficialAccountsService {
   }
 
   async list(showArchived = false) {
-    const items = await this.prisma.lineOfficialAccount.findMany({ where: showArchived ? undefined : { archivedAt: null, store: { archivedAt: null } }, include: safeInclude, orderBy: { name: "asc" } });
+    const items = await this.prisma.lineOfficialAccount.findMany({ where: showArchived ? { accountType: "STORE" } : { accountType: "STORE", archivedAt: null, store: { archivedAt: null } }, include: safeInclude, orderBy: { name: "asc" } });
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const [latestManagerUrls, conversationCounts] = await Promise.all([
-      loadLatestManagerUrls(this.prisma, items.map(({ store }) => store.code)),
+      loadLatestManagerUrls(this.prisma, items.flatMap(({ store }) => store ? [store.code] : [])),
       this.prisma.conversation.findMany({
         where: { lineOfficialAccountId: { in: items.map(({ id }) => id) } },
         select: { lineOfficialAccountId: true, _count: { select: { messages: { where: { sentAt: { gte: start } } } } } },
@@ -139,8 +140,8 @@ export class LineOfficialAccountsService {
   }
   async get(id: string) {
     const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: safeInclude });
-    if (!item) throw new NotFoundException("LINE Official Account not found");
-    return this.safe(item, await loadLatestManagerUrls(this.prisma, [item.store.code]));
+    if (!item || item.accountType === "HEAD_OFFICE") throw new NotFoundException("LINE Official Account not found");
+    return this.safe(item, await loadLatestManagerUrls(this.prisma, item.store ? [item.store.code] : []));
   }
 
   async create(dto: CreateLineOfficialAccountDto) {
@@ -166,7 +167,7 @@ export class LineOfficialAccountsService {
         }, include: safeInclude });
         });
         if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
-        const response = this.safe(item, await loadLatestManagerUrls(this.prisma, [item.store.code]));
+        const response = this.safe(item, await loadLatestManagerUrls(this.prisma, item.store ? [item.store.code] : []));
         if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
         void this.followerInsightsService?.enqueueAutoBackfillJob?.(response.id)?.catch?.(() => null);
         return response;
@@ -265,7 +266,7 @@ export class LineOfficialAccountsService {
     if (raw.encryptedChannelSecret) {
       try { this.encryption.decrypt(raw.encryptedChannelSecret); credentialDecrypts = true; } catch { /* Safe diagnostic only. */ }
     }
-    return { webhookUrl, webhookKeyConfigured: Boolean(raw.webhookKey), routeConfigured: true, isActive: raw.isActive, isArchived: Boolean(raw.archivedAt), credentialsHealthy: credentialDecrypts, webhookUrlConfigured: configured, credentialsConfigured: Boolean(raw.encryptedChannelSecret), credentialDecrypts, channelIdConfigured: Boolean(raw.channelId), destinationIdConfigured: Boolean(raw.destinationId), lastWebhookReceivedAt: raw.lastWebhookReceivedAt, connectionStatus: this.calculatedStatus(raw), missingConfigurationFields: this.missingFields(raw), backendPort: Number(process.env.PORT ?? 3001), webhookPath: `/webhook/${raw.webhookKey}`, oa: { id: raw.id, name: raw.name, store: raw.store.name, isActive: raw.isActive } };
+    return { webhookUrl, webhookKeyConfigured: Boolean(raw.webhookKey), routeConfigured: true, isActive: raw.isActive, isArchived: Boolean(raw.archivedAt), credentialsHealthy: credentialDecrypts, webhookUrlConfigured: configured, credentialsConfigured: Boolean(raw.encryptedChannelSecret), credentialDecrypts, channelIdConfigured: Boolean(raw.channelId), destinationIdConfigured: Boolean(raw.destinationId), lastWebhookReceivedAt: raw.lastWebhookReceivedAt, connectionStatus: this.calculatedStatus(raw), missingConfigurationFields: this.missingFields(raw), backendPort: Number(process.env.PORT ?? 3001), webhookPath: `/webhook/${raw.webhookKey}`, oa: { id: raw.id, name: raw.name, store: raw.store?.name ?? "Main OA", isActive: raw.isActive } };
   }
 
   async regenerateWebhook(id: string) {

@@ -785,8 +785,7 @@ test("application shutdown clears worker polling timer cleanly", () => {
 
 
 test("yesterday ready but 29 earlier dates missing → job enqueued", async () => {
-  const { dateFrom, dateTo } = { dateFrom: "2026-06-23", dateTo: "2026-07-22" };
-  const yesterdayUtc = toUtcDateForDb(dateTo);
+  let yesterdayUtc = new Date(0);
 
   let jobCreated = false;
   const mockPrisma: any = {
@@ -804,6 +803,7 @@ test("yesterday ready but 29 earlier dates missing → job enqueued", async () =
   };
 
   const service = new FollowerInsightsService(mockPrisma, {} as any);
+  yesterdayUtc = toUtcDateForDb(service.getAutoBackfillDates().dateTo);
   const result = await service.enqueueAutoBackfillJob("oa-test-1");
 
   assert.equal(jobCreated, true, "Job must be enqueued when 29 earlier dates are missing");
@@ -811,10 +811,24 @@ test("yesterday ready but 29 earlier dates missing → job enqueued", async () =
 });
 
 test("full 30 days ready → no new job created", async () => {
-  const { dateFrom, dateTo } = { dateFrom: "2026-06-23", dateTo: "2026-07-22" };
-  const allDates = getDateRangeArray(dateFrom, dateTo);
-
-  const completedJob = { id: "job-comp", lineOaId: "oa-test-2", status: "COMPLETED", dateFrom, dateTo, totalDays: 30, requested: 30, succeeded: 30, skipped: 0, unready: 0, failed: 0, errorMessage: null, startedAt: new Date(), completedAt: new Date(), createdAt: new Date() };
+  let allDates: string[] = [];
+  let completedJob: {
+    id: string;
+    lineOaId: string;
+    status: string;
+    dateFrom: string;
+    dateTo: string;
+    totalDays: number;
+    requested: number;
+    succeeded: number;
+    skipped: number;
+    unready: number;
+    failed: number;
+    errorMessage: null;
+    startedAt: Date;
+    completedAt: Date;
+    createdAt: Date;
+  } | null = null;
 
   let createCalled = false;
   const mockPrisma: any = {
@@ -829,6 +843,9 @@ test("full 30 days ready → no new job created", async () => {
   };
 
   const service = new FollowerInsightsService(mockPrisma, {} as any);
+  const dates = service.getAutoBackfillDates();
+  allDates = getDateRangeArray(dates.dateFrom, dates.dateTo);
+  completedJob = { id: "job-comp", lineOaId: "oa-test-2", status: "COMPLETED", dateFrom: dates.dateFrom, dateTo: dates.dateTo, totalDays: dates.totalDays, requested: dates.totalDays, succeeded: dates.totalDays, skipped: 0, unready: 0, failed: 0, errorMessage: null, startedAt: new Date(), completedAt: new Date(), createdAt: new Date() };
   const result = await service.enqueueAutoBackfillJob("oa-test-2");
 
   assert.equal(createCalled, false, "Create should not be called when full 30 days are ready");

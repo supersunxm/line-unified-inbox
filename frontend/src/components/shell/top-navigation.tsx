@@ -23,7 +23,7 @@ type TopNavigationText = {
 
 export interface TopNavigationProps {
   currentSection: PrimarySection;
-  authUser: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null;
+  authUser: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } } | null;
   text: TopNavigationText;
   language: Language;
   changeLanguage: (lang: Language) => void;

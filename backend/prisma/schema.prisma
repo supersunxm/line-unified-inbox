@@ -169,6 +169,11 @@ enum StoreMetadataSource {
   MANUAL
 }
 
+enum LineAccountType {
+  STORE
+  HEAD_OFFICE
+}
+
 enum UserRole {
   ADMIN
   VIEWER
@@ -264,6 +269,8 @@ model User {
   role                          UserRole                     @default(VIEWER)
   status                        UserStatus                   @default(ACTIVE)
   isActive                      Boolean                      @default(true)
+  canAccessMainOa               Boolean                      @default(false)
+  canManageMainOa               Boolean                      @default(false)
   phone                         String?                      @unique
   firstName                     String?
   lastName                      String?
@@ -598,13 +605,14 @@ model LineOfficialAccount {
   lastWebhookReceivedAt       DateTime?
   lastConnectionTestAt        DateTime?
   lastConnectionError         String?
-  storeId                     String
+  accountType                 LineAccountType                    @default(STORE)
+  storeId                     String?
   isActive                    Boolean                            @default(true)
   archivedAt                  DateTime?
   createdAt                   DateTime                           @default(now())
   updatedAt                   DateTime                           @updatedAt
   lastBackfillReconciledAt    DateTime?
-  store                       Store                              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store                       Store?                             @relation(fields: [storeId], references: [id], onDelete: Restrict)
   conversations               Conversation[]
   webhookEvents               WebhookEvent[]
   pilotChecklist              PilotChecklistItem[]
@@ -617,6 +625,7 @@ model LineOfficialAccount {
   massMessageStoreDeliveries  MassMessageStoreDelivery[]
 
   @@index([storeId, isActive])
+  @@index([accountType, isActive, archivedAt])
   @@index([isActive, lastBackfillReconciledAt])
 }
 
@@ -766,7 +775,7 @@ model CustomerNameHistory {
 model Conversation {
   id                    String                      @id @default(uuid())
   customerId            String
-  storeId               String
+  storeId               String?
   lineOfficialAccountId String
   latestMessageAt       DateTime
   priority              Priority                    @default(NORMAL)
@@ -788,7 +797,7 @@ model Conversation {
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   customer              Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  store                 Store                       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  store                 Store?                      @relation(fields: [storeId], references: [id], onDelete: Restrict)
   lineOfficialAccount   LineOfficialAccount         @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
   messages              Message[]
   products              ConversationProduct[]
@@ -813,6 +822,7 @@ model Conversation {
   @@index([storeId, followUpStatus, latestMessageAt(sort: Desc)])
   @@index([lineOfficialAccountId, followUpStatus, latestMessageAt(sort: Desc)])
   @@index([lineOfficialAccountId, bmReplyStatus, latestMessageAt(sort: Desc)])
+  @@index([lineOfficialAccountId, customerId])
   @@index([customerId, latestMessageAt(sort: Desc)])
 }
 
@@ -1538,4 +1548,3 @@ model AppRelease {
   @@index([platform, isActive])
   @@index([platform, buildNumber])
 }
-

@@ -240,7 +240,7 @@ export class CustomerIntelligenceService {
 
   private buildProfileSummary(
     customer: { displayName: string },
-    latestConversation: { latestMessageAt: Date; store: { name: string } } | null,
+    latestConversation: { latestMessageAt: Date; store: { name: string } | null } | null,
     latestStore: { name: string } | undefined | null,
     latestProducts: string[],
     topicNames: string[],

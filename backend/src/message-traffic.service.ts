@@ -117,7 +117,7 @@ export class MessageTrafficService {
       hourlyDistribution[hour].count++;
       dayOfWeekDistribution[dayOfWeek].count++;
       allConversationIds.add(message.conversationId);
-      const agg = storeMap.get(message.conversation.storeId);
+      const agg = message.conversation.storeId ? storeMap.get(message.conversation.storeId) : undefined;
       if (!agg) continue;
       agg.inboundMessages++;
       agg.conversationIds.add(message.conversationId);
