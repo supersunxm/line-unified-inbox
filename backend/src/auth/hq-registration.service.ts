@@ -1,7 +1,6 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UserRole, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
-import { EmailService } from "../email/email.service";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
@@ -14,7 +13,6 @@ export class HqRegistrationService {
     private readonly passwords: PasswordService,
     private readonly rateLimiter?: AuthRateLimitService,
     private readonly audit?: AuditLogService,
-    @Optional() private readonly email?: EmailService,
   ) {}
 
   async request(input: { name: string; employeeId: string; email: string; password: string }, ip = "unknown") {
@@ -90,7 +88,7 @@ export class HqRegistrationService {
     await this.assertApprover(actorUserId);
     const user = await this.prisma.user.findFirst({
       where: { id: userId, role: UserRole.ADMIN, status: UserStatus.PENDING_APPROVAL, canAccessHq: true },
-      select: { id: true, email: true, displayName: true },
+      select: { id: true },
     });
     if (!user) throw new NotFoundException("Pending HQ account not found");
 
@@ -112,12 +110,6 @@ export class HqRegistrationService {
     });
 
     await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_APPROVED", targetUserId: user.id, metadata: { fullAccess: true }, ipAddress, userAgent });
-    try {
-      await this.email?.sendAccountApproved({ email: user.email, displayName: user.displayName });
-    } catch {
-      // Approval remains committed even if notification delivery fails.
-    }
-
     return { userId: user.id, status: UserStatus.ACTIVE, accountType: "HQ" as const, fullAccess: true };
   }
 
