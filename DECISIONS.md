@@ -1102,3 +1102,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Deactivation invalidates all web/mobile sessions and active device tokens in the same transaction. Device-token rows are retained with `isActive=false` for recoverability and auditability; no plaintext token is exposed.
 - Reactivation restores exactly one intended membership, ordered by primary status and approval recency, instead of enabling every historical membership. It is an administrative state transition only and does not re-send registration approval email.
 - Permanent deletion remains out of scope for Phase 1. Before any future delete capability, relationship-by-relationship impact and retention requirements must be audited; no delete endpoint or schema relationship was introduced here.
+
+# BM/PC permanent deletion boundary (2026-08-24)
+
+- Permanent deletion uses a tombstone, not `prisma.user.delete`. The new `DELETED` status and `deletedAt` preserve the User row so membership approval history, message sender references, conversation purchase/sales attribution, activity history, translation feedback, mass-message creator references, and audit actor/target references remain valid.
+- The transaction deletes sessions, device tokens, push notifications, and OTP challenges; suspends any remaining active memberships; scrubs registration-request PII; and replaces account PII with a non-routable unique `deleted+<userId>@deleted.lineoppo.invalid` identity. No deletion or approval email is sent.
+- Only active ADMIN actors can delete inactive approved VIEWER BM/PC accounts. ACTIVE accounts, ADMIN accounts, Main OA-capable identities, self-delete, and deleted accounts are rejected or safely idempotent. Reactivation explicitly rejects tombstones.
+- Deletion audit metadata contains only safe status/timestamp/membership-history fields. Original email, phone, employee ID, password, tokens, and other PII are excluded. The explicit destructive UI requires exact `DELETE` text and never exposes the action for ACTIVE rows.

@@ -236,3 +236,100 @@ void test("reactivation restores only the selected current membership and does n
   assert.deepEqual(calls, ["user", "membership:current-membership"]);
   assert.equal(auditEntries[0].action, "ADMIN_REACTIVATE_ACCOUNT");
 });
+
+function deletionUser(role: "STORE_MANAGER" | "STAFF" = "STORE_MANAGER") {
+  return {
+    id: "user-1",
+    role: "VIEWER",
+    status: "SUSPENDED",
+    isActive: false,
+    deletedAt: null,
+    canAccessMainOa: false,
+    canManageMainOa: false,
+    memberships: [{ id: "membership-1", storeId: "store-1", role, status: "SUSPENDED", approvedAt: new Date("2026-08-20"), approvedById: "admin-approver", store: { id: "store-1", name: "OBS Big C Bang Phli By OPPO", code: "BIG-C" } }],
+  };
+}
+
+function deletionService(target = deletionUser()) {
+  const writes: Record<string, unknown[]> = { membership: [], session: [], device: [], push: [], otp: [], registration: [], user: [], audit: [] };
+  const targetUser = target;
+  const tx: any = {
+    user: {
+      findUnique: async ({ where }: any) => where.id === "admin-1" ? { role: "ADMIN", status: "ACTIVE", isActive: true } : targetUser,
+      update: async ({ data }: any) => { writes.user.push(data); return { id: targetUser.id, ...targetUser, ...data }; },
+    },
+    userStoreMembership: { updateMany: async ({ data }: any) => { writes.membership.push(data); return { count: 1 }; } },
+    session: { deleteMany: async ({ where }: any) => { writes.session.push(where); return { count: 2 }; } },
+    deviceToken: { deleteMany: async ({ where }: any) => { writes.device.push(where); return { count: 1 }; } },
+    pushNotification: { deleteMany: async ({ where }: any) => { writes.push.push(where); return { count: 1 }; } },
+    otpChallenge: { deleteMany: async ({ where }: any) => { writes.otp.push(where); return { count: 1 }; } },
+    registrationRequest: { updateMany: async ({ data }: any) => { writes.registration.push(data); return { count: 1 }; } },
+    auditLog: { create: async ({ data }: any) => { writes.audit.push(data); return data; } },
+  };
+  return { service: new RegistrationService({ $transaction: async (callback: any) => callback(tx) } as any, {} as any), writes };
+}
+
+void test("ADMIN can permanently delete an inactive BM while preserving membership history", async () => {
+  const { service, writes } = deletionService(deletionUser("STORE_MANAGER"));
+  const result = await service.permanentlyDeleteAccount("user-1", "admin-1", "127.0.0.1", "test-agent");
+  assert.deepEqual(result, { userId: "user-1", accountStatus: "DELETED", changed: true });
+  assert.equal(writes.membership.length, 1);
+  assert.equal(writes.membership[0].status, "SUSPENDED");
+  assert.equal(writes.session.length, 1);
+  assert.equal(writes.device.length, 1);
+  assert.equal(writes.push.length, 1);
+  assert.equal(writes.otp.length, 1);
+  assert.equal(writes.registration.length, 1);
+  assert.equal(writes.user.length, 1);
+  assert.equal((writes.user[0] as any).displayName, "Deleted User");
+  assert.equal((writes.user[0] as any).passwordHash, null);
+  assert.equal((writes.user[0] as any).phone, null);
+  assert.equal((writes.user[0] as any).employeeId, null);
+  assert.match((writes.user[0] as any).email, /^deleted\+user-1@deleted\.lineoppo\.invalid$/);
+  assert.equal((writes.registration[0] as any).passwordHash, null);
+  assert.equal((writes.registration[0] as any).employeeId, null);
+  assert.equal((writes.audit[0] as any).action, "ACCOUNT_PERMANENTLY_DELETED");
+  assert.doesNotMatch(JSON.stringify(writes.audit[0]), /bm@example|password|phone|employee/i);
+  assert.equal((writes.audit[0] as any).metadata.membershipHistory[0].storeName, "OBS Big C Bang Phli By OPPO");
+});
+
+void test("ADMIN can permanently delete an inactive PC and no message/conversation history delete is attempted", async () => {
+  const { service, writes } = deletionService(deletionUser("STAFF"));
+  await service.permanentlyDeleteAccount("user-1", "admin-1");
+  assert.equal(writes.audit.length, 1);
+  assert.equal(writes.user.length, 1);
+  assert.equal("message" in writes, false);
+  assert.equal("conversation" in writes, false);
+});
+
+void test("permanent deletion rejects active accounts, non-admin actors, self-delete, and ADMIN targets", async () => {
+  const active = deletionUser();
+  active.status = "ACTIVE";
+  active.isActive = true;
+  const activeCase = deletionService(active);
+  await assert.rejects(() => activeCase.service.permanentlyDeleteAccount("user-1", "admin-1"), ConflictException);
+
+  const nonAdminTx: any = { user: { findUnique: async () => ({ role: "VIEWER", status: "ACTIVE", isActive: true }) } };
+  const nonAdmin = new RegistrationService({ $transaction: async (callback: any) => callback(nonAdminTx) } as any, {} as any);
+  await assert.rejects(() => nonAdmin.permanentlyDeleteAccount("user-1", "viewer-1"), /Only an active administrator/);
+
+  const { service: selfDelete } = deletionService();
+  await assert.rejects(() => selfDelete.permanentlyDeleteAccount("admin-1", "admin-1"), /cannot delete their own/);
+
+  const adminTarget = deletionUser();
+  adminTarget.role = "ADMIN";
+  const { service: adminTargetService } = deletionService(adminTarget);
+  await assert.rejects(() => adminTargetService.permanentlyDeleteAccount("user-1", "admin-1"), /Only approved BM and PC/);
+});
+
+void test("deleted accounts are idempotent tombstones and cannot be reactivated", async () => {
+  const deleted = deletionUser();
+  deleted.status = "DELETED";
+  deleted.isActive = false;
+  deleted.deletedAt = new Date("2026-08-21");
+  const { service, writes } = deletionService(deleted);
+  const result = await service.permanentlyDeleteAccount("user-1", "admin-1");
+  assert.deepEqual(result, { userId: "user-1", accountStatus: "DELETED", changed: false });
+  assert.equal(writes.audit.length, 0);
+  await assert.rejects(() => service.reactivateAccount("user-1", "admin-1"), /Deleted account cannot be reactivated/);
+});

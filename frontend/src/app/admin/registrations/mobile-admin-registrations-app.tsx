@@ -47,6 +47,9 @@ export function MobileAdminRegistrationsApp() {
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [lifecycleTarget, setLifecycleTarget] = useState<ApprovedAccount | null>(null);
+  const [accountActionsTarget, setAccountActionsTarget] = useState<ApprovedAccount | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApprovedAccount | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -135,6 +138,28 @@ export function MobileAdminRegistrationsApp() {
     finally { setActingId(null); }
   };
 
+  const openPermanentDeleteConfirmation = (account: ApprovedAccount) => {
+    setAccountActionsTarget(null);
+    setDeleteTarget(account);
+    setDeleteConfirmation("");
+    setError(null);
+    setNotice(null);
+  };
+
+  const permanentlyDelete = async () => {
+    if (!deleteTarget || deleteConfirmation !== "DELETE") return;
+    const target = deleteTarget;
+    setActingId(target.userId); setError(null); setNotice(null);
+    try {
+      await api.permanentlyDeleteAccount(target.userId);
+      setDeleteTarget(null);
+      setDeleteConfirmation("");
+      setNotice("Account permanently deleted.");
+      await loadApproved();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "ลบบัญชีถาวรไม่สำเร็จ"); }
+    finally { setActingId(null); }
+  };
+
   if (!authChecked || !user) return <main className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิด Account Management...</main>;
 
   return (
@@ -184,7 +209,7 @@ export function MobileAdminRegistrationsApp() {
                   {loading && approved.length === 0 ? <MobileCard><p className="py-10 text-center text-xs text-[var(--app-text-secondary)]">กำลังโหลด...</p></MobileCard> : filteredApproved.length === 0 ? <MobileEmptyState title="ไม่พบบัญชี" description="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" /> : <div className="space-y-2.5">{filteredApproved.map((account) => (
                     <MobileListCard key={account.id} title={account.name} subtitle={`${account.store.name}${account.store.code ? ` · ${account.store.code}` : ""}`} trailing={<div className="flex items-center gap-1.5"><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${account.role === "STORE_MANAGER" ? "bg-[var(--app-accent)]/10 text-[var(--app-accent)]" : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]"}`}>{roleLabel(account.role)}</span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${account.accountStatus === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>{account.accountStatus === "ACTIVE" ? "Active" : "Inactive"}</span></div>}>
                       <div className="space-y-1 text-[10px] text-[var(--app-text-secondary)]"><p>Employee ID: <strong className="text-[var(--app-text-primary)]">{account.employeeId || "—"}</strong></p><p className="break-all">{account.email}</p><p>อนุมัติ: {formatDate(account.approvedAt)}</p></div>
-                      <div className="mt-3 grid grid-cols-1 gap-2">{account.accountStatus === "INACTIVE" && <button type="button" disabled={actingId !== null} onClick={() => void changeLifecycle(account, "reactivate")} className="min-h-11 w-full rounded-xl bg-[var(--app-accent)] text-xs font-bold text-white disabled:opacity-35">{actingId === account.userId ? "กำลังทำ..." : "Reactivate"}</button>}<button type="button" disabled={actingId !== null} onClick={() => void resetPassword(account)} className="min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">{actingId === account.userId ? "กำลังรีเซ็ต..." : "Reset Password"}</button>{account.accountStatus === "ACTIVE" && <button type="button" disabled={actingId !== null} onClick={() => setLifecycleTarget(account)} className="min-h-11 w-full rounded-xl border border-amber-500/30 text-xs font-bold text-amber-700 disabled:opacity-35">More · Deactivate</button>}</div>
+                      <div className="mt-3 grid grid-cols-1 gap-2">{account.accountStatus === "INACTIVE" && <button type="button" disabled={actingId !== null} onClick={() => void changeLifecycle(account, "reactivate")} className="min-h-11 w-full rounded-xl bg-[var(--app-accent)] text-xs font-bold text-white disabled:opacity-35">{actingId === account.userId ? "กำลังทำ..." : "Reactivate"}</button>}<button type="button" disabled={actingId !== null} onClick={() => void resetPassword(account)} className="min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">{actingId === account.userId ? "กำลังรีเซ็ต..." : "Reset Password"}</button><button type="button" disabled={actingId !== null} onClick={() => account.accountStatus === "ACTIVE" ? setLifecycleTarget(account) : setAccountActionsTarget(account)} className="min-h-11 w-full rounded-xl border border-amber-500/30 text-xs font-bold text-amber-700 disabled:opacity-35">{account.accountStatus === "ACTIVE" ? "More · Deactivate" : "More actions"}</button></div>
                     </MobileListCard>
                   ))}</div>}
                 </MobileSection>
@@ -193,7 +218,9 @@ export function MobileAdminRegistrationsApp() {
           </>
         )}
       </div>
+      {accountActionsTarget && <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-900/60 p-4"><MobileCard className="w-full max-w-sm space-y-2"><p className="px-2 pb-2 text-xs font-bold text-[var(--app-text-primary)]">Actions for {accountActionsTarget.name}</p><button type="button" onClick={() => { const target = accountActionsTarget; setAccountActionsTarget(null); void changeLifecycle(target, "reactivate"); }} className="min-h-11 w-full rounded-xl border border-[var(--app-border)] text-left px-3 text-xs font-bold">Reactivate account</button><button type="button" onClick={() => openPermanentDeleteConfirmation(accountActionsTarget)} className="min-h-11 w-full rounded-xl border border-rose-500/30 px-3 text-left text-xs font-bold text-rose-600">Delete permanently</button><button type="button" onClick={() => setAccountActionsTarget(null)} className="min-h-11 w-full rounded-xl bg-[var(--app-surface-subtle)] text-xs font-bold">Cancel</button></MobileCard></div>}
       {lifecycleTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-5"><MobileCard className="w-full max-w-sm space-y-4"><h2 className="text-base font-bold">Deactivate account?</h2><p className="text-xs leading-5 text-[var(--app-text-secondary)]">Deactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong>? Store access, active sessions, and device tokens will be disabled. Account history is preserved.</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setLifecycleTarget(null)} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">Cancel</button><button type="button" onClick={() => void changeLifecycle(lifecycleTarget, "deactivate", true)} className="min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white">Confirm</button></div></MobileCard></div>}
+      {deleteTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/70 p-5"><MobileCard className="w-full max-w-sm space-y-4 border-rose-500/40"><h2 className="text-base font-bold">Delete account permanently?</h2><dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"><dt className="text-[var(--app-text-secondary)]">Name</dt><dd className="font-semibold">{deleteTarget.name}</dd><dt className="text-[var(--app-text-secondary)]">Store</dt><dd className="font-semibold">{deleteTarget.store.name}</dd><dt className="text-[var(--app-text-secondary)]">Role</dt><dd className="font-semibold">{roleLabel(deleteTarget.role)}</dd></dl><p className="text-xs leading-5 text-[var(--app-text-secondary)]">This permanently removes personal account information. Sign-in will no longer work and this action cannot be undone. Operational and audit history will be preserved.</p><label className="block text-xs font-bold" htmlFor="mobile-delete-confirmation">Type DELETE to confirm<input id="mobile-delete-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" placeholder="DELETE" className={`${inputClass} mt-1`} /></label><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setDeleteTarget(null); setDeleteConfirmation(""); }} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">Cancel</button><button type="button" onClick={() => void permanentlyDelete()} disabled={actingId !== null || deleteConfirmation !== "DELETE"} className="min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white disabled:opacity-35">{actingId === deleteTarget.userId ? "Deleting…" : "Delete permanently"}</button></div></MobileCard></div>}
       {moreOpen && <MobileMoreSheet displayName={user.displayName} role={user.role} onClose={() => setMoreOpen(false)} />}
     </MobilePageShell>
   );

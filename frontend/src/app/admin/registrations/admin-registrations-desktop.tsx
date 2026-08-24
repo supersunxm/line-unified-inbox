@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  Input,
   LoadingState,
   SearchInput,
   Table,
@@ -57,6 +58,8 @@ export default function AdminRegistrationsPage() {
   const [lifecycleTarget, setLifecycleTarget] = useState<ApprovedAccount | null>(null);
   const [lifecycleAction, setLifecycleAction] = useState<LifecycleAction | null>(null);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApprovedAccount | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -170,6 +173,33 @@ export default function AdminRegistrationsPage() {
       await loadApproved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The account status change failed.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const openPermanentDeleteConfirmation = (account: ApprovedAccount) => {
+    setActionMenuUserId(null);
+    setDeleteTarget(account);
+    setDeleteConfirmation("");
+    setError(null);
+    setNotice(null);
+  };
+
+  const permanentlyDelete = async () => {
+    if (!deleteTarget || deleteConfirmation !== "DELETE") return;
+    const target = deleteTarget;
+    setActingId(target.userId);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.permanentlyDeleteAccount(target.userId);
+      setDeleteTarget(null);
+      setDeleteConfirmation("");
+      setNotice("Account permanently deleted.");
+      await loadApproved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The account could not be permanently deleted.");
     } finally {
       setActingId(null);
     }
@@ -516,9 +546,26 @@ export default function AdminRegistrationsPage() {
                                     ⋯
                                   </Button>
                                   {actionMenuUserId === account.userId && (
-                                    <div role="menu" className="absolute right-0 top-full z-10 mt-1 min-w-36 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-[var(--app-shadow-modal)]">
+                                    <div role="menu" className="absolute right-0 top-full z-10 mt-1 min-w-40 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-[var(--app-shadow-modal)]">
                                       <button type="button" role="menuitem" className="w-full rounded-[var(--app-radius-sm)] px-3 py-2 text-left text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger-soft)]" onClick={() => { setActionMenuUserId(null); openLifecycleConfirmation(account, "deactivate"); }}>
-                                        Deactivate
+                                        Deactivate account
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {account.accountStatus === "INACTIVE" && (
+                                <div className="relative">
+                                  <Button variant="secondary" size="sm" disabled={actingId !== null} aria-label={`More actions for ${account.name}`} aria-expanded={actionMenuUserId === account.userId} onClick={() => setActionMenuUserId((current) => current === account.userId ? null : account.userId)}>
+                                    ⋯
+                                  </Button>
+                                  {actionMenuUserId === account.userId && (
+                                    <div role="menu" className="absolute right-0 top-full z-10 mt-1 min-w-44 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-[var(--app-shadow-modal)]">
+                                      <button type="button" role="menuitem" className="w-full rounded-[var(--app-radius-sm)] px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]" onClick={() => { setActionMenuUserId(null); openLifecycleConfirmation(account, "reactivate"); }}>
+                                        Reactivate account
+                                      </button>
+                                      <button type="button" role="menuitem" className="w-full rounded-[var(--app-radius-sm)] px-3 py-2 text-left text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger-soft)]" onClick={() => openPermanentDeleteConfirmation(account)}>
+                                        Delete permanently
                                       </button>
                                     </div>
                                   )}
@@ -580,6 +627,29 @@ export default function AdminRegistrationsPage() {
               <Button variant="secondary" size="md" onClick={() => { setLifecycleTarget(null); setLifecycleAction(null); }}>Cancel</Button>
               <Button variant={lifecycleAction === "deactivate" ? "danger" : "primary"} size="md" onClick={() => void confirmLifecycleAction()} disabled={actingId !== null}>
                 {lifecycleAction === "deactivate" ? "Confirm Deactivate" : "Confirm Reactivate"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="permanent-delete-title" className="w-full max-w-md rounded-[var(--app-radius-xl)] border border-rose-500/40 bg-[var(--app-surface)] p-6 shadow-[var(--app-shadow-modal)] space-y-4">
+            <h2 id="permanent-delete-title" className="text-lg font-bold text-[var(--app-text-primary)]">Delete account permanently?</h2>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
+              <dt className="text-[var(--app-text-secondary)]">Name</dt><dd className="font-semibold text-[var(--app-text-primary)]">{deleteTarget.name}</dd>
+              <dt className="text-[var(--app-text-secondary)]">Store</dt><dd className="font-semibold text-[var(--app-text-primary)]">{deleteTarget.store.name}</dd>
+              <dt className="text-[var(--app-text-secondary)]">Role</dt><dd className="font-semibold text-[var(--app-text-primary)]">{roleLabel(deleteTarget.role)}</dd>
+            </dl>
+            <p className="text-xs leading-relaxed text-[var(--app-text-secondary)]">This permanently removes the account and personal account information. The user will no longer be able to sign in. This action cannot be undone. Operational and audit history will be preserved.</p>
+            <label className="block text-xs font-semibold text-[var(--app-text-primary)]" htmlFor="permanent-delete-confirmation">Type DELETE to confirm
+              <Input id="permanent-delete-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" className="mt-2" placeholder="DELETE" />
+            </label>
+            <div className="flex justify-end gap-2.5 pt-2">
+              <Button variant="secondary" size="md" onClick={() => { setDeleteTarget(null); setDeleteConfirmation(""); }}>Cancel</Button>
+              <Button variant="danger" size="md" onClick={() => void permanentlyDelete()} disabled={actingId !== null || deleteConfirmation !== "DELETE"}>
+                {actingId === deleteTarget.userId ? "Deleting…" : "Delete permanently"}
               </Button>
             </div>
           </div>

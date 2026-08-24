@@ -88,6 +88,16 @@ void test("an existing session is rejected immediately after account deactivatio
   assert.equal(result, null);
 });
 
+void test("deleted credentials cannot create a session or authenticate an old session", async () => {
+  const prisma: any = {
+    user: { findFirst: async () => ({ id: "user-1", email: "deleted+user-1@deleted.lineoppo.invalid", displayName: "Deleted User", role: "VIEWER", isActive: false, status: "DELETED", passwordHash: null, memberships: [] }) },
+    session: { findUnique: async () => ({ expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", email: "deleted+user-1@deleted.lineoppo.invalid", displayName: "Deleted User", role: "VIEWER", isActive: false, status: "DELETED", memberships: [] } }) },
+  };
+  const service = new AuthService(prisma, { verify: async () => true } as any);
+  await assert.rejects(() => service.login("deleted+user-1@deleted.lineoppo.invalid", "old-password"));
+  assert.equal(await service.authenticate("old-session"), null);
+});
+
 void test("admin password reset stores only a hash, forces a change, expires sessions, and audits safely", async () => {
   const updates: any[] = [];
   const auditEntries: any[] = [];

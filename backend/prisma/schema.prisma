@@ -184,6 +184,7 @@ enum UserStatus {
   PENDING_APPROVAL
   SUSPENDED
   REJECTED
+  DELETED
 }
 
 enum StoreMembershipRole {
@@ -281,6 +282,7 @@ model User {
   lastLoginAt                   DateTime?
   createdAt                     DateTime                     @default(now())
   updatedAt                     DateTime                     @updatedAt
+  deletedAt                     DateTime?
   sessions                      Session[]
   memberships                   UserStoreMembership[]        @relation("UserMemberships")
   approvedMemberships           UserStoreMembership[]        @relation("MembershipApprover")
@@ -300,6 +302,7 @@ model User {
 
   @@index([status])
   @@index([employeeId])
+  @@index([deletedAt])
 }
 
 model AdminRegistrationOtp {

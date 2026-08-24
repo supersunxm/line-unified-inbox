@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { MembershipStatus, RegistrationRequestStatus, UserRole, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { EmailService } from "../email/email.service";
@@ -115,7 +115,7 @@ export class RegistrationService {
           },
         },
       });
-      if (!user || user.role !== UserRole.VIEWER || user.status === UserStatus.REJECTED || user.status === UserStatus.PENDING_APPROVAL) {
+      if (!user || user.role !== UserRole.VIEWER || user.status === UserStatus.REJECTED || user.status === UserStatus.PENDING_APPROVAL || user.status === UserStatus.DELETED) {
         throw new NotFoundException("Approved account not found");
       }
       if (!user.isActive || user.status === UserStatus.SUSPENDED) {
@@ -152,6 +152,7 @@ export class RegistrationService {
           role: true,
           isActive: true,
           status: true,
+          deletedAt: true,
           memberships: {
             where: { status: { in: [MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED] } },
             select: { id: true, storeId: true, status: true, isPrimary: true, approvedAt: true, createdAt: true },
@@ -160,6 +161,7 @@ export class RegistrationService {
         },
       });
       if (!user || user.role !== UserRole.VIEWER) throw new NotFoundException("Account not found");
+      if (user.status === UserStatus.DELETED || user.deletedAt) throw new ConflictException("Deleted account cannot be reactivated");
       if (user.isActive && user.status === UserStatus.ACTIVE) {
         return this.lifecycleResult(user.id, "ACTIVE", user.memberships.some((membership) => membership.status === MembershipStatus.ACTIVE) ? "ACTIVE" : "INACTIVE", false, user.memberships.find((membership) => membership.status === MembershipStatus.ACTIVE)?.id);
       }
@@ -182,6 +184,107 @@ export class RegistrationService {
       await this.audit?.record({ actorUserId: adminUserId, action: "ADMIN_REACTIVATE_ACCOUNT", targetUserId: result.userId, metadata: { accountStatus: result.accountStatus, membershipStatus: result.membershipStatus, membershipId: result.membershipId ?? null }, ipAddress, userAgent });
     }
     return result;
+  }
+
+  async permanentlyDeleteAccount(userId: string, adminUserId: string, ipAddress?: string, userAgent?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const actor = await tx.user.findUnique({ where: { id: adminUserId }, select: { role: true, status: true, isActive: true } });
+      if (!actor || actor.role !== UserRole.ADMIN || actor.status !== UserStatus.ACTIVE || !actor.isActive) {
+        throw new ForbiddenException("Only an active administrator can delete accounts");
+      }
+      if (userId === adminUserId) throw new ForbiddenException("Administrators cannot delete their own account");
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          role: true,
+          status: true,
+          isActive: true,
+          deletedAt: true,
+          canAccessMainOa: true,
+          canManageMainOa: true,
+          memberships: {
+            select: {
+              id: true,
+              storeId: true,
+              role: true,
+              status: true,
+              approvedAt: true,
+              approvedById: true,
+              store: { select: { id: true, name: true, code: true } },
+            },
+          },
+        },
+      });
+      if (!user) throw new NotFoundException("Account not found");
+      if (user.status === UserStatus.DELETED || user.deletedAt) return { userId: user.id, accountStatus: "DELETED" as const, changed: false };
+      if (user.role !== UserRole.VIEWER || user.canAccessMainOa || user.canManageMainOa) throw new ConflictException("Only approved BM and PC accounts can be deleted");
+      if (user.isActive && user.status === UserStatus.ACTIVE) throw new ConflictException("Deactivate the account before permanent deletion");
+      if (user.status !== UserStatus.SUSPENDED && !(user.status === UserStatus.ACTIVE && !user.isActive)) throw new ConflictException("Only inactive accounts can be permanently deleted");
+      if (!user.memberships.some((membership) => membership.status === MembershipStatus.ACTIVE || membership.status === MembershipStatus.SUSPENDED)) throw new ConflictException("Only approved BM and PC accounts can be deleted");
+
+      const deletedAt = new Date();
+      const tombstoneEmail = `deleted+${user.id}@deleted.lineoppo.invalid`;
+      const membershipHistory = user.memberships.map((membership) => ({
+        storeId: membership.store.id,
+        storeName: membership.store.name,
+        storeCode: membership.store.code,
+        role: membership.role,
+        status: membership.status,
+        approvedAt: membership.approvedAt?.toISOString() ?? null,
+        approvedById: membership.approvedById,
+      }));
+
+      await tx.userStoreMembership.updateMany({ where: { userId: user.id, status: MembershipStatus.ACTIVE }, data: { status: MembershipStatus.SUSPENDED } });
+      await tx.session.deleteMany({ where: { userId: user.id } });
+      await tx.deviceToken.deleteMany({ where: { userId: user.id } });
+      await tx.pushNotification.deleteMany({ where: { userId: user.id } });
+      await tx.otpChallenge.deleteMany({ where: { OR: [{ userId: user.id }, { registration: { createdUserId: user.id } }] } });
+      await tx.registrationRequest.updateMany({
+        where: { createdUserId: user.id },
+        data: { email: tombstoneEmail, normalizedEmail: tombstoneEmail, passwordHash: null, phone: null, firstName: null, lastName: null, employeeId: null, position: null },
+      });
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          username: null,
+          email: tombstoneEmail,
+          normalizedEmail: tombstoneEmail,
+          displayName: "Deleted User",
+          passwordHash: null,
+          mustChangePassword: false,
+          status: UserStatus.DELETED,
+          isActive: false,
+          canAccessMainOa: false,
+          canManageMainOa: false,
+          phone: null,
+          firstName: null,
+          lastName: null,
+          employeeId: null,
+          position: null,
+          emailVerifiedAt: null,
+          phoneVerifiedAt: null,
+          deletedAt,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: adminUserId,
+          action: "ACCOUNT_PERMANENTLY_DELETED",
+          targetUserId: user.id,
+          metadata: {
+            previousStatus: user.status,
+            resultingStatus: UserStatus.DELETED,
+            deletionTimestamp: deletedAt.toISOString(),
+            membershipHistory,
+          },
+          ipAddress,
+          userAgent,
+        },
+      });
+      return { userId: user.id, accountStatus: "DELETED" as const, changed: true };
+    });
   }
 
   async approve(registrationId: string, adminUserId: string, ipAddress?: string, userAgent?: string) { return this.setApproval(registrationId, adminUserId, MembershipStatus.ACTIVE, ipAddress, userAgent); }

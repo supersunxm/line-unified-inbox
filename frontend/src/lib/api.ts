@@ -159,6 +159,7 @@ export const api = {
   resetUserPassword: (userId: string) => request<{ userId: string; temporaryPassword: string }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reset-password`, { method: "POST" }),
   deactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/deactivate`, { method: "PATCH" }),
   reactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reactivate`, { method: "PATCH" }),
+  permanentlyDeleteAccount: (userId: string) => request<{ userId: string; accountStatus: "DELETED"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/permanent-delete`, { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   purchaseAnalytics: (params?: { from?: string; to?: string; storeId?: string }) => {
     const query = new URLSearchParams();
