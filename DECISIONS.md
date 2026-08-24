@@ -1071,3 +1071,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Do not create or activate the production `HEAD_OFFICE` account until the approved secure environment provides all real Main OA inputs (Channel ID, channel secret, channel access token, display name, and Basic ID). Missing credentials are a hard stop; generic/local LINE variables are not assumed to identify the Main OA.
 - Stage 2 remains incremental: create exactly one null-Store/null-Store-Master account only after the credential audit and baseline, verify LINE identity read-only, then configure the existing account-specific webhook before controlled internal inbound/outbound tests. Never print, log, or persist plaintext credentials outside the existing encrypted columns.
 - The current audit stopped before any external write. The recorded production baseline and missing-input evidence are the rollback-safe handoff for the next Stage 2 attempt.
+
+# Main Workspace/Main OA rebase boundary (2026-08-24)
+
+- `origin/main` remains the source of truth for the existing Main Workspace, AppSidebar, top navigation, homepage, and navigation structure. Main OA is integrated into that shell rather than restoring the older top-navigation-only layout.
+- Main OA remains a distinct `HEAD_OFFICE` capability-gated workspace. Its sidebar entry is rendered only for `canAccessMainOa` users, it never enters Store selection, and its page/API paths continue to enforce the same capability and account-type boundaries.
+- The rebase preserved the three local Main OA commits and added only follow-up integration/test-fixture changes. The backup branch is intentionally untouched. No push, deployment, database mutation, credential change, or webhook configuration was performed.

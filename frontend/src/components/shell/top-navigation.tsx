@@ -41,6 +41,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     home: ["หน้าหลัก", "Main", "主页"],
     dashboard: ["แดชบอร์ด", "Dashboard", "仪表盘"],
     chats: ["แชทร้านค้า", "Store Chats", "门店聊天"],
+    "main-oa": ["Main OA", "Main OA", "Main OA"],
     stores: ["จัดการร้านค้า", "Store Management", "门店管理"],
     "admin-registrations": ["อนุมัติ BM", "BM Approval", "BM 审批"],
     "purchase-analytics": ["ข้อมูลการซื้อ", "Purchase Intelligence", "购买洞察"],

@@ -65,11 +65,12 @@ test("dashboard scope is derived from StoreAccessService, not client role or sto
   const rootCauseService = { generateRootCauseInsights: async (...args: unknown[]) => { captured.push(args); return { ok: true }; } } as never;
   const storeAccess = { accessibleStoreIds: async () => ["s1"] } as never;
   const executiveService = {} as never;
-  const controller = new DashboardController(fakePrisma, operationsService, analytics, executiveService, reportService, rootCauseService, storeAccess);
+  const messageTraffic = { getTraffic: async () => ({ overallPeakHour: { hour: 0, window: "00:00", count: 0 }, hourlyDistribution: [], storeHourlyDistribution: [] }) } as never;
+  const controller = new DashboardController(fakePrisma, operationsService, analytics, executiveService, reportService, rootCauseService, storeAccess, messageTraffic);
 
-  const result = await controller.getAnalytics("today", "s2", undefined, { user: { role: "VIEWER" } } as never);
-  assert.deepEqual(result, { ok: true });
-  assert.deepEqual(captured[0], ["today", "VIEWER", ["s1"]]);
+  const result = await controller.getAnalytics("today", undefined, undefined, undefined, "s2", { user: { role: "VIEWER" } } as never);
+  assert.equal(result.ok, true);
+  assert.deepEqual(captured[0], ["today", "VIEWER", ["s1"], undefined]);
 });
 
 test("ADMIN can select multiple active stores, while invalid selections are rejected", async () => {
@@ -81,12 +82,13 @@ test("ADMIN can select multiple active stores, while invalid selections are reje
   const rootCauseService = { generateRootCauseInsights: async () => ({ ok: true }) } as never;
   const reportService = { generateDailyReport: async () => ({ ok: true }) } as never;
   const storeAccess = { accessibleStoreIds: async () => null } as never;
-  const controller = new DashboardController(fakePrisma, {} as never, analytics, {} as never, reportService, rootCauseService, storeAccess);
+  const messageTraffic = { getTraffic: async () => ({ overallPeakHour: { hour: 0, window: "00:00", count: 0 }, hourlyDistribution: [], storeHourlyDistribution: [] }) } as never;
+  const controller = new DashboardController(fakePrisma, {} as never, analytics, {} as never, reportService, rootCauseService, storeAccess, messageTraffic);
 
-  await controller.getAnalytics("30d", "s1,s2", undefined, { user: { role: "ADMIN" } } as never);
-  assert.deepEqual(captured[0], ["30d", "ADMIN", ["s1", "s2"]]);
+  await controller.getAnalytics("30d", undefined, undefined, "s1,s2", undefined, { user: { role: "ADMIN" } } as never);
+  assert.deepEqual(captured[0], ["30d", "ADMIN", ["s1", "s2"], undefined]);
   await assert.rejects(
-    () => controller.getAnalytics("today", "s1,missing", undefined, { user: { role: "ADMIN" } } as never),
+    () => controller.getAnalytics("today", undefined, undefined, "s1,missing", undefined, { user: { role: "ADMIN" } } as never),
     (error: unknown) => error instanceof ForbiddenException,
   );
 });
