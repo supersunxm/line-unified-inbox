@@ -1058,3 +1058,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Runtime verification uses only the local PostgreSQL container, an encrypted dummy temporary HEAD_OFFICE fixture, and signed synthetic webhook payloads. No real LINE credential, external webhook, deployment, or production data mutation is part of this audit.
 - Temporary capability grants and fixtures are created and removed in the same verification run; final database counts and invariants must match the pre-test baseline before reporting completion.
 - Rolling-window tests derive fixture dates from the service's public date helper so the test remains deterministic as the calendar advances; production date behavior is unchanged.
+
+# Main OA production Stage 1 boundary (2026-08-24)
+
+- Deploy the clean, locally verified release commit through Railway's existing backend/frontend services using local uploads; do not push unrelated work or create a new project/database.
+- Let the existing backend pre-deploy command own production migration execution (`npx prisma migrate deploy`), then verify the migration record and account-type constraints before application smoke tests.
+- Use only temporary existing-user sessions and minimum capability grants for authorization smoke testing. Restore flags and delete sessions before completion; never create a production HEAD_OFFICE account or add credentials in Stage 1.
+- Treat changes in dynamic conversation/message totals during the deployment window as live traffic unless database evidence shows a deployment write or data loss. Store account/follower/friend-source scope counts are the regression invariants.
