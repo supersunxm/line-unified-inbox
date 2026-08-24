@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ThemeControl } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
+import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
 import { AppSidebar } from "./app-sidebar";
 
 export type Language = "th" | "en" | "zh";
@@ -23,7 +24,7 @@ type TopNavigationText = {
 
 export interface TopNavigationProps {
   currentSection: PrimarySection;
-  authUser: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } } | null;
+  authUser: AuthUser | null;
   text: TopNavigationText;
   language: Language;
   changeLanguage: (lang: Language) => void;
@@ -90,10 +91,11 @@ function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigatio
   );
 }
 
-function MobileNavIcon({ type }: { type: "home" | "chat" | "insights" | "more" }) {
+function MobileNavIcon({ type }: { type: "home" | "chat" | "insights" | "main-oa" | "more" }) {
   if (type === "home") return <span aria-hidden="true" className="text-[19px] leading-none">⌂</span>;
   if (type === "chat") return <span aria-hidden="true" className="text-[18px] leading-none">◫</span>;
   if (type === "insights") return <span aria-hidden="true" className="text-[18px] leading-none">↗</span>;
+  if (type === "main-oa") return <span aria-hidden="true" className="text-[18px] leading-none">▦</span>;
   return <span aria-hidden="true" className="text-[20px] leading-none">•••</span>;
 }
 
@@ -101,13 +103,16 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
   const [moreOpen, setMoreOpen] = useState(false);
   const secondaryActive = ["dashboard", "stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
   const labels = language === "th"
-    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
+    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", approval: "อนุมัติ BM", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
     : language === "zh"
-      ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友链接", mass: "群发消息", logout: "退出", appearance: "外观", language: "语言" }
-      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Followers", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", logout: "Logout", appearance: "Appearance", language: "Language" };
+      ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", mainOa: "Main OA", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友链接", mass: "群发消息", approval: "BM 审批", logout: "退出", appearance: "外观", language: "语言" }
+      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Followers", mainOa: "Main OA", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", approval: "BM Approval", logout: "Logout", appearance: "Appearance", language: "Language" };
 
-  const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
+  const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
   const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
+  const can = (section: PrimarySection) => Boolean(authUser && canAccessPrimarySection(authUser, section));
+  const canTool = (tool: "message-traffic" | "tiktok") => Boolean(authUser && canAccessWebTool(authUser, tool));
+  const defaultRoute = authUser ? defaultRouteForUser(authUser) : "/login";
 
   return (
     <>
@@ -130,15 +135,16 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
 
           <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{labels.more}</div>
           <div className="grid grid-cols-1 gap-1">
-            <Link href="/dashboard" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.dashboard}</span><span>›</span></Link>
-            <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span>›</span></Link>
-            {authUser?.role === "ADMIN" && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
-            <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>
-            <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span>›</span></Link>
-            {authUser?.role === "ADMIN" && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span>›</span></Link>}
-            {authUser?.role === "ADMIN" && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span>›</span></Link>}
-            {authUser?.role === "ADMIN" && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>BM Approval</span><span>›</span></Link>}
-            {authUser?.role === "ADMIN" && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok</span><span>›</span></Link>}
+            {can("dashboard") && <Link href="/dashboard" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.dashboard}</span><span>›</span></Link>}
+            {canTool("message-traffic") && <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span>›</span></Link>}
+            {can("coupons") && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
+            {can("stores") && <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>}
+            {can("purchase-analytics") && <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span>›</span></Link>}
+            {can("friend-source-links") && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span>›</span></Link>}
+            {can("mass-messages") && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span>›</span></Link>}
+            {can("admin-registrations") && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.approval}</span><span>›</span></Link>}
+            {can("main-oa") && <Link href="/main-oa" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mainOa}</span><span>›</span></Link>}
+            {canTool("tiktok") && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok</span><span>›</span></Link>}
           </div>
 
           <div className="my-3 border-t border-[var(--app-border-subtle)]" />
@@ -156,12 +162,15 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
         </div>
       )}
 
-      <nav aria-label="Mobile primary navigation" className="fixed inset-x-0 bottom-0 z-[60] grid grid-cols-4 border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
-        <Link href="/home" aria-current={currentSection === "home" ? "page" : undefined} className={itemClass(currentSection === "home")}><MobileNavIcon type="home" /><span>{labels.home}</span></Link>
-        <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={itemClass(currentSection === "chats")}><MobileNavIcon type="chat" /><span>{labels.chats}</span></Link>
-        <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={itemClass(currentSection === "follower-insights")}><MobileNavIcon type="insights" /><span>{labels.insights}</span></Link>
-        <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)} className={itemClass(moreOpen || secondaryActive)}><MobileNavIcon type="more" /><span>{labels.more}</span></button>
+      <nav aria-label="Mobile primary navigation" className="fixed inset-x-0 bottom-0 z-[60] flex border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
+        {can("home") && <Link href="/home" aria-current={currentSection === "home" ? "page" : undefined} className={itemClass(currentSection === "home")}><MobileNavIcon type="home" /><span>{labels.home}</span></Link>}
+        {can("chats") && <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={itemClass(currentSection === "chats")}><MobileNavIcon type="chat" /><span>{labels.chats}</span></Link>}
+        {can("follower-insights") && <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={itemClass(currentSection === "follower-insights")}><MobileNavIcon type="insights" /><span>{labels.insights}</span></Link>}
+        {can("main-oa") && !can("home") && !can("chats") && <Link href="/main-oa" aria-current={currentSection === "main-oa" ? "page" : undefined} className={itemClass(currentSection === "main-oa")}><MobileNavIcon type="main-oa" /><span>{labels.mainOa}</span></Link>}
+        <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)} className={itemClass(moreOpen || secondaryActive || currentSection === "main-oa")}><MobileNavIcon type="more" /><span>{labels.more}</span></button>
       </nav>
+
+      {authUser && defaultRoute === "/login" && <span className="sr-only">No authorized workspace</span>}
     </>
   );
 }
@@ -171,6 +180,7 @@ export function TopNavigation(props: TopNavigationProps) {
   const updatedLabel = lastUpdatedAt
     ? `${text.lastUpdated || "Last updated"} ${new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdatedAt)}`
     : (text.lastUpdated || "Last updated");
+  const defaultRoute = authUser ? defaultRouteForUser(authUser) : "/login";
 
   return (
     <>
@@ -193,7 +203,7 @@ export function TopNavigation(props: TopNavigationProps) {
 
       <header className="app-header sticky top-0 z-30 flex h-14 min-h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-4 backdrop-blur-xl sm:px-5">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Link href="/home" className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg md:hidden`}>
+          <Link href={defaultRoute} className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg md:hidden`}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-[11px] font-bold text-white">O</span>
             <span className="truncate text-[15px] font-bold">{text.appName || "OPPO LINE OA Monitor"}</span>
           </Link>
