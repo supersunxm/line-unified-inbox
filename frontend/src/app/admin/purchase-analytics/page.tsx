@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AuthorizedSection } from "../../authorized-workspace";
 import PurchaseAnalyticsDesktopPage from "./purchase-analytics-desktop";
 import { MobilePurchaseAnalyticsApp } from "./mobile-purchase-analytics-app";
 
@@ -21,6 +22,9 @@ export default function PurchaseAnalyticsPage() {
     return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลการซื้อ...</main>;
   }
 
-  if (mode === "mobile") return <MobilePurchaseAnalyticsApp />;
-  return <PurchaseAnalyticsDesktopPage />;
+  return (
+    <AuthorizedSection section="purchase-analytics">
+      {mode === "mobile" ? <MobilePurchaseAnalyticsApp /> : <PurchaseAnalyticsDesktopPage />}
+    </AuthorizedSection>
+  );
 }
