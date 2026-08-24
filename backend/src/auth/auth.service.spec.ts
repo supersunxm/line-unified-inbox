@@ -12,6 +12,12 @@ void test("login rejects pending, rejected, and suspended users", async () => {
   }
 });
 
+void test("an inactive account cannot create a new web session", async () => {
+  const prisma: any = { user: { findFirst: async () => ({ id: "user-1", email: "bm@example.test", displayName: "BM", role: "VIEWER", status: "ACTIVE", isActive: false, passwordHash: "hash", memberships: [{ id: "membership-1" }] }) } };
+  const service = new AuthService(prisma, { verify: async () => true } as any);
+  await assert.rejects(() => service.login("bm@example.test", "password"), (error: any) => error.response?.code === "ACCOUNT_SUSPENDED");
+});
+
 void test("active user with an active membership can log in", async () => {
   const prisma: any = {
     user: { findFirst: async () => ({ id: "user-1", email: "bm@example.test", displayName: "BM", role: "VIEWER", status: "ACTIVE", isActive: true, passwordHash: "hash", memberships: [{ id: "membership-1", storeId: "store-1", role: "STAFF", store: { id: "store-1", name: "Store 1", code: "S1" } }] }), update: async () => ({}) },
@@ -72,6 +78,14 @@ void test("authenticated mobile profile includes stores, membership roles, and d
   assert.deepEqual(result?.permissions?.membershipRoles, ["STAFF"]);
   assert.deepEqual(result?.stores, [{ id: "store-1", name: "Store 1", code: "S1" }]);
   assert.deepEqual(result?.profile, { firstName: "First", lastName: "Last", employeeId: "EMP-1", position: "PC", phone: "+66812345678" });
+});
+
+void test("an existing session is rejected immediately after account deactivation", async () => {
+  const prisma: any = {
+    session: { findUnique: async () => ({ expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", email: "bm@example.test", displayName: "BM", role: "VIEWER", isActive: false, status: "SUSPENDED", memberships: [] } }) },
+  };
+  const result = await new AuthService(prisma, {} as any).authenticate("existing-session-token");
+  assert.equal(result, null);
 });
 
 void test("admin password reset stores only a hash, forces a change, expires sessions, and audits safely", async () => {

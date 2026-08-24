@@ -13,6 +13,10 @@ export class RegistrationService {
   private readonly logger = new Logger(RegistrationService.name);
   constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService, @Optional() private readonly email?: EmailService) {}
 
+  private lifecycleResult(userId: string, accountStatus: "ACTIVE" | "INACTIVE", membershipStatus: "ACTIVE" | "INACTIVE", changed: boolean, membershipId?: string) {
+    return { userId, accountStatus, membershipStatus, changed, ...(membershipId ? { membershipId } : {}) };
+  }
+
   async stores() {
     return this.prisma.store.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } });
   }
@@ -65,14 +69,18 @@ export class RegistrationService {
 
   async approved() {
     const memberships = await this.prisma.userStoreMembership.findMany({
-      where: { status: MembershipStatus.ACTIVE, user: { role: UserRole.VIEWER, status: UserStatus.ACTIVE, isActive: true } },
+      where: {
+        status: { in: [MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED] },
+        user: { role: UserRole.VIEWER, status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
+      },
       select: {
         id: true,
         userId: true,
         role: true,
+        status: true,
         approvedAt: true,
         approvedBy: { select: { id: true, displayName: true, email: true } },
-        user: { select: { id: true, displayName: true, employeeId: true, email: true } },
+        user: { select: { id: true, displayName: true, employeeId: true, email: true, isActive: true } },
         store: { select: { id: true, name: true, code: true } },
       },
       orderBy: { approvedAt: "desc" },
@@ -85,9 +93,95 @@ export class RegistrationService {
       email: membership.user.email,
       store: membership.store,
       role: membership.role,
+      accountStatus: membership.user.isActive ? "ACTIVE" : "INACTIVE",
+      membershipStatus: membership.status === MembershipStatus.ACTIVE ? "ACTIVE" : "INACTIVE",
       approvedAt: membership.approvedAt,
       approvedBy: membership.approvedBy,
     }));
+  }
+
+  async deactivateAccount(userId: string, adminUserId: string, ipAddress?: string, userAgent?: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          status: true,
+          memberships: {
+            where: { status: MembershipStatus.ACTIVE },
+            select: { id: true, storeId: true },
+          },
+        },
+      });
+      if (!user || user.role !== UserRole.VIEWER || user.status === UserStatus.REJECTED || user.status === UserStatus.PENDING_APPROVAL) {
+        throw new NotFoundException("Approved account not found");
+      }
+      if (!user.isActive || user.status === UserStatus.SUSPENDED) {
+        return this.lifecycleResult(user.id, "INACTIVE", "INACTIVE", false);
+      }
+      if (user.memberships.length === 0) throw new ConflictException("Account has no active store membership");
+
+      const userUpdate = await tx.user.updateMany({
+        where: { id: user.id, role: UserRole.VIEWER, isActive: true, status: UserStatus.ACTIVE },
+        data: { isActive: false, status: UserStatus.SUSPENDED },
+      });
+      if (userUpdate.count !== 1) {
+        const latest = await tx.user.findUnique({ where: { id: user.id }, select: { isActive: true, status: true } });
+        if (latest && (!latest.isActive || latest.status === UserStatus.SUSPENDED)) return this.lifecycleResult(user.id, "INACTIVE", "INACTIVE", false);
+        throw new ConflictException("Account changed while it was being deactivated");
+      }
+      await tx.userStoreMembership.updateMany({ where: { userId: user.id, status: MembershipStatus.ACTIVE }, data: { status: MembershipStatus.SUSPENDED } });
+      await tx.session.deleteMany({ where: { userId: user.id } });
+      await tx.deviceToken.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false, lastSeenAt: new Date() } });
+      return this.lifecycleResult(user.id, "INACTIVE", "INACTIVE", true);
+    });
+    if (result.changed) {
+      await this.audit?.record({ actorUserId: adminUserId, action: "ADMIN_DEACTIVATE_ACCOUNT", targetUserId: result.userId, metadata: { accountStatus: result.accountStatus, membershipStatus: result.membershipStatus }, ipAddress, userAgent });
+    }
+    return result;
+  }
+
+  async reactivateAccount(userId: string, adminUserId: string, ipAddress?: string, userAgent?: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          status: true,
+          memberships: {
+            where: { status: { in: [MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED] } },
+            select: { id: true, storeId: true, status: true, isPrimary: true, approvedAt: true, createdAt: true },
+            orderBy: [{ isPrimary: "desc" }, { approvedAt: "desc" }, { createdAt: "desc" }],
+          },
+        },
+      });
+      if (!user || user.role !== UserRole.VIEWER) throw new NotFoundException("Account not found");
+      if (user.isActive && user.status === UserStatus.ACTIVE) {
+        return this.lifecycleResult(user.id, "ACTIVE", user.memberships.some((membership) => membership.status === MembershipStatus.ACTIVE) ? "ACTIVE" : "INACTIVE", false, user.memberships.find((membership) => membership.status === MembershipStatus.ACTIVE)?.id);
+      }
+      if (user.status !== UserStatus.SUSPENDED && user.status !== UserStatus.ACTIVE) throw new ConflictException("Account cannot be reactivated");
+      const membership = user.memberships[0];
+      if (!membership) throw new ConflictException("No current store membership is available to restore");
+
+      const userUpdate = await tx.user.updateMany({ where: { id: user.id, role: UserRole.VIEWER, isActive: false, status: { in: [UserStatus.SUSPENDED, UserStatus.ACTIVE] } }, data: { isActive: true, status: UserStatus.ACTIVE } });
+      if (userUpdate.count !== 1) {
+        const latest = await tx.user.findUnique({ where: { id: user.id }, select: { isActive: true, status: true } });
+        if (latest?.isActive && latest.status === UserStatus.ACTIVE) return this.lifecycleResult(user.id, "ACTIVE", "ACTIVE", false, membership.id);
+        throw new ConflictException("Account changed while it was being reactivated");
+      }
+      if (membership.status === MembershipStatus.SUSPENDED) {
+        await tx.userStoreMembership.updateMany({ where: { id: membership.id, status: MembershipStatus.SUSPENDED }, data: { status: MembershipStatus.ACTIVE } });
+      }
+      return this.lifecycleResult(user.id, "ACTIVE", "ACTIVE", true, membership.id);
+    });
+    if (result.changed) {
+      await this.audit?.record({ actorUserId: adminUserId, action: "ADMIN_REACTIVATE_ACCOUNT", targetUserId: result.userId, metadata: { accountStatus: result.accountStatus, membershipStatus: result.membershipStatus, membershipId: result.membershipId ?? null }, ipAddress, userAgent });
+    }
+    return result;
   }
 
   async approve(registrationId: string, adminUserId: string, ipAddress?: string, userAgent?: string) { return this.setApproval(registrationId, adminUserId, MembershipStatus.ACTIVE, ipAddress, userAgent); }

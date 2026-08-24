@@ -13,4 +13,6 @@ export class AdminRegistrationController {
   @Patch(":id/approve") approve(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.approve(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch(":id/reject") reject(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reject(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Post("users/:id/reset-password") resetPassword(@Param("id") id: string, @Req() request: AuthRequest) { return this.auth.resetPassword(id, request.user!.id, request.ip, request.get("user-agent")); }
+  @Patch("users/:id/deactivate") deactivate(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.deactivateAccount(id, request.user!.id, request.ip, request.get("user-agent")); }
+  @Patch("users/:id/reactivate") reactivate(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reactivateAccount(id, request.user!.id, request.ip, request.get("user-agent")); }
 }

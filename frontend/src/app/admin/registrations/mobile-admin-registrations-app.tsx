@@ -17,6 +17,7 @@ import { api, type ApprovedAccount, type PendingRegistration } from "@/lib/api";
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
 type Tab = "pending" | "approved";
 type RoleFilter = "ALL" | "STAFF" | "STORE_MANAGER";
+type AccountStatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
 
 const inputClass = "w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-3 text-[16px] text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]";
 
@@ -40,10 +41,12 @@ export function MobileAdminRegistrationsApp() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+  const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>("ACTIVE");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [lifecycleTarget, setLifecycleTarget] = useState<ApprovedAccount | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -70,24 +73,26 @@ export function MobileAdminRegistrationsApp() {
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
-    void loadPending();
+    const timer = window.setTimeout(() => void loadPending(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadPending, user?.role]);
 
   const switchTab = (next: Tab) => {
-    setTab(next); setSearch(""); setRoleFilter("ALL"); setError(null); setNotice(null); setTemporaryPassword(null);
+    setTab(next); setSearch(""); setRoleFilter("ALL"); setAccountStatusFilter("ACTIVE"); setError(null); setNotice(null); setTemporaryPassword(null);
     if (next === "pending") void loadPending(); else void loadApproved();
   };
 
   const filteredApproved = useMemo(() => {
     const query = search.trim().toLowerCase();
     return approved.filter((account) => {
+      if (accountStatusFilter !== "ALL" && account.accountStatus !== accountStatusFilter) return false;
       if (roleFilter !== "ALL" && account.role !== roleFilter) return false;
       if (!query) return true;
       return [account.name, account.employeeId, account.email, account.store.name, account.store.code]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query));
     });
-  }, [approved, roleFilter, search]);
+  }, [accountStatusFilter, approved, roleFilter, search]);
 
   const act = async (registration: PendingRegistration, action: "approve" | "reject") => {
     const verb = action === "approve" ? "อนุมัติ" : "ปฏิเสธ";
@@ -111,6 +116,22 @@ export function MobileAdminRegistrationsApp() {
       setTemporaryPassword(result.temporaryPassword);
       setNotice(`รีเซ็ตรหัสผ่านของ ${account.name} สำเร็จ`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "รีเซ็ตรหัสผ่านไม่สำเร็จ"); }
+    finally { setActingId(null); }
+  };
+
+  const changeLifecycle = async (account: ApprovedAccount, action: "deactivate" | "reactivate") => {
+    const confirmed = window.confirm(action === "deactivate"
+      ? `Deactivate ${account.name}? Store access, sessions, and device tokens will be disabled. Account history is preserved.`
+      : `Reactivate ${account.name}? The current approved store membership will be restored. No approval email will be sent.`);
+    if (!confirmed) return;
+    setActingId(account.userId); setError(null); setNotice(null); setLifecycleTarget(null);
+    try {
+      const result = action === "deactivate" ? await api.deactivateAccount(account.userId) : await api.reactivateAccount(account.userId);
+      setNotice(action === "deactivate"
+        ? result.changed ? `${account.name} deactivated` : `${account.name} is already inactive`
+        : result.changed ? `${account.name} reactivated (no approval email sent)` : `${account.name} is already active`);
+      await loadApproved();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "เปลี่ยนสถานะบัญชีไม่สำเร็จ"); }
     finally { setActingId(null); }
   };
 
@@ -158,12 +179,12 @@ export function MobileAdminRegistrationsApp() {
               </MobileSection>
             ) : (
               <div className="space-y-4">
-                <MobileCard className="space-y-3"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อ, Employee ID, email, ร้าน" className={inputClass} /><div className="grid grid-cols-3 gap-2">{(["ALL", "STORE_MANAGER", "STAFF"] as RoleFilter[]).map((role) => <button key={role} type="button" onClick={() => setRoleFilter(role)} className={`min-h-10 rounded-xl border text-[10px] font-bold ${roleFilter === role ? "border-[var(--app-accent)] bg-[var(--app-accent)]/5 text-[var(--app-accent)]" : "border-[var(--app-border)]"}`}>{role === "ALL" ? "ทั้งหมด" : roleLabel(role)}</button>)}</div></MobileCard>
+                <MobileCard className="space-y-3"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อ, Employee ID, email, ร้าน" className={inputClass} /><label className="block text-[10px] font-bold text-[var(--app-text-secondary)]" htmlFor="mobile-account-status">สถานะบัญชี<select id="mobile-account-status" value={accountStatusFilter} onChange={(event) => setAccountStatusFilter(event.target.value as AccountStatusFilter)} className={`${inputClass} mt-1 py-2 text-sm`}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="ALL">ทั้งหมด</option></select></label><div className="grid grid-cols-3 gap-2">{(["ALL", "STORE_MANAGER", "STAFF"] as RoleFilter[]).map((role) => <button key={role} type="button" onClick={() => setRoleFilter(role)} className={`min-h-10 rounded-xl border text-[10px] font-bold ${roleFilter === role ? "border-[var(--app-accent)] bg-[var(--app-accent)]/5 text-[var(--app-accent)]" : "border-[var(--app-border)]"}`}>{role === "ALL" ? "ทั้งหมด" : roleLabel(role)}</button>)}</div></MobileCard>
                 <MobileSection title="บัญชีที่อนุมัติแล้ว" description={`${filteredApproved.length.toLocaleString()} บัญชี`}>
                   {loading && approved.length === 0 ? <MobileCard><p className="py-10 text-center text-xs text-[var(--app-text-secondary)]">กำลังโหลด...</p></MobileCard> : filteredApproved.length === 0 ? <MobileEmptyState title="ไม่พบบัญชี" description="ลองเปลี่ยนคำค้นหาหรือตัวกรอง" /> : <div className="space-y-2.5">{filteredApproved.map((account) => (
-                    <MobileListCard key={account.id} title={account.name} subtitle={`${account.store.name}${account.store.code ? ` · ${account.store.code}` : ""}`} trailing={<span className={`rounded-full px-2 py-1 text-[9px] font-bold ${account.role === "STORE_MANAGER" ? "bg-[var(--app-accent)]/10 text-[var(--app-accent)]" : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]"}`}>{roleLabel(account.role)}</span>}>
+                    <MobileListCard key={account.id} title={account.name} subtitle={`${account.store.name}${account.store.code ? ` · ${account.store.code}` : ""}`} trailing={<div className="flex items-center gap-1.5"><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${account.role === "STORE_MANAGER" ? "bg-[var(--app-accent)]/10 text-[var(--app-accent)]" : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]"}`}>{roleLabel(account.role)}</span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${account.accountStatus === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>{account.accountStatus === "ACTIVE" ? "Active" : "Inactive"}</span></div>}>
                       <div className="space-y-1 text-[10px] text-[var(--app-text-secondary)]"><p>Employee ID: <strong className="text-[var(--app-text-primary)]">{account.employeeId || "—"}</strong></p><p className="break-all">{account.email}</p><p>อนุมัติ: {formatDate(account.approvedAt)}</p></div>
-                      <button type="button" disabled={actingId !== null} onClick={() => void resetPassword(account)} className="mt-3 min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">{actingId === account.userId ? "กำลังรีเซ็ต..." : "Reset Password"}</button>
+                      <div className="mt-3 grid grid-cols-1 gap-2">{account.accountStatus === "INACTIVE" && <button type="button" disabled={actingId !== null} onClick={() => void changeLifecycle(account, "reactivate")} className="min-h-11 w-full rounded-xl bg-[var(--app-accent)] text-xs font-bold text-white disabled:opacity-35">{actingId === account.userId ? "กำลังทำ..." : "Reactivate"}</button>}<button type="button" disabled={actingId !== null} onClick={() => void resetPassword(account)} className="min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">{actingId === account.userId ? "กำลังรีเซ็ต..." : "Reset Password"}</button>{account.accountStatus === "ACTIVE" && <button type="button" disabled={actingId !== null} onClick={() => setLifecycleTarget(account)} className="min-h-11 w-full rounded-xl border border-amber-500/30 text-xs font-bold text-amber-700 disabled:opacity-35">More · Deactivate</button>}</div>
                     </MobileListCard>
                   ))}</div>}
                 </MobileSection>
@@ -172,6 +193,7 @@ export function MobileAdminRegistrationsApp() {
           </>
         )}
       </div>
+      {lifecycleTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-5"><MobileCard className="w-full max-w-sm space-y-4"><h2 className="text-base font-bold">Deactivate account?</h2><p className="text-xs leading-5 text-[var(--app-text-secondary)]">Deactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong>? Store access, active sessions, and device tokens will be disabled. Account history is preserved.</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setLifecycleTarget(null)} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">Cancel</button><button type="button" onClick={() => void changeLifecycle(lifecycleTarget, "deactivate")} className="min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white">Confirm</button></div></MobileCard></div>}
       {moreOpen && <MobileMoreSheet displayName={user.displayName} role={user.role} onClose={() => setMoreOpen(false)} />}
     </MobilePageShell>
   );

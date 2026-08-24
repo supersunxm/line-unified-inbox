@@ -1095,3 +1095,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Registration approval remains the source of truth: the existing transaction transitions the registration, user, and membership first; the approval email is dispatched only after that transaction resolves. Provider failure cannot roll back or invalidate the approval.
 - Email delivery is provider-independent through `EmailProvider`; the current `ResendEmailProvider` sends only a plain notification/template message. The approval email contains display name, store, BM/PC role, and support guidance, and never contains credentials, tokens, URLs, or internal identifiers.
 - Duplicate approval email dispatch is prevented by conditional pending-state updates and the existing pending-only transition guard. No Resend button or new delivery-state schema was introduced; existing hashed-recipient `EmailDeliveryEvent` rows provide sanitized operational outcomes for this first version.
+
+# BM/PC account lifecycle boundary (2026-08-24)
+
+- Phase 1 uses the existing suspension states rather than adding a new enum or migration: `UserStatus.SUSPENDED` plus `isActive=false` marks an inactive account, and active Store memberships become `MembershipStatus.SUSPENDED`. This keeps approval provenance and historical rows intact while making every existing auth path fail closed.
+- Deactivation invalidates all web/mobile sessions and active device tokens in the same transaction. Device-token rows are retained with `isActive=false` for recoverability and auditability; no plaintext token is exposed.
+- Reactivation restores exactly one intended membership, ordered by primary status and approval recency, instead of enabling every historical membership. It is an administrative state transition only and does not re-send registration approval email.
+- Permanent deletion remains out of scope for Phase 1. Before any future delete capability, relationship-by-relationship impact and retention requirements must be audited; no delete endpoint or schema relationship was introduced here.

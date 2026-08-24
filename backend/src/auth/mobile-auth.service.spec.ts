@@ -39,6 +39,20 @@ void test("pending, rejected, and suspended users cannot complete mobile login",
   }
 });
 
+void test("an inactive account cannot start a new mobile login challenge", async () => {
+  let challengeInput: any;
+  const prisma: any = {
+    user: { findUnique: async () => mobileUser({ isActive: false }) },
+    $transaction: async (callback: any) => callback({
+      otpChallenge: { create: async () => ({ id: "challenge-1", expiresAt: new Date(Date.now() + 60_000) }) },
+    }),
+  };
+  const otp: any = { create: async (_tx: unknown, input: any) => { challengeInput = input; return { challenge: { id: "challenge-1", expiresAt: new Date(Date.now() + 60_000) }, code: "123456" }; } };
+  const service = new MobileAuthService(prisma, otp, {} as any, { sendSms: async () => ({ status: "SENT" as const }) });
+  await service.sendOtp("0812345678");
+  assert.equal(challengeInput.userId, undefined);
+});
+
 void test("wrong or expired OTP and duplicate verification do not create additional sessions", async () => {
   let sessionCount = 0;
   const challenge = { id: "otp-1", userId: "user-1", purpose: MobileOtpPurpose.BM_STAFF_LOGIN, codeHash: "hash", expiresAt: new Date(Date.now() + 60_000), attempts: 0, maxAttempts: 5, consumedAt: null };

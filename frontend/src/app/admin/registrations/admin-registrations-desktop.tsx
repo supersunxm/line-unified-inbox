@@ -12,8 +12,6 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
-  ErrorState,
-  Input,
   LoadingState,
   SearchInput,
   Table,
@@ -29,6 +27,8 @@ import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 
 type Tab = "pending" | "approved";
 type RoleFilter = "ALL" | "STAFF" | "STORE_MANAGER";
+type AccountStatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
+type LifecycleAction = "deactivate" | "reactivate";
 
 function roleLabel(role: "STAFF" | "STORE_MANAGER") {
   return role === "STORE_MANAGER" ? "BM" : "PC";
@@ -53,6 +53,10 @@ export default function AdminRegistrationsPage() {
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+  const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>("ACTIVE");
+  const [lifecycleTarget, setLifecycleTarget] = useState<ApprovedAccount | null>(null);
+  const [lifecycleAction, setLifecycleAction] = useState<LifecycleAction | null>(null);
+  const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -106,6 +110,7 @@ export default function AdminRegistrationsPage() {
     setActiveTab(tab);
     setSearch("");
     setRoleFilter("ALL");
+    setAccountStatusFilter("ACTIVE");
     setNotice(null);
     setError(null);
     if (tab === "approved" && approvedAccounts.length === 0) void loadApproved();
@@ -132,13 +137,43 @@ export default function AdminRegistrationsPage() {
   const filteredApprovedAccounts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return approvedAccounts.filter((account) => {
+      if (accountStatusFilter !== "ALL" && account.accountStatus !== accountStatusFilter) return false;
       if (roleFilter !== "ALL" && account.role !== roleFilter) return false;
       if (!query) return true;
       return [account.name, account.employeeId, account.email, account.store.name, account.store.code]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query));
     });
-  }, [approvedAccounts, roleFilter, search]);
+  }, [accountStatusFilter, approvedAccounts, roleFilter, search]);
+
+  const openLifecycleConfirmation = (account: ApprovedAccount, action: LifecycleAction) => {
+    setLifecycleTarget(account);
+    setLifecycleAction(action);
+    setError(null);
+    setNotice(null);
+  };
+
+  const confirmLifecycleAction = async () => {
+    if (!lifecycleTarget || !lifecycleAction) return;
+    const target = lifecycleTarget;
+    const action = lifecycleAction;
+    setActingId(target.userId);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = action === "deactivate" ? await api.deactivateAccount(target.userId) : await api.reactivateAccount(target.userId);
+      setNotice(action === "deactivate"
+        ? result.changed ? `${target.name} was deactivated. Store access and active sessions were revoked.` : `${target.name} is already inactive.`
+        : result.changed ? `${target.name} was reactivated. No approval email was sent.` : `${target.name} is already active.`);
+      setLifecycleTarget(null);
+      setLifecycleAction(null);
+      await loadApproved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The account status change failed.");
+    } finally {
+      setActingId(null);
+    }
+  };
 
   const resetPassword = async () => {
     if (!resetTarget) return;
@@ -288,6 +323,19 @@ export default function AdminRegistrationsPage() {
                     placeholder="Search employee ID, name, email, or store…"
                     className="h-8 min-w-[280px] flex-1"
                   />
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[var(--app-text-primary)]" htmlFor="account-status-filter">
+                    <span>Account</span>
+                    <select
+                      id="account-status-filter"
+                      value={accountStatusFilter}
+                      onChange={(event) => setAccountStatusFilter(event.target.value as AccountStatusFilter)}
+                      className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] font-normal focus:border-[var(--app-accent)] focus:outline-none"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                      <option value="ALL">All</option>
+                    </select>
+                  </label>
                   <label className="flex items-center gap-2 text-xs font-semibold text-[var(--app-text-primary)]" htmlFor="role-filter">
                     <span>Role</span>
                     <select
@@ -314,7 +362,7 @@ export default function AdminRegistrationsPage() {
               <CardDescription>
                 {activeTab === "pending"
                   ? "Access requests awaiting admin review"
-                  : "Active authorized store managers and staff members"}
+                  : "Active and inactive approved store managers and staff members. Deactivation preserves account history."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -407,6 +455,7 @@ export default function AdminRegistrationsPage() {
                         <TableHead>Email</TableHead>
                         <TableHead>Store</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Approved</TableHead>
                         <TableHead>Approved By</TableHead>
                         <TableHead align="right">Action</TableHead>
@@ -432,6 +481,11 @@ export default function AdminRegistrationsPage() {
                               {roleLabel(account.role)}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            <Badge size="sm" variant={account.accountStatus === "ACTIVE" ? "success" : "warning"} dot>
+                              {account.accountStatus === "ACTIVE" ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="whitespace-nowrap font-mono text-[11px] text-[var(--app-text-secondary)]">
                             {formatDate(account.approvedAt)}
                           </TableCell>
@@ -439,17 +493,38 @@ export default function AdminRegistrationsPage() {
                             {account.approvedBy?.displayName || "Unknown"}
                           </TableCell>
                           <TableCell align="right">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={actingId !== null}
-                              onClick={() => {
-                                setTemporaryPassword(null);
-                                setResetTarget(account);
-                              }}
-                            >
-                              Reset Password
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              {account.accountStatus === "INACTIVE" && (
+                                <Button variant="primary" size="sm" disabled={actingId !== null} onClick={() => openLifecycleConfirmation(account, "reactivate")}>
+                                  Reactivate
+                                </Button>
+                              )}
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={actingId !== null}
+                                onClick={() => {
+                                  setTemporaryPassword(null);
+                                  setResetTarget(account);
+                                }}
+                              >
+                                Reset Password
+                              </Button>
+                              {account.accountStatus === "ACTIVE" && (
+                                <div className="relative">
+                                  <Button variant="secondary" size="sm" disabled={actingId !== null} aria-label={`More actions for ${account.name}`} aria-expanded={actionMenuUserId === account.userId} onClick={() => setActionMenuUserId((current) => current === account.userId ? null : account.userId)}>
+                                    ⋯
+                                  </Button>
+                                  {actionMenuUserId === account.userId && (
+                                    <div role="menu" className="absolute right-0 top-full z-10 mt-1 min-w-36 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-[var(--app-shadow-modal)]">
+                                      <button type="button" role="menuitem" className="w-full rounded-[var(--app-radius-sm)] px-3 py-2 text-left text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger-soft)]" onClick={() => { setActionMenuUserId(null); openLifecycleConfirmation(account, "deactivate"); }}>
+                                        Deactivate
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -484,6 +559,27 @@ export default function AdminRegistrationsPage() {
                 disabled={actingId !== null}
               >
                 Confirm Reset
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lifecycleTarget && lifecycleAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="account-lifecycle-title" className="w-full max-w-md rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-[var(--app-shadow-modal)] space-y-4">
+            <h2 id="account-lifecycle-title" className="text-lg font-bold text-[var(--app-text-primary)]">
+              {lifecycleAction === "deactivate" ? "Deactivate account" : "Reactivate account"}
+            </h2>
+            <p className="text-xs text-[var(--app-text-secondary)] leading-relaxed">
+              {lifecycleAction === "deactivate"
+                ? <>Deactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong> ({roleLabel(lifecycleTarget.role)}) at {lifecycleTarget.store.name}? Store access, active sessions, and device tokens will be disabled. Account history is preserved.</>
+                : <>Reactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong> ({roleLabel(lifecycleTarget.role)}) at {lifecycleTarget.store.name}? The current approved store membership will be restored. No approval email will be sent.</>}
+            </p>
+            <div className="flex justify-end gap-2.5 pt-2">
+              <Button variant="secondary" size="md" onClick={() => { setLifecycleTarget(null); setLifecycleAction(null); }}>Cancel</Button>
+              <Button variant={lifecycleAction === "deactivate" ? "danger" : "primary"} size="md" onClick={() => void confirmLifecycleAction()} disabled={actingId !== null}>
+                {lifecycleAction === "deactivate" ? "Confirm Deactivate" : "Confirm Reactivate"}
               </Button>
             </div>
           </div>

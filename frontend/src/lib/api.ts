@@ -42,6 +42,8 @@ export type ApprovedAccount = {
   email: string;
   store: { id: string; name: string; code: string | null };
   role: "STAFF" | "STORE_MANAGER";
+  accountStatus: "ACTIVE" | "INACTIVE";
+  membershipStatus: "ACTIVE" | "INACTIVE";
   approvedAt: string | null;
   approvedBy: { id: string; displayName: string; email: string } | null;
 };
@@ -155,6 +157,8 @@ export const api = {
   approveRegistration: (id: string) => request<RegistrationApprovalResult>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
   rejectRegistration: (id: string) => request<RegistrationApprovalResult>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
   resetUserPassword: (userId: string) => request<{ userId: string; temporaryPassword: string }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reset-password`, { method: "POST" }),
+  deactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/deactivate`, { method: "PATCH" }),
+  reactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reactivate`, { method: "PATCH" }),
   changePassword: (currentPassword: string, newPassword: string) => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   purchaseAnalytics: (params?: { from?: string; to?: string; storeId?: string }) => {
     const query = new URLSearchParams();

@@ -177,3 +177,62 @@ void test("approved accounts include employee, store, role, and approver provena
   assert.equal(account.approvedBy?.displayName, "OPPO Admin");
   assert.equal(account.store.name, "Central World");
 });
+
+void test("deactivation suspends the store membership, revokes sessions and device tokens, and audits once", async () => {
+  const calls: string[] = [];
+  const auditEntries: any[] = [];
+  const tx: any = {
+    user: {
+      findUnique: async () => ({ id: "user-1", role: "VIEWER", isActive: true, status: "ACTIVE", memberships: [{ id: "membership-1", storeId: "store-1" }] }),
+      updateMany: async () => { calls.push("user"); return { count: 1 }; },
+    },
+    userStoreMembership: { updateMany: async () => { calls.push("membership"); return { count: 1 }; } },
+    session: { deleteMany: async () => { calls.push("sessions"); return { count: 2 }; } },
+    deviceToken: { updateMany: async () => { calls.push("devices"); return { count: 1 }; } },
+  };
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback(tx) } as any, {} as any, undefined, { record: async (entry: any) => auditEntries.push(entry) } as any);
+  const result = await service.deactivateAccount("user-1", "admin-1", "127.0.0.1", "test-agent");
+  assert.deepEqual(result, { userId: "user-1", accountStatus: "INACTIVE", membershipStatus: "INACTIVE", changed: true });
+  assert.deepEqual(calls, ["user", "membership", "sessions", "devices"]);
+  assert.deepEqual(auditEntries[0], { actorUserId: "admin-1", action: "ADMIN_DEACTIVATE_ACCOUNT", targetUserId: "user-1", metadata: { accountStatus: "INACTIVE", membershipStatus: "INACTIVE" }, ipAddress: "127.0.0.1", userAgent: "test-agent" });
+});
+
+void test("repeated deactivation is idempotent and does not repeat revocation side effects", async () => {
+  let sideEffects = 0;
+  const auditEntries: any[] = [];
+  const tx: any = {
+    user: { findUnique: async () => ({ id: "user-1", role: "VIEWER", isActive: false, status: "SUSPENDED", memberships: [] }) },
+    userStoreMembership: { updateMany: async () => { sideEffects += 1; return { count: 1 }; } },
+    session: { deleteMany: async () => { sideEffects += 1; return { count: 1 }; } },
+    deviceToken: { updateMany: async () => { sideEffects += 1; return { count: 1 }; } },
+    $transaction: undefined,
+  };
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback(tx) } as any, {} as any, undefined, { record: async (entry: any) => auditEntries.push(entry) } as any);
+  const result = await service.deactivateAccount("user-1", "admin-1");
+  assert.equal(result.changed, false);
+  assert.equal(sideEffects, 0);
+  assert.equal(auditEntries.length, 0);
+});
+
+void test("reactivation restores only the selected current membership and does not send approval email", async () => {
+  const calls: string[] = [];
+  const auditEntries: any[] = [];
+  const tx: any = {
+    user: {
+      findUnique: async () => ({
+        id: "user-1", role: "VIEWER", isActive: false, status: "SUSPENDED",
+        memberships: [
+          { id: "current-membership", storeId: "store-2", status: "SUSPENDED", isPrimary: true, approvedAt: new Date("2026-08-20"), createdAt: new Date("2026-08-20") },
+          { id: "historical-membership", storeId: "store-1", status: "SUSPENDED", isPrimary: false, approvedAt: new Date("2026-08-10"), createdAt: new Date("2026-08-10") },
+        ],
+      }),
+      updateMany: async () => { calls.push("user"); return { count: 1 }; },
+    },
+    userStoreMembership: { updateMany: async ({ where }: any) => { calls.push(`membership:${where.id}`); return { count: 1 }; } },
+  };
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback(tx) } as any, {} as any, undefined, { record: async (entry: any) => auditEntries.push(entry) } as any, { sendAccountApproved: async () => { throw new Error("must not send"); } } as any);
+  const result = await service.reactivateAccount("user-1", "admin-1");
+  assert.deepEqual(result, { userId: "user-1", accountStatus: "ACTIVE", membershipStatus: "ACTIVE", changed: true, membershipId: "current-membership" });
+  assert.deepEqual(calls, ["user", "membership:current-membership"]);
+  assert.equal(auditEntries[0].action, "ADMIN_REACTIVATE_ACCOUNT");
+});
