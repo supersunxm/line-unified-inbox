@@ -47,7 +47,21 @@ export class RegistrationService {
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
         },
       });
-      const user = await tx.user.create({ data: { email: dto.email.trim(), normalizedEmail, displayName: name, employeeId, passwordHash, role: UserRole.VIEWER, status: UserStatus.PENDING_APPROVAL, isActive: true } });
+      const user = await tx.user.create({
+        data: {
+          email: dto.email.trim(),
+          normalizedEmail,
+          displayName: name,
+          employeeId,
+          passwordHash,
+          role: UserRole.VIEWER,
+          status: UserStatus.PENDING_APPROVAL,
+          isActive: true,
+          canAccessWeb: true,
+          canAccessMobile: true,
+          canReply: false,
+        },
+      });
       await tx.userStoreMembership.create({ data: { userId: user.id, storeId: store.id, role: dto.role, status: MembershipStatus.PENDING_APPROVAL } });
       await tx.registrationRequest.update({ where: { id: request.id }, data: { createdUserId: user.id } });
       return { request, user };
@@ -80,7 +94,7 @@ export class RegistrationService {
         status: true,
         approvedAt: true,
         approvedBy: { select: { id: true, displayName: true, email: true } },
-        user: { select: { id: true, displayName: true, employeeId: true, email: true, isActive: true } },
+        user: { select: { id: true, displayName: true, employeeId: true, email: true, isActive: true, canAccessWeb: true, canAccessMobile: true } },
         store: { select: { id: true, name: true, code: true } },
       },
       orderBy: { approvedAt: "desc" },
@@ -95,6 +109,7 @@ export class RegistrationService {
       role: membership.role,
       accountStatus: membership.user.isActive ? "ACTIVE" : "INACTIVE",
       membershipStatus: membership.status === MembershipStatus.ACTIVE ? "ACTIVE" : "INACTIVE",
+      platformAccess: { web: membership.user.canAccessWeb, mobile: membership.user.canAccessMobile },
       approvedAt: membership.approvedAt,
       approvedBy: membership.approvedBy,
     }));
@@ -202,6 +217,9 @@ export class RegistrationService {
           status: true,
           isActive: true,
           deletedAt: true,
+          canAccessHq: true,
+          canAccessAllStores: true,
+          canManageAccounts: true,
           canAccessMainOa: true,
           canManageMainOa: true,
           memberships: {
@@ -219,7 +237,7 @@ export class RegistrationService {
       });
       if (!user) throw new NotFoundException("Account not found");
       if (user.status === UserStatus.DELETED || user.deletedAt) return { userId: user.id, accountStatus: "DELETED" as const, changed: false };
-      if (user.role !== UserRole.VIEWER || user.canAccessMainOa || user.canManageMainOa) throw new ConflictException("Only approved BM and PC accounts can be deleted");
+      if (user.role !== UserRole.VIEWER || user.canAccessHq || user.canAccessAllStores || user.canManageAccounts || user.canAccessMainOa || user.canManageMainOa) throw new ConflictException("Only approved BM and PC accounts can be deleted");
       if (user.isActive && user.status === UserStatus.ACTIVE) throw new ConflictException("Deactivate the account before permanent deletion");
       if (user.status !== UserStatus.SUSPENDED && !(user.status === UserStatus.ACTIVE && !user.isActive)) throw new ConflictException("Only inactive accounts can be permanently deleted");
       if (!user.memberships.some((membership) => membership.status === MembershipStatus.ACTIVE || membership.status === MembershipStatus.SUSPENDED)) throw new ConflictException("Only approved BM and PC accounts can be deleted");
@@ -256,6 +274,12 @@ export class RegistrationService {
           mustChangePassword: false,
           status: UserStatus.DELETED,
           isActive: false,
+          canAccessWeb: false,
+          canAccessMobile: false,
+          canAccessHq: false,
+          canAccessAllStores: false,
+          canManageAccounts: false,
+          canReply: false,
           canAccessMainOa: false,
           canManageMainOa: false,
           phone: null,
@@ -302,7 +326,13 @@ export class RegistrationService {
       const approvedAt = new Date();
       const membershipUpdate = await tx.userStoreMembership.updateMany({ where: { id: membership.id, status: MembershipStatus.PENDING_APPROVAL }, data: { status, approvedAt, approvedById: adminUserId } });
       if (membershipUpdate.count !== 1) throw new ConflictException("Registration is no longer pending approval");
-      const userUpdate = await tx.user.updateMany({ where: { id: request.createdUserId, status: UserStatus.PENDING_APPROVAL }, data: { status: status === MembershipStatus.ACTIVE ? UserStatus.ACTIVE : UserStatus.REJECTED } });
+      const userUpdate = await tx.user.updateMany({
+        where: { id: request.createdUserId, status: UserStatus.PENDING_APPROVAL },
+        data: {
+          status: status === MembershipStatus.ACTIVE ? UserStatus.ACTIVE : UserStatus.REJECTED,
+          canReply: status === MembershipStatus.ACTIVE,
+        },
+      });
       if (userUpdate.count !== 1) throw new ConflictException("Registration user is no longer pending approval");
       const requestUpdate = await tx.registrationRequest.updateMany({ where: { id: request.id, status: RegistrationRequestStatus.PENDING_APPROVAL }, data: { status: status === MembershipStatus.ACTIVE ? RegistrationRequestStatus.APPROVED : RegistrationRequestStatus.REJECTED } });
       if (requestUpdate.count !== 1) throw new ConflictException("Registration is no longer pending approval");
