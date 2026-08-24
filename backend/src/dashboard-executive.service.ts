@@ -54,15 +54,6 @@ export function getDashboardStoreIssues(input: {
   return issues;
 }
 
-function toBangkokDateString(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
 function pickReliableDate(
   snapshots: Array<{ lineOaId: string; snapshotDate: Date; followers: number | null }>,
   requestedIsoDate: string,
