@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import { Request } from "express";
 import { AuthService } from "./auth.service";
 import { IS_PUBLIC, REQUIRED_ROLES } from "./auth.decorators";
+import type { PermissionContext } from "./permission-context";
 import { StoreAccessService } from "./store-access.service";
 
 export type AuthUser = {
@@ -22,7 +23,21 @@ export type AuthUser = {
   memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }>;
   stores?: Array<{ id: string; name: string; code: string | null }>;
   profile?: { firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; phone?: string | null };
-  permissions?: { platformRole: UserRole; membershipRoles: string[]; canAccessAllStores: boolean; canReply: boolean; canAccessMainOa: boolean; canManageMainOa: boolean };
+  authorization?: PermissionContext;
+  permissions?: {
+    platformRole: UserRole;
+    membershipRoles: string[];
+    canAccessAllStores: boolean;
+    canReply: boolean;
+    canAccessMainOa: boolean;
+    canManageMainOa: boolean;
+    canManageAccounts?: boolean;
+    version?: PermissionContext["version"];
+    platforms?: PermissionContext["platforms"];
+    workspaces?: PermissionContext["workspaces"];
+    scope?: PermissionContext["scope"];
+    capabilities?: PermissionContext["capabilities"];
+  };
 };
 export type AuthRequest = Request & { user?: AuthUser };
 

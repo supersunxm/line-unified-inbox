@@ -6,6 +6,7 @@ import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
 import { assertPasswordPolicy } from "./password-policy";
+import { buildPermissionContext } from "./permission-context";
 
 @Injectable()
 export class AuthService {
@@ -14,6 +15,12 @@ export class AuthService {
   private tokenHash(token: string) { return createHash("sha256").update(token).digest("hex"); }
   private safeUser(user: { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; isActive: boolean; canAccessMainOa?: boolean; canManageMainOa?: boolean; status?: string; mustChangePassword?: boolean; phone?: string | null; firstName?: string | null; lastName?: string | null; employeeId?: string | null; position?: string | null; memberships?: Array<{ id: string; storeId: string; role: string; store: { id: string; name: string; code: string | null } }> }) {
     const memberships = user.memberships?.map((membership) => ({ id: membership.id, storeId: membership.storeId, role: membership.role, store: membership.store })) ?? [];
+    const authorization = buildPermissionContext({
+      role: user.role,
+      canAccessMainOa: user.canAccessMainOa,
+      canManageMainOa: user.canManageMainOa,
+      memberships,
+    });
     return {
       id: user.id,
       email: user.email,
@@ -30,13 +37,22 @@ export class AuthService {
       memberships,
       stores: memberships.map((membership) => membership.store),
       profile: { firstName: user.firstName, lastName: user.lastName, employeeId: user.employeeId, position: user.position, phone: user.phone },
+      authorization,
       permissions: {
-        platformRole: user.role,
-        membershipRoles: [...new Set(memberships.map((membership) => membership.role))],
-        canAccessAllStores: user.role === "ADMIN",
-        canReply: user.role === "ADMIN" || memberships.length > 0,
-        canAccessMainOa: user.canAccessMainOa ?? false,
-        canManageMainOa: user.canManageMainOa ?? false,
+        // Keep the existing flat permission contract for current Web/App clients.
+        platformRole: authorization.identity.platformRole,
+        membershipRoles: authorization.identity.membershipRoles,
+        canAccessAllStores: authorization.scope.allStores,
+        canReply: authorization.capabilities.reply,
+        canAccessMainOa: authorization.capabilities.accessMainOa,
+        canManageMainOa: authorization.capabilities.manageMainOa,
+        // Add the normalized Stage 1 contract alongside the legacy keys.
+        canManageAccounts: authorization.capabilities.manageAccounts,
+        version: authorization.version,
+        platforms: authorization.platforms,
+        workspaces: authorization.workspaces,
+        scope: authorization.scope,
+        capabilities: authorization.capabilities,
       },
     };
   }

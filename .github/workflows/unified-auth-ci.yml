@@ -1,0 +1,47 @@
+name: Unified Auth CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/auth/**"
+      - "backend/prisma/schema.prisma"
+      - "backend/prisma/migrations/**"
+      - ".github/workflows/unified-auth-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-foundation:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma validate
+        run: npx prisma validate
+
+      - name: Lint unified auth scope
+        run: npx eslint "src/auth/auth.service.ts" "src/auth/auth.guard.ts" "src/auth/permission-context.ts" "src/auth/permission-context.spec.ts"
+
+      - name: Unified auth regression tests
+        run: npx tsx --test src/auth/permission-context.spec.ts src/auth/auth.service.spec.ts src/auth/auth.guard.spec.ts
+
+      - name: Backend build
+        run: npm run build
