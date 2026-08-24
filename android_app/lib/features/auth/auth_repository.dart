@@ -17,8 +17,8 @@ class AuthRepository {
     await _tokens.save(result['accessToken'] as String);
   }
 
-  Future<void> login(String email, String password) async {
-    final result = await _api.post('/auth/mobile/login', body: {'email': email.trim(), 'password': password}, authenticated: false);
+  Future<void> login(String identifier, String password) async {
+    final result = await _api.post('/auth/mobile/login', body: {'email': identifier.trim(), 'password': password}, authenticated: false);
     await _tokens.save(result['accessToken'] as String);
   }
 
