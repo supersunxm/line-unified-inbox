@@ -15,6 +15,11 @@ void test("development admin and console email fail closed in production", () =>
   assert.throws(() => validateProductionEnvironment({ ...valid, DEV_ADMIN_ENABLED: "true" }), /must never/);
   assert.throws(() => validateProductionEnvironment({ ...valid, EMAIL_PROVIDER: "console" }), /not allowed/);
 });
+void test("Resend production email configuration requires the API key and sender address", () => {
+  assert.doesNotThrow(() => validateProductionEnvironment({ ...valid, EMAIL_PROVIDER: "resend", RESEND_API_KEY: "resend-secret", EMAIL_FROM_ADDRESS: "no-reply@lineoppo.click" }));
+  assert.throws(() => validateProductionEnvironment({ ...valid, EMAIL_PROVIDER: "resend", EMAIL_FROM_ADDRESS: "no-reply@lineoppo.click" }), /RESEND_API_KEY and EMAIL_FROM_ADDRESS/);
+  assert.throws(() => validateProductionEnvironment({ ...valid, EMAIL_PROVIDER: "resend", RESEND_API_KEY: "resend-secret" }), /RESEND_API_KEY and EMAIL_FROM_ADDRESS/);
+});
 void test("enabled pilot admin bootstrap is validated before startup", () => {
   const enabled = { ...valid, PILOT_ADMIN_BOOTSTRAP_ENABLED: "true", PILOT_ADMIN_USERNAME: "pilot", PILOT_ADMIN_PASSWORD: "A strong pilot password" };
   assert.doesNotThrow(() => validateProductionEnvironment(enabled));

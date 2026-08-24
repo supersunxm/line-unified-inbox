@@ -59,7 +59,7 @@ Both values are intentionally public browser configuration. Never add `DATABASE_
 - `PILOT_ADMIN_USERNAME` and `PILOT_ADMIN_PASSWORD` when pilot bootstrap is enabled. Create these directly in Railway; never commit them. The password must be at least 12 characters and must not be a common password.
 - `PILOT_ADMIN_DISPLAY_NAME=Pilot Admin` (optional)
 - `EMAIL_PROVIDER=resend` for first-admin setup on a new database. Use `none` only when registration email is intentionally unavailable and an administrator already exists.
-- `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME` when using Resend
+- `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, and optionally `EMAIL_FROM_NAME` when using Resend
 - `DEV_ADMIN_ENABLED=false`
 - `MEDIA_STORAGE_ENABLED=false` — recommended for the pilot when inbound image retention is not needed. Image events remain visible, but the backend does not download or store their content.
 - When image retention is required, set `MEDIA_STORAGE_ENABLED=true` and `MEDIA_STORAGE_DRIVER=s3`. Railway filesystems are ephemeral, so local storage is rejected in production.

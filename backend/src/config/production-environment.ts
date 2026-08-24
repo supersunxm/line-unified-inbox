@@ -2,6 +2,7 @@ import { readPilotAdminBootstrapConfig } from "../auth/pilot-admin-bootstrap.con
 
 import { readMediaStorageEnabled } from "../media/media-storage.config";
 import { readMessageTranslationConfig } from "../translation/translation.config";
+import { emailFromAddress } from "../email/email.config";
 
 const requiredProductionVariables = ["DATABASE_URL", "FRONTEND_URL", "PUBLIC_WEBHOOK_BASE_URL", "LINE_CREDENTIAL_ENCRYPTION_KEY", "LINE_WEBHOOK_ENABLED", "PILOT_MODE", "PILOT_ADMIN_BOOTSTRAP_ENABLED", "EMAIL_PROVIDER", "FRIEND_SOURCE_PUBLIC_BASE_URL", "FRIEND_SOURCE_IP_HASH_KEY"] as const;
 
@@ -42,7 +43,7 @@ export function validateProductionEnvironment(environment: NodeJS.ProcessEnv = p
   readPilotAdminBootstrapConfig(environment);
   const emailProvider = environment.EMAIL_PROVIDER!.trim().toLowerCase();
   if (emailProvider === "console") throw new Error("EMAIL_PROVIDER=console is not allowed in production");
-  if (emailProvider === "resend" && (!environment.RESEND_API_KEY?.trim() || !environment.EMAIL_FROM?.trim())) throw new Error("RESEND_API_KEY and EMAIL_FROM are required when EMAIL_PROVIDER=resend");
+  if (emailProvider === "resend" && (!environment.RESEND_API_KEY?.trim() || !emailFromAddress(environment))) throw new Error("RESEND_API_KEY and EMAIL_FROM_ADDRESS are required when EMAIL_PROVIDER=resend");
   if (emailProvider !== "none" && emailProvider !== "resend") throw new Error("EMAIL_PROVIDER must be none or resend in production");
 }
 

@@ -1,6 +1,7 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { MembershipStatus, RegistrationRequestStatus, UserRole, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
+import { EmailService } from "../email/email.service";
 import { CreateRegistrationRequestDto } from "./registration.dto";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
@@ -9,7 +10,8 @@ import { assertPasswordPolicy } from "./password-policy";
 
 @Injectable()
 export class RegistrationService {
-  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService) {}
+  private readonly logger = new Logger(RegistrationService.name);
+  constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService, @Optional() private readonly email?: EmailService) {}
 
   async stores() {
     return this.prisma.store.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } });
@@ -95,16 +97,41 @@ export class RegistrationService {
     const result = await this.prisma.$transaction(async (tx) => {
       const request = await tx.registrationRequest.findUnique({ where: { id: registrationId } });
       if (!request?.createdUserId || request.status !== RegistrationRequestStatus.PENDING_APPROVAL) throw new NotFoundException("Pending registration not found");
-      const membership = await tx.userStoreMembership.findUnique({ where: { userId_storeId: { userId: request.createdUserId, storeId: request.storeId } } });
+      const membership = await tx.userStoreMembership.findUnique({
+        where: { userId_storeId: { userId: request.createdUserId, storeId: request.storeId } },
+        select: { id: true, status: true, role: true, user: { select: { email: true, displayName: true } }, store: { select: { name: true } } },
+      });
       if (!membership || membership.status !== MembershipStatus.PENDING_APPROVAL) throw new ConflictException("Registration is no longer pending approval");
       const approvedAt = new Date();
-      await tx.userStoreMembership.update({ where: { id: membership.id }, data: { status, approvedAt, approvedById: adminUserId } });
-      await tx.user.update({ where: { id: request.createdUserId }, data: { status: status === MembershipStatus.ACTIVE ? UserStatus.ACTIVE : UserStatus.REJECTED } });
-      await tx.registrationRequest.update({ where: { id: request.id }, data: { status: status === MembershipStatus.ACTIVE ? RegistrationRequestStatus.APPROVED : RegistrationRequestStatus.REJECTED } });
-      return { registrationId: request.id, userId: request.createdUserId, status };
+      const membershipUpdate = await tx.userStoreMembership.updateMany({ where: { id: membership.id, status: MembershipStatus.PENDING_APPROVAL }, data: { status, approvedAt, approvedById: adminUserId } });
+      if (membershipUpdate.count !== 1) throw new ConflictException("Registration is no longer pending approval");
+      const userUpdate = await tx.user.updateMany({ where: { id: request.createdUserId, status: UserStatus.PENDING_APPROVAL }, data: { status: status === MembershipStatus.ACTIVE ? UserStatus.ACTIVE : UserStatus.REJECTED } });
+      if (userUpdate.count !== 1) throw new ConflictException("Registration user is no longer pending approval");
+      const requestUpdate = await tx.registrationRequest.updateMany({ where: { id: request.id, status: RegistrationRequestStatus.PENDING_APPROVAL }, data: { status: status === MembershipStatus.ACTIVE ? RegistrationRequestStatus.APPROVED : RegistrationRequestStatus.REJECTED } });
+      if (requestUpdate.count !== 1) throw new ConflictException("Registration is no longer pending approval");
+      return {
+        result: { registrationId: request.id, userId: request.createdUserId, status },
+        notification: { to: membership.user.email, displayName: membership.user.displayName, storeName: membership.store.name, role: membership.role },
+      };
     });
-    await this.audit?.record({ actorUserId: adminUserId, action: status === MembershipStatus.ACTIVE ? "ADMIN_APPROVE_REGISTRATION" : "ADMIN_REJECT_REGISTRATION", targetUserId: result.userId, targetRegistrationId: result.registrationId, ipAddress, userAgent });
-    return result;
+    await this.audit?.record({ actorUserId: adminUserId, action: status === MembershipStatus.ACTIVE ? "ADMIN_APPROVE_REGISTRATION" : "ADMIN_REJECT_REGISTRATION", targetUserId: result.result.userId, targetRegistrationId: result.result.registrationId, ipAddress, userAgent });
+    if (status !== MembershipStatus.ACTIVE) return result.result;
+    const notificationStatus = await this.sendApprovalNotification(result.notification);
+    return { ...result.result, notification: { status: notificationStatus } };
+  }
+
+  private async sendApprovalNotification(input: { to: string; displayName: string; storeName: string; role: "STAFF" | "STORE_MANAGER" }) {
+    if (!this.email) {
+      this.logger.warn(JSON.stringify({ event: "approval_notification_failed", reason: "email_service_unavailable" }));
+      return "failed" as const;
+    }
+    try {
+      await this.email.sendAccountApproved(input);
+      return "sent" as const;
+    } catch {
+      this.logger.warn(JSON.stringify({ event: "approval_notification_failed", reason: "email_delivery_failed" }));
+      return "failed" as const;
+    }
   }
 
 }

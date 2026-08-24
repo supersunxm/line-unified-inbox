@@ -116,9 +116,10 @@ export default function AdminRegistrationsPage() {
     setError(null);
     setNotice(null);
     try {
-      if (action === "approve") await api.approveRegistration(registration.id);
-      else await api.rejectRegistration(registration.id);
-      setNotice(action === "approve" ? "Registration approved." : "Registration rejected.");
+      const result = action === "approve" ? await api.approveRegistration(registration.id) : await api.rejectRegistration(registration.id);
+      setNotice(action === "approve"
+        ? result.notification?.status === "failed" ? "Registration approved, but the notification email could not be sent." : "Registration approved."
+        : "Registration rejected.");
       await loadPending();
       if (approvedAccounts.length > 0) await loadApproved();
     } catch (err) {

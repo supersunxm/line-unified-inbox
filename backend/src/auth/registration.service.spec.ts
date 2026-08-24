@@ -89,9 +89,9 @@ void test("approval activates both user and membership atomically", async () => 
   const updates: Array<{ table: string; data: unknown }> = [];
   const request = { id: "registration-1", storeId: "store-1", createdUserId: "user-1", status: "PENDING_APPROVAL" };
   const tx: any = {
-    registrationRequest: { findUnique: async () => request, update: async ({ data }: any) => { updates.push({ table: "request", data }); return data; } },
-    userStoreMembership: { findUnique: async () => ({ id: "membership-1", status: "PENDING_APPROVAL" }), update: async ({ data }: any) => { updates.push({ table: "membership", data }); return data; } },
-    user: { update: async ({ data }: any) => { updates.push({ table: "user", data }); return data; } },
+    registrationRequest: { findUnique: async () => request, updateMany: async ({ data }: any) => { updates.push({ table: "request", data }); return { count: 1 }; } },
+    userStoreMembership: { findUnique: async () => ({ id: "membership-1", status: "PENDING_APPROVAL", role: "STORE_MANAGER", user: { email: "bm@example.test", displayName: "Bee Manager" }, store: { name: "Central World" } }), updateMany: async ({ data }: any) => { updates.push({ table: "membership", data }); return { count: 1 }; } },
+    user: { updateMany: async ({ data }: any) => { updates.push({ table: "user", data }); return { count: 1 }; } },
   };
   const auditEntries: any[] = [];
   const service = new RegistrationService({ $transaction: async (callback: any) => callback(tx) } as any, {} as any, undefined, { record: async (entry: any) => auditEntries.push(entry) } as any);
@@ -101,6 +101,60 @@ void test("approval activates both user and membership atomically", async () => 
   const requestUpdate = updates.find((entry) => entry.table === "request");
   assert.equal((requestUpdate?.data as any).status, "APPROVED");
   assert.equal(auditEntries[0].action, "ADMIN_APPROVE_REGISTRATION");
+});
+
+void test("successful approval sends exactly one notification after the transaction commits", async () => {
+  const calls: string[] = [];
+  const transaction = async (callback: any) => callback({
+    registrationRequest: {
+      findUnique: async () => ({ id: "registration-1", storeId: "store-1", createdUserId: "user-1", status: "PENDING_APPROVAL" }),
+      updateMany: async () => { calls.push("request"); return { count: 1 }; },
+    },
+    userStoreMembership: {
+      findUnique: async () => ({ id: "membership-1", status: "PENDING_APPROVAL", role: "STAFF", user: { email: "pc@example.test", displayName: "Ploy <PC>" }, store: { name: "Central <World>" } }),
+      updateMany: async () => { calls.push("membership"); return { count: 1 }; },
+    },
+    user: { updateMany: async () => { calls.push("user"); return { count: 1 }; } },
+  });
+  const sent: unknown[] = [];
+  const service = new RegistrationService({ $transaction: transaction } as any, {} as any, undefined, undefined, { sendAccountApproved: async (input: unknown) => { calls.push("email"); sent.push(input); } } as any);
+  const result = await service.approve("registration-1", "admin-1");
+  assert.deepEqual(calls, ["membership", "user", "request", "email"]);
+  assert.deepEqual(result.notification, { status: "sent" });
+  assert.deepEqual(sent, [{ to: "pc@example.test", displayName: "Ploy <PC>", storeName: "Central <World>", role: "STAFF" }]);
+});
+
+void test("approval notification failure leaves the approved result active", async () => {
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback({
+    registrationRequest: { findUnique: async () => ({ id: "registration-1", storeId: "store-1", createdUserId: "user-1", status: "PENDING_APPROVAL" }), updateMany: async () => ({ count: 1 }) },
+    userStoreMembership: { findUnique: async () => ({ id: "membership-1", status: "PENDING_APPROVAL", role: "STORE_MANAGER", user: { email: "bm@example.test", displayName: "Bee Manager" }, store: { name: "Central World" } }), updateMany: async () => ({ count: 1 }) },
+    user: { updateMany: async () => ({ count: 1 }) },
+  }) } as any, {} as any, undefined, undefined, { sendAccountApproved: async () => { throw new Error("provider unavailable"); } } as any);
+  const result = await service.approve("registration-1", "admin-1");
+  assert.equal(result.status, "ACTIVE");
+  assert.deepEqual(result.notification, { status: "failed" });
+});
+
+void test("rejecting a registration never sends an approval email", async () => {
+  let sent = 0;
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback({
+    registrationRequest: { findUnique: async () => ({ id: "registration-1", storeId: "store-1", createdUserId: "user-1", status: "PENDING_APPROVAL" }), updateMany: async () => ({ count: 1 }) },
+    userStoreMembership: { findUnique: async () => ({ id: "membership-1", status: "PENDING_APPROVAL", role: "STAFF", user: { email: "pc@example.test", displayName: "PC" }, store: { name: "Store" } }), updateMany: async () => ({ count: 1 }) },
+    user: { updateMany: async () => ({ count: 1 }) },
+  }) } as any, {} as any, undefined, undefined, { sendAccountApproved: async () => { sent += 1; } } as any);
+  const result = await service.reject("registration-1", "admin-1");
+  assert.equal(result.status, "REJECTED");
+  assert.equal(sent, 0);
+  assert.equal("notification" in result, false);
+});
+
+void test("a repeated approval request is rejected before notification dispatch", async () => {
+  let sent = 0;
+  const service = new RegistrationService({ $transaction: async (callback: any) => callback({
+    registrationRequest: { findUnique: async () => ({ id: "registration-1", storeId: "store-1", createdUserId: "user-1", status: "APPROVED" }) },
+  }) } as any, {} as any, undefined, undefined, { sendAccountApproved: async () => { sent += 1; } } as any);
+  await assert.rejects(() => service.approve("registration-1", "admin-1"), NotFoundException);
+  assert.equal(sent, 0);
 });
 
 void test("approved accounts include employee, store, role, and approver provenance", async () => {

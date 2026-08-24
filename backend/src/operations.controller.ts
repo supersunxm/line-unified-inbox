@@ -4,6 +4,7 @@ import { PrismaService } from "./prisma.service";
 import { Roles } from "./auth/auth.decorators";
 import { UserRole } from "@prisma/client";
 import { OperationsService } from "./operations/operations.service";
+import { emailFromAddress } from "./email/email.config";
 
 const checklistKeys = ["credentials_saved", "webhook_copied", "verify_passed", "webhook_enabled", "text_received", "profile_fetched", "history_visible", "product_detected", "topic_detected", "reanalysis_works", "note_saves", "status_changes", "reminder_status", "dashboard_updates", "manager_button"] as const;
 type ChecklistKey = typeof checklistKeys[number];
@@ -28,7 +29,7 @@ export class OperationsController {
     const activeAdminCount = await this.prisma.user.count({ where: { role: "ADMIN", isActive: true } });
     const lastEmail = await this.prisma.emailDeliveryEvent.findFirst({ orderBy: { createdAt: "desc" } });
     const publicWebhookUrlConfigured = Boolean(process.env.PUBLIC_WEBHOOK_BASE_URL?.trim());
-    const emailMode = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "none"; const emailProviderConfigured = emailMode === "console" ? process.env.NODE_ENV !== "production" : emailMode === "resend" && Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+    const emailMode = process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "none"; const emailProviderConfigured = emailMode === "console" ? process.env.NODE_ENV !== "production" : emailMode === "resend" && Boolean(process.env.RESEND_API_KEY?.trim() && emailFromAddress());
     return { frontend: "HEALTHY", backendApi: "HEALTHY", database, lineWebhookEnabled: process.env.LINE_WEBHOOK_ENABLED !== "false", publicWebhookUrlConfigured, activeLineOaCount: activeOas, connectedLineOaCount: connectedOas, lineOaIssueCount: issueOas, lastValidWebhookReceived: lastWebhook._max.lastWebhookReceivedAt, lastStoreMasterImport: lastStoreMasterImport._max.updatedAt, storeMasterRecordCount: storeMasterCount, classificationEngine: "HEALTHY", pilotMode: process.env.PILOT_MODE === "true", emailProviderConfigured, emailProviderMode: emailMode, lastSuccessfulEmailSent: lastEmail?.success ? lastEmail.createdAt : null, lastEmailError: lastEmail && !lastEmail.success ? lastEmail.sanitizedError : null, firstAdminRequired: activeAdminCount === 0, activeAdminCount };
   }
   @Get("errors") errors() { return this.prisma.operationalError.findMany({ take: 20, orderBy: { createdAt: "desc" }, select: { id: true, feature: true, summary: true, resolved: true, createdAt: true } }); }

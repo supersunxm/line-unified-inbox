@@ -1865,3 +1865,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Updated route/navigation/design-system/auth tests to reflect that `/classification-insights` is not registered. The built route manifest omits it and the local production server returns 404 for that path.
 - Frontend tests pass 373/373 and the production build passes. Required route smoke checks return 200 for `/`, `/dashboard`, `/chats`, `/follower-insights`, and `/main-oa`; backend health returns 200. `git diff --check` passes.
 - Repository-wide ESLint still reports pre-existing unrelated errors/warnings (including React hook rules and explicit `any` findings); no unrelated lint cleanup was included.
+
+# Current task: Approval notification emails via Resend (2026-08-24)
+
+- Extended the existing backend email subsystem with a provider interface, a Resend provider, and an escaped responsive Thai approval template. The sender uses `EMAIL_FROM_NAME` and `EMAIL_FROM_ADDRESS` (with legacy `EMAIL_FROM` compatibility); `APP_LOGIN_URL` is not used.
+- Approval now performs conditional pending-state updates inside the existing transaction, then sends the notification only after the transaction resolves. Delivery is best-effort: approval remains ACTIVE when Resend fails, the API returns `notification.status`, and sanitized delivery events/logs contain only a recipient hash.
+- Added focused approval/provider/template/config tests. Backend focused tests pass 29/29, full backend tests pass 1,269/1,269, backend build passes, and changed backend source lint passes. Frontend tests pass 374/374 and frontend production build passes. Local homepage/admin registrations/Main OA routes return 200; backend health returns 200; unauthenticated approved-accounts API returns 401; `git diff --check` passes.
+- No Resend resend button or schema migration was added. Existing `EmailDeliveryEvent` records delivery outcomes; persistent per-account idempotency/rate-limit state remains out of scope for this first version.

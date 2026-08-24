@@ -12,7 +12,7 @@ The normal first-run flow is web-based. After applying migrations, open the fron
 
 1. Create a Resend account and API key.
 2. Configure a verified sender address.
-3. Set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM`, and optionally `EMAIL_FROM_NAME` in `backend/.env`.
+3. Set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, and optionally `EMAIL_FROM_NAME` in `backend/.env`.
 4. Restart the backend and open the website.
 5. Enter the first administrator details and the OTP received by email.
 

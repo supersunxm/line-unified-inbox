@@ -46,6 +46,13 @@ export type ApprovedAccount = {
   approvedBy: { id: string; displayName: string; email: string } | null;
 };
 
+export type RegistrationApprovalResult = {
+  registrationId: string;
+  userId: string;
+  status: string;
+  notification?: { status: "sent" | "failed" };
+};
+
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {
   id: string;
@@ -145,8 +152,8 @@ export const api = {
     const response = await request<{ accounts?: ApprovedAccount[] } | ApprovedAccount[]>("/admin/registrations/approved");
     return Array.isArray(response) ? response : response.accounts ?? [];
   },
-  approveRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
-  rejectRegistration: (id: string) => request<{ registrationId: string; userId: string; status: string }>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
+  approveRegistration: (id: string) => request<RegistrationApprovalResult>(`/admin/registrations/${encodeURIComponent(id)}/approve`, { method: "PATCH" }),
+  rejectRegistration: (id: string) => request<RegistrationApprovalResult>(`/admin/registrations/${encodeURIComponent(id)}/reject`, { method: "PATCH" }),
   resetUserPassword: (userId: string) => request<{ userId: string; temporaryPassword: string }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reset-password`, { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   purchaseAnalytics: (params?: { from?: string; to?: string; storeId?: string }) => {

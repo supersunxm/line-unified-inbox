@@ -94,9 +94,10 @@ export function MobileAdminRegistrationsApp() {
     if (!window.confirm(`${verb}คำขอของ ${registration.name || registration.email}?`)) return;
     setActingId(registration.id); setError(null); setNotice(null);
     try {
-      if (action === "approve") await api.approveRegistration(registration.id);
-      else await api.rejectRegistration(registration.id);
-      setNotice(action === "approve" ? "อนุมัติบัญชีแล้ว" : "ปฏิเสธคำขอแล้ว");
+      const result = action === "approve" ? await api.approveRegistration(registration.id) : await api.rejectRegistration(registration.id);
+      setNotice(action === "approve"
+        ? result.notification?.status === "failed" ? "อนุมัติบัญชีแล้ว แต่อีเมลแจ้งเตือนส่งไม่สำเร็จ" : "อนุมัติบัญชีแล้ว"
+        : "ปฏิเสธคำขอแล้ว");
       await loadPending();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "ดำเนินการไม่สำเร็จ"); }
     finally { setActingId(null); }

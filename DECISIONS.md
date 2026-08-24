@@ -1089,3 +1089,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Classification Insights is intentionally not a current frontend workspace. Its page/view/translation modules, navigation entries, route state, and frontend API surface are removed so users cannot discover or enter the unsupported UI.
 - The backend classification/product-intelligence implementation is left untouched; removing the frontend exposure does not alter stored classification data or backend authorization boundaries.
 - The route tree test asserts that no `/classification-insights` page is registered, while Main Workspace, Store Operations, and capability-gated Main OA navigation remain unchanged.
+
+# Approval notification email boundary (2026-08-24)
+
+- Registration approval remains the source of truth: the existing transaction transitions the registration, user, and membership first; the approval email is dispatched only after that transaction resolves. Provider failure cannot roll back or invalidate the approval.
+- Email delivery is provider-independent through `EmailProvider`; the current `ResendEmailProvider` sends only a plain notification/template message. The approval email contains display name, store, BM/PC role, and support guidance, and never contains credentials, tokens, URLs, or internal identifiers.
+- Duplicate approval email dispatch is prevented by conditional pending-state updates and the existing pending-only transition guard. No Resend button or new delivery-state schema was introduced; existing hashed-recipient `EmailDeliveryEvent` rows provide sanitized operational outcomes for this first version.
