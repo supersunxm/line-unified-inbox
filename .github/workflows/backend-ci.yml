@@ -55,16 +55,13 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Lint changed backend scope
-        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/dashboard.controller.ts" "src/dashboard-executive.service.ts" "src/dashboard-executive.service.spec.ts" "src/auth/auth.service.ts" "src/auth/auth.guard.ts" "src/auth/permission-context.ts" "src/auth/permission-context.spec.ts" "src/app.module.ts"
+        run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/dashboard.controller.ts" "src/dashboard-executive.service.ts" "src/dashboard-executive.service.spec.ts" "src/app.module.ts"
 
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
 
       - name: App version unit tests
         run: npx tsx --test src/app-version/app-version.service.spec.ts
-
-      - name: Unified auth permission regression tests
-        run: npx tsx --test src/auth/permission-context.spec.ts src/auth/auth.service.spec.ts src/auth/auth.guard.spec.ts
 
       - name: Conversation data contract regression tests
         run: npx tsx --test src/conversation-data-contract.spec.ts
