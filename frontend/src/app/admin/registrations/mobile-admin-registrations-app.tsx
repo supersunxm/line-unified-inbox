@@ -119,8 +119,8 @@ export function MobileAdminRegistrationsApp() {
     finally { setActingId(null); }
   };
 
-  const changeLifecycle = async (account: ApprovedAccount, action: "deactivate" | "reactivate") => {
-    const confirmed = window.confirm(action === "deactivate"
+  const changeLifecycle = async (account: ApprovedAccount, action: "deactivate" | "reactivate", alreadyConfirmed = false) => {
+    const confirmed = alreadyConfirmed || window.confirm(action === "deactivate"
       ? `Deactivate ${account.name}? Store access, sessions, and device tokens will be disabled. Account history is preserved.`
       : `Reactivate ${account.name}? The current approved store membership will be restored. No approval email will be sent.`);
     if (!confirmed) return;
@@ -193,7 +193,7 @@ export function MobileAdminRegistrationsApp() {
           </>
         )}
       </div>
-      {lifecycleTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-5"><MobileCard className="w-full max-w-sm space-y-4"><h2 className="text-base font-bold">Deactivate account?</h2><p className="text-xs leading-5 text-[var(--app-text-secondary)]">Deactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong>? Store access, active sessions, and device tokens will be disabled. Account history is preserved.</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setLifecycleTarget(null)} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">Cancel</button><button type="button" onClick={() => void changeLifecycle(lifecycleTarget, "deactivate")} className="min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white">Confirm</button></div></MobileCard></div>}
+      {lifecycleTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-5"><MobileCard className="w-full max-w-sm space-y-4"><h2 className="text-base font-bold">Deactivate account?</h2><p className="text-xs leading-5 text-[var(--app-text-secondary)]">Deactivate <strong className="text-[var(--app-text-primary)]">{lifecycleTarget.name}</strong>? Store access, active sessions, and device tokens will be disabled. Account history is preserved.</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setLifecycleTarget(null)} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">Cancel</button><button type="button" onClick={() => void changeLifecycle(lifecycleTarget, "deactivate", true)} className="min-h-11 rounded-xl bg-rose-600 text-xs font-bold text-white">Confirm</button></div></MobileCard></div>}
       {moreOpen && <MobileMoreSheet displayName={user.displayName} role={user.role} onClose={() => setMoreOpen(false)} />}
     </MobilePageShell>
   );
