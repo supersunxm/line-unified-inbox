@@ -1858,3 +1858,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - The exact baseline frontend command produced 368 tests: 341 passed and 27 failed. HEAD initially produced the same 27 failures plus two passing Main OA tests, proving zero frontend regressions were introduced by the rebase/integration.
 - Updated stale tests to validate the current Main Workspace/AppSidebar, responsive shell wrappers, `/home` login destination, current dashboard copy, current TikTok shell links, and responsive purchase/broadcast entrypoints. Added the missing `/classification-insights` route and its AppSidebar link because the route was referenced by the product but absent from the built route tree.
 - Final frontend suite passes 378/378. Focused Main Workspace/navigation/Main OA tests pass 113/113; frontend build, changed-file lint, backend full suite (1,258/1,258), Main OA isolation tests (3/3), and backend build pass. Local runtime routes return 200; unauthenticated Main OA API returns 401. No production change, push, or deployment was performed.
+
+# Current task: Remove Classification Insights from the frontend (2026-08-24)
+
+- Removed the Classification Insights page, view, translations, sidebar item, mobile More-menu links, primary-section state, shell labels, workspace branch, API client method, and response type. Backend routes, product-classification data, Main Workspace, and Main OA were not changed.
+- Updated route/navigation/design-system/auth tests to reflect that `/classification-insights` is not registered. The built route manifest omits it and the local production server returns 404 for that path.
+- Frontend tests pass 373/373 and the production build passes. Required route smoke checks return 200 for `/`, `/dashboard`, `/chats`, `/follower-insights`, and `/main-oa`; backend health returns 200. `git diff --check` passes.
+- Repository-wide ESLint still reports pre-existing unrelated errors/warnings (including React hook rules and explicit `any` findings); no unrelated lint cleanup was included.

@@ -56,7 +56,6 @@ test("primaryNavigationState maps active sections correctly", () => {
     dashboardActive: true,
     chatsActive: false,
     storesActive: false,
-    classificationInsightsActive: false,
     followerInsightsActive: false,
     friendSourceLinksActive: false,
     showStoreManagementAction: false,
@@ -66,7 +65,6 @@ test("primaryNavigationState maps active sections correctly", () => {
     dashboardActive: false,
     chatsActive: true,
     storesActive: false,
-    classificationInsightsActive: false,
     followerInsightsActive: false,
     friendSourceLinksActive: false,
     showStoreManagementAction: false,
@@ -166,13 +164,12 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
   assert.doesNotMatch(topNavCode, /lg:flex-1/);
   assert.match(topNavCode, /className="flex shrink-0 items-center justify-end gap-2"/);
 
-  // Ensure all 8 navigation items use native <Link> tags with valid hrefs and focus rings
+  // Ensure all navigation items use native <Link> tags with valid hrefs and focus rings
   for (const href of [
     "/dashboard",
     "/chats",
     "/stores",
     "/admin/registrations",
-    "/classification-insights",
     "/follower-insights",
     "/friend-source-links",
     "/mass-messages",

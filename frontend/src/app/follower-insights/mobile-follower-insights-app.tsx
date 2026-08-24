@@ -95,7 +95,6 @@ function MoreSheet({ user, onClose }: { user: AuthUser; onClose: () => void }) {
     { href: "/dashboard/message-traffic", label: "Message Traffic" },
     { href: "/coupons", label: "คูปอง" },
     { href: "/stores", label: "จัดการร้านค้า" },
-    { href: "/classification-insights", label: "ข้อมูลการจำแนก" },
     ...(user.role === "ADMIN" ? [{ href: "/admin/purchase-analytics", label: "ข้อมูลการซื้อ" }, { href: "/mass-messages", label: "ส่งข้อความ" }] : []),
   ];
   return (

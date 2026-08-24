@@ -32,7 +32,6 @@ test("unrelated and existing frontend routes are not matched", () => {
     "/dashboard",
     "/chats",
     "/stores",
-    "/classification-insights",
     "/follower-insights",
     "/friend-source-links",
     "/friend-attribution",

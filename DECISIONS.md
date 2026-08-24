@@ -1083,3 +1083,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The detached `origin/main` baseline reproduced every one of the original 27 frontend failures; none was introduced by the Main OA rebase. The failures were stale assertions around the `/home` entry route, AppSidebar replacing primary TopNavigation, responsive wrapper entrypoints, current dashboard copy, and current TikTok/purchase route composition.
 - Tests were updated to assert the current architecture rather than restoring obsolete UI behavior. The missing Classification Insights route was treated as a real product gap because it was referenced by the workspace and route tests; a minimal authenticated `ApplicationWorkspace` entrypoint and matching sidebar link were added.
 - The resulting frontend suite is green at 378/378 while preserving AppSidebar, Main Workspace, Store/Main OA separation, and Main OA capability gating.
+
+# Classification Insights frontend visibility boundary (2026-08-24)
+
+- Classification Insights is intentionally not a current frontend workspace. Its page/view/translation modules, navigation entries, route state, and frontend API surface are removed so users cannot discover or enter the unsupported UI.
+- The backend classification/product-intelligence implementation is left untouched; removing the frontend exposure does not alter stored classification data or backend authorization boundaries.
+- The route tree test asserts that no `/classification-insights` page is registered, while Main Workspace, Store Operations, and capability-gated Main OA navigation remain unchanged.

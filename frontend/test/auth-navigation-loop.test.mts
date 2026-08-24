@@ -36,7 +36,6 @@ test("resolveAuthRedirect enforces deterministic, loop-free redirect rules", () 
   assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/dashboard" }), null);
   assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/chats" }), null);
   assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/stores" }), null);
-  assert.equal(resolveAuthRedirect({ authState: "authenticated", pathname: "/classification-insights" }), null);
 
   // 4. Unauthenticated user on /login stays on /login to view the login form (no redirect)
   assert.equal(resolveAuthRedirect({ authState: "unauthenticated", pathname: "/login" }), null);

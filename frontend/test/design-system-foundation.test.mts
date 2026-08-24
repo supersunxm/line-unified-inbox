@@ -246,19 +246,7 @@ test("Phase 2E: Admin Purchase Analytics and Registrations consume shared design
   assert.match(registrationsSource, /<SearchInput/);
 });
 
-test("Phase 2F: Classification Insights consumes shared design system components", () => {
-  const classificationInsightsSource = readFileSync(new URL("../src/app/classification-insights/classification-insights-view.tsx", import.meta.url), "utf8");
-
-  assert.match(classificationInsightsSource, /<PageHeader/);
-  assert.match(classificationInsightsSource, /<MetricCard/);
-  assert.match(classificationInsightsSource, /<Card/);
-  assert.match(classificationInsightsSource, /<TableContainer>/);
-  assert.match(classificationInsightsSource, /<Table>/);
-  assert.match(classificationInsightsSource, /<Badge/);
-  assert.match(classificationInsightsSource, /<Button/);
-});
-
-test("Phase 2G: TikTok Overview and Dashboard consume shared design system components", () => {
+test("Phase 2F: TikTok Overview and Dashboard consume shared design system components", () => {
   const tiktokOverviewSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url), "utf8");
   const tiktokDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
 

@@ -16,7 +16,6 @@ import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
-import { ClassificationInsightsView } from "./classification-insights/classification-insights-view";
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
@@ -3666,10 +3665,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ) : initialSection === "follower-insights" ? (
             <PageContainer variant="readable">
               <FollowerInsightsView language={language} />
-            </PageContainer>
-          ) : initialSection === "classification-insights" ? (
-            <PageContainer variant="readable">
-              <ClassificationInsightsView language={language} />
             </PageContainer>
           ) : initialSection === "friend-source-links" ? (
             <PageContainer variant="readable">

@@ -115,7 +115,6 @@ export function MobileMoreSheet({ displayName, role, onClose }: { displayName: s
     { href: "/dashboard/message-traffic", label: "Message Traffic" },
     { href: "/coupons", label: "คูปอง" },
     { href: "/stores", label: "จัดการร้านค้า" },
-    { href: "/classification-insights", label: "ข้อมูลการจำแนก" },
     { href: "/friend-source-links", label: "Friend Source Links" },
     { href: "/tiktok", label: "TikTok Monitor" },
     ...(role === "ADMIN" ? [
