@@ -24,13 +24,15 @@ test("Mass Message translations exist with identical keys in Thai, English, and 
   assert.equal(zhText.pageTitle, "群发消息");
 });
 
-test("AppSidebar renders Mass Message only for ADMIN", () => {
-  assert.match(sidebarCode, /\{ href: "\/mass-messages", label: t\.mass, icon: "broadcast", adminOnly: true \}/);
-  assert.match(sidebarCode, /if \(item\.adminOnly && authUser\?\.role !== "ADMIN"\) return null/);
+test("AppSidebar renders Mass Message through normalized section authorization", () => {
+  assert.match(sidebarCode, /\{ href: "\/mass-messages", label: t\.mass, icon: "broadcast", section: "mass-messages" \}/);
+  assert.match(sidebarCode, /canAccessPrimarySection\(authUser, item\.section\)/);
+  assert.doesNotMatch(sidebarCode, /adminOnly:\s*true/);
 });
 
-test("Mass Message route entrypoint delegates to ApplicationWorkspace with mass-messages section", () => {
-  assert.match(routePageCode, /ApplicationWorkspace initialSection="mass-messages"/);
+test("Mass Message route entrypoint delegates through AuthorizedWorkspace with mass-messages section", () => {
+  assert.match(routePageCode, /AuthorizedWorkspace section="mass-messages"/);
+  assert.match(routePageCode, /AuthorizedSection section="mass-messages"/);
   assert.match(pageCode, /initialSection === "mass-messages"/);
   assert.match(pageCode, /<MassMessagesView language=\{language\} userRole=\{authUser\.role\} \/>/);
 });
