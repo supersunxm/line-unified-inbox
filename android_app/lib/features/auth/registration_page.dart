@@ -31,6 +31,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
   String? _storeId;
   String _role = 'STAFF';
   bool _loading = true;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
   String? _error;
 
   bool get _isHq => _role == 'HQ';
@@ -195,10 +197,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
           const SizedBox(height: 12),
           TextField(
               controller: _password,
-              obscureText: true,
+              obscureText: !_showPassword,
               decoration: InputDecoration(
                   labelText: l10n.passwordRequirement,
-                  border: const OutlineInputBorder())),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: _showPassword ? 'Hide password' : 'Show password',
+                    onPressed: () => setState(() => _showPassword = !_showPassword),
+                    icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                  ))),
           const SizedBox(height: 8),
           Text(
             '${l10n.passwordConditionsTitle}\n\n${l10n.passwordConditions}',
@@ -207,10 +214,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
           const SizedBox(height: 12),
           TextField(
               controller: _confirm,
-              obscureText: true,
+              obscureText: !_showConfirmPassword,
               decoration: InputDecoration(
                   labelText: l10n.confirmPassword,
-                  border: const OutlineInputBorder())),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: _showConfirmPassword
+                        ? 'Hide confirm password'
+                        : 'Show confirm password',
+                    onPressed: () => setState(() =>
+                        _showConfirmPassword = !_showConfirmPassword),
+                    icon: Icon(_showConfirmPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                  ))),
           if (_error != null)
             Padding(
                 padding: const EdgeInsets.only(top: 12),
