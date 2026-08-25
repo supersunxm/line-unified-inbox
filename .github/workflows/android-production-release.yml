@@ -69,19 +69,27 @@ jobs:
           test -n "$APKSIGNER"
 
           PACKAGE_ID="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          VERSION_CODE="$("$AAPT" dump badging "$APK" | sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p" | head -n 1)"
+          VERSION_NAME="$("$AAPT" dump badging "$APK" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p" | head -n 1)"
           echo "Package ID: $PACKAGE_ID"
+          echo "Version: $VERSION_NAME+$VERSION_CODE"
           test "$PACKAGE_ID" = "click.lineoppo.chat"
+          test "$VERSION_NAME" = "1.0.14"
+          test "$VERSION_CODE" = "15"
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
-          grep -Fq "E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14" /tmp/apk-signature.txt
+          EXPECTED_CERT_SHA256="e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114"
+          ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p; s/^V2 Signer: certificate SHA-256 digest: //p' /tmp/apk-signature.txt | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          echo "Certificate SHA-256: $ACTUAL_CERT_SHA256"
+          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
 
       - name: Rename release APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.14-production.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: oppo-line-oa-chat-v1.0.13-production
-          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+          name: oppo-line-oa-chat-v1.0.14-production
+          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.14-production.apk
           if-no-files-found: error
           retention-days: 30
