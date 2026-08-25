@@ -464,7 +464,7 @@ export interface SyncTikTokAccountParams {
 
 /**
  * Persists authorized TikTok account, tokens, profile, and videos to PostgreSQL database via backend API.
- * Forwards user session authentication as canonical Authorization: Bearer <sessionToken>.
+ * Forwards the WEB user session through the backend's canonical oppo_session cookie.
  */
 export async function syncTikTokAccountToBackend(
   params: SyncTikTokAccountParams
@@ -472,12 +472,12 @@ export async function syncTikTokAccountToBackend(
   const sessionToken = params.sessionToken?.trim() || null;
   const sessionTokenPresent = Boolean(sessionToken);
 
-  const headers: Record<string, string> = {
+  let headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
   if (sessionToken) {
-    headers["Authorization"] = `Bearer ${sessionToken}`;
+    headers = createTikTokWebSessionHeaders(sessionToken, headers);
   }
 
   const mappedVideos = (params.videos || []).map((v) => ({
@@ -621,6 +621,16 @@ export interface FetchTikTokAccountOptions {
   sessionToken?: string | null;
 }
 
+function createTikTokWebSessionHeaders(
+  sessionToken: string,
+  additionalHeaders: Record<string, string> = {}
+): Record<string, string> {
+  return {
+    ...additionalHeaders,
+    Cookie: `oppo_session=${encodeURIComponent(sessionToken)}`,
+  };
+}
+
 export class TikTokBackendAuthenticationError extends Error {
   constructor() {
     super("TikTok backend authentication failed");
@@ -708,9 +718,7 @@ export async function fetchTikTokAccountByIdFromBackend(
     return null;
   }
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${sessionToken}`,
-  };
+  const headers = createTikTokWebSessionHeaders(sessionToken);
 
   const response = await fetch(`${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}`, {
     headers,
@@ -768,9 +776,7 @@ export async function fetchLatestTikTokAccountFromBackend(
       return null;
     }
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sessionToken}`,
-    };
+    const headers = createTikTokWebSessionHeaders(sessionToken);
 
     const response = await fetch(`${API_BASE_URL}/tiktok/latest`, {
       headers,
@@ -823,9 +829,7 @@ export async function fetchTikTokAccountsListFromBackend(
       return [];
     }
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sessionToken}`,
-    };
+    const headers = createTikTokWebSessionHeaders(sessionToken);
 
     const response = await fetch(`${API_BASE_URL}/tiktok/accounts`, {
       headers,
@@ -867,9 +871,7 @@ export async function fetchTikTokHistoricalMetricsFromBackend(
       return null;
     }
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sessionToken}`,
-    };
+    const headers = createTikTokWebSessionHeaders(sessionToken);
 
     const endpoint = accountId
       ? `${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}/metrics?days=${days}`
@@ -914,9 +916,7 @@ export async function fetchTikTokBulkMetricsSummaryFromBackend(
       return { accounts: [] };
     }
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sessionToken}`,
-    };
+    const headers = createTikTokWebSessionHeaders(sessionToken);
 
     const endpoint = `${API_BASE_URL}/tiktok/accounts/metrics-summary?days=${days}`;
 

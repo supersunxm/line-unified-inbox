@@ -219,7 +219,7 @@ test("logTikTokVideoDiagnostic emits metrics completeness without sensitive data
   assert.match(apiClientSource, /videosWithCoverImage/);
 });
 
-test("Frontend interacts with backend PostgreSQL sync and query endpoints with canonical Bearer session auth", () => {
+test("Frontend forwards WEB sessions to backend through the canonical oppo_session cookie", () => {
   assert.ok(typeof syncTikTokAccountToBackend === "function");
   assert.ok(typeof fetchLatestTikTokAccountFromBackend === "function");
   assert.match(apiClientSource, /\/tiktok\/sync/);
@@ -227,9 +227,8 @@ test("Frontend interacts with backend PostgreSQL sync and query endpoints with c
   assert.match(apiClientSource, /sessionTokenPresent/);
   assert.match(apiClientSource, /backendSyncStatus/);
   assert.match(apiClientSource, /backendReadStatus/);
-  assert.match(apiClientSource, /Bearer \$\{sessionToken\}/);
-  // Verify raw cookie header is NOT forwarded to backend
-  assert.doesNotMatch(apiClientSource, /headers\["Cookie"\]/);
+  assert.match(apiClientSource, /Cookie:\s*`oppo_session=\$\{encodeURIComponent\(sessionToken\)\}`/);
+  assert.doesNotMatch(apiClientSource, /Authorization:\s*`Bearer \$\{sessionToken\}`/);
   assert.match(callbackRouteSource, /request\.cookies\.get\("oppo_session"\)/);
   assert.match(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
   assert.match(dashboardPageSource, /fetchTikTokAccountsListFromBackend/);
@@ -414,6 +413,7 @@ test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboar
 
 test("Dashboard account fetch returns valid data, preserves 404, and exposes 401 authentication failure", async () => {
   const originalFetch = globalThis.fetch;
+  let forwardedCookie = "";
   const validAccount = {
     id: "account-1",
     openId: "open-1",
@@ -429,12 +429,16 @@ test("Dashboard account fetch returns valid data, preserves 404, and exposes 401
   };
 
   try {
-    globalThis.fetch = async () => Response.json(validAccount);
+    globalThis.fetch = async (_input, init) => {
+      forwardedCookie = new Headers(init?.headers).get("Cookie") || "";
+      return Response.json(validAccount);
+    };
     const account = await fetchTikTokAccountByIdFromBackend("account-1", {
       sessionToken: "valid-session",
     });
     assert.equal(account?.id, "account-1");
     assert.equal(account?.profile.display_name, "O-Central World");
+    assert.equal(forwardedCookie, "oppo_session=valid-session");
 
     globalThis.fetch = async () => new Response(null, { status: 404 });
     assert.equal(
