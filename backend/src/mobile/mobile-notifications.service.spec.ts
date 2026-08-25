@@ -17,3 +17,16 @@ void test("read and opened updates are scoped to the authenticated user and upda
   assert.ok(updates[1]?.data.readAt instanceof Date);
   assert.ok(updates[1]?.data.openedAt instanceof Date);
 });
+
+void test("unread total is the authenticated user's all-store notification truth", async () => {
+  const service = new MobileNotificationsService({
+    pushNotification: {
+      count: async ({ where }: { where: { userId: string; readAt: null } }) => {
+        assert.deepEqual(where, { userId: "hq-user", readAt: null });
+        return 128;
+      },
+    },
+  } as never);
+
+  assert.deepEqual(await service.unreadCount("hq-user"), { unreadCount: 128 });
+});

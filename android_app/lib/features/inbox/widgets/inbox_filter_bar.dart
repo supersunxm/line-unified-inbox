@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/localization/localization.dart';
 
-enum InboxFilter { all, notReplied, notifiedBm, replied, priority }
+enum InboxFilter { all, notReplied, notifiedBm, replied, unread, priority }
 
 class InboxFilterBar extends StatelessWidget {
   const InboxFilterBar({
@@ -21,7 +21,18 @@ class InboxFilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         child: Row(
-          children: InboxFilter.values.map((filter) {
+          children: (hqMode
+                  ? const [
+                      InboxFilter.all,
+                      InboxFilter.notReplied,
+                      InboxFilter.notifiedBm,
+                      InboxFilter.replied,
+                      InboxFilter.unread,
+                    ]
+                  : InboxFilter.values
+                      .where((filter) => filter != InboxFilter.unread)
+                      .toList())
+              .map((filter) {
             final isSelected = filter == selected;
             return Padding(
               padding: const EdgeInsets.only(right: 6),
@@ -71,6 +82,7 @@ class InboxFilterBar extends StatelessWidget {
         InboxFilter.replied => hqMode
             ? appLocalizations(context).replied
             : appLocalizations(context).completed,
+        InboxFilter.unread => appLocalizations(context).unread,
         InboxFilter.priority => appLocalizations(context).priority,
       };
 
@@ -79,6 +91,7 @@ class InboxFilterBar extends StatelessWidget {
         InboxFilter.notReplied => Icons.reply_outlined,
         InboxFilter.notifiedBm => Icons.notifications_active_outlined,
         InboxFilter.replied => Icons.check_circle_outline,
+        InboxFilter.unread => Icons.mark_email_unread_outlined,
         InboxFilter.priority => Icons.priority_high,
       };
 }

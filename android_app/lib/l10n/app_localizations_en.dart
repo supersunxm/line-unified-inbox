@@ -88,6 +88,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replied => 'Replied';
 
   @override
+  String get unread => 'Unread';
+
+  @override
   String get searchConversations => 'Search conversations';
 
   @override

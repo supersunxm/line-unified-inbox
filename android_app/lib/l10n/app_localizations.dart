@@ -251,6 +251,12 @@ abstract class AppLocalizations {
   /// **'Replied'**
   String get replied;
 
+  /// No description provided for @unread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get unread;
+
   /// No description provided for @searchConversations.
   ///
   /// In en, this message translates to:

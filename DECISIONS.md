@@ -1136,6 +1136,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Store identity is rendered from the authorized conversation detail response in a dedicated header context. The client never chooses the sending store; `StoreAccessService.assertConversationAccess` authorizes the conversation and the canonical service resolves the store's OA credentials for delivery.
 - `canReply` is enforced at both presentation and mobile service boundaries. Read-only users cannot open the composer or detail write controls, and backend calls fail closed even if a client bypasses the UI. No new notification state or database model was introduced; `NOTIFIED_BM` remains the existing BM notification status.
 
+# HQ mobile inbox operational polish boundary (2026-08-25)
+
+- The HQ unread total comes from the existing authenticated mobile notification count endpoint. It is not derived from the currently loaded page, so all authorized stores remain represented without a new schema or parallel inbox API.
+- `Unread` is a client-side view over each conversation's existing unread count; All/Not Replied/Notified BM/Replied continue to use the canonical `bmReplyStatus` values. Store, status, and search state remains owned by the authenticated inbox route and is not persisted through logout.
+- Pull-to-refresh, detail return, and realtime patches all trigger backend reconciliation. The existing StoreAccessService and mobile conversation endpoint remain the authorization source of truth; BM/PC behavior is intentionally unchanged.
+
 # Android 1.0.14 permanent signing verification (2026-08-25)
 
 - Reused only the existing production key whose certificate SHA-256 is `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`; no replacement key was generated.

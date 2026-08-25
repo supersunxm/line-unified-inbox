@@ -17,6 +17,7 @@ class FakeConversationRepository extends ConversationRepository {
   FakeConversationRepository() : super(ApiClient(TokenStore()));
 
   int unreadCount = 28;
+  int unreadCountCalls = 0;
   int detailCalls = 0;
   int inboxCalls = 0;
   int markReadCalls = 0;
@@ -50,6 +51,12 @@ class FakeConversationRepository extends ConversationRepository {
     inboxCalls += 1;
     final items = customItems ?? [summary];
     return InboxPageResult(items: items, page: page, total: items.length);
+  }
+
+  @override
+  Future<int> unreadTotal() async {
+    unreadCountCalls += 1;
+    return unreadCount;
   }
 
   @override
@@ -647,7 +654,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Read-only · Reply permission is disabled'), findsOneWidget);
+    expect(
+        find.text('Read-only · Reply permission is disabled'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(find.byTooltip('More actions'), findsNothing);
   });

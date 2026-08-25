@@ -25,6 +25,7 @@
   "notifiedBm": "แจ้ง BM แล้ว",
   "completed": "ตอบแล้ว",
   "replied": "ตอบแล้ว",
+  "unread": "ยังไม่อ่าน",
   "searchConversations": "ค้นหาบทสนทนา",
   "clearSearch": "ล้างการค้นหา",
   "noConversationsYet": "ยังไม่มีบทสนทนา",

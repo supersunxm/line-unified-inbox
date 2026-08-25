@@ -357,6 +357,17 @@ class ConversationRepository {
         .toList(growable: false);
   }
 
+  /// Returns the authenticated user's unread notification total.
+  ///
+  /// The mobile notifications endpoint applies the same backend authorization
+  /// scope used by the conversation APIs, so HQ receives one all-store total
+  /// without maintaining a second inbox counter on the client.
+  Future<int> unreadTotal() async {
+    final result = await _api.get('/mobile/notifications/unread-count');
+    final count = result['unreadCount'];
+    return count is num ? count.toInt() : 0;
+  }
+
   Future<ConversationDetail> detail(String id,
           {int limit = 50, String? before}) async =>
       ConversationDetail.fromJson(await _api.get('/mobile/conversations/$id',

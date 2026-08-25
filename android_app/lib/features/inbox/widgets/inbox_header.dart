@@ -8,10 +8,16 @@ class InboxHeader extends StatelessWidget {
     super.key,
     required this.conversationCount,
     required this.onProfile,
+    this.isHq = false,
+    this.scopeName,
+    this.unreadCount = 0,
   });
 
   final int conversationCount;
   final VoidCallback onProfile;
+  final bool isHq;
+  final String? scopeName;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -34,13 +40,23 @@ class InboxHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    appLocalizations(context)
-                        .conversationsCount(conversationCount),
+                    isHq
+                        ? 'HQ · ${scopeName ?? appLocalizations(context).allStores}'
+                        : appLocalizations(context)
+                            .conversationsCount(conversationCount),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                           fontSize: 12,
                         ),
                   ),
+                  if (isHq)
+                    Text(
+                      '$unreadCount ${appLocalizations(context).unread}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                 ],
               ),
             ),

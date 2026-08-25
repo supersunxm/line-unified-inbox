@@ -88,6 +88,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get replied => 'ตอบแล้ว';
 
   @override
+  String get unread => 'ยังไม่อ่าน';
+
+  @override
   String get searchConversations => 'ค้นหาบทสนทนา';
 
   @override

@@ -25,6 +25,7 @@
   "notifiedBm": "Notified BM",
   "completed": "Completed",
   "replied": "Replied",
+  "unread": "Unread",
   "searchConversations": "Search conversations",
   "clearSearch": "Clear search",
   "noConversationsYet": "No conversations yet",

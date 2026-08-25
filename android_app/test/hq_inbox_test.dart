@@ -14,13 +14,16 @@ class _HqInboxRepository extends ConversationRepository {
 
   String? lastStoreId;
   String? lastStatus;
+  String? lastSearch;
+  int unreadTotalValue = 128;
+  int unreadCountCalls = 0;
 
   final _items = [
     ConversationSummary(
       id: 'central',
       customerName: 'Chutisorn',
       storeName: 'OPPO CentralWorld',
-      unreadCount: 0,
+      unreadCount: 2,
       bmReplyStatus: 'NOT_REPLIED',
       preview: 'สวัสดีค่ะ ขอสอบถามรุ่น Reno13',
     ),
@@ -41,6 +44,26 @@ class _HqInboxRepository extends ConversationRepository {
       ];
 
   @override
+  Future<int> unreadTotal() async {
+    unreadCountCalls += 1;
+    return unreadTotalValue;
+  }
+
+  @override
+  Future<ConversationDetail> detail(String id,
+      {int limit = 50, String? before}) async {
+    final item = _items.firstWhere((candidate) => candidate.id == id);
+    return ConversationDetail(
+      id: id,
+      customerName: item.customerName,
+      storeName: item.storeName,
+      messages: const [],
+      unreadCount: 0,
+      bmReplyStatus: item.bmReplyStatus,
+    );
+  }
+
+  @override
   Future<InboxPageResult> inbox({
     int page = 1,
     String? storeId,
@@ -49,6 +72,7 @@ class _HqInboxRepository extends ConversationRepository {
   }) async {
     lastStoreId = storeId;
     lastStatus = bmReplyStatus;
+    lastSearch = search;
     final filtered = _items.where((item) {
       final matchesStore = storeId == null ||
           (storeId == 'central-store' && item.id == 'central') ||
@@ -112,6 +136,44 @@ void main() {
     expect(find.text('Not Replied'), findsOneWidget);
     expect(find.text('Notified BM'), findsOneWidget);
     expect(find.text('Replied'), findsOneWidget);
+    expect(find.text('Unread'), findsOneWidget);
+  });
+
+  testWidgets('HQ header shows the backend unread total and unread filter',
+      (tester) async {
+    final repository = _HqInboxRepository();
+    await tester.pumpWidget(localized(
+      SizedBox(
+        height: 900,
+        child: InboxPage(
+          repository: repository,
+          isHq: true,
+          showStoreFilter: true,
+          onOpen: (_) async {},
+          onProfile: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HQ · All Stores'), findsOneWidget);
+    expect(find.text('128 Unread'), findsOneWidget);
+    expect(repository.unreadCountCalls, greaterThanOrEqualTo(1));
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Unread'));
+    await tester.pumpAndSettle();
+    expect(find.text('OPPO CentralWorld'), findsOneWidget);
+    expect(find.text('OPPO Siam Paragon'), findsNothing);
+    expect(repository.lastStatus, isNull);
+
+    repository.unreadTotalValue = 7;
+    await tester.tap(find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Chutisorn :'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('7 Unread'), findsOneWidget);
   });
 
   testWidgets('HQ inbox defaults to all stores and sends store/status filters',
@@ -146,5 +208,67 @@ void main() {
     await tester.tap(find.text('Notified BM'));
     await tester.pumpAndSettle();
     expect(repository.lastStatus, 'NOTIFIED_BM');
+  });
+
+  testWidgets('HQ preserves store/status/search filters after opening a chat',
+      (tester) async {
+    final repository = _HqInboxRepository();
+    await tester.pumpWidget(localized(
+      SizedBox(
+        height: 900,
+        child: InboxPage(
+          repository: repository,
+          isHq: true,
+          showStoreFilter: true,
+          onOpen: (_) async {},
+          onProfile: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OPPO Siam Paragon').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, 'Replied'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Kittiya');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText && widget.text.toPlainText().contains('Kittiya :'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastStoreId, 'siam-store');
+    expect(repository.lastStatus, 'REPLIED');
+    expect(repository.lastSearch, 'Kittiya');
+  });
+
+  testWidgets('HQ pull-to-refresh reconciles the global unread total',
+      (tester) async {
+    final repository = _HqInboxRepository();
+    await tester.pumpWidget(localized(
+      SizedBox(
+        height: 900,
+        child: InboxPage(
+          repository: repository,
+          isHq: true,
+          showStoreFilter: true,
+          onOpen: (_) async {},
+          onProfile: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    repository.unreadTotalValue = 64;
+
+    await tester.drag(find.byType(ListView).last, const Offset(0, 320));
+    await tester.pumpAndSettle();
+
+    expect(find.text('64 Unread'), findsOneWidget);
   });
 }

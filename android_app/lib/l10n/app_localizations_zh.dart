@@ -88,6 +88,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get replied => '已回复';
 
   @override
+  String get unread => '未读';
+
+  @override
   String get searchConversations => '搜索会话';
 
   @override
@@ -919,6 +922,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get replied => '已回复';
+
+  @override
+  String get unread => '未读';
 
   @override
   String get searchConversations => '搜索会话';
