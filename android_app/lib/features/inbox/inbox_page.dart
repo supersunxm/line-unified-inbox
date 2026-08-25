@@ -40,6 +40,7 @@ class _InboxPageState extends State<InboxPage> {
   String? _selectedStoreId;
   InboxFilter _selectedFilter = InboxFilter.all;
   int _total = 0;
+  int _unreadTotal = 0;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -84,6 +85,7 @@ class _InboxPageState extends State<InboxPage> {
             : isNeedReplyStatus(item.bmReplyStatus),
         InboxFilter.notifiedBm => item.bmReplyStatus == 'NOTIFIED_BM',
         InboxFilter.replied => isCompletedStatus(item.bmReplyStatus),
+        InboxFilter.unread => item.unreadCount > 0,
       };
       return matchesQuery && matchesFilter;
     }).toList(growable: false);
@@ -126,7 +128,7 @@ class _InboxPageState extends State<InboxPage> {
         InboxFilter.notReplied => widget.isHq ? 'NOT_REPLIED' : null,
         InboxFilter.notifiedBm => 'NOTIFIED_BM',
         InboxFilter.replied => 'REPLIED',
-        InboxFilter.all || InboxFilter.priority => null,
+        InboxFilter.all || InboxFilter.unread || InboxFilter.priority => null,
       };
 
   void _selectFilter(InboxFilter filter) {
@@ -163,10 +165,12 @@ class _InboxPageState extends State<InboxPage> {
         _handledRealtimeMessageIds.add(messageId);
         _reconcileUnread(conversationId);
       }
+      _refreshUnreadCount();
       return;
     }
     if (event['type'] == 'conversation.updated') {
       _patchConversationUpdated(conversationId, event);
+      _refreshUnreadCount();
     }
   }
 
@@ -308,11 +312,26 @@ class _InboxPageState extends State<InboxPage> {
       if (mounted) setState(() => _error = 'Unable to load conversations');
     } finally {
       if (mounted) {
-        setState(() {
-          _loading = false;
-          _loadingMore = false;
-        });
+        if (reset) await _refreshUnreadCount();
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _loadingMore = false;
+          });
+        }
       }
+    }
+  }
+
+  Future<void> _refreshUnreadCount() async {
+    if (!widget.isHq) return;
+    try {
+      final count = await widget.repository.unreadTotal();
+      if (!mounted) return;
+      setState(() => _unreadTotal = count);
+    } catch (_) {
+      // Keep the last known count visible when reconciliation is temporarily
+      // unavailable; the next refresh retries against backend truth.
     }
   }
 
@@ -356,7 +375,17 @@ class _InboxPageState extends State<InboxPage> {
               () => _items[index] = _items[index].copyWith(unreadCount: 0));
         }
       }
+      await _refreshUnreadCount();
     }
+  }
+
+  String get _hqScopeName {
+    if (!widget.isHq) return '';
+    if (_selectedStoreId == null) return appLocalizations(context).allStores;
+    for (final store in _stores) {
+      if (store.id == _selectedStoreId) return store.name;
+    }
+    return appLocalizations(context).allStores;
   }
 
   @override
@@ -368,6 +397,9 @@ class _InboxPageState extends State<InboxPage> {
               InboxHeader(
                 conversationCount: _total,
                 onProfile: widget.onProfile,
+                isHq: widget.isHq,
+                scopeName: _hqScopeName,
+                unreadCount: _unreadTotal,
               ),
               ConversationOverviewCard(conversations: _items),
               InboxSearchField(

@@ -1927,6 +1927,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - HQ detail now keeps store identity prominent in the header, shows customer and exact reply status, loads the existing full message/media history, supports reply and Notify BM/status actions through the existing conversation service, and returns to Inbox with the existing detail reconciliation path. BM/PC detail and store scope remain unchanged; read-only users receive a disabled composer and no write actions.
 - Added Flutter and backend regression coverage for store context, all-store detail access, reply/status/read-only behavior, status persistence, unauthorized stores, and existing inbox behavior.
 - Flutter analyze passes; full Flutter tests pass 111/111; focused detail/inbox tests pass 26/26. Backend build passes; focused mobile service tests pass 23/23; full backend tests pass 1,305/1,305. `git diff --check` passes. Next action is commit, push the feature branch, open the PR, and wait for CI.
+
+# Current task: HQ mobile inbox operational polish (2026-08-25)
+
+- Started `feat/hq-mobile-inbox-operational-polish` from `origin/main` at `363cd12ed50be74d0ce246d2f885d7184f20a710`; Android version and the signed APK were not touched.
+- Reused `GET /mobile/notifications/unread-count` for the authenticated backend unread total, added HQ-only All/Not Replied/Notified BM/Replied/Unread filters, preserved existing store/status/search state in the inbox route, and made pull-to-refresh/detail/realtime paths reconcile the count and card data.
+- Kept BM/PC filters/cards and StoreAccess authorization unchanged. Added localized Unread labels and regression coverage for HQ total/filter/store scope and refresh behavior; backend notification count coverage confirms the user-scoped all-store truth.
+- Focused Flutter inbox/unread tests pass 24/24; full Flutter tests pass 114/114; Flutter analyze passes. Backend build passes, focused mobile tests pass 25/25, full backend tests pass 1,306/1,306, and changed-test lint passes. Commit `4d156a068b951e06e871a8ce4b3b1d63d581d862` is pushed on the feature branch; PR #50 is open and Android package, backend, frontend, and mobile CI checks all pass. No merge or deployment was performed.
 # Current task: Public OPPO Retail Insights landing page (2026-08-25)
 
 - Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.

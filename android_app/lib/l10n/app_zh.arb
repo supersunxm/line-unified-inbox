@@ -25,6 +25,7 @@
   "notifiedBm": "已通知 BM",
   "completed": "已回复",
   "replied": "已回复",
+  "unread": "未读",
   "searchConversations": "搜索会话",
   "clearSearch": "清除搜索",
   "noConversationsYet": "暂无会话",
