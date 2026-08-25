@@ -181,6 +181,7 @@ export default function RegisterPage() {
                 required
                 minLength={12}
                 autoComplete="new-password"
+                aria-describedby="registration-password-requirements"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700"
@@ -194,6 +195,16 @@ export default function RegisterPage() {
               >
                 <PasswordVisibilityIcon visible={showPassword} />
               </button>
+            </div>
+            <div id="registration-password-requirements" className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              <p className="font-medium text-slate-600 dark:text-slate-300">Password requirements</p>
+              <ul className="mt-1 space-y-0.5" aria-label="Password requirements">
+                <li>✓ At least 12 characters</li>
+                <li>✓ At least 1 uppercase letter (A-Z)</li>
+                <li>✓ At least 1 lowercase letter (a-z)</li>
+                <li>✓ At least 1 number (0-9)</li>
+                <li>✓ At least 1 special character (@#$%^&amp;*...)</li>
+              </ul>
             </div>
           </label>
 
@@ -222,7 +233,6 @@ export default function RegisterPage() {
           </label>
         </div>
 
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Password must contain at least 12 characters.</p>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">One approved account is used for both Web and Mobile. HQ requests require approval from an existing full-access administrator.</p>
 
         <button disabled={submitting || (!isHq && (storesLoading || !storeId))} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900">

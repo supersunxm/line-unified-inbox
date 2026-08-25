@@ -1886,3 +1886,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Chosen strategy is an explicit `UserStatus.DELETED` tombstone with `deletedAt`, PII/credential anonymization, preserved User and membership rows, and transactional cleanup of authentication/runtime material. A fresh registration can reuse the original email, employee ID, and phone because the tombstone and registration-request PII are scrubbed.
 - Added the ADMIN-only inactive-account permanent-delete action, exact `DELETE` confirmation UI, safe deletion audit metadata, and regression tests. Main OA, HEAD_OFFICE, Kaojao, LINE webhook, Store analytics isolation, and Resend approval notification behavior remain untouched.
 - Local migration `20260824150000_add_deleted_account_state` applied successfully and was verified in the local PostgreSQL container; no production database was touched. Backend full suite passes 1,281/1,281, frontend full suite passes 377/377, both production builds pass, changed-source lint passes, required route smoke checks return 200, and `git diff --check` passes.
+
+# Current task: Web auth copy and password guidance (2026-08-25)
+
+- Simplified the login registration CTA to “Create account” while retaining `/register` as its target.
+- Expanded the Web registration password guidance under the Password field using the existing Mobile app conditions, without changing registration submission, validation, HQ/BM/PC selection, or either password visibility toggle.
+- Frontend tests pass 382/382, scoped ESLint and the production build pass, `/login` and `/register` respond successfully, and rendered registration output contains all five password conditions.
