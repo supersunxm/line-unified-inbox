@@ -8,6 +8,7 @@ import 'core/localization/localization.dart';
 import 'core/network/api_client.dart';
 import 'core/storage/token_store.dart';
 import 'core/models/models.dart';
+import 'core/models/authorization_extensions.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_scroll_behavior.dart';
 import 'core/services/app_update_service.dart';
@@ -246,7 +247,10 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         onLogout: _logout,
       );
     }
-    if (user.memberships.isEmpty) {
+    final hasWorkspace = user.canAccessHqWorkspace ||
+        user.canAccessStoreWorkspace ||
+        user.canAccessMainOaWorkspace;
+    if (!hasWorkspace) {
       return WaitingApprovalPage(
           onRefresh: () => _finishLogin(), onLogout: _logout);
     }
