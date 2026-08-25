@@ -15,7 +15,11 @@ class _PriorityRepository extends ConversationRepository {
   final List<ConversationSummary> items;
 
   @override
-  Future<InboxPageResult> inbox({int page = 1}) async =>
+  Future<InboxPageResult> inbox(
+          {int page = 1,
+          String? storeId,
+          String? bmReplyStatus,
+          String? search}) async =>
       InboxPageResult(items: items, page: page, total: items.length);
 }
 

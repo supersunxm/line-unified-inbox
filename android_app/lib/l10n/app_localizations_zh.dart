@@ -36,6 +36,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get all => '全部';
 
   @override
+  String get allStores => '所有门店';
+
+  @override
   String get summary => '汇总';
 
   @override
@@ -73,7 +76,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get needReply => '待回复';
 
   @override
+  String get notReplied => '未回复';
+
+  @override
+  String get notifiedBm => '已通知 BM';
+
+  @override
   String get completed => '已回复';
+
+  @override
+  String get replied => '已回复';
 
   @override
   String get searchConversations => '搜索会话';
@@ -854,6 +866,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get all => '全部';
 
   @override
+  String get allStores => '所有门店';
+
+  @override
   String get summary => '汇总';
 
   @override
@@ -891,7 +906,16 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get needReply => '待回复';
 
   @override
+  String get notReplied => '未回复';
+
+  @override
+  String get notifiedBm => '已通知 BM';
+
+  @override
   String get completed => '已回复';
+
+  @override
+  String get replied => '已回复';
 
   @override
   String get searchConversations => '搜索会话';

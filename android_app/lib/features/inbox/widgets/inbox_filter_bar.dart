@@ -2,17 +2,19 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/localization/localization.dart';
 
-enum InboxFilter { all, notReplied, replied, priority }
+enum InboxFilter { all, notReplied, notifiedBm, replied, priority }
 
 class InboxFilterBar extends StatelessWidget {
   const InboxFilterBar({
     super.key,
     required this.selected,
     required this.onChanged,
+    this.hqMode = false,
   });
 
   final InboxFilter selected;
   final ValueChanged<InboxFilter> onChanged;
+  final bool hqMode;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -34,7 +36,8 @@ class InboxFilterBar extends StatelessWidget {
                 avatar: Icon(
                   _icon(filter),
                   size: 14,
-                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                  color:
+                      isSelected ? AppColors.primary : AppColors.textSecondary,
                 ),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
@@ -61,14 +64,20 @@ class InboxFilterBar extends StatelessWidget {
 
   String _label(BuildContext context, InboxFilter filter) => switch (filter) {
         InboxFilter.all => appLocalizations(context).all,
-        InboxFilter.notReplied => appLocalizations(context).needReply,
-        InboxFilter.replied => appLocalizations(context).completed,
+        InboxFilter.notReplied => hqMode
+            ? appLocalizations(context).notReplied
+            : appLocalizations(context).needReply,
+        InboxFilter.notifiedBm => appLocalizations(context).notifiedBm,
+        InboxFilter.replied => hqMode
+            ? appLocalizations(context).replied
+            : appLocalizations(context).completed,
         InboxFilter.priority => appLocalizations(context).priority,
       };
 
   IconData _icon(InboxFilter filter) => switch (filter) {
         InboxFilter.all => Icons.inbox_outlined,
         InboxFilter.notReplied => Icons.reply_outlined,
+        InboxFilter.notifiedBm => Icons.notifications_active_outlined,
         InboxFilter.replied => Icons.check_circle_outline,
         InboxFilter.priority => Icons.priority_high,
       };

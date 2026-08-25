@@ -14,6 +14,7 @@ class AdminApprovalPage extends StatefulWidget {
 class _AdminApprovalPageState extends State<AdminApprovalPage> {
   List<PendingRegistration> _items = const [];
   List<PendingHqRegistration> _hqItems = const [];
+  List<ApprovedHqAccount> _approvedHqItems = const [];
   bool _loading = true;
   String? _error;
 
@@ -32,9 +33,11 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
       final results = await Future.wait([
         widget.auth.pendingRegistrations(),
         widget.auth.pendingHqRegistrations(),
+        widget.auth.approvedHqRegistrations(),
       ]);
       _items = results[0] as List<PendingRegistration>;
       _hqItems = results[1] as List<PendingHqRegistration>;
+      _approvedHqItems = results[2] as List<ApprovedHqAccount>;
     } on ApiException catch (error) {
       _error = error.message;
     } catch (_) {
@@ -69,6 +72,19 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
     }
   }
 
+  Future<void> _actApprovedHq(ApprovedHqAccount item) async {
+    try {
+      if (item.isActive) {
+        await widget.auth.deactivateHqAccount(item.id);
+      } else {
+        await widget.auth.reactivateHqAccount(item.id);
+      }
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
+
   Widget _hqCard(PendingHqRegistration item) {
     return Card(
       child: Padding(
@@ -87,7 +103,8 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
             ),
             Text('Employee ID: ${item.employeeId ?? '—'}'),
             Text(item.email),
-            const Text('Web + Mobile · HQ · All Stores · Accounts · Reply · Main OA'),
+            const Text(
+                'Web + Mobile · HQ · All Stores · Accounts · Reply · Main OA'),
             Text(item.createdAt.toLocal().toString()),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
@@ -107,24 +124,102 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(item.name, style: Theme.of(context).textTheme.titleMedium),
+          Text(appLocalizations(context).employeeIdValue(
+              item.employeeId ?? appLocalizations(context).notSet)),
+          Text(item.email),
+          Text('${item.storeName} · ${item.role.replaceAll('_', ' ')}'),
+          Text(item.createdAt.toLocal().toString()),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            TextButton(
+                onPressed: () => _act(item, false),
+                child: Text(appLocalizations(context).reject)),
+            FilledButton(
+                onPressed: () => _act(item, true),
+                child: Text(appLocalizations(context).approve)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _approvedHqCard(ApprovedHqAccount item) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.name, style: Theme.of(context).textTheme.titleMedium),
-              Text(appLocalizations(context)
-                  .employeeIdValue(item.employeeId ?? appLocalizations(context).notSet)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(item.displayName,
+                        style: Theme.of(context).textTheme.titleMedium),
+                  ),
+                  Chip(
+                    label: Text(item.isActive ? 'Active' : 'Inactive'),
+                    backgroundColor: item.isActive
+                        ? Colors.green.withValues(alpha: 0.12)
+                        : Colors.grey.withValues(alpha: 0.16),
+                  ),
+                ],
+              ),
+              Text('Employee ID: ${item.employeeId ?? '—'}'),
               Text(item.email),
-              Text('${item.storeName} · ${item.role.replaceAll('_', ' ')}'),
-              Text(item.createdAt.toLocal().toString()),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(
-                    onPressed: () => _act(item, false),
-                    child: Text(appLocalizations(context).reject)),
-                FilledButton(
-                    onPressed: () => _act(item, true),
-                    child: Text(appLocalizations(context).approve)),
-              ]),
-            ]),
+              Text('HQ · All Stores · Web + Mobile'),
+              Text('Status: ${item.status}'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => _actApprovedHq(item),
+                    child: Text(item.isActive ? 'Deactivate' : 'Reactivate'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _pendingBody() {
+    if (_items.isEmpty && _hqItems.isEmpty) {
+      return Center(
+          child: Text(appLocalizations(context).noPendingRegistrations));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: [
+          if (_hqItems.isNotEmpty) ...[
+            Text('HQ approvals', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            ..._hqItems.map(_hqCard),
+            const SizedBox(height: 16),
+          ],
+          if (_items.isNotEmpty) ...[
+            Text(appLocalizations(context).pendingBmRegistrations,
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            ..._items.map(_storeCard),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _approvedBody() {
+    if (_approvedHqItems.isEmpty) {
+      return Center(child: Text('No approved HQ accounts'));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: _approvedHqItems.map(_approvedHqCard).toList(),
       ),
     );
   }
@@ -136,27 +231,22 @@ class _AdminApprovalPageState extends State<AdminApprovalPage> {
       body = const Center(child: CircularProgressIndicator());
     } else if (_error != null) {
       body = Center(child: Text(_error!));
-    } else if (_items.isEmpty && _hqItems.isEmpty) {
-      body = Center(child: Text(appLocalizations(context).noPendingRegistrations));
     } else {
-      body = RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(12),
+      body = DefaultTabController(
+        length: 2,
+        child: Column(
           children: [
-            if (_hqItems.isNotEmpty) ...[
-              Text('HQ approvals', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              ..._hqItems.map(_hqCard),
-              const SizedBox(height: 16),
-            ],
-            if (_items.isNotEmpty) ...[
-              Text(appLocalizations(context).pendingBmRegistrations,
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              ..._items.map(_storeCard),
-            ],
+            const TabBar(
+              tabs: [
+                Tab(text: 'Pending approvals'),
+                Tab(text: 'Approved / manage'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [_pendingBody(), _approvedBody()],
+              ),
+            ),
           ],
         ),
       );

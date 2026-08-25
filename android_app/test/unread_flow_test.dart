@@ -41,7 +41,11 @@ class FakeConversationRepository extends ConversationRepository {
       );
 
   @override
-  Future<InboxPageResult> inbox({int page = 1}) async {
+  Future<InboxPageResult> inbox(
+      {int page = 1,
+      String? storeId,
+      String? bmReplyStatus,
+      String? search}) async {
     inboxCalls += 1;
     final items = customItems ?? [summary];
     return InboxPageResult(items: items, page: page, total: items.length);

@@ -22,6 +22,71 @@ void test("mobile list is restricted to the authenticated user's accessible stor
   assert.equal(result.items[0]?.unreadCount, 2);
 });
 
+void test("mobile list gives all-store users the same store/status/search scope used by web chats", async () => {
+  let where: any;
+  const prisma = {
+    conversation: {
+      findMany: async (input: { where: unknown }) => {
+        where = input.where;
+        return [];
+      },
+      count: async () => 0,
+    },
+    $transaction: async <T>(operations: Promise<T>[]) => Promise.all(operations),
+  };
+  let selectedStore: string | undefined;
+  const stores = {
+    accessibleStoreIds: async () => null,
+    assertStoreAccess: async (_user: unknown, storeId: string) => {
+      selectedStore = storeId;
+      return storeId;
+    },
+  };
+  const service = new MobileConversationsService(prisma as never, stores as never, {} as never);
+  await service.list(user, {
+    page: 1,
+    pageSize: 30,
+    storeId: "store-2",
+    bmReplyStatus: "NOTIFIED_BM",
+    search: "Reno",
+  });
+  assert.equal(selectedStore, "store-2");
+  assert.deepEqual(where, {
+    store: { isActive: true, archivedAt: null },
+    storeId: "store-2",
+    bmReplyStatus: "NOTIFIED_BM",
+    OR: [
+      { customer: { displayName: { contains: "Reno", mode: "insensitive" } } },
+      { store: { name: { contains: "Reno", mode: "insensitive" } } },
+      { messages: { some: { originalText: { contains: "Reno", mode: "insensitive" } } } },
+    ],
+  });
+});
+
+void test("mobile all-store list does not add a membership store restriction", async () => {
+  let where: any;
+  const prisma = {
+    conversation: {
+      findMany: async (input: { where: unknown }) => {
+        where = input.where;
+        return [];
+      },
+      count: async () => 0,
+    },
+    $transaction: async <T>(operations: Promise<T>[]) => Promise.all(operations),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { accessibleStoreIds: async () => null } as never,
+    {} as never,
+  );
+  await service.list(user, { page: 1, pageSize: 30, bmReplyStatus: "REPLIED" });
+  assert.deepEqual(where, {
+    store: { isActive: true, archivedAt: null },
+    bmReplyStatus: "REPLIED",
+  });
+});
+
 void test("mobile detail permits the assigned store and rejects a different store", async () => {
   const conversation = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, messages: [], _count: { pushNotifications: 0 } };
   const prisma = { conversation: { findUnique: async () => conversation } };

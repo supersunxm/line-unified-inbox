@@ -44,9 +44,12 @@ class CustomerSalesProductItem {
     final variant = json['variant'] as Map<String, dynamic>?;
     return CustomerSalesProductItem(
       id: json['id'] as String? ?? '',
-      productModelId: json['productModelId'] as String? ?? model['id'] as String? ?? '',
-      productVariantId: json['productVariantId'] as String? ?? variant?['id'] as String?,
-      modelName: model['name'] as String? ?? json['modelName'] as String? ?? 'Product',
+      productModelId:
+          json['productModelId'] as String? ?? model['id'] as String? ?? '',
+      productVariantId:
+          json['productVariantId'] as String? ?? variant?['id'] as String?,
+      modelName:
+          model['name'] as String? ?? json['modelName'] as String? ?? 'Product',
       seriesName: model['seriesName'] as String?,
       category: model['category'] as String?,
       ram: json['ram'] as String? ?? variant?['ram'] as String?,
@@ -58,15 +61,15 @@ class CustomerSalesProductItem {
   }
 
   Map<String, dynamic> toJson() => {
-    if (id.isNotEmpty) 'id': id,
-    'productModelId': productModelId,
-    if (productVariantId != null) 'productVariantId': productVariantId,
-    if (ram != null) 'ram': ram,
-    if (rom != null) 'rom': rom,
-    if (color != null) 'color': color,
-    'quantity': quantity,
-    'status': status,
-  };
+        if (id.isNotEmpty) 'id': id,
+        'productModelId': productModelId,
+        if (productVariantId != null) 'productVariantId': productVariantId,
+        if (ram != null) 'ram': ram,
+        if (rom != null) 'rom': rom,
+        if (color != null) 'color': color,
+        'quantity': quantity,
+        'status': status,
+      };
 }
 
 class CustomerSalesInformation {
@@ -105,7 +108,8 @@ class CustomerSalesInformation {
       products: rawProducts is List
           ? rawProducts
               .whereType<Map>()
-              .map((item) => CustomerSalesProductItem.fromJson(Map<String, dynamic>.from(item)))
+              .map((item) => CustomerSalesProductItem.fromJson(
+                  Map<String, dynamic>.from(item)))
               .toList(growable: false)
           : const [],
       recordedBy: json['recordedBy'] as String?,
@@ -170,26 +174,27 @@ class AiInsight {
   static AiInsight? fromJson(Map<String, dynamic>? json) => json == null
       ? null
       : AiInsight(
-        mentionedProducts: (json['mentionedProducts'] is List)
-            ? (json['mentionedProducts'] as List)
-                .whereType<Map>()
-                .map((item) => Map<String, dynamic>.from(item))
-                .toList(growable: false)
-            : const [],
-        topics: (json['topics'] is List)
-            ? (json['topics'] as List)
-                .whereType<Map>()
-                .map((item) => Map<String, dynamic>.from(item))
-                .toList(growable: false)
-            : const [],
-        classification: json['classification'] is Map
-            ? Map<String, dynamic>.from(json['classification'] as Map)
-            : const {},
-      );
+          mentionedProducts: (json['mentionedProducts'] is List)
+              ? (json['mentionedProducts'] as List)
+                  .whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .toList(growable: false)
+              : const [],
+          topics: (json['topics'] is List)
+              ? (json['topics'] as List)
+                  .whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .toList(growable: false)
+              : const [],
+          classification: json['classification'] is Map
+              ? Map<String, dynamic>.from(json['classification'] as Map)
+              : const {},
+        );
 }
 
 class OperationalState {
-  const OperationalState({required this.replyStatus, required this.priority, this.unread});
+  const OperationalState(
+      {required this.replyStatus, required this.priority, this.unread});
 
   final String replyStatus;
   final String priority;
@@ -200,7 +205,8 @@ class OperationalState {
     final priority = json['priority'];
     return OperationalState(
       replyStatus: json['replyStatus'] as String? ?? 'NOT_REPLIED',
-      priority: priority is Map ? priority['level'] as String? ?? 'NONE' : 'NONE',
+      priority:
+          priority is Map ? priority['level'] as String? ?? 'NONE' : 'NONE',
       unread: json['unread'] is num ? (json['unread'] as num).toInt() : null,
     );
   }
@@ -261,10 +267,13 @@ class ConversationDetail {
           bmReplyStatus: identical(bmReplyStatus, _detailUnset)
               ? this.bmReplyStatus
               : bmReplyStatus as String?,
-          tags: identical(tags, _detailUnset) ? this.tags : tags as ConversationTags?,
-          customerSalesInformation: identical(customerSalesInformation, _detailUnset)
-              ? this.customerSalesInformation
-              : customerSalesInformation as CustomerSalesInformation?,
+          tags: identical(tags, _detailUnset)
+              ? this.tags
+              : tags as ConversationTags?,
+          customerSalesInformation:
+              identical(customerSalesInformation, _detailUnset)
+                  ? this.customerSalesInformation
+                  : customerSalesInformation as CustomerSalesInformation?,
           purchaseInformation: identical(purchaseInformation, _detailUnset)
               ? this.purchaseInformation
               : purchaseInformation as PurchaseInformation?,
@@ -317,9 +326,20 @@ class InboxPageResult {
 class ConversationRepository {
   ConversationRepository(this._api);
   final ApiClient _api;
-  Future<InboxPageResult> inbox({int page = 1}) async {
-    final result = await _api.get('/mobile/conversations',
-        query: {'page': '$page', 'pageSize': '30'});
+  Future<InboxPageResult> inbox({
+    int page = 1,
+    String? storeId,
+    String? bmReplyStatus,
+    String? search,
+  }) async {
+    final result = await _api.get('/mobile/conversations', query: {
+      'page': '$page',
+      'pageSize': '30',
+      if (storeId?.trim().isNotEmpty == true) 'storeId': storeId!.trim(),
+      if (bmReplyStatus?.trim().isNotEmpty == true)
+        'bmReplyStatus': bmReplyStatus!.trim(),
+      if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
+    });
     return InboxPageResult(
         items: (result['items'] as List<dynamic>)
             .map((item) =>
@@ -327,6 +347,14 @@ class ConversationRepository {
             .toList(),
         page: result['page'] as int,
         total: result['total'] as int);
+  }
+
+  /// Returns the same store scope exposed by Web `/chats`.
+  Future<List<Store>> storeOptions() async {
+    final result = await _api.get('/conversations/store-priority-summary');
+    return (result['stores'] as List<dynamic>? ?? [])
+        .map((item) => Store.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
   }
 
   Future<ConversationDetail> detail(String id,
@@ -337,33 +365,41 @@ class ConversationRepository {
     await _api.patch('/mobile/conversations/$id/read');
   }
 
-  Future<List<ProductSelectorItem>> fetchProducts({String? search, String? category}) async {
+  Future<List<ProductSelectorItem>> fetchProducts(
+      {String? search, String? category}) async {
     final result = await _api.get('/mobile/products', query: {
       if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
       if (category?.trim().isNotEmpty == true) 'category': category!.trim(),
     });
     return (result['items'] as List<dynamic>? ?? [])
-        .map((item) => ProductSelectorItem.fromJson(item as Map<String, dynamic>))
+        .map((item) =>
+            ProductSelectorItem.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 
-  Future<List<ProductVariantSelectorItem>> fetchProductVariants(String productId) async {
+  Future<List<ProductVariantSelectorItem>> fetchProductVariants(
+      String productId) async {
     final result = await _api.get('/mobile/products/$productId/variants');
     return (result['items'] as List<dynamic>? ?? [])
-        .map((item) => ProductVariantSelectorItem.fromJson(item as Map<String, dynamic>))
+        .map((item) =>
+            ProductVariantSelectorItem.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 
   Future<ConversationDetail> updateConversationTags(
-      String id, {
-      Object? sourceChannels = _unset,
-      Object? isInstallment = _unset,
-      Object? productId = _unset,
-      Object? variantId = _unset,
+    String id, {
+    Object? sourceChannels = _unset,
+    Object? isInstallment = _unset,
+    Object? productId = _unset,
+    Object? variantId = _unset,
   }) async {
     final body = <String, dynamic>{};
-    if (!identical(sourceChannels, _unset)) body['sourceChannels'] = sourceChannels;
-    if (!identical(isInstallment, _unset)) body['isInstallment'] = isInstallment;
+    if (!identical(sourceChannels, _unset)) {
+      body['sourceChannels'] = sourceChannels;
+    }
+    if (!identical(isInstallment, _unset)) {
+      body['isInstallment'] = isInstallment;
+    }
     if (!identical(productId, _unset)) body['productId'] = productId;
     if (!identical(variantId, _unset)) body['variantId'] = variantId;
     return ConversationDetail.fromJson(
@@ -371,18 +407,24 @@ class ConversationRepository {
   }
 
   Future<ConversationDetail> updateCustomerSalesInfo(
-      String id, {
-      Object? status = _unset,
-      Object? interestLevel = _unset,
-      Object? purchaseChannel = _unset,
-      Object? paymentMethod = _unset,
-      Object? products = _unset,
+    String id, {
+    Object? status = _unset,
+    Object? interestLevel = _unset,
+    Object? purchaseChannel = _unset,
+    Object? paymentMethod = _unset,
+    Object? products = _unset,
   }) async {
     final body = <String, dynamic>{};
     if (!identical(status, _unset)) body['status'] = status;
-    if (!identical(interestLevel, _unset)) body['interestLevel'] = interestLevel;
-    if (!identical(purchaseChannel, _unset)) body['purchaseChannel'] = purchaseChannel;
-    if (!identical(paymentMethod, _unset)) body['paymentMethod'] = paymentMethod;
+    if (!identical(interestLevel, _unset)) {
+      body['interestLevel'] = interestLevel;
+    }
+    if (!identical(purchaseChannel, _unset)) {
+      body['purchaseChannel'] = purchaseChannel;
+    }
+    if (!identical(paymentMethod, _unset)) {
+      body['paymentMethod'] = paymentMethod;
+    }
     if (!identical(products, _unset)) {
       if (products is List<CustomerSalesProductItem>) {
         body['products'] = products.map((p) => p.toJson()).toList();
@@ -390,24 +432,32 @@ class ConversationRepository {
         body['products'] = products;
       }
     }
-    return ConversationDetail.fromJson(
-        await _api.patch('/mobile/conversations/$id/customer-sales-info', body: body));
+    return ConversationDetail.fromJson(await _api
+        .patch('/mobile/conversations/$id/customer-sales-info', body: body));
   }
 
   Future<ConversationDetail> updatePurchaseInformation(
-      String id, {
-      Object? purchaseChannel = _unset,
-      Object? paymentMethod = _unset,
-      Object? productModelId = _unset,
-      Object? productVariantId = _unset,
+    String id, {
+    Object? purchaseChannel = _unset,
+    Object? paymentMethod = _unset,
+    Object? productModelId = _unset,
+    Object? productVariantId = _unset,
   }) async {
     final body = <String, dynamic>{};
-    if (!identical(purchaseChannel, _unset)) body['purchaseChannel'] = purchaseChannel;
-    if (!identical(paymentMethod, _unset)) body['paymentMethod'] = paymentMethod;
-    if (!identical(productModelId, _unset)) body['productModelId'] = productModelId;
-    if (!identical(productVariantId, _unset)) body['productVariantId'] = productVariantId;
-    return ConversationDetail.fromJson(
-        await _api.patch('/mobile/conversations/$id/purchase-information', body: body));
+    if (!identical(purchaseChannel, _unset)) {
+      body['purchaseChannel'] = purchaseChannel;
+    }
+    if (!identical(paymentMethod, _unset)) {
+      body['paymentMethod'] = paymentMethod;
+    }
+    if (!identical(productModelId, _unset)) {
+      body['productModelId'] = productModelId;
+    }
+    if (!identical(productVariantId, _unset)) {
+      body['productVariantId'] = productVariantId;
+    }
+    return ConversationDetail.fromJson(await _api
+        .patch('/mobile/conversations/$id/purchase-information', body: body));
   }
 
   Future<ChatMessage?> reply(
