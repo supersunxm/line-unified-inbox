@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
  * Public OAuth callback route handler.
  * Consumes and validates HttpOnly OAuth state cookie, exchanges authorization code,
  * fetches profile/video data, binds StoreMaster via normalized username, and routes
- * to either public success/error pages or admin dashboard if authenticated.
+ * to public success/error pages independently of any unrelated admin session cookie.
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -170,16 +170,8 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(errorUrl);
   }
 
-  // 6. Successful authorization routing
-  if (requestHasOppoSession) {
-    // Authenticated admin user: redirect back to admin dashboard
-    const adminDestination = syncedAccount.id
-      ? new URL(`/tiktok/dashboard/${encodeURIComponent(syncedAccount.id)}`, publicOrigin)
-      : new URL("/tiktok", publicOrigin);
-    return createRedirectResponse(adminDestination);
-  }
-
-  // Public retail store staff: redirect to public success page with safe short-lived cookie state
+  // 6. Public store authorization always returns to the public success page. An unrelated
+  // admin session cookie is diagnostic only and must not become OAuth routing authority.
   const successUrl = new URL("/tiktok/connect/success", publicOrigin);
   const response = createRedirectResponse(successUrl);
 

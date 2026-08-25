@@ -9,12 +9,14 @@ import {
   TIKTOK_VIDEO_LIST_FIELDS,
   TIKTOK_VIDEO_QUERY_ENDPOINT,
   fetchLatestTikTokAccountFromBackend,
+  fetchTikTokAccountByIdFromBackend,
   logTikTokTokenDiagnostic,
   logTikTokVideoDiagnostic,
   mergeTikTokVideoItems,
   parseTikTokTokenResponse,
   parseTikTokVideoItem,
   syncTikTokAccountToBackend,
+  TikTokBackendAuthenticationError,
 } from "../src/app/tiktok/tiktok-api-client.ts";
 
 const apiClientSource = readFileSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url), "utf8");
@@ -410,3 +412,52 @@ test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboar
   assert.doesNotMatch(rootDashboardSource, /accounts\.length > 0\s*\)\s*\{\s*redirect\(`\/tiktok\/dashboard/);
 });
 
+test("Dashboard account fetch returns valid data, preserves 404, and exposes 401 authentication failure", async () => {
+  const originalFetch = globalThis.fetch;
+  const validAccount = {
+    id: "account-1",
+    openId: "open-1",
+    displayName: "O-Central World",
+    username: "o_centralworld",
+    followerCount: 10,
+    followingCount: 2,
+    likesCount: 30,
+    videoCount: 1,
+    isVerified: false,
+    lastSyncedAt: "2026-08-25T03:18:22.864Z",
+    videos: [],
+  };
+
+  try {
+    globalThis.fetch = async () => Response.json(validAccount);
+    const account = await fetchTikTokAccountByIdFromBackend("account-1", {
+      sessionToken: "valid-session",
+    });
+    assert.equal(account?.id, "account-1");
+    assert.equal(account?.profile.display_name, "O-Central World");
+
+    globalThis.fetch = async () => new Response(null, { status: 404 });
+    assert.equal(
+      await fetchTikTokAccountByIdFromBackend("missing", { sessionToken: "valid-session" }),
+      null
+    );
+
+    globalThis.fetch = async () => new Response(null, { status: 401 });
+    await assert.rejects(
+      fetchTikTokAccountByIdFromBackend("account-1", { sessionToken: "expired-session" }),
+      TikTokBackendAuthenticationError
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Dynamic dashboard redirects backend 401 to login and reserves notFound for a missing account", () => {
+  const dynamicDashboardSource = readFileSync(
+    new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.match(dynamicDashboardSource, /error instanceof TikTokBackendAuthenticationError/);
+  assert.match(dynamicDashboardSource, /redirect\("\/login"\)/);
+  assert.match(dynamicDashboardSource, /if \(!data\) \{\s*notFound\(\);/s);
+});

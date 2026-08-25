@@ -1109,9 +1109,14 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The transaction deletes sessions, device tokens, push notifications, and OTP challenges; suspends any remaining active memberships; scrubs registration-request PII; and replaces account PII with a non-routable unique `deleted+<userId>@deleted.lineoppo.invalid` identity. No deletion or approval email is sent.
 - Only active ADMIN actors can delete inactive approved VIEWER BM/PC accounts. ACTIVE accounts, ADMIN accounts, Main OA-capable identities, self-delete, and deleted accounts are rejected or safely idempotent. Reactivation explicitly rejects tombstones.
 - Deletion audit metadata contains only safe status/timestamp/membership-history fields. Original email, phone, employee ID, password, tokens, and other PII are excluded. The explicit destructive UI requires exact `DELETE` text and never exposes the action for ACTIVE rows.
-
 # Public landing-page boundary (2026-08-25)
 
 - `/` is an unconditional public product page for authenticated and unauthenticated visitors. Authentication remains explicit through `/login`; the landing route does not inspect sessions or render the administrative AppShell.
 - `/tiktok/connect` remains the public account-authorization entry. Administrative TikTok routes and the existing workspace routes retain their current session and capability boundaries.
 - The shared `ApplicationWorkspace` remains in its existing client module to avoid a broad, unrelated extraction. Optional route metadata was not added because native head tags in that client module duplicate the layout metadata; a future workspace extraction can introduce canonical route-level metadata safely.
+
+# Deterministic public TikTok authorization destination (2026-08-25)
+
+- `/tiktok/connect` is a public Store Authorization entry, so its successful OAuth callback always returns to `/tiktok/connect/success` regardless of an existing `oppo_session` cookie.
+- Cookie presence is not trusted routing or authorization intent. If an admin-specific connect flow is introduced later, it must use an explicit short-lived server-created signed/HttpOnly marker; no unsigned query parameter will control the destination.
+- TikTok dashboard account lookup treats backend 401 as an authentication failure and redirects to login. Only a genuine backend 404 or a successful null payload represents an absent account and triggers the Next.js not-found page.

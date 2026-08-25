@@ -5,7 +5,6 @@ import {
   DEFAULT_PUBLIC_APP_URL,
   getPublicAppUrl,
 } from "../src/app/tiktok/connect/tiktok-oauth.ts";
-import { getSafeTikTokErrorMessage } from "../src/app/tiktok/callback/tiktok-callback-utils.ts";
 import {
   STATE_MISMATCH_ERROR_MESSAGE,
   logTikTokCallbackDiagnostic,
@@ -150,6 +149,13 @@ test("Callback route handler constructs result redirects with public application
   assert.doesNotMatch(routeSource, /new\s+URL\("\/tiktok\/connect\/error",\s*request\.nextUrl\)/);
   assert.doesNotMatch(routeSource, /0\.0\.0\.0/);
   assert.doesNotMatch(routeSource, /localhost/);
+});
+
+test("Public TikTok callback always redirects to success without using admin session routing", () => {
+  assert.match(routeSource, /new\s+URL\("\/tiktok\/connect\/success",\s*publicOrigin\)/);
+  assert.doesNotMatch(routeSource, /if\s*\(requestHasOppoSession\)/);
+  assert.doesNotMatch(routeSource, /\/tiktok\/dashboard\/\$\{encodeURIComponent\(syncedAccount\.id\)\}/);
+  assert.match(routeSource, /requestHasOppoSession/);
 });
 
 test("Route handler clears state cookie in the 302 redirect response without client-side actions", () => {

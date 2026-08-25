@@ -196,6 +196,8 @@ test("TikTokService auto-binds StoreMaster and handles reconciliation safely", a
   };
 
   const result = await service.upsertTikTokAccount(syncPayload);
+  const immediatelyFetched = await service.getTikTokAccountById(result.id);
+  assert.equal(immediatelyFetched?.id, result.id);
   assert.equal(result.storeMasterId, "store-cw-1");
   assert.ok(result.storeMaster);
   assert.equal(result.storeMaster.storeName, "OPPO Brand Shop Central World");
@@ -1368,5 +1370,3 @@ test("TikTokService.resetTikTokSandboxAccountByUsername safely revokes token, de
   assert.equal(storeMasterTable.length, 2);
   assert.equal(storeMasterTable[0].tiktokUsername, "o_centralworld");
 });
-
-

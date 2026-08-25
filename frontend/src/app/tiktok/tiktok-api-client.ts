@@ -621,7 +621,32 @@ export interface FetchTikTokAccountOptions {
   sessionToken?: string | null;
 }
 
-function mapBackendAccountToStoreData(data: any): TikTokStoreData {
+export class TikTokBackendAuthenticationError extends Error {
+  constructor() {
+    super("TikTok backend authentication failed");
+    this.name = "TikTokBackendAuthenticationError";
+  }
+}
+
+interface BackendTikTokVideoResponse {
+  tikTokVideoId: string;
+  title?: string | null;
+  videoDescription?: string | null;
+  createTime?: string | null;
+  coverImageUrl?: string | null;
+  shareUrl?: string | null;
+  duration?: number | null;
+  viewCount?: number | null;
+  likeCount?: number | null;
+  commentCount?: number | null;
+  shareCount?: number | null;
+}
+
+type BackendTikTokAccountResponse = SafeTikTokSyncedAccountResponse & {
+  videos?: BackendTikTokVideoResponse[];
+};
+
+function mapBackendAccountToStoreData(data: BackendTikTokAccountResponse): TikTokStoreData {
   return {
     id: data.id,
     profile: {
@@ -641,7 +666,7 @@ function mapBackendAccountToStoreData(data: any): TikTokStoreData {
       likes_count: data.likesCount,
       video_count: data.videoCount,
     },
-    videos: (data.videos || []).map((v: any) => ({
+    videos: (data.videos || []).map((v) => ({
       id: v.tikTokVideoId,
       title: v.title || undefined,
       video_description: v.videoDescription || undefined,
@@ -654,7 +679,7 @@ function mapBackendAccountToStoreData(data: any): TikTokStoreData {
       comment_count: v.commentCount ?? 0,
       share_count: v.shareCount ?? 0,
     })),
-    updatedAt: data.lastSyncedAt || data.updatedAt,
+    updatedAt: data.lastSyncedAt,
     storeMasterId: data.storeMasterId || null,
     storeMaster: data.storeMaster || null,
   };
@@ -667,45 +692,49 @@ export async function fetchTikTokAccountByIdFromBackend(
   accountId: string,
   options?: FetchTikTokAccountOptions
 ): Promise<TikTokStoreData | null> {
-  try {
-    let sessionToken = options?.sessionToken?.trim() || null;
+  let sessionToken = options?.sessionToken?.trim() || null;
 
-    if (!sessionToken) {
-      try {
-        const { cookies } = await import("next/headers");
-        const cookieStore = await cookies();
-        sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
-      } catch {
-        // Fallback when executed outside Next.js request context
-      }
+  if (!sessionToken) {
+    try {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      sessionToken = cookieStore.get("oppo_session")?.value?.trim() || null;
+    } catch {
+      // Fallback when executed outside Next.js request context
     }
+  }
 
-    if (!sessionToken) {
-      return null;
-    }
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${sessionToken}`,
-    };
-
-    const response = await fetch(`${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}`, {
-      headers,
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    if (!data || !data.openId) {
-      return null;
-    }
-
-    return mapBackendAccountToStoreData(data);
-  } catch {
+  if (!sessionToken) {
     return null;
   }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${sessionToken}`,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/tiktok/accounts/${encodeURIComponent(accountId)}`, {
+    headers,
+    cache: "no-store",
+  });
+
+  if (response.status === 401) {
+    throw new TikTokBackendAuthenticationError();
+  }
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch TikTok account from backend (HTTP ${response.status})`);
+  }
+
+  const data = (await response.json()) as BackendTikTokAccountResponse | null;
+  if (!data || !data.openId) {
+    return null;
+  }
+
+  return mapBackendAccountToStoreData(data);
 }
 
 /**
@@ -905,4 +934,3 @@ export async function fetchTikTokBulkMetricsSummaryFromBackend(
     return { accounts: [] };
   }
 }
-

@@ -5,6 +5,7 @@ import {
   fetchTikTokAccountByIdFromBackend,
   fetchTikTokAccountsListFromBackend,
   fetchTikTokHistoricalMetricsFromBackend,
+  TikTokBackendAuthenticationError,
 } from "../../tiktok-api-client";
 import { TikTokDashboardResponsive } from "../tiktok-dashboard-responsive";
 import {
@@ -37,15 +38,24 @@ export default async function TikTokAccountDashboardPage({ params }: Props) {
     redirect("/login");
   }
 
-  const [data, realHistoricalMetrics, accounts] = await Promise.all([
-    fetchTikTokAccountByIdFromBackend(accountId, { sessionToken }),
-    fetchTikTokHistoricalMetricsFromBackend(accountId, 30, { sessionToken }),
-    fetchTikTokAccountsListFromBackend({ sessionToken }),
-  ]);
+  let data;
+  try {
+    data = await fetchTikTokAccountByIdFromBackend(accountId, { sessionToken });
+  } catch (error) {
+    if (error instanceof TikTokBackendAuthenticationError) {
+      redirect("/login");
+    }
+    throw error;
+  }
 
   if (!data) {
     notFound();
   }
+
+  const [realHistoricalMetrics, accounts] = await Promise.all([
+    fetchTikTokHistoricalMetricsFromBackend(accountId, 30, { sessionToken }),
+    fetchTikTokAccountsListFromBackend({ sessionToken }),
+  ]);
 
   const historicalMetrics = isTikTokDemoGrowthEnabled()
     ? getTikTokDemoGrowthMetrics(accountId)
