@@ -112,7 +112,7 @@ export default function LoginPage() {
         </form>
         <div className="mt-4 text-center">
           <Link href="/register" className="text-sm font-medium text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white">
-            Create BM / PC account
+            Create account
           </Link>
         </div>
       </div>
