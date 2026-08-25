@@ -1,5 +1,16 @@
 # AI progress
 
+## Current task: Android Production Release v1.0.14+15 (2026-08-25)
+
+- Located the existing production signing material in the local Downloads credential setup; verified the store password, key alias, private-key password, and permanent certificate without exposing secret values.
+- Configured the four Android signing values as GitHub Actions repository secrets.
+- Corrected the production workflow's certificate check to normalize the compact lowercase digest emitted by current `apksigner`; added explicit `versionName` and `versionCode` gates.
+- GitHub Actions run `32805224478` passed build, package ID, version, signature, rename, and artifact upload.
+- Independently verified the downloaded APK: package `click.lineoppo.chat`, version `1.0.14+15`, permanent certificate SHA-256 `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`, production Railway API URL, and APK SHA-256 `10d9716e8f75ec989a2c4979a6fef3b33b0173c862d94537b07a927fce49d1ba`.
+- Published the verified artifact only to the release branch download tree and added 1.0.14 to `/download` metadata while retaining 1.0.13 history.
+- Final checks passed: Flutter analyze, all 105 Flutter tests, targeted `/download` lint and 3/3 regression tests, Next.js production build, live frontend health/download/history/APK HTTP checks, and independent APK package/version/signature/API/checksum verification.
+- Release publication work is complete on the isolated release branch. PR #47 remains Draft pending explicit merge approval.
+
 ## Current task: Brand Accent Modernization to OPPO Green (2026-08-20)
 
 - **Audit & Implementation**:

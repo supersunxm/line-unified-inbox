@@ -1109,6 +1109,7 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The transaction deletes sessions, device tokens, push notifications, and OTP challenges; suspends any remaining active memberships; scrubs registration-request PII; and replaces account PII with a non-routable unique `deleted+<userId>@deleted.lineoppo.invalid` identity. No deletion or approval email is sent.
 - Only active ADMIN actors can delete inactive approved VIEWER BM/PC accounts. ACTIVE accounts, ADMIN accounts, Main OA-capable identities, self-delete, and deleted accounts are rejected or safely idempotent. Reactivation explicitly rejects tombstones.
 - Deletion audit metadata contains only safe status/timestamp/membership-history fields. Original email, phone, employee ID, password, tokens, and other PII are excluded. The explicit destructive UI requires exact `DELETE` text and never exposes the action for ACTIVE rows.
+
 # Public landing-page boundary (2026-08-25)
 
 - `/` is an unconditional public product page for authenticated and unauthenticated visitors. Authentication remains explicit through `/login`; the landing route does not inspect sessions or render the administrative AppShell.
@@ -1121,3 +1122,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Cookie presence is not trusted routing or authorization intent. If an admin-specific connect flow is introduced later, it must use an explicit short-lived server-created signed/HttpOnly marker; no unsigned query parameter will control the destination.
 - TikTok dashboard account lookup treats backend 401 as an authentication failure and redirects to login. Only a genuine backend 404 or a successful null payload represents an absent account and triggers the Next.js not-found page.
 - Server-side TikTok admin API calls forward WEB sessions through the backend's canonical `oppo_session` cookie. They do not relabel a WEB session as Bearer auth because backend Bearer credentials are intentionally reserved for MOBILE sessions.
+
+# Android 1.0.14 permanent signing verification (2026-08-25)
+
+- Reused only the existing production key whose certificate SHA-256 is `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`; no replacement key was generated.
+- Store the keystore and credentials only in GitHub Actions repository secrets for CI use; do not commit or upload signing material as repository artifacts.
+- Normalize `apksigner` certificate output to a lowercase compact SHA-256 digest before exact comparison because current build tools emit compact lowercase digests rather than colon-delimited uppercase fingerprints.
+- Keep the release isolated on `release/android-1.0.14`; publishing the APK metadata does not authorize merging PR #47 or manually deploying Railway.
