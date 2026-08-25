@@ -237,6 +237,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get conversationContext => 'ข้อมูลบทสนทนา';
 
   @override
+  String get readOnlyConversation => 'ดูได้อย่างเดียว · ไม่มีสิทธิ์ตอบกลับ';
+
+  @override
   String get replyStatus => 'สถานะการตอบ';
 
   @override

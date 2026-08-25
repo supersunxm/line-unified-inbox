@@ -71,6 +71,7 @@
   "storeUnavailable": "门店信息不可用",
   "storeCode": "门店编号：{code}",
   "conversationContext": "会话信息",
+  "readOnlyConversation": "只读 · 无回复权限",
   "replyStatus": "回复状态",
   "unreadMessages": "未读消息",
   "messagesInView": "当前消息数",

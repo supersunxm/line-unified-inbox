@@ -41,7 +41,7 @@ class ConversationTagsBar extends StatelessWidget {
   final ConversationTags? tags;
   final CustomerSalesInformation? customerSalesInformation;
   final PurchaseInformation? purchaseInformation;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +100,8 @@ class ConversationTagsBar extends StatelessWidget {
                       ? Icons.shopping_bag_outlined
                       : Icons.flag_outlined,
                   size: 18,
-                  color: sales?.isPurchased == true ? Colors.green : Colors.blue,
+                  color:
+                      sales?.isPurchased == true ? Colors.green : Colors.blue,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -210,8 +211,7 @@ class ConversationTagsBar extends StatelessWidget {
                     if (hasProvenance) ...[
                       const SizedBox(height: 3),
                       Text(
-                        _provenanceLabel(
-                            context, sales, purchaseInformation),
+                        _provenanceLabel(context, sales, purchaseInformation),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -247,8 +247,8 @@ class ConversationTagsBar extends StatelessWidget {
     return '${appLocalizations(context).customerSalesInformation}: ${parts.join(' · ')}';
   }
 
-  String _provenanceLabel(BuildContext context,
-      CustomerSalesInformation? sales, PurchaseInformation? purchase) {
+  String _provenanceLabel(BuildContext context, CustomerSalesInformation? sales,
+      PurchaseInformation? purchase) {
     final parts = <String>[];
     final recordedBy = sales?.recordedBy?.trim().isNotEmpty == true
         ? sales!.recordedBy!.trim()
@@ -260,8 +260,8 @@ class ConversationTagsBar extends StatelessWidget {
     if (recordedAt != null) {
       final date = MaterialLocalizations.of(context)
           .formatMediumDate(recordedAt.toLocal());
-      final time = MaterialLocalizations.of(context).formatTimeOfDay(
-          TimeOfDay.fromDateTime(recordedAt.toLocal()));
+      final time = MaterialLocalizations.of(context)
+          .formatTimeOfDay(TimeOfDay.fromDateTime(recordedAt.toLocal()));
       parts.add('${appLocalizations(context).recordedAt}: $date $time');
     }
     return parts.join(' · ');
@@ -495,8 +495,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
         widget.conversationId,
         status: _status,
         interestLevel: _status == 'INTERESTED' ? _interestLevel : null,
-        purchaseChannel:
-            _status == 'PURCHASED' ? _sourceChannels.toList() : [],
+        purchaseChannel: _status == 'PURCHASED' ? _sourceChannels.toList() : [],
         paymentMethod: _status == 'PURCHASED' ? _paymentMethod : null,
         products: _payloadProducts(),
       );
@@ -802,12 +801,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   Future<void> _promptSaveConfirmation() async {
     final l10n = appLocalizations(context);
-    final isConverting = widget.initialSalesInfo?.isInterested == true &&
-        _status == 'PURCHASED';
+    final isConverting =
+        widget.initialSalesInfo?.isInterested == true && _status == 'PURCHASED';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isConverting ? l10n.confirmPurchase : l10n.confirmCustomerInfo),
+        title: Text(
+            isConverting ? l10n.confirmPurchase : l10n.confirmCustomerInfo),
         content: Text(
           _status == null
               ? l10n.noCustomerSalesInfo
@@ -889,7 +889,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : Text(l10n.save),
                       );
@@ -1047,14 +1048,12 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         _filter(
                           '🏪 ${l10n.store}',
                           _sourceChannels.contains('STORE'),
-                          (selected) =>
-                              _setSourceChannel('STORE', selected),
+                          (selected) => _setSourceChannel('STORE', selected),
                         ),
                         _filter(
                           '🌐 ${l10n.online}',
                           _sourceChannels.contains('ONLINE'),
-                          (selected) =>
-                              _setSourceChannel('ONLINE', selected),
+                          (selected) => _setSourceChannel('ONLINE', selected),
                         ),
                       ],
                     ),
@@ -1070,8 +1069,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           'CASH',
                           '💵 ${l10n.paymentCash}',
                           _paymentMethod == 'CASH',
-                          (selected) =>
-                              _setPaymentMethod('CASH', selected),
+                          (selected) => _setPaymentMethod('CASH', selected),
                         ),
                         _choice(
                           'INSTALLMENT',
@@ -1091,8 +1089,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           'OTHER',
                           '🏷️ ${l10n.paymentOther}',
                           _paymentMethod == 'OTHER',
-                          (selected) =>
-                              _setPaymentMethod('OTHER', selected),
+                          (selected) => _setPaymentMethod('OTHER', selected),
                         ),
                       ],
                     ),
@@ -1158,7 +1155,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                         .titleSmall
                                         ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                                  if ((product.seriesName?.isNotEmpty ?? false) ||
+                                  if ((product.seriesName?.isNotEmpty ??
+                                          false) ||
                                       (product.category?.isNotEmpty ?? false))
                                     Text(
                                       [product.seriesName, product.category]
@@ -1193,9 +1191,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                             IconButton(
                               icon: const Icon(Icons.delete_outline,
                                   color: Colors.redAccent, size: 20),
-                              onPressed: _saving
-                                  ? null
-                                  : () => _removeProduct(index),
+                              onPressed:
+                                  _saving ? null : () => _removeProduct(index),
                             ),
                           ],
                         ),
@@ -1372,8 +1369,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         selected: selected,
                         onSelected: _saving
                             ? null
-                            : (value) => _selectDraftVariant(
-                                value ? variant : null),
+                            : (value) =>
+                                _selectDraftVariant(value ? variant : null),
                       );
                     }).toList(),
                   ),
@@ -1391,8 +1388,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     Text('$_draftQuantity'),
                     IconButton(
                       icon: const Icon(Icons.add, size: 16),
-                      onPressed:
-                          _saving ? null : () => _updateDraftQuantity(1),
+                      onPressed: _saving ? null : () => _updateDraftQuantity(1),
                     ),
                   ],
                 ),

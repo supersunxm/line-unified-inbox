@@ -15,6 +15,11 @@ export class MobileMessageQueryDto {
   @IsOptional() @IsString() before?: string;
 }
 
+export class UpdateMobileBmReplyStatusDto {
+  @IsEnum(BmReplyStatus)
+  status!: BmReplyStatus;
+}
+
 export class MobileProductQueryDto {
   @IsOptional() @IsString() @MaxLength(100) search?: string;
   @IsOptional() @IsEnum(ProductGroup) category?: ProductGroup;

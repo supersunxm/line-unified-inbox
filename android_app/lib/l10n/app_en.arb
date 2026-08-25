@@ -71,6 +71,7 @@
   "storeUnavailable": "Store unavailable",
   "storeCode": "Store code: {code}",
   "conversationContext": "Conversation context",
+  "readOnlyConversation": "Read-only · Reply permission is disabled",
   "replyStatus": "Reply status",
   "unreadMessages": "Unread messages",
   "messagesInView": "Messages in view",

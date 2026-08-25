@@ -68,6 +68,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
           conversationId: conversationId,
           repository: widget.conversations,
           events: widget.events,
+          canReply: widget.user.canReply,
           onConversationOpened: widget.onConversationOpened,
         ),
       ),

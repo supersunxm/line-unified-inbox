@@ -22,6 +22,7 @@ class FakeConversationRepository extends ConversationRepository {
   int markReadCalls = 0;
   bool failMarkRead = false;
   int replyCalls = 0;
+  int updateStatusCalls = 0;
   int mediaCalls = 0;
   List<ChatMessage> detailMessages = const [];
   List<ChatMessage> olderDetailMessages = const [];
@@ -91,6 +92,14 @@ class FakeConversationRepository extends ConversationRepository {
     markReadCalls += 1;
     if (failMarkRead) throw StateError('read service unavailable');
     unreadCount = 0;
+  }
+
+  @override
+  Future<ConversationDetail> updateBmReplyStatus(
+      String id, String status) async {
+    updateStatusCalls += 1;
+    replyStatus = status;
+    return detail(id);
   }
 
   @override
@@ -598,6 +607,49 @@ void main() {
     expect(repository.replyCalls, 1);
     expect(repository.detailCalls, 1);
     expect(find.text('Reply now'), findsOneWidget);
+  });
+
+  testWidgets('conversation detail exposes canonical status actions',
+      (tester) async {
+    final repository = FakeConversationRepository();
+
+    await tester.pumpWidget(MaterialApp(
+      home: ChatPage(
+        conversationId: 'conversation-a',
+        repository: repository,
+        canReply: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Notified BM'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byIcon(Icons.notifications_active_outlined));
+    await tester.pumpAndSettle();
+
+    expect(repository.updateStatusCalls, 1);
+    expect(repository.replyStatus, 'NOTIFIED_BM');
+    expect(find.text('Notified BM'), findsOneWidget);
+  });
+
+  testWidgets('conversation detail is read-only when reply permission is off',
+      (tester) async {
+    final repository = FakeConversationRepository();
+
+    await tester.pumpWidget(MaterialApp(
+      home: ChatPage(
+        conversationId: 'conversation-a',
+        repository: repository,
+        canReply: false,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Read-only · Reply permission is disabled'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(find.byTooltip('More actions'), findsNothing);
   });
 
   testWidgets('initial chat scroll settles at the bottom with image rows',

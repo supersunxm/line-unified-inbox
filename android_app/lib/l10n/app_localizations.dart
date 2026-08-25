@@ -527,6 +527,12 @@ abstract class AppLocalizations {
   /// **'Conversation context'**
   String get conversationContext;
 
+  /// No description provided for @readOnlyConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only · Reply permission is disabled'**
+  String get readOnlyConversation;
+
   /// No description provided for @replyStatus.
   ///
   /// In en, this message translates to:

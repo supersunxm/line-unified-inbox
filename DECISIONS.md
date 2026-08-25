@@ -1130,6 +1130,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Use `/conversations/store-priority-summary` for mobile store options because it already exposes the authenticated Web chat store scope; no duplicate store-list authorization or schema path was introduced.
 - Extend the existing HQ approvals page with its already-supported `hq-approved` and deactivate/reactivate API actions instead of adding a new account-management backend or data model.
 
+# HQ mobile conversation detail boundary (2026-08-25)
+
+- Conversation detail remains a presentation layer over `/mobile/conversations/:id`, the existing message/media repository, and `ConversationsService.sendMessage`/`updateBmReplyStatus`. Mobile status changes therefore persist to the same `bmReplyStatus`, follow-up completion, and activity-history state used by Web `/chats`.
+- Store identity is rendered from the authorized conversation detail response in a dedicated header context. The client never chooses the sending store; `StoreAccessService.assertConversationAccess` authorizes the conversation and the canonical service resolves the store's OA credentials for delivery.
+- `canReply` is enforced at both presentation and mobile service boundaries. Read-only users cannot open the composer or detail write controls, and backend calls fail closed even if a client bypasses the UI. No new notification state or database model was introduced; `NOTIFIED_BM` remains the existing BM notification status.
+
 # Android 1.0.14 permanent signing verification (2026-08-25)
 
 - Reused only the existing production key whose certificate SHA-256 is `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`; no replacement key was generated.

@@ -7,6 +7,7 @@ import '../../core/localization/localization.dart';
 import '../../core/models/models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/logging/safe_logger.dart';
+import '../../core/widgets/status_badge.dart';
 import '../inbox/conversation_repository.dart';
 import 'widgets/conversation_header.dart';
 import 'widgets/chat_composer.dart';
@@ -47,10 +48,12 @@ class ChatPage extends StatefulWidget {
       {super.key,
       required this.conversationId,
       required this.repository,
+      this.canReply = true,
       this.events,
       this.onConversationOpened});
   final String conversationId;
   final ConversationRepository repository;
+  final bool canReply;
   final Stream<Map<String, dynamic>>? events;
   final Future<void> Function(String conversationId)? onConversationOpened;
   @override
@@ -154,8 +157,10 @@ class _ChatPageState extends State<ChatPage> {
     );
     if (!mounted || updated == null || _detail == null) return;
 
-    final wasInterested = _detail?.customerSalesInformation?.isInterested == true;
-    final isNowPurchased = updated.customerSalesInformation?.isPurchased == true;
+    final wasInterested =
+        _detail?.customerSalesInformation?.isInterested == true;
+    final isNowPurchased =
+        updated.customerSalesInformation?.isPurchased == true;
     final isConversion = wasInterested && isNowPurchased;
 
     setState(() => _detail = _detail!.copyWith(
@@ -272,8 +277,71 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _pending.removeWhere((item) => item.key == idempotencyKey);
       _pendingImages.removeWhere((item) => item.key == idempotencyKey);
-      _detail = detail.copyWith(messages: messages);
+      _detail = detail.copyWith(messages: messages, bmReplyStatus: 'REPLIED');
     });
+  }
+
+  Future<void> _showConversationActions() async {
+    final detail = _detail;
+    if (detail == null || !widget.canReply || !mounted) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final l10n = appLocalizations(sheetContext);
+        const statuses = ['NOT_REPLIED', 'NOTIFIED_BM', 'REPLIED'];
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.notifications_active_outlined),
+                title: Text(l10n.notifiedBm),
+                subtitle: Text(l10n.replyStatus),
+                onTap: () => Navigator.of(sheetContext).pop('NOTIFIED_BM'),
+              ),
+              const Divider(height: 1),
+              RadioGroup<String>(
+                groupValue: detail.bmReplyStatus,
+                onChanged: (value) {
+                  if (value != null) {
+                    Navigator.of(sheetContext).pop(value);
+                  }
+                },
+                child: Column(
+                  children: [
+                    for (final status in statuses)
+                      RadioListTile<String>(
+                        value: status,
+                        title: Text(localizedConversationStatusLabel(
+                            sheetContext, status,
+                            exact: true)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == detail.bmReplyStatus || !mounted) {
+      return;
+    }
+    try {
+      final updated =
+          await widget.repository.updateBmReplyStatus(detail.id, selected);
+      if (!mounted) return;
+      setState(() => _detail = _detail?.copyWith(
+            bmReplyStatus: updated.bmReplyStatus,
+            operationalState: updated.operationalState,
+            unreadCount: updated.unreadCount,
+          ));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Unable to update reply status');
+    }
   }
 
   void _appendRealtimeMessage(Object? rawMessage) {
@@ -608,14 +676,21 @@ class _ChatPageState extends State<ChatPage> {
             return Scaffold(
                 appBar: ConversationHeader(
                     customerName: detail.customerName,
+                    storeName: detail.storeName,
+                    storeCode: detail.storeCode,
                     bmReplyStatus: detail.bmReplyStatus,
-                    onProfile: _showCustomerProfile),
+                    exactStatus: true,
+                    onBack: () => Navigator.of(context).maybePop(),
+                    onProfile: _showCustomerProfile,
+                    onAction:
+                        widget.canReply ? _showConversationActions : null),
                 body: Column(children: [
                   ConversationTagsBar(
                       tags: detail.tags,
                       customerSalesInformation: detail.customerSalesInformation,
                       purchaseInformation: detail.purchaseInformation,
-                      onPressed: _showConversationTags),
+                      onPressed:
+                          widget.canReply ? _showConversationTags : null),
                   Expanded(
                       child: MessageTimeline(
                           controller: _scroll,
@@ -650,8 +725,23 @@ class _ChatPageState extends State<ChatPage> {
                         padding: const EdgeInsets.all(8),
                         child: Text(_error!,
                             style: const TextStyle(color: Colors.red))),
+                  if (!widget.canReply)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock_outline, size: 16),
+                          const SizedBox(width: 6),
+                          Text(appLocalizations(context).readOnlyConversation,
+                              style: Theme.of(context).textTheme.labelMedium),
+                        ],
+                      ),
+                    ),
                   ChatComposer(
-                      controller: _text, onAttach: _pickImage, onSend: _send)
+                      controller: _text,
+                      enabled: widget.canReply,
+                      onAttach: widget.canReply ? _pickImage : null,
+                      onSend: widget.canReply ? _send : null)
                 ]));
           }));
 
@@ -740,8 +830,7 @@ class _ImagePreviewPage extends StatelessWidget {
               ),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1F2B),
                 border: Border(

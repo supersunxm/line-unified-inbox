@@ -201,6 +201,68 @@ void test("mobile reply delegates only after store ownership is verified", async
   await assert.rejects(() => denied.send(user, "conversation-2", { text: "Reply", idempotencyKey: "key-2" }), ForbiddenException);
 });
 
+void test("mobile detail and status actions support an all-store user through the canonical service", async () => {
+  let selectedStatus: string | undefined;
+  const conversation = {
+    id: "conversation-store-2",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "NOT_REPLIED",
+    followUpStatus: "FOLLOW_UP",
+    sourceChannels: [],
+    isInstallment: false,
+    customer: { id: "customer-2", displayName: "Customer 2" },
+    store: { id: "store-2", name: "Store 2", code: "S2" },
+    messages: [],
+    _count: { pushNotifications: 0 },
+  };
+  const stores = {
+    assertConversationAccess: async () => "store-2",
+    accessibleStoreIds: async () => null,
+  };
+  const conversations = {
+    updateBmReplyStatus: async (id: string, status: string) => {
+      assert.equal(id, "conversation-store-2");
+      selectedStatus = status;
+      return { changed: true, conversation };
+    },
+  };
+  const prisma = { conversation: { findUnique: async () => conversation } };
+  const service = new MobileConversationsService(prisma as never, stores as never, conversations as never);
+
+  assert.equal((await service.get(user, conversation.id)).store.name, "Store 2");
+  const result = await service.updateBmReplyStatus(user, conversation.id, "NOTIFIED_BM");
+  assert.equal(result.changed, true);
+  assert.equal(selectedStatus, "NOTIFIED_BM");
+});
+
+void test("mobile status action rejects an unauthorized store before updating canonical state", async () => {
+  let updated = false;
+  const service = new MobileConversationsService(
+    {} as never,
+    { assertConversationAccess: async () => { throw new ForbiddenException("Store access is forbidden"); } } as never,
+    { updateBmReplyStatus: async () => { updated = true; return {}; } } as never,
+  );
+  await assert.rejects(() => service.updateBmReplyStatus(user, "other-store-conversation", "REPLIED"), ForbiddenException);
+  assert.equal(updated, false);
+});
+
+void test("mobile reply and status actions reject users without reply capability", async () => {
+  const readOnlyUser = { ...user, permissions: { canReply: false } } as never;
+  let delegated = false;
+  const service = new MobileConversationsService(
+    {} as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {
+      sendMessage: async () => { delegated = true; return {}; },
+      updateBmReplyStatus: async () => { delegated = true; return {}; },
+    } as never,
+  );
+
+  await assert.rejects(() => service.send(readOnlyUser, "conversation-1", { text: "Reply", idempotencyKey: "key-1" }), ForbiddenException);
+  await assert.rejects(() => service.updateBmReplyStatus(readOnlyUser, "conversation-1", "REPLIED"), ForbiddenException);
+  assert.equal(delegated, false);
+});
+
 void test("mark read clears every unread notification for the user and conversation", async () => {
   const updates: any[] = [];
   const prisma = { pushNotification: { updateMany: async (args: any) => { updates.push(args); return { count: 28 }; } } };
