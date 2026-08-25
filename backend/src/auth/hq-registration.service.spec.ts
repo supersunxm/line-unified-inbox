@@ -65,3 +65,70 @@ void test("approving HQ reasserts every full-access grant", async () => {
   assert.equal(updateData.canAccessMainOa, true);
   assert.equal(updateData.canManageMainOa, true);
 });
+
+void test("approved HQ listing is separated from legacy username admins", async () => {
+  let where: any;
+  const prisma: any = {
+    user: {
+      findMany: async (input: any) => { where = input.where; return []; },
+    },
+  };
+  const service = new HqRegistrationService(prisma, {} as any);
+
+  await service.approved();
+
+  assert.equal(where.role, UserRole.ADMIN);
+  assert.equal(where.canAccessHq, true);
+  assert.equal(where.canAccessAllStores, true);
+  assert.equal(where.canManageAccounts, true);
+  assert.equal(where.username, null);
+  assert.deepEqual(where.employeeId, { not: null });
+});
+
+void test("deactivating HQ revokes active sessions without requiring store membership", async () => {
+  const updates: any[] = [];
+  const prisma: any = {
+    user: {
+      findUnique: async () => ({ role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true, canManageAccounts: true }),
+      findFirst: async () => ({ id: "hq-1", status: UserStatus.ACTIVE, isActive: true }),
+      update: async ({ data }: any) => { updates.push(data); return {}; },
+    },
+    session: { deleteMany: async () => ({ count: 2 }) },
+    deviceToken: { updateMany: async () => ({ count: 1 }) },
+    $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations),
+  };
+  const service = new HqRegistrationService(prisma, {} as any);
+
+  const result = await service.deactivate("hq-1", "admin-1");
+
+  assert.equal(result.changed, true);
+  assert.equal(result.status, UserStatus.SUSPENDED);
+  assert.equal(updates[0].isActive, false);
+  assert.equal(updates[0].status, UserStatus.SUSPENDED);
+});
+
+void test("reactivating HQ restores every full-access grant", async () => {
+  let updateData: any;
+  const prisma: any = {
+    user: {
+      findUnique: async () => ({ role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true, canManageAccounts: true }),
+      findFirst: async () => ({ id: "hq-1", status: UserStatus.SUSPENDED, isActive: false }),
+      update: async ({ data }: any) => { updateData = data; return {}; },
+    },
+  };
+  const service = new HqRegistrationService(prisma, {} as any);
+
+  const result = await service.reactivate("hq-1", "admin-1");
+
+  assert.equal(result.changed, true);
+  assert.equal(updateData.isActive, true);
+  assert.equal(updateData.status, UserStatus.ACTIVE);
+  assert.equal(updateData.canAccessWeb, true);
+  assert.equal(updateData.canAccessMobile, true);
+  assert.equal(updateData.canAccessHq, true);
+  assert.equal(updateData.canAccessAllStores, true);
+  assert.equal(updateData.canManageAccounts, true);
+  assert.equal(updateData.canReply, true);
+  assert.equal(updateData.canAccessMainOa, true);
+  assert.equal(updateData.canManageMainOa, true);
+});
