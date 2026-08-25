@@ -1892,3 +1892,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Simplified the login registration CTA to “Create account” while retaining `/register` as its target.
 - Expanded the Web registration password guidance under the Password field using the existing Mobile app conditions, without changing registration submission, validation, HQ/BM/PC selection, or either password visibility toggle.
 - Frontend tests pass 382/382, scoped ESLint and the production build pass, `/login` and `/register` respond successfully, and rendered registration output contains all five password conditions.
+
+# Current task: Public OPPO Retail Insights landing page (2026-08-25)
+
+- Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.
+- Preserved the existing authenticated workspace implementation and all protected routes. Added regression coverage for the public root boundary, canonical links, public TikTok authorization entry, policies, and existing admin authentication behavior.
+- Frontend tests pass 387/387 and the production build passes. Production-mode route checks confirm `/` is a cacheable 200 without an auth redirect; `/login`, `/dashboard`, `/chats`, `/follower-insights`, `/main-oa`, `/privacy`, and `/terms` respond, while `/tiktok` retains its unauthenticated redirect to `/login`.
+- No commit, push, deployment, database change, environment-variable change, or webhook change was performed.

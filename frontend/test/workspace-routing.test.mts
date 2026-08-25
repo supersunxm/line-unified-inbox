@@ -23,10 +23,15 @@ test("application exposes primary routes with active navigation", () => {
   assert.match(topNavCode, /aria-current=\{currentSection === "chats" \? "page" : undefined\}/);
 });
 
-test("dashboard links to filtered workspaces and root redirects safely", () => {
+test("dashboard links to filtered workspaces while root remains public", () => {
   const dashboardCode = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
   assert.match(dashboardCode, /onOpenStore/);
-  assert.match(page, /window\.location\.replace\("\/dashboard"\)/);
+  const home = page.slice(
+    page.indexOf("export default function Home"),
+    page.indexOf("export function ApplicationWorkspace"),
+  );
+  assert.match(home, /Understand your social content performance\./);
+  assert.doesNotMatch(home, /window\.location\.replace/);
 });
 
 test("stores and chats remain focused workspaces", () => {

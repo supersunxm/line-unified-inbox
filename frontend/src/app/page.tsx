@@ -1289,8 +1289,78 @@ function mapApiConversationState(item: ApiConversation): ConversationState {
 }
 
 export default function Home() {
-  useEffect(() => window.location.replace("/dashboard"), []);
-  return <main className="app-shell flex min-h-screen items-center justify-center"><p className="app-muted text-sm">Opening dashboard…</p></main>;
+  const steps = [
+    { number: "01", title: "Connect your account", description: "Start a secure connection from the account authorization page." },
+    { number: "02", title: "Authorize access", description: "Review the requested permissions and approve access to your social account." },
+    { number: "03", title: "View your insights", description: "Explore profile, audience, and public content performance in one place." },
+  ];
+
+  return (
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#f4f7f5] text-slate-950 dark:bg-[#07100c] dark:text-white">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[radial-gradient(circle_at_15%_10%,rgba(22,163,74,0.18),transparent_36%),radial-gradient(circle_at_85%_0%,rgba(16,185,129,0.14),transparent_32%)]" />
+
+        <header className="relative z-10 border-b border-emerald-950/10 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-[#07100c]/75">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
+            <Link href="/" aria-label="OPPO Retail Insights home" className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm">O</span>
+              <span className="text-sm font-semibold tracking-tight sm:text-base">OPPO Retail Insights</span>
+            </Link>
+            <Link href="/login" className="rounded-full border border-slate-300 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-600 hover:text-emerald-700 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-emerald-400 dark:hover:text-emerald-300">
+              Administrator Sign in
+            </Link>
+          </div>
+        </header>
+
+        <section className="relative z-10 flex flex-1 items-center">
+          <div className="mx-auto grid w-full max-w-6xl gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:py-28">
+            <div className="max-w-3xl">
+              <p className="mb-5 inline-flex rounded-full border border-emerald-600/20 bg-emerald-600/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800 dark:text-emerald-300">Social performance insights</p>
+              <h1 className="max-w-3xl text-4xl font-bold leading-[1.05] tracking-[-0.04em] text-slate-950 sm:text-6xl dark:text-white">Understand your social content performance.</h1>
+              <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">Connect your social account to view profile insights, audience statistics, and public content performance.</p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link href="/tiktok/connect" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-700/15 transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                  Connect Account
+                </Link>
+                <Link href="/login" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white/75 px-6 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
+                  Administrator Sign in
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/80 bg-white/75 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-white/5 sm:p-7">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-5 dark:border-white/10">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">How it works</p>
+                  <h2 className="mt-1 text-xl font-semibold">Three simple steps</h2>
+                </div>
+                <span aria-hidden="true" className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_0_7px_rgba(16,185,129,0.12)]" />
+              </div>
+              <ol className="mt-2 divide-y divide-slate-200 dark:divide-white/10">
+                {steps.map((step) => (
+                  <li key={step.number} className="grid grid-cols-[2.75rem_1fr] gap-4 py-5">
+                    <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-300">{step.number}</span>
+                    <div>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">{step.title}</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{step.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <footer className="relative z-10 border-t border-emerald-950/10 dark:border-white/10">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-5 py-6 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 dark:text-slate-400">
+            <p>© {new Date().getFullYear()} OPPO Retail Insights</p>
+            <nav aria-label="Public policies" className="flex gap-5">
+              <Link href="/privacy" className="transition hover:text-emerald-700 dark:hover:text-emerald-300">Privacy Policy</Link>
+              <Link href="/terms" className="transition hover:text-emerald-700 dark:hover:text-emerald-300">Terms of Service</Link>
+            </nav>
+          </div>
+        </footer>
+    </main>
+  );
 }
 
 export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
