@@ -1,5 +1,14 @@
 # AI progress
 
+## Current task: Rebase Android Release PR #47 onto latest main (2026-08-25)
+
+- Fetched and rebased `release/android-1.0.14` onto `origin/main` `ef07cfdca530dc8203f83a614de127437baede19` without changing or pushing main.
+- Resolved the sole conflict in `DECISIONS.md` by preserving all newer main TikTok/public-site decisions and the Android 1.0.14 permanent-signing decision.
+- Confirmed no Android source changed between the previously verified release commit and the rebased result, so the signed APK was not rebuilt or replaced.
+- Verified APK SHA-256 remains `10d9716e8f75ec989a2c4979a6fef3b33b0173c862d94537b07a927fce49d1ba`; release metadata remains 1.0.14+15 dated 25 Aug 2026 with previous history intact.
+- Checks passed: `git diff --check`, Flutter analyze, all 105 Flutter tests, targeted `/download` lint and 3/3 regression tests, and Next.js production build.
+- Next action: push the rebased release branch with `--force-with-lease` and wait for all PR #47 CI checks. Do not merge the PR.
+
 ## Current task: Android Production Release v1.0.14+15 (2026-08-25)
 
 - Located the existing production signing material in the local Downloads credential setup; verified the store password, key alias, private-key password, and permanent certificate without exposing secret values.
