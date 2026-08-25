@@ -18,10 +18,14 @@ class InboxPage extends StatefulWidget {
       required this.repository,
       required this.onOpen,
       required this.onProfile,
+      this.isHq = false,
+      this.showStoreFilter = false,
       this.events});
   final ConversationRepository repository;
   final Future<void> Function(String id) onOpen;
   final VoidCallback onProfile;
+  final bool isHq;
+  final bool showStoreFilter;
   final Stream<Map<String, dynamic>>? events;
   @override
   State<InboxPage> createState() => _InboxPageState();
@@ -31,8 +35,11 @@ class _InboxPageState extends State<InboxPage> {
   final _scroll = ScrollController();
   final _searchController = TextEditingController();
   final List<ConversationSummary> _items = [];
+  final List<Store> _stores = [];
   String _searchQuery = '';
+  String? _selectedStoreId;
   InboxFilter _selectedFilter = InboxFilter.all;
+  int _total = 0;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -41,12 +48,14 @@ class _InboxPageState extends State<InboxPage> {
   final Set<String> _handledRealtimeMessageIds = {};
   final Map<String, int> _reconcileGenerations = {};
   int _generation = 0;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
     _eventsSubscription = widget.events?.listen(_handleRealtimeEvent);
+    if (widget.showStoreFilter) _loadStoreOptions();
     _load(reset: true);
   }
 
@@ -54,6 +63,7 @@ class _InboxPageState extends State<InboxPage> {
   void dispose() {
     _eventsSubscription?.cancel();
     _searchController.dispose();
+    _searchDebounce?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -69,7 +79,10 @@ class _InboxPageState extends State<InboxPage> {
         InboxFilter.all => true,
         InboxFilter.priority =>
           item.priority.isActionable && !isCompletedStatus(item.bmReplyStatus),
-        InboxFilter.notReplied => isNeedReplyStatus(item.bmReplyStatus),
+        InboxFilter.notReplied => widget.isHq
+            ? item.bmReplyStatus == 'NOT_REPLIED'
+            : isNeedReplyStatus(item.bmReplyStatus),
+        InboxFilter.notifiedBm => item.bmReplyStatus == 'NOTIFIED_BM',
         InboxFilter.replied => isCompletedStatus(item.bmReplyStatus),
       };
       return matchesQuery && matchesFilter;
@@ -83,12 +96,49 @@ class _InboxPageState extends State<InboxPage> {
   void _updateSearch(String value) {
     if (value == _searchQuery) return;
     setState(() => _searchQuery = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _load(reset: true);
+    });
   }
 
   void _clearSearch() {
     if (_searchQuery.isEmpty) return;
     _searchController.clear();
-    setState(() => _searchQuery = '');
+    _updateSearch('');
+  }
+
+  Future<void> _loadStoreOptions() async {
+    try {
+      final stores = await widget.repository.storeOptions();
+      if (!mounted) return;
+      setState(() {
+        _stores
+          ..clear()
+          ..addAll(stores);
+      });
+    } catch (_) {
+      // Store filtering is optional; the all-store inbox remains usable.
+    }
+  }
+
+  String? get _statusQuery => switch (_selectedFilter) {
+        InboxFilter.notReplied => widget.isHq ? 'NOT_REPLIED' : null,
+        InboxFilter.notifiedBm => 'NOTIFIED_BM',
+        InboxFilter.replied => 'REPLIED',
+        InboxFilter.all || InboxFilter.priority => null,
+      };
+
+  void _selectFilter(InboxFilter filter) {
+    if (_selectedFilter == filter) return;
+    setState(() => _selectedFilter = filter);
+    _load(reset: true);
+  }
+
+  void _selectStore(String? storeId) {
+    if (_selectedStoreId == storeId) return;
+    setState(() => _selectedStoreId = storeId);
+    _load(reset: true);
   }
 
   void _onScroll() {
@@ -237,14 +287,19 @@ class _InboxPageState extends State<InboxPage> {
       }
     });
     try {
-      final page = await widget.repository
-          .inbox(page: reset ? 1 : ((_items.length ~/ 30) + 1));
+      final page = await widget.repository.inbox(
+        page: reset ? 1 : ((_items.length ~/ 30) + 1),
+        storeId: _selectedStoreId,
+        bmReplyStatus: _statusQuery,
+        search: _searchQuery,
+      );
       if (!mounted) return;
       setState(() {
         if (reset) {
           _items.clear();
         }
         _items.addAll(page.items);
+        _total = page.total;
         _hasMore = _items.length < page.total;
       });
     } on ApiException catch (error) {
@@ -311,7 +366,7 @@ class _InboxPageState extends State<InboxPage> {
           child: Column(
             children: [
               InboxHeader(
-                conversationCount: _items.length,
+                conversationCount: _total,
                 onProfile: widget.onProfile,
               ),
               ConversationOverviewCard(conversations: _items),
@@ -323,8 +378,11 @@ class _InboxPageState extends State<InboxPage> {
               ),
               InboxFilterBar(
                 selected: _selectedFilter,
-                onChanged: (filter) => setState(() => _selectedFilter = filter),
+                hqMode: widget.isHq,
+                onChanged: _selectFilter,
               ),
+              if (widget.showStoreFilter && _stores.isNotEmpty)
+                _buildStoreFilter(context),
               Expanded(child: _buildConversationContent(context)),
             ],
           ),
@@ -401,9 +459,43 @@ class _InboxPageState extends State<InboxPage> {
           return ConversationCard(
             conversation: item,
             onTap: () => _open(item),
+            hqLayout: widget.isHq,
           );
         },
       ),
     );
   }
+
+  Widget _buildStoreFilter(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: appLocalizations(context).store,
+            prefixIcon: const Icon(Icons.storefront_outlined),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: _selectedStoreId ?? '',
+              items: [
+                DropdownMenuItem<String>(
+                  value: '',
+                  child: Text(appLocalizations(context).allStores),
+                ),
+                ..._stores.map(
+                  (store) => DropdownMenuItem<String>(
+                    value: store.id,
+                    child: Text(store.name, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: (value) =>
+                  _selectStore(value?.isEmpty == true ? null : value),
+            ),
+          ),
+        ),
+      );
 }

@@ -66,7 +66,9 @@ bool isNeedReplyStatus(String value) {
 
 bool isCompletedStatus(String value) => value.toUpperCase() == 'REPLIED';
 
-String conversationStatusLabel(String value) {
+String conversationStatusLabel(String value, {bool exact = false}) {
+  if (exact && value.toUpperCase() == 'NOT_REPLIED') return 'Not Replied';
+  if (exact && value.toUpperCase() == 'NOTIFIED_BM') return 'Notified BM';
   if (isNeedReplyStatus(value)) return 'Need Reply';
   if (isCompletedStatus(value)) return 'Completed';
   return value
@@ -77,9 +79,19 @@ String conversationStatusLabel(String value) {
       .join(' ');
 }
 
-String localizedConversationStatusLabel(BuildContext context, String value) {
+String localizedConversationStatusLabel(BuildContext context, String value,
+    {bool exact = false}) {
   final localizations = AppLocalizations.of(context);
-  if (localizations == null) return conversationStatusLabel(value);
+  if (localizations == null) {
+    return conversationStatusLabel(value, exact: exact);
+  }
+  if (exact && value.toUpperCase() == 'NOT_REPLIED') {
+    return localizations.notReplied;
+  }
+  if (exact && value.toUpperCase() == 'NOTIFIED_BM') {
+    return localizations.notifiedBm;
+  }
+  if (exact && isCompletedStatus(value)) return localizations.replied;
   if (isNeedReplyStatus(value)) return localizations.needReply;
   if (isCompletedStatus(value)) return localizations.completed;
   return localizedRoleLabel(context, value);

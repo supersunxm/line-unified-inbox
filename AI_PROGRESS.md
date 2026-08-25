@@ -1913,6 +1913,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Simplified the login registration CTA to “Create account” while retaining `/register` as its target.
 - Expanded the Web registration password guidance under the Password field using the existing Mobile app conditions, without changing registration submission, validation, HQ/BM/PC selection, or either password visibility toggle.
 - Frontend tests pass 382/382, scoped ESLint and the production build pass, `/login` and `/register` respond successfully, and rendered registration output contains all five password conditions.
+
+# Current task: HQ mobile all-store inbox (2026-08-25)
+
+- Extended the existing `/mobile/conversations` query with authorized `storeId`, `bmReplyStatus`, and search filters while preserving `StoreAccessService.accessibleStoreIds`; all-store HQ users remain unscoped until they select a store, matching Web `/chats` visibility.
+- HQ users with all-store scope now see Inbox as the first mobile destination. HQ cards use the required store/time, customer/preview, and exact status hierarchy; store selection uses the existing Web store-scope summary endpoint. BM/PC inbox cards and legacy Need Reply behavior remain unchanged.
+- Added the existing HQ approved-account endpoint to the mobile approvals page as an Approved/manage tab with active/inactive state and deactivate/reactivate actions; no schema, webhook, provider, or Main OA changes were made.
+- Flutter analyze and all 108 Flutter tests pass. Backend build and all 1,302 backend tests pass. Focused mobile conversation service tests pass 20/20. Next action is review/commit the release-related diff only.
 # Current task: Public OPPO Retail Insights landing page (2026-08-25)
 
 - Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.

@@ -1,10 +1,13 @@
-import { ConversationSourceChannel, CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, ProductGroup } from "@prisma/client";
+import { BmReplyStatus, ConversationSourceChannel, CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, ProductGroup } from "@prisma/client";
 import { Type } from "class-transformer";
 import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
 
 export class MobileConversationQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize = 30;
+  @IsOptional() @IsUUID("4") storeId?: string;
+  @IsOptional() @IsEnum(BmReplyStatus) bmReplyStatus?: BmReplyStatus;
+  @IsOptional() @IsString() @MaxLength(100) search?: string;
 }
 
 export class MobileMessageQueryDto {

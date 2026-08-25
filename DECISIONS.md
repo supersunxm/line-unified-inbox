@@ -1123,6 +1123,13 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - TikTok dashboard account lookup treats backend 401 as an authentication failure and redirects to login. Only a genuine backend 404 or a successful null payload represents an absent account and triggers the Next.js not-found page.
 - Server-side TikTok admin API calls forward WEB sessions through the backend's canonical `oppo_session` cookie. They do not relabel a WEB session as Bearer auth because backend Bearer credentials are intentionally reserved for MOBILE sessions.
 
+# HQ mobile inbox alignment (2026-08-25)
+
+- Reuse the mobile conversation endpoint's existing StoreAccessService scope rather than creating an HQ-only inbox. The optional store/status/search query fields are applied to the same authorized store conversation query, so an all-store HQ account sees every active store conversation and a selected store is re-authorized server-side.
+- Keep BM/PC presentation and historical Need Reply filtering intact. The new exact Not Replied / Notified BM labels and the three-row Store/Time → Customer/Preview → Status hierarchy are enabled only for HQ cards, avoiding a mobile regression for existing store users while satisfying HQ's explicit information hierarchy.
+- Use `/conversations/store-priority-summary` for mobile store options because it already exposes the authenticated Web chat store scope; no duplicate store-list authorization or schema path was introduced.
+- Extend the existing HQ approvals page with its already-supported `hq-approved` and deactivate/reactivate API actions instead of adding a new account-management backend or data model.
+
 # Android 1.0.14 permanent signing verification (2026-08-25)
 
 - Reused only the existing production key whose certificate SHA-256 is `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`; no replacement key was generated.

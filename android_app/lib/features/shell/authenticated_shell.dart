@@ -57,7 +57,11 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
   int _selectedIndex = 0;
 
   Future<void> openConversation(String conversationId) async {
-    if (!mounted || !widget.user.canAccessStoreWorkspace) return;
+    if (!mounted ||
+        (!widget.user.canAccessStoreWorkspace &&
+            !widget.user.canAccessAllStores)) {
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatPage(
@@ -72,6 +76,14 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
 
   List<_ShellDestination> _destinations(BuildContext context) {
     final destinations = <_ShellDestination>[];
+    final hasInboxAccess =
+        widget.user.canAccessStoreWorkspace || widget.user.canAccessAllStores;
+
+    // HQ's primary mobile task is the all-store inbox. Keep the existing
+    // workspace-first order for Main OA and store-only users.
+    if (widget.user.canAccessHqWorkspace && hasInboxAccess) {
+      destinations.add(_inboxDestination(context));
+    }
 
     if (widget.user.canAccessHqWorkspace ||
         widget.user.canAccessMainOaWorkspace) {
@@ -88,23 +100,11 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
       );
     }
 
-    if (widget.user.canAccessStoreWorkspace) {
-      destinations.add(
-        _ShellDestination(
-          keyName: 'inbox',
-          child: InboxPage(
-            repository: widget.conversations,
-            events: widget.events,
-            onOpen: openConversation,
-            onProfile: _openProfile,
-          ),
-          destination: NavigationDestination(
-            icon: const Icon(Icons.inbox_outlined),
-            selectedIcon: const Icon(Icons.inbox),
-            label: appLocalizations(context).inbox,
-          ),
-        ),
-      );
+    if (hasInboxAccess &&
+        !(widget.user.canAccessHqWorkspace && hasInboxAccess)) {
+      destinations.add(_inboxDestination(context));
+    }
+    if (hasInboxAccess) {
       destinations.add(
         _ShellDestination(
           keyName: 'summary',
@@ -140,6 +140,24 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
     return destinations;
   }
 
+  _ShellDestination _inboxDestination(BuildContext context) =>
+      _ShellDestination(
+        keyName: 'inbox',
+        child: InboxPage(
+          repository: widget.conversations,
+          events: widget.events,
+          isHq: widget.user.canAccessHqWorkspace,
+          showStoreFilter: widget.user.canAccessAllStores,
+          onOpen: openConversation,
+          onProfile: _openProfile,
+        ),
+        destination: NavigationDestination(
+          icon: const Icon(Icons.inbox_outlined),
+          selectedIcon: const Icon(Icons.inbox),
+          label: appLocalizations(context).inbox,
+        ),
+      );
+
   void _openProfile() {
     if (!mounted) return;
     final destinations = _destinations(context);
@@ -174,11 +192,13 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
     return Scaffold(
       body: IndexedStack(
         index: selectedIndex,
-        children: destinations.map((item) => item.child).toList(growable: false),
+        children:
+            destinations.map((item) => item.child).toList(growable: false),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
-        onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+        onDestinationSelected: (index) =>
+            setState(() => _selectedIndex = index),
         destinations: destinations
             .map((item) => item.destination)
             .toList(growable: false),

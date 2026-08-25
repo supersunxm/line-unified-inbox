@@ -30,10 +30,27 @@ export class MobileConversationsService {
 
   async list(user: AuthUser, query: MobileConversationQueryDto) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
+    const requestedStoreId = query.storeId?.trim();
+    if (requestedStoreId) await this.storeAccess.assertStoreAccess(user, requestedStoreId);
     const pageSize = Math.min(50, Math.max(1, query.pageSize));
+    const search = query.search?.trim();
     const where: Prisma.ConversationWhereInput = {
       store: { isActive: true, archivedAt: null },
-      ...(accessibleStoreIds === null ? {} : { storeId: { in: accessibleStoreIds } }),
+      ...(requestedStoreId
+        ? { storeId: requestedStoreId }
+        : accessibleStoreIds === null
+            ? {}
+            : { storeId: { in: accessibleStoreIds } }),
+      ...(query.bmReplyStatus ? { bmReplyStatus: query.bmReplyStatus } : {}),
+      ...(search
+        ? {
+            OR: [
+              { customer: { displayName: { contains: search, mode: "insensitive" } } },
+              { store: { name: { contains: search, mode: "insensitive" } } },
+              { messages: { some: { originalText: { contains: search, mode: "insensitive" } } } },
+            ],
+          }
+        : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.conversation.findMany({

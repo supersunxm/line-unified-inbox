@@ -155,6 +155,12 @@ abstract class AppLocalizations {
   /// **'All'**
   String get all;
 
+  /// No description provided for @allStores.
+  ///
+  /// In en, this message translates to:
+  /// **'All Stores'**
+  String get allStores;
+
   /// No description provided for @summary.
   ///
   /// In en, this message translates to:
@@ -221,11 +227,29 @@ abstract class AppLocalizations {
   /// **'Need Reply'**
   String get needReply;
 
+  /// No description provided for @notReplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Replied'**
+  String get notReplied;
+
+  /// No description provided for @notifiedBm.
+  ///
+  /// In en, this message translates to:
+  /// **'Notified BM'**
+  String get notifiedBm;
+
   /// No description provided for @completed.
   ///
   /// In en, this message translates to:
   /// **'Completed'**
   String get completed;
+
+  /// No description provided for @replied.
+  ///
+  /// In en, this message translates to:
+  /// **'Replied'**
+  String get replied;
 
   /// No description provided for @searchConversations.
   ///

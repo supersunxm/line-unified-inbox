@@ -44,7 +44,11 @@ class FakeConversationRepository extends ConversationRepository {
   FakeConversationRepository() : super(ApiClient(TokenStore()));
 
   @override
-  Future<InboxPageResult> inbox({int page = 1}) async =>
+  Future<InboxPageResult> inbox(
+          {int page = 1,
+          String? storeId,
+          String? bmReplyStatus,
+          String? search}) async =>
       InboxPageResult(items: const [], page: page, total: 0);
 }
 

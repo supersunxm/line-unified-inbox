@@ -36,6 +36,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get all => 'ทั้งหมด';
 
   @override
+  String get allStores => 'ทุกร้าน';
+
+  @override
   String get summary => 'สรุป';
 
   @override
@@ -73,7 +76,16 @@ class AppLocalizationsTh extends AppLocalizations {
   String get needReply => 'รอตอบ';
 
   @override
+  String get notReplied => 'ยังไม่ตอบ';
+
+  @override
+  String get notifiedBm => 'แจ้ง BM แล้ว';
+
+  @override
   String get completed => 'ตอบแล้ว';
+
+  @override
+  String get replied => 'ตอบแล้ว';
 
   @override
   String get searchConversations => 'ค้นหาบทสนทนา';

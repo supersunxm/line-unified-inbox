@@ -36,6 +36,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get all => 'All';
 
   @override
+  String get allStores => 'All Stores';
+
+  @override
   String get summary => 'Summary';
 
   @override
@@ -73,7 +76,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get needReply => 'Need Reply';
 
   @override
+  String get notReplied => 'Not Replied';
+
+  @override
+  String get notifiedBm => 'Notified BM';
+
+  @override
   String get completed => 'Completed';
+
+  @override
+  String get replied => 'Replied';
 
   @override
   String get searchConversations => 'Search conversations';
