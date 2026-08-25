@@ -2,6 +2,12 @@ name: Android Production Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "release/android-1.0.14"
+    paths:
+      - "android_app/**"
+      - ".github/workflows/android-production-release.yml"
 
 permissions:
   contents: read
@@ -76,12 +82,12 @@ jobs:
           grep -Fq "E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14" /tmp/apk-signature.txt
 
       - name: Rename release APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.14-production.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: oppo-line-oa-chat-v1.0.13-production
-          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.13-production.apk
+          name: oppo-line-oa-chat-v1.0.14-production
+          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.14-production.apk
           if-no-files-found: error
           retention-days: 30
