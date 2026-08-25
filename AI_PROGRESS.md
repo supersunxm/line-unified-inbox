@@ -7,7 +7,8 @@
 - Confirmed no Android source changed between the previously verified release commit and the rebased result, so the signed APK was not rebuilt or replaced.
 - Verified APK SHA-256 remains `10d9716e8f75ec989a2c4979a6fef3b33b0173c862d94537b07a927fce49d1ba`; release metadata remains 1.0.14+15 dated 25 Aug 2026 with previous history intact.
 - Checks passed: `git diff --check`, Flutter analyze, all 105 Flutter tests, targeted `/download` lint and 3/3 regression tests, and Next.js production build.
-- Next action: push the rebased release branch with `--force-with-lease` and wait for all PR #47 CI checks. Do not merge the PR.
+- Initial post-rebase CI exposed one stale newer-main TikTok test that still expected Bearer authorization after main changed WEB session forwarding to the canonical `oppo_session` cookie. Updated that test only, preserving the newer main implementation; full frontend tests now pass 393/393, targeted lint passes cleanly, and the production build passes.
+- Next action: push the CI compatibility repair with `--force-with-lease` and wait for all PR #47 CI checks. Do not merge the PR.
 
 ## Current task: Android Production Release v1.0.14+15 (2026-08-25)
 

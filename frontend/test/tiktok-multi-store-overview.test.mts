@@ -9,10 +9,10 @@ import type {
   TikTokGrowthPeriod,
 } from "../src/app/tiktok/tiktok-types.ts";
 
-test("fetchTikTokBulkMetricsSummaryFromBackend calls canonical endpoint with authorization", async () => {
+test("fetchTikTokBulkMetricsSummaryFromBackend calls canonical endpoint with the web session cookie", async () => {
   const originalFetch = globalThis.fetch;
   let interceptedUrl = "";
-  let interceptedAuth = "";
+  let interceptedCookie = "";
 
   const mockBulkResponse: TikTokBulkMetricsSummaryResponse = {
     accounts: [
@@ -34,13 +34,14 @@ test("fetchTikTokBulkMetricsSummaryFromBackend calls canonical endpoint with aut
   };
 
   try {
-    globalThis.fetch = async (url: any, init: any) => {
+    globalThis.fetch = async (...args: Parameters<typeof fetch>) => {
+      const [url, init] = args;
       interceptedUrl = String(url);
-      interceptedAuth = init?.headers?.Authorization || "";
-      return {
-        ok: true,
-        json: async () => mockBulkResponse,
-      } as any;
+      interceptedCookie = new Headers(init?.headers).get("Cookie") || "";
+      return new Response(JSON.stringify(mockBulkResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     };
 
     const result = await fetchTikTokBulkMetricsSummaryFromBackend(30, {
@@ -48,7 +49,7 @@ test("fetchTikTokBulkMetricsSummaryFromBackend calls canonical endpoint with aut
     });
 
     assert.ok(interceptedUrl.includes("/tiktok/accounts/metrics-summary?days=30"));
-    assert.equal(interceptedAuth, "Bearer oppo-test-session");
+    assert.equal(interceptedCookie, "oppo_session=oppo-test-session");
     assert.equal(result.accounts.length, 1);
     assert.equal(result.accounts[0].accountId, "acc-cw");
     assert.equal(result.accounts[0].growth.sevenDays.followers, 286);
@@ -333,6 +334,9 @@ test("Multi-store Demo Preview Account provides requested frontend-only growth v
       region: "Central",
     },
   };
+
+  assert.equal(previewAccount.connectionStatus, "DEMO PREVIEW");
+  assert.equal(previewAccount.followerCount, 12317);
 
   // Verify requested demo values for all 3 periods
   assert.deepEqual(DEMO_PREVIEW_GROWTH.today, {
