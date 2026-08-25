@@ -15,6 +15,17 @@ export class HqRegistrationService {
     private readonly audit?: AuditLogService,
   ) {}
 
+  private hqIdentityWhere() {
+    return {
+      role: UserRole.ADMIN,
+      canAccessHq: true,
+      canAccessAllStores: true,
+      canManageAccounts: true,
+      username: null,
+      employeeId: { not: null },
+    } as const;
+  }
+
   async request(input: { name: string; employeeId: string; email: string; password: string }, ip = "unknown") {
     const normalizedEmail = input.email.trim().toLowerCase();
     const employeeId = input.employeeId.trim().toUpperCase();
@@ -62,15 +73,40 @@ export class HqRegistrationService {
   async pending() {
     return this.prisma.user.findMany({
       where: {
-        role: UserRole.ADMIN,
+        ...this.hqIdentityWhere(),
         status: UserStatus.PENDING_APPROVAL,
         isActive: true,
-        canAccessHq: true,
-        canAccessAllStores: true,
-        canManageAccounts: true,
       },
       select: { id: true, displayName: true, employeeId: true, email: true, createdAt: true },
       orderBy: { createdAt: "asc" },
+    });
+  }
+
+  async approved() {
+    return this.prisma.user.findMany({
+      where: {
+        ...this.hqIdentityWhere(),
+        status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] },
+      },
+      select: {
+        id: true,
+        displayName: true,
+        employeeId: true,
+        email: true,
+        status: true,
+        isActive: true,
+        canAccessWeb: true,
+        canAccessMobile: true,
+        canAccessHq: true,
+        canAccessAllStores: true,
+        canManageAccounts: true,
+        canReply: true,
+        canAccessMainOa: true,
+        canManageMainOa: true,
+        createdAt: true,
+        lastLoginAt: true,
+      },
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
     });
   }
 
@@ -80,14 +116,14 @@ export class HqRegistrationService {
       select: { role: true, status: true, isActive: true, canManageAccounts: true },
     });
     if (!actor || actor.role !== UserRole.ADMIN || actor.status !== UserStatus.ACTIVE || !actor.isActive || !actor.canManageAccounts) {
-      throw new ForbiddenException("Only an active full-access administrator can approve HQ accounts");
+      throw new ForbiddenException("Only an active full-access administrator can manage HQ accounts");
     }
   }
 
   async approve(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
     await this.assertApprover(actorUserId);
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, role: UserRole.ADMIN, status: UserStatus.PENDING_APPROVAL, canAccessHq: true },
+      where: { id: userId, ...this.hqIdentityWhere(), status: UserStatus.PENDING_APPROVAL },
       select: { id: true },
     });
     if (!user) throw new NotFoundException("Pending HQ account not found");
@@ -116,7 +152,7 @@ export class HqRegistrationService {
   async reject(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
     await this.assertApprover(actorUserId);
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, role: UserRole.ADMIN, status: UserStatus.PENDING_APPROVAL, canAccessHq: true },
+      where: { id: userId, ...this.hqIdentityWhere(), status: UserStatus.PENDING_APPROVAL },
       select: { id: true },
     });
     if (!user) throw new NotFoundException("Pending HQ account not found");
@@ -144,5 +180,52 @@ export class HqRegistrationService {
 
     await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_REJECTED", targetUserId: user.id, ipAddress, userAgent });
     return { userId: user.id, status: UserStatus.REJECTED, accountType: "HQ" as const };
+  }
+
+  async deactivate(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
+    await this.assertApprover(actorUserId);
+    if (userId === actorUserId) throw new ForbiddenException("You cannot deactivate your own HQ account");
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, ...this.hqIdentityWhere(), status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
+      select: { id: true, status: true, isActive: true },
+    });
+    if (!user) throw new NotFoundException("HQ account not found");
+    if (!user.isActive || user.status === UserStatus.SUSPENDED) return { userId: user.id, status: UserStatus.SUSPENDED, changed: false };
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: user.id }, data: { isActive: false, status: UserStatus.SUSPENDED } }),
+      this.prisma.session.deleteMany({ where: { userId: user.id } }),
+      this.prisma.deviceToken.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false, lastSeenAt: new Date() } }),
+    ]);
+    await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_DEACTIVATED", targetUserId: user.id, ipAddress, userAgent });
+    return { userId: user.id, status: UserStatus.SUSPENDED, changed: true };
+  }
+
+  async reactivate(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
+    await this.assertApprover(actorUserId);
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, ...this.hqIdentityWhere(), status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
+      select: { id: true, status: true, isActive: true },
+    });
+    if (!user) throw new NotFoundException("HQ account not found");
+    if (user.isActive && user.status === UserStatus.ACTIVE) return { userId: user.id, status: UserStatus.ACTIVE, changed: false };
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: true,
+        status: UserStatus.ACTIVE,
+        canAccessWeb: true,
+        canAccessMobile: true,
+        canAccessHq: true,
+        canAccessAllStores: true,
+        canManageAccounts: true,
+        canReply: true,
+        canAccessMainOa: true,
+        canManageMainOa: true,
+      },
+    });
+    await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_REACTIVATED", targetUserId: user.id, ipAddress, userAgent });
+    return { userId: user.id, status: UserStatus.ACTIVE, changed: true };
   }
 }
