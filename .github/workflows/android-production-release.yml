@@ -2,12 +2,6 @@ name: Android Production Release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "release/android-1.0.14"
-    paths:
-      - "android_app/**"
-      - ".github/workflows/android-production-release.yml"
 
 permissions:
   contents: read
