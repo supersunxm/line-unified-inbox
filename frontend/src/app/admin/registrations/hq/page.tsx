@@ -81,7 +81,22 @@ function HqApprovalContent() {
     }
   }, [loadApproved, loadPending]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      request<{ registrations: PendingHq[] }>("/admin/registrations/hq-pending"),
+      request<{ accounts: ApprovedHq[] }>("/admin/registrations/hq-approved"),
+    ]).then(([pendingResult, approvedResult]) => {
+      if (cancelled) return;
+      setPending(pendingResult.registrations);
+      setApproved(approvedResult.accounts);
+    }).catch((cause: unknown) => {
+      if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load HQ accounts");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   async function actPending(id: string, action: "approve" | "reject") {
     setActing(id);
