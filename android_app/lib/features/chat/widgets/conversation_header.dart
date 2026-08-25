@@ -7,19 +7,25 @@ import '../../../core/widgets/app_widgets.dart';
 
 class ConversationHeader extends StatelessWidget
     implements PreferredSizeWidget {
-  static const double _height = 96;
+  static const double _height = 128;
 
   const ConversationHeader({
     super.key,
     required this.customerName,
+    this.storeName,
+    this.storeCode,
     this.bmReplyStatus,
+    this.exactStatus = false,
     this.onBack,
     this.onProfile,
     this.onAction,
   });
 
   final String customerName;
+  final String? storeName;
+  final String? storeCode;
   final String? bmReplyStatus;
+  final bool exactStatus;
   final VoidCallback? onBack;
   final VoidCallback? onProfile;
   final VoidCallback? onAction;
@@ -30,6 +36,7 @@ class ConversationHeader extends StatelessWidget
   @override
   Widget build(BuildContext context) {
     final hasStatus = bmReplyStatus?.trim().isNotEmpty ?? false;
+    final hasStore = storeName?.trim().isNotEmpty ?? false;
     return AppBar(
       toolbarHeight: _height,
       backgroundColor: AppColors.surface,
@@ -45,32 +52,109 @@ class ConversationHeader extends StatelessWidget
               icon: const Icon(Icons.arrow_back),
             ),
       titleSpacing: AppSpacing.sm,
-      title: Row(
-        children: [
-          UserAvatar(displayName: customerName, radius: 22),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
+      title: hasStore
+          ? Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  customerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                Row(
+                  children: [
+                    const Icon(Icons.storefront_outlined,
+                        size: 16, color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        storeName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
                       ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      appLocalizations(context).storeContext,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
                 ),
+                if (storeCode?.trim().isNotEmpty ?? false)
+                  Text(
+                    appLocalizations(context).storeCode(storeCode!),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
                 const SizedBox(height: AppSpacing.xs),
-                if (hasStatus)
-                  StatusBadge(status: bmReplyStatus!, compact: true),
+                Row(
+                  children: [
+                    UserAvatar(displayName: customerName, radius: 16),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            customerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                          ),
+                          if (hasStatus)
+                            StatusBadge(
+                              status: bmReplyStatus!,
+                              label: localizedConversationStatusLabel(
+                                  context, bmReplyStatus!,
+                                  exact: exactStatus),
+                              compact: true,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                UserAvatar(displayName: customerName, radius: 22),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        customerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      if (hasStatus)
+                        StatusBadge(status: bmReplyStatus!, compact: true),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
-      ),
       actions: [
         if (onProfile != null)
           IconButton(
@@ -78,11 +162,12 @@ class ConversationHeader extends StatelessWidget
             tooltip: appLocalizations(context).customerProfile,
             icon: const Icon(Icons.person_outline),
           ),
-        IconButton(
-          onPressed: onAction,
-          tooltip: appLocalizations(context).moreActions,
-          icon: const Icon(Icons.more_horiz),
-        ),
+        if (onAction != null)
+          IconButton(
+            onPressed: onAction,
+            tooltip: appLocalizations(context).moreActions,
+            icon: const Icon(Icons.more_horiz),
+          ),
       ],
     );
   }

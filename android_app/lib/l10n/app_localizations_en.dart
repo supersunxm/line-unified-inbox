@@ -241,6 +241,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationContext => 'Conversation context';
 
   @override
+  String get readOnlyConversation => 'Read-only · Reply permission is disabled';
+
+  @override
   String get replyStatus => 'Reply status';
 
   @override

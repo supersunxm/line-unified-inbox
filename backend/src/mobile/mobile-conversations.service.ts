@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BmReplyStatus, CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService } from "../conversations.service";
@@ -27,6 +27,11 @@ function purchaseSnapshot(input: {
 @Injectable()
 export class MobileConversationsService {
   constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService, private readonly priority: PriorityService = undefined as unknown as PriorityService) {}
+
+  private assertCanReply(user: AuthUser) {
+    const canReply = user.authorization?.capabilities.reply ?? user.permissions?.canReply;
+    if (canReply === false) throw new ForbiddenException("Reply access is forbidden");
+  }
 
   async list(user: AuthUser, query: MobileConversationQueryDto) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
@@ -250,6 +255,12 @@ export class MobileConversationsService {
       data: { readAt: new Date() },
     });
     return { conversationId, unreadCount: 0 };
+  }
+
+  async updateBmReplyStatus(user: AuthUser, conversationId: string, status: BmReplyStatus) {
+    this.assertCanReply(user);
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    return this.conversations.updateBmReplyStatus(conversationId, status);
   }
 
   async products(query: MobileProductQueryDto) {
@@ -607,11 +618,13 @@ export class MobileConversationsService {
   }
 
   async send(user: AuthUser, conversationId: string, dto: SendConversationMessageDto) {
+    this.assertCanReply(user);
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.sendMessage(conversationId, dto, user);
   }
 
   async sendImage(user: AuthUser, conversationId: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string) {
+    this.assertCanReply(user);
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.sendImage(conversationId, file, idempotencyKey, user);
   }

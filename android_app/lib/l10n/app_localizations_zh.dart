@@ -236,6 +236,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationContext => '会话信息';
 
   @override
+  String get readOnlyConversation => '只读 · 无回复权限';
+
+  @override
   String get replyStatus => '回复状态';
 
   @override
@@ -1064,6 +1067,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get conversationContext => '会话信息';
+
+  @override
+  String get readOnlyConversation => '只读 · 无回复权限';
 
   @override
   String get replyStatus => '回复状态';

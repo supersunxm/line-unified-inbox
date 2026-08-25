@@ -1920,6 +1920,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - HQ users with all-store scope now see Inbox as the first mobile destination. HQ cards use the required store/time, customer/preview, and exact status hierarchy; store selection uses the existing Web store-scope summary endpoint. BM/PC inbox cards and legacy Need Reply behavior remain unchanged.
 - Added the existing HQ approved-account endpoint to the mobile approvals page as an Approved/manage tab with active/inactive state and deactivate/reactivate actions; no schema, webhook, provider, or Main OA changes were made.
 - Flutter analyze and all 108 Flutter tests pass. Backend build and all 1,302 backend tests pass. Focused mobile conversation service tests pass 20/20. Next action is review/commit the release-related diff only.
+
+# Current task: HQ mobile conversation detail (2026-08-25)
+
+- Created `feat/hq-mobile-conversation-detail` from `origin/main` at `2a7b46ebef55fc4c38ab31c950058e6085230594`. Extended the existing mobile conversation detail route with the canonical Web-compatible BM reply-status endpoint, store authorization, and explicit `canReply` enforcement; no schema, APK, frontend Web, Main OA, webhook, or provider changes were made.
+- HQ detail now keeps store identity prominent in the header, shows customer and exact reply status, loads the existing full message/media history, supports reply and Notify BM/status actions through the existing conversation service, and returns to Inbox with the existing detail reconciliation path. BM/PC detail and store scope remain unchanged; read-only users receive a disabled composer and no write actions.
+- Added Flutter and backend regression coverage for store context, all-store detail access, reply/status/read-only behavior, status persistence, unauthorized stores, and existing inbox behavior.
+- Flutter analyze passes; full Flutter tests pass 111/111; focused detail/inbox tests pass 26/26. Backend build passes; focused mobile service tests pass 23/23; full backend tests pass 1,305/1,305. `git diff --check` passes. Next action is commit, push the feature branch, open the PR, and wait for CI.
 # Current task: Public OPPO Retail Insights landing page (2026-08-25)
 
 - Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.

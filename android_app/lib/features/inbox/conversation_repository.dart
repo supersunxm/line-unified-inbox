@@ -365,6 +365,18 @@ class ConversationRepository {
     await _api.patch('/mobile/conversations/$id/read');
   }
 
+  Future<ConversationDetail> updateBmReplyStatus(
+      String id, String status) async {
+    final result = await _api.patch('/mobile/conversations/$id/bm-reply-status',
+        body: {'status': status});
+    final conversation = result['conversation'];
+    if (conversation is Map) {
+      return ConversationDetail.fromJson(
+          Map<String, dynamic>.from(conversation));
+    }
+    return detail(id);
+  }
+
   Future<List<ProductSelectorItem>> fetchProducts(
       {String? search, String? category}) async {
     final result = await _api.get('/mobile/products', query: {

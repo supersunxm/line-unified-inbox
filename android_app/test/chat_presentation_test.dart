@@ -32,6 +32,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'conversation header keeps store context and exact status visible',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        appBar: ConversationHeader(
+          storeName: 'OPPO CentralWorld',
+          storeCode: 'CW-01',
+          customerName: 'Chutisorn',
+          bmReplyStatus: 'REPLIED',
+          exactStatus: true,
+          onBack: () {},
+        ),
+      ),
+    ));
+
+    expect(find.text('OPPO CentralWorld'), findsOneWidget);
+    expect(find.text('Store context'), findsOneWidget);
+    expect(find.text('Chutisorn'), findsOneWidget);
+    expect(find.text('Replied'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
+  });
+
   testWidgets('conversation tags bar shows add state and compact selected tags',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
@@ -74,10 +99,21 @@ void main() {
     expect(find.text('📱 OPPO Find N6'), findsOneWidget);
   });
 
-  testWidgets('camera and gallery picker strings localize in TH, EN, and ZH', (tester) async {
+  testWidgets('camera and gallery picker strings localize in TH, EN, and ZH',
+      (tester) async {
     for (final (locale, photoText, galleryText, permText) in [
-      (const Locale('th'), 'ถ่ายภาพ', 'เลือกจากคลังภาพ', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูปในการตั้งค่า'),
-      (const Locale('en'), 'Take Photo', 'Gallery', 'Camera permission is required to take photos'),
+      (
+        const Locale('th'),
+        'ถ่ายภาพ',
+        'เลือกจากคลังภาพ',
+        'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูปในการตั้งค่า'
+      ),
+      (
+        const Locale('en'),
+        'Take Photo',
+        'Gallery',
+        'Camera permission is required to take photos'
+      ),
       (const Locale('zh'), '拍照', '相册', '需要相机权限才能拍照'),
     ]) {
       late BuildContext captured;
@@ -97,15 +133,77 @@ void main() {
     }
   });
 
-  testWidgets('image preview dialog exposes Cancel and Send actions', (tester) async {
+  testWidgets('image preview dialog exposes Cancel and Send actions',
+      (tester) async {
     // 1x1 transparent PNG
     final sampleBytes = Uint8List.fromList([
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-      0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-      0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82
     ]);
 
     bool? result;

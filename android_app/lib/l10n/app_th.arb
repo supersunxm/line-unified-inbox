@@ -71,6 +71,7 @@
   "storeUnavailable": "ไม่มีข้อมูลร้าน",
   "storeCode": "รหัสร้าน: {code}",
   "conversationContext": "ข้อมูลบทสนทนา",
+  "readOnlyConversation": "ดูได้อย่างเดียว · ไม่มีสิทธิ์ตอบกลับ",
   "replyStatus": "สถานะการตอบ",
   "unreadMessages": "ข้อความที่ยังไม่อ่าน",
   "messagesInView": "ข้อความที่แสดง",
