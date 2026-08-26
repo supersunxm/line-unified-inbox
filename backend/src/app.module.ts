@@ -4,6 +4,7 @@ import { ConversationsController } from "./conversations.controller";
 import { ConversationsService } from "./conversations.service";
 import { CustomersController } from "./customers.controller";
 import { DashboardController } from "./dashboard.controller";
+import { DashboardResponseBucketsController } from "./dashboard-response-buckets.controller";
 import { HealthController } from "./health.controller";
 import { MetadataController } from "./metadata.controller";
 import { PrismaModule } from "./prisma.module";
@@ -60,7 +61,7 @@ import { MainOaController } from "./main-oa.controller";
 
 @Module({
   imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule],
-  controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
+  controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
   providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
 export class AppModule {}
