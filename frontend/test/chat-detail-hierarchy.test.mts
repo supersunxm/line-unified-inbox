@@ -15,8 +15,8 @@ test("chat detail customer identity and action hierarchy use the active handlers
   assert.match(detail, /data-chat-detail-secondary-action[\s\S]*setShowTranslation\(!showTranslation\)/);
   assert.match(detail, /data-chat-detail-secondary-action[\s\S]*reanalyzeConversation\(\)/);
   assert.doesNotMatch(detail, /editConversationTags\(\)/);
-  assert.match(detail, /data-chat-detail-secondary-action[\s\S]*editPurchaseInformation\(\)/);
-  assert.match(detail, /selectedApiConversation\?\.purchaseInformation\?\.recordState/);
+  assert.doesNotMatch(detail, /editPurchaseInformation\(\)/);
+  assert.doesNotMatch(detail, /data-purchase-information-card/);
   assert.match(detail, /showTranslation\s*\? text\.showOriginal\s*:\s*text\.translateMessage/);
 });
 
@@ -33,8 +33,7 @@ test("message viewport dominates the workspace and preserves ordering, media, tr
 
 test("insights consolidate product intent and topics while the internal note remains separate and editable", () => {
   for (const field of [
-    "text.productCategory",
-    "text.productModel",
+    "text.mentionedProduct",
     "text.customerRelationship",
     "text.purchaseIntent",
   ]) {
@@ -52,16 +51,20 @@ test("insights consolidate product intent and topics while the internal note rem
   assert.match(detail, /text\.noteSaveHint/);
 });
 
-test("customer purchase and AI insight remain semantically separated", () => {
-  const purchaseStart = detail.indexOf("data-purchase-information-card");
-  const insightStart = detail.indexOf("data-product-intent-card", purchaseStart);
-  assert.ok(purchaseStart >= 0);
-  assert.ok(insightStart > purchaseStart);
-  const purchaseSection = detail.slice(purchaseStart, insightStart);
-  const insightSection = detail.slice(insightStart);
-  assert.match(purchaseSection, /purchaseInformation/);
-  assert.match(purchaseSection, /recordState/);
-  assert.doesNotMatch(purchaseSection, /confidence|purchaseIntent|mentionedProducts|aiInsight/);
+test("customer purchase card is removed while AI insight, note, and activity sections remain intact", () => {
+  assert.doesNotMatch(detail, /data-purchase-information-card/);
+  assert.doesNotMatch(detail, /text\.customerPurchase/);
+  assert.doesNotMatch(detail, /text\.editPurchaseInformation/);
+
+  const insightStart = detail.indexOf("data-product-intent-card");
+  const noteStart = detail.indexOf("data-topics-note-card");
+  const activityStart = detail.indexOf("data-activity-history");
+
+  assert.ok(insightStart >= 0, "AI insight card must be present");
+  assert.ok(noteStart > insightStart, "Internal note card must follow insight card");
+  assert.ok(activityStart > noteStart, "Activity history card must follow internal note card");
+
+  const insightSection = detail.slice(insightStart, noteStart);
   assert.match(insightSection, /aiInsight/);
   assert.match(insightSection, /mentionedProducts/);
   assert.match(insightSection, /purchaseIntent/);

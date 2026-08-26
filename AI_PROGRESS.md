@@ -1,6 +1,19 @@
 # AI progress
 
-## Current task: BM Mobile Customer Sales Tags Presentation on Web (2026-08-26)
+## Current task: Removal of Customer Sales / Purchase Information Card from Web Chat Detail (2026-08-26)
+
+- **UI Streamlining**:
+  - Removed `<section data-purchase-information-card ...>` from the Web chat detail lower pane, including Customer Sales Information / Customer Purchase heading, interested/purchased indicators, product/purchase details, legacy purchase notices, Edit Purchase Information button, and recorded-by/recorded-at info.
+  - Removed now-unused Web `editPurchaseInformation` function.
+  - Retained `customerSalesInformation` and `purchaseInformation` data structures, backend APIs, database models, and Mobile App functionality.
+  - AI Insight (`data-product-intent-card`), Internal Note (`data-topics-note-card`), and Activity History (`data-activity-history`) remain fully intact in the detail pane.
+- **Verification & Test Results**:
+  - Updated `frontend/test/chat-detail-hierarchy.test.mts` to verify `data-purchase-information-card` and `editPurchaseInformation` are removed and remaining lower sections retain ordering.
+  - All 400 / 400 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: BM Mobile Customer Sales Tags Presentation on Web (2026-08-26)
 
 - **Audit & Architecture**:
   - Replaced legacy Web-generated/manual tag presentation (AI topics, AI products, Priority, Follow-Up Status, and AI Customer Stage) with BM-entered customer sales data from the Mobile App (`customerSalesInformation`).

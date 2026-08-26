@@ -1,3 +1,9 @@
+# Removal of Customer Sales / Purchase Information Card from Web Chat Detail (2026-08-26)
+
+- **Chat Detail Lower Pane Streamlining**: With BM-entered sales data now clearly displayed in the conversation list rows and chat detail header, the standalone Customer Sales Information / Purchase Information card in the chat detail lower section is removed.
+- **Retained Lower Sections**: AI Insight (`data-product-intent-card`), Internal Note (`data-topics-note-card`), and Activity History (`data-activity-history`) remain prominent and functional.
+- **Backend & Data Integrity**: Backend data contracts, `customerSalesInformation`, `purchaseInformation`, database columns, APIs, and Mobile App features remain completely unchanged.
+
 # BM Mobile Customer Sales Tags as Source of Truth on Web (2026-08-26)
 
 - **Source of Truth**: The tags displayed in the conversation list rows and chat detail header reflect BM staff entries in the Mobile App (`customerSalesInformation`) rather than Web-generated/manual AI tags.
