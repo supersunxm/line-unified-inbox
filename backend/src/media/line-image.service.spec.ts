@@ -3,17 +3,20 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
+import { MessageType } from "@prisma/client";
 import { LineImageService } from "./line-image.service";
 import { MediaStorageService } from "./media-storage";
 
 type MediaUpdate = { processingStatus: string; mimeType?: string; objectKey?: string | null; fileSize?: number; provider?: string; fileId?: string; errorCode?: string };
 
-async function runImage(response: Response, maxBytes = "1024") {
+async function runImage(response: Response, maxBytes = "1024", mediaType = MessageType.IMAGE) {
   const previousFetch = global.fetch;
   const previousMax = process.env.MEDIA_MAX_FILE_SIZE_BYTES;
+  const previousVideoMax = process.env.MEDIA_MAX_VIDEO_FILE_SIZE_BYTES;
   const previousEnabled = process.env.MEDIA_STORAGE_ENABLED;
   process.env.MEDIA_STORAGE_ENABLED = "true";
-  process.env.MEDIA_MAX_FILE_SIZE_BYTES = maxBytes;
+  if (mediaType === MessageType.VIDEO) process.env.MEDIA_MAX_VIDEO_FILE_SIZE_BYTES = maxBytes;
+  else process.env.MEDIA_MAX_FILE_SIZE_BYTES = maxBytes;
   let authorization = "";
   let requestedUrl = "";
   let update: MediaUpdate | undefined;
@@ -30,11 +33,12 @@ async function runImage(response: Response, maxBytes = "1024") {
   const encryption = { decrypt: () => "oa-specific-token" } as unknown as CredentialEncryptionService;
   const storage = { put: (key: string, body: Buffer, mimeType: string) => { stored = { key, body, mimeType }; return Promise.resolve({ provider: "s3", fileId: key, mimeType, size: body.length }); } } as unknown as MediaStorageService;
   try {
-    await new LineImageService(prisma, encryption, storage).process("media-1", "oa-1", "line-message-1", new Date("2026-07-20T00:00:00Z"));
+    await new LineImageService(prisma, encryption, storage).process("media-1", "oa-1", "line-message-1", new Date("2026-07-20T00:00:00Z"), mediaType);
     return { authorization, requestedUrl, update, stored };
   } finally {
     global.fetch = previousFetch;
     if (previousMax === undefined) delete process.env.MEDIA_MAX_FILE_SIZE_BYTES; else process.env.MEDIA_MAX_FILE_SIZE_BYTES = previousMax;
+    if (previousVideoMax === undefined) delete process.env.MEDIA_MAX_VIDEO_FILE_SIZE_BYTES; else process.env.MEDIA_MAX_VIDEO_FILE_SIZE_BYTES = previousVideoMax;
     if (previousEnabled === undefined) delete process.env.MEDIA_STORAGE_ENABLED; else process.env.MEDIA_STORAGE_ENABLED = previousEnabled;
   }
 }
@@ -51,6 +55,14 @@ void test("image download uses the exact OA token and stores supported content",
   assert.equal(result.update?.objectKey, result.stored?.key);
   assert.match(result.stored?.key ?? "", /^line-media\/oa-1\/2026\/07\/line-message-1\.png$/);
   assert.equal(JSON.stringify(result).includes("oa-specific-token"), true);
+});
+
+void test("video download uses the canonical LINE content endpoint and stores video media", async () => {
+  const result = await runImage(new Response(Buffer.from("video"), { status: 200, headers: { "content-type": "video/mp4", "content-length": "5" } }), "1024", MessageType.VIDEO);
+  assert.equal(result.update?.processingStatus, "READY");
+  assert.equal(result.update?.mimeType, "video/mp4");
+  assert.equal(result.update?.fileSize, 5);
+  assert.match(result.stored?.key ?? "", /\.mp4$/);
 });
 
 void test("disabled media storage skips without downloading or storing", async () => {

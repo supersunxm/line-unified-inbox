@@ -89,6 +89,29 @@ void test("image webhook creates pending media and invokes image processing with
   assert.deepEqual(processed, ["media-1", "oa-1", "line-image-1"]);
 });
 
+void test("video webhook creates pending video media and invokes the backend processor", async () => {
+  let mediaData: { messageId: string; providerMessageId: string; mediaType: string } | undefined;
+  let processedType: string | undefined;
+  const transactionClient = {
+    conversation: { create: () => Promise.resolve({ id: "conversation-video", followUpStatus: "FOLLOW_UP" }) },
+    message: { create: () => Promise.resolve({ id: "stored-video-message" }) },
+    messageMedia: { create: ({ data }: { data: typeof mediaData }) => { mediaData = data; return Promise.resolve({ id: "video-media-1" }); } },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-video", storeId: "store-video", store: { id: "store-video" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "customer-video", displayName: "Video Customer" }) },
+    conversation: { findFirst: () => Promise.resolve(null) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+  const media = { process: (_mediaId: string, _oaId: string, _messageId: string, _occurredAt: Date, type: string) => { processedType = type; return Promise.resolve(); } } as unknown as LineImageService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, {} as ClassificationService, { refresh: () => Promise.resolve({}) } as unknown as LineProfileService, media);
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-video", timestamp: Date.now(), source: { type: "user", userId: "line-video-user" }, message: { type: "video", id: "line-video-1" } }] }, "oa-video");
+  assert.deepEqual(mediaData, { messageId: "stored-video-message", providerMessageId: "line-video-1", mediaType: "VIDEO" });
+  assert.equal(processedType, "VIDEO");
+});
+
 void test("inbound message on REPLIED conversation resets bmReplyStatus to NOT_REPLIED and records activity without touching followUpStatus logic", async () => {
   const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
 

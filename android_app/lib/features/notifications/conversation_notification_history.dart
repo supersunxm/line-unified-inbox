@@ -209,6 +209,7 @@ class MemoryConversationNotificationHistoryStore
 
 String notificationPreview({required String messageType, String? preview}) {
   if (messageType.toUpperCase() == 'IMAGE') return 'Sent an image';
+  if (messageType.toUpperCase() == 'VIDEO') return 'Sent a video';
   final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
   if (compact.isEmpty) return 'New customer message';
   return compact.length <= 160 ? compact : '${compact.substring(0, 157)}...';
@@ -221,6 +222,9 @@ String localizedNotificationPreview({
 }) {
   if (messageType.toUpperCase() == 'IMAGE') {
     return localizations.sentAnImage;
+  }
+  if (messageType.toUpperCase() == 'VIDEO') {
+    return localizations.sentAVideo;
   }
   final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
   if (compact.isEmpty) return localizations.newCustomerMessage;

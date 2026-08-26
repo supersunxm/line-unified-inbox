@@ -109,6 +109,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get sentAnImage => 'ส่งรูปภาพ';
 
   @override
+  String get sentAVideo => 'ส่งวิดีโอ';
+
+  @override
   String get newCustomerMessage => 'ข้อความใหม่จากลูกค้า';
 
   @override
@@ -265,6 +268,21 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get imageUnavailable => 'ไม่สามารถใช้รูปภาพได้';
+
+  @override
+  String get videoProcessing => 'กำลังประมวลผลวิดีโอ…';
+
+  @override
+  String get loadingVideo => 'กำลังโหลดวิดีโอ…';
+
+  @override
+  String get videoUnavailable => 'ไม่สามารถใช้วิดีโอได้';
+
+  @override
+  String get playVideo => 'เล่นวิดีโอ';
+
+  @override
+  String get pauseVideo => 'หยุดวิดีโอชั่วคราว';
 
   @override
   String get sendImageQuestion => 'ส่งรูปภาพหรือไม่';

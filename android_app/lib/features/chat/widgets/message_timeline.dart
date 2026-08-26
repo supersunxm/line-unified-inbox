@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import 'image_bubble.dart';
 import 'message_bubble.dart';
+import 'video_bubble.dart';
 
 class PendingTimelineMessage {
   const PendingTimelineMessage({
@@ -40,6 +41,7 @@ class MessageTimeline extends StatelessWidget {
     this.onRetryMessage,
     this.onOpenImage,
     this.onLoadMedia,
+    this.onLoadVideo,
     this.onUserScroll,
     this.isProgrammaticScroll,
   });
@@ -53,6 +55,8 @@ class MessageTimeline extends StatelessWidget {
   final ValueChanged<String>? onRetryMessage;
   final ValueChanged<Uint8List>? onOpenImage;
   final void Function(ChatMedia media, String messageId)? onLoadMedia;
+  final Future<Uint8List> Function(ChatMedia media, String messageId)?
+      onLoadVideo;
   final VoidCallback? onUserScroll;
   final bool Function()? isProgrammaticScroll;
 
@@ -120,6 +124,7 @@ class MessageTimeline extends StatelessWidget {
     final outbound = message.direction == 'OUTBOUND';
     final media = message.media;
     final image = message.messageType == 'IMAGE';
+    final video = message.messageType == 'VIDEO';
     if (image && media != null && media.ready) {
       onLoadMedia?.call(media, message.id);
     }
@@ -138,7 +143,15 @@ class MessageTimeline extends StatelessWidget {
                   ? null
                   : () => onOpenImage!(bytes),
             )
-          : null,
+          : video
+              ? VideoBubble(
+                  messageId: message.id,
+                  media: media,
+                  onLoad: media == null || onLoadVideo == null
+                      ? null
+                      : () => onLoadVideo!(media, message.id),
+                )
+              : null,
     );
   }
 

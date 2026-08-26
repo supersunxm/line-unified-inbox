@@ -58,6 +58,23 @@ void main() {
     expect(summary('OUTBOUND').preview, 'You: Sent an image');
   });
 
+  test('conversation summary uses a non-empty video preview label', () {
+    final item = ConversationSummary.fromJson({
+      'id': 'conversation-video',
+      'customer': {'displayName': 'Customer'},
+      'store': {'name': 'Store'},
+      'unreadCount': 0,
+      'bmReplyStatus': 'NOT_REPLIED',
+      'lastMessage': {
+        'preview': '[Video]',
+        'direction': 'INBOUND',
+        'messageType': 'VIDEO',
+        'sentAt': '2026-08-11T00:00:00.000Z'
+      },
+    });
+    expect(item.preview, 'Sent a video');
+  });
+
   test('conversation detail maps customer, store, timestamps, and ready media',
       () {
     final detail = ConversationDetail.fromJson({
@@ -107,6 +124,25 @@ void main() {
     expect(message.sender, isNull);
   });
 
+  test('conversation detail recognizes ready video media', () {
+    final message = ChatMessage.fromJson({
+      'id': 'video-message',
+      'direction': 'INBOUND',
+      'messageType': 'VIDEO',
+      'text': '[Video]',
+      'sentAt': '2026-08-13T02:12:00.000Z',
+      'media': {
+        'processingStatus': 'READY',
+        'mimeType': 'video/mp4',
+        'fileSize': 4096,
+        'url': '/messages/video-message/media'
+      },
+    });
+    expect(message.media?.isVideo, isTrue);
+    expect(message.media?.ready, isTrue);
+    expect(message.media?.url, '/messages/video-message/media');
+  });
+
   test('conversation detail maps manual tags only', () {
     final detail = ConversationDetail.fromJson({
       'id': 'conversation-1',
@@ -127,7 +163,8 @@ void main() {
     expect(detail.tags?.product?.productName, 'OPPO Reno16 Pro 5G');
   });
 
-  test('conversation detail parses separated purchase and insight contracts', () {
+  test('conversation detail parses separated purchase and insight contracts',
+      () {
     final detail = ConversationDetail.fromJson({
       'id': 'conversation-1',
       'customer': {'displayName': 'Customer'},
@@ -163,7 +200,8 @@ void main() {
     expect(detail.purchaseInformation?.recordState, 'VERIFIED');
     expect(detail.purchaseInformation?.paymentMethod, 'INSTALLMENT');
     expect(detail.purchaseInformation?.recordedBy, 'BM Tester');
-    expect(detail.purchaseInformation?.recordedAt?.toUtc().toIso8601String(), '2026-08-16T10:00:00.000Z');
+    expect(detail.purchaseInformation?.recordedAt?.toUtc().toIso8601String(),
+        '2026-08-16T10:00:00.000Z');
     expect(detail.purchaseInformation?.products.single['source'], 'MANUAL');
     expect(detail.aiInsight?.topics.single['name'], 'Price Inquiry');
     expect(detail.operationalState?.priority, 'HIGH');

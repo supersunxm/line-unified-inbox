@@ -229,20 +229,33 @@ class _ChatPageState extends State<ChatPage> {
     if (index < 0) return;
 
     final current = detail.messages[index];
+    final processingStatus = mediaJson['processingStatus'] is String
+        ? mediaJson['processingStatus'] as String
+        : current.media?.processingStatus ?? 'FAILED';
     final updatedMedia = ChatMedia(
-        processingStatus: mediaJson['processingStatus'] is String
-            ? mediaJson['processingStatus'] as String
-            : current.media?.processingStatus ?? 'FAILED',
-        mimeType: mediaJson['mimeType'] is String
-            ? mediaJson['mimeType'] as String
+        processingStatus: processingStatus,
+        mimeType: mediaJson.containsKey('mimeType')
+            ? mediaJson['mimeType'] is String
+                ? mediaJson['mimeType'] as String
+                : null
             : current.media?.mimeType ??
-                (current.messageType == 'IMAGE' ? 'image/*' : null),
-        fileSize: mediaJson['fileSize'] is num
-            ? (mediaJson['fileSize'] as num).toInt()
+                (current.messageType == 'IMAGE'
+                    ? 'image/*'
+                    : current.messageType == 'VIDEO'
+                        ? 'video/mp4'
+                        : null),
+        fileSize: mediaJson.containsKey('fileSize')
+            ? mediaJson['fileSize'] is num
+                ? (mediaJson['fileSize'] as num).toInt()
+                : null
             : current.media?.fileSize,
-        url: mediaJson['url'] is String
-            ? mediaJson['url'] as String
-            : current.media?.url ?? '/messages/$id/media');
+        url: mediaJson.containsKey('url')
+            ? mediaJson['url'] is String
+                ? mediaJson['url'] as String
+                : null
+            : processingStatus == 'READY'
+                ? current.media?.url ?? '/messages/$id/media'
+                : current.media?.url);
     if (_sameMedia(current.media, updatedMedia)) return;
     final messages = [...detail.messages];
     messages[index] = ChatMessage(
@@ -640,18 +653,25 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> _loadMedia(ChatMedia media, String id) async {
-    if (!media.ready || _mediaBytes.containsKey(id) || !_mediaLoading.add(id)) {
-      return;
-    }
+  Future<Uint8List?> _loadMedia(ChatMedia media, String id) async {
+    if (!media.ready) return null;
+    final existing = _mediaBytes[id];
+    if (existing != null) return existing;
+    if (!_mediaLoading.add(id)) return null;
+    Uint8List? bytes;
     try {
-      final bytes = await widget.repository.media(media.url!);
-      if (mounted) setState(() => _mediaBytes[id] = bytes);
+      bytes = await widget.repository.media(media.url!);
+      if (mounted) setState(() => _mediaBytes[id] = bytes!);
     } catch (_) {
       if (mounted) setState(() {});
     } finally {
       _mediaLoading.remove(id);
     }
+    return bytes;
+  }
+
+  void _loadImageMedia(ChatMedia media, String id) {
+    unawaited(_loadMedia(media, id));
   }
 
   @override
@@ -717,7 +737,14 @@ class _ChatPageState extends State<ChatPage> {
                           onOpenImage: (bytes) => Navigator.of(context).push(
                               MaterialPageRoute(
                                   builder: (_) => _ImageViewer(bytes: bytes))),
-                          onLoadMedia: _loadMedia,
+                          onLoadMedia: _loadImageMedia,
+                          onLoadVideo: (media, id) async {
+                            final bytes = await _loadMedia(media, id);
+                            if (bytes == null || bytes.isEmpty) {
+                              throw StateError('Video media is unavailable');
+                            }
+                            return bytes;
+                          },
                           onUserScroll: () => _scrollGeneration += 1,
                           isProgrammaticScroll: () => _programmaticScroll)),
                   if (_error != null)

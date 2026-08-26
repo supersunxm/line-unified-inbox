@@ -1965,3 +1965,11 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Frontend verification passes: full tests 393/393, zero-warning ESLint on the changed release metadata, and the production Next.js build with TypeScript and 26 routes. Repository-wide ESLint remains red on the unchanged `b2acbef` baseline (27 errors, 73 warnings across unrelated files); no lint failure points to this release's changed file.
 - Runtime verification of the built frontend passes: `/api/health`, `/download`, `/download/history`, and the new APK route all return 200. The HTTP-downloaded APK is exactly 58,040,466 bytes and retains SHA-256 `5837e94111f7a7fb4398bdefff75e4639610ec9b4bea88a8004ffc906967924e`; the latest page renders 1.0.16 and Version History retains 1.0.15.
 - Next action: review/commit the verified artifact and metadata, push, open the PR, and monitor CI without merging or deploying.
+
+# Current task: Android inbound LINE video messages (2026-08-26)
+
+- Created `feat/android-inbound-video-messages` from latest `origin/main` at `e107388d8df2c4a330ea84d61d2412a734c6b672`.
+- Audited the end-to-end path. LINE webhook parsing and the `VIDEO` enum already existed, but ingestion only created/downloaded media for images; Android only accepted `image/*` bytes and rendered image bubbles, so video messages had no stored media and no client renderer.
+- Extended the existing authenticated media processor and `GET /messages/:messageId/media` proxy for video MIME types, metadata, pending/ready realtime updates, and a 200 MB video limit. No schema migration was required.
+- Added lazy, non-autoplay Android video playback with loading, controls, and localized fallback states; preserved text/image rendering and realtime ID-based patching. Added TH/EN/ZH labels and regression coverage.
+- Focused Flutter tests pass 31/31, Flutter analyze passes, focused backend tests pass 37/37, and the backend build passes. Next action: run full Flutter/backend verification, review the diff, commit, push, open the PR, and wait for CI; do not merge or release an APK.

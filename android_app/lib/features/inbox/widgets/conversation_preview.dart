@@ -50,11 +50,17 @@ class ConversationPreview extends StatelessWidget {
 String localizedConversationPreview(BuildContext context, String? preview) {
   final localizations = appLocalizations(context);
   var displayPreview = preview?.trim() ?? '';
+  var outbound = false;
+  if (displayPreview.startsWith('You:')) {
+    outbound = true;
+    displayPreview = displayPreview.substring(4).trimLeft();
+  }
   if (displayPreview == 'Sent an image') {
     displayPreview = localizations.sentAnImage;
-  } else if (displayPreview.startsWith('You:')) {
-    displayPreview = '${localizations.you}:${displayPreview.substring(4)}';
+  } else if (displayPreview == 'Sent a video') {
+    displayPreview = localizations.sentAVideo;
   }
+  if (outbound) displayPreview = '${localizations.you}: $displayPreview';
   return displayPreview;
 }
 

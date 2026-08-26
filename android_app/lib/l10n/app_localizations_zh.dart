@@ -109,6 +109,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sentAnImage => '发送了一张图片';
 
   @override
+  String get sentAVideo => '发送视频';
+
+  @override
   String get newCustomerMessage => '新的客户消息';
 
   @override
@@ -264,6 +267,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get imageUnavailable => '图片不可用';
+
+  @override
+  String get videoProcessing => '正在处理视频…';
+
+  @override
+  String get loadingVideo => '正在加载视频…';
+
+  @override
+  String get videoUnavailable => '视频不可用';
+
+  @override
+  String get playVideo => '播放视频';
+
+  @override
+  String get pauseVideo => '暂停视频';
 
   @override
   String get sendImageQuestion => '发送图片？';
@@ -945,6 +963,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get sentAnImage => '发送了一张图片';
 
   @override
+  String get sentAVideo => '发送视频';
+
+  @override
   String get newCustomerMessage => '新的客户消息';
 
   @override
@@ -1100,6 +1121,21 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get imageUnavailable => '图片不可用';
+
+  @override
+  String get videoProcessing => '正在处理视频…';
+
+  @override
+  String get loadingVideo => '正在加载视频…';
+
+  @override
+  String get videoUnavailable => '视频不可用';
+
+  @override
+  String get playVideo => '播放视频';
+
+  @override
+  String get pauseVideo => '暂停视频';
 
   @override
   String get sendImageQuestion => '发送图片？';

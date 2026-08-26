@@ -69,7 +69,7 @@ Both values are intentionally public browser configuration. Never add `DATABASE_
 - Cloudflare R2 is the recommended production media provider. Set `MEDIA_STORAGE_ENABLED=true`, `MEDIA_STORAGE_DRIVER=s3`, `S3_REGION=auto`, `S3_BUCKET=oppo-line-media`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, and the R2 access key and secret as Railway secrets.
 - Keep `GOOGLE_DRIVE_ENABLED` unset or `false`; when it is `true`, the existing driver selection intentionally prioritizes Google Drive over S3.
 - Verify R2 access with the admin `GET /health/storage` and `GET /health/storage/write-test` endpoints before sending test images. Media continues to stream through the authenticated backend endpoint.
-- `MEDIA_MAX_FILE_SIZE_BYTES=10485760` and `MEDIA_DOWNLOAD_TIMEOUT_MS=10000` — optional limits shown with their defaults.
+- `MEDIA_MAX_FILE_SIZE_BYTES=10485760`, `MEDIA_MAX_VIDEO_FILE_SIZE_BYTES=209715200`, and `MEDIA_DOWNLOAD_TIMEOUT_MS=10000` — optional image/video limits and download timeout shown with their defaults.
 
 For local development, media is also disabled by default. To test downloads, set `MEDIA_STORAGE_ENABLED=true`, `MEDIA_STORAGE_DRIVER=local`, and `MEDIA_LOCAL_DIRECTORY=.media`. The directory is ignored by Git and its filesystem path is never returned by the API. Create production bucket credentials before enabling media on Railway; never use Railway's ephemeral service filesystem for durable images.
 

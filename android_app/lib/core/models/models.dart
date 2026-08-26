@@ -376,9 +376,11 @@ String? conversationMessagePreview({
   final normalizedText = text?.trim();
   final content = normalizedType == 'IMAGE'
       ? 'Sent an image'
-      : normalizedText?.isNotEmpty == true
-          ? normalizedText!
-          : null;
+      : normalizedType == 'VIDEO'
+          ? 'Sent a video'
+          : normalizedText?.isNotEmpty == true
+              ? normalizedText!
+              : null;
   if (content == null) return null;
   return direction?.toUpperCase() == 'OUTBOUND' ? 'You: $content' : content;
 }
@@ -440,10 +442,10 @@ class ChatMedia {
   final String? mimeType;
   final int? fileSize;
   final String? url;
+  bool get isImage => mimeType?.toLowerCase().startsWith('image/') ?? false;
+  bool get isVideo => mimeType?.toLowerCase().startsWith('video/') ?? false;
   bool get ready =>
-      processingStatus == 'READY' &&
-      url != null &&
-      (mimeType?.startsWith('image/') ?? false);
+      processingStatus == 'READY' && url != null && (isImage || isVideo);
   static ChatMedia? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
     final fileSize = json['fileSize'];
