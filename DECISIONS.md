@@ -1153,3 +1153,8 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Store the keystore and credentials only in GitHub Actions repository secrets for CI use; do not commit or upload signing material as repository artifacts.
 - Normalize `apksigner` certificate output to a lowercase compact SHA-256 digest before exact comparison because current build tools emit compact lowercase digests rather than colon-delimited uppercase fingerprints.
 - Keep the release isolated on `release/android-1.0.14`; publishing the APK metadata does not authorize merging PR #47 or manually deploying Railway.
+# Android 1.0.16 release boundary (2026-08-26)
+
+- Release `1.0.16+17` is isolated on `release/android-1.0.16` from `main` commit `b2acbef71aca274e5c697a2c89aa0621463a3073`. Its user-facing scope is PR #52: remove Normal/Urgent badges from mobile conversation cards while preserving backend priority behavior and reply-status badges.
+- The signed production APK must be produced only by the existing GitHub Actions permanent signing identity and independently verified against package `click.lineoppo.chat` and certificate SHA-256 `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14` before publication. No new or substitute key is authorized.
+- Prior APKs and release entries remain immutable in Version History; the new artifact and metadata are additive.
