@@ -74,8 +74,8 @@ jobs:
           echo "Package ID: $PACKAGE_ID"
           echo "Version: $VERSION_NAME+$VERSION_CODE"
           test "$PACKAGE_ID" = "click.lineoppo.chat"
-          test "$VERSION_NAME" = "1.0.16"
-          test "$VERSION_CODE" = "17"
+          test "$VERSION_NAME" = "1.0.17"
+          test "$VERSION_CODE" = "18"
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
           EXPECTED_CERT_SHA256="e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114"
@@ -84,12 +84,12 @@ jobs:
           test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
 
       - name: Rename release APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.16-production.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.17-production.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: oppo-line-oa-chat-v1.0.16-production
-          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.16-production.apk
+          name: oppo-line-oa-chat-v1.0.17-production
+          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.0.17-production.apk
           if-no-files-found: error
           retention-days: 30

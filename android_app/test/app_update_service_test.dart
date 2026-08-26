@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:line_oa_chat_hub/core/localization/localization.dart';
 import 'package:line_oa_chat_hub/core/network/api_client.dart';
+import 'package:line_oa_chat_hub/core/network/connectivity_service.dart';
 import 'package:line_oa_chat_hub/core/services/app_update_service.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 
+class _OnlineConnectivity extends ConnectivityService {
+  @override
+  Future<bool> get isOnline async => true;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   group('AppUpdateInfo', () {
     test('parses JSON correctly', () {
@@ -17,7 +28,8 @@ void main() {
         'minimumSupportedVersion': '1.0.3',
         'minimumSupportedBuildNumber': 4,
         'forceUpdate': false,
-        'apkUrl': 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
+        'apkUrl':
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
         'apkSize': '57 MB',
         'sha256': '4068576a...',
         'releaseNotes': ['CRM improvements', 'Update system'],
@@ -44,7 +56,8 @@ void main() {
         apkUrl: 'https://example.com/app.apk',
       );
 
-      expect(info.isUpdateAvailable(5), true); // Older build 5 -> update available
+      expect(
+          info.isUpdateAvailable(5), true); // Older build 5 -> update available
       expect(info.isUpdateAvailable(6), false); // Same build 6 -> up to date
       expect(info.isUpdateAvailable(7), false); // Newer build 7 -> up to date
     });
@@ -59,8 +72,10 @@ void main() {
         apkUrl: 'https://example.com/app.apk',
       );
 
-      expect(normalUpdate.isForceUpdateRequired(5), false); // build 5 >= 4 -> optional
-      expect(normalUpdate.isForceUpdateRequired(3), true); // build 3 < 4 -> force update
+      expect(normalUpdate.isForceUpdateRequired(5),
+          false); // build 5 >= 4 -> optional
+      expect(normalUpdate.isForceUpdateRequired(3),
+          true); // build 3 < 4 -> force update
 
       const forcedUpdate = AppUpdateInfo(
         latestVersion: '1.0.5',
@@ -71,12 +86,14 @@ void main() {
         apkUrl: 'https://example.com/app.apk',
       );
 
-      expect(forcedUpdate.isForceUpdateRequired(5), true); // forceUpdate flag true -> forced
+      expect(forcedUpdate.isForceUpdateRequired(5),
+          true); // forceUpdate flag true -> forced
     });
   });
 
   group('AppUpdateService UI Flow', () {
-    testWidgets('shows optional update dialog when newer version is available', (tester) async {
+    testWidgets('shows optional update dialog when newer version is available',
+        (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final testPackageInfo = PackageInfo(
@@ -92,7 +109,8 @@ void main() {
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
+        apkUrl:
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
         apkSize: '57.1 MB',
         releaseNotes: ['CRM enhancements', 'In-app update system'],
       );
@@ -134,7 +152,9 @@ void main() {
       expect(find.text('New Version Available'), findsNothing);
     });
 
-    testWidgets('shows non-dismissible force update dialog when below minimum version', (tester) async {
+    testWidgets(
+        'shows non-dismissible force update dialog when below minimum version',
+        (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final oldPackageInfo = PackageInfo(
@@ -150,7 +170,8 @@ void main() {
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
+        apkUrl:
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
         apkSize: '57.1 MB',
         releaseNotes: ['Critical security and CRM upgrade'],
       );
@@ -179,11 +200,13 @@ void main() {
 
       // Verify Forced Update dialog
       expect(find.text('Update Required'), findsOneWidget);
-      expect(find.text('Later'), findsNothing); // No "Later" button for forced update
+      expect(find.text('Later'),
+          findsNothing); // No "Later" button for forced update
       expect(find.text('Update Now'), findsOneWidget);
     });
 
-    testWidgets('shows already up to date SnackBar on manual check', (tester) async {
+    testWidgets('shows already up to date SnackBar on manual check',
+        (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final currentPackageInfo = PackageInfo(
@@ -199,7 +222,8 @@ void main() {
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
+        apkUrl:
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
       );
 
       await tester.pumpWidget(
@@ -227,27 +251,31 @@ void main() {
 
       // Verify no dialog, but SnackBar shows up
       expect(find.text('New Version Available'), findsNothing);
-      expect(find.textContaining('You are using the latest version'), findsOneWidget);
+      expect(find.textContaining('You are using the latest version'),
+          findsOneWidget);
     });
 
-    testWidgets('installed v1.0.5 (build 6) detects v1.0.6 (build 7) and triggers update dialog', (tester) async {
+    testWidgets(
+        'installed v1.0.16 (build 17) detects v1.0.17 (build 18) and shows the production APK',
+        (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final v105PackageInfo = PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'com.oppo.lineoahub',
-        version: '1.0.5',
-        buildNumber: '6',
+        version: '1.0.16',
+        buildNumber: '17',
       );
 
       const v106UpdateInfo = AppUpdateInfo(
-        latestVersion: '1.0.6',
-        buildNumber: 7,
+        latestVersion: '1.0.17',
+        buildNumber: 18,
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
-        apkUrl: 'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk',
-        apkSize: '56.9 MB',
+        apkUrl:
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.17-production.apk',
+        apkSize: '58.0 MB',
         releaseNotes: [
           'Product selection UX improvement',
           'Explicit select confirmation',
@@ -279,12 +307,79 @@ void main() {
 
       // Verify New Version Available dialog with v1.0.6+7 details
       expect(find.text('New Version Available'), findsOneWidget);
-      expect(find.textContaining('1.0.6+7'), findsOneWidget);
+      expect(find.textContaining('1.0.17+18'), findsOneWidget);
       expect(find.text('Product selection UX improvement'), findsOneWidget);
       expect(find.text('Explicit select confirmation'), findsOneWidget);
       expect(find.text('Improved CRM tagging accuracy'), findsOneWidget);
       expect(find.text('Update Now'), findsOneWidget);
       expect(find.text('Later'), findsOneWidget);
+    });
+
+    testWidgets('installed v1.0.17 build 18 reports up to date',
+        (tester) async {
+      final updateService = AppUpdateService(ApiClient(TokenStore()));
+      final current = PackageInfo(
+          appName: 'OPPO LINE OA Chat',
+          packageName: 'click.lineoppo.chat',
+          version: '1.0.17',
+          buildNumber: '18');
+      const latest = AppUpdateInfo(
+          latestVersion: '1.0.17',
+          buildNumber: 18,
+          minimumSupportedVersion: '1.0.3',
+          minimumSupportedBuildNumber: 4,
+          forceUpdate: false,
+          apkUrl:
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.17-production.apk');
+      await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+              builder: (context) => Scaffold(
+                  body: ElevatedButton(
+                      onPressed: () => updateService.checkForUpdates(context,
+                          isManual: true,
+                          overridePackageInfo: current,
+                          overrideUpdateInfo: latest),
+                      child: const Text('Check current'))))));
+      await tester.tap(find.text('Check current'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('You are using the latest version'),
+          findsOneWidget);
+      expect(find.textContaining('1.0.17+18'), findsOneWidget);
+      expect(find.text('New Version Available'), findsNothing);
+    });
+
+    testWidgets(
+        'update metadata network failure is recoverable and preserves session',
+        (tester) async {
+      final tokens = TokenStore();
+      await tokens.saveCredentials(const MobileCredentials(
+          accessToken: 'access', refreshToken: 'refresh'));
+      final updateService = AppUpdateService(ApiClient(tokens,
+          connectivity: _OnlineConnectivity(),
+          httpClient: MockClient(
+              (_) async => throw http.ClientException('temporary outage'))));
+      final current = PackageInfo(
+          appName: 'OPPO LINE OA Chat',
+          packageName: 'click.lineoppo.chat',
+          version: '1.0.16',
+          buildNumber: '17');
+      await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+              builder: (context) => Scaffold(
+                  body: ElevatedButton(
+                      onPressed: () => updateService.checkForUpdates(context,
+                          isManual: true, overridePackageInfo: current),
+                      child: const Text('Check network'))))));
+      await tester.tap(find.text('Check network'));
+      await tester.pumpAndSettle();
+      expect(
+          find.textContaining('Unable to check for updates'), findsOneWidget);
+      expect((await tokens.readCredentials())?.refreshToken, 'refresh');
+      expect(find.text('New Version Available'), findsNothing);
     });
   });
 }
