@@ -31,7 +31,7 @@ export default function DownloadAppPage() {
             <p className="mt-1 font-medium text-slate-500 text-xs dark:text-slate-400">สำหรับ HQ / BM / PC</p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 text-xs dark:bg-emerald-950/60 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Latest · Version {release.version}+{release.build} · {release.size}
+              Latest · Version {release.version} · Build {release.build} · {release.size}
             </div>
             <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">อัปเดตล่าสุด: {release.releasedAtDisplay}</p>
           </div>

@@ -1172,3 +1172,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Persist the Android access/refresh pair and both expiries as one secure-storage JSON value. This makes credential rotation atomic from the client's perspective and retains a legacy access-token read path for already-installed builds.
 - Only a backend 401/`SESSION_EXPIRED` response from the refresh endpoint is terminal. Network/configuration/5xx and all 403 responses preserve credentials; startup restoration shows a retry state rather than Login. One authenticated 401 initiates a single shared refresh flight, and each failed request retries at most once with the new access token.
 - Diagnostic events record restoration, refresh, and forced-logout outcomes without raw tokens, passwords, request bodies, or secrets.
+
+# Android 1.0.17 release and update-metadata boundary (2026-08-26)
+
+- Release `1.0.17+18` contains the already-merged inbound LINE video and mobile session-refresh changes only. Signing reuses the permanent GitHub Actions identity; no local, generated, or substitute signing key is permitted.
+- The backend `AppRelease` row is the Android app's canonical update-check contract and `/download/releases.ts` is the Web download contract. Release regression tests require their version, build, APK filename, size, SHA-256, and notes to match, preventing silent drift between in-app and Web distribution surfaces.
+- Update availability is determined by integer build number (`17 < 18`), not version-string ordering. Update metadata fetches remain unauthenticated and recoverable failures cannot clear mobile credentials or change login state.
+- Migration `20260826163000_release_android_1_0_17` is additive/idempotent: it upserts build 18 and marks older Android releases inactive without deleting release history or application data. The previously merged mobile refresh migration adds nullable columns and a nullable unique index; production migration status confirms it is already applied.
