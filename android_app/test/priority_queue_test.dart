@@ -146,11 +146,13 @@ void main() {
       tester.getTopLeft(find.text('Urgent customer')).dy,
       lessThan(tester.getTopLeft(find.text('Normal customer')).dy),
     );
-    expect(find.text('Urgent'), findsOneWidget);
-    expect(find.text('Waiting 1d 1h'), findsOneWidget);
+    expect(find.text('Urgent'), findsNothing);
+    expect(find.text('Normal'), findsNothing);
+    expect(find.text('Waiting 1d 1h'), findsNothing);
   });
 
-  testWidgets('priority labels localize in Thai and Chinese', (tester) async {
+  testWidgets('priority queue labels localize while card badges stay hidden',
+      (tester) async {
     final repository = _PriorityRepository([
       _summary(
         'urgent',
@@ -168,8 +170,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('คิวเร่งด่วน'), findsOneWidget);
-    expect(find.text('เร่งด่วน'), findsOneWidget);
-    expect(find.text('รอการตอบกลับ 18h'), findsOneWidget);
+    expect(find.text('เร่งด่วน'), findsNothing);
+    expect(find.text('ปกติ'), findsNothing);
+    expect(find.text('รอการตอบกลับ 18h'), findsNothing);
 
     await tester.pumpWidget(_app(
       InboxPage(repository: repository, onOpen: (_) async {}, onProfile: () {}),
@@ -177,11 +180,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('优先处理'), findsOneWidget);
-    expect(find.text('紧急'), findsOneWidget);
-    expect(find.text('等待回复 18h'), findsOneWidget);
+    expect(find.text('紧急'), findsNothing);
+    expect(find.text('等待回复 18h'), findsNothing);
   });
 
-  testWidgets('priority card remains usable at a narrow width', (tester) async {
+  testWidgets('priority card remains usable at a narrow width without badges',
+      (tester) async {
     final repository = _PriorityRepository([
       _summary(
         'urgent',
@@ -209,6 +213,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Urgent'), findsOneWidget);
+    expect(find.text('Urgent'), findsNothing);
+    expect(find.text('Normal'), findsNothing);
   });
 }
