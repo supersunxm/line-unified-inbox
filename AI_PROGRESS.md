@@ -1934,6 +1934,11 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Reused `GET /mobile/notifications/unread-count` for the authenticated backend unread total, added HQ-only All/Not Replied/Notified BM/Replied/Unread filters, preserved existing store/status/search state in the inbox route, and made pull-to-refresh/detail/realtime paths reconcile the count and card data.
 - Kept BM/PC filters/cards and StoreAccess authorization unchanged. Added localized Unread labels and regression coverage for HQ total/filter/store scope and refresh behavior; backend notification count coverage confirms the user-scoped all-store truth.
 - Focused Flutter inbox/unread tests pass 24/24; full Flutter tests pass 114/114; Flutter analyze passes. Backend build passes, focused mobile tests pass 25/25, full backend tests pass 1,306/1,306, and changed-test lint passes. Commit `4d156a068b951e06e871a8ce4b3b1d63d581d862` is pushed on the feature branch; PR #50 is open and Android package, backend, frontend, and mobile CI checks all pass. No merge or deployment was performed.
+
+# Current task: Android 1.0.15+16 production release (2026-08-26)
+
+- Created `release/android-1.0.15` from `origin/main` at `699fe377ca56e5f48c4c68ab43df43fee868f0b` and updated the Flutter/workflow targets to version `1.0.15+16` with package `click.lineoppo.chat`.
+- Local Flutter analyze and full tests pass. Signed workflow run `32922506775` passed; independent verification confirms package `click.lineoppo.chat`, version `1.0.15+16`, production API URL, and the permanent certificate fingerprint. The verified APK is 58,040,494 bytes with SHA-256 `f09d53b2e25bf9467f0994e9934c4b1da666ae4637075bfad09f52d9e2f29ead`; download metadata now records the 26 August 2026 release while preserving prior history.
 # Current task: Public OPPO Retail Insights landing page (2026-08-25)
 
 - Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.

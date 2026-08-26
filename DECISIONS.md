@@ -1142,6 +1142,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - `Unread` is a client-side view over each conversation's existing unread count; All/Not Replied/Notified BM/Replied continue to use the canonical `bmReplyStatus` values. Store, status, and search state remains owned by the authenticated inbox route and is not persisted through logout.
 - Pull-to-refresh, detail return, and realtime patches all trigger backend reconciliation. The existing StoreAccessService and mobile conversation endpoint remain the authorization source of truth; BM/PC behavior is intentionally unchanged.
 
+# Android 1.0.15 release boundary (2026-08-26)
+
+- Release `1.0.15+16` is isolated on `release/android-1.0.15` from the latest `origin/main`. Only the Flutter version, Android release artifact naming, and public Android release metadata are in scope; no database, Main OA, webhook/provider, or Railway changes are authorized.
+- Signing must reuse the existing permanent certificate (`E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`) through GitHub Actions secrets. The APK is not published to `frontend/public/downloads` until independent package/version/certificate/API URL/checksum verification passes.
+
 # Android 1.0.14 permanent signing verification (2026-08-25)
 
 - Reused only the existing production key whose certificate SHA-256 is `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14`; no replacement key was generated.
