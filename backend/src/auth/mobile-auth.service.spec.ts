@@ -72,7 +72,34 @@ void test("/auth/me returns the authenticated mobile profile and mobile logout d
   assert.deepEqual(controller.me({ user: profile } as any), profile);
 
   let where: unknown;
-  const auth = new AuthService({ session: { findUnique: async () => ({ userId: "user-1", sessionType: SessionType.MOBILE }), deleteMany: async ({ where: input }: { where: unknown }) => { where = input; return { count: 1 }; } } } as any, {} as any);
+  const auth = new AuthService({ session: { findFirst: async () => ({ userId: "user-1", sessionType: SessionType.MOBILE }), deleteMany: async ({ where: input }: { where: unknown }) => { where = input; return { count: 1 }; } } } as any, {} as any);
   await auth.logoutMobile("raw-mobile-token");
-  assert.deepEqual(where, { tokenHash: "9cc397051db4237fd137a88ccd967f118ffed74f8361d1b7ecd98bfc0bcefd86", sessionType: SessionType.MOBILE });
+  assert.deepEqual(where, { sessionType: SessionType.MOBILE, OR: [{ tokenHash: "9cc397051db4237fd137a88ccd967f118ffed74f8361d1b7ecd98bfc0bcefd86" }] });
+});
+
+void test("mobile refresh rotates both credentials while preserving the bounded session lifetime", async () => {
+  const refreshExpiresAt = new Date(Date.now() + 60_000);
+  let update: any;
+  const user = mobileUser({ role: "VIEWER", canAccessMobile: true, memberships: [{ storeId: "store-1", role: "STAFF" }] });
+  const prisma: any = { session: {
+    findUnique: async () => ({ id: "session-1", userId: "user-1", sessionType: SessionType.MOBILE, refreshExpiresAt, user }),
+    updateMany: async (input: any) => { update = input; return { count: 1 }; },
+  } };
+  const result = await new AuthService(prisma, {} as any).refreshMobileSession("refresh-before");
+  assert.equal(typeof result.accessToken, "string");
+  assert.equal(typeof result.refreshToken, "string");
+  assert.notEqual(result.refreshToken, "refresh-before");
+  assert.equal(result.refreshExpiresAt, refreshExpiresAt);
+  assert.equal(update.where.id, "session-1");
+  assert.equal(update.where.refreshExpiresAt.gt instanceof Date, true);
+});
+
+void test("expired or revoked mobile refresh sessions are rejected without rotation", async () => {
+  let updates = 0;
+  const prisma: any = { session: {
+    findUnique: async () => ({ id: "session-1", sessionType: SessionType.MOBILE, refreshExpiresAt: new Date(Date.now() - 1), user: mobileUser() }),
+    updateMany: async () => { updates += 1; return { count: 1 }; },
+  } };
+  await assert.rejects(() => new AuthService(prisma, {} as any).refreshMobileSession("expired"), (error: unknown) => (error as any).response?.code === "SESSION_EXPIRED");
+  assert.equal(updates, 0);
 });

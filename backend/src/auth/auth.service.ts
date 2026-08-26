@@ -34,6 +34,8 @@ type AuthUserSource = {
 
 @Injectable()
 export class AuthService {
+  static readonly ACCESS_SESSION_MS = 12 * 60 * 60 * 1000;
+  static readonly MOBILE_REFRESH_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
   private readonly logger = new Logger(AuthService.name);
   constructor(private readonly prisma: PrismaService, private readonly passwords: PasswordService, private readonly rateLimiter?: AuthRateLimitService, private readonly audit?: AuditLogService) {}
 
@@ -133,10 +135,10 @@ export class AuthService {
     }
     if (!this.platformAccessAllowed(user, sessionType)) await this.rejectPlatformAccess(user, sessionType, ip, userAgent);
 
-    const { token, expiresAt } = await this.createSession(user.id, sessionType);
+    const session = await this.createSession(user.id, sessionType);
     this.logger.log(JSON.stringify({ event: "login_success", userId: user.id, role: user.role, sessionType }));
     await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_SUCCESS", metadata: { sessionType }, ipAddress: ip, userAgent });
-    return { token, expiresAt, user: this.safeUser(user) };
+    return { ...session, user: this.safeUser(user) };
   }
 
   async authenticate(token?: string, expectedSessionType?: SessionType) {
@@ -161,17 +163,40 @@ export class AuthService {
 
   async createSession(userId: string, sessionType: SessionType, client: Prisma.TransactionClient | PrismaService = this.prisma) {
     const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
-    const writes = [client.session.create({ data: { tokenHash: this.tokenHash(token), userId, sessionType, expiresAt } }), client.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } })];
+    const expiresAt = new Date(Date.now() + AuthService.ACCESS_SESSION_MS);
+    const refreshToken = sessionType === SessionType.MOBILE ? randomBytes(48).toString("base64url") : undefined;
+    const refreshExpiresAt = refreshToken ? new Date(Date.now() + AuthService.MOBILE_REFRESH_SESSION_MS) : undefined;
+    const writes = [client.session.create({ data: { tokenHash: this.tokenHash(token), refreshTokenHash: refreshToken ? this.tokenHash(refreshToken) : null, userId, sessionType, expiresAt, refreshExpiresAt } }), client.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } })];
     if (client === this.prisma) await this.prisma.$transaction(writes);
     else await Promise.all(writes);
-    return { token, expiresAt };
+    return { token, expiresAt, refreshToken, refreshExpiresAt };
   }
 
-  async logoutMobile(token?: string) {
-    if (!token) return;
-    const session = await this.prisma.session.findUnique({ where: { tokenHash: this.tokenHash(token) }, select: { userId: true, sessionType: true } });
-    await this.prisma.session.deleteMany({ where: { tokenHash: this.tokenHash(token), sessionType: SessionType.MOBILE } });
+  async refreshMobileSession(refreshToken: string) {
+    const oldHash = this.tokenHash(refreshToken);
+    const now = new Date();
+    const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: oldHash }, include: { user: { include: this.userInclude } } });
+    const valid = session?.sessionType === SessionType.MOBILE && session.refreshExpiresAt && session.refreshExpiresAt > now && session.user.isActive && session.user.status === UserStatus.ACTIVE && hasWorkspaceAccess(this.authorizationFor(session.user)) && this.authorizationFor(session.user).platforms.mobile;
+    if (!valid) throw new UnauthorizedException({ code: "SESSION_EXPIRED", message: "Session expired" });
+    const token = randomBytes(32).toString("base64url");
+    const nextRefreshToken = randomBytes(48).toString("base64url");
+    const expiresAt = new Date(now.getTime() + AuthService.ACCESS_SESSION_MS);
+    const updated = await this.prisma.session.updateMany({
+      where: { id: session.id, refreshTokenHash: oldHash, refreshExpiresAt: { gt: now } },
+      data: { tokenHash: this.tokenHash(token), refreshTokenHash: this.tokenHash(nextRefreshToken), expiresAt },
+    });
+    if (updated.count !== 1) throw new UnauthorizedException({ code: "SESSION_EXPIRED", message: "Session expired" });
+    this.logger.log(JSON.stringify({ event: "mobile_session_refreshed", userId: session.userId }));
+    return { accessToken: token, expiresAt, refreshToken: nextRefreshToken, refreshExpiresAt: session.refreshExpiresAt };
+  }
+
+  async logoutMobile(token?: string, refreshToken?: string) {
+    if (!token && !refreshToken) return;
+    const tokenHash = token ? this.tokenHash(token) : undefined;
+    const refreshTokenHash = refreshToken ? this.tokenHash(refreshToken) : undefined;
+    const where = { sessionType: SessionType.MOBILE, OR: [...(tokenHash ? [{ tokenHash }] : []), ...(refreshTokenHash ? [{ refreshTokenHash }] : [])] };
+    const session = await this.prisma.session.findFirst({ where, select: { userId: true, sessionType: true } });
+    await this.prisma.session.deleteMany({ where });
     if (session?.sessionType === SessionType.MOBILE) await this.audit?.record({ actorUserId: session.userId, action: "USER_LOGOUT" });
   }
 

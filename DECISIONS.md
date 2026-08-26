@@ -1164,3 +1164,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Reuse the existing `LineImageService` media-download/storage implementation (class name retained for compatibility) and authenticated `GET /messages/:messageId/media`; the backend, not Android, retrieves temporary LINE content URLs. Existing Prisma `MessageType.VIDEO` and `MessageMedia` support make a migration unnecessary.
 - The mobile detail contract returns `media.processingStatus`, `mimeType`, `fileSize`, and the authenticated proxy `url` only when READY. Realtime media events carry the same metadata so a pending placeholder patches the existing message by ID instead of creating a duplicate.
 - Android uses `video_player` lazily after the user taps play, writes backend-proxy bytes to a temporary file for playback, and never autoplays or initializes every timeline video. Existing image/text paths and reply-status/priority logic remain unchanged.
+
+# Android mobile session reliability boundary (2026-08-26)
+
+- Retain the existing 12-hour opaque access-session lifetime. MOBILE sessions additionally receive a 30-day absolute refresh expiry; refreshing rotates both opaque credentials but does not slide or extend that absolute boundary.
+- Store only SHA-256 credential hashes server-side. A refresh uses a conditional update against the previous refresh hash, so replay and simultaneous rotation attempts fail closed. The existing Session row remains the revocation unit for logout, account disable/delete, mobile-access removal, and security-sensitive password reset. WEB cookie sessions are unchanged.
+- Persist the Android access/refresh pair and both expiries as one secure-storage JSON value. This makes credential rotation atomic from the client's perspective and retains a legacy access-token read path for already-installed builds.
+- Only a backend 401/`SESSION_EXPIRED` response from the refresh endpoint is terminal. Network/configuration/5xx and all 403 responses preserve credentials; startup restoration shows a retry state rather than Login. One authenticated 401 initiates a single shared refresh flight, and each failed request retries at most once with the new access token.
+- Diagnostic events record restoration, refresh, and forced-logout outcomes without raw tokens, passwords, request bodies, or secrets.
