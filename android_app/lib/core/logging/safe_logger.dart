@@ -11,6 +11,12 @@ class SafeLogger {
   static void networkFailure({int? statusCode, String? code}) =>
       _write('network request failed status=$statusCode code=$code');
   static void lifecycle(String event) => _write('lifecycle event=$event');
+  static void sessionRestoration(String outcome) =>
+      _write('session_restoration outcome=$outcome');
+  static void sessionRefresh(String outcome, {int? statusCode, String? code}) =>
+      _write('session_refresh outcome=$outcome status=$statusCode code=$code');
+  static void forcedLogout(String reason) =>
+      _write('forced_logout reason=$reason');
   static void fcmRegistrationStarted({required bool authenticated}) =>
       _write('fcm_registration_started authenticated=$authenticated');
   static void fcmTokenAvailable({required bool available}) =>

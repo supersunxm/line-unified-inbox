@@ -17,15 +17,25 @@ class AuthRepository {
   Future<void> verifyOtp(String challengeId, String otp) async {
     final result = await _api.post('/auth/mobile/verify-otp',
         body: {'challengeId': challengeId, 'otp': otp}, authenticated: false);
-    await _tokens.save(result['accessToken'] as String);
+    await _saveCredentials(result);
   }
 
   Future<void> login(String identifier, String password) async {
     final result = await _api.post('/auth/mobile/login',
         body: {'email': identifier.trim(), 'password': password},
         authenticated: false);
-    await _tokens.save(result['accessToken'] as String);
+    await _saveCredentials(result);
   }
+
+  Future<void> _saveCredentials(Map<String, dynamic> result) =>
+      _tokens.saveCredentials(MobileCredentials(
+        accessToken: result['accessToken'] as String,
+        refreshToken: result['refreshToken'] as String?,
+        accessExpiresAt:
+            DateTime.tryParse(result['expiresAt'] as String? ?? ''),
+        refreshExpiresAt:
+            DateTime.tryParse(result['refreshExpiresAt'] as String? ?? ''),
+      ));
 
   Future<void> changePassword(
       String currentPassword, String newPassword) async {
@@ -120,8 +130,14 @@ class AuthRepository {
   Future<CurrentUser> me() async =>
       CurrentUser.fromJson(await _api.get('/auth/me'));
   Future<void> logout() async {
+    final credentials = await _tokens.readCredentials();
     try {
-      await _api.post('/auth/mobile/logout');
+      await _api.post('/auth/mobile/logout',
+          body: {
+            if (credentials?.refreshToken != null)
+              'refreshToken': credentials!.refreshToken,
+          },
+          handleSessionExpiry: false);
     } finally {
       await _tokens.clear();
     }

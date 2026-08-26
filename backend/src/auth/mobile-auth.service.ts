@@ -88,7 +88,7 @@ export class MobileAuthService {
       const user = await tx.user.findUnique({ where: { id: challenge.userId }, select: this.userSelect });
       if (!this.isEligible(user)) throw new UnauthorizedException("Mobile login is unavailable");
       const session = await this.auth.createSession(user!.id, SessionType.MOBILE, tx);
-      return { accessToken: session.token, expiresAt: session.expiresAt };
+      return { accessToken: session.token, expiresAt: session.expiresAt, refreshToken: session.refreshToken, refreshExpiresAt: session.refreshExpiresAt };
     });
   }
 }

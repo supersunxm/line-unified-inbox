@@ -11,6 +11,7 @@ import 'core/models/models.dart';
 import 'core/models/authorization_extensions.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_scroll_behavior.dart';
+import 'core/widgets/error_state.dart';
 import 'core/services/app_update_service.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/change_password_page.dart';
@@ -54,6 +55,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   bool _pendingApproval = false;
   bool _loading = true;
   bool _loggingOut = false;
+  bool _restoreDeferred = false;
 
   @override
   void initState() {
@@ -96,12 +98,22 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   }
 
   Future<void> _restore() async {
+    SafeLogger.sessionRestoration('started');
     if (await _auth.hasToken()) {
       try {
         _user = await _auth.me();
+        _restoreDeferred = false;
+        SafeLogger.sessionRestoration('success');
       } catch (_) {
-        await _tokens.clear();
+        // A terminal refresh rejection clears credentials through
+        // _expireSession. All other failures retain the session and offer a
+        // retry instead of incorrectly presenting Login.
+        _restoreDeferred = await _auth.hasToken();
+        SafeLogger.sessionRestoration(
+            _restoreDeferred ? 'deferred' : 'invalid');
       }
+    } else {
+      SafeLogger.sessionRestoration('no_credentials');
     }
     if (mounted) setState(() => _loading = false);
     if (_user != null) {
@@ -159,6 +171,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       _navigator.currentState?.popUntil((route) => route.isFirst);
       setState(() {
         _user = null;
+        _restoreDeferred = false;
         _registering = false;
         _pendingApproval = false;
       });
@@ -222,6 +235,15 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     }
     final user = _user;
     if (user == null) {
+      if (_restoreDeferred) {
+        return ErrorState(
+          message: appLocalizations(context).cannotReachBackend,
+          onRetry: () {
+            setState(() => _loading = true);
+            unawaited(_restore());
+          },
+        );
+      }
       if (_pendingApproval) {
         return PendingApprovalPage(
             onBack: () => setState(() => _pendingApproval = false));
