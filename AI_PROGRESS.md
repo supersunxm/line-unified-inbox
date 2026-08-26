@@ -1938,7 +1938,7 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 # Current task: Android 1.0.15+16 production release (2026-08-26)
 
 - Created `release/android-1.0.15` from `origin/main` at `699fe377ca56e5f48c4c68ab43df43fee868f0b` and updated the Flutter/workflow targets to version `1.0.15+16` with package `click.lineoppo.chat`.
-- Local Flutter analyze and full tests pass. The signed APK and public download metadata remain pending until the existing permanent signing workflow completes and its certificate, package, version, API URL, and checksum are independently verified.
+- Local Flutter analyze and full tests pass. Signed workflow run `32922506775` passed; independent verification confirms package `click.lineoppo.chat`, version `1.0.15+16`, production API URL, and the permanent certificate fingerprint. The verified APK is 58,040,494 bytes with SHA-256 `f09d53b2e25bf9467f0994e9934c4b1da666ae4637075bfad09f52d9e2f29ead`; download metadata now records the 26 August 2026 release while preserving prior history.
 # Current task: Public OPPO Retail Insights landing page (2026-08-25)
 
 - Replaced the root `/` dashboard redirect with a standalone public OPPO Retail Insights landing page containing the required product copy, TikTok connection CTA, administrator sign-in CTA, three-step explanation, and public policy links.
