@@ -4,6 +4,7 @@ import '../../core/models/models.dart';
 import '../../core/localization/localization.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/services/app_update_service.dart';
+import '../notifications/notification_service.dart';
 import 'widgets/account_section.dart';
 import 'widgets/admin_tools_section.dart';
 import 'widgets/membership_section.dart';
@@ -18,6 +19,7 @@ class ProfilePage extends StatelessWidget {
     this.onApprovals,
     this.onPersonalInformation,
     this.updateService,
+    this.notificationService,
   });
 
   final CurrentUser user;
@@ -25,6 +27,7 @@ class ProfilePage extends StatelessWidget {
   final VoidCallback? onApprovals;
   final VoidCallback? onPersonalInformation;
   final AppUpdateService? updateService;
+  final NotificationService? notificationService;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -41,6 +44,7 @@ class ProfilePage extends StatelessWidget {
             SettingsSection(
               onPersonalInformation: onPersonalInformation,
               updateService: updateService,
+              notificationService: notificationService,
             ),
             if (onApprovals != null) ...[
               const SizedBox(height: AppSpacing.xl),

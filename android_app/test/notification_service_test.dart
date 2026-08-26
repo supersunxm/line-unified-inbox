@@ -6,6 +6,11 @@ import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/features/notifications/notification_service.dart';
 import 'package:line_oa_chat_hub/features/notifications/conversation_notification_history.dart';
 
+class _AuthenticatedTokenStore extends TokenStore {
+  @override
+  Future<String?> read() async => 'access-token';
+}
+
 void main() {
   test(
       'conversation notification IDs are stable, distinct, and valid Android ints',
@@ -55,6 +60,113 @@ void main() {
         history.messages.where((message) => message.messageId == 'message-9'),
         hasLength(1));
     expect(history.messages.last.preview, 'updated');
+    expect(
+        await store.contains(
+            conversationId: 'conversation-a', messageId: 'message-9'),
+        isTrue);
+    expect(
+        await store.contains(
+            conversationId: 'conversation-a', messageId: 'missing'),
+        isFalse);
+  });
+
+  test(
+      'foreground and data-only background messages render locally, while mixed background messages are system-rendered',
+      () {
+    expect(
+        shouldDisplayLocalNotification(
+            path: NotificationReceivePath.foreground,
+            hasSystemNotification: true),
+        isTrue);
+    expect(
+        shouldDisplayLocalNotification(
+            path: NotificationReceivePath.background,
+            hasSystemNotification: false),
+        isTrue);
+    expect(
+        shouldDisplayLocalNotification(
+            path: NotificationReceivePath.background,
+            hasSystemNotification: true),
+        isFalse);
+  });
+
+  test('duplicate notification events are suppressed by message identity',
+      () async {
+    final store = MemoryConversationNotificationHistoryStore();
+    final message = ConversationNotificationMessage(
+      messageId: 'message-duplicate',
+      preview: 'Hello',
+      sentAt: DateTime.utc(2026),
+    );
+    await store.append(
+        conversationId: 'conversation-a',
+        customerName: 'Customer',
+        message: message);
+    expect(
+        isDuplicateNotification(
+            history: store.read('conversation-a'),
+            messageId: message.messageId),
+        isTrue);
+    expect(
+        isDuplicateNotification(
+            history: store.read('conversation-a'), messageId: 'message-new'),
+        isFalse);
+  });
+
+  test('notification tap payload routes to its conversation', () {
+    expect(notificationConversationId({'conversationId': 'conversation-42'}),
+        'conversation-42');
+    expect(notificationConversationId({'conversationId': ''}), isNull);
+  });
+
+  test(
+      'token refresh registers the refreshed token and drains concurrent refreshes',
+      () async {
+    final registered = <String>[];
+    final deactivated = <String>[];
+    final service = NotificationService(
+      ApiClient(TokenStore()),
+      _AuthenticatedTokenStore(),
+      tokenRegistrar: (token) async {
+        registered.add(token);
+        await Future<void>.delayed(Duration.zero);
+      },
+      deviceTokenDeactivator: (token) async => deactivated.add(token),
+    );
+    await Future.wait([
+      service.handleTokenRefresh('fcm-token-1'),
+      service.handleTokenRefresh('fcm-token-2'),
+    ]);
+    expect(registered, ['fcm-token-1', 'fcm-token-2']);
+    await service.logout();
+    expect(deactivated.toSet(), {'fcm-token-1', 'fcm-token-2'});
+  });
+
+  test(
+      'notification permission status can be refreshed and settings can be opened',
+      () async {
+    var opened = false;
+    var requests = 0;
+    final service = NotificationService(
+      ApiClient(TokenStore()),
+      TokenStore(),
+      permissionLoader: () async => NotificationPermissionStatus.denied,
+      permissionRequester: () async {
+        requests += 1;
+        return NotificationPermissionStatus.authorized;
+      },
+      settingsOpener: () async {
+        opened = true;
+        return true;
+      },
+    );
+    expect(await service.notificationPermissionStatus(),
+        NotificationPermissionStatus.denied);
+    expect(await service.requestNotificationPermission(),
+        NotificationPermissionStatus.authorized);
+    expect(await service.openNotificationSettings(), isTrue);
+    expect(requests, 1);
+    expect(opened, isTrue);
   });
 
   test(
@@ -176,6 +288,7 @@ void main() {
       ),
     );
     var deactivationCount = 0;
+    var deletionCount = 0;
     var cleanupCount = 0;
     final service = NotificationService(
       ApiClient(TokenStore()),
@@ -184,6 +297,7 @@ void main() {
       tokenLoader: () async => 'token-for-test',
       tokenRegistrar: (_) async {},
       deviceTokenDeactivator: (_) async => deactivationCount += 1,
+      tokenDeleter: () async => deletionCount += 1,
       cancelNotifications: () async => cleanupCount += 1,
       historyStore: history,
     );
@@ -192,6 +306,7 @@ void main() {
     await service.logout();
 
     expect(deactivationCount, 1);
+    expect(deletionCount, 1);
     expect(cleanupCount, 1);
     expect(history.read('conversation-a'), isNull);
   });
@@ -299,6 +414,6 @@ void main() {
     await Future.wait([registration, logout]);
 
     expect(registered, isFalse);
-    expect(deactivationCount, 0);
+    expect(deactivationCount, 1);
   });
 }

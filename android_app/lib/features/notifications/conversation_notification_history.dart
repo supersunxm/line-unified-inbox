@@ -85,6 +85,9 @@ class ConversationNotificationHistory {
 }
 
 abstract class ConversationNotificationHistoryStore {
+  Future<bool> contains(
+      {required String conversationId, required String messageId});
+
   Future<ConversationNotificationHistory> append({
     required String conversationId,
     required String customerName,
@@ -103,6 +106,14 @@ class SharedPreferencesConversationNotificationHistoryStore
 
   static const _key = 'conversation_notification_history_v1';
   final SharedPreferencesAsync _preferences;
+
+  @override
+  Future<bool> contains(
+      {required String conversationId, required String messageId}) async {
+    final history = (await _read())[conversationId];
+    return history?.messages.any((item) => item.messageId == messageId) ??
+        false;
+  }
 
   @override
   Future<ConversationNotificationHistory> append({
@@ -167,6 +178,14 @@ class SharedPreferencesConversationNotificationHistoryStore
 class MemoryConversationNotificationHistoryStore
     implements ConversationNotificationHistoryStore {
   final Map<String, ConversationNotificationHistory> _values = {};
+
+  @override
+  Future<bool> contains(
+          {required String conversationId, required String messageId}) async =>
+      _values[conversationId]
+          ?.messages
+          .any((item) => item.messageId == messageId) ??
+      false;
 
   @override
   Future<ConversationNotificationHistory> append({

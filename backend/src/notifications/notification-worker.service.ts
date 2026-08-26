@@ -12,14 +12,25 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly prisma: PrismaService, private readonly dispatcher: NotificationDispatcher, private readonly provider: FirebasePushProvider) {}
 
   onModuleInit() {
-    if (process.env.NODE_ENV === "test" || !this.provider.configured()) return;
+    if (process.env.NODE_ENV === "test") return;
+    if (!this.provider.configured()) {
+      this.logger.warn(JSON.stringify({ event: "push_worker_disabled", reason: "missing_fcm_configuration" }));
+      return;
+    }
     void this.processCycle();
     this.timer = setInterval(() => { void this.processCycle(); }, 5_000);
   }
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); this.timer = null; }
   async processPending(limit = 50) { return this.process(PushNotificationStatus.PENDING, limit); }
   async retryFailed(limit = 50) { return this.process(PushNotificationStatus.FAILED, limit); }
-  private async processCycle() { await this.processPending(); await this.retryFailed(); }
+  private async processCycle() {
+    try {
+      await this.processPending();
+      await this.retryFailed();
+    } catch (error) {
+      this.logger.error(JSON.stringify({ event: "push_worker_cycle_failed", errorType: error instanceof Error ? error.constructor.name : "UnknownError" }));
+    }
+  }
 
   private async process(status: PushNotificationStatus, limit: number) {
     if (this.running) return 0;
@@ -32,8 +43,8 @@ export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
         if (claimed.count === 0) continue;
         try {
           await this.dispatcher.send(notification, this.provider, true);
-        } catch {
-          this.logger.warn(`Push notification dispatch failed for ${notification.id}`);
+        } catch (error) {
+          this.logger.warn(JSON.stringify({ event: "push_notification_dispatch_failed", notificationId: notification.id, messageId: notification.messageId, errorType: error instanceof Error ? error.constructor.name : "UnknownError" }));
         }
         processed += 1;
       }

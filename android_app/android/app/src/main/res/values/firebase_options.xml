@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Public Firebase client configuration for the package's native FCM
+         receiver. The same values are used by lib/firebase_options.dart. -->
+    <string name="google_app_id" translatable="false">1:1085831667678:android:280661139a514e4bf3474f</string>
+    <string name="gcm_defaultSenderId" translatable="false">1085831667678</string>
+    <string name="google_api_key" translatable="false">AIzaSyDekcZGAE7pQbW1wOy6vBgwZYrHj6wfHiE</string>
+    <string name="project_id" translatable="false">line-oa-chat-hub-ai</string>
+</resources>

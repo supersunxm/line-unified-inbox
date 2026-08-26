@@ -285,6 +285,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         events: _realtime.events,
         onLogout: _logout,
         onConversationOpened: _notifications.clearConversationNotifications,
-        updateService: _updateService);
+        updateService: _updateService,
+        notifications: _notifications);
   }
 }

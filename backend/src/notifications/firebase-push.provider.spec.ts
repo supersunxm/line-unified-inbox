@@ -10,11 +10,11 @@ void test("Firebase provider sends a minimal deep-link payload to active encrypt
   const provider = new FirebasePushProvider(prisma as never, { decrypt: () => "fcm-token-1" } as never);
   (provider as unknown as { messaging: { sendEachForMulticast: (input: unknown) => Promise<unknown> } }).messaging = { sendEachForMulticast: async (input) => { request = input; return { responses: [{ success: true }] }; } };
   await provider.send(notification);
-  assert.deepEqual(request, { tokens: ["fcm-token-1"], data: { title: "New customer message", body: "Tap to open the conversation", channelId: "line_oa_messages", conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, android: { priority: "high" } });
+  assert.deepEqual(request, { tokens: ["fcm-token-1"], data: { title: "New customer message", body: "Tap to open the conversation", channelId: "line_oa_messages", conversationId: "conversation-1", messageId: "message-1", notificationId: "notification-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, notification: { title: "New customer message", body: "Tap to open the conversation" }, android: { priority: "high", notification: { channelId: "line_oa_messages", sound: "default" } } });
 });
 
 void test("Firebase provider gives distinct messages unique notification identities without an FCM collapse key", async () => {
-  const requests: Array<{ data: Record<string, string>; android: { priority: string }; notification?: unknown }> = [];
+  const requests: Array<{ data: Record<string, string>; android: { priority: string; notification: unknown }; notification?: unknown }> = [];
   const prisma = { deviceToken: { findMany: async () => [{ id: "device-1", token: "encrypted-1" }], update: async () => ({}) } };
   const provider = new FirebasePushProvider(prisma as never, { decrypt: () => "fcm-token-1" } as never);
   (provider as unknown as { messaging: { sendEachForMulticast: (input: unknown) => Promise<unknown> } }).messaging = {
@@ -35,7 +35,8 @@ void test("Firebase provider gives distinct messages unique notification identit
   assert.equal(requests[1]?.data.messageType, "IMAGE");
   assert.equal(requests[1]?.data.sentAt, "2026-08-13T00:00:01.000Z");
   assert.equal(requests[0]?.android.priority, "high");
-  assert.equal(requests[0]?.notification, undefined);
+  assert.deepEqual(requests[0]?.notification, { title: "New customer message", body: "Tap to open the conversation" });
+  assert.deepEqual(requests[0]?.android.notification, { channelId: "line_oa_messages", sound: "default" });
   assert.equal("collapseKey" in (requests[0] ?? {}), false);
 });
 

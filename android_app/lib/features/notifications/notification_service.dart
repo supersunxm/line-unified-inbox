@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -24,6 +25,39 @@ typedef DeviceTokenRegistrar = Future<void> Function(String token);
 typedef DeviceTokenDeactivator = Future<void> Function(String token);
 typedef AuthenticationChecker = Future<bool> Function();
 typedef NotificationCleanup = Future<void> Function();
+typedef NotificationPermissionLoader = Future<NotificationPermissionStatus>
+    Function();
+typedef NotificationPermissionRequester = Future<NotificationPermissionStatus>
+    Function();
+typedef NotificationSettingsOpener = Future<bool> Function();
+typedef FcmTokenDeleter = Future<void> Function();
+typedef FcmTokenRefreshStream = Stream<String> Function();
+
+enum NotificationPermissionStatus {
+  authorized,
+  denied,
+  notDetermined,
+  unavailable,
+}
+
+enum NotificationReceivePath { foreground, background }
+
+bool shouldDisplayLocalNotification({
+  required NotificationReceivePath path,
+  required bool hasSystemNotification,
+}) =>
+    path == NotificationReceivePath.foreground || !hasSystemNotification;
+
+bool isDuplicateNotification({
+  required ConversationNotificationHistory? history,
+  required String messageId,
+}) =>
+    history?.messages.any((message) => message.messageId == messageId) ?? false;
+
+String? notificationConversationId(Map<String, dynamic> data) {
+  final value = data['conversationId'];
+  return value is String && value.isNotEmpty ? value : null;
+}
 
 const _channelId = 'line_oa_messages';
 const _channelName = 'Customer messages';
@@ -76,8 +110,8 @@ Future<void> _initializeLocalNotifications(
             if (payload == null) return;
             final decoded = jsonDecode(payload);
             if (decoded is! Map<String, dynamic>) return;
-            final conversationId = decoded['conversationId'];
-            if (conversationId is String && conversationId.isNotEmpty) {
+            final conversationId = notificationConversationId(decoded);
+            if (conversationId != null) {
               onConversation(
                   conversationId, decoded['notificationId'] as String?);
             }
@@ -97,7 +131,14 @@ Future<void> _initializeLocalNotifications(
   _localNotificationsInitialized = true;
 }
 
-Future<void> _showRemoteNotification(RemoteMessage message) async {
+Future<void> _showRemoteNotification(
+  RemoteMessage message, {
+  NotificationReceivePath path = NotificationReceivePath.foreground,
+}) async {
+  if (!shouldDisplayLocalNotification(
+      path: path, hasSystemNotification: message.notification != null)) {
+    return;
+  }
   final notificationId = message.data['notificationId'];
   final conversationId = message.data['conversationId'];
   final messageId = message.data['messageId'];
@@ -109,6 +150,10 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
     hasNotificationId: notificationId is String && notificationId.isNotEmpty,
     hasConversationId: conversationId is String && conversationId.isNotEmpty,
     hasMessageId: messageId is String && messageId.isNotEmpty,
+    notificationId: notificationId is String ? notificationId : null,
+    conversationId: conversationId is String ? conversationId : null,
+    messageId: messageId is String ? messageId : null,
+    path: path.name,
   );
   if (notificationId is! String ||
       notificationId.isEmpty ||
@@ -121,6 +166,11 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
   try {
     final localizations = await _loadNotificationLocalizations();
     await _initializeLocalNotifications();
+    if (await _effectiveBackgroundHistory.contains(
+        conversationId: conversationId, messageId: messageId)) {
+      SafeLogger.fcmDuplicateSuppressed();
+      return;
+    }
     final history = await _effectiveBackgroundHistory.append(
       conversationId: conversationId,
       customerName: customerName is String && customerName.trim().isNotEmpty
@@ -186,8 +236,27 @@ Future<void> _showRemoteNotification(RemoteMessage message) async {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   DartPluginRegistrant.ensureInitialized();
   SafeLogger.fcmBackgroundHandlerInvoked();
+  SafeLogger.fcmReceivePath(NotificationReceivePath.background.name);
+  final notificationId = message.data['notificationId'];
+  final conversationId = message.data['conversationId'];
+  final messageId = message.data['messageId'];
+  SafeLogger.fcmMessageReceived(
+    hasNotificationId: notificationId is String && notificationId.isNotEmpty,
+    hasConversationId: conversationId is String && conversationId.isNotEmpty,
+    hasMessageId: messageId is String && messageId.isNotEmpty,
+    notificationId: notificationId is String ? notificationId : null,
+    conversationId: conversationId is String ? conversationId : null,
+    messageId: messageId is String ? messageId : null,
+    path: NotificationReceivePath.background.name,
+  );
+  if (!shouldDisplayLocalNotification(
+      path: NotificationReceivePath.background,
+      hasSystemNotification: message.notification != null)) {
+    return;
+  }
   await _ensureFirebaseInitialized();
-  await _showRemoteNotification(message);
+  await _showRemoteNotification(message,
+      path: NotificationReceivePath.background);
 }
 
 class NotificationService {
@@ -197,13 +266,23 @@ class NotificationService {
       AuthenticationChecker? authenticationChecker,
       DeviceTokenDeactivator? deviceTokenDeactivator,
       NotificationCleanup? cancelNotifications,
-      ConversationNotificationHistoryStore? historyStore})
+      ConversationNotificationHistoryStore? historyStore,
+      NotificationPermissionLoader? permissionLoader,
+      NotificationPermissionRequester? permissionRequester,
+      NotificationSettingsOpener? settingsOpener,
+      FcmTokenDeleter? tokenDeleter,
+      FcmTokenRefreshStream? tokenRefreshStream})
       : _tokenLoader = tokenLoader,
         _tokenRegistrar = tokenRegistrar,
         _authenticationChecker = authenticationChecker,
         _deviceTokenDeactivator = deviceTokenDeactivator,
         _cancelNotifications = cancelNotifications,
-        _historyStore = historyStore;
+        _historyStore = historyStore,
+        _permissionLoader = permissionLoader,
+        _permissionRequester = permissionRequester,
+        _settingsOpener = settingsOpener,
+        _tokenDeleter = tokenDeleter,
+        _tokenRefreshStream = tokenRefreshStream;
 
   final ApiClient _api;
   final TokenStore _tokens;
@@ -212,8 +291,14 @@ class NotificationService {
   final AuthenticationChecker? _authenticationChecker;
   final DeviceTokenDeactivator? _deviceTokenDeactivator;
   final NotificationCleanup? _cancelNotifications;
+  final NotificationPermissionLoader? _permissionLoader;
+  final NotificationPermissionRequester? _permissionRequester;
+  final NotificationSettingsOpener? _settingsOpener;
+  final FcmTokenDeleter? _tokenDeleter;
+  final FcmTokenRefreshStream? _tokenRefreshStream;
   ConversationNotificationHistoryStore? _historyStore;
   String? _token;
+  final Set<String> _registeredTokens = <String>{};
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
@@ -221,6 +306,10 @@ class NotificationService {
   bool _loggingOut = false;
   Future<void>? _initializationInFlight;
   Future<void>? _registrationInFlight;
+  Future<void>? _tokenRefreshRegistrationInFlight;
+  String? _pendingRefreshToken;
+  NotificationPermissionStatus _permissionStatus =
+      NotificationPermissionStatus.unavailable;
 
   Future<void> initialize(ConversationDeepLink onConversation) async {
     if (_loggingOut) return;
@@ -262,15 +351,21 @@ class NotificationService {
 
     final messaging = FirebaseMessaging.instance;
     try {
-      await messaging.requestPermission();
+      final settings = await messaging.requestPermission();
+      _permissionStatus =
+          _permissionStatusFromFirebase(settings.authorizationStatus);
+      final android = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await android?.requestNotificationsPermission();
+      _permissionStatus = await notificationPermissionStatus();
+      SafeLogger.fcmPermissionStatus(_permissionStatus.name);
     } catch (error) {
       _logFailure('permission_request', error);
     }
 
-    _tokenSubscription = messaging.onTokenRefresh.listen((value) {
-      _token = value;
-      unawaited(_registerAuthenticatedToken(value));
-    });
+    _tokenSubscription =
+        (_tokenRefreshStream?.call() ?? messaging.onTokenRefresh)
+            .listen((value) => unawaited(handleTokenRefresh(value)));
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp
         .listen((message) => _open(message, onConversation));
     _messageSubscription =
@@ -288,8 +383,8 @@ class NotificationService {
       if (localLaunch?.didNotificationLaunchApp == true && payload != null) {
         final decoded = jsonDecode(payload);
         if (decoded is Map<String, dynamic>) {
-          final conversationId = decoded['conversationId'];
-          if (conversationId is String && conversationId.isNotEmpty) {
+          final conversationId = notificationConversationId(decoded);
+          if (conversationId != null) {
             onConversation(
                 conversationId, decoded['notificationId'] as String?);
           }
@@ -300,6 +395,35 @@ class NotificationService {
     }
     _initialized = true;
     await ensureDeviceRegistered();
+  }
+
+  Future<void> handleTokenRefresh(String value) async {
+    final token = value.trim();
+    if (token.isEmpty || _loggingOut) return;
+    _token = token;
+    _pendingRefreshToken = token;
+    final inFlight = _tokenRefreshRegistrationInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final operation = _drainTokenRefreshes();
+    _tokenRefreshRegistrationInFlight = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_tokenRefreshRegistrationInFlight, operation)) {
+        _tokenRefreshRegistrationInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _drainTokenRefreshes() async {
+    while (_pendingRefreshToken != null && !_loggingOut) {
+      final token = _pendingRefreshToken!;
+      _pendingRefreshToken = null;
+      await _registerAuthenticatedToken(token);
+    }
   }
 
   Future<void> ensureDeviceRegistered() async {
@@ -356,6 +480,7 @@ class NotificationService {
       await (_tokenRegistrar == null
           ? _registerAuthenticatedToken(token)
           : _tokenRegistrar(token));
+      _registeredTokens.add(token);
     } catch (error) {
       _logFailure('device_token_request', error);
     }
@@ -376,11 +501,89 @@ class NotificationService {
     }
     try {
       SafeLogger.fcmRegistrationRequestStarted();
-      await _api.post('/device-tokens',
-          body: {'token': token, 'platform': 'ANDROID'});
+      if (_tokenRegistrar != null) {
+        await _tokenRegistrar(token);
+      } else {
+        await _api.post('/device-tokens',
+            body: {'token': token, 'platform': 'ANDROID'});
+      }
+      _registeredTokens.add(token);
       SafeLogger.fcmTokenRegistered();
     } catch (error) {
       _logFailure('device_token_request', error);
+    }
+  }
+
+  Future<NotificationPermissionStatus> notificationPermissionStatus() async {
+    if (_permissionLoader != null) {
+      _permissionStatus = await _permissionLoader();
+      return _permissionStatus;
+    }
+    try {
+      final settings =
+          await FirebaseMessaging.instance.getNotificationSettings();
+      final firebaseStatus =
+          _permissionStatusFromFirebase(settings.authorizationStatus);
+      final enabled = await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.areNotificationsEnabled();
+      _permissionStatus = enabled == false
+          ? NotificationPermissionStatus.denied
+          : firebaseStatus;
+    } catch (_) {
+      _permissionStatus = NotificationPermissionStatus.unavailable;
+    }
+    SafeLogger.fcmPermissionStatus(_permissionStatus.name);
+    return _permissionStatus;
+  }
+
+  Future<NotificationPermissionStatus> requestNotificationPermission() async {
+    if (_permissionRequester != null) {
+      _permissionStatus = await _permissionRequester();
+      return _permissionStatus;
+    }
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      _permissionStatus =
+          _permissionStatusFromFirebase(settings.authorizationStatus);
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+      return await notificationPermissionStatus();
+    } catch (_) {
+      _permissionStatus = NotificationPermissionStatus.unavailable;
+      return _permissionStatus;
+    }
+  }
+
+  Future<bool> openNotificationSettings() async {
+    if (_settingsOpener != null) return _settingsOpener();
+    try {
+      return await const MethodChannel(
+                  'click.lineoppo.chat/notification_settings')
+              .invokeMethod<bool>('openNotificationSettings') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  NotificationPermissionStatus _permissionStatusFromFirebase(
+      AuthorizationStatus status) {
+    switch (status) {
+      case AuthorizationStatus.authorized:
+      case AuthorizationStatus.provisional:
+        return NotificationPermissionStatus.authorized;
+      case AuthorizationStatus.denied:
+        return NotificationPermissionStatus.denied;
+      case AuthorizationStatus.notDetermined:
+        return NotificationPermissionStatus.notDetermined;
     }
   }
 
@@ -414,18 +617,47 @@ class NotificationService {
           // Registration failures must never block logout.
         }
       }
-      final token = _token;
-      if (token != null && token.isNotEmpty) {
+      final tokenRefresh = _tokenRefreshRegistrationInFlight;
+      if (tokenRefresh != null) {
+        try {
+          await tokenRefresh;
+        } catch (_) {
+          // Token refresh failures must never block logout.
+        }
+      }
+      final token = _token ?? await _loadTokenForLogout();
+      final tokens = <String>{
+        ..._registeredTokens,
+        if (token != null && token.isNotEmpty) token,
+      };
+      if (tokens.isNotEmpty) {
         SafeLogger.logoutDeviceTokenDeactivationStarted();
         try {
-          if (_deviceTokenDeactivator != null) {
-            await _deviceTokenDeactivator(token);
-          } else {
-            await _api.delete('/device-tokens', body: {'token': token});
+          for (final registeredToken in tokens) {
+            if (_deviceTokenDeactivator != null) {
+              await _deviceTokenDeactivator(registeredToken);
+            } else {
+              await _api
+                  .delete('/device-tokens', body: {'token': registeredToken});
+            }
           }
           SafeLogger.logoutDeviceTokenDeactivationCompleted();
         } catch (_) {
           SafeLogger.logoutDeviceTokenDeactivationFailed();
+        } finally {
+          if (_tokenDeleter != null) {
+            try {
+              await _tokenDeleter();
+            } catch (_) {
+              // Local Firebase deletion is best effort after backend cleanup.
+            }
+          } else if (_tokenLoader == null) {
+            try {
+              await FirebaseMessaging.instance.deleteToken();
+            } catch (_) {
+              // Local Firebase deletion is best effort after backend cleanup.
+            }
+          }
         }
       }
     } finally {
@@ -449,6 +681,16 @@ class NotificationService {
     }
   }
 
+  Future<String?> _loadTokenForLogout() async {
+    try {
+      if (_tokenLoader != null) return await _tokenLoader();
+      if (Firebase.apps.isEmpty) return null;
+      return await FirebaseMessaging.instance.getToken();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> clearConversationNotifications(String conversationId) async {
     if (_localNotificationsInitialized) {
       await _localNotifications
@@ -468,12 +710,13 @@ class NotificationService {
     _openedSubscription = null;
     _messageSubscription = null;
     _token = null;
+    _registeredTokens.clear();
     _initialized = false;
   }
 
   void _open(RemoteMessage message, ConversationDeepLink onConversation) {
-    final conversationId = message.data['conversationId'];
-    if (conversationId is String && conversationId.isNotEmpty) {
+    final conversationId = notificationConversationId(message.data);
+    if (conversationId != null) {
       onConversation(conversationId, message.data['notificationId'] as String?);
     }
   }

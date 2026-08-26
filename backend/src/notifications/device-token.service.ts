@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
-import { UserStatus } from "@prisma/client";
+import { MembershipStatus, UserRole, UserStatus } from "@prisma/client";
 import { createHash } from "node:crypto";
+import { buildPermissionContext, hasWorkspaceAccess } from "../auth/permission-context";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
 import { RegisterDeviceTokenDto } from "./device-token.dto";
@@ -15,13 +16,34 @@ export class DeviceTokenService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
+        role: true,
         isActive: true,
         status: true,
-        memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { id: true } },
+        canAccessWeb: true,
+        canAccessMobile: true,
+        canAccessHq: true,
+        canAccessAllStores: true,
+        canManageAccounts: true,
+        canReply: true,
+        canAccessMainOa: true,
+        canManageMainOa: true,
+        memberships: { where: { status: MembershipStatus.ACTIVE, store: { isActive: true, archivedAt: null } }, select: { storeId: true, role: true } },
       },
     });
-    if (!user || !user.isActive || user.status !== UserStatus.ACTIVE || user.memberships.length === 0) {
-      throw new ForbiddenException("An active store membership is required to register a device");
+    const authorization = user && buildPermissionContext({
+      role: user.role ?? UserRole.VIEWER,
+      canAccessWeb: user.canAccessWeb,
+      canAccessMobile: user.canAccessMobile,
+      canAccessHq: user.canAccessHq,
+      canAccessAllStores: user.canAccessAllStores,
+      canManageAccounts: user.canManageAccounts,
+      canReply: user.canReply,
+      canAccessMainOa: user.canAccessMainOa,
+      canManageMainOa: user.canManageMainOa,
+      memberships: user.memberships,
+    });
+    if (!user || !user.isActive || user.status !== UserStatus.ACTIVE || !authorization?.platforms.mobile || !hasWorkspaceAccess(authorization)) {
+      throw new ForbiddenException("An active mobile workspace permission is required to register a device");
     }
   }
 

@@ -34,11 +34,20 @@ class SafeLogger {
     required bool hasNotificationId,
     required bool hasConversationId,
     required bool hasMessageId,
+    String? notificationId,
+    String? conversationId,
+    String? messageId,
+    String? path,
   }) =>
       _write(
-          'fcm_message_received notificationId=$hasNotificationId conversationId=$hasConversationId messageId=$hasMessageId');
+          'fcm_message_received notificationId=$hasNotificationId conversationId=$hasConversationId messageId=$hasMessageId path=${path ?? "unknown"} notificationRef=${_safeId(notificationId)} conversationRef=${_safeId(conversationId)} messageRef=${_safeId(messageId)}');
   static void fcmBackgroundHandlerInvoked() =>
       _write('fcm_background_handler_invoked');
+  static void fcmReceivePath(String path) =>
+      _write('fcm_receive_path path=$path');
+  static void fcmDuplicateSuppressed() => _write('fcm_duplicate_suppressed');
+  static void fcmPermissionStatus(String status) =>
+      _write('fcm_permission_status status=$status');
   static void fcmLocalNotificationShown() =>
       _write('fcm_local_notification_shown');
   static void fcmLocalNotificationFailed(String errorType) =>
@@ -64,4 +73,9 @@ class SafeLogger {
       _write('update_check_failed errorType=$errorType');
   static void updateDownloadFailed(String errorType) =>
       _write('update_download_failed errorType=$errorType');
+
+  static String _safeId(String? value) {
+    if (value == null || value.isEmpty) return 'missing';
+    return value.length <= 64 ? value : value.substring(0, 64);
+  }
 }
