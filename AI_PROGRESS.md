@@ -2162,6 +2162,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - `/download` and `/download/history` metadata preserves prior releases and is locked by regression test to the backend `AppRelease` migration used by `/app/version/android`. Numeric build comparison tests cover old/current installs and recoverable network failure without credential loss.
 - Flutter analyze and all 128 Flutter tests pass. Backend full tests pass 1,311/1,311; Prisma validate/generate and backend build pass. Frontend tests pass 394/394, changed-file lint passes, and production build passes. Local migrations deploy cleanly; production currently reports all 69 main migrations (including mobile refresh sessions) applied and up to date. Final runtime rerun, release commit, PR, and green CI monitoring remain.
 
+# Current task: Android 1.0.18+19 production release (2026-08-26)
+
+- Created `release/android-1.0.18` from clean `origin/main` at `44c8d63361691186b42ee37d79f94c5747733ea8`, containing the reliable APK updater and push notification fixes.
+- Bumped Android to `1.0.18+19` and updated the permanent-signing workflow gates. Signed workflow run `32961583276` passed package/version and permanent certificate verification; the signed artifact is being independently checked before publication.
+- Added the new APK, checksum-dependent frontend release entry, and additive AppRelease migration with the updater and push-notification changelog. Full Flutter/backend/frontend and Prisma gates remain required before the PR is opened.
+
 # Current task: Reliable Android APK updater (2026-08-26)
 
 - Created `feat/android-reliable-apk-updater-fix` from the latest clean `main` at `e919290`. Replaced the silent `canLaunchUrl`-only path with an app-scoped APK download, streamed SHA-256 verification against `/app/version/android` metadata, visible progress/error states, single-flight duplicate protection, stale/failed temporary-file cleanup, download tracking after verified download, and a retryable installer-permission state.
