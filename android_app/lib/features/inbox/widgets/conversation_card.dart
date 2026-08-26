@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
-import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import 'conversation_preview.dart';
-import 'priority_badge.dart';
-import '../priority.dart';
 
 class ConversationCard extends StatelessWidget {
   const ConversationCard({
@@ -105,10 +102,6 @@ class ConversationCard extends StatelessWidget {
                 ),
                 compact: true,
               ),
-              if (conversation.priority.isActionable) ...[
-                const SizedBox(width: 6),
-                PriorityBadge(priority: conversation.priority),
-              ],
               const Spacer(),
               const Icon(Icons.chevron_right,
                   size: 16, color: AppColors.textSecondary),
@@ -157,36 +150,9 @@ class ConversationCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    Expanded(
-                      child: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: [
-                          StatusBadge(
-                              status: conversation.bmReplyStatus,
-                              compact: true),
-                          if (conversation.priority.isActionable) ...[
-                            PriorityBadge(priority: conversation.priority),
-                            Text(
-                              appLocalizations(context).waitingFor(
-                                  formatWaitingDuration(
-                                      conversation.priority.waitingSeconds)),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 10.5,
-                                  ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    StatusBadge(
+                        status: conversation.bmReplyStatus, compact: true),
+                    const Spacer(),
                     const Icon(Icons.chevron_right,
                         size: 16, color: AppColors.textSecondary),
                   ],
