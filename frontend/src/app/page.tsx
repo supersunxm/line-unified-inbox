@@ -203,6 +203,8 @@ const translations = {
     translatedMessage: "ข้อความแปล",
     translateMessage: "ดูคำแปล",
     showOriginal: "ดูต้นฉบับ",
+    details: "รายละเอียด",
+    hideDetails: "ซ่อนรายละเอียด",
 
     purchased: "ซื้อแล้ว",
     customerSalesInformation: "ข้อมูลการขาย (CRM)",
@@ -519,6 +521,8 @@ const translations = {
     translatedMessage: "Translated Message",
     translateMessage: "Show Translation",
     showOriginal: "Show Original",
+    details: "Details",
+    hideDetails: "Hide Details",
 
     purchased: "Purchased",
     customerSalesInformation: "Customer Sales Information",
@@ -834,6 +838,8 @@ const translations = {
     translatedMessage: "翻译消息",
     translateMessage: "查看翻译",
     showOriginal: "查看原文",
+    details: "详情",
+    hideDetails: "隐藏详情",
 
     purchased: "已购买",
     customerSalesInformation: "客户销售信息",
@@ -1504,6 +1510,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [showTranslation, setShowTranslation] = useState(true);
+  const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [conversationStates, setConversationStates] = useState<
     Record<string, ConversationState>
   >({});
@@ -4116,6 +4123,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           ↻
                         </button>
                         <button
+                          type="button"
+                          data-chat-details-toggle
+                          onClick={() => setShowDetailsDrawer((v) => !v)}
+                          aria-expanded={showDetailsDrawer}
+                          className={`rounded-[var(--app-radius-sm)] border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)] ${
+                            showDetailsDrawer
+                              ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)] border-[var(--app-accent)]/30 font-semibold"
+                              : "border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-subtle)] hover:text-[var(--app-text-primary)]"
+                          }`}
+                          title={showDetailsDrawer ? text.hideDetails : text.details}
+                        >
+                          {text.details}
+                        </button>
+                        <button
                           data-chat-detail-primary-action
                           type="button"
                           onClick={() => void openSelectedConversationInLineOa()}
@@ -4127,137 +4148,159 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       </div>
                     </header>
 
-                    {/* ── 2. CHAT CONVERSATION — PRIMARY AREA ─────────── */}
-                    <div className="flex min-h-0 shrink-0 flex-col">
-                      <div className="flex shrink-0 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-1.5">
-                        <p className="app-muted text-xs font-tabular text-[var(--app-text-tertiary)] font-mono">{chatHistory.total} {text.messagesToday}</p>
-                        <button
-                          data-chat-detail-secondary-action
-                          onClick={() => setShowTranslation(!showTranslation)}
-                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]"
-                        >
-                          🌐 {showTranslation ? text.showOriginal : text.translateMessage}
-                        </button>
-                      </div>
-                      <div data-chat-message-scroll className="h-[clamp(200px,36vh,440px)] min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
-                        {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
-                        {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
-                        {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">{text.noMessages}</p>}
-                        <div ref={chatEndRef} />
-                      </div>
-                      <div data-chat-reply-composer className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
-                        <div className="flex items-end gap-2">
-                          <textarea
-                            value={replyText}
-                            disabled={replySending || authUser.role === "VIEWER"}
-                            maxLength={5000}
-                            rows={2}
-                            aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
-                            placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
-                            onChange={(event) => {
-                              setReplyText(event.target.value);
-                              setReplyError(null);
-                              replyIdempotencyKeyRef.current = null;
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" && !event.shiftKey) {
-                                event.preventDefault();
-                                void sendReply();
-                              }
-                            }}
-                            className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60"
-                          />
+                    {/* ── 2. DETAIL WORKSPACE BODY (DOMINANT CHAT + DRAWER) ── */}
+                    <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden relative">
+                      {/* ── PRIMARY CHAT COLUMN ── */}
+                      <div className="flex flex-1 min-h-0 min-w-0 flex-col bg-[var(--app-surface)]">
+                        <div className="flex shrink-0 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-1.5">
+                          <p className="app-muted text-xs font-tabular text-[var(--app-text-tertiary)] font-mono">{chatHistory.total} {text.messagesToday}</p>
                           <button
-                            type="button"
-                            disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
-                            onClick={() => void sendReply()}
-                            className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            data-chat-detail-secondary-action
+                            onClick={() => setShowTranslation(!showTranslation)}
+                            className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]"
                           >
-                            {replySending ? "กำลังส่ง..." : "ส่ง"}
+                            🌐 {showTranslation ? text.showOriginal : text.translateMessage}
                           </button>
                         </div>
-                        {replyError && <p role="alert" className="mt-2 text-xs text-[var(--app-danger)]">{replyError}</p>}
-                        <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)] font-mono">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
-                      </div>
-                      <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/50 px-4 py-1.5 text-xs text-[var(--app-text-tertiary)]"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
-                    </div>
-
-                    {/* ── 3. LOWER SECTIONS ──────────────────────────────── */}
-                    <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto">
-                      <div className="px-3 py-3 sm:px-4">
-                        <div data-chat-detail-lower className="chat-detail-lower grid gap-3 py-2">
-                          <section data-product-intent-card data-insights-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-insights">
-                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.aiInsight}</h3>
-                              <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]">{text.reanalyzeConversation}</button>
-                            </div>
-                            {selectedApiConversation?.aiInsight?.mentionedProducts.length ? (
-                              <div className="mb-3"><h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.mentionedProduct}</h4><p className="mt-0.5 text-xs font-medium text-[var(--app-text-primary)]">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
-                            ) : (
-                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.noInsightAvailable}</p>
-                            )}
-                            <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                              <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
-                              <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200 font-semibold">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
-                            </dl>
-                            <div className="mt-3 border-t border-[var(--app-border-subtle)] pt-3">
-                              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.conversationTopics}</h4>
-                              <div className="flex flex-wrap gap-1.5">
-                                {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics.filter(({ source }) => source === "RULE") ?? [])
-                                  .map((topic) => {
-                                    const topicId = "topic" in topic ? topic.topic.id : topic.id;
-                                    const topicName = "topic" in topic ? topic.topic.name : topic.name;
-                                    return <span key={topicId} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">{topicName} <span className="text-[10px] opacity-70">{text.autoSource}</span></span>;
-                                  })}
-                                {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-xs text-[var(--app-text-tertiary)]">{text.noTopicDetected}</span>}
-                              </div>
-                            </div>
-                          </section>
-
-                          <section data-topics-note-card data-internal-note-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-note">
-                            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.internalNote}</label>
-                            <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="max-h-32 min-h-20 w-full resize-y rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)]" />
-                            <p className="app-muted mt-1.5 text-[11px] text-[var(--app-text-tertiary)] font-mono">{isMutating ? text.loadingData : text.noteSaveHint}</p>
-                          </section>
-
-                          <section data-activity-history className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-activity">
-                            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.activityHistory}</h3>
-                            {selectedConversationState.activityHistory.length > 0 ? (
-                              <div className="space-y-2">
-                                {[...selectedConversationState.activityHistory]
-                                  .reverse()
-                                  .map((activity) => (
-                                    <div
-                                      key={activity.id}
-                                      className="flex items-center justify-between gap-3 rounded-[var(--app-radius-sm)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs"
-                                    >
-                                      <p className="text-xs text-[var(--app-text-primary)]">
-                                        {activity.actionType === "messageReceived" ? (
-                                          text.messageReceivedActivity
-                                        ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
-                                          <>
-                                            {text.bmReplyStatusChangedTo}{" "}
-                                            <span className="font-semibold text-[var(--app-text-primary)]">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
-                                          </>
-                                        ) : activity.status ? (
-                                          <>
-                                            {text.statusChangedTo}{" "}
-                                            <span className="font-semibold text-[var(--app-text-primary)]">{getStatusLabel(language, activity.status)}</span>
-                                          </>
-                                        ) : null}
-                                      </p>
-                                      <time className="text-[10px] text-[var(--app-text-tertiary)] font-mono" dateTime={activity.timestamp}>
-                                        {formatRelativeTime(activity.timestamp, language)}
-                                      </time>
-                                    </div>
-                                  ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-[var(--app-text-tertiary)]">{text.noActivity}</p>
-                            )}
-                          </section>
+                        <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
+                          {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
+                          {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                          {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">{text.noMessages}</p>}
+                          <div ref={chatEndRef} />
                         </div>
+                        <div data-chat-reply-composer className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
+                          <div className="flex items-end gap-2">
+                            <textarea
+                              value={replyText}
+                              disabled={replySending || authUser.role === "VIEWER"}
+                              maxLength={5000}
+                              rows={2}
+                              aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
+                              placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
+                              onChange={(event) => {
+                                setReplyText(event.target.value);
+                                setReplyError(null);
+                                replyIdempotencyKeyRef.current = null;
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                  event.preventDefault();
+                                  void sendReply();
+                                }
+                              }}
+                              className="app-input max-h-32 min-h-11 flex-1 resize-none rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
+                              onClick={() => void sendReply()}
+                              className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {replySending ? "กำลังส่ง..." : "ส่ง"}
+                            </button>
+                          </div>
+                          {replyError && <p role="alert" className="mt-2 text-xs text-[var(--app-danger)]">{replyError}</p>}
+                          <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)] font-mono">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                        </div>
+                        <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/50 px-4 py-1.5 text-xs text-[var(--app-text-tertiary)]"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                       </div>
+
+                      {/* ── 3. COLLAPSIBLE DETAILS DRAWER ── */}
+                      {showDetailsDrawer && (
+                        <aside
+                          data-chat-details-drawer
+                          className="w-80 lg:w-[22rem] shrink-0 border-l border-[var(--app-border)] bg-[var(--app-surface)] flex flex-col h-full min-h-0 z-10 shadow-lg"
+                        >
+                          <div className="flex items-center justify-between border-b border-[var(--app-border)] px-4 py-2.5 shrink-0 bg-[var(--app-surface)]">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                              {text.details}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowDetailsDrawer(false)}
+                              className="rounded-[var(--app-radius-sm)] p-1 text-xs text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-subtle)] hover:text-[var(--app-text-primary)] transition-colors"
+                              aria-label={text.hideDetails}
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto p-3.5 space-y-3">
+                            <div data-chat-detail-lower className="chat-detail-lower grid gap-3">
+                              <section data-product-intent-card data-insights-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-insights">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.aiInsight}</h3>
+                                  <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]">{text.reanalyzeConversation}</button>
+                                </div>
+                                {selectedApiConversation?.aiInsight?.mentionedProducts.length ? (
+                                  <div className="mb-3"><h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.mentionedProduct}</h4><p className="mt-0.5 text-xs font-medium text-[var(--app-text-primary)]">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
+                                ) : (
+                                  <p className="text-xs text-[var(--app-text-tertiary)]">{text.noInsightAvailable}</p>
+                                )}
+                                <dl className="grid grid-cols-1 gap-x-4 gap-y-3">
+                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
+                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200 font-semibold">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
+                                </dl>
+                                <div className="mt-3 border-t border-[var(--app-border-subtle)] pt-3">
+                                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.conversationTopics}</h4>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics.filter(({ source }) => source === "RULE") ?? [])
+                                      .map((topic) => {
+                                        const topicId = "topic" in topic ? topic.topic.id : topic.id;
+                                        const topicName = "topic" in topic ? topic.topic.name : topic.name;
+                                        return <span key={topicId} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">{topicName} <span className="text-[10px] opacity-70">{text.autoSource}</span></span>;
+                                      })}
+                                    {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-xs text-[var(--app-text-tertiary)]">{text.noTopicDetected}</span>}
+                                  </div>
+                                </div>
+                              </section>
+
+                              <section data-topics-note-card data-internal-note-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-note">
+                                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.internalNote}</label>
+                                <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="max-h-32 min-h-20 w-full resize-y rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)]" />
+                                <p className="app-muted mt-1.5 text-[11px] text-[var(--app-text-tertiary)] font-mono">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                              </section>
+
+                              <section data-activity-history className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-activity">
+                                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.activityHistory}</h3>
+                                {selectedConversationState.activityHistory.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {[...selectedConversationState.activityHistory]
+                                      .reverse()
+                                      .map((activity) => (
+                                        <div
+                                          key={activity.id}
+                                          className="flex items-center justify-between gap-3 rounded-[var(--app-radius-sm)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs"
+                                        >
+                                          <p className="text-xs text-[var(--app-text-primary)]">
+                                            {activity.actionType === "messageReceived" ? (
+                                              text.messageReceivedActivity
+                                            ) : activity.actionType === "bmReplyStatus" && activity.bmReplyStatus ? (
+                                              <>
+                                                {text.bmReplyStatusChangedTo}{" "}
+                                                <span className="font-semibold text-[var(--app-text-primary)]">{bmReplyStatusLabels[language][activity.bmReplyStatus]}</span>
+                                              </>
+                                            ) : activity.status ? (
+                                              <>
+                                                {text.statusChangedTo}{" "}
+                                                <span className="font-semibold text-[var(--app-text-primary)]">{getStatusLabel(language, activity.status)}</span>
+                                              </>
+                                            ) : null}
+                                          </p>
+                                          <time className="text-[10px] text-[var(--app-text-tertiary)] font-mono" dateTime={activity.timestamp}>
+                                            {formatRelativeTime(activity.timestamp, language)}
+                                          </time>
+                                        </div>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-[var(--app-text-tertiary)]">{text.noActivity}</p>
+                                )}
+                              </section>
+                            </div>
+                          </div>
+                        </aside>
+                      )}
                     </div>
                   </div>
                 ) : (

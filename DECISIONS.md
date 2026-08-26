@@ -1,3 +1,10 @@
+# Dominant Chat Timeline & Collapsible Details Drawer in /chats (2026-08-26)
+
+- **Primary Flexible Chat Region**: The message timeline (`data-chat-message-scroll`) is now the main flexible region (`flex-1 min-h-0 overflow-y-auto`) filling all available vertical space directly above the docked reply composer.
+- **Collapsible Operational Metadata**: Secondary cards (AI Insight, Internal Note, and Activity History) are housed inside a collapsible side drawer (`data-chat-details-drawer`) accessible via a `Details` toggle button in the chat header.
+- **Default Closed State**: By default, the details drawer is closed, allowing the conversation stream to occupy 100% of the detail pane width and height.
+- **Side Panel & Overlay Behavior**: On desktop viewports, opening details renders a 320–352px side drawer side-by-side with the chat. On narrow viewports (< 900px), it smoothly overlays the chat with independent scrolling.
+
 # Fixed Single-Screen /chats Workspace Layout (2026-08-26)
 
 - **Root Viewport Constraint**: The outer application shell is locked to `100dvh` (`max-height: 100dvh; overflow: hidden`) across desktop and responsive viewports, ensuring the outer browser document never produces a vertical scrollbar.

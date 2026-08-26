@@ -618,12 +618,6 @@ body.is-resizing-panes {
   .chat-resize-handle {
     display: none;
   }
-
-  [data-chat-message-scroll] {
-    max-height: 50vh;
-    min-height: clamp(20rem, 46vh, 28rem);
-  }
-
 }
 
 @media (max-width: 900px) {
@@ -658,6 +652,16 @@ body.is-resizing-panes {
 
   .chat-resizable-grid > [data-chat-pane="detail"] {
     grid-column: 1 / -1;
+  }
+
+  [data-chat-details-drawer] {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(100%, 22rem);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+    z-index: 30;
   }
 
   .chat-detail-follow-up {

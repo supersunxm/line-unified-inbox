@@ -80,16 +80,33 @@ test("Store Follow-up bottom panel is removed from Chat Detail while shared stat
   }
 });
 
-test("detail pane uses container-responsive consolidation and reserves the assistant corner", () => {
+test("detail pane uses dominant chat message timeline and collapsible details drawer", () => {
   assert.match(pageCode, /data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col"/);
+  assert.match(detail, /data-chat-details-toggle/);
+  assert.match(detail, /data-chat-details-drawer/);
+  assert.match(detail, /data-chat-message-scroll className="flex-1 min-h-0 space-y-2\.5 overflow-y-auto/);
   assert.match(globalsCode, /container-name: chat-detail/);
-  assert.match(globalsCode, /@container chat-detail \(min-width: 44rem\)/);
-  assert.match(globalsCode, /\.chat-detail-follow-up \{[\s\S]*bottom: 0;[\s\S]*padding-right: 5\.5rem;[\s\S]*position: sticky;[\s\S]*z-index: 20;/);
-  assert.match(globalsCode, /@media \(max-width: 1120px\)[\s\S]*\[data-chat-message-scroll\][\s\S]*min-height: clamp\(20rem, 46vh, 28rem\)/);
+  assert.match(globalsCode, /\[data-chat-details-drawer\]/);
 });
 
 test("detail pane renders centered empty state when no conversation is selected", () => {
   assert.match(pageCode, /data-chat-detail-empty-state/);
   assert.match(pageCode, /text\.selectConversationTitle/);
   assert.match(pageCode, /text\.selectConversationDescription/);
+});
+
+test("collapsible details drawer encapsulates secondary metadata without consuming permanent vertical space", () => {
+  // Toggle button in header
+  assert.match(detail, /data-chat-details-toggle[\s\S]*setShowDetailsDrawer\(\(v\) => !v\)/);
+  assert.match(detail, /aria-expanded=\{showDetailsDrawer\}/);
+  assert.match(detail, /\{text\.details\}/);
+
+  // Drawer structure
+  assert.match(detail, /showDetailsDrawer && \(\s*<aside\s+data-chat-details-drawer/);
+  assert.match(detail, /className="w-80 lg:w-\[22rem\] shrink-0 border-l border-\[var\(--app-border\)\] bg-\[var\(--app-surface\)\] flex flex-col h-full min-h-0/);
+  assert.match(detail, /onClick=\{\(\) => setShowDetailsDrawer\(false\)\}/);
+
+  // Dominant chat timeline
+  assert.match(detail, /data-chat-message-scroll className="flex-1 min-h-0 space-y-2\.5 overflow-y-auto/);
+  assert.match(detail, /data-chat-reply-composer className="shrink-0 border-t/);
 });

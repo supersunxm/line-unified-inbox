@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: Fixed Single-Screen /chats Workspace Layout (2026-08-26)
+## Current task: Dominant Chat Timeline & Collapsible Details Drawer in /chats (2026-08-26)
+
+- **Dominant Message Timeline Area**:
+  - Refactored `/chats` detail pane so the message conversation stream is the primary flexible region, consuming all available vertical height via `flex-1 min-h-0 overflow-y-auto`.
+  - Removed artificial fixed height clamps (`h-[clamp(...)]` and media query caps).
+  - Pinned customer identity header at the top (`shrink-0`), chat subheader/toolbar (`shrink-0`), message timeline (`flex-1 min-h-0`), reply composer at bottom (`shrink-0`), and manager notice (`shrink-0`).
+- **Collapsible Details Drawer**:
+  - Replaced permanently rendered lower operational cards with a collapsible slide-in Details drawer (`data-chat-details-drawer`).
+  - Added subtle `Details` (`data-chat-details-toggle`) action in the customer header with active toggle states and multilingual labels (`Details` / `รายละเอียด` / `详情`).
+  - Default state is closed, giving the message area 100% of the detail pane width and vertical height.
+  - When opened, renders a 320–352px (`w-80 lg:w-[22rem]`) side panel on desktop (and overlay under 900px) containing AI Insight, Internal Note (with inline editing), and Activity History with independent internal scrolling (`min-h-0 flex-1 overflow-y-auto`).
+- **Verification & Test Results**:
+  - Updated `frontend/test/chat-detail-hierarchy.test.mts` and `frontend/test/shell-navigation.test.mts`.
+  - All 404 / 404 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Fixed Single-Screen /chats Workspace Layout (2026-08-26)
 
 - **Single-Screen Viewport Architecture**:
   - Locked browser viewport to `100dvh` without document-level vertical scrolling.

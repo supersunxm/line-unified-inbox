@@ -193,10 +193,12 @@ test("/chats workspace enforces a single-screen layout with internal scrolling o
   assert.match(pageCode, /<div className="flex-1 overflow-y-auto">/);
   assert.match(pageCode, /<div className="shrink-0">\s*<ConversationPaginationFooter/);
 
-  // Detail pane: fixed header, internal message scroll, fixed composer, internal lower detail scroll
+  // Detail pane: fixed header, dominant message timeline, fixed composer, and collapsible drawer
   assert.match(pageCode, /<section data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col"/);
   assert.match(pageCode, /<header data-chat-detail-header className="flex shrink-0/);
-  assert.match(pageCode, /data-chat-message-scroll className="h-\[clamp\(200px,36vh,440px\)\] min-h-0 space-y-2\.5 overflow-y-auto/);
+  assert.match(pageCode, /data-chat-details-toggle/);
+  assert.match(pageCode, /data-chat-message-scroll className="flex-1 min-h-0 space-y-2\.5 overflow-y-auto/);
   assert.match(pageCode, /<div data-chat-reply-composer className="shrink-0/);
-  assert.match(pageCode, /<div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto"/);
+  assert.match(pageCode, /<div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto/);
+  assert.match(pageCode, /data-chat-details-drawer/);
 });
