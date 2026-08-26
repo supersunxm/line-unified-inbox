@@ -177,3 +177,26 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
     assert.match(appSidebarCode, new RegExp(`href: "${href}"`));
   }
 });
+
+test("/chats workspace enforces a single-screen layout with internal scrolling on all 3 panes", () => {
+  assert.match(appShellCode, /className="app-shell flex h-dvh min-h-dvh max-h-dvh w-full min-w-0 max-w-full flex-col overflow-hidden/);
+  assert.match(appShellCode, /height: 100dvh !important;\s*max-height: 100dvh !important;\s*overflow: hidden !important;/);
+  assert.match(pageContainerCode, /className=\{\`w-full h-full min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden \$\{className\}\`\}/);
+  assert.match(globalsCode, /\.chat-resizable-grid \{\s*height: 100%;\s*max-height: 100%;\s*max-width: 100vw;\s*overflow: hidden;\s*\}/);
+
+  // Sidebar: fixed pane with internal scrolling
+  assert.match(contextSidebarCode, /<aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-hidden/);
+  assert.match(contextSidebarCode, /className="flex-1 min-h-0 overflow-y-auto/);
+
+  // Conversations pane: fixed header, internal list scroll, fixed pagination
+  assert.match(pageCode, /<section data-chat-pane="conversations" className="app-surface min-w-0 min-h-0 flex flex-col h-full overflow-hidden/);
+  assert.match(pageCode, /<div className="flex-1 overflow-y-auto">/);
+  assert.match(pageCode, /<div className="shrink-0">\s*<ConversationPaginationFooter/);
+
+  // Detail pane: fixed header, internal message scroll, fixed composer, internal lower detail scroll
+  assert.match(pageCode, /<section data-chat-pane="detail" className="app-surface h-full min-w-0 min-h-0 overflow-hidden flex flex-col"/);
+  assert.match(pageCode, /<header data-chat-detail-header className="flex shrink-0/);
+  assert.match(pageCode, /data-chat-message-scroll className="h-\[clamp\(200px,36vh,440px\)\] min-h-0 space-y-2\.5 overflow-y-auto/);
+  assert.match(pageCode, /<div data-chat-reply-composer className="shrink-0/);
+  assert.match(pageCode, /<div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto"/);
+});

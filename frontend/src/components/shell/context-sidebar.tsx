@@ -90,105 +90,109 @@ export function ContextSidebar({
   const totalOverviewCount = (overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0);
 
   return (
-    <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-y-auto border-r border-[var(--app-border)] bg-[var(--app-surface)] p-3">
-      {/* Overview Status Section */}
-      <p className="app-muted mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
-        {text.overview || "ภาพรวม"}
-      </p>
-
-      <nav aria-label="Conversation filters" className="space-y-0.5">
-        <button
-          type="button"
-          onClick={() => selectSidebarView("all")}
-          className={`${sidebarButtonClass("all")} flex items-center justify-between`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-neutral)] shrink-0" />
-            <span>{text.all || "ทั้งหมด"}</span>
-          </span>
-          <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-surface-subtle)] border border-[var(--app-border-subtle)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--app-text-secondary)]">
-            {totalOverviewCount}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => selectSidebarView("notReplied")}
-          className={`${sidebarButtonClass("notReplied")} flex items-center justify-between`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-danger)] shrink-0" />
-            <span>{text.notReplied || "ยังไม่ตอบ"}</span>
-          </span>
-          <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] border border-[var(--app-danger)]/20 px-1.5 py-0.5 text-[11px] font-semibold">
-            {overview.notReplied}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => selectSidebarView("notifiedBm")}
-          className={`${sidebarButtonClass("notifiedBm")} flex items-center justify-between`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#8e44ec] shrink-0" />
-            <span>{text.notifiedBm || "แจ้ง BM แล้ว"}</span>
-          </span>
-          <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] border border-[#8e44ec]/20 px-1.5 py-0.5 text-[11px] font-semibold">
-            {overview.notifiedBm}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => selectSidebarView("replied")}
-          className={`${sidebarButtonClass("replied")} flex items-center justify-between`}
-        >
-          <span className="flex items-center gap-2 truncate">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)] shrink-0" />
-            <span>{text.replied || "ตอบแล้ว"}</span>
-          </span>
-          <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-success-soft)] text-[var(--app-success)] border border-[var(--app-success)]/20 px-1.5 py-0.5 text-[11px] font-semibold">
-            {overview.replied}
-          </span>
-        </button>
-      </nav>
-
-      {/* Stores Filter Section */}
-      <div className="my-3 border-t border-[var(--app-border-subtle)]" />
-
-      <div className="mb-2 flex items-center justify-between px-1">
-        <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
-          {text.stores || "ร้านค้า"}
+    <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-surface)]">
+      <div className="p-3 pb-2 shrink-0 border-b border-[var(--app-border-subtle)]">
+        {/* Overview Status Section */}
+        <p className="app-muted mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+          {text.overview || "ภาพรวม"}
         </p>
-        <button
-          type="button"
-          onClick={handleClearAll}
-          className="text-[11px] font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-danger)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-danger)] rounded px-1"
-        >
-          {text.clearAll || "ล้างทั้งหมด"}
-        </button>
+
+        <nav aria-label="Conversation filters" className="space-y-0.5">
+          <button
+            type="button"
+            onClick={() => selectSidebarView("all")}
+            className={`${sidebarButtonClass("all")} flex items-center justify-between`}
+          >
+            <span className="flex items-center gap-2 truncate">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-neutral)] shrink-0" />
+              <span>{text.all || "ทั้งหมด"}</span>
+            </span>
+            <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-surface-subtle)] border border-[var(--app-border-subtle)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--app-text-secondary)]">
+              {totalOverviewCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectSidebarView("notReplied")}
+            className={`${sidebarButtonClass("notReplied")} flex items-center justify-between`}
+          >
+            <span className="flex items-center gap-2 truncate">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-danger)] shrink-0" />
+              <span>{text.notReplied || "ยังไม่ตอบ"}</span>
+            </span>
+            <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] border border-[var(--app-danger)]/20 px-1.5 py-0.5 text-[11px] font-semibold">
+              {overview.notReplied}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectSidebarView("notifiedBm")}
+            className={`${sidebarButtonClass("notifiedBm")} flex items-center justify-between`}
+          >
+            <span className="flex items-center gap-2 truncate">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8e44ec] shrink-0" />
+              <span>{text.notifiedBm || "แจ้ง BM แล้ว"}</span>
+            </span>
+            <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] border border-[#8e44ec]/20 px-1.5 py-0.5 text-[11px] font-semibold">
+              {overview.notifiedBm}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectSidebarView("replied")}
+            className={`${sidebarButtonClass("replied")} flex items-center justify-between`}
+          >
+            <span className="flex items-center gap-2 truncate">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)] shrink-0" />
+              <span>{text.replied || "ตอบแล้ว"}</span>
+            </span>
+            <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[var(--app-success-soft)] text-[var(--app-success)] border border-[var(--app-success)]/20 px-1.5 py-0.5 text-[11px] font-semibold">
+              {overview.replied}
+            </span>
+          </button>
+        </nav>
+
+        {/* Stores Filter Section */}
+        <div className="my-2.5 border-t border-[var(--app-border-subtle)]" />
+
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+            {text.stores || "ร้านค้า"}
+          </p>
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="text-[11px] font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-danger)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-danger)] rounded px-1"
+          >
+            {text.clearAll || "ล้างทั้งหมด"}
+          </button>
+        </div>
+
+        {/* Inline Store Search Box */}
+        <div className="mb-1">
+          <label className="relative block">
+            <span className="sr-only">{text.searchStores || "ค้นหาร้านค้า"}</span>
+            <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--app-text-tertiary)]">
+              ⌕
+            </span>
+            <input
+              type="search"
+              value={storeSearch}
+              onChange={(e) => {
+                setStoreSearch(e.target.value);
+                setStorePage(1);
+              }}
+              placeholder={text.searchStoresPlaceholder || "Search stores..."}
+              className="app-input h-7 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] py-1 pl-7 pr-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            />
+          </label>
+        </div>
       </div>
 
-      {/* Inline Store Search Box */}
-      <div className="mb-2.5">
-        <label className="relative block">
-          <span className="sr-only">{text.searchStores || "ค้นหาร้านค้า"}</span>
-          <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--app-text-tertiary)]">
-            ⌕
-          </span>
-          <input
-            type="search"
-            value={storeSearch}
-            onChange={(e) => {
-              setStoreSearch(e.target.value);
-              setStorePage(1);
-            }}
-            placeholder={text.searchStoresPlaceholder || "Search stores..."}
-            className="app-input h-7 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] py-1 pl-7 pr-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-          />
-        </label>
-      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 pt-2">
 
       {sortedStores.length === 0 && storeSearch.trim() !== "" ? (
         <div className="py-6 text-center text-xs app-muted">
@@ -397,6 +401,7 @@ export function ContextSidebar({
           )}
         </div>
       )}
+      </div>
     </aside>
   );
 }

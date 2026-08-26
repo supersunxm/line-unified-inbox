@@ -1,3 +1,12 @@
+# Fixed Single-Screen /chats Workspace Layout (2026-08-26)
+
+- **Root Viewport Constraint**: The outer application shell is locked to `100dvh` (`max-height: 100dvh; overflow: hidden`) across desktop and responsive viewports, ensuring the outer browser document never produces a vertical scrollbar.
+- **Dedicated Internal Scrolling Boundaries**:
+  - Store sidebar: Search and status filter buttons are fixed at top; store list container scrolls internally with `overflow-y-auto`.
+  - Conversation list: Title, search count, and filter panel are fixed; conversation cards scroll internally with `overflow-y-auto`; pagination controls stay docked at the bottom.
+  - Chat detail pane: Customer header is fixed; chat message timeline scrolls internally with responsive clamp `clamp(200px, 36vh, 440px)`; reply composer and manager notice are fixed; lower detail sections (AI Insight, Internal Note, Activity) scroll internally within the remaining height.
+- **Page Container Versatility**: `PageContainer variant="full"` locks viewport height with `overflow-hidden` for `/chats`, while `variant="wide"` and `variant="readable"` retain `<main>` internal `overflow-y-auto` scrolling for standard dashboards and reports.
+
 # /chats Workspace Layout & UX Optimization (2026-08-26)
 
 - **Default Pane Proportions**:

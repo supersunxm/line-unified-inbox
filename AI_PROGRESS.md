@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: /chats Workspace Layout & UX Optimization (2026-08-26)
+## Current task: Fixed Single-Screen /chats Workspace Layout (2026-08-26)
+
+- **Single-Screen Viewport Architecture**:
+  - Locked browser viewport to `100dvh` without document-level vertical scrolling.
+  - `AppShell`: Configured root container with `h-dvh min-h-dvh max-h-dvh overflow-hidden flex flex-col`.
+  - `PageContainer variant="full"`: Configured with `w-full h-full min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden`.
+  - `chat-resizable-grid`: Configured with `height: 100%; max-height: 100%; overflow: hidden`.
+- **Internal Pane Scrolling**:
+  - **Left context/store sidebar**: Fixed pane header and search controls, with stores list scrolling internally via `flex-1 min-h-0 overflow-y-auto`.
+  - **Middle conversation list**: Fixed header and filter area (`shrink-0`), conversation rows scrolling internally via `flex-1 min-h-0 overflow-y-auto`, pagination footer fixed at the bottom (`shrink-0`).
+  - **Right conversation detail**: Customer header fixed (`shrink-0`), message area scrolling internally with viewport-proportional clamp `h-[clamp(200px,36vh,440px)] min-h-0 overflow-y-auto`, reply composer fixed (`shrink-0`), manager notice fixed (`shrink-0`), lower detail sections (AI Insight, Internal Note, Activity) scrolling internally via `min-h-0 flex-1 overflow-y-auto`.
+- **Verification & Test Results**:
+  - Added dedicated tests in `frontend/test/shell-navigation.test.mts` verifying viewport bounds, container hierarchy, and internal scrolling behaviors.
+  - All 402 / 402 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: /chats Workspace Layout & UX Optimization (2026-08-26)
 
 - **Pane Widths & Proportions**:
   - Context Sidebar: Updated default to 280px (min: 220px, max: 420px).

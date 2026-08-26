@@ -16,9 +16,20 @@ export function AppShell({
   ...topNavProps
 }: AppShellProps) {
   return (
-    <div className="app-shell flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
+    <div className="app-shell flex h-dvh min-h-dvh max-h-dvh w-full min-w-0 max-w-full flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <style>{`
         @media (min-width: 768px) {
+          html,
+          body {
+            height: 100%;
+            max-height: 100dvh;
+            overflow: hidden !important;
+          }
+          .app-shell {
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
+          }
           .app-mobile-scroll,
           .app-shell-status {
             margin-left: var(--app-sidebar-width, 16rem);
@@ -126,7 +137,7 @@ export function AppShell({
         </div>
       )}
 
-      <div className="app-mobile-scroll flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">
+      <div className="app-mobile-scroll flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
         {children}
       </div>
     </div>
