@@ -1,6 +1,42 @@
 # AI progress
 
-## Current task: BM Mobile Customer Sales Tags as Source of Truth on Web (2026-08-26)
+## Current task: Store Master Google Maps Column K Integration (2026-08-26)
+
+- **Database & Prisma Schema**:
+  - Added nullable `googleMapsUrl String?` to `model StoreMaster` in `backend/prisma/schema.prisma`.
+  - Created migration `20260826180000_add_store_master_google_maps_url/migration.sql` adding `googleMapsUrl TEXT` to `StoreMaster`.
+  - Executed `prisma generate` to update Prisma Client typings.
+- **CSV Parser & Validation (`backend/src/store-master/store-master.utils.ts`)**:
+  - Added `googleMapsUrl` to `ParsedMasterRow`.
+  - Implemented `isValidGoogleMapsUrl(value)` supporting `https://maps.app.goo.gl/...`, `https://goo.gl/maps/...`, `https://maps.google.com/...`, `https://maps.google.co.th/...`, and `https://*.google.com/maps/...` with full query parameters preserved.
+  - Mapped Column K `"Google Maps links"` and accepted aliases (`"Google Maps Link"`, `"Google Maps URL"`, `"googleMapsUrl"`).
+  - Blank and `#REF!` values resolve cleanly to `null`.
+- **Import Pipeline & Search Service (`backend/src/store-master/store-master.service.ts`)**:
+  - `importCsv`: Persists `googleMapsUrl` on create and update, preserving existing values when updated rows contain empty/REF cells.
+  - `validationForRows` and `validate()`: Compute `invalidGoogleMapsUrls` and `missingGoogleMapsUrls` summary counts without failing imports for missing URLs.
+  - `search()`: Returns `googleMapsUrl` in Store Master suggestion objects.
+  - `LineOfficialAccountsService`: Exposes `googleMapsUrl` on serialized store objects.
+- **Reusable Template Variable Resolver**:
+  - Created `backend/src/store-master/template-variable-resolver.ts` and `frontend/src/lib/template-variable-resolver.ts`.
+  - Supports `{{store.googleMapsUrl}}` and standard store variables.
+  - Validates variable readiness: URL exists & valid => `READY`; URL missing or invalid => `BLOCKED` with reason `"Missing Google Maps URL"`.
+- **Frontend Types & Store Management UI**:
+  - Added `googleMapsUrl` to `StoreMasterSuggestion`, `LineOfficialAccountResponse.store`, and `ApiStore` in `frontend/src/types/api.ts`.
+  - Updated `synchronizedStoreMasterData` in `frontend/src/app/store-master-form.ts`.
+  - Added "Open Google Maps" ↗ button and "Not configured" state in Store Management table and `store-master-sync-card` in `frontend/src/app/page.tsx`.
+  - Added Google Maps button in mobile store details in `frontend/src/app/stores/mobile-stores-app.tsx`.
+  - Added multilingual translations across `th`, `en`, and `zh`.
+- **Verification & Test Results**:
+  - `backend/src/store-master/store-master.utils.spec.ts` (validation & Column K aliases) passing.
+  - `backend/src/store-master/template-variable-resolver.spec.ts` (resolution & readiness) passing.
+  - `backend/src/store-master/store-master.service.spec.ts` (import, counts, search) passing.
+  - `frontend/test/store-master-google-maps.test.mts` and `frontend/test/store-master-form.test.mts` passing.
+  - All 1,323 / 1,323 backend tests passing (`npm test` in `backend/`).
+  - All 425 / 425 frontend tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: BM Mobile Customer Sales Tags as Source of Truth on Web (2026-08-26)
 
 - **Audit & Source of Truth Architecture**:
   - Web conversation list cards and chat detail header use BM staff entries from the Mobile App (`customerSalesInformation`) as the source of truth.
@@ -2090,6 +2126,15 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Frontend verification passes: full tests 393/393, zero-warning ESLint on the changed release metadata, and the production Next.js build with TypeScript and 26 routes. Repository-wide ESLint remains red on the unchanged `b2acbef` baseline (27 errors, 73 warnings across unrelated files); no lint failure points to this release's changed file.
 - Runtime verification of the built frontend passes: `/api/health`, `/download`, `/download/history`, and the new APK route all return 200. The HTTP-downloaded APK is exactly 58,040,466 bytes and retains SHA-256 `5837e94111f7a7fb4398bdefff75e4639610ec9b4bea88a8004ffc906967924e`; the latest page renders 1.0.16 and Version History retains 1.0.15.
 - Next action: review/commit the verified artifact and metadata, push, open the PR, and monitor CI without merging or deploying.
+
+# Current task: Android push notification reliability (2026-08-26)
+
+- Started `feat/android-push-notification-reliability` from `origin/main` at `88b474396d2e55364261f12bd2a643cdd971fd56`; no APK/release metadata changes are in scope.
+- Audit confirmed LINE webhook persistence and the notification outbox/worker/FCM acceptance path work for store members, but the provider sent data-only FCM payloads. Android background/terminated delivery therefore depended on a Dart isolate/local notification path that is not guaranteed. Android 13 permission state was also not inspected, so denied notifications could appear as a silent delivery loss.
+- Audit also found device-token registration and enqueue targeting required an active store membership. All-store/HQ accounts without memberships could neither register a token nor receive store-scoped notifications, despite having mobile/all-store permission.
+- Implemented mixed FCM notification+data payloads with high-importance channel/sound metadata; foreground remains a local notification path, while background/terminated system-rendered messages are not duplicated. Added safe backend delivery/enqueue logs and permanent invalid-token cleanup reporting.
+- Aligned device registration and recipient targeting with mobile workspace/all-store/store-membership permissions, preserving store and Main OA isolation. Android now handles token refresh with a single-flight drain, unregisters/deletes the current token on explicit logout, exposes actual Android/Firebase notification permission state, and routes denied users to app notification settings. Added notification channel sound/vibration configuration and tap/deduplication helpers.
+- Focused notification tests and Flutter analyzer are next; full Flutter/backend suites, backend build, and a real-device FCM matrix remain required before commit/PR. CI can validate payload shape, lifecycle logic, and native compilation, but cannot prove OEM/permission/terminated delivery without a physical Android device.
 
 # Current task: Android inbound LINE video messages (2026-08-26)
 

@@ -3,6 +3,7 @@ import { StoreMasterDataQualityStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import {
   extractTikTokUsernameFromUrl,
+  isValidGoogleMapsUrl,
   isValidManagerUrl,
   isValidTikTokProfileUrl,
   normalizeSearchText,
@@ -52,6 +53,7 @@ export class StoreMasterService {
           let normalizedAccountName = row.normalizedAccountName;
           let tiktokUsername = row.tiktokUsername;
           let tiktokProfileUrl = row.tiktokProfileUrl;
+          let googleMapsUrl = row.googleMapsUrl;
 
           if (
             (storeName === "#REF!" || !storeName) &&
@@ -86,6 +88,14 @@ export class StoreMasterService {
             tiktokProfileUrl = existingRow.tiktokProfileUrl;
           }
 
+          if (
+            !googleMapsUrl &&
+            existingRow?.googleMapsUrl &&
+            existingRow.googleMapsUrl !== "#REF!"
+          ) {
+            googleMapsUrl = existingRow.googleMapsUrl;
+          }
+
           const incomplete =
             !storeName || storeName === "#REF!" || !accountName || accountName === "#REF!";
           const dataQualityStatus = incomplete
@@ -105,6 +115,7 @@ export class StoreMasterService {
             normalizedAccountName,
             tiktokUsername,
             tiktokProfileUrl,
+            googleMapsUrl,
             region: row.region ?? regionFromProvince(row.province),
             dataQualityStatus: dataQualityStatus as StoreMasterDataQualityStatus,
             isActive: true,
@@ -226,6 +237,10 @@ export class StoreMasterService {
         (item) => Boolean(item.tiktokProfileUrl) && !isValidTikTokProfileUrl(item.tiktokProfileUrl)
       ).length,
       mismatchedTikTokUsernames: mismatchedTikTok,
+      invalidGoogleMapsUrls: items.filter(
+        (item) => Boolean(item.googleMapsUrl) && !isValidGoogleMapsUrl(item.googleMapsUrl)
+      ).length,
+      missingGoogleMapsUrls: items.filter((item) => !item.googleMapsUrl).length,
     };
   }
 
@@ -292,6 +307,7 @@ export class StoreMasterService {
           lineManagerUrl: isValidManagerUrl(item.lineManagerUrl) ? item.lineManagerUrl : null,
           tiktokUsername: item.tiktokUsername,
           tiktokProfileUrl: item.tiktokProfileUrl,
+          googleMapsUrl: item.googleMapsUrl ?? null,
           matchScore: Number(score.toFixed(3)),
           matchReason: reason,
           dataQualityStatus: item.dataQualityStatus,
@@ -339,6 +355,10 @@ export class StoreMasterService {
         (item) => Boolean(item.tiktokProfileUrl) && !isValidTikTokProfileUrl(item.tiktokProfileUrl)
       ).length,
       mismatchedTikTokUsernames: mismatchedTikTok,
+      invalidGoogleMapsUrls: items.filter(
+        (item) => Boolean(item.googleMapsUrl) && !isValidGoogleMapsUrl(item.googleMapsUrl)
+      ).length,
+      missingGoogleMapsUrls: items.filter((item) => !item.googleMapsUrl).length,
       incomplete: items.filter((item) => item.dataQualityStatus !== "COMPLETE").length,
     };
   }

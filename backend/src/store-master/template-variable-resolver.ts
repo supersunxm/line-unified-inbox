@@ -1,0 +1,150 @@
+import { isValidGoogleMapsUrl } from "./store-master.utils";
+
+export type StoreVariableContext = {
+  id?: string | null;
+  name?: string | null;
+  storeName?: string | null;
+  code?: string | null;
+  storeId?: string | null;
+  externalStoreId?: string | null;
+  accountName?: string | null;
+  province?: string | null;
+  region?: string | null;
+  lineId?: string | null;
+  lineOaLink?: string | null;
+  lineManagerUrl?: string | null;
+  tiktokUsername?: string | null;
+  tiktokProfileUrl?: string | null;
+  googleMapsUrl?: string | null;
+  [key: string]: unknown;
+};
+
+export type TemplateValidationStatus = "READY" | "BLOCKED";
+
+export type TemplateValidationResult = {
+  status: TemplateValidationStatus;
+  missingVariables: string[];
+  reason?: string;
+};
+
+/**
+ * Extracts variable names inside {{...}} delimiters.
+ */
+export function extractTemplateVariables(template: string): string[] {
+  if (!template) return [];
+  const matches = template.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+  if (!matches) return [];
+  const vars = new Set<string>();
+  for (const m of matches) {
+    const raw = m.slice(2, -2).trim();
+    if (raw) vars.add(raw);
+  }
+  return Array.from(vars);
+}
+
+/**
+ * Resolves a variable expression like "store.googleMapsUrl" or "store.name" against the store context.
+ */
+export function getStoreVariableValue(
+  variable: string,
+  store?: StoreVariableContext | null,
+): string | null {
+  if (!store) return null;
+  const normalized = variable.trim();
+
+  // Support both "store.xxx" and "xxx"
+  const prop = normalized.startsWith("store.") ? normalized.slice(6) : normalized;
+
+  switch (prop) {
+    case "googleMapsUrl":
+      return store.googleMapsUrl?.trim() || null;
+    case "name":
+    case "storeName":
+      return store.storeName?.trim() || store.name?.trim() || null;
+    case "storeId":
+    case "externalStoreId":
+    case "code":
+      return store.storeId?.trim() || store.externalStoreId?.trim() || store.code?.trim() || null;
+    case "accountName":
+      return store.accountName?.trim() || null;
+    case "province":
+      return store.province?.trim() || null;
+    case "region":
+      return store.region?.trim() || null;
+    case "lineId":
+      return store.lineId?.trim() || null;
+    case "lineOaLink":
+      return store.lineOaLink?.trim() || null;
+    case "lineManagerUrl":
+      return store.lineManagerUrl?.trim() || null;
+    case "tiktokUsername":
+      return store.tiktokUsername?.trim() || null;
+    case "tiktokProfileUrl":
+      return store.tiktokProfileUrl?.trim() || null;
+    default: {
+      const val = store[prop];
+      return typeof val === "string" && val.trim() ? val.trim() : null;
+    }
+  }
+}
+
+/**
+ * Validates whether all required template variables can be resolved with valid values.
+ * Specifically for googleMapsUrl:
+ * - URL exists & is valid => READY
+ * - URL missing or invalid => BLOCKED / Missing Google Maps URL
+ */
+export function validateTemplateVariables(
+  template: string,
+  store?: StoreVariableContext | null,
+): TemplateValidationResult {
+  if (!template) {
+    return { status: "READY", missingVariables: [] };
+  }
+
+  const variables = extractTemplateVariables(template);
+  const missingVariables: string[] = [];
+  const reasons: string[] = [];
+
+  for (const v of variables) {
+    const value = getStoreVariableValue(v, store);
+    const prop = v.startsWith("store.") ? v.slice(6) : v;
+
+    if (prop === "googleMapsUrl") {
+      if (!value || !isValidGoogleMapsUrl(value)) {
+        missingVariables.push(v);
+        reasons.push("Missing Google Maps URL");
+      }
+    } else if (!value) {
+      missingVariables.push(v);
+      reasons.push(`Missing ${v}`);
+    }
+  }
+
+  if (missingVariables.length > 0) {
+    return {
+      status: "BLOCKED",
+      missingVariables,
+      reason: reasons.join("; "),
+    };
+  }
+
+  return {
+    status: "READY",
+    missingVariables: [],
+  };
+}
+
+/**
+ * Replaces all {{store.xxx}} template variables in the template string.
+ */
+export function resolveTemplateVariables(
+  template: string,
+  store?: StoreVariableContext | null,
+): string {
+  if (!template) return "";
+  return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, varName: string) => {
+    const val = getStoreVariableValue(varName, store);
+    return val ?? "";
+  });
+}

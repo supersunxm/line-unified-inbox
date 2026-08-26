@@ -1,3 +1,11 @@
+# Store Master Google Maps Column K Integration (2026-08-26)
+
+- **Column K Header & Aliases**: Column K header `"Google Maps links"` is mapped into nullable `googleMapsUrl` in `StoreMaster`. Aliases accepted: `"Google Maps Link"`, `"Google Maps URL"`, `"googleMapsUrl"`.
+- **URL Sanitation & Validation**: Blank / whitespace / `#REF!` values resolve to `null`. URL validator requires `https:` protocol and supports `maps.app.goo.gl`, `goo.gl/maps`, `maps.google.com`, `maps.google.co.th`, and `*.google.com/maps` paths, while preserving shortlink IDs and query parameters.
+- **Import Summary Counters**: Added `invalidGoogleMapsUrls` and `missingGoogleMapsUrls` summary metrics to import validation routines. Missing URLs do not fail the import.
+- **Template Variable Resolver**: Reusable resolver function supports `{{store.googleMapsUrl}}`. Variable validation outputs `READY` when the URL exists and is valid, and `BLOCKED` with reason `"Missing Google Maps URL"` when missing.
+- **Store Management UI**: Exposes an "Open Google Maps" ↗ button when a URL is present and a disabled "Not configured" state when missing, in both desktop Store Management tables, synchronized Store Master modal cards, and mobile store views.
+
 # Dominant Chat Timeline & Collapsible Details Drawer in /chats (2026-08-26)
 
 - **Primary Flexible Chat Region**: The message timeline (`data-chat-message-scroll`) is now the main flexible region (`flex-1 min-h-0 overflow-y-auto`) filling all available vertical space directly above the docked reply composer.
@@ -1236,3 +1244,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Installation is delegated through a narrow Flutter method channel to Android `FileProvider`. The native bridge validates that the path is inside `cacheDir`/`filesDir`, grants a content URI to `ACTION_VIEW`, and opens `ACTION_MANAGE_UNKNOWN_APP_SOURCES` when Android requires per-app install permission. No raw `file://` URI or broad storage permission is introduced.
 - A verified APK is retained only while the installer reports permission required, enabling retry without a duplicate download. Other failures delete the temporary file; concurrent Update Now calls share one in-flight operation. The dialog remains visible and renders localized preparing/downloading/verifying/ready/error states so failures cannot disappear silently.
 - Server-side compatibility for 1.0.16+17 was investigated but not changed. That binary cannot download itself and its `canLaunchUrl` result is constrained by its already-installed manifest; a different release URL cannot safely correct that client behavior. Production release metadata remains untouched until a new fixed APK is released.
+
+# Android push notification delivery boundary (2026-08-26)
+
+- Use a mixed FCM notification+data payload. Android system rendering is the reliable background/terminated path; the Flutter `onMessage` listener renders foreground alerts, and the background isolate renders only data-only fallback messages so a notification envelope can never double-alert.
+- Notification recipients are selected from active mobile-eligible users who have an active token and either all-store scope or an active membership for the inbound conversation's store. Main OA/HEAD_OFFICE isolation is preserved because enqueueing remains keyed to the persisted store conversation.
+- Device registration uses the same permission projection as mobile auth, allowing all-store/HQ accounts without memberships to register while still preventing inactive, suspended, or mobile-disabled accounts. Explicit logout deactivates the backend token and best-effort deletes the Firebase token; session refresh never unregisters it.
+- Android treats notification permission as runtime state, not a one-time request. It reports disabled/denied status in Profile settings and opens the per-app notification settings screen; channel importance remains HIGH with default sound and vibration. No broad storage permission or secret/config replacement is introduced.
+- Safe logs carry notification/message IDs, recipient/device counts, accepted/rejected counts, receive path, and permission outcomes only. Message contents, tokens, credentials, and secrets remain excluded.

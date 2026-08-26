@@ -84,5 +84,6 @@ export function synchronizedStoreMasterData(master: StoreMasterSuggestion) {
     region: master.region ?? "-",
     lineOaLink: master.lineOaLink,
     lineManagerUrl: master.lineManagerUrl,
+    googleMapsUrl: master.googleMapsUrl ?? null,
   };
 }

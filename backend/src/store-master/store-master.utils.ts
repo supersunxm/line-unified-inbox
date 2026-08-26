@@ -8,6 +8,7 @@ export type ParsedMasterRow = {
   lineManagerUrl: string | null;
   tiktokUsername: string | null;
   tiktokProfileUrl: string | null;
+  googleMapsUrl: string | null;
   province: string | null;
   region: string | null;
   sourceRowNumber: number;
@@ -68,6 +69,31 @@ export function isValidTikTokProfileUrl(value: string | null): boolean {
         url.hostname === "vt.tiktok.com" ||
         url.hostname.endsWith(".tiktok.com"))
     );
+  } catch {
+    return false;
+  }
+}
+
+export function isValidGoogleMapsUrl(value: string | null): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "maps.app.goo.gl") return true;
+    if (host === "goo.gl" && url.pathname.startsWith("/maps")) return true;
+    if (host.startsWith("maps.google.")) return true;
+    if (
+      (host === "google.com" ||
+        host.endsWith(".google.com") ||
+        host === "google.co.th" ||
+        host.endsWith(".google.co.th") ||
+        /^(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?$/i.test(host)) &&
+      url.pathname.startsWith("/maps")
+    ) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -170,6 +196,24 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
     );
     const tiktokProfileUrl = clean(rawTikTokProfileUrl);
 
+    // Column K (Google Maps links)
+    const rawGoogleMapsUrl = at(
+      row,
+      "Google Maps links",
+      "Google Maps Link",
+      "Google Maps URL",
+      "googleMapsUrl",
+      "Google Maps Links",
+      "Google Maps",
+      "google maps",
+      "google maps link",
+      "google maps url",
+      "google maps links",
+      "Google Map",
+      "google map"
+    );
+    const googleMapsUrl = clean(rawGoogleMapsUrl);
+
     const incomplete = !storeName || !accountName;
     const dataQualityStatus = incomplete
       ? "INCOMPLETE"
@@ -189,6 +233,7 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
       lineManagerUrl,
       tiktokUsername,
       tiktokProfileUrl,
+      googleMapsUrl,
       province,
       region,
       sourceRowNumber: index + 2,

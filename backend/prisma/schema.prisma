@@ -572,6 +572,7 @@ model StoreMaster {
   lineManagerUrl        String?
   tiktokUsername        String?
   tiktokProfileUrl      String?
+  googleMapsUrl         String?
   province              String?
   region                String?
   source                String

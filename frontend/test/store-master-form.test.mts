@@ -20,6 +20,7 @@ const master: StoreMasterSuggestion = {
   lineId: "@oppocentral",
   lineOaLink: "https://line.me/R/ti/p/@oppocentral",
   lineManagerUrl: "https://manager.line.biz/account/@oppocentral",
+  googleMapsUrl: "https://maps.app.goo.gl/central",
   matchScore: 1,
   matchReason: "EXACT_ACCOUNT_NAME",
   dataQualityStatus: "COMPLETE",
@@ -127,6 +128,7 @@ test("selecting a suggestion fills all supported fields and Store Master identif
     region: "Central",
     lineOaLink: master.lineOaLink,
     lineManagerUrl: master.lineManagerUrl,
+    googleMapsUrl: master.googleMapsUrl,
   });
 });
 

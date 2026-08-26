@@ -385,6 +385,9 @@ const translations = {
     openExistingStore: "เปิดร้านค้าที่มีอยู่",
     openLineManager: "เปิด LINE OA Manager",
     openLineOa: "เปิดหน้า LINE OA",
+    openGoogleMaps: "เปิด Google Maps",
+    googleMapsNotConfigured: "ยังไม่ได้ตั้งค่า",
+    googleMapsUrlLabel: "Google Maps",
     noMatchingAccount: "ไม่พบบัญชีที่ตรงกัน",
     syncedStoreMasterTitle: "ข้อมูลร้านค้าที่ซิงก์จาก Store Master",
     manualFallbackHint: "ไม่พบข้อมูล Store Master คุณยังสามารถกรอกข้อมูล LINE OA ด้วยตนเองได้",
@@ -703,6 +706,9 @@ const translations = {
     openExistingStore: "Open existing store",
     openLineManager: "Open LINE OA Manager",
     openLineOa: "Open LINE OA",
+    openGoogleMaps: "Open Google Maps",
+    googleMapsNotConfigured: "Not configured",
+    googleMapsUrlLabel: "Google Maps",
     noMatchingAccount: "No matching account found",
     syncedStoreMasterTitle: "Store information synced from Store Master",
     manualFallbackHint: "No Store Master record was found. You can still enter the LINE OA details manually.",
@@ -1019,6 +1025,9 @@ const translations = {
     openExistingStore: "打开现有门店",
     openLineManager: "打开 LINE OA Manager",
     openLineOa: "打开 LINE OA",
+    openGoogleMaps: "打开 Google 地图",
+    googleMapsNotConfigured: "未配置",
+    googleMapsUrlLabel: "Google 地图",
     noMatchingAccount: "未找到匹配账户",
     syncedStoreMasterTitle: "从 Store Master 同步的门店信息",
     manualFallbackHint: "未找到 Store Master 记录，您仍可手动输入 LINE OA 信息。",
@@ -3256,6 +3265,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                         {text.openLineOa}
                                       </button>
                                     )}
+                                    {account.store.googleMapsUrl ? (
+                                      <a
+                                        href={account.store.googleMapsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-accent)]/30 text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] transition-colors"
+                                      >
+                                        {text.openGoogleMaps} ↗
+                                      </a>
+                                    ) : (
+                                      <button disabled title={text.googleMapsNotConfigured} className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-border)] text-[var(--app-text-disabled)] opacity-50 cursor-not-allowed">
+                                        {text.googleMapsNotConfigured}
+                                      </button>
+                                    )}
                                     <Button size="sm" variant="secondary" disabled={lineOaSubmitting} onClick={() => void testLineOa(account)}>
                                       {text.testConnection}
                                     </Button>
@@ -3417,6 +3440,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               <div><dt className="store-master-sync-label text-[11px]">{text.region}</dt><dd className="font-medium">{synchronizedMaster.region}</dd></div>
                               <div><dt className="store-master-sync-label text-[11px]">{text.openLineOa}</dt><dd className="font-medium">{synchronizedMaster.lineOaLink ? <a className="store-master-sync-link" href={synchronizedMaster.lineOaLink} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineOaLink} ↗</a> : "-"}</dd></div>
                               <div><dt className="store-master-sync-label text-[11px]">{text.openLineManager}</dt><dd className="font-medium">{synchronizedMaster.lineManagerUrl ? <a className="store-master-sync-link" href={synchronizedMaster.lineManagerUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.lineManagerUrl} ↗</a> : "-"}</dd></div>
+                              <div><dt className="store-master-sync-label text-[11px]">{text.googleMapsUrlLabel}</dt><dd className="font-medium">{synchronizedMaster.googleMapsUrl ? <a className="store-master-sync-link" href={synchronizedMaster.googleMapsUrl} target="_blank" rel="noopener noreferrer">{synchronizedMaster.googleMapsUrl} ↗</a> : "-"}</dd></div>
                             </dl>
                             {selectedMaster.existingStore && <p className="mt-3 rounded-[var(--app-radius-sm)] bg-[var(--app-info-soft)] p-2 text-[var(--app-info)] border border-[var(--app-info)]/20">{text.storeAlreadyExists}: {selectedMaster.existingStore.name}</p>}
                             {selectedMaster.dataQualityStatus !== "COMPLETE" && <p className="mt-2 text-[var(--app-warning)]">{text.incompleteMasterData}</p>}
