@@ -1,6 +1,33 @@
 # AI progress
 
-## Current task: Dominant Chat Timeline & Collapsible Details Drawer in /chats (2026-08-26)
+## Current task: BM Mobile Customer Sales Tags as Source of Truth on Web (2026-08-26)
+
+- **Audit & Source of Truth Architecture**:
+  - Web conversation list cards and chat detail header use BM staff entries from the Mobile App (`customerSalesInformation`) as the source of truth.
+  - Replaced legacy Web-generated/manual tag presentation (AI topics, AI products, Priority, Follow-Up Status, and AI Customer Stage) with BM sales tags.
+  - Verified backend data contract: `customerSalesInformation` (`status`, `interestLevel`, `purchaseChannel`, `paymentMethod`, `products`) is returned by `ConversationsService.list()` via `safe()` and `findById()`.
+- **Presentation Helper (`frontend/src/app/conversation-list-presentation.ts`)**:
+  - `getBmCustomerSalesTags`: Converts `ApiCustomerSalesInformation` into ordered tags with strict priority:
+    1. Sales Status: `INTERESTED` (blue) / `PURCHASED` (emerald)
+    2. Interest Level: `HOT` (rose/red) / `WARM` (amber) / `COLD` (slate)
+    3. Product model: Extracted from `sales.products`
+    4. Product variant: Formatted RAM / ROM / color string
+    5. Purchase channel: `STORE` / `ONLINE`
+    6. Payment method: `CASH`, `INSTALLMENT`, `CREDIT CARD`, `OTHER`
+  - Empty state: When BM has not entered information, returns `[]` with zero fake/AI replacement tags.
+- **Web UI Presentation (`frontend/src/app/page.tsx`)**:
+  - Conversation list card tag area renders `data-conversation-bm-tag` chips and retains `data-conversation-bm-reply-status` with `+N` overflow chip.
+  - Chat detail header renders `data-chat-detail-bm-tag` chips, Customer Name, Store Name, BM Reply Status dropdown (`data-bm-reply-status-select`), and Relative Time.
+  - Removed AI Customer Stage, Follow-Up Status, and Priority from the visible tag area.
+  - Retained underlying fields in backend and frontend state for filters, search, and analytics.
+- **Verification & Test Results**:
+  - Expanded `frontend/test/conversation-list-presentation.test.mts` with dedicated 17-point specification test suite.
+  - All 421 / 421 frontend unit tests passing (`npm test` in `frontend/`).
+  - All 1,311 / 1,311 backend unit tests passing (`npm test` in `backend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Dominant Chat Timeline & Collapsible Details Drawer in /chats (2026-08-26)
 
 - **Dominant Message Timeline Area**:
   - Refactored `/chats` detail pane so the message conversation stream is the primary flexible region, consuming all available vertical height via `flex-1 min-h-0 overflow-y-auto`.

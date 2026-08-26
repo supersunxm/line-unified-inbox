@@ -290,3 +290,243 @@ test("bmReplyStatus badge is rendered per row separately from tag truncation", (
   assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
   assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus\]/);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Explicit 17-Point Specification Verification
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("1. INTERESTED appears on conversation cards", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "INTERESTED",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  };
+  const tags = getBmCustomerSalesTags(sales);
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].kind, "salesStatus");
+  assert.equal(tags[0].label, "INTERESTED");
+  assert.match(getBmTagChipClass(tags[0]), /bg-blue-100.*text-blue-800/);
+});
+
+test("2. PURCHASED appears correctly", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "PURCHASED",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  };
+  const tags = getBmCustomerSalesTags(sales);
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].kind, "salesStatus");
+  assert.equal(tags[0].label, "PURCHASED");
+  assert.match(getBmTagChipClass(tags[0]), /bg-emerald-100.*text-emerald-800/);
+});
+
+test("3. HOT / WARM / COLD mapping", () => {
+  const levels = ["HOT", "WARM", "COLD"] as const;
+  const expectedPatterns = [/bg-rose-100.*text-rose-800/, /bg-amber-100.*text-amber-800/, /bg-slate-100.*text-slate-700/];
+  levels.forEach((level, i) => {
+    const tags = getBmCustomerSalesTags({
+      status: "INTERESTED",
+      interestLevel: level,
+      purchaseChannel: null,
+      paymentMethod: null,
+      products: [],
+    });
+    assert.equal(tags[1].kind, "interestLevel");
+    assert.equal(tags[1].label, level);
+    assert.match(getBmTagChipClass(tags[1]), expectedPatterns[i]);
+  });
+});
+
+test("4. Product model appears", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "INTERESTED",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [
+      {
+        id: "prod-1",
+        model: { id: "m-1", name: "OPPO Find X8 Pro", seriesName: "Find X Series", category: "SMARTPHONE" },
+        variant: null,
+        customProductName: null,
+        quantity: 1,
+        status: "INTERESTED",
+      },
+    ],
+  };
+  const tags = getBmCustomerSalesTags(sales);
+  const modelTag = tags.find((t) => t.kind === "productModel");
+  assert.ok(modelTag, "Product model tag must exist");
+  assert.equal(modelTag.label, "OPPO Find X8 Pro");
+  assert.match(getBmTagChipClass(modelTag), /bg-\[var\(--app-accent-soft\)\]/);
+});
+
+test("5. Product variant appears when available", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "PURCHASED",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [
+      {
+        id: "prod-2",
+        model: { id: "m-2", name: "OPPO Reno13", seriesName: "Reno Series", category: "SMARTPHONE" },
+        variant: { id: "v-1", ram: "12GB", rom: "256GB", color: "Midnight Black" },
+        customProductName: null,
+        quantity: 1,
+        status: "PURCHASED",
+      },
+    ],
+  };
+  const tags = getBmCustomerSalesTags(sales);
+  const variantTag = tags.find((t) => t.kind === "productVariant");
+  assert.ok(variantTag, "Product variant tag must exist");
+  assert.equal(variantTag.label, "12GB / 256GB · Midnight Black");
+});
+
+test("6. STORE / ONLINE mapping", () => {
+  const channels = ["STORE", "ONLINE"];
+  channels.forEach((ch) => {
+    const tags = getBmCustomerSalesTags({
+      status: "PURCHASED",
+      interestLevel: null,
+      purchaseChannel: [ch],
+      paymentMethod: null,
+      products: [],
+    });
+    const chTag = tags.find((t) => t.kind === "purchaseChannel");
+    assert.ok(chTag, `Channel ${ch} tag must exist`);
+    assert.equal(chTag.label, ch);
+  });
+});
+
+test("7. Payment method mapping", () => {
+  const mappings: Array<["CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER", string]> = [
+    ["CASH", "CASH"],
+    ["INSTALLMENT", "INSTALLMENT"],
+    ["CREDIT_CARD", "CREDIT CARD"],
+    ["OTHER", "OTHER"],
+  ];
+  mappings.forEach(([raw, expected]) => {
+    const tags = getBmCustomerSalesTags({
+      status: "PURCHASED",
+      interestLevel: null,
+      purchaseChannel: null,
+      paymentMethod: raw,
+      products: [],
+    });
+    const pmTag = tags.find((t) => t.kind === "paymentMethod");
+    assert.ok(pmTag, `Payment method ${raw} tag must exist`);
+    assert.equal(pmTag.label, expected);
+  });
+});
+
+test("8. BM tags appear in the detail header", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const headerStart = pageCode.indexOf("<header data-chat-detail-header");
+  const headerEnd = pageCode.indexOf("</header>", headerStart);
+  const activeHeader = pageCode.slice(headerStart, headerEnd);
+
+  assert.match(activeHeader, /getBmCustomerSalesTags\(/);
+  assert.match(activeHeader, /data-chat-detail-bm-tag=\{tag\.kind\}/);
+  assert.match(activeHeader, /getBmTagChipClass\(tag\)/);
+});
+
+test("9. BM Reply Status remains visible", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  assert.match(pageCode, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
+  assert.match(pageCode, /data-bm-reply-status-select/);
+});
+
+test("10. BM Reply Status remains editable", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  assert.match(pageCode, /updateBmReplyStatus\(e\.target\.value as ApiBmReplyStatus\)/);
+  assert.match(pageCode, /updateConversationBmReplyStatus\(conversation\.id,\s*"REPLIED"\)/);
+});
+
+test("11. Follow Up tag no longer appears in the list tag area", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.doesNotMatch(activeRows, /getStatusLabel\(language,\s*status\)/);
+  assert.doesNotMatch(activeRows, /followUpStatusLabels/);
+});
+
+test("12. Priority tag no longer appears in the list tag area", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.doesNotMatch(activeRows, /data-conversation-priority/);
+  assert.doesNotMatch(activeRows, /conversation\.priority/);
+});
+
+test("13. AI Topic tag no longer appears in the list tag area", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.doesNotMatch(activeRows, /conversation\.topic/);
+});
+
+test("14. AI Product tag no longer appears in the list tag area", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.doesNotMatch(activeRows, /conversation\.product/);
+  assert.doesNotMatch(activeRows, /conversation\.series/);
+});
+
+test("15. AI Customer Stage no longer appears in the detail header", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const headerStart = pageCode.indexOf("<header data-chat-detail-header");
+  const headerEnd = pageCode.indexOf("</header>", headerStart);
+  const activeHeader = pageCode.slice(headerStart, headerEnd);
+
+  assert.doesNotMatch(activeHeader, /customerStage/);
+  assert.doesNotMatch(activeHeader, /customerIntelligence/);
+  assert.doesNotMatch(activeHeader, /followUpStatusLabels/);
+  assert.doesNotMatch(activeHeader, /selectedConversation\.priority/);
+});
+
+test("16. Conversation with no BM-entered information shows no fake/AI replacement tags", () => {
+  const emptySales: ApiCustomerSalesInformation = {
+    status: null,
+    interestLevel: null,
+    purchaseChannel: [],
+    paymentMethod: null,
+    products: [],
+  };
+  const tags = getBmCustomerSalesTags(emptySales);
+  assert.deepEqual(tags, []);
+
+  const nullTags = getBmCustomerSalesTags(null);
+  assert.deepEqual(nullTags, []);
+
+  const undefinedTags = getBmCustomerSalesTags(undefined);
+  assert.deepEqual(undefinedTags, []);
+});
+
+test("17. Existing filters and analytics still work", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+
+  // Filters retain priority, status, topics, and date filtering
+  assert.match(pageCode, /priority:\s*priorityFilter/);
+  assert.match(pageCode, /status:\s*statusFilter/);
+  assert.match(pageCode, /topic:\s*topicFilter/);
+  assert.match(pageCode, /item\.followUpStatus/);
+  assert.match(pageCode, /item\.priority/);
+  assert.match(pageCode, /item\.topics/);
+  assert.match(pageCode, /item\.products/);
+});
