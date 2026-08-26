@@ -36,6 +36,13 @@ const BUCKET_META: Record<ResponseBucket, { label: string; shortLabel: string }>
   over24h: { label: "> 24 ชั่วโมง", shortLabel: "ตอบกลับเกิน 24 ชั่วโมง" },
 };
 
+const RESPONSE_BUCKET_KEYS: ResponseBucket[] = [
+  "under4h",
+  "between4and12h",
+  "between12and24h",
+  "over24h",
+];
+
 const THAI_MONTHS = new Map<string, number>([
   ["ม.ค.", 1],
   ["ก.พ.", 2],
@@ -155,15 +162,14 @@ export function DashboardView({
         if (element.dataset.responseBucket) continue;
         if (element.children.length !== 2) continue;
         const headerText = element.firstElementChild?.textContent?.replace(/\s+/g, " ").trim() ?? "";
-        const match = (Object.entries(BUCKET_META) as Array<[ResponseBucket, { label: string; shortLabel: string }>])
-          .find(([, meta]) => headerText.startsWith(meta.label));
-        if (!match) continue;
+        const bucket = RESPONSE_BUCKET_KEYS.find((key) => headerText.startsWith(BUCKET_META[key].label));
+        if (!bucket) continue;
         const valueText = element.lastElementChild?.textContent?.trim() ?? "";
         if (!/^\d[\d,]*$/.test(valueText)) continue;
-        element.dataset.responseBucket = match[0];
+        element.dataset.responseBucket = bucket;
         element.setAttribute("role", "button");
         element.setAttribute("tabindex", "0");
-        element.setAttribute("aria-label", `${match[1].shortLabel} ดูข้อความในกลุ่มนี้`);
+        element.setAttribute("aria-label", `${BUCKET_META[bucket].shortLabel} ดูข้อความในกลุ่มนี้`);
       }
     };
 
