@@ -4,24 +4,24 @@ import test from "node:test";
 import { CHAT_LAYOUT_STORAGE_KEY, CHAT_PANE_LIMITS, DEFAULT_CHAT_PANE_WIDTHS, parseSavedChatPaneWidths, resizeChatPanes } from "../src/app/resizable-panes.ts";
 
 test("chat panes expose stable default, minimum, and maximum widths", () => {
-  assert.deepEqual(DEFAULT_CHAT_PANE_WIDTHS, { sidebar: 240, conversations: 340 });
-  assert.deepEqual(CHAT_PANE_LIMITS.sidebar, { default: 240, min: 180, max: 420 });
-  assert.deepEqual(CHAT_PANE_LIMITS.conversations, { default: 340, min: 280, max: 600 });
-  assert.equal(CHAT_PANE_LIMITS.detailMin, 520);
+  assert.deepEqual(DEFAULT_CHAT_PANE_WIDTHS, { sidebar: 280, conversations: 380 });
+  assert.deepEqual(CHAT_PANE_LIMITS.sidebar, { default: 280, min: 220, max: 420 });
+  assert.deepEqual(CHAT_PANE_LIMITS.conversations, { default: 380, min: 320, max: 600 });
+  assert.equal(CHAT_PANE_LIMITS.detailMin, 480);
   assert.equal(CHAT_LAYOUT_STORAGE_KEY, "oppo-line-oa-chat-layout-v1");
 });
 
 test("dragging the first separator resizes sidebar and conversation panes", () => {
-  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "sidebar", 40, 1400), { sidebar: 280, conversations: 300 });
-  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "sidebar", -200, 1400), { sidebar: 180, conversations: 400 });
-  assert.deepEqual(resizeChatPanes({ sidebar: 400, conversations: 300 }, "sidebar", 100, 1500), { sidebar: 420, conversations: 280 });
+  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "sidebar", 40, 1400), { sidebar: 320, conversations: 340 });
+  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "sidebar", -200, 1400), { sidebar: 220, conversations: 440 });
+  assert.deepEqual(resizeChatPanes({ sidebar: 400, conversations: 300 }, "sidebar", 100, 1500), { sidebar: 380, conversations: 320 });
 });
 
 test("dragging the second separator preserves minimum detail width", () => {
-  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", 80, 1400), { sidebar: 240, conversations: 420 });
-  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", -200, 1400), { sidebar: 240, conversations: 280 });
-  assert.deepEqual(resizeChatPanes({ sidebar: 240, conversations: 590 }, "conversations", 100, 1400), { sidebar: 240, conversations: 600 });
-  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", 500, 1100), { sidebar: 240, conversations: 324 });
+  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", 80, 1400), { sidebar: 280, conversations: 460 });
+  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", -200, 1400), { sidebar: 280, conversations: 320 });
+  assert.deepEqual(resizeChatPanes({ sidebar: 280, conversations: 590 }, "conversations", 100, 1400), { sidebar: 280, conversations: 600 });
+  assert.deepEqual(resizeChatPanes(DEFAULT_CHAT_PANE_WIDTHS, "conversations", 500, 1100), { sidebar: 280, conversations: 324 });
 });
 
 test("saved widths restore only when the payload is valid", () => {

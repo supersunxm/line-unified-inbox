@@ -1,3 +1,13 @@
+# /chats Workspace Layout & UX Optimization (2026-08-26)
+
+- **Default Pane Proportions**:
+  - Context sidebar increased from 240px to 280px default (min 220px, max 420px) to prevent aggressive truncation of store names and SLA metrics.
+  - Conversation list increased from 340px to 380px default (min 320px, max 600px) providing ample room for customer name, message preview, store name, and BM tags.
+  - Detail pane min width adjusted to 480px while expanding into the remaining flexible workspace.
+- **Empty Detail Pane UX**: Replaced the previous generic blank state with a centered, subtle empty state indicator informing users to select a conversation to view messages and customer details.
+- **Conversation Card Layout**: Polished vertical rhythm and hierarchy: 1. Customer name + action menu, 2. Message preview, 3. Store name · Relative time, 4. BM status and customer sales tags.
+- **Pagination Footer**: Switched to a single-row flex wrap layout optimized for 360–420px container widths with compact select controls and navigation buttons.
+
 # Removal of Customer Sales / Purchase Information Card from Web Chat Detail (2026-08-26)
 
 - **Chat Detail Lower Pane Streamlining**: With BM-entered sales data now clearly displayed in the conversation list rows and chat detail header, the standalone Customer Sales Information / Purchase Information card in the chat detail lower section is removed.

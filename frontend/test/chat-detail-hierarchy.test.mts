@@ -87,3 +87,9 @@ test("detail pane uses container-responsive consolidation and reserves the assis
   assert.match(globalsCode, /\.chat-detail-follow-up \{[\s\S]*bottom: 0;[\s\S]*padding-right: 5\.5rem;[\s\S]*position: sticky;[\s\S]*z-index: 20;/);
   assert.match(globalsCode, /@media \(max-width: 1120px\)[\s\S]*\[data-chat-message-scroll\][\s\S]*min-height: clamp\(20rem, 46vh, 28rem\)/);
 });
+
+test("detail pane renders centered empty state when no conversation is selected", () => {
+  assert.match(pageCode, /data-chat-detail-empty-state/);
+  assert.match(pageCode, /text\.selectConversationTitle/);
+  assert.match(pageCode, /text\.selectConversationDescription/);
+});

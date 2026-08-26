@@ -121,7 +121,7 @@ test("production page renders all five desktop grid tracks", () => {
 test("responsive chat rules target identified direct panes", () => {
   assert.match(globalsCode, /\.chat-resizable-grid > \[data-chat-pane="detail"\]/);
   assert.match(globalsCode, /\.chat-resizable-grid > \[data-chat-pane="sidebar"\]/);
-  assert.match(globalsCode, /grid-template-columns: 12rem 19rem minmax\(0, 1fr\) !important/);
+  assert.match(globalsCode, /grid-template-columns: 15rem 22rem minmax\(0, 1fr\) !important/);
 });
 
 test("SidebarView is shell-owned and profile controls are consolidated", () => {

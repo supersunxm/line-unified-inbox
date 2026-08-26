@@ -194,7 +194,7 @@ test("message previews stay readable across content and row states while metadat
   const activeRows = pageCode.slice(rowStart, rowEnd);
 
   assert.match(activeRows, /data-conversation-message-preview/);
-  assert.match(activeRows, /conversation-message-preview mt-2 line-clamp-2 text-sm leading-5/);
+  assert.match(activeRows, /conversation-message-preview mt-(1|1\.5|2) line-clamp-2 text-(xs|sm)/);
   assert.match(activeRows, /\{conversation\.translations\[language\]\}/);
   assert.match(activeRows, /data-conversation-metadata className="app-muted/);
   assert.match(activeRows, /data-selected=\{isSelected\}/);

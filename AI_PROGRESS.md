@@ -1,6 +1,28 @@
 # AI progress
 
-## Current task: Removal of Customer Sales / Purchase Information Card from Web Chat Detail (2026-08-26)
+## Current task: /chats Workspace Layout & UX Optimization (2026-08-26)
+
+- **Pane Widths & Proportions**:
+  - Context Sidebar: Updated default to 280px (min: 220px, max: 420px).
+  - Conversation List: Updated default to 380px (min: 320px, max: 600px).
+  - Detail Pane: Minimum width 480px, expanding to fill available space.
+  - Breakpoint adjustments: `@media (max-width: 1120px)` updated to `15rem 22rem minmax(0, 1fr)`.
+- **Empty Detail State**:
+  - Added centered empty state (`data-chat-detail-empty-state`) with subtle chat icon, multilingual title ("Select a conversation" / "เลือกการสนทนา" / "选择对话"), and description ("Choose a conversation from the list to view messages and customer details.").
+- **Conversation List Rows**:
+  - Refined layout hierarchy: 1. Customer name + 3-dot action, 2. Message preview, 3. Store name · Relative time, 4. BM Reply Status + BM sales tags.
+  - Enhanced horizontal room for store names and customer names with clean truncation and comfortable line height.
+- **Sidebar & Store Rows**:
+  - Increased store name width before truncation, refined badge sizing/spacing, and softened waiting time indicator.
+- **Pagination Footer**:
+  - Responsive single-row flex layout fitting 360–420px widths cleanly without crushed controls.
+- **Verification & Test Results**:
+  - Updated `frontend/test/resizable-panes.test.mts`, `frontend/test/shell-navigation.test.mts`, `frontend/test/chat-detail-hierarchy.test.mts`, and `frontend/test/conversation-list-presentation.test.mts`.
+  - All 401 / 401 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Removal of Customer Sales / Purchase Information Card from Web Chat Detail (2026-08-26)
 
 - **UI Streamlining**:
   - Removed `<section data-purchase-information-card ...>` from the Web chat detail lower pane, including Customer Sales Information / Customer Purchase heading, interested/purchased indicators, product/purchase details, legacy purchase notices, Edit Purchase Information button, and recorded-by/recorded-at info.

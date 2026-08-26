@@ -610,7 +610,7 @@ body.is-resizing-panes {
 
 @media (max-width: 1120px) {
   .chat-resizable-grid {
-    grid-template-columns: 12rem 19rem minmax(0, 1fr) !important;
+    grid-template-columns: 15rem 22rem minmax(0, 1fr) !important;
   }
 
   .chat-resize-handle {

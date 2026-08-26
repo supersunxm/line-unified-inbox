@@ -1,8 +1,8 @@
 export const CHAT_LAYOUT_STORAGE_KEY = "oppo-line-oa-chat-layout-v1";
 export const CHAT_PANE_LIMITS = {
-  sidebar: { default: 240, min: 180, max: 420 },
-  conversations: { default: 340, min: 280, max: 600 },
-  detailMin: 520,
+  sidebar: { default: 280, min: 220, max: 420 },
+  conversations: { default: 380, min: 320, max: 600 },
+  detailMin: 480,
   separatorWidth: 8,
   keyboardStep: 16,
 } as const;

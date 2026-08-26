@@ -210,15 +210,15 @@ export function ContextSidebar({
                 : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
             }`}
           >
-            <span className="truncate">{text.allStores || "ร้านค้าทั้งหมด"}</span>
-            <div className="ml-2 flex items-center space-x-1 shrink-0 font-tabular">
-              <span className="rounded bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1 py-0.2 text-[10px] font-medium" title="Not Replied">
+            <span className="min-w-0 flex-1 truncate font-medium">{text.allStores || "ร้านค้าทั้งหมด"}</span>
+            <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
                 {overview.notReplied}
               </span>
-              <span className="rounded bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1 py-0.2 text-[10px] font-medium" title="Notified BM">
+              <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1.5 py-0.5 text-[10px] font-medium" title="Notified BM">
                 {overview.notifiedBm}
               </span>
-              <span className="rounded bg-[var(--app-success-soft)] text-[var(--app-success)] px-1 py-0.2 text-[10px] font-medium" title="Replied">
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
                 {overview.replied}
               </span>
             </div>
@@ -242,8 +242,8 @@ export function ContextSidebar({
                       : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
                   }`}
                 >
-                  <div className="flex w-full items-center justify-between">
-                    <span className="truncate pr-1 font-medium">
+                  <div className="flex w-full items-center justify-between min-w-0">
+                    <span className="min-w-0 flex-1 truncate pr-1 font-medium">
                       {(store.masterStoreId || store.externalStoreId) && (
                         <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] mr-1 opacity-80">
                           [{store.masterStoreId ?? store.externalStoreId}]
@@ -251,14 +251,14 @@ export function ContextSidebar({
                       )}
                       {getStoreDisplayName(store.name)}
                     </span>
-                    <div className="ml-2 flex items-center space-x-1 shrink-0 font-tabular">
-                      <span className="rounded bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1 py-0.2 text-[10px] font-medium" title="Not Replied">
+                    <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
                         {counts.notReplied}
                       </span>
-                      <span className="rounded bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1 py-0.2 text-[10px] font-medium" title="Notified BM">
+                      <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1.5 py-0.5 text-[10px] font-medium" title="Notified BM">
                         {counts.notifiedBm}
                       </span>
-                      <span className="rounded bg-[var(--app-success-soft)] text-[var(--app-success)] px-1 py-0.2 text-[10px] font-medium" title="Replied">
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
                         {counts.replied}
                       </span>
                     </div>

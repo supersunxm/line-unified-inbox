@@ -189,6 +189,9 @@ const translations = {
     noConversationsFound: "ไม่พบบทสนทนา",
     noResultsExplanation:
       "ลองเปลี่ยนคำค้นหาหรือล้างตัวกรองเพื่อดูบทสนทนาอื่น",
+    selectConversationTitle: "เลือกการสนทนา",
+    selectConversationDescription:
+      "เลือกการสนทนาจากรายการเพื่อดูข้อความและรายละเอียดลูกค้า",
     searchFilter: "ค้นหา",
     searchResults: "ผลลัพธ์",
     topicFilter: "หัวข้อ",
@@ -502,6 +505,9 @@ const translations = {
     noConversationsFound: "No conversations found",
     noResultsExplanation:
       "Try changing your search or clearing the filters to see other conversations.",
+    selectConversationTitle: "Select a conversation",
+    selectConversationDescription:
+      "Choose a conversation from the list to view messages and customer details.",
     searchFilter: "Search",
     searchResults: "results",
     topicFilter: "Topic",
@@ -814,6 +820,9 @@ const translations = {
     clearAll: "全部清除",
     noConversationsFound: "未找到会话",
     noResultsExplanation: "请尝试更改搜索内容或清除筛选条件。",
+    selectConversationTitle: "选择对话",
+    selectConversationDescription:
+      "从列表中选择一个对话以查看消息和客户详情。",
     searchFilter: "搜索",
     searchResults: "个结果",
     topicFilter: "主题",
@@ -3898,8 +3907,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           aria-pressed={isSelected}
                           className={`conversation-list-row app-list-item relative w-full border-b border-[var(--app-border-subtle)] px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]/40 cursor-pointer ${isSelected ? "is-selected" : ""}`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <p data-conversation-customer className="truncate text-sm font-bold leading-5 tracking-tight flex-1 text-[var(--app-text-primary)]">{conversation.customer}</p>
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <p data-conversation-customer className="truncate text-sm font-bold leading-5 tracking-tight flex-1 min-w-0 text-[var(--app-text-primary)]">{conversation.customer}</p>
 
                             <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
@@ -3984,17 +3993,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             </div>
                           </div>
 
-                          <p data-conversation-message-preview className="conversation-message-preview mt-2 line-clamp-2 text-sm leading-5">
+                          <p data-conversation-message-preview className="conversation-message-preview mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--app-text-secondary)] break-words">
                             {conversation.translations[language]}
                           </p>
 
                           <div data-conversation-metadata className="app-muted mt-2 flex items-center gap-1.5 text-[11px] font-tabular text-[var(--app-text-tertiary)] font-mono">
-                            <span className="min-w-0 truncate">{conversation.store}</span>
-                            <span aria-hidden="true">·</span>
+                            <span className="min-w-0 truncate font-medium text-[var(--app-text-secondary)]">{conversation.store}</span>
+                            <span aria-hidden="true" className="opacity-50">·</span>
                             <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
                           </div>
 
-                          <div className="mt-2.5 flex flex-wrap gap-1 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
                             <span
                               data-conversation-bm-reply-status={currentBmReplyStatus}
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -4252,11 +4261,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-h-full items-center justify-center text-center p-8">
-                    <div>
-                      <p className="font-semibold text-[var(--app-text-primary)]">{text.noConversationsFound}</p>
-                      <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">
-                        {text.noResultsExplanation}
+                  <div
+                    data-chat-detail-empty-state
+                    className="flex h-full min-h-0 flex-1 flex-col items-center justify-center p-8 text-center select-none bg-[var(--app-surface-subtle)]/20"
+                  >
+                    <div className="flex flex-col items-center max-w-sm">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--app-surface)] border border-[var(--app-border)] text-lg text-[var(--app-text-tertiary)] shadow-2xs">
+                        💬
+                      </div>
+                      <h3 className="text-sm sm:text-base font-semibold text-[var(--app-text-primary)]">
+                        {text.selectConversationTitle || "Select a conversation"}
+                      </h3>
+                      <p className="mt-1.5 text-xs text-[var(--app-text-tertiary)] leading-relaxed">
+                        {text.selectConversationDescription ||
+                          "Choose a conversation from the list to view messages and customer details."}
                       </p>
                     </div>
                   </div>
