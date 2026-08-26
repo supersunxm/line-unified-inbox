@@ -109,6 +109,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sentAnImage => 'Sent an image';
 
   @override
+  String get sentAVideo => 'Sent a video';
+
+  @override
   String get newCustomerMessage => 'New customer message';
 
   @override
@@ -269,6 +272,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get imageUnavailable => 'Image unavailable';
+
+  @override
+  String get videoProcessing => 'Video processing…';
+
+  @override
+  String get loadingVideo => 'Loading video…';
+
+  @override
+  String get videoUnavailable => 'Video unavailable';
+
+  @override
+  String get playVideo => 'Play video';
+
+  @override
+  String get pauseVideo => 'Pause video';
 
   @override
   String get sendImageQuestion => 'Send image?';

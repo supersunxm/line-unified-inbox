@@ -9,6 +9,7 @@ import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/core/theme/app_scroll_behavior.dart';
 import 'package:line_oa_chat_hub/core/widgets/app_widgets.dart';
 import 'package:line_oa_chat_hub/features/chat/chat_page.dart';
+import 'package:line_oa_chat_hub/features/chat/widgets/video_bubble.dart';
 import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 import 'package:line_oa_chat_hub/features/inbox/inbox_page.dart';
 import 'package:line_oa_chat_hub/features/inbox/widgets/conversation_overview_card.dart';
@@ -593,6 +594,68 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
     expect(repository.mediaCalls, 1);
     expect(repository.detailCalls, 1);
+    await events.close();
+  });
+
+  testWidgets(
+      'video realtime placeholder becomes playable media without duplication',
+      (tester) async {
+    final repository = FakeConversationRepository();
+    final events = StreamController<Map<String, dynamic>>();
+
+    await tester.pumpWidget(MaterialApp(
+      home: ChatPage(
+        conversationId: 'conversation-a',
+        repository: repository,
+        events: events.stream,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final created = {
+      'type': 'message.created',
+      'conversationId': 'conversation-a',
+      'message': {
+        'id': 'video-message',
+        'direction': 'INBOUND',
+        'messageType': 'VIDEO',
+        'text': '[Video]',
+        'sentAt': '2026-08-13T10:00:00.000Z',
+        'media': {'processingStatus': 'PENDING'},
+      },
+    };
+    events.add(created);
+    await tester.pumpAndSettle();
+    expect(find.text('Video processing…'), findsOneWidget);
+
+    events.add(created);
+    await tester.pumpAndSettle();
+    expect(find.text('Video processing…'), findsOneWidget);
+    expect(find.byType(VideoBubble), findsOneWidget);
+
+    final ready = {
+      'type': 'message.media.updated',
+      'conversationId': 'conversation-a',
+      'message': {
+        'id': 'video-message',
+        'messageType': 'VIDEO',
+        'media': {
+          'processingStatus': 'READY',
+          'mimeType': 'video/mp4',
+          'fileSize': 128,
+          'url': '/messages/video-message/media',
+        },
+      },
+    };
+    events.add(ready);
+    await tester.pumpAndSettle();
+    events.add(ready);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(VideoBubble), findsOneWidget);
+    expect(find.byTooltip('Play video'), findsOneWidget);
+    expect(repository.detailCalls, 1);
+    expect(repository.mediaCalls, 0);
     await events.close();
   });
 

@@ -293,6 +293,12 @@ abstract class AppLocalizations {
   /// **'Sent an image'**
   String get sentAnImage;
 
+  /// No description provided for @sentAVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent a video'**
+  String get sentAVideo;
+
   /// No description provided for @newCustomerMessage.
   ///
   /// In en, this message translates to:
@@ -586,6 +592,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Image unavailable'**
   String get imageUnavailable;
+
+  /// No description provided for @videoProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Video processing…'**
+  String get videoProcessing;
+
+  /// No description provided for @loadingVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading video…'**
+  String get loadingVideo;
+
+  /// No description provided for @videoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Video unavailable'**
+  String get videoUnavailable;
+
+  /// No description provided for @playVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Play video'**
+  String get playVideo;
+
+  /// No description provided for @pauseVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause video'**
+  String get pauseVideo;
 
   /// No description provided for @sendImageQuestion.
   ///

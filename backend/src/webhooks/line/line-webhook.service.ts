@@ -212,7 +212,8 @@ export class LineWebhookService {
         },
       });
       if (this.notifications && conversation.storeId) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
-      const media = message.type === "image" ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType: MessageType.IMAGE } }) : null;
+      const mediaType = message.type === "image" || message.type === "video" ? messageTypeMap[message.type] : null;
+      const media = mediaType ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
       if (shouldResetBm && prevBmStatus) {
         await tx.activityHistory.create({
@@ -225,7 +226,7 @@ export class LineWebhookService {
           },
         });
       }
-      return { conversation, messageId: storedMessage.id, mediaId: media?.id };
+      return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType };
     });
     const conversation = stored.conversation;
     this.realtime?.publish({
@@ -233,14 +234,14 @@ export class LineWebhookService {
       version: 1,
       conversationId: conversation.id,
       storeId: conversation.storeId,
-      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: stored.mediaId ? { processingStatus: "PENDING" } : null },
+      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: stored.mediaId ? { processingStatus: "PENDING", mimeType: null, fileSize: null, url: null } : null },
       conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
     });
-    if (message.type === "image" && stored.mediaId) {
-      await this.images.process(stored.mediaId, oa.id, message.id, sentAt);
+    if ((message.type === "image" || message.type === "video") && stored.mediaId) {
+      await this.images.process(stored.mediaId, oa.id, message.id, sentAt, stored.mediaType ?? MessageType.UNSUPPORTED);
       if (this.realtime) {
-        const media = await this.prisma.messageMedia.findUnique({ where: { id: stored.mediaId }, select: { processingStatus: true } });
-        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: "IMAGE", text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED" } } });
+        const media = await this.prisma.messageMedia.findUnique({ where: { id: stored.mediaId }, select: { processingStatus: true, mimeType: true, fileSize: true } });
+        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED", mimeType: media?.mimeType ?? null, fileSize: media?.fileSize ?? null, url: media?.processingStatus === "READY" ? `/messages/${stored.messageId}/media` : null } } });
       }
     }
     if (message.type === "text") {

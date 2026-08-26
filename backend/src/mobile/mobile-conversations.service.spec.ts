@@ -99,6 +99,22 @@ void test("mobile detail permits the assigned store and rejects a different stor
   await assert.rejects(() => deniedService.get(user, "conversation-2"), ForbiddenException);
 });
 
+void test("mobile detail returns a ready video through the authenticated media proxy contract", async () => {
+  const conversation = {
+    id: "conversation-video",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "NOT_REPLIED",
+    followUpStatus: "FOLLOW_UP",
+    customer: { id: "customer-video", displayName: "Customer" },
+    store: { id: "store-video", name: "Store", code: "S1" },
+    messages: [{ id: "message-video", direction: "INBOUND", messageType: "VIDEO", originalText: "[Video]", sentAt: new Date(), senderUserId: null, senderDisplayName: null, media: { processingStatus: "READY", mimeType: "video/mp4", fileSize: 4096 } }],
+    _count: { pushNotifications: 0 },
+  };
+  const service = new MobileConversationsService({ conversation: { findUnique: async () => conversation } } as never, { assertConversationAccess: async () => "store-video" } as never, {} as never);
+  const result = await service.get(user, "conversation-video");
+  assert.deepEqual(result.messages[0]?.media, { processingStatus: "READY", mimeType: "video/mp4", fileSize: 4096, url: "/messages/message-video/media" });
+});
+
 void test("mobile detail separates verified purchase data from AI insight", async () => {
   const conversation = {
     id: "conversation-1",

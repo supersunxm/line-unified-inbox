@@ -84,6 +84,8 @@ void main() {
   test('image notifications use a safe image fallback and text is bounded', () {
     expect(notificationPreview(messageType: 'IMAGE', preview: 'private URL'),
         'Sent an image');
+    expect(notificationPreview(messageType: 'VIDEO', preview: 'private URL'),
+        'Sent a video');
     expect(
         notificationPreview(messageType: 'TEXT', preview: '  hello\nthere  '),
         'hello there');

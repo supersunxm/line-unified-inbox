@@ -1158,3 +1158,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Release `1.0.16+17` is isolated on `release/android-1.0.16` from `main` commit `b2acbef71aca274e5c697a2c89aa0621463a3073`. Its user-facing scope is PR #52: remove Normal/Urgent badges from mobile conversation cards while preserving backend priority behavior and reply-status badges.
 - The signed production APK must be produced only by the existing GitHub Actions permanent signing identity and independently verified against package `click.lineoppo.chat` and certificate SHA-256 `E2:44:A8:98:76:38:8B:01:5B:BD:10:AB:E3:93:26:AA:B1:5D:A2:E1:EC:0F:E0:D6:A8:24:88:55:12:6A:F1:14` before publication. No new or substitute key is authorized.
 - Prior APKs and release entries remain immutable in Version History; the new artifact and metadata are additive.
+
+# Android inbound LINE video media boundary (2026-08-26)
+
+- Reuse the existing `LineImageService` media-download/storage implementation (class name retained for compatibility) and authenticated `GET /messages/:messageId/media`; the backend, not Android, retrieves temporary LINE content URLs. Existing Prisma `MessageType.VIDEO` and `MessageMedia` support make a migration unnecessary.
+- The mobile detail contract returns `media.processingStatus`, `mimeType`, `fileSize`, and the authenticated proxy `url` only when READY. Realtime media events carry the same metadata so a pending placeholder patches the existing message by ID instead of creating a duplicate.
+- Android uses `video_player` lazily after the user taps play, writes backend-proxy bytes to a temporary file for playback, and never autoplays or initializes every timeline video. Existing image/text paths and reply-status/priority logic remain unchanged.
