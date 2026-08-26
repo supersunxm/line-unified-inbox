@@ -852,7 +852,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unableToCheckUpdates => 'Unable to check for updates';
 
   @override
-  String get downloadingApk => 'Opening download page...';
+  String get preparingDownload => 'Preparing download...';
+
+  @override
+  String get downloadingApk => 'Downloading APK...';
+
+  @override
+  String downloadingApkProgress(Object percent) {
+    return 'Downloading APK: $percent%';
+  }
+
+  @override
+  String get verifyingDownload => 'Verifying download...';
+
+  @override
+  String get readyToInstall => 'Ready to install';
+
+  @override
+  String get installingApk => 'Opening installer...';
+
+  @override
+  String get downloadFailed => 'Download failed. Please try again.';
+
+  @override
+  String get checksumFailed =>
+      'The download could not be verified and was blocked.';
+
+  @override
+  String get installPermissionRequired => 'Install permission is required';
+
+  @override
+  String get installPermissionInstructions =>
+      'Allow installs from this app in Android settings, then tap Retry.';
+
+  @override
+  String get installationFailed =>
+      'Unable to open the installer. Please try again.';
+
+  @override
+  String get retryUpdate => 'Retry';
 
   @override
   String get select => 'Select';

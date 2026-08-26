@@ -840,7 +840,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get unableToCheckUpdates => '无法检查更新';
 
   @override
-  String get downloadingApk => '正在打开下载页面...';
+  String get preparingDownload => '正在准备下载...';
+
+  @override
+  String get downloadingApk => '正在下载 APK...';
+
+  @override
+  String downloadingApkProgress(Object percent) {
+    return '正在下载 APK：$percent%';
+  }
+
+  @override
+  String get verifyingDownload => '正在验证下载文件...';
+
+  @override
+  String get readyToInstall => '已准备安装';
+
+  @override
+  String get installingApk => '正在打开安装程序...';
+
+  @override
+  String get downloadFailed => '下载失败，请重试';
+
+  @override
+  String get checksumFailed => '下载文件验证失败，已阻止安装';
+
+  @override
+  String get installPermissionRequired => '需要安装权限';
+
+  @override
+  String get installPermissionInstructions => '请在 Android 设置中允许此应用安装应用，然后点击重试';
+
+  @override
+  String get installationFailed => '无法打开安装程序，请重试';
+
+  @override
+  String get retryUpdate => '重试';
 
   @override
   String get select => '选择';
@@ -1694,7 +1729,42 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get unableToCheckUpdates => '无法检查更新';
 
   @override
-  String get downloadingApk => '正在打开下载页面...';
+  String get preparingDownload => '正在准备下载...';
+
+  @override
+  String get downloadingApk => '正在下载 APK...';
+
+  @override
+  String downloadingApkProgress(Object percent) {
+    return '正在下载 APK：$percent%';
+  }
+
+  @override
+  String get verifyingDownload => '正在验证下载文件...';
+
+  @override
+  String get readyToInstall => '已准备安装';
+
+  @override
+  String get installingApk => '正在打开安装程序...';
+
+  @override
+  String get downloadFailed => '下载失败，请重试';
+
+  @override
+  String get checksumFailed => '下载文件验证失败，已阻止安装';
+
+  @override
+  String get installPermissionRequired => '需要安装权限';
+
+  @override
+  String get installPermissionInstructions => '请在 Android 设置中允许此应用安装应用，然后点击重试';
+
+  @override
+  String get installationFailed => '无法打开安装程序，请重试';
+
+  @override
+  String get retryUpdate => '重试';
 
   @override
   String get select => '选择';

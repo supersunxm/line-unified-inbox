@@ -847,7 +847,43 @@ class AppLocalizationsTh extends AppLocalizations {
   String get unableToCheckUpdates => 'ไม่สามารถตรวจสอบการอัปเดตได้';
 
   @override
-  String get downloadingApk => 'กำลังเปิดหน้าดาวน์โหลด APK...';
+  String get preparingDownload => 'กำลังเตรียมดาวน์โหลด...';
+
+  @override
+  String get downloadingApk => 'กำลังดาวน์โหลด APK...';
+
+  @override
+  String downloadingApkProgress(Object percent) {
+    return 'กำลังดาวน์โหลด APK: $percent%';
+  }
+
+  @override
+  String get verifyingDownload => 'กำลังตรวจสอบไฟล์ดาวน์โหลด...';
+
+  @override
+  String get readyToInstall => 'พร้อมติดตั้ง';
+
+  @override
+  String get installingApk => 'กำลังเปิดตัวติดตั้ง...';
+
+  @override
+  String get downloadFailed => 'ดาวน์โหลดไม่สำเร็จ โปรดลองอีกครั้ง';
+
+  @override
+  String get checksumFailed => 'ตรวจสอบไฟล์ดาวน์โหลดไม่ผ่าน จึงหยุดการติดตั้ง';
+
+  @override
+  String get installPermissionRequired => 'ต้องอนุญาตให้ติดตั้งแอป';
+
+  @override
+  String get installPermissionInstructions =>
+      'อนุญาตการติดตั้งจากแอปนี้ในการตั้งค่า Android แล้วแตะลองอีกครั้ง';
+
+  @override
+  String get installationFailed => 'ไม่สามารถเปิดตัวติดตั้งได้ โปรดลองอีกครั้ง';
+
+  @override
+  String get retryUpdate => 'ลองอีกครั้ง';
 
   @override
   String get select => 'เลือก';

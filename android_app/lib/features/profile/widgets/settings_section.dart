@@ -1,87 +1,120 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 
 import '../../../core/services/app_update_service.dart';
 
-class SettingsSection extends StatelessWidget {
-  const SettingsSection({super.key, this.onPersonalInformation, this.updateService});
+class SettingsSection extends StatefulWidget {
+  const SettingsSection(
+      {super.key,
+      this.onPersonalInformation,
+      this.updateService,
+      this.packageInfo});
 
   final VoidCallback? onPersonalInformation;
   final AppUpdateService? updateService;
+  final PackageInfo? packageInfo;
+
+  @override
+  State<SettingsSection> createState() => _SettingsSectionState();
+}
+
+class _SettingsSectionState extends State<SettingsSection> {
+  PackageInfo? _packageInfo;
+
+  @override
+  void initState() {
+    super.initState();
+    _packageInfo = widget.packageInfo;
+    if (_packageInfo == null) {
+      unawaited(_loadPackageInfo());
+    }
+  }
+
+  Future<void> _loadPackageInfo() async {
+    try {
+      final value = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _packageInfo = value);
+    } catch (_) {
+      // Keep the About row usable on platforms where package metadata is unavailable.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final languageController = AppLanguageScope.maybeOf(context);
     final l10n = appLocalizations(context);
     return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.settings,
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title:
-                      Text(l10n.personalInformation),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: onPersonalInformation,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.language),
-                  title: Text(l10n.language),
-                  subtitle: Text(languageController?.language.nativeName ??
-                      AppLanguage.english.nativeName),
-                  onTap: languageController == null
-                      ? null
-                      : () => _showLanguagePicker(context),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.notifications_none),
-                  title: Text(l10n.notifications),
-                  subtitle: Text(l10n.comingSoon),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.palette_outlined),
-                  title: Text(l10n.appearance),
-                  subtitle: Text(l10n.comingSoon),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.security_outlined),
-                  title: Text(l10n.accountSecurity),
-                  subtitle:
-                      Text(l10n.managedByOrganization),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(l10n.about),
-                  subtitle: const Text('OPPO LINE OA Chat · v1.0.6+7'),
-                  trailing: Text(
-                    l10n.checkForUpdates,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.settings, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(l10n.personalInformation),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: widget.onPersonalInformation,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.language),
+                title: Text(l10n.language),
+                subtitle: Text(languageController?.language.nativeName ??
+                    AppLanguage.english.nativeName),
+                onTap: languageController == null
+                    ? null
+                    : () => _showLanguagePicker(context),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.notifications_none),
+                title: Text(l10n.notifications),
+                subtitle: Text(l10n.comingSoon),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: Text(l10n.appearance),
+                subtitle: Text(l10n.comingSoon),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.security_outlined),
+                title: Text(l10n.accountSecurity),
+                subtitle: Text(l10n.managedByOrganization),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(l10n.about),
+                subtitle: Text(_packageInfo == null
+                    ? 'OPPO LINE OA Chat'
+                    : 'OPPO LINE OA Chat · v${_packageInfo!.version}+${_packageInfo!.buildNumber}'),
+                trailing: Text(
+                  l10n.checkForUpdates,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  onTap: updateService == null
-                      ? null
-                      : () => updateService!.checkForUpdates(context, isManual: true),
                 ),
-              ],
-            ),
+                onTap: widget.updateService == null
+                    ? null
+                    : () => widget.updateService!
+                        .checkForUpdates(context, isManual: true),
+              ),
+            ],
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 
   Future<void> _showLanguagePicker(BuildContext context) async {

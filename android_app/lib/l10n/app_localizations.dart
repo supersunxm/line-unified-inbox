@@ -1715,11 +1715,77 @@ abstract class AppLocalizations {
   /// **'Unable to check for updates'**
   String get unableToCheckUpdates;
 
+  /// No description provided for @preparingDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing download...'**
+  String get preparingDownload;
+
   /// No description provided for @downloadingApk.
   ///
   /// In en, this message translates to:
-  /// **'Opening download page...'**
+  /// **'Downloading APK...'**
   String get downloadingApk;
+
+  /// No description provided for @downloadingApkProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading APK: {percent}%'**
+  String downloadingApkProgress(Object percent);
+
+  /// No description provided for @verifyingDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying download...'**
+  String get verifyingDownload;
+
+  /// No description provided for @readyToInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to install'**
+  String get readyToInstall;
+
+  /// No description provided for @installingApk.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening installer...'**
+  String get installingApk;
+
+  /// No description provided for @downloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed. Please try again.'**
+  String get downloadFailed;
+
+  /// No description provided for @checksumFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The download could not be verified and was blocked.'**
+  String get checksumFailed;
+
+  /// No description provided for @installPermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Install permission is required'**
+  String get installPermissionRequired;
+
+  /// No description provided for @installPermissionInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow installs from this app in Android settings, then tap Retry.'**
+  String get installPermissionInstructions;
+
+  /// No description provided for @installationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open the installer. Please try again.'**
+  String get installationFailed;
+
+  /// No description provided for @retryUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retryUpdate;
 
   /// No description provided for @select.
   ///
