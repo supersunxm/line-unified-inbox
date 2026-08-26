@@ -14,4 +14,4 @@ Keep the corresponding keystore and passwords outside Git and back them up secur
 
 ## Firebase
 
-Register a Firebase Android app whose package name is exactly `click.lineoppo.chat`, then download its `google-services.json` into `android/app/google-services.json` before building the production APK. If Firebase requires Android certificate fingerprints, use the values above.
+Register a Firebase Android app whose package name is exactly `click.lineoppo.chat`. The native FCM receiver uses the checked-in non-secret identifiers in `android/app/src/main/res/values/firebase_options.xml`, which must match `lib/firebase_options.dart`; an optional downloaded `google-services.json` remains ignored. If Firebase requires Android certificate fingerprints, use the values above.

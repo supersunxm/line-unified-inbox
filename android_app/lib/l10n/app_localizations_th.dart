@@ -583,6 +583,15 @@ class AppLocalizationsTh extends AppLocalizations {
   String get notifications => 'การแจ้งเตือน';
 
   @override
+  String get notificationsEnabled => 'เปิดใช้งานแล้ว';
+
+  @override
+  String get notificationsDisabled => 'ปิดใช้งาน · แตะเพื่อเปิดการตั้งค่า';
+
+  @override
+  String get enableNotifications => 'แตะเพื่อเปิดการแจ้งเตือน';
+
+  @override
   String get appearance => 'การแสดงผล';
 
   @override

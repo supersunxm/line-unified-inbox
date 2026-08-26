@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.plugin.common.MethodChannel
@@ -15,6 +17,7 @@ import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
     private val installerChannel = "click.lineoppo.chat/apk_installer"
+    private val notificationSettingsChannel = "click.lineoppo.chat/notification_settings"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,6 +27,14 @@ class MainActivity : FlutterActivity() {
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "New LINE OA customer messages"
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build(),
+            )
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 250, 200, 250)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
@@ -43,6 +54,32 @@ class MainActivity : FlutterActivity() {
                 }
                 installApk(path, result)
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationSettingsChannel)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "openNotificationSettings") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                openNotificationSettings(result)
+            }
+    }
+
+    private fun openNotificationSettings(result: MethodChannel.Result) {
+        val intent = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            }
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+        }).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            startActivity(intent)
+            result.success(true)
+        } catch (_: Exception) {
+            result.success(false)
+        }
     }
 
     private fun installApk(path: String, result: MethodChannel.Result) {

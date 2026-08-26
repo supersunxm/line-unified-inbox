@@ -13,6 +13,7 @@ import '../profile/personal_information_page.dart';
 import '../profile/profile_page.dart';
 import '../summary/summary_page.dart';
 import '../summary/summary_repository.dart';
+import '../notifications/notification_service.dart';
 import 'workspace_home_page.dart';
 
 class AuthenticatedShell extends StatefulWidget {
@@ -26,6 +27,7 @@ class AuthenticatedShell extends StatefulWidget {
     required this.onLogout,
     required this.onConversationOpened,
     this.updateService,
+    this.notifications,
   });
 
   final CurrentUser user;
@@ -36,6 +38,7 @@ class AuthenticatedShell extends StatefulWidget {
   final VoidCallback onLogout;
   final Future<void> Function(String conversationId) onConversationOpened;
   final AppUpdateService? updateService;
+  final NotificationService? notifications;
 
   @override
   AuthenticatedShellState createState() => AuthenticatedShellState();
@@ -129,6 +132,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
               widget.user.canManageAccounts ? _openAdminApprovals : null,
           onPersonalInformation: _openPersonalInformation,
           updateService: widget.updateService,
+          notificationService: widget.notifications,
         ),
         destination: NavigationDestination(
           icon: const Icon(Icons.person_outline),

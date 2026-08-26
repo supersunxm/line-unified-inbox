@@ -579,6 +579,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notifications => '通知';
 
   @override
+  String get notificationsEnabled => '已启用';
+
+  @override
+  String get notificationsDisabled => '已停用 · 点击打开设置';
+
+  @override
+  String get enableNotifications => '点击启用通知';
+
+  @override
   String get appearance => '外观';
 
   @override
@@ -1466,6 +1475,15 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get notifications => '通知';
+
+  @override
+  String get notificationsEnabled => '已启用';
+
+  @override
+  String get notificationsDisabled => '已停用 · 点击打开设置';
+
+  @override
+  String get enableNotifications => '点击启用通知';
 
   @override
   String get appearance => '外观';

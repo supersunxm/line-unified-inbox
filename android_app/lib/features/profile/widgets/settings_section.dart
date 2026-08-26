@@ -7,17 +7,20 @@ import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_spacing.dart';
 
 import '../../../core/services/app_update_service.dart';
+import '../../notifications/notification_service.dart';
 
 class SettingsSection extends StatefulWidget {
   const SettingsSection(
       {super.key,
       this.onPersonalInformation,
       this.updateService,
-      this.packageInfo});
+      this.packageInfo,
+      this.notificationService});
 
   final VoidCallback? onPersonalInformation;
   final AppUpdateService? updateService;
   final PackageInfo? packageInfo;
+  final NotificationService? notificationService;
 
   @override
   State<SettingsSection> createState() => _SettingsSectionState();
@@ -25,6 +28,7 @@ class SettingsSection extends StatefulWidget {
 
 class _SettingsSectionState extends State<SettingsSection> {
   PackageInfo? _packageInfo;
+  NotificationPermissionStatus? _notificationStatus;
 
   @override
   void initState() {
@@ -32,6 +36,9 @@ class _SettingsSectionState extends State<SettingsSection> {
     _packageInfo = widget.packageInfo;
     if (_packageInfo == null) {
       unawaited(_loadPackageInfo());
+    }
+    if (widget.notificationService != null) {
+      unawaited(_loadNotificationStatus());
     }
   }
 
@@ -76,7 +83,11 @@ class _SettingsSectionState extends State<SettingsSection> {
               ListTile(
                 leading: const Icon(Icons.notifications_none),
                 title: Text(l10n.notifications),
-                subtitle: Text(l10n.comingSoon),
+                subtitle: Text(_notificationSubtitle(l10n)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: widget.notificationService == null
+                    ? null
+                    : () => _manageNotifications(context),
               ),
               const Divider(height: 1),
               ListTile(
@@ -115,6 +126,42 @@ class _SettingsSectionState extends State<SettingsSection> {
         ),
       ],
     );
+  }
+
+  String _notificationSubtitle(AppLocalizations l10n) {
+    switch (_notificationStatus) {
+      case NotificationPermissionStatus.authorized:
+        return l10n.notificationsEnabled;
+      case NotificationPermissionStatus.denied:
+        return l10n.notificationsDisabled;
+      case NotificationPermissionStatus.notDetermined:
+        return l10n.enableNotifications;
+      case NotificationPermissionStatus.unavailable:
+      case null:
+        return l10n.enableNotifications;
+    }
+  }
+
+  Future<void> _loadNotificationStatus() async {
+    final service = widget.notificationService;
+    if (service == null) return;
+    final status = await service.notificationPermissionStatus();
+    if (mounted) setState(() => _notificationStatus = status);
+  }
+
+  Future<void> _manageNotifications(BuildContext context) async {
+    final service = widget.notificationService;
+    if (service == null) return;
+    var status = await service.notificationPermissionStatus();
+    if (status == NotificationPermissionStatus.denied) {
+      await service.openNotificationSettings();
+    } else {
+      status = await service.requestNotificationPermission();
+      if (status == NotificationPermissionStatus.denied) {
+        await service.openNotificationSettings();
+      }
+    }
+    if (mounted) setState(() => _notificationStatus = status);
   }
 
   Future<void> _showLanguagePicker(BuildContext context) async {

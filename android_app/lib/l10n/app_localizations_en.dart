@@ -586,6 +586,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifications => 'Notifications';
 
   @override
+  String get notificationsEnabled => 'Enabled';
+
+  @override
+  String get notificationsDisabled => 'Disabled · Tap to open settings';
+
+  @override
+  String get enableNotifications => 'Tap to enable notifications';
+
+  @override
   String get appearance => 'Appearance';
 
   @override

@@ -25,3 +25,28 @@ void test("unregister and last-seen updates are scoped to the authenticated user
   assert.equal(updates.every((entry) => entry.where.userId === "user-1" && entry.where.isActive === true), true);
   assert.equal(updates[0].data.isActive, false);
 });
+
+void test("HQ and all-store users may register without a store membership", async () => {
+  let upserted = false;
+  const prisma: any = {
+    user: {
+      findUnique: async () => ({
+        role: "ADMIN",
+        isActive: true,
+        status: "ACTIVE",
+        canAccessMobile: true,
+        canAccessAllStores: true,
+        memberships: [],
+      }),
+    },
+    deviceToken: {
+      upsert: async () => {
+        upserted = true;
+        return { id: "device-hq", platform: DevicePlatform.ANDROID, isActive: true, lastSeenAt: new Date() };
+      },
+    },
+  };
+  const service = new DeviceTokenService(prisma, { encrypt: () => "encrypted-device-token" } as any);
+  await service.register("hq-1", { token: "b".repeat(30), platform: DevicePlatform.ANDROID });
+  assert.equal(upserted, true);
+});

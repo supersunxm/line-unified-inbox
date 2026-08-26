@@ -1,27 +1,34 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma, PushNotificationStatus, UserStatus } from "@prisma/client";
+import { Injectable, Logger } from "@nestjs/common";
+import { Prisma, PushNotificationStatus, UserRole, UserStatus } from "@prisma/client";
 
 type NotificationClient = Prisma.TransactionClient;
 
 @Injectable()
 export class NotificationEnqueueService {
+  private readonly logger = new Logger(NotificationEnqueueService.name);
+
   async enqueueInboundMessage(tx: NotificationClient, input: { storeId: string; conversationId: string; messageId: string; customerName: string; messageType: string; preview: string; sentAt: string }) {
-    const memberships = await tx.userStoreMembership.findMany({
+    const users = await tx.user.findMany({
       where: {
-        storeId: input.storeId,
-        status: "ACTIVE",
-        user: {
-          isActive: true,
-          status: UserStatus.ACTIVE,
-          deviceTokens: { some: { isActive: true } },
-        },
+        isActive: true,
+        status: UserStatus.ACTIVE,
+        canAccessMobile: true,
+        deviceTokens: { some: { isActive: true } },
+        OR: [
+          { role: UserRole.ADMIN },
+          { canAccessAllStores: true },
+          { memberships: { some: { storeId: input.storeId, status: "ACTIVE", store: { isActive: true, archivedAt: null } } } },
+        ],
       },
-      select: { userId: true },
+      select: { id: true },
     });
-    if (memberships.length === 0) return { count: 0 };
+    if (users.length === 0) {
+      this.logger.log(JSON.stringify({ event: "push_notification_enqueued", messageId: input.messageId, conversationId: input.conversationId, targetedUserCount: 0 }));
+      return { count: 0 };
+    }
     const result = await tx.pushNotification.createMany({
-      data: memberships.map((membership) => ({
-        userId: membership.userId,
+      data: users.map((user) => ({
+        userId: user.id,
         conversationId: input.conversationId,
         messageId: input.messageId,
         type: "INBOUND_MESSAGE",
@@ -30,6 +37,7 @@ export class NotificationEnqueueService {
       })),
       skipDuplicates: true,
     });
+    this.logger.log(JSON.stringify({ event: "push_notification_enqueued", messageId: input.messageId, conversationId: input.conversationId, targetedUserCount: users.length, enqueuedCount: result.count }));
     return { count: result.count };
   }
 }

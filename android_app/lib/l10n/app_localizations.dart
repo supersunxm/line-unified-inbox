@@ -1205,6 +1205,24 @@ abstract class AppLocalizations {
   /// **'Notifications'**
   String get notifications;
 
+  /// No description provided for @notificationsEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get notificationsEnabled;
+
+  /// No description provided for @notificationsDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled · Tap to open settings'**
+  String get notificationsDisabled;
+
+  /// No description provided for @enableNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to enable notifications'**
+  String get enableNotifications;
+
   /// No description provided for @appearance.
   ///
   /// In en, this message translates to:
