@@ -1,6 +1,35 @@
 # AI progress
 
-## Current task: Rebase Android Release PR #47 onto latest main (2026-08-25)
+## Current task: BM Mobile Customer Sales Tags Presentation on Web (2026-08-26)
+
+- **Audit & Architecture**:
+  - Replaced legacy Web-generated/manual tag presentation (AI topics, AI products, Priority, Follow-Up Status, and AI Customer Stage) with BM-entered customer sales data from the Mobile App (`customerSalesInformation`).
+  - Verified backend data contract: `customerSalesInformation` (`status`, `interestLevel`, `purchaseChannel`, `paymentMethod`, `products`) is already built and returned by `ConversationsService.list()` via `safe()`.
+  - Reused existing data structures without creating duplicate tag systems.
+- **Presentation Helper Implementation (`frontend/src/app/conversation-list-presentation.ts`)**:
+  - `formatVariantLabel`: Formats RAM, ROM, color (`16GB / 512GB · Graphite`, `12GB / 256GB`, `Titanium Silver`).
+  - `getBmCustomerSalesTags`: Extracts ordered tags following display priority:
+    1. Sales Status: `INTERESTED` (blue) or `PURCHASED` (emerald)
+    2. Interest Level: `HOT` (rose/red), `WARM` (amber), `COLD` (slate)
+    3. Product model: Extracted from `sales.products`
+    4. Product variant: Formatted variant string when present
+    5. Purchase channel: `STORE` / `ONLINE`
+    6. Payment method: `CASH`, `INSTALLMENT`, `CREDIT CARD`, `OTHER`
+  - `getConversationListTags`: Supports max visible items (default 3) and returns hidden tags count for `+N` overflow chip.
+  - `getBmTagChipClass`: Returns semantic theme-aware Tailwind classes for light/dark mode.
+  - When BM sales data is missing/empty, returns empty array with zero fake/AI fallback tags.
+- **Web UI Updates (`frontend/src/app/page.tsx`)**:
+  - Updated `Conversation` type and `mapApiConversation` to include `customerSalesInformation`.
+  - Updated conversation list card tag area to render BM customer sales tags with `data-conversation-bm-tag`, retaining `data-conversation-bm-reply-status`.
+  - Updated chat detail header to render BM customer sales tags with `data-chat-detail-bm-tag`, retaining Customer Name, Store Name, BM Reply Status dropdown (`data-bm-reply-status-select`), and Relative Time.
+  - Updated `editPurchaseInformation` to sync updated `customerSalesInformation` into the conversation list state without page reload.
+  - Preserved underlying fields (Priority, FollowUpStatus, topics, customerStage) in the backend and state for search, filter panel, and analytics.
+- **Verification & Test Results**:
+  - Expanded `frontend/test/conversation-list-presentation.test.mts` with tests covering all 17 specification criteria.
+  - All 400 / 400 frontend unit tests passing (`npm test` in `frontend/`).
+  - All 1,311 / 1,311 backend unit tests passing (`npm test` in `backend/`).
+  - Next.js Turbopack production build succeeded cleanly across all routes with TypeScript validation (`npm run build` in `frontend/`).
+  - `git diff --check` clean with zero whitespace/formatting issues.
 
 - Fetched and rebased `release/android-1.0.14` onto `origin/main` `ef07cfdca530dc8203f83a614de127437baede19` without changing or pushing main.
 - Resolved the sole conflict in `DECISIONS.md` by preserving all newer main TikTok/public-site decisions and the Android 1.0.14 permanent-signing decision.

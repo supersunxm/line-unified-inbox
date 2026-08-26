@@ -1,3 +1,21 @@
+# BM Mobile Customer Sales Tags as Source of Truth on Web (2026-08-26)
+
+- **Source of Truth**: The tags displayed in the conversation list rows and chat detail header reflect BM staff entries in the Mobile App (`customerSalesInformation`) rather than Web-generated/manual AI tags.
+- **Display Priority Order**:
+  1. `salesStatus`: `INTERESTED` (blue) or `PURCHASED` (emerald)
+  2. `interestLevel`: `HOT` (rose/red), `WARM` (amber), `COLD` (slate)
+  3. `productModel`: Product model name (accent background)
+  4. `productVariant`: Formatted RAM / ROM / color (subtle background)
+  5. `purchaseChannel`: `STORE` or `ONLINE` (subtle background)
+  6. `paymentMethod`: `CREDIT CARD`, `INSTALLMENT`, `CASH`, `OTHER` (subtle background)
+- **Removal of Legacy Presentation**:
+  - Removed from list area tags: Follow Up Store, Follow-up status, Priority, AI-generated topic tags, AI-generated product tags.
+  - Removed from detail header chips: AI Customer Stage, Follow-up status, Priority.
+  - Retained in detail header: Customer Name, Store Name, BM Customer Sales Tags, BM Reply Status dropdown, and Relative time.
+  - Retained in list row: Customer Name, Store Name, BM Reply Status pill, Relative time, and `+N` overflow chip.
+- **Empty State Behavior**: If BM staff have not entered customer sales information, zero tags are rendered; no fallback AI tags or artificial placeholders are displayed.
+- **Underlying Field Preservation**: Priority, FollowUpStatus, topics, and customer stage remain fully preserved in backend models, search, filtering, and analytics.
+
 # Brand Accent Modernization to OPPO Green (2026-08-20)
 
 - **Semantic Separation of Brand Accent and Warning States**:

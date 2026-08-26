@@ -51,8 +51,8 @@ import { ConversationPaginationFooter } from "./conversation-pagination-footer";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
-import { getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -135,6 +135,7 @@ type Conversation = {
   purchaseIntent: string;
   lineOaId: string;
   lineOaName: string;
+  customerSalesInformation?: ApiCustomerSalesInformation;
 };
 
 const CONVERSATION_STATES_STORAGE_KEY = "oppo-line-oa-conversation-states";
@@ -1256,6 +1257,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
     purchaseIntent: item.purchaseIntent ?? "Unknown",
     lineOaId: item.lineOfficialAccount.id,
     lineOaName: item.lineOfficialAccount.name,
+    customerSalesInformation: item.customerSalesInformation,
   };
 }
 
@@ -2802,6 +2804,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         productVariantId,
       });
       setSelectedApiConversation(updated);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedConversationId
+            ? { ...c, customerSalesInformation: updated.customerSalesInformation }
+            : c
+        )
+      );
       setToastMessage(text.purchaseInformationUpdated);
     } catch (error) {
       setToastMessage(error instanceof Error ? error.message : text.noPurchaseInformation);
@@ -3937,15 +3946,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   ) : (
                     filteredConversations.map((conversation) => {
                       const isSelected = conversation.id === selectedConversation?.id;
-                      const status = conversationStates[conversation.id]?.status;
                       const currentBmReplyStatus = conversationStates[conversation.id]?.bmReplyStatus ?? conversation.bmReplyStatus;
-                      const tags = getConversationListTags({
-                        priority: conversation.priority,
-                        priorityLabel: text.highPriority,
-                        statusLabel: getStatusLabel(language, status),
-                        product: conversation.product,
-                        topic: conversation.topic,
-                      });
+                      const tags = getConversationListTags(conversation.customerSalesInformation);
                       const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
 
                       return (
@@ -4081,24 +4083,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             {tags.visible.map((tag, index) => (
                               <span
                                 key={`${tag.kind}-${tag.label}-${index}`}
-                                data-conversation-priority={tag.kind === "priority" ? conversation.priority : undefined}
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                  tag.kind === "priority"
-                                    ? "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200 font-semibold"
-                                    : tag.kind === "status"
-                                      ? status === "followUp"
-                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
-                                        : status === "reminded"
-                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                                          : status === "acknowledged"
-                                            ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                            : status === "completed"
-                                              ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
-                                              : "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200"
-                                      : tag.kind === "product"
-                                        ? "bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200"
-                                        : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
-                                }`}
+                                data-conversation-bm-tag={tag.kind}
+                                className={`rounded-full px-2 py-0.5 text-[10px] ${getBmTagChipClass(tag)}`}
                               >
                                 {tag.label}
                               </span>
@@ -4152,29 +4138,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
-                            {customerIntelligence && (
-                              <span className={`inline-flex items-center rounded-[var(--app-radius-sm)] px-1.5 py-0.5 text-[10px] font-semibold ${
-                                customerIntelligence.customerStage === "PURCHASED"
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40"
-                                  : customerIntelligence.customerStage === "INTERESTED"
-                                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40"
-                                    : customerIntelligence.customerStage === "NEW"
-                                      ? "bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] border border-[var(--app-border)]"
-                                      : "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40"
-                              }`}>
-                                {customerIntelligence.customerStage.replaceAll("_", " ")}
+                            {getBmCustomerSalesTags(selectedApiConversation?.customerSalesInformation ?? selectedConversation.customerSalesInformation).map((tag, index) => (
+                              <span
+                                key={`detail-bm-tag-${tag.kind}-${tag.label}-${index}`}
+                                data-chat-detail-bm-tag={tag.kind}
+                                className={`rounded-[var(--app-radius-sm)] px-1.5 py-0.5 text-[10px] ${getBmTagChipClass(tag)}`}
+                              >
+                                {tag.label}
                               </span>
-                            )}
-                            <span className="rounded-[var(--app-radius-sm)] bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200/60 dark:border-amber-900/40">
-                              {followUpStatusLabels[language][selectedConversationState.status]}
-                            </span>
-                            <span className={`rounded-[var(--app-radius-sm)] px-1.5 py-0.5 text-[10px] font-medium ${
-                              selectedConversation.priority === "High"
-                                ? "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200 border border-red-200/60 dark:border-red-900/40 font-semibold"
-                                : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] border border-[var(--app-border)]"
-                            }`}>
-                              {selectedConversation.priority === "High" ? text.highPriority : text.normalPriority}
-                            </span>
+                            ))}
                             <select
                               data-bm-reply-status-select
                               aria-label={text.bmReplyStatus}

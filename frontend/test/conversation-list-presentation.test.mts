@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  formatVariantLabel,
+  getBmCustomerSalesTags,
   getBmReplyStatusBadge,
+  getBmTagChipClass,
   getConversationListTags,
   getConversationListTitle,
 } from "../src/app/conversation-list-presentation.ts";
+import type { ApiCustomerSalesInformation } from "../src/types/api.ts";
 
 const labels = {
   conversations: "Conversations",
@@ -23,36 +27,163 @@ test("conversation list title follows the active sidebar and status filter", () 
   assert.equal(getConversationListTitle("dashboard", "all", labels), "Conversations");
 });
 
-test("default priority is hidden while attention priority remains visible", () => {
-  const normal = getConversationListTags({
-    priority: "Normal",
-    priorityLabel: "Normal Priority",
-    statusLabel: "",
-    product: "Reno 16",
-    topic: "",
-  });
-  assert.deepEqual(normal.visible.map(({ label }) => label), ["Reno 16"]);
-
-  const high = getConversationListTags({
-    priority: "High",
-    priorityLabel: "High Priority",
-    statusLabel: "",
-    product: "Reno 16",
-    topic: "",
-  });
-  assert.deepEqual(high.visible.map(({ label }) => label), ["High Priority", "Reno 16"]);
+test("formatVariantLabel handles RAM, ROM, color and combinations cleanly", () => {
+  assert.equal(formatVariantLabel("16GB", "512GB", "Graphite"), "16GB / 512GB · Graphite");
+  assert.equal(formatVariantLabel("12GB", "256GB", null), "12GB / 256GB");
+  assert.equal(formatVariantLabel(null, null, "Titanium Silver"), "Titanium Silver");
+  assert.equal(formatVariantLabel("8GB", null, null), "8GB");
+  assert.equal(formatVariantLabel(null, "128GB", null), "128GB");
+  assert.equal(formatVariantLabel(null, null, null), null);
 });
 
-test("only three tags are visible and remaining tags are counted", () => {
-  const tags = getConversationListTags({
-    priority: "High",
-    priorityLabel: "High Priority",
-    statusLabel: "Follow-up",
-    product: "Reno 16",
-    topic: "Price · Stock",
+test("getBmCustomerSalesTags generates INTERESTED and interestLevel tags with appropriate priority", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "INTERESTED",
+    interestLevel: "HOT",
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [
+      {
+        model: "OPPO Watch S",
+        ram: null,
+        rom: null,
+        color: null,
+        quantity: 1,
+      },
+    ],
+  };
+
+  const tags = getBmCustomerSalesTags(sales);
+  assert.deepEqual(
+    tags.map(({ kind, label }) => ({ kind, label })),
+    [
+      { kind: "salesStatus", label: "INTERESTED" },
+      { kind: "interestLevel", label: "HOT" },
+      { kind: "productModel", label: "OPPO Watch S" },
+    ]
+  );
+  assert.match(getBmTagChipClass(tags[0]), /bg-blue-100.*text-blue-800/);
+  assert.match(getBmTagChipClass(tags[1]), /bg-rose-100.*text-rose-800/);
+});
+
+test("getBmCustomerSalesTags generates PURCHASED with model, variant, store channel, and payment method", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "PURCHASED",
+    interestLevel: null,
+    purchaseChannel: "STORE",
+    paymentMethod: "CREDIT_CARD",
+    products: [
+      {
+        model: "OPPO Find N6",
+        ram: "16GB",
+        rom: "512GB",
+        color: "Silver",
+        quantity: 1,
+      },
+    ],
+  };
+
+  const tags = getBmCustomerSalesTags(sales);
+  assert.deepEqual(
+    tags.map(({ kind, label }) => ({ kind, label })),
+    [
+      { kind: "salesStatus", label: "PURCHASED" },
+      { kind: "productModel", label: "OPPO Find N6" },
+      { kind: "productVariant", label: "16GB / 512GB · Silver" },
+      { kind: "purchaseChannel", label: "STORE" },
+      { kind: "paymentMethod", label: "CREDIT CARD" },
+    ]
+  );
+  assert.match(getBmTagChipClass(tags[0]), /bg-emerald-100.*text-emerald-800/);
+});
+
+test("interestLevel color classes handle HOT, WARM, and COLD correctly", () => {
+  const hotTag = getBmCustomerSalesTags({
+    status: "INTERESTED",
+    interestLevel: "HOT",
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  })[1];
+  const warmTag = getBmCustomerSalesTags({
+    status: "INTERESTED",
+    interestLevel: "WARM",
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  })[1];
+  const coldTag = getBmCustomerSalesTags({
+    status: "INTERESTED",
+    interestLevel: "COLD",
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  })[1];
+
+  assert.match(getBmTagChipClass(hotTag), /bg-rose-100.*text-rose-800/);
+  assert.match(getBmTagChipClass(warmTag), /bg-amber-100.*text-amber-800/);
+  assert.match(getBmTagChipClass(coldTag), /bg-slate-100.*text-slate-700/);
+});
+
+test("all payment methods are formatted with human-friendly labels", () => {
+  const methods = ["CASH", "INSTALLMENT", "CREDIT_CARD", "OTHER"] as const;
+  const expectedLabels = ["CASH", "INSTALLMENT", "CREDIT CARD", "OTHER"];
+
+  methods.forEach((method, idx) => {
+    const tags = getBmCustomerSalesTags({
+      status: "PURCHASED",
+      interestLevel: null,
+      purchaseChannel: null,
+      paymentMethod: method,
+      products: [],
+    });
+    assert.equal(tags[1].kind, "paymentMethod");
+    assert.equal(tags[1].label, expectedLabels[idx]);
   });
-  assert.equal(tags.visible.length, 3);
-  assert.deepEqual(tags.hidden.map(({ label }) => label), ["Price", "Stock"]);
+});
+
+test("getBmCustomerSalesTags returns empty array when customerSalesInformation is undefined or empty", () => {
+  assert.deepEqual(getBmCustomerSalesTags(undefined), []);
+  assert.deepEqual(
+    getBmCustomerSalesTags({
+      status: null,
+      interestLevel: null,
+      purchaseChannel: null,
+      paymentMethod: null,
+      products: [],
+    }),
+    []
+  );
+});
+
+test("getConversationListTags truncates to maxVisible (default 3) and returns hidden tags count", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "PURCHASED",
+    interestLevel: null,
+    purchaseChannel: "STORE",
+    paymentMethod: "CREDIT_CARD",
+    products: [
+      {
+        model: "OPPO Find N6",
+        ram: "16GB",
+        rom: "512GB",
+        color: null,
+        quantity: 1,
+      },
+    ],
+  };
+
+  const listTags = getConversationListTags(sales, 3);
+  assert.equal(listTags.visible.length, 3);
+  assert.deepEqual(
+    listTags.visible.map(({ label }) => label),
+    ["PURCHASED", "OPPO Find N6", "16GB / 512GB"]
+  );
+  assert.equal(listTags.hidden.length, 2);
+  assert.deepEqual(
+    listTags.hidden.map(({ label }) => label),
+    ["STORE", "CREDIT CARD"]
+  );
 });
 
 test("message previews stay readable across content and row states while metadata remains quieter", () => {
@@ -71,6 +202,43 @@ test("message previews stay readable across content and row states while metadat
   assert.match(globalsCode, /\.conversation-message-preview \{\s*color: var\(--foreground\);\s*opacity: 1;/);
   assert.match(pageCode, /latestMessage\?\.messageType === "IMAGE"[\s\S]*📷 รูปภาพ/);
   assert.match(pageCode, /latestMessage\?\.originalText \?\? ""/);
+});
+
+test("conversation list rows render BM tags with data-conversation-bm-tag and no AI or legacy tags", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const rowStart = pageCode.indexOf("filteredConversations.map");
+  const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
+  const activeRows = pageCode.slice(rowStart, rowEnd);
+
+  assert.match(activeRows, /getConversationListTags\(conversation\.customerSalesInformation\)/);
+  assert.match(activeRows, /data-conversation-bm-tag=\{tag\.kind\}/);
+  assert.match(activeRows, /getBmTagChipClass\(tag\)/);
+  assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
+
+  // Assert legacy/AI tags are NOT rendered in conversation list rows
+  assert.doesNotMatch(activeRows, /data-conversation-priority/);
+  assert.doesNotMatch(activeRows, /getStatusLabel\(language,\s*status\)/);
+  assert.doesNotMatch(activeRows, /conversation\.product/);
+  assert.doesNotMatch(activeRows, /conversation\.topic/);
+});
+
+test("chat detail header renders BM tags with data-chat-detail-bm-tag, reply status dropdown, and relative time", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const headerStart = pageCode.indexOf("<header data-chat-detail-header");
+  const headerEnd = pageCode.indexOf("</header>", headerStart);
+  const activeHeader = pageCode.slice(headerStart, headerEnd);
+
+  assert.match(activeHeader, /getBmCustomerSalesTags\(selectedApiConversation\?\.customerSalesInformation \?\? selectedConversation\.customerSalesInformation\)/);
+  assert.match(activeHeader, /data-chat-detail-bm-tag=\{tag\.kind\}/);
+  assert.match(activeHeader, /getBmTagChipClass\(tag\)/);
+  assert.match(activeHeader, /data-bm-reply-status-select/);
+  assert.match(activeHeader, /formatRelativeTime\(selectedConversation\.time,\s*language\)/);
+
+  // Assert legacy/AI tags are NOT rendered in chat detail header
+  assert.doesNotMatch(activeHeader, /customerIntelligence/);
+  assert.doesNotMatch(activeHeader, /customerStage/);
+  assert.doesNotMatch(activeHeader, /followUpStatusLabels/);
+  assert.doesNotMatch(activeHeader, /selectedConversation\.priority/);
 });
 
 test("conversation list retains selected-row state, accurate count, and in-pane pagination", () => {
@@ -93,8 +261,6 @@ test("conversation list retains selected-row state, accurate count, and in-pane 
   assert.doesNotMatch(activeHeader, /text\.conversationsToFollow|\{text\.filter\}/);
   assert.match(activeRows, /data-conversation-row/);
   assert.match(activeRows, /data-selected=\{isSelected\}/);
-  assert.match(activeRows, /data-conversation-priority=\{tag\.kind === "priority"/);
-  assert.doesNotMatch(activeRows, /text\.normalPriority/);
   assert.match(globalsCode, /\[data-chat-pane="conversations"\] \.conversation-list-row\.is-selected/);
   assert.match(globalsCode, /box-shadow: inset 4px 0 0 var\(--focus\)/);
   assert.match(pageCode, /\{chatTotalCount\} \{text\.searchResults\}/);
@@ -124,4 +290,3 @@ test("bmReplyStatus badge is rendered per row separately from tag truncation", (
   assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
   assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus\]/);
 });
-
