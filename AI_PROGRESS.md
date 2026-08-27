@@ -1,6 +1,25 @@
 # AI progress
 
-## Current task: Match LINE OA Template Presets (12 Official-Style Presets) (2026-08-27)
+## Current task: Make JPEG/PNG Rich Menu Uploads Reliable in Production (2026-08-27)
+
+- **Root Cause Analysis**:
+  - Image upload previously depended solely on `sharp(file.buffer).metadata()` which threw exceptions on certain valid JPEG/PNG files in containerized environments, and converted all decoder exceptions into the generic `"Invalid or corrupt image file"`.
+  - The UI simultaneously showed both `"ยังไม่ได้เลือกรูปภาพ"` and `"Invalid or corrupt image file"`.
+- **Resolution**:
+  - **Magic Bytes Signature Detector**: Implemented `detectImageMagicBytes` checking exact PNG (`89 50 4E 47 0D 0A 1A 0A`) and JPEG (`FF D8 FF`) bytes before parsing.
+  - **Pure JS Dimension Parsing**: Adopted `image-size` as the primary resilient metadata parser, with Sharp as a fallback, preserving unmodified original bytes during storage.
+  - **Multer Memory Storage**: Explicitly configured `FileInterceptor` with `memoryStorage()` and 1 MB size limit.
+  - **Template Aspect Ratio Verification**: Added checks verifying that uploaded images match the selected template format (Large vs Compact) with clear localized errors.
+  - **Safe Diagnostic Logging**: Emitted structured log metadata on failure without logging image bytes or content.
+  - **Frontend UX Refinement**: Added client-side format validation, single clear error banner, and preserved existing template images when a replacement upload fails.
+- **Verification & Test Results**:
+  - 1341 / 1341 backend tests passing (`npm test` in `backend/`).
+  - 439 / 439 frontend tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack build succeeded cleanly (`npm run build` in `frontend/`).
+  - Backend build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean.
+
+## Previous task: Match LINE OA Template Presets (12 Official-Style Presets) (2026-08-27)
 
 - **12 Canonical LINE OA Template Presets**:
   - Implemented 7 Large layouts (2500x1686 canonical canvas: `LARGE_6`, `LARGE_4`, `LARGE_TOP_1_BOTTOM_3`, `LARGE_LEFT_1_RIGHT_2`, `LARGE_2_ROWS`, `LARGE_2_COLS`, `LARGE_1`).

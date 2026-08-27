@@ -1,3 +1,11 @@
+# Rich Menu Image Upload Reliability & Signature Architecture (2026-08-27)
+
+- **Pure JavaScript Dimension Parsing (`image-size`)**: Switched primary image dimension extraction from Sharp native decoding to pure-JS `image-size`, eliminating container runtime decoding failures while retaining Sharp as a fallback.
+- **Strict Magic Bytes Validation**: Validate file signatures directly on raw buffers (`PNG: 89 50 4E 47 0D 0A 1A 0A`, `JPEG: FF D8 FF`), ensuring format accuracy independent of filename extension.
+- **Multer Memory Storage**: Configured `FileInterceptor` with `memoryStorage()` and a 1 MB limit to prevent disk-temp dependencies in ephemeral cloud environments.
+- **Aspect Ratio Alignment**: Validate that uploaded image aspect ratios correspond to the selected template geometry (Large vs Compact), providing descriptive localized error messages.
+- **Zero-Loss Replacement**: Failed uploads preserve the current draft's existing image preview and URL without resetting to null.
+
 # Canonical LINE Official Account Template Preset Geometry (2026-08-27)
 
 - **12-Preset LINE OA Geometry System**: Implemented the complete official LINE OA template system consisting of 7 Large layouts (2500x1686 canonical canvas) and 5 Compact layouts (2500x843 canonical canvas).

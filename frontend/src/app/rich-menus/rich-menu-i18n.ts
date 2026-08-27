@@ -77,6 +77,8 @@ export const RICH_MENU_I18N = {
     imageUploaded: (w: number, h: number) => `✓ อัปโหลดรูปภาพแล้ว (${w} x ${h} px)`,
     imageSizeError: "ขนาดไฟล์รูปภาพเกินขีดจำกัด 1 MB (ข้อกำหนดของ LINE Messaging API)",
     imageUploadError: "อัปโหลดรูปภาพไม่สำเร็จ",
+    unsupportedFormatError: "รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง",
+    aspectRatioMismatchError: "รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก",
 
     // Actions
     actions: "การทำงานของแต่ละพื้นที่",
@@ -214,6 +216,8 @@ export const RICH_MENU_I18N = {
     imageUploaded: (w: number, h: number) => `✓ Image uploaded (${w} x ${h} px)`,
     imageSizeError: "Image file size exceeds 1 MB limit (LINE Messaging API requirement).",
     imageUploadError: "Failed to upload image.",
+    unsupportedFormatError: "Only JPG and PNG images are supported. Please convert the image and try again.",
+    aspectRatioMismatchError: "The image does not match the aspect ratio of the selected template.",
 
     // Actions
     actions: "Actions",
@@ -351,6 +355,8 @@ export const RICH_MENU_I18N = {
     imageUploaded: (w: number, h: number) => `✓ 已上传图片 (${w} x ${h} 像素)`,
     imageSizeError: "图片大小超过 1 MB 限制 (LINE Messaging API 规范)。",
     imageUploadError: "图片上传失败。",
+    unsupportedFormatError: "仅支持 JPG 或 PNG 图片，请转换后重试。",
+    aspectRatioMismatchError: "图片比例与所选模板不匹配。",
 
     // Actions
     actions: "操作区域",

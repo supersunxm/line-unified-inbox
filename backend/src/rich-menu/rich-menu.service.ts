@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   Inject,
@@ -8,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { Prisma, RichMenuTemplateStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
+import { imageSize } from "image-size";
 import sharp from "sharp";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "../media/media-storage";
@@ -57,11 +59,41 @@ export class RichMenuPublishNoopAdapter implements IRichMenuPublishService {
   }
 }
 
+export type DetectedImageFormat = "jpeg" | "png" | "unknown";
+
+export function detectImageMagicBytes(buffer: Buffer): DetectedImageFormat {
+  if (!buffer || buffer.length < 8) return "unknown";
+
+  // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  // JPEG magic bytes: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "jpeg";
+  }
+
+  return "unknown";
+}
+
 @Injectable()
 export class RichMenuService {
+  private readonly logger = new Logger(RichMenuService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() @Inject(MediaStorageService) private readonly media?: MediaStorageService,
+    @Optional() @Inject("MediaStorageService") private readonly media?: MediaStorageService,
+    @Optional() @Inject("RichMenuPublishService") private readonly publishAdapter: IRichMenuPublishService = new RichMenuPublishNoopAdapter(),
   ) {}
 
   async listTemplates() {
@@ -266,50 +298,133 @@ export class RichMenuService {
     };
   }
 
+  async parseImageMetadata(
+    file: { buffer: Buffer; originalname?: string; mimetype?: string; size?: number },
+  ): Promise<{ format: "jpeg" | "png"; width: number; height: number }> {
+    const detectedFormat = detectImageMagicBytes(file.buffer);
+
+    if (detectedFormat === "unknown") {
+      this.logger.warn(
+        `[RichMenu Image Upload] Unsupported signature: ` +
+          JSON.stringify({
+            originalname: file.originalname || "unknown",
+            mimetype: file.mimetype || "unknown",
+            fileSize: file.size ?? file.buffer.length,
+            bufferLength: file.buffer.length,
+            signatureHex: file.buffer.subarray(0, 8).toString("hex"),
+          }),
+      );
+      throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
+    }
+
+    let width = 0;
+    let height = 0;
+    let imageSizeErrorMsg: string | null = null;
+
+    // 1. Primary parser: image-size (pure JavaScript, resilient against native decoding issues)
+    try {
+      const dimensions = imageSize(file.buffer);
+      if (dimensions.width && dimensions.height) {
+        width = dimensions.width;
+        height = dimensions.height;
+      }
+    } catch (err: any) {
+      imageSizeErrorMsg = err?.message || "image-size parse failed";
+    }
+
+    // 2. Secondary fallback parser: Sharp
+    if (!width || !height) {
+      try {
+        const metadata = await sharp(file.buffer).metadata();
+        if (metadata.width && metadata.height) {
+          width = metadata.width;
+          height = metadata.height;
+        }
+      } catch (sharpErr: any) {
+        this.logger.warn(
+          `[RichMenu Image Upload] Metadata decoding failure: ` +
+            JSON.stringify({
+              originalname: file.originalname || "unknown",
+              mimetype: file.mimetype || "unknown",
+              fileSize: file.size ?? file.buffer.length,
+              bufferLength: file.buffer.length,
+              detectedFormat,
+              imageSizeError: imageSizeErrorMsg,
+              sharpError: sharpErr?.message || null,
+            }),
+        );
+        throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
+      }
+    }
+
+    if (!width || !height) {
+      this.logger.warn(
+        `[RichMenu Image Upload] Could not determine dimensions: ` +
+          JSON.stringify({
+            originalname: file.originalname || "unknown",
+            mimetype: file.mimetype || "unknown",
+            fileSize: file.size ?? file.buffer.length,
+            bufferLength: file.buffer.length,
+            detectedFormat,
+            imageSizeError: imageSizeErrorMsg,
+          }),
+      );
+      throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
+    }
+
+    return {
+      format: detectedFormat,
+      width,
+      height,
+    };
+  }
+
   async uploadImage(
-    file: { buffer: Buffer; mimetype?: string; size?: number },
+    file: { buffer: Buffer; originalname?: string; mimetype?: string; size?: number },
     user: AuthUser,
+    preset?: string,
   ): Promise<{ imageUrl: string; width: number; height: number }> {
     if (!file?.buffer || !file.buffer.length) {
       throw new BadRequestException("Image file is required and cannot be empty");
     }
 
     if (file.buffer.length > 1 * 1024 * 1024) {
-      throw new BadRequestException("Rich Menu image exceeds the 1 MB limit (LINE Messaging API requirement).");
+      throw new BadRequestException("ขนาดไฟล์รูปภาพเกินขีดจำกัด 1 MB (ข้อกำหนดของ LINE Messaging API)");
     }
 
-    let metadata: { format?: string; width?: number; height?: number };
-    try {
-      metadata = await sharp(file.buffer).metadata();
-    } catch {
-      throw new BadRequestException("Invalid or corrupt image file");
-    }
-
-    if (metadata.format !== "jpeg" && metadata.format !== "png") {
-      throw new BadRequestException("Unsupported image format. Allowed formats: JPEG, PNG.");
-    }
-
-    const width = metadata.width ?? 0;
-    const height = metadata.height ?? 0;
+    const { format, width, height } = await this.parseImageMetadata(file);
 
     if (width < 800 || width > 2500) {
-      throw new BadRequestException(`Rich Menu image width must be between 800 and 2500 pixels (uploaded: ${width}px).`);
+      throw new BadRequestException(`ความกว้างของรูปภาพต้องอยู่ระหว่าง 800 ถึง 2500 พิกเซล (ขนาดปัจจุบัน: ${width}px)`);
     }
     if (height < 250) {
-      throw new BadRequestException(`Rich Menu image height must be at least 250 pixels (uploaded: ${height}px).`);
+      throw new BadRequestException(`ความสูงของรูปภาพต้องไม่น้อยกว่า 250 พิกเซล (ขนาดปัจจุบัน: ${height}px)`);
     }
 
     const aspectRatio = width / height;
-    if (aspectRatio < 1.45) {
-      throw new BadRequestException(`Rich Menu image aspect ratio (width/height) must be at least 1.45 (uploaded: ${aspectRatio.toFixed(2)}).`);
+    if (aspectRatio < 1.40) {
+      throw new BadRequestException(`สัดส่วนรูปภาพไม่ถูกต้อง (กว้าง/สูง ต้องไม่น้อยกว่า 1.45)`);
+    }
+
+    // Template aspect ratio validation if preset is provided
+    if (preset) {
+      const isCompact = preset.startsWith("COMPACT_") || preset === "GRID_3";
+      const isLarge = preset.startsWith("LARGE_") || preset === "GRID_6" || preset === "GRID_4";
+
+      if (isLarge && aspectRatio > 2.0) {
+        throw new BadRequestException("รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก (เทมเพลตขนาดใหญ่ต้องมีสัดส่วนประมาณ 2500x1686)");
+      }
+      if (isCompact && aspectRatio < 2.0) {
+        throw new BadRequestException("รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก (เทมเพลตแบบกะทัดรัดต้องมีสัดส่วนประมาณ 2500x843)");
+      }
     }
 
     if (!this.media) {
       throw new ServiceUnavailableException("Media storage is unavailable");
     }
 
-    const ext = metadata.format === "jpeg" ? "jpg" : "png";
-    const mime = metadata.format === "jpeg" ? "image/jpeg" : "image/png";
+    const ext = format === "jpeg" ? "jpg" : "png";
+    const mime = format === "jpeg" ? "image/jpeg" : "image/png";
     const fileId = randomUUID();
     const objectKey = `line-media/outbound/rich-menu/${fileId}.${ext}`;
 

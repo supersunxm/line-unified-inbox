@@ -478,9 +478,12 @@ export const api = {
         body: JSON.stringify({ lineOfficialAccountIds }),
       },
     ),
-  uploadRichMenuImage: (file: File) => {
+  uploadRichMenuImage: (file: File, preset?: string) => {
     const formData = new FormData();
     formData.append("file", file);
+    if (preset) {
+      formData.append("preset", preset);
+    }
     return request<{ imageUrl: string; width: number; height: number }>("/rich-menu/upload-image", {
       method: "POST",
       body: formData,

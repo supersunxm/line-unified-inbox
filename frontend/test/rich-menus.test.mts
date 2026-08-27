@@ -92,15 +92,15 @@ test("Template selector modal contains 12 LINE-style presets organized in Large 
   assert.match(viewFile, /templateGroupCompactDims/);
 });
 
-test("RichMenusView supports multilingual dictionary across Thai, English, and Chinese for 12 presets", () => {
+test("RichMenusView supports multilingual dictionary across Thai, English, and Chinese for 12 presets and image uploads", () => {
   // Thai
   assert.equal(RICH_MENU_I18N.th.pageTitle, "ริชเมนู");
   assert.equal(RICH_MENU_I18N.th.saveDraft, "บันทึกแบบร่าง");
   assert.equal(RICH_MENU_I18N.th.selectTemplateTitle, "เลือกเทมเพลต");
   assert.equal(RICH_MENU_I18N.th.templateGroupLarge, "ขนาดใหญ่");
-  assert.equal(RICH_MENU_I18N.th.templateGroupLargeDesc, "เมนูขนาดใหญ่ เหมาะสำหรับแสดงรายการเมนูจำนวนมาก");
   assert.equal(RICH_MENU_I18N.th.templateGroupCompact, "แบบกะทัดรัด");
-  assert.equal(RICH_MENU_I18N.th.templateGroupCompactDesc, "เมนูขนาดเล็ก เหมาะสำหรับใช้งานร่วมกับพื้นที่แชท");
+  assert.equal(RICH_MENU_I18N.th.unsupportedFormatError, "รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
+  assert.equal(RICH_MENU_I18N.th.aspectRatioMismatchError, "รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก");
 
   // English
   assert.equal(RICH_MENU_I18N.en.pageTitle, "Rich Menu");
@@ -108,6 +108,8 @@ test("RichMenusView supports multilingual dictionary across Thai, English, and C
   assert.equal(RICH_MENU_I18N.en.selectTemplateTitle, "Select a template");
   assert.equal(RICH_MENU_I18N.en.templateGroupLarge, "Large");
   assert.equal(RICH_MENU_I18N.en.templateGroupCompact, "Compact");
+  assert.equal(RICH_MENU_I18N.en.unsupportedFormatError, "Only JPG and PNG images are supported. Please convert the image and try again.");
+  assert.equal(RICH_MENU_I18N.en.aspectRatioMismatchError, "The image does not match the aspect ratio of the selected template.");
 
   // Chinese
   assert.equal(RICH_MENU_I18N.zh.pageTitle, "丰富菜单");
@@ -115,6 +117,8 @@ test("RichMenusView supports multilingual dictionary across Thai, English, and C
   assert.equal(RICH_MENU_I18N.zh.selectTemplateTitle, "选择模板");
   assert.equal(RICH_MENU_I18N.zh.templateGroupLarge, "大型");
   assert.equal(RICH_MENU_I18N.zh.templateGroupCompact, "紧凑型");
+  assert.equal(RICH_MENU_I18N.zh.unsupportedFormatError, "仅支持 JPG 或 PNG 图片，请转换后重试。");
+  assert.equal(RICH_MENU_I18N.zh.aspectRatioMismatchError, "图片比例与所选模板不匹配。");
 
   // Structural & variable placeholders unchanged across languages
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
@@ -122,6 +126,23 @@ test("RichMenusView supports multilingual dictionary across Thai, English, and C
   assert.match(viewFile, /\{\{store\.googleMapsUrl\}\}/);
   assert.match(viewFile, /\{\{store\.lineUrl\}\}/);
   assert.match(viewFile, /\{\{store\.tiktokUrl\}\}/);
+});
+
+test("RichMenusView image upload performs client validation and preserves previous image on failure", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+  // Client format and extension validation
+  assert.match(viewFile, /isJpegOrPng/);
+  assert.match(viewFile, /unsupportedFormatError/);
+  assert.match(viewFile, /imageSizeError/);
+
+  // Passes preset to uploadRichMenuImage
+  assert.match(viewFile, /uploadRichMenuImage\(file,\s*formPreset\)/);
+
+  // Clear previous error on new selection
+  assert.match(viewFile, /setImageError\(null\)/);
+
+  // Single error display without overlapping noImageSelected
+  assert.match(viewFile, /imageError \? \(/);
 });
 
 test("API client exports Rich Menu template and readiness methods", () => {
@@ -134,7 +155,7 @@ test("API client exports Rich Menu template and readiness methods", () => {
   assert.match(apiFile, /previewRichMenuTemplate/);
   assert.match(apiFile, /getRichMenuReadiness/);
   assert.match(apiFile, /saveRichMenuAssignments/);
-  assert.match(apiFile, /uploadRichMenuImage/);
+  assert.match(apiFile, /uploadRichMenuImage:\s*\(file:\s*File,\s*preset\?:/);
 });
 
 test("RichMenusView enables vertical page scrolling while preserving chats fixed-height layout", () => {

@@ -362,24 +362,49 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setImageError(null);
+
+    const isJpegOrPng =
+      file.type === "image/jpeg" ||
+      file.type === "image/png" ||
+      file.type === "image/jpg" ||
+      /\.(jpe?g|png)$/i.test(file.name);
+
+    if (!isJpegOrPng) {
+      setImageError(t.unsupportedFormatError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     if (file.size > 1 * 1024 * 1024) {
       setImageError(t.imageSizeError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
     setUploadingImage(true);
-    setImageError(null);
     try {
-      const res = await api.uploadRichMenuImage(file);
+      const res = await api.uploadRichMenuImage(file, formPreset);
       setFormImageUrl(res.imageUrl);
       if (res.width && res.height) {
         setFormWidth(res.width);
         setFormHeight(res.height);
       }
+      setImageError(null);
     } catch (err: any) {
-      setImageError(err.message || t.imageUploadError);
+      const msg = err.message || "";
+      if (msg.includes("JPG") || msg.includes("PNG") || msg.includes("format") || msg.includes("Unsupported")) {
+        setImageError(t.unsupportedFormatError);
+      } else if (msg.includes("สัดส่วน") || msg.includes("aspect") || msg.includes("ratio")) {
+        setImageError(t.aspectRatioMismatchError);
+      } else if (msg.includes("1 MB") || msg.includes("1MB") || msg.includes("exceeds")) {
+        setImageError(t.imageSizeError);
+      } else {
+        setImageError(err.message || t.imageUploadError);
+      }
     } finally {
       setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -788,10 +813,18 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     <p className="truncate text-xs text-gray-900 dark:text-gray-100 font-medium mt-0.5">
                       {t.imageUploaded(formWidth, formHeight)}
                     </p>
+                  ) : imageError ? (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-0.5 flex items-center gap-1">
+                      <span>⚠</span> {imageError}
+                    </p>
                   ) : (
                     <p className="text-xs text-gray-400 mt-0.5">{t.noImageSelected}</p>
                   )}
-                  {imageError && <p className="text-[11px] text-rose-500 mt-1">{imageError}</p>}
+                  {formImageUrl && imageError && (
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mt-1 flex items-center gap-1">
+                      <span>⚠</span> {imageError}
+                    </p>
+                  )}
                 </div>
 
                 <input

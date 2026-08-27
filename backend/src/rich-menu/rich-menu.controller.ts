@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
@@ -83,14 +84,30 @@ export class RichMenuController {
   }
 
   @Post("upload-image")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 1 * 1024 * 1024,
+      },
+    }),
+  )
   async uploadImage(
-    @UploadedFile() file: { buffer: Buffer; mimetype?: string; size?: number } | undefined,
+    @UploadedFile()
+    file:
+      | {
+          buffer: Buffer;
+          originalname?: string;
+          mimetype?: string;
+          size?: number;
+        }
+      | undefined,
+    @Body("preset") preset: string | undefined,
     @Req() req: AuthRequest,
   ) {
-    if (!file || !file.buffer) {
-      throw new BadRequestException("Image file is required");
+    if (!file || !file.buffer || !file.buffer.length) {
+      throw new BadRequestException("Image file is required and cannot be empty");
     }
-    return this.service.uploadImage(file, req.user!);
+    return this.service.uploadImage(file, req.user!, preset);
   }
 }

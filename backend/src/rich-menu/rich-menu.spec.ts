@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import sharp from "sharp";
 import {
   generatePresetAreas,
   validateRichMenuAreas,
   RichMenuCanvasPreset,
 } from "./rich-menu.types";
-import { RichMenuPublishNoopAdapter } from "./rich-menu.service";
+import {
+  RichMenuService,
+  RichMenuPublishNoopAdapter,
+  detectImageMagicBytes,
+} from "./rich-menu.service";
 
 test("RichMenuCanvasPreset supports 12 LINE OA presets and legacy aliases", () => {
   const largePresets: RichMenuCanvasPreset[] = [
@@ -113,4 +118,128 @@ test("RichMenuPublishNoopAdapter prevents any calls to LINE Messaging API in Pha
   await assert.rejects(() => adapter.uploadRichMenuImage(), /disabled in Phase 1/);
   await assert.rejects(() => adapter.setDefaultRichMenu(), /disabled in Phase 1/);
   await assert.rejects(() => adapter.deleteRichMenu(), /disabled in Phase 1/);
+});
+
+test("detectImageMagicBytes accurately identifies PNG, JPEG, and rejects other formats", async () => {
+  const pngBuffer = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
+  }).png().toBuffer();
+  assert.equal(detectImageMagicBytes(pngBuffer), "png");
+
+  const jpegBuffer = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 255, b: 0 } },
+  }).jpeg().toBuffer();
+  assert.equal(detectImageMagicBytes(jpegBuffer), "jpeg");
+
+  const webpBuffer = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: { r: 0, g: 0, b: 255 } },
+  }).webp().toBuffer();
+  assert.equal(detectImageMagicBytes(webpBuffer), "unknown");
+
+  const randomBytes = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+  assert.equal(detectImageMagicBytes(randomBytes), "unknown");
+
+  const shortBytes = Buffer.from([0x89, 0x50]);
+  assert.equal(detectImageMagicBytes(shortBytes), "unknown");
+});
+
+test("RichMenuService image parsing and upload validations", async () => {
+  let putObjectKey = "";
+  let putBodyLength = 0;
+  let putContentType = "";
+
+  const mockMedia = {
+    put: async (key: string, body: Buffer, contentType: string) => {
+      putObjectKey = key;
+      putBodyLength = body.length;
+      putContentType = contentType;
+      return { provider: "local", fileId: key, mimeType: contentType, size: body.length };
+    },
+    get: async () => ({ body: Buffer.from([]) }),
+  } as any;
+
+  const service = new RichMenuService({} as any, mockMedia);
+  const mockUser = { id: "u1", email: "admin@oppo.com", displayName: "Admin", role: "ADMIN" } as any;
+
+  // 1. Valid 2500x1686 PNG upload for Large preset
+  const validLargePng = await sharp({
+    create: { width: 2500, height: 1686, channels: 3, background: { r: 255, g: 255, b: 255 } },
+  }).png().toBuffer();
+
+  const resLarge = await service.uploadImage(
+    { buffer: validLargePng, originalname: "menu.png", mimetype: "image/png" },
+    mockUser,
+    "LARGE_6",
+  );
+  assert.equal(resLarge.width, 2500);
+  assert.equal(resLarge.height, 1686);
+  assert.match(resLarge.imageUrl, /line-media\/outbound\/rich-menu\/.*\.png/);
+  assert.equal(putContentType, "image/png");
+  assert.equal(putBodyLength, validLargePng.length);
+
+  // 2. Valid 1200x405 JPEG upload for Compact preset
+  const validCompactJpg = await sharp({
+    create: { width: 1200, height: 405, channels: 3, background: { r: 200, g: 200, b: 200 } },
+  }).jpeg().toBuffer();
+
+  const resCompact = await service.uploadImage(
+    { buffer: validCompactJpg, originalname: "menu.jpg", mimetype: "image/jpeg" },
+    mockUser,
+    "COMPACT_3",
+  );
+  assert.equal(resCompact.width, 1200);
+  assert.equal(resCompact.height, 405);
+  assert.match(resCompact.imageUrl, /line-media\/outbound\/rich-menu\/.*\.jpg/);
+  assert.equal(putContentType, "image/jpeg");
+
+  // 3. PNG disguised with .jpg filename succeeds as PNG based on magic bytes
+  const resDisguised = await service.uploadImage(
+    { buffer: validLargePng, originalname: "image.jpg", mimetype: "image/jpeg" },
+    mockUser,
+  );
+  assert.equal(resDisguised.width, 2500);
+  assert.match(resDisguised.imageUrl, /\.png$/);
+
+  // 4. WebP disguised as .png is rejected with clear localized error
+  const webpBuffer = await sharp({
+    create: { width: 1200, height: 810, channels: 3, background: { r: 100, g: 100, b: 100 } },
+  }).webp().toBuffer();
+
+  await assert.rejects(
+    () => service.uploadImage({ buffer: webpBuffer, originalname: "fake.png" }, mockUser),
+    /รองรับเฉพาะไฟล์ JPG หรือ PNG/
+  );
+
+  // 5. Random bytes rejected with clear localized error
+  const corruptBuffer = Buffer.from("this is not an image at all but random text bytes");
+  await assert.rejects(
+    () => service.uploadImage({ buffer: corruptBuffer, originalname: "bad.jpg" }, mockUser),
+    /รองรับเฉพาะไฟล์ JPG หรือ PNG/
+  );
+
+  // 6. Oversized image > 1 MB is rejected
+  const oversizedBuffer = Buffer.alloc(1024 * 1024 + 10);
+  await assert.rejects(
+    () => service.uploadImage({ buffer: oversizedBuffer }, mockUser),
+    /1 MB/
+  );
+
+  // 7. Width < 800 is rejected
+  const smallWidthPng = await sharp({
+    create: { width: 600, height: 400, channels: 3, background: { r: 255, g: 255, b: 255 } },
+  }).png().toBuffer();
+  await assert.rejects(
+    () => service.uploadImage({ buffer: smallWidthPng }, mockUser),
+    /800 ถึง 2500/
+  );
+
+  // 8. Aspect ratio mismatch with selected template
+  // Large template with Compact aspect ratio (2500x843 on LARGE_6)
+  const compactShapePng = await sharp({
+    create: { width: 2500, height: 843, channels: 3, background: { r: 255, g: 255, b: 255 } },
+  }).png().toBuffer();
+  await assert.rejects(
+    () => service.uploadImage({ buffer: compactShapePng }, mockUser, "LARGE_6"),
+    /รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก/
+  );
 });
