@@ -1,6 +1,37 @@
 # AI progress
 
-## Current task: Implement Rich Menu Phase 2A (Safe Single-Store Canary LINE Publishing) (2026-08-27)
+## Current task: Implement Rich Menu Phase 2B (Durable Multi-Store Bulk Publishing with Background Queue) (2026-08-27)
+
+- **Architecture & Workflow**:
+  - **Durable Bulk Publish Job & Queue Architecture**:
+    - Introduced `RichMenuPublishJob` and `RichMenuPublishJobStatus` (`PENDING`, `RUNNING`, `COMPLETED`, `COMPLETED_WITH_ERRORS`, `CANCELLED`, `CANCELLING`, `FAILED`) to coordinate 1 Template $\to$ N explicit target stores.
+    - Extended `RichMenuPublishAttempt` with `jobId`, `publishType` (`CANARY` | `BULK`), and `status` (`QUEUED`, `SKIPPED`, `CANCELLED`).
+    - Added `RichMenuWorkerHeartbeat` to monitor active background queue workers and warn frontend if worker is offline.
+  - **Background Worker & Concurrency Control (`RichMenuPublishWorkerService` & `rich-menu-worker.ts`)**:
+    - Atomic batch claiming using PostgreSQL transaction + row-level state transition (`PENDING` $\to$ `RUNNING`).
+    - Bounded concurrency per batch (configurable via `RICH_MENU_PUBLISH_CONCURRENCY`, default 2, max 5) using `p-limit` style worker pooling.
+    - Bounded batch size limit (configurable via `RICH_MENU_MAX_BULK_TARGETS`, default 5).
+    - Heartbeat recording every 10 seconds.
+    - Graceful cancellation support: `CANCELLED` / `CANCELLING` transitions abort remaining attempts immediately and mark in-flight attempts `CANCELLED` / `SKIPPED`.
+    - Retry failed stores only: Creates a new child `RichMenuPublishJob` targeting exclusively failed attempts from the parent job.
+  - **LINE Client Resiliency (`LineRichMenuClientService`)**:
+    - Exponential backoff retry loop for transient network / 429 rate limit / 5xx server errors on LINE endpoints (`withRetry`).
+    - 400 Bad Request fail-fast validation protection.
+  - **Frontend UI Workspace Modernization (`frontend/src/app/rich-menus/rich-menus-view.tsx`)**:
+    - Dual-checkbox table paradigm: `Assign` (Store Assignment) and `Publish` (Explicit Publish Selection).
+    - Real-time publish capabilities badge & worker readiness indicator (`GET /rich-menu/publish-capabilities`).
+    - Active Job Progress Card: Real-time progress bar ($K / N$ stores), status badge, `[ Cancel ]` button, and `[ Retry Failed Stores Only ]`.
+    - Bulk Publish Confirmation Modal displaying total count, target store list with LINE OA names, and background processing notice.
+    - Per-store granular actions: individual rollback, single retry, and live status tooltips.
+    - Multilingual dictionary updated for Thai (`th`), English (`en`), and Simplified Chinese (`zh`).
+- **Verification & Test Results**:
+  - 1355 / 1355 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 441 / 441 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - NestJS & Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+
+## Previous task: Implement Rich Menu Phase 2A (Safe Single-Store Canary LINE Publishing) (2026-08-27)
 
 - **Architecture & Workflow**:
   - **Single-Store Canary Guardrails**: Strictly enforced 1-store publishing per action on both frontend and backend. Rejects HEAD_OFFICE accounts, archived/disabled OAs, unassigned stores, or stores with blocked/missing variables (e.g. `{{store.googleMapsUrl}}`).

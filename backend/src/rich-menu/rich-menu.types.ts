@@ -56,6 +56,27 @@ export type PublishCanaryDto = {
   lineOfficialAccountId: string;
 };
 
+export type PublishBulkDto = {
+  lineOfficialAccountIds: string[];
+};
+
+export type PublishCapabilitiesDto = {
+  bulkEnabled: boolean;
+  maxTargets: number;
+  concurrency: number;
+  workerReady: boolean;
+  lastWorkerHeartbeatAt: string | null;
+};
+
+export type PublishStoreParams = {
+  templateId: string;
+  lineOfficialAccountId: string;
+  actorUserId?: string;
+  attemptId?: string;
+  jobId?: string;
+  expectedTemplateVersion?: number;
+};
+
 export type LineRichMenuAreaPayload = {
   bounds: {
     x: number;
@@ -89,7 +110,9 @@ export type LineRichMenuPayload = {
 
 export type PublishAttemptResponseDto = {
   id: string;
+  jobId?: string | null;
   templateId: string;
+  templateVersion?: number;
   lineOfficialAccountId: string;
   lineOfficialAccountName?: string;
   storeName?: string;
@@ -105,6 +128,27 @@ export type PublishAttemptResponseDto = {
   completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type PublishJobResponseDto = {
+  id: string;
+  templateId: string;
+  templateVersion: number;
+  status: string;
+  totalCount: number;
+  pendingCount: number;
+  processingCount: number;
+  publishedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  cancelledCount: number;
+  createdByUserId: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  cancelRequestedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  attempts?: PublishAttemptResponseDto[];
 };
 
 export type RichMenuPreviewInputDto = {

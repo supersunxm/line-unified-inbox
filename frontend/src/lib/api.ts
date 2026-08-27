@@ -486,6 +486,38 @@ export const api = {
         body: JSON.stringify({ lineOfficialAccountId }),
       },
     ),
+  getRichMenuCapabilities: () =>
+    request<import("@/types/api").PublishCapabilities>("/rich-menu/publish-capabilities"),
+  publishBulkRichMenu: (templateId: string, lineOfficialAccountIds: string[]) =>
+    request<import("@/types/api").RichMenuPublishJob>(
+      `/rich-menu/templates/${encodeURIComponent(templateId)}/publish-bulk`,
+      {
+        method: "POST",
+        body: JSON.stringify({ lineOfficialAccountIds }),
+      },
+    ),
+  listRichMenuPublishJobs: (templateId: string) =>
+    request<import("@/types/api").RichMenuPublishJob[]>(
+      `/rich-menu/templates/${encodeURIComponent(templateId)}/publish-jobs`,
+    ),
+  getRichMenuPublishJob: (jobId: string) =>
+    request<import("@/types/api").RichMenuPublishJob>(
+      `/rich-menu/publish-jobs/${encodeURIComponent(jobId)}`,
+    ),
+  cancelRichMenuPublishJob: (jobId: string) =>
+    request<import("@/types/api").RichMenuPublishJob>(
+      `/rich-menu/publish-jobs/${encodeURIComponent(jobId)}/cancel`,
+      {
+        method: "POST",
+      },
+    ),
+  retryFailedRichMenuPublishJob: (jobId: string) =>
+    request<import("@/types/api").RichMenuPublishJob>(
+      `/rich-menu/publish-jobs/${encodeURIComponent(jobId)}/retry-failed`,
+      {
+        method: "POST",
+      },
+    ),
   listRichMenuPublishAttempts: (templateId: string) =>
     request<import("@/types/api").RichMenuPublishAttempt[]>(
       `/rich-menu/templates/${encodeURIComponent(templateId)}/publish-attempts`,

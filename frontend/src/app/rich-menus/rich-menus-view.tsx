@@ -206,7 +206,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [readinessFilter, setReadinessFilter] = useState<"all" | "ready" | "blocked">("all");
   const [storeSearch, setStoreSearch] = useState("");
-  const [selectedOaIds, setSelectedOaIds] = useState<Set<string>>(new Set());
+  const [assignedOaIds, setAssignedOaIds] = useState<Set<string>>(new Set());
+  const [publishSelectedOaIds, setPublishSelectedOaIds] = useState<Set<string>>(new Set());
   const [savingAssignments, setSavingAssignments] = useState(false);
   const [assignmentsMessage, setAssignmentsMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -215,31 +216,84 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [previewData, setPreviewData] = useState<RichMenuPreviewResponse | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  // Phase 2A: Single-Store Canary Publishing State
-  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  // Phase 2B: Capabilities & Background Queue State
+  const [capabilities, setCapabilities] = useState<any | null>(null);
+  const [activeJob, setActiveJob] = useState<any | null>(null);
+  const [isBulkPublishModalOpen, setIsBulkPublishModalOpen] = useState(false);
+  const [cancellingJob, setCancellingJob] = useState(false);
+  const [retryingJob, setRetryingJob] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [publishStage, setPublishStage] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  // Phase 2A: Rollback Modal State
+  // Phase 2A/2B: Rollback Modal State
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [rollbackAttemptId, setRollbackAttemptId] = useState<string | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
 
-  // Computed Canary Publish eligibility
-  const singleSelectedOaId = selectedOaIds.size === 1 ? Array.from(selectedOaIds)[0] : null;
-  const singleSelectedStoreItem = useMemo(() => {
-    if (!singleSelectedOaId || !readinessData?.items) return null;
-    return readinessData.items.find((i) => i.lineOfficialAccountId === singleSelectedOaId) || null;
-  }, [singleSelectedOaId, readinessData]);
+  // Load Capabilities
+  const loadCapabilities = async () => {
+    try {
+      const caps = await api.getRichMenuCapabilities();
+      setCapabilities(caps);
+    } catch {
+      /* ignore */
+    }
+  };
 
-  const isCanaryPublishEligible = Boolean(
+  useEffect(() => {
+    loadCapabilities();
+  }, []);
+
+  // Poll Active Job
+  useEffect(() => {
+    if (!activeJob || !["QUEUED", "RUNNING", "CANCELLING"].includes(activeJob.status)) return;
+
+    const timer = setInterval(async () => {
+      try {
+        const updated = await api.getRichMenuPublishJob(activeJob.id);
+        setActiveJob(updated);
+        if (!["QUEUED", "RUNNING", "CANCELLING"].includes(updated.status)) {
+          if (selectedTemplateId && selectedTemplateId !== "new") {
+            await loadReadiness(selectedTemplateId);
+          }
+        }
+      } catch {
+        /* ignore polling error */
+      }
+    }, 2500);
+
+    return () => clearInterval(timer);
+  }, [activeJob, selectedTemplateId]);
+
+  // Load template jobs when template changes
+  const loadLatestJob = async (templateId: string) => {
+    try {
+      const jobs = await api.listRichMenuPublishJobs(templateId);
+      if (jobs.length > 0) {
+        setActiveJob(jobs[0]);
+      } else {
+        setActiveJob(null);
+      }
+    } catch {
+      setActiveJob(null);
+    }
+  };
+
+  // Target Stores selected for bulk publish
+  const maxTargets = capabilities?.maxTargets || 5;
+  const publishTargetItems = useMemo(() => {
+    if (!readinessData?.items) return [];
+    return readinessData.items.filter((i) => publishSelectedOaIds.has(i.lineOfficialAccountId));
+  }, [publishSelectedOaIds, readinessData]);
+
+  const isPublishEligible = Boolean(
     userRole === "ADMIN" &&
       selectedTemplateId &&
       selectedTemplateId !== "new" &&
       formImageUrl &&
-      singleSelectedStoreItem &&
-      singleSelectedStoreItem.readinessStatus === "READY",
+      publishSelectedOaIds.size > 0 &&
+      publishSelectedOaIds.size <= maxTargets &&
+      capabilities?.workerReady !== false,
   );
 
   const rollbackTargetStoreItem = useMemo(() => {
@@ -287,7 +341,9 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setActiveAreaId("area-1");
     setReadinessData(null);
     setPreviewData(null);
-    setSelectedOaIds(new Set());
+    setAssignedOaIds(new Set());
+    setPublishSelectedOaIds(new Set());
+    setActiveJob(null);
     setSaveMessage(null);
   };
 
@@ -306,46 +362,50 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormSelected(tmpl.selected !== false);
     setFormChatBarText(tmpl.chatBarText || t.menuBarDefault);
     setFormImageUrl(tmpl.imageUrl || null);
-    setFormAreas(tmpl.areas || []);
+    setFormAreas(tmpl.areas.length > 0 ? tmpl.areas : generatePresetAreasClient(tmpl.canvasPreset, tmpl.width, tmpl.height));
     setActiveAreaId(tmpl.areas?.[0]?.id || "area-1");
     setSaveMessage(null);
 
-    // Load store readiness
     loadReadiness(tmpl.id);
+    loadLatestJob(tmpl.id);
   }, [selectedTemplateId, templates]);
 
-  // Load readiness data
+  // Load readiness data for a template
   const loadReadiness = async (templateId: string) => {
-    if (!templateId || templateId === "new") return;
+    if (templateId === "new") return;
     setLoadingReadiness(true);
     try {
-      const res = await api.getRichMenuReadiness(templateId);
-      setReadinessData(res);
+      const data = await api.getRichMenuReadiness(templateId);
+      setReadinessData(data);
 
-      const preSelected = new Set(res.items.filter((item) => item.selected).map((item) => item.lineOfficialAccountId));
-      setSelectedOaIds(preSelected);
+      const assigned = new Set(data.items.filter((i) => i.selected).map((i) => i.lineOfficialAccountId));
+      setAssignedOaIds(assigned);
 
-      if (res.items.length > 0) {
-        const nextOaId = previewStoreOaId && res.items.some((i) => i.lineOfficialAccountId === previewStoreOaId)
-          ? previewStoreOaId
-          : res.items[0].lineOfficialAccountId;
-        setPreviewStoreOaId(nextOaId);
-        void loadPreview(templateId, nextOaId);
+      const defaultPreview = data.items.find((i) => i.selected && i.readinessStatus === "READY") || data.items.find((i) => i.readinessStatus === "READY") || data.items[0];
+      if (defaultPreview) {
+        setPreviewStoreOaId(defaultPreview.lineOfficialAccountId);
       }
     } catch {
-      // Non-blocking
+      // readiness failure handled gracefully
     } finally {
       setLoadingReadiness(false);
     }
   };
 
-  // Load single store preview
-  const loadPreview = async (templateId: string, lineOfficialAccountId?: string) => {
-    if (!templateId || templateId === "new") return;
+  // Load live store preview
+  useEffect(() => {
+    if (!selectedTemplateId || selectedTemplateId === "new" || !previewStoreOaId) {
+      setPreviewData(null);
+      return;
+    }
+    loadPreview(selectedTemplateId, previewStoreOaId);
+  }, [selectedTemplateId, previewStoreOaId, formAreas, formPreset, formImageUrl, formChatBarText]);
+
+  const loadPreview = async (templateId: string, lineOfficialAccountId: string) => {
     setLoadingPreview(true);
     try {
-      const res = await api.previewRichMenuTemplate(templateId, { lineOfficialAccountId });
-      setPreviewData(res);
+      const data = await api.previewRichMenuTemplate(templateId, { lineOfficialAccountId });
+      setPreviewData(data);
     } catch {
       // preview error handled gracefully
     } finally {
@@ -459,30 +519,54 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     }
   };
 
-  // Target Store selection helpers
-  const handleSelectAllReady = () => {
+  // Target Store Assignment Checkbox helpers
+  const handleSelectAllReadyForAssignment = () => {
     if (!readinessData) return;
     const readyIds = readinessData.items
       .filter((item) => item.readinessStatus === "READY")
       .map((item) => item.lineOfficialAccountId);
-    setSelectedOaIds(new Set(readyIds));
+    setAssignedOaIds(new Set(readyIds));
   };
 
-  const handleClearSelection = () => {
-    setSelectedOaIds(new Set());
+  const handleClearAssignments = () => {
+    setAssignedOaIds(new Set());
   };
 
-  const handleToggleStore = (oaId: string, status: "READY" | "BLOCKED") => {
+  const handleToggleAssignment = (oaId: string, status: "READY" | "BLOCKED") => {
     if (status === "BLOCKED") return;
-    setSelectedOaIds((prev) => {
+    setAssignedOaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(oaId)) next.delete(oaId);
+      else next.add(oaId);
+      return next;
+    });
+  };
+
+  // Publish Selection Checkbox helpers
+  const handleTogglePublishSelection = (oaId: string, status: "READY" | "BLOCKED") => {
+    if (status === "BLOCKED") return;
+    setPublishSelectedOaIds((prev) => {
       const next = new Set(prev);
       if (next.has(oaId)) {
         next.delete(oaId);
       } else {
+        if (next.size >= maxTargets) {
+          setAssignmentsMessage({ type: "error", text: t.exceededMaxTargets(maxTargets) });
+          return prev;
+        }
         next.add(oaId);
       }
       return next;
     });
+  };
+
+  const handleSelectAllReadyForPublish = () => {
+    if (!readinessData) return;
+    const readyAssignedIds = readinessData.items
+      .filter((item) => item.readinessStatus === "READY" && assignedOaIds.has(item.lineOfficialAccountId))
+      .slice(0, maxTargets)
+      .map((item) => item.lineOfficialAccountId);
+    setPublishSelectedOaIds(new Set(readyAssignedIds));
   };
 
   const handleSaveAssignments = async () => {
@@ -494,7 +578,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setSavingAssignments(true);
     setAssignmentsMessage(null);
     try {
-      const res = await api.saveRichMenuAssignments(selectedTemplateId, Array.from(selectedOaIds));
+      const res = await api.saveRichMenuAssignments(selectedTemplateId, Array.from(assignedOaIds));
       setAssignmentsMessage({ type: "success", text: t.savedAssignmentsSuccess(res.assignedCount) });
       await loadReadiness(selectedTemplateId);
       await loadTemplates(selectedTemplateId);
@@ -505,23 +589,54 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     }
   };
 
-  // Phase 2A: Handle Canary Publish
-  const handlePublishCanary = async () => {
-    if (!selectedTemplateId || selectedTemplateId === "new" || !singleSelectedOaId) return;
+  // Phase 2B: Handle Bulk Publish Submission
+  const handlePublishBulk = async () => {
+    if (!selectedTemplateId || selectedTemplateId === "new" || publishSelectedOaIds.size === 0) return;
 
     setPublishing(true);
     setPublishError(null);
-    setPublishStage(t.stageValidating);
     try {
-      await api.publishCanaryRichMenu(selectedTemplateId, singleSelectedOaId);
+      const targetIds = Array.from(publishSelectedOaIds);
+      const job = await api.publishBulkRichMenu(selectedTemplateId, targetIds);
+      setActiveJob(job);
+      setIsBulkPublishModalOpen(false);
+      setPublishSelectedOaIds(new Set());
       setSaveMessage({ type: "success", text: t.publishSuccess });
-      setIsPublishModalOpen(false);
       await loadReadiness(selectedTemplateId);
     } catch (err: any) {
       setPublishError(err.message || t.failedPublish);
     } finally {
       setPublishing(false);
-      setPublishStage(null);
+    }
+  };
+
+  // Phase 2B: Cancel Job
+  const handleCancelJob = async () => {
+    if (!activeJob) return;
+    setCancellingJob(true);
+    try {
+      const updated = await api.cancelRichMenuPublishJob(activeJob.id);
+      setActiveJob(updated);
+      if (selectedTemplateId) await loadReadiness(selectedTemplateId);
+    } catch (err: any) {
+      setSaveMessage({ type: "error", text: err.message || "Failed to cancel job" });
+    } finally {
+      setCancellingJob(false);
+    }
+  };
+
+  // Phase 2B: Retry Failed Stores
+  const handleRetryFailedJob = async () => {
+    if (!activeJob) return;
+    setRetryingJob(true);
+    try {
+      const newJob = await api.retryFailedRichMenuPublishJob(activeJob.id);
+      setActiveJob(newJob);
+      if (selectedTemplateId) await loadReadiness(selectedTemplateId);
+    } catch (err: any) {
+      setSaveMessage({ type: "error", text: err.message || "Failed to retry job" });
+    } finally {
+      setRetryingJob(false);
     }
   };
 
@@ -543,8 +658,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     }
   };
 
-  // Phase 2A: Handle Retry
-  const handleRetry = async (attemptId: string) => {
+  // Phase 2A: Handle Single Retry
+  const handleRetrySingle = async (attemptId: string) => {
     if (!selectedTemplateId) return;
 
     setPublishing(true);
@@ -591,7 +706,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t.pageTitle}</h1>
               <span className="text-[11px] font-semibold text-[#06C755] bg-[#06C755]/10 px-2 py-0.5 rounded">
-                {t.phase1Badge}
+                {t.phase2bBadge}
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.pageSubtitle}</p>
@@ -608,26 +723,32 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               </span>
             )}
 
-            {/* Canary Publish Button */}
+            {/* Bulk / Canary Publish Button */}
             {userRole === "ADMIN" && (
               <button
                 type="button"
-                onClick={() => setIsPublishModalOpen(true)}
-                disabled={!isCanaryPublishEligible || publishing}
+                onClick={() => setIsBulkPublishModalOpen(true)}
+                disabled={!isPublishEligible || publishing}
                 title={
-                  selectedOaIds.size === 0
+                  publishSelectedOaIds.size === 0
                     ? t.selectSingleStoreToPublish
-                    : selectedOaIds.size > 1
-                    ? t.publishCanaryNoticeSingle
+                    : publishSelectedOaIds.size > maxTargets
+                    ? t.exceededMaxTargets(maxTargets)
                     : !formImageUrl
                     ? t.uploadImageFirst
                     : !selectedTemplateId || selectedTemplateId === "new"
                     ? t.saveTemplateFirst
+                    : capabilities?.workerReady === false
+                    ? t.workerOfflineWarning
                     : undefined
                 }
                 className="inline-flex items-center justify-center gap-1.5 rounded border border-[#06C755] bg-[#06C755]/10 hover:bg-[#06C755]/20 text-[#06C755] dark:text-[#06C755] px-4 py-2 text-xs font-bold transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {publishing ? t.publishingToLine : t.publishToLine}
+                {publishing
+                  ? t.publishingToLine
+                  : publishSelectedOaIds.size > 0
+                  ? t.bulkPublishButton(publishSelectedOaIds.size)
+                  : t.publishToLine}
               </button>
             )}
 
@@ -677,6 +798,170 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             {t.newTemplateButton}
           </button>
         </div>
+
+        {/* Worker Offline Alert Banner */}
+        {capabilities && capabilities.workerReady === false && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="text-base">⚠</span>
+              <span>{t.workerOfflineWarning}</span>
+            </div>
+            <button
+              type="button"
+              onClick={loadCapabilities}
+              className="text-[11px] font-bold text-amber-900 dark:text-amber-100 underline hover:no-underline"
+            >
+              Check Again
+            </button>
+          </div>
+        )}
+
+        {/* Active Publish Job Progress Card */}
+        {activeJob && (
+          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-3 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{t.activeJobHeader}</span>
+                <span
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                    activeJob.status === "COMPLETED"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : activeJob.status === "COMPLETED_WITH_ERRORS"
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                      : activeJob.status === "FAILED"
+                      ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                      : activeJob.status === "CANCELLED"
+                      ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                      : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 animate-pulse"
+                  }`}
+                >
+                  {activeJob.status === "QUEUED"
+                    ? t.jobStatusQueued
+                    : activeJob.status === "RUNNING"
+                    ? t.jobStatusRunning
+                    : activeJob.status === "COMPLETED"
+                    ? t.jobStatusCompleted
+                    : activeJob.status === "COMPLETED_WITH_ERRORS"
+                    ? t.jobStatusCompletedWithErrors
+                    : activeJob.status === "CANCELLING"
+                    ? t.jobStatusCancelling
+                    : activeJob.status === "CANCELLED"
+                    ? t.jobStatusCancelled
+                    : t.jobStatusFailed}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Cancel Job Button */}
+                {["QUEUED", "RUNNING"].includes(activeJob.status) && userRole === "ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={handleCancelJob}
+                    disabled={cancellingJob}
+                    className="rounded border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-1 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 transition disabled:opacity-50"
+                  >
+                    {cancellingJob ? t.jobStatusCancelling : t.cancelJobButton}
+                  </button>
+                )}
+
+                {/* Retry Failed Only Button */}
+                {["COMPLETED_WITH_ERRORS", "FAILED"].includes(activeJob.status) &&
+                  (activeJob.failedCount > 0 || activeJob.skippedCount > 0) &&
+                  userRole === "ADMIN" && (
+                    <button
+                      type="button"
+                      onClick={handleRetryFailedJob}
+                      disabled={retryingJob}
+                      className="rounded border border-[#06C755] bg-[#06C755]/10 hover:bg-[#06C755]/20 px-3 py-1 text-xs font-bold text-[#06C755] transition disabled:opacity-50"
+                    >
+                      {retryingJob ? t.publishingToLine : t.retryFailedButton}
+                    </button>
+                  )}
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[11px] font-medium text-gray-500">
+                <span>
+                  {t.jobProgressLabel(
+                    activeJob.publishedCount + activeJob.failedCount + activeJob.skippedCount + activeJob.cancelledCount,
+                    activeJob.totalCount,
+                  )}
+                </span>
+                <span>
+                  {Math.round(
+                    ((activeJob.publishedCount +
+                      activeJob.failedCount +
+                      activeJob.skippedCount +
+                      activeJob.cancelledCount) /
+                      Math.max(activeJob.totalCount, 1)) *
+                      100,
+                  )}
+                  %
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden flex">
+                <div
+                  className="bg-[#06C755] h-2 transition-all duration-300"
+                  style={{
+                    width: `${(activeJob.publishedCount / Math.max(activeJob.totalCount, 1)) * 100}%`,
+                  }}
+                />
+                <div
+                  className="bg-rose-500 h-2 transition-all duration-300"
+                  style={{
+                    width: `${(activeJob.failedCount / Math.max(activeJob.totalCount, 1)) * 100}%`,
+                  }}
+                />
+                <div
+                  className="bg-amber-400 h-2 transition-all duration-300"
+                  style={{
+                    width: `${(activeJob.skippedCount / Math.max(activeJob.totalCount, 1)) * 100}%`,
+                  }}
+                />
+                <div
+                  className="bg-gray-400 h-2 transition-all duration-300"
+                  style={{
+                    width: `${(activeJob.cancelledCount / Math.max(activeJob.totalCount, 1)) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Status Breakdown Pills */}
+            <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+              <span className="rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 font-semibold">
+                ✓ Published: {activeJob.publishedCount}
+              </span>
+              {activeJob.processingCount > 0 && (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 font-semibold animate-pulse">
+                  ⚡ Processing: {activeJob.processingCount}
+                </span>
+              )}
+              {activeJob.pendingCount > 0 && (
+                <span className="rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2.5 py-1 font-semibold">
+                  ⏳ Pending: {activeJob.pendingCount}
+                </span>
+              )}
+              {activeJob.failedCount > 0 && (
+                <span className="rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-2.5 py-1 font-semibold">
+                  ✖ Failed: {activeJob.failedCount}
+                </span>
+              )}
+              {activeJob.skippedCount > 0 && (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 font-semibold">
+                  ⏭ Skipped: {activeJob.skippedCount}
+                </span>
+              )}
+              {activeJob.cancelledCount > 0 && (
+                <span className="rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2.5 py-1 font-semibold">
+                  🚫 Cancelled: {activeJob.cancelledCount}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 2. Main Settings Section */}
         <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
@@ -1175,7 +1460,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {t.readyCount}: <strong className="text-emerald-600">{readinessData.summary.ready}</strong> · {t.blockedCount}:{" "}
                   <strong className="text-rose-600">{readinessData.summary.blocked}</strong> · {t.selectedCount}:{" "}
-                  <strong className="text-gray-900 dark:text-gray-100">{selectedOaIds.size}</strong>
+                  <strong className="text-gray-900 dark:text-gray-100">{assignedOaIds.size}</strong>
                 </p>
               )}
             </div>
@@ -1189,18 +1474,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 >
                   {assignmentsMessage.text}
                 </span>
-              )}
-
-              {/* Publish Canary in Target Stores Bar */}
-              {userRole === "ADMIN" && (
-                <button
-                  type="button"
-                  onClick={() => setIsPublishModalOpen(true)}
-                  disabled={!isCanaryPublishEligible || publishing}
-                  className="inline-flex items-center justify-center gap-1 rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-3.5 py-1.5 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs"
-                >
-                  {publishing ? t.publishingToLine : t.publishToLine}
-                </button>
               )}
 
               <button
@@ -1245,17 +1518,32 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             </div>
 
             <div className="flex items-center gap-3 text-xs">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">
+                {t.publishSelectionCount(publishSelectedOaIds.size, maxTargets)}
+              </span>
+              <span className="text-gray-300">|</span>
               <button
                 type="button"
-                onClick={handleSelectAllReady}
+                onClick={handleSelectAllReadyForPublish}
                 className="font-semibold text-[#06C755] hover:underline"
+              >
+                {`Select ${maxTargets} for publish`}
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={handleSelectAllReadyForAssignment}
+                className="font-semibold text-gray-600 dark:text-gray-400 hover:underline"
               >
                 {t.selectAllReady}
               </button>
               <span className="text-gray-300">|</span>
               <button
                 type="button"
-                onClick={handleClearSelection}
+                onClick={() => {
+                  handleClearAssignments();
+                  setPublishSelectedOaIds(new Set());
+                }}
                 className="text-gray-500 hover:text-gray-800 hover:underline"
               >
                 {t.clearSelection}
@@ -1263,57 +1551,73 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             </div>
           </div>
 
-          {/* Compact Store Table */}
+          {/* Compact Store Table with Dual Checkboxes */}
           <div className="overflow-x-auto rounded border border-[#e5e7eb] dark:border-[var(--app-border)]">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] text-gray-500 font-semibold">
                 <tr>
-                  <th className="w-10 px-3 py-2.5 text-center">{t.colHash}</th>
-                  <th className="w-24 px-3 py-2.5">{t.colStoreId}</th>
+                  <th className="w-12 px-3 py-2.5 text-center">{t.colAssignCheckbox}</th>
+                  <th className="w-12 px-3 py-2.5 text-center">{t.colPublishCheckbox}</th>
+                  <th className="w-20 px-3 py-2.5">{t.colStoreId}</th>
                   <th className="px-3 py-2.5">{t.colStoreName}</th>
                   <th className="px-3 py-2.5">{t.colLineOaName}</th>
                   <th className="px-3 py-2.5">{t.colProvince}</th>
-                  <th className="w-32 px-3 py-2.5">{t.colStatus}</th>
+                  <th className="w-28 px-3 py-2.5">{t.colStatus}</th>
                   <th className="w-48 px-3 py-2.5">{t.colPublishStatus}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f3f4f6] dark:divide-[var(--app-border-subtle)]">
                 {loadingReadiness ? (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={8} className="p-6 text-center text-xs text-gray-400">
                       {t.evaluatingReadiness}
                     </td>
                   </tr>
                 ) : filteredStores.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={8} className="p-6 text-center text-xs text-gray-400">
                       {t.noStoresFound}
                     </td>
                   </tr>
                 ) : (
                   filteredStores.map((store) => {
-                    const isChecked = selectedOaIds.has(store.lineOfficialAccountId);
+                    const isAssigned = assignedOaIds.has(store.lineOfficialAccountId);
+                    const isPublishSelected = publishSelectedOaIds.has(store.lineOfficialAccountId);
                     const isBlocked = store.readinessStatus === "BLOCKED";
 
                     return (
                       <tr
                         key={store.lineOfficialAccountId}
-                        onClick={() => handleToggleStore(store.lineOfficialAccountId, store.readinessStatus)}
                         className={`transition ${
                           isBlocked
-                            ? "bg-gray-50/50 dark:bg-gray-900/20 text-gray-400 cursor-not-allowed"
-                            : isChecked
-                            ? "bg-[#06C755]/5 hover:bg-[#06C755]/10 cursor-pointer"
-                            : "hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] cursor-pointer"
+                            ? "bg-gray-50/50 dark:bg-gray-900/20 text-gray-400"
+                            : isPublishSelected
+                            ? "bg-[#06C755]/10 hover:bg-[#06C755]/15"
+                            : isAssigned
+                            ? "bg-[#06C755]/5 hover:bg-[#06C755]/10"
+                            : "hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)]"
                         }`}
                       >
-                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        {/* Checkbox 1: Assign */}
+                        <td className="px-3 py-2.5 text-center">
                           <input
                             type="checkbox"
-                            checked={isChecked}
+                            checked={isAssigned}
                             disabled={isBlocked}
-                            onChange={() => handleToggleStore(store.lineOfficialAccountId, store.readinessStatus)}
-                            className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
+                            onChange={() => handleToggleAssignment(store.lineOfficialAccountId, store.readinessStatus)}
+                            title={t.colAssignCheckbox}
+                            className="rounded border-gray-300 text-gray-700 focus:ring-gray-400 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                        </td>
+                        {/* Checkbox 2: Publish */}
+                        <td className="px-3 py-2.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isPublishSelected}
+                            disabled={isBlocked || !isAssigned}
+                            onChange={() => handleTogglePublishSelection(store.lineOfficialAccountId, store.readinessStatus)}
+                            title={!isAssigned ? "Must be assigned first" : t.colPublishCheckbox}
+                            className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755] cursor-pointer disabled:cursor-not-allowed"
                           />
                         </td>
                         <td className="px-3 py-2.5 font-mono text-gray-600 dark:text-gray-400">
@@ -1349,7 +1653,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                           </div>
                         </td>
                         {/* Publish Status Column */}
-                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 py-2.5">
                           {store.publishStatus === "PUBLISHED" ? (
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
@@ -1376,7 +1680,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 </span>
                                 {store.lastPublishError && (
                                   <span
-                                    className="text-[10px] text-rose-500 truncate max-w-[100px]"
+                                    className="text-[10px] text-rose-500 truncate max-w-[120px]"
                                     title={store.lastPublishError}
                                   >
                                     {store.lastPublishError}
@@ -1386,7 +1690,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               {userRole === "ADMIN" && store.publishAttemptId && (
                                 <button
                                   type="button"
-                                  onClick={() => handleRetry(store.publishAttemptId!)}
+                                  onClick={() => handleRetrySingle(store.publishAttemptId!)}
                                   disabled={publishing}
                                   className="text-[10px] font-bold text-[#06C755] hover:underline"
                                 >
@@ -1394,6 +1698,34 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 </button>
                               )}
                             </div>
+                          ) : store.publishStatus === "SKIPPED" ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                  {t.statusSkipped}
+                                </span>
+                                {store.lastPublishError && (
+                                  <span
+                                    className="text-[10px] text-amber-500 truncate max-w-[120px]"
+                                    title={store.lastPublishError}
+                                  >
+                                    {store.lastPublishError}
+                                  </span>
+                                )}
+                              </div>
+                              {userRole === "ADMIN" && store.publishAttemptId && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetrySingle(store.publishAttemptId!)}
+                                  disabled={publishing}
+                                  className="text-[10px] font-bold text-[#06C755] hover:underline"
+                                >
+                                  {t.retryPublishButton}
+                                </button>
+                              )}
+                            </div>
+                          ) : store.publishStatus === "CANCELLED" ? (
+                            <span className="text-gray-400 font-medium">{t.statusCancelled}</span>
                           ) : store.publishStatus === "ROLLED_BACK" ? (
                             <span className="text-gray-400 font-medium">{t.statusRolledBack}</span>
                           ) : [
@@ -1590,52 +1922,50 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         </div>
       )}
 
-      {/* 6. Phase 2A: Single-Store Canary Publish Confirmation Modal */}
-      {isPublishModalOpen && singleSelectedStoreItem && (
+      {/* 6. Phase 2B: Bulk / Canary Publish Confirmation Modal */}
+      {isBulkPublishModalOpen && publishTargetItems.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
               <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <span>🚀</span>
-                <span>{t.publishCanaryModalTitle}</span>
+                <span>{t.bulkPublishModalTitle}</span>
               </h3>
             </div>
 
             <div className="p-6 space-y-4 text-xs">
               <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                {t.publishCanaryModalDesc}
+                {t.bulkPublishModalDesc}
               </p>
+
+              <div className="rounded bg-blue-50 dark:bg-blue-950/40 p-2.5 text-blue-700 dark:text-blue-300 font-medium">
+                {t.bulkPublishLimitNotice(maxTargets)}
+              </div>
 
               {/* Target Details Card */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[var(--app-surface-subtle)] p-3.5 space-y-2 font-medium">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.selectedStore}:</span>
-                  <span className="font-bold text-gray-900 dark:text-gray-100">
-                    {singleSelectedStoreItem.storeName} ({singleSelectedStoreItem.externalStoreId || "—"})
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.selectedLineOa}:</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">
-                    {singleSelectedStoreItem.lineOfficialAccountName}
-                  </span>
-                </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between border-b border-gray-200 dark:border-gray-800 pb-2">
                   <span className="text-gray-500">{t.selectedTemplate}:</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">{formName}</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{formName}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.colStatus}:</span>
-                  <span className="font-bold text-emerald-600">{t.statusReady}</span>
+
+                <div className="text-gray-500 font-semibold pt-1">
+                  {`Target Stores (${publishTargetItems.length}):`}
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                  {publishTargetItems.map((store, idx) => (
+                    <div
+                      key={store.lineOfficialAccountId}
+                      className="flex items-center justify-between rounded bg-white dark:bg-[var(--app-surface)] px-2.5 py-1.5 border border-gray-100 dark:border-gray-800"
+                    >
+                      <span className="font-bold text-gray-800 dark:text-gray-200">
+                        {idx + 1}. {store.storeName} ({store.externalStoreId || "—"})
+                      </span>
+                      <span className="text-gray-500 text-[11px]">{store.lineOfficialAccountName}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              {publishStage && (
-                <div className="flex items-center gap-2 rounded bg-emerald-50 dark:bg-emerald-950/50 p-2.5 text-emerald-700 dark:text-emerald-300 font-semibold animate-pulse">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span>{publishStage}</span>
-                </div>
-              )}
 
               {publishError && (
                 <div className="rounded bg-rose-50 dark:bg-rose-950/50 p-3 text-rose-600 dark:text-rose-400 font-medium">
@@ -1647,7 +1977,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             <div className="flex items-center justify-end gap-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4 bg-gray-50 dark:bg-[var(--app-surface-subtle)]">
               <button
                 type="button"
-                onClick={() => setIsPublishModalOpen(false)}
+                onClick={() => setIsBulkPublishModalOpen(false)}
                 disabled={publishing}
                 className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition disabled:opacity-50"
               >
@@ -1655,7 +1985,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               </button>
               <button
                 type="button"
-                onClick={handlePublishCanary}
+                onClick={handlePublishBulk}
                 disabled={publishing}
                 className="rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
               >
@@ -1666,7 +1996,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         </div>
       )}
 
-      {/* 7. Phase 2A: Rollback Confirmation Modal */}
+      {/* 7. Phase 2A/2B: Rollback Confirmation Modal */}
       {isRollbackModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">

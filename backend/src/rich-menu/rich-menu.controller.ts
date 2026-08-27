@@ -20,6 +20,7 @@ import { Roles } from "../auth/auth.decorators";
 import { RichMenuService } from "./rich-menu.service";
 import type {
   CreateRichMenuTemplateDto,
+  PublishBulkDto,
   PublishCanaryDto,
   RichMenuPreviewInputDto,
   SaveAssignmentsDto,
@@ -31,6 +32,11 @@ import type {
 @Roles(UserRole.ADMIN)
 export class RichMenuController {
   constructor(private readonly service: RichMenuService) {}
+
+  @Get("publish-capabilities")
+  async getPublishCapabilities() {
+    return this.service.getPublishCapabilities();
+  }
 
   @Get("templates")
   async listTemplates() {
@@ -93,6 +99,41 @@ export class RichMenuController {
     return this.service.publishCanary(id, body, req.user!);
   }
 
+  @Post("templates/:id/publish-bulk")
+  async publishBulk(
+    @Param("id") id: string,
+    @Body() body: PublishBulkDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.createBulkPublishJob(id, body, req.user!);
+  }
+
+  @Get("templates/:id/publish-jobs")
+  async listPublishJobs(@Param("id") id: string) {
+    return this.service.listPublishJobs(id);
+  }
+
+  @Get("publish-jobs/:jobId")
+  async getPublishJob(@Param("jobId") jobId: string) {
+    return this.service.getPublishJob(jobId);
+  }
+
+  @Post("publish-jobs/:jobId/cancel")
+  async cancelPublishJob(
+    @Param("jobId") jobId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.cancelPublishJob(jobId, req.user!);
+  }
+
+  @Post("publish-jobs/:jobId/retry-failed")
+  async retryFailedJob(
+    @Param("jobId") jobId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.retryFailedJobAttempts(jobId, req.user!);
+  }
+
   @Get("templates/:id/publish-attempts")
   async getPublishAttempts(@Param("id") id: string) {
     return this.service.getPublishAttempts(id);
@@ -139,11 +180,10 @@ export class RichMenuController {
         }
       | undefined,
     @Body("preset") preset: string | undefined,
-    @Req() req: AuthRequest,
   ) {
     if (!file || !file.buffer || !file.buffer.length) {
       throw new BadRequestException("Image file is required and cannot be empty");
     }
-    return this.service.uploadImage(file, req.user!, preset);
+    return this.service.uploadImage(file as any, preset);
   }
 }

@@ -18,6 +18,8 @@
     "test:line-webhook": "tsx --env-file=.env scripts/send-test-line-webhook.ts",
     "test:line-verify": "tsx --env-file=.env scripts/send-test-line-verify.ts",
     "test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts",
+    "worker:rich-menu-publish": "tsx src/rich-menu/rich-menu-worker.ts",
+    "worker:rich-menu-publish:prod": "node dist/rich-menu/rich-menu-worker.js",
     "store-master:import": "tsx --env-file=.env scripts/store-master.ts import",
     "store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate",
     "store-master:sync-connected-line-oa": "tsx --env-file=.env scripts/sync-connected-line-oa-store-master.ts",

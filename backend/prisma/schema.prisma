@@ -1569,6 +1569,16 @@ enum RichMenuTemplateStatus {
   ARCHIVED
 }
 
+enum RichMenuPublishJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  CANCELLING
+  CANCELLED
+  FAILED
+}
+
 enum RichMenuPublishStatus {
   PENDING
   VALIDATING
@@ -1580,6 +1590,8 @@ enum RichMenuPublishStatus {
   FAILED
   ROLLING_BACK
   ROLLED_BACK
+  SKIPPED
+  CANCELLED
 }
 
 enum RichMenuPreviousDefaultSource {
@@ -1606,6 +1618,7 @@ model RichMenuTemplate {
   updatedAt       DateTime                @updatedAt
   assignments     RichMenuStoreAssignment[]
   publishAttempts RichMenuPublishAttempt[]
+  publishJobs     RichMenuPublishJob[]
 
   @@index([status])
   @@index([createdAt])
@@ -1626,9 +1639,38 @@ model RichMenuStoreAssignment {
   @@index([lineOfficialAccountId])
 }
 
+model RichMenuPublishJob {
+  id                 String                   @id @default(uuid())
+  templateId         String
+  templateVersion    Int                      @default(1)
+  status             RichMenuPublishJobStatus @default(QUEUED)
+  totalCount         Int                      @default(0)
+  pendingCount       Int                      @default(0)
+  processingCount    Int                      @default(0)
+  publishedCount     Int                      @default(0)
+  failedCount        Int                      @default(0)
+  skippedCount       Int                      @default(0)
+  cancelledCount     Int                      @default(0)
+  createdByUserId    String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  cancelRequestedAt  DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  template           RichMenuTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  attempts           RichMenuPublishAttempt[]
+
+  @@index([templateId])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model RichMenuPublishAttempt {
   id                         String                          @id @default(uuid())
+  jobId                      String?
   templateId                 String
+  templateVersion            Int                             @default(1)
   lineOfficialAccountId      String
   assignmentId               String?
   status                     RichMenuPublishStatus           @default(PENDING)
@@ -1645,12 +1687,25 @@ model RichMenuPublishAttempt {
   completedAt                DateTime?
   createdAt                  DateTime                        @default(now())
   updatedAt                  DateTime                        @updatedAt
+  job                        RichMenuPublishJob?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
   template                   RichMenuTemplate                @relation(fields: [templateId], references: [id], onDelete: Cascade)
   lineOfficialAccount        LineOfficialAccount             @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
   assignment                 RichMenuStoreAssignment?        @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  @@index([jobId])
+  @@index([jobId, status])
   @@index([templateId])
   @@index([lineOfficialAccountId])
   @@index([status])
+  @@index([status, createdAt])
   @@index([createdAt])
+}
+
+model RichMenuWorkerHeartbeat {
+  id              String   @id @default("singleton")
+  workerId        String
+  lastHeartbeatAt DateTime @default(now())
+  hostname        String?
+  metadata        Json?
+  updatedAt       DateTime @updatedAt
 }

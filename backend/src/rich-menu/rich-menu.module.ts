@@ -6,6 +6,7 @@ import { CredentialsModule } from "../credentials/credentials.module";
 import { RichMenuController } from "./rich-menu.controller";
 import { RichMenuService } from "./rich-menu.service";
 import { LineRichMenuClientService } from "./line-rich-menu-client.service";
+import { RichMenuPublishWorkerService } from "./rich-menu-publish-worker.service";
 
 @Module({
   imports: [PrismaModule, AuthModule, MediaModule, CredentialsModule],
@@ -13,11 +14,12 @@ import { LineRichMenuClientService } from "./line-rich-menu-client.service";
   providers: [
     RichMenuService,
     LineRichMenuClientService,
+    RichMenuPublishWorkerService,
     {
       provide: "IRichMenuPublishService",
       useClass: LineRichMenuClientService,
     },
   ],
-  exports: [RichMenuService, LineRichMenuClientService],
+  exports: [RichMenuService, LineRichMenuClientService, RichMenuPublishWorkerService],
 })
 export class RichMenuModule {}

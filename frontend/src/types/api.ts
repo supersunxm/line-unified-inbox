@@ -1228,9 +1228,49 @@ export type RichMenuTemplate = {
   updatedAt: string;
 };
 
-export type RichMenuPublishAttempt = {
+export type PublishCapabilities = {
+  bulkEnabled: boolean;
+  maxTargets: number;
+  concurrency: number;
+  workerReady: boolean;
+  lastWorkerHeartbeatAt: string | null;
+};
+
+export type RichMenuPublishJobStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "COMPLETED_WITH_ERRORS"
+  | "CANCELLING"
+  | "CANCELLED"
+  | "FAILED";
+
+export type RichMenuPublishJob = {
   id: string;
   templateId: string;
+  templateVersion: number;
+  status: RichMenuPublishJobStatus;
+  totalCount: number;
+  pendingCount: number;
+  processingCount: number;
+  publishedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  cancelledCount: number;
+  createdByUserId: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  cancelRequestedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  attempts?: RichMenuPublishAttempt[];
+};
+
+export type RichMenuPublishAttempt = {
+  id: string;
+  jobId?: string | null;
+  templateId: string;
+  templateVersion?: number;
   lineOfficialAccountId: string;
   lineOfficialAccountName?: string;
   storeName?: string;

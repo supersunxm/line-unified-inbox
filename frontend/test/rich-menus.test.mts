@@ -177,25 +177,35 @@ test("RichMenusView enables vertical page scrolling while preserving chats fixed
   assert.match(pageFile, /data-chat-message-scroll/);
 });
 
-test("RichMenusView enforces Phase 2A Single-Store Canary publishing rules and modals", () => {
+test("RichMenusView enforces Phase 2B bulk publishing rules and modals", () => {
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
 
-  // Single-store canary eligibility check (exactly 1 store, ready, image present, saved)
-  assert.match(viewFile, /selectedOaIds\.size === 1/);
-  assert.match(viewFile, /singleSelectedStoreItem\.readinessStatus === "READY"/);
-  assert.match(viewFile, /isCanaryPublishEligible/);
+  // Dual-checkbox paradigm: assignedOaIds + publishSelectedOaIds
+  assert.match(viewFile, /assignedOaIds/);
+  assert.match(viewFile, /publishSelectedOaIds/);
+  assert.match(viewFile, /isPublishEligible/);
 
-  // Publish and Rollback modals
-  assert.match(viewFile, /isPublishModalOpen/);
+  // Bulk publish and Rollback modals
+  assert.match(viewFile, /isBulkPublishModalOpen/);
   assert.match(viewFile, /isRollbackModalOpen/);
-  assert.match(viewFile, /handlePublishCanary/);
+  assert.match(viewFile, /handlePublishBulk/);
   assert.match(viewFile, /handleRollback/);
-  assert.match(viewFile, /handleRetry/);
+  assert.match(viewFile, /handleRetrySingle/);
 
-  // Target stores table contains Publish status column
+  // Active Job progress card
+  assert.match(viewFile, /activeJob/);
+  assert.match(viewFile, /handleCancelJob/);
+  assert.match(viewFile, /handleRetryFailedJob/);
+  assert.match(viewFile, /capabilities/);
+
+  // Target stores table contains dual checkbox columns and Publish status column
+  assert.match(viewFile, /colAssignCheckbox/);
+  assert.match(viewFile, /colPublishCheckbox/);
   assert.match(viewFile, /colPublishStatus/);
   assert.match(viewFile, /statusPublished/);
   assert.match(viewFile, /statusFailed/);
+  assert.match(viewFile, /statusSkipped/);
+  assert.match(viewFile, /statusCancelled/);
   assert.match(viewFile, /statusRolledBack/);
   assert.match(viewFile, /rollbackButton/);
   assert.match(viewFile, /retryPublishButton/);
@@ -207,25 +217,35 @@ test("RichMenusView enforces Phase 2A Single-Store Canary publishing rules and m
   assert.match(viewFile, /behaviorCollapsed/);
 });
 
-test("Rich Menu i18n dictionary supports Phase 2A publishing, rollback, and status messages across th, en, and zh", () => {
+test("Rich Menu i18n dictionary supports Phase 2A/2B publishing, rollback, and status messages across th, en, and zh", () => {
   // Thai
   assert.equal(RICH_MENU_I18N.th.publishToLine, "เผยแพร่ไปยัง LINE");
   assert.equal(RICH_MENU_I18N.th.publishCanaryModalTitle, "เผยแพร่ริชเมนูไปยัง LINE?");
+  assert.equal(RICH_MENU_I18N.th.bulkPublishModalTitle, "เผยแพร่ริชเมนูไปยังหลายร้านค้า?");
   assert.equal(RICH_MENU_I18N.th.confirmAndPublish, "ยืนยันและเผยแพร่");
   assert.equal(RICH_MENU_I18N.th.rollbackButton, "ย้อนกลับริชเมนู");
   assert.equal(RICH_MENU_I18N.th.statusPublished, "● เผยแพร่แล้ว");
+  assert.equal(RICH_MENU_I18N.th.jobStatusQueued, "อยู่ในคิวรอประมวลผล");
+  assert.equal(RICH_MENU_I18N.th.cancelJobButton, "ยกเลิกงานเผยแพร่");
 
   // English
   assert.equal(RICH_MENU_I18N.en.publishToLine, "Publish to LINE");
   assert.equal(RICH_MENU_I18N.en.publishCanaryModalTitle, "Publish Rich Menu to LINE?");
+  assert.equal(RICH_MENU_I18N.en.bulkPublishModalTitle, "Publish Rich Menu to Multiple Stores?");
   assert.equal(RICH_MENU_I18N.en.confirmAndPublish, "Confirm and Publish");
   assert.equal(RICH_MENU_I18N.en.rollbackButton, "Rollback");
   assert.equal(RICH_MENU_I18N.en.statusPublished, "● Published");
+  assert.equal(RICH_MENU_I18N.en.jobStatusQueued, "Queued in background");
+  assert.equal(RICH_MENU_I18N.en.cancelJobButton, "Cancel Job");
+  assert.equal(RICH_MENU_I18N.en.retryFailedButton, "Retry Failed Stores Only");
 
   // Chinese
   assert.equal(RICH_MENU_I18N.zh.publishToLine, "发布至 LINE");
   assert.equal(RICH_MENU_I18N.zh.publishCanaryModalTitle, "发布丰富菜单至 LINE？");
+  assert.equal(RICH_MENU_I18N.zh.bulkPublishModalTitle, "发布丰富菜单至多家门店？");
   assert.equal(RICH_MENU_I18N.zh.confirmAndPublish, "确认并发布");
   assert.equal(RICH_MENU_I18N.zh.rollbackButton, "回滚菜单");
   assert.equal(RICH_MENU_I18N.zh.statusPublished, "● 已发布");
+  assert.equal(RICH_MENU_I18N.zh.jobStatusQueued, "排队中");
+  assert.equal(RICH_MENU_I18N.zh.cancelJobButton, "取消任务");
 });

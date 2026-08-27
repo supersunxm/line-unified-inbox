@@ -1,3 +1,13 @@
+# Rich Menu Phase 2B: Durable Multi-Store Bulk Publishing Architecture (2026-08-27)
+
+- **Job-Attempt Hierarchy**: Bulk publishing creates a parent `RichMenuPublishJob` linked to $N$ individual `RichMenuPublishAttempt` rows. This maintains per-store granular audit history, rollback capabilities, and individual retry records while providing an aggregate lifecycle (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED` / `COMPLETED_WITH_ERRORS` / `CANCELLED` / `FAILED`).
+- **Atomic Queue Claiming**: Queue processing utilizes a transactional `UPDATE ... WHERE status = 'PENDING'` claim pattern to ensure that distributed workers never double-claim or process overlapping jobs.
+- **Worker Heartbeat & Capabilities Detection**: Background workers continuously record a heartbeat in `RichMenuWorkerHeartbeat`. The `/publish-capabilities` endpoint evaluates worker freshness ($< 60$ seconds) to inform the frontend if queue processing is operational.
+- **Bounded Concurrency & Batch Limits**: Concurrency is strictly bounded at both the worker pool level (default 2, maximum 5 concurrent LINE API requests via `p-limit`) and batch submission level (default 5 stores per job, configurable up to 10), guarding against LINE Messaging API rate limiting (`429`) and connection saturation.
+- **Exponential Backoff on Transient LINE Failures**: `LineRichMenuClientService.withRetry()` wraps HTTP calls with jittered exponential backoff for status codes 429 and 5xx, while immediately failing fast on 400 Bad Request client errors.
+- **Dual-Checkbox Frontend State**: Store selection in `RichMenusView` is cleanly decoupled into two independent sets: `assignedOaIds` (stores bound to the template) and `publishSelectedOaIds` (explicit target subset for the upcoming publish job).
+- **Graceful Cancellation & Granular Retry**: Cancelling a job immediately marks pending attempts as `CANCELLED` or `SKIPPED` while in-flight operations finish safely. A dedicated `retryFailed()` action spawns a scoped child job targeting only failed stores without re-publishing already successful stores.
+
 # Rich Menu Phase 2A: Safe Single-Store Canary LINE Publishing Architecture (2026-08-27)
 
 - **Single-Store Canary Scope Invariance**: Phase 2A strictly constrains real LINE publishing to exactly one store per publish request. Bulk or unattended publishing remains completely gated until Phase 2B.

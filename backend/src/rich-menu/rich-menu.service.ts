@@ -10,7 +10,13 @@ import {
   Inject,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { Prisma, RichMenuPublishStatus, RichMenuPreviousDefaultSource, RichMenuTemplateStatus } from "@prisma/client";
+import {
+  Prisma,
+  RichMenuPublishJobStatus,
+  RichMenuPublishStatus,
+  RichMenuPreviousDefaultSource,
+  RichMenuTemplateStatus,
+} from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { imageSize } from "image-size";
 import sharp from "sharp";
@@ -33,7 +39,11 @@ import {
   generatePresetAreas,
   LineRichMenuPayload,
   PublishAttemptResponseDto,
+  PublishBulkDto,
   PublishCanaryDto,
+  PublishCapabilitiesDto,
+  PublishJobResponseDto,
+  PublishStoreParams,
   RichMenuArea,
   RichMenuCanvasPreset,
   RichMenuPreviewInputDto,
@@ -109,19 +119,19 @@ export class RichMenuService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(MediaStorageService) private readonly media: MediaStorageService,
     @Inject(CredentialEncryptionService) private readonly encryption: CredentialEncryptionService,
-    @Inject(LineRichMenuClientService) private readonly publishAdapter: ILineRichMenuClient,
-    @Optional() private readonly auditLog?: AuditLogService,
+    @Optional()
+    @Inject(LineRichMenuClientService)
+    private readonly publishAdapter: ILineRichMenuClient = new LineRichMenuClientService(),
+    @Optional()
+    @Inject(AuditLogService)
+    private readonly auditLog?: AuditLogService,
   ) {}
 
-  private resolveTemplateImageUrl(imageUrl: string | null): string | null {
+  private resolveTemplateImageUrl(imageUrl: string | null | undefined): string | null {
     if (!imageUrl) return null;
     const objectKey = extractMediaObjectKey(imageUrl);
     if (objectKey) {
-      try {
-        return createMediaPublicUrl(objectKey);
-      } catch (err) {
-        this.logger.warn(`Failed to refresh signed URL for objectKey '${objectKey}': ${err}`);
-      }
+      return createMediaPublicUrl(objectKey);
     }
     return imageUrl;
   }
@@ -253,16 +263,16 @@ export class RichMenuService {
     const updated = await this.prisma.richMenuTemplate.update({
       where: { id },
       data: {
-        name: dto.name !== undefined ? dto.name.trim() : undefined,
-        description: dto.description !== undefined ? dto.description?.trim() || null : undefined,
-        status: dto.status !== undefined ? (dto.status as RichMenuTemplateStatus) : undefined,
-        canvasPreset: dto.canvasPreset !== undefined ? dto.canvasPreset : undefined,
-        width: dto.width !== undefined ? dto.width : undefined,
-        height: dto.height !== undefined ? dto.height : undefined,
-        selected: dto.selected !== undefined ? dto.selected : undefined,
-        chatBarText: dto.chatBarText !== undefined ? dto.chatBarText.trim() || "Menu" : undefined,
-        imageUrl: dto.imageUrl !== undefined ? dto.imageUrl?.trim() || null : undefined,
-        areasJson: dto.areas ? (areas as unknown as Prisma.InputJsonValue) : undefined,
+        name: dto.name !== undefined ? dto.name.trim() : existing.name,
+        description: dto.description !== undefined ? dto.description?.trim() || null : existing.description,
+        canvasPreset: dto.canvasPreset !== undefined ? dto.canvasPreset : existing.canvasPreset,
+        width,
+        height,
+        selected: dto.selected !== undefined ? dto.selected : existing.selected,
+        chatBarText: dto.chatBarText !== undefined ? dto.chatBarText.trim() || "Menu" : existing.chatBarText,
+        imageUrl: dto.imageUrl !== undefined ? dto.imageUrl?.trim() || null : existing.imageUrl,
+        areasJson: areas as unknown as Prisma.InputJsonValue,
+        status: dto.status !== undefined ? (dto.status as RichMenuTemplateStatus) : existing.status,
         version: { increment: 1 },
       },
     });
@@ -283,10 +293,10 @@ export class RichMenuService {
       where: { id },
     });
 
-    return { success: true, message: `Template '${existing.name}' deleted successfully` };
+    return { success: true, id };
   }
 
-  async saveAssignments(templateId: string, dto: SaveAssignmentsDto) {
+  async saveAssignments(templateId: string, dto: SaveAssignmentsDto, user?: AuthUser) {
     const template = await this.prisma.richMenuTemplate.findUnique({
       where: { id: templateId },
     });
@@ -295,188 +305,128 @@ export class RichMenuService {
       throw new NotFoundException(`Rich Menu template with ID '${templateId}' not found`);
     }
 
-    const oaIds = Array.from(new Set(dto.lineOfficialAccountIds || []));
+    const requestedIds = Array.from(new Set(dto.lineOfficialAccountIds || []));
 
-    if (oaIds.length > 0) {
-      const validOas = await this.prisma.lineOfficialAccount.findMany({
-        where: {
-          id: { in: oaIds },
-          accountType: "STORE",
-          archivedAt: null,
-        },
-        select: { id: true },
-      });
+    const validOas = await this.prisma.lineOfficialAccount.findMany({
+      where: {
+        id: { in: requestedIds },
+        accountType: "STORE",
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
 
-      const validOaIdSet = new Set(validOas.map((o) => o.id));
-      const invalid = oaIds.filter((id) => !validOaIdSet.has(id));
-      if (invalid.length > 0) {
-        throw new BadRequestException(
-          `Invalid or ineligible LineOfficialAccount IDs: ${invalid.join(", ")}`,
-        );
-      }
-    }
+    const validIds = validOas.map((oa) => oa.id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.richMenuStoreAssignment.deleteMany({
-        where: { templateId },
+        where: {
+          templateId,
+          lineOfficialAccountId: { notIn: validIds },
+        },
       });
 
-      if (oaIds.length > 0) {
-        await tx.richMenuStoreAssignment.createMany({
-          data: oaIds.map((lineOfficialAccountId) => ({
+      for (const lineOfficialAccountId of validIds) {
+        await tx.richMenuStoreAssignment.upsert({
+          where: {
+            templateId_lineOfficialAccountId: {
+              templateId,
+              lineOfficialAccountId,
+            },
+          },
+          create: {
             templateId,
             lineOfficialAccountId,
-          })),
+          },
+          update: {},
         });
       }
     });
 
     return {
       templateId,
-      assignedCount: oaIds.length,
-      assignedLineOfficialAccountIds: oaIds,
-    };
-  }
-
-  private async parseImageMetadata(file: { buffer: Buffer; originalname?: string; mimetype?: string; size?: number }): Promise<{
-    format: DetectedImageFormat;
-    width: number;
-    height: number;
-  }> {
-    const detectedFormat = detectImageMagicBytes(file.buffer);
-    if (detectedFormat === "unknown") {
-      this.logger.warn(
-        `[RichMenu Image Upload] Rejected file due to unsupported magic bytes: ` +
-          JSON.stringify({
-            originalname: file.originalname || "unknown",
-            mimetype: file.mimetype || "unknown",
-            fileSize: file.size ?? file.buffer.length,
-            bufferLength: file.buffer.length,
-            detectedSignature: detectedFormat,
-          }),
-      );
-      throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
-    }
-
-    let width = 0;
-    let height = 0;
-    let imageSizeErrorMsg: string | null = null;
-
-    // 1. Primary parser: image-size (pure JavaScript)
-    try {
-      const dimensions = imageSize(file.buffer);
-      if (dimensions.width && dimensions.height) {
-        width = dimensions.width;
-        height = dimensions.height;
-      }
-    } catch (err: any) {
-      imageSizeErrorMsg = err?.message || "image-size parse failed";
-    }
-
-    // 2. Secondary fallback parser: Sharp
-    if (!width || !height) {
-      try {
-        const metadata = await sharp(file.buffer).metadata();
-        if (metadata.width && metadata.height) {
-          width = metadata.width;
-          height = metadata.height;
-        }
-      } catch (sharpErr: any) {
-        this.logger.warn(
-          `[RichMenu Image Upload] Metadata decoding failure: ` +
-            JSON.stringify({
-              originalname: file.originalname || "unknown",
-              mimetype: file.mimetype || "unknown",
-              fileSize: file.size ?? file.buffer.length,
-              bufferLength: file.buffer.length,
-              detectedFormat,
-              imageSizeError: imageSizeErrorMsg,
-              sharpError: sharpErr?.message || null,
-            }),
-        );
-        throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
-      }
-    }
-
-    if (!width || !height) {
-      this.logger.warn(
-        `[RichMenu Image Upload] Could not determine dimensions: ` +
-          JSON.stringify({
-            originalname: file.originalname || "unknown",
-            mimetype: file.mimetype || "unknown",
-            fileSize: file.size ?? file.buffer.length,
-            bufferLength: file.buffer.length,
-            detectedFormat,
-            imageSizeError: imageSizeErrorMsg,
-          }),
-      );
-      throw new BadRequestException("รองรับเฉพาะไฟล์ JPG หรือ PNG กรุณาแปลงรูปภาพแล้วลองอีกครั้ง");
-    }
-
-    return {
-      format: detectedFormat,
-      width,
-      height,
+      assignedCount: validIds.length,
+      assignedLineOfficialAccountIds: validIds,
     };
   }
 
   async uploadImage(
-    file: { buffer: Buffer; originalname?: string; mimetype?: string; size?: number },
-    user: AuthUser,
-    preset?: string,
+    file: Express.Multer.File,
+    userOrPreset?: AuthUser | string,
+    presetParam?: string,
   ): Promise<{ imageUrl: string; width: number; height: number }> {
-    if (!file?.buffer || !file.buffer.length) {
-      throw new BadRequestException("Image file is required and cannot be empty");
+    const preset = typeof userOrPreset === "string" ? userOrPreset : presetParam;
+    if (!file || !file.buffer || !file.buffer.length) {
+      throw new BadRequestException("No image file provided");
     }
 
-    if (file.buffer.length > 1 * 1024 * 1024) {
-      throw new BadRequestException("ขนาดไฟล์รูปภาพเกินขีดจำกัด 1 MB (ข้อกำหนดของ LINE Messaging API)");
+    if (file.buffer.length > 1 * 1024 * 1024 || (file.size && file.size > 1 * 1024 * 1024)) {
+      throw new BadRequestException("ขนาดไฟล์ต้องไม่เกิน 1 MB (Image size must not exceed 1 MB)");
     }
 
-    const { format, width, height } = await this.parseImageMetadata(file);
+    const detectedFormat = detectImageMagicBytes(file.buffer);
+    if (detectedFormat === "unknown") {
+      this.logger.warn(`[RichMenuUpload] Signature mismatch: name=${file.originalname} mime=${file.mimetype} size=${file.size}`);
+      throw new BadRequestException("Invalid or corrupt image file (รองรับเฉพาะไฟล์ JPG หรือ PNG)");
+    }
+
+    let width: number;
+    let height: number;
+
+    try {
+      const dimensions = imageSize(file.buffer);
+      if (!dimensions.width || !dimensions.height) {
+        throw new Error("Unable to determine image dimensions");
+      }
+      width = dimensions.width;
+      height = dimensions.height;
+    } catch {
+      try {
+        const meta = await sharp(file.buffer).metadata();
+        if (!meta.width || !meta.height) {
+          throw new Error("Unable to decode image dimensions");
+        }
+        width = meta.width;
+        height = meta.height;
+      } catch (sharpErr: any) {
+        this.logger.warn(`[RichMenuUpload] Decoder failed: name=${file.originalname} size=${file.size} err=${sharpErr?.message}`);
+        throw new BadRequestException("Invalid or corrupt image file");
+      }
+    }
 
     if (width < 800 || width > 2500) {
-      throw new BadRequestException(`ความกว้างของรูปภาพต้องอยู่ระหว่าง 800 ถึง 2500 พิกเซล (ขนาดปัจจุบัน: ${width}px)`);
+      throw new BadRequestException(
+        `ความกว้างของรูปภาพ (${width} px) ต้องอยู่ระหว่าง 800 ถึง 2500 พิกเซล (Image width must be between 800 and 2500 px)`,
+      );
     }
+
     if (height < 250) {
-      throw new BadRequestException(`ความสูงของรูปภาพต้องไม่น้อยกว่า 250 พิกเซล (ขนาดปัจจุบัน: ${height}px)`);
+      throw new BadRequestException(
+        `ความสูงของรูปภาพ (${height} px) ต้องมีอย่างน้อย 250 พิกเซล (Image height must be at least 250 px)`,
+      );
     }
 
-    const aspectRatio = width / height;
-    if (aspectRatio < 1.40) {
-      throw new BadRequestException(`สัดส่วนรูปภาพไม่ถูกต้อง (กว้าง/สูง ต้องไม่น้อยกว่า 1.45)`);
+    const isCompact = preset ? preset.startsWith("COMPACT_") || preset === "GRID_3" : height <= 1000;
+    const expectedAspectRatio = isCompact ? 2500 / 843 : 2500 / 1686;
+    const actualAspectRatio = width / height;
+
+    if (Math.abs(actualAspectRatio - expectedAspectRatio) > 0.05) {
+      const expectedType = isCompact ? "Compact (2500x843 px)" : "Large (2500x1686 px)";
+      throw new BadRequestException(
+        `รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก (${expectedType}): สัดส่วนจริง ${width}x${height} px`,
+      );
     }
 
-    // Template aspect ratio validation if preset is provided
-    if (preset) {
-      const isCompact = preset.startsWith("COMPACT_") || preset === "GRID_3";
-      const isLarge = preset.startsWith("LARGE_") || preset === "GRID_6" || preset === "GRID_4";
-
-      if (isLarge && aspectRatio > 2.0) {
-        throw new BadRequestException("รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก (เทมเพลตขนาดใหญ่ต้องมีสัดส่วนประมาณ 2500x1686)");
-      }
-      if (isCompact && aspectRatio < 2.0) {
-        throw new BadRequestException("รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก (เทมเพลตแบบกะทัดรัดต้องมีสัดส่วนประมาณ 2500x843)");
-      }
-    }
-
-    const ext = format === "jpeg" ? "jpg" : "png";
-    const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+    const fileExt = detectedFormat === "png" ? "png" : "jpg";
+    const mime = detectedFormat === "png" ? "image/png" : "image/jpeg";
     const fileId = randomUUID();
-    const objectKey = `line-media/outbound/rich-menu/${fileId}.${ext}`;
+    const objectKey = `line-media/outbound/rich-menu/${fileId}.${fileExt}`;
 
     try {
       await this.media.put(objectKey, file.buffer, mime);
-    } catch (storageErr: any) {
-      this.logger.error(
-        `[RichMenu Image Storage Failure] ` +
-          JSON.stringify({
-            objectKey,
-            errorName: storageErr?.name || "StorageError",
-            errorMessage: storageErr?.message || "Failed to store image",
-          }),
-      );
-      throw new BadRequestException("ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่อีกครั้ง");
+    } catch (err: any) {
+      this.logger.error(`[RichMenuUpload] Storage put failed: key=${objectKey} err=${err?.message}`);
+      throw new ServiceUnavailableException("ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่อีกครั้ง (Failed to save image to storage. Please try again.)");
     }
 
     const imageUrl = createMediaPublicUrl(objectKey);
@@ -497,7 +447,6 @@ export class RichMenuService {
       throw new NotFoundException(`Rich Menu template with ID '${templateId}' not found`);
     }
 
-    // Find the target LineOfficialAccount
     let targetOa: Prisma.LineOfficialAccountGetPayload<{
       include: { store: { include: { storeMaster: true } } };
     }> | null = null;
@@ -533,9 +482,7 @@ export class RichMenuService {
     }
 
     if (!targetOa || !targetOa.store) {
-      throw new BadRequestException(
-        "No suitable STORE LINE Official Account available for preview",
-      );
+      throw new BadRequestException("No suitable STORE LINE Official Account available for preview");
     }
 
     const storeContext: StoreVariableContext = {
@@ -649,7 +596,6 @@ export class RichMenuService {
     const assignedSet = new Set(template.assignments.map((a) => a.lineOfficialAccountId));
     const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
 
-    // Extract all variables referenced in the template
     const usedVariablesSet = new Set<string>();
     for (const area of areas) {
       const vars = extractTemplateVariables(area.actionData);
@@ -658,7 +604,6 @@ export class RichMenuService {
     const usedVariables = Array.from(usedVariablesSet);
     const requiresGoogleMaps = usedVariables.includes("store.googleMapsUrl") || usedVariables.includes("googleMapsUrl");
 
-    // Fetch all active connected STORE LINE OAs with latest publish attempt for this template
     const storeOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
         accountType: "STORE",
@@ -762,21 +707,11 @@ export class RichMenuService {
     };
   }
 
-  // =========================================================================
-  // Phase 2A: Single-Store Canary Publishing to LINE Messaging API
-  // =========================================================================
+  // Unified Per-Store Publish Engine (Used by both Canary and Bulk Worker)
+  async publishOneStore(params: PublishStoreParams): Promise<PublishAttemptResponseDto> {
+    const { templateId, lineOfficialAccountId, actorUserId, jobId, expectedTemplateVersion } = params;
 
-  async publishCanary(
-    templateId: string,
-    dto: PublishCanaryDto,
-    user: AuthUser,
-  ): Promise<PublishAttemptResponseDto> {
-    if (!dto?.lineOfficialAccountId || typeof dto.lineOfficialAccountId !== "string" || !dto.lineOfficialAccountId.trim()) {
-      throw new BadRequestException("Phase 2A supports publishing to exactly one store at a time. Target store is required.");
-    }
-    const lineOfficialAccountId = dto.lineOfficialAccountId.trim();
-
-    // 1. Fetch template
+    // 1. Fetch latest Template
     const template = await this.prisma.richMenuTemplate.findUnique({
       where: { id: templateId },
       include: {
@@ -790,17 +725,22 @@ export class RichMenuService {
       throw new NotFoundException(`Rich Menu template with ID '${templateId}' not found`);
     }
 
+    // Template Version Invariance Check
+    if (expectedTemplateVersion !== undefined && template.version !== expectedTemplateVersion) {
+      return this.recordSkippedAttempt(params, "Template changed after this publishing job was created");
+    }
+
     if (!template.imageUrl) {
-      throw new BadRequestException("Cannot publish: template has no image");
+      return this.recordSkippedAttempt(params, "Template has no image uploaded");
     }
 
     const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
     const areaValidation = validateRichMenuAreas(areas, template.width, template.height);
     if (!areaValidation.valid) {
-      throw new BadRequestException(`Cannot publish: invalid area layout (${areaValidation.errors.join("; ")})`);
+      return this.recordSkippedAttempt(params, `Invalid area layout: ${areaValidation.errors.join("; ")}`);
     }
 
-    // 2. Fetch LINE Official Account
+    // 2. Fetch LINE Official Account & Store
     const targetOa = await this.prisma.lineOfficialAccount.findUnique({
       where: { id: lineOfficialAccountId },
       include: {
@@ -811,32 +751,400 @@ export class RichMenuService {
     });
 
     if (!targetOa) {
-      throw new NotFoundException(`Target store LINE Official Account not found`);
+      return this.recordSkippedAttempt(params, "Target store LINE Official Account not found");
     }
 
     if (targetOa.accountType === "HEAD_OFFICE") {
-      throw new BadRequestException("Cannot publish rich menu to Head Office account. Only STORE accounts are supported.");
+      return this.recordSkippedAttempt(params, "Cannot publish rich menu to Head Office account. Only STORE accounts are supported.");
     }
 
     if (!targetOa.isActive || targetOa.archivedAt) {
-      throw new BadRequestException("Target LINE OA is disabled or archived");
+      return this.recordSkippedAttempt(params, "Target LINE OA is disabled or archived");
     }
 
     if (!targetOa.encryptedChannelAccessToken) {
-      throw new BadRequestException("Target LINE OA has no channel access token configured");
+      return this.recordSkippedAttempt(params, "Target LINE OA has no channel access token configured");
     }
 
     if (!targetOa.store) {
-      throw new BadRequestException("Target LINE OA is not linked to a store");
+      return this.recordSkippedAttempt(params, "Target LINE OA is not linked to a store");
     }
 
-    // Assignment check
     const assignment = template.assignments[0];
     if (!assignment) {
-      throw new BadRequestException("Target store is not assigned to this template. Please save assignment first.");
+      return this.recordSkippedAttempt(params, "Target store is not assigned to this template. Please save assignment first.");
     }
 
-    // 3. Idempotency Guard (prevent double-clicks or concurrent publishes)
+    // 3. Live Dynamic Store Master Variable Resolution
+    const storeMaster = targetOa.store.storeMaster;
+    const storeContext: StoreVariableContext = {
+      storeName: targetOa.store.name,
+      externalStoreId: storeMaster?.externalStoreId ?? null,
+      accountName: targetOa.name,
+      googleMapsUrl: storeMaster?.googleMapsUrl ?? null,
+    };
+
+    const resolvedAreas: Array<{
+      bounds: { x: number; y: number; width: number; height: number };
+      actionType: "URI" | "MESSAGE";
+      rawActionData: string;
+      resolvedActionData: string;
+      label?: string;
+    }> = [];
+
+    for (const area of areas) {
+      const resolved = resolveTemplateVariables(area.actionData, storeContext);
+      if (area.actionType === "URI") {
+        const containsMapsVar = area.actionData.includes("{{store.googleMapsUrl}}") || area.actionData.includes("{{googleMapsUrl}}");
+        if (containsMapsVar) {
+          if (!storeMaster?.googleMapsUrl) {
+            return this.recordSkippedAttempt(params, "Cannot publish: Store Master is missing Google Maps URL");
+          }
+          if (!isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
+            return this.recordSkippedAttempt(params, "Cannot publish: Store Master has invalid Google Maps URL");
+          }
+        } else if (!/^https?:\/\//i.test(resolved)) {
+          return this.recordSkippedAttempt(params, `Cannot publish: invalid URI schema '${resolved}' (must start with https:// or http://)`);
+        }
+      } else if (area.actionType === "MESSAGE") {
+        if (!resolved.trim()) {
+          return this.recordSkippedAttempt(params, "Cannot publish: message action text resolved to empty");
+        }
+      }
+
+      resolvedAreas.push({
+        bounds: area.bounds,
+        actionType: area.actionType,
+        rawActionData: area.actionData,
+        resolvedActionData: resolved,
+        label: area.label?.trim() || undefined,
+      });
+    }
+
+    // 4. Construct LINE Rich Menu Payload
+    const linePayload: LineRichMenuPayload = {
+      size: {
+        width: template.width,
+        height: template.height,
+      },
+      selected: template.selected ?? true,
+      name: template.name.slice(0, 300),
+      chatBarText: template.chatBarText.slice(0, 14),
+      areas: resolvedAreas.map((a) => ({
+        bounds: a.bounds,
+        action:
+          a.actionType === "URI"
+            ? {
+                type: "uri",
+                label: a.label?.slice(0, 20),
+                uri: a.resolvedActionData,
+              }
+            : {
+                type: "message",
+                label: a.label?.slice(0, 20),
+                text: a.resolvedActionData,
+              },
+      })),
+    };
+
+    // 5. Retrieve Stored Image Bytes
+    const objectKey = extractMediaObjectKey(template.imageUrl);
+    if (!objectKey) {
+      return this.recordSkippedAttempt(params, "Invalid template image URL or object key");
+    }
+
+    let imageBuffer: Buffer;
+    let mimeType: string;
+    try {
+      const stored = await this.media.get(objectKey);
+      imageBuffer = stored.body;
+      mimeType = stored.contentType || (objectKey.endsWith(".jpg") || objectKey.endsWith(".jpeg") ? "image/jpeg" : "image/png");
+    } catch (err: any) {
+      return this.recordSkippedAttempt(params, `Failed to retrieve template image from storage: ${err?.message || "unknown"}`);
+    }
+
+    // 6. Decrypt OA channel access token
+    let token: string;
+    try {
+      token = this.encryption.decrypt(targetOa.encryptedChannelAccessToken);
+    } catch {
+      return this.recordSkippedAttempt(params, "Failed to decrypt LINE OA credentials");
+    }
+
+    // 7. Get or Create Attempt record
+    let attemptRecord = params.attemptId
+      ? await this.prisma.richMenuPublishAttempt.findUnique({ where: { id: params.attemptId } })
+      : null;
+
+    if (!attemptRecord) {
+      const totalAttempts = await this.prisma.richMenuPublishAttempt.count({
+        where: { templateId, lineOfficialAccountId },
+      });
+
+      attemptRecord = await this.prisma.richMenuPublishAttempt.create({
+        data: {
+          jobId: jobId || null,
+          templateId,
+          templateVersion: template.version,
+          lineOfficialAccountId,
+          assignmentId: assignment.id,
+          status: RichMenuPublishStatus.VALIDATING,
+          resolvedConfigJson: linePayload as unknown as Prisma.InputJsonValue,
+          attemptNumber: totalAttempts + 1,
+          createdByUserId: actorUserId || null,
+        },
+      });
+    } else {
+      attemptRecord = await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: {
+          status: RichMenuPublishStatus.VALIDATING,
+          resolvedConfigJson: linePayload as unknown as Prisma.InputJsonValue,
+          templateVersion: template.version,
+        },
+      });
+    }
+
+    if (this.auditLog && actorUserId) {
+      await this.auditLog.record({
+        actorUserId,
+        action: "RICH_MENU_PUBLISH_STARTED",
+        metadata: {
+          jobId: jobId || null,
+          templateId,
+          templateName: template.name,
+          templateVersion: template.version,
+          lineOfficialAccountId,
+          storeName: targetOa.store.name,
+          attemptId: attemptRecord.id,
+        },
+      });
+    }
+
+    // 8. Execute LINE Publishing Stages
+    let lineRichMenuId: string | null = null;
+
+    try {
+      // Stage A: Validate Rich Menu Structure on LINE
+      const validation = await this.publishAdapter.validateRichMenu(token, linePayload);
+      if (!validation.valid) {
+        throw new BadRequestException(`LINE validation failed: ${validation.message || "Invalid rich menu structure"}`);
+      }
+
+      // Stage B: Detect Previous Default on LINE
+      let prevDefault: { richMenuId: string | null; source: "MESSAGING_API" | "OTHER_OR_MANAGER" | "NONE" };
+      try {
+        prevDefault = await this.publishAdapter.getDefaultRichMenu(token);
+      } catch {
+        prevDefault = { richMenuId: null, source: "NONE" };
+      }
+
+      await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: {
+          status: RichMenuPublishStatus.CREATING,
+          previousDefaultRichMenuId: prevDefault.richMenuId,
+          previousDefaultSource: prevDefault.source as RichMenuPreviousDefaultSource,
+        },
+      });
+
+      // Stage C: Create Rich Menu on LINE
+      const createRes = await this.publishAdapter.createRichMenu(token, linePayload);
+      lineRichMenuId = createRes.richMenuId;
+
+      await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: {
+          status: RichMenuPublishStatus.IMAGE_UPLOADING,
+          lineRichMenuId,
+        },
+      });
+
+      // Stage D: Upload Image Content to LINE
+      try {
+        await this.publishAdapter.uploadRichMenuImage(token, lineRichMenuId, imageBuffer, mimeType);
+      } catch (imgErr: any) {
+        if (lineRichMenuId) {
+          try {
+            await this.publishAdapter.deleteRichMenu(token, lineRichMenuId);
+          } catch {
+            /* ignore cleanup error */
+          }
+        }
+        await this.prisma.richMenuPublishAttempt.update({
+          where: { id: attemptRecord.id },
+          data: {
+            status: RichMenuPublishStatus.FAILED,
+            errorStage: "IMAGE_UPLOADING",
+            errorMessage: imgErr?.message || "Failed to upload image content to LINE",
+          },
+        });
+        if (this.auditLog && actorUserId) {
+          await this.auditLog.record({
+            actorUserId,
+            action: "RICH_MENU_PUBLISH_FAILED",
+            metadata: {
+              jobId: jobId || null,
+              templateId,
+              lineOfficialAccountId,
+              attemptId: attemptRecord.id,
+              errorStage: "IMAGE_UPLOADING",
+              errorMessage: imgErr?.message || "Image upload failed",
+            },
+          });
+        }
+        throw imgErr;
+      }
+
+      // Stage E: Set Default Rich Menu
+      await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: { status: RichMenuPublishStatus.SETTING_DEFAULT },
+      });
+
+      try {
+        await this.publishAdapter.setDefaultRichMenu(token, lineRichMenuId);
+      } catch (setErr: any) {
+        await this.prisma.richMenuPublishAttempt.update({
+          where: { id: attemptRecord.id },
+          data: {
+            status: RichMenuPublishStatus.FAILED,
+            errorStage: "SETTING_DEFAULT",
+            errorMessage: setErr?.message || "Failed to set default rich menu on LINE",
+          },
+        });
+        if (this.auditLog && actorUserId) {
+          await this.auditLog.record({
+            actorUserId,
+            action: "RICH_MENU_PUBLISH_FAILED",
+            metadata: {
+              jobId: jobId || null,
+              templateId,
+              lineOfficialAccountId,
+              attemptId: attemptRecord.id,
+              errorStage: "SETTING_DEFAULT",
+              errorMessage: setErr?.message || "Set default failed",
+            },
+          });
+        }
+        throw setErr;
+      }
+
+      // Stage F: Verify Active Default
+      await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: { status: RichMenuPublishStatus.VERIFYING },
+      });
+
+      const verifyDefault = await this.publishAdapter.getDefaultRichMenu(token);
+      if (verifyDefault.richMenuId !== lineRichMenuId) {
+        throw new BadGatewayException(
+          `Verification failed: expected default rich menu '${lineRichMenuId}', but LINE returned '${verifyDefault.richMenuId}'`,
+        );
+      }
+
+      // Stage G: Terminal Success
+      const finalAttempt = await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: {
+          status: RichMenuPublishStatus.PUBLISHED,
+          completedAt: new Date(),
+          errorStage: null,
+          errorMessage: null,
+          errorCode: null,
+        },
+      });
+
+      if (this.auditLog && actorUserId) {
+        await this.auditLog.record({
+          actorUserId,
+          action: "RICH_MENU_PUBLISHED",
+          metadata: {
+            jobId: jobId || null,
+            templateId,
+            templateName: template.name,
+            templateVersion: template.version,
+            lineOfficialAccountId,
+            storeName: targetOa.store.name,
+            lineRichMenuId,
+            attemptId: finalAttempt.id,
+          },
+        });
+      }
+
+      return this.formatAttemptResponse(finalAttempt, targetOa.name, targetOa.store.name);
+    } catch (err: any) {
+      const errorMsg = err?.message || "Publish failed";
+      await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptRecord.id },
+        data: {
+          status: RichMenuPublishStatus.FAILED,
+          errorMessage: errorMsg,
+          completedAt: new Date(),
+        },
+      });
+
+      if (this.auditLog && actorUserId) {
+        await this.auditLog.record({
+          actorUserId,
+          action: "RICH_MENU_PUBLISH_FAILED",
+          metadata: {
+            jobId: jobId || null,
+            templateId,
+            lineOfficialAccountId,
+            attemptId: attemptRecord.id,
+            errorMessage: errorMsg,
+          },
+        });
+      }
+
+      throw err;
+    }
+  }
+
+  private async recordSkippedAttempt(params: PublishStoreParams, reason: string): Promise<PublishAttemptResponseDto> {
+    const { templateId, lineOfficialAccountId, actorUserId, jobId, attemptId, expectedTemplateVersion } = params;
+
+    let attempt: any;
+    if (attemptId) {
+      attempt = await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attemptId },
+        data: {
+          status: RichMenuPublishStatus.SKIPPED,
+          errorMessage: reason,
+          completedAt: new Date(),
+        },
+      });
+    } else {
+      const totalAttempts = await this.prisma.richMenuPublishAttempt.count({
+        where: { templateId, lineOfficialAccountId },
+      });
+      attempt = await this.prisma.richMenuPublishAttempt.create({
+        data: {
+          jobId: jobId || null,
+          templateId,
+          templateVersion: expectedTemplateVersion || 1,
+          lineOfficialAccountId,
+          status: RichMenuPublishStatus.SKIPPED,
+          errorMessage: reason,
+          attemptNumber: totalAttempts + 1,
+          createdByUserId: actorUserId || null,
+          completedAt: new Date(),
+        },
+      });
+    }
+
+    return this.formatAttemptResponse(attempt);
+  }
+
+  // Phase 2A Single-Store Canary (reusing publishOneStore)
+  async publishCanary(templateId: string, dto: PublishCanaryDto, user: AuthUser): Promise<PublishAttemptResponseDto> {
+    const { lineOfficialAccountId } = dto;
+    if (!lineOfficialAccountId) {
+      throw new BadRequestException("lineOfficialAccountId is required");
+    }
+
+    // Idempotency check for active canary attempts
     const activeAttempt = await this.prisma.richMenuPublishAttempt.findFirst({
       where: {
         templateId,
@@ -863,336 +1171,322 @@ export class RichMenuService {
       }
     }
 
-    // Count existing attempts for attempt numbering
-    const totalAttempts = await this.prisma.richMenuPublishAttempt.count({
-      where: { templateId, lineOfficialAccountId },
+    return this.publishOneStore({
+      templateId,
+      lineOfficialAccountId,
+      actorUserId: user.id,
+    });
+  }
+
+  // Phase 2B Bulk Job Creation
+  async createBulkPublishJob(templateId: string, dto: PublishBulkDto, user: AuthUser): Promise<PublishJobResponseDto> {
+    const maxTargets = parseInt(
+      process.env.RICH_MENU_MAX_BULK_TARGETS || process.env.RICH_MENU_BULK_MAX_TARGETS || "5",
+      10,
+    );
+    const rawIds = dto.lineOfficialAccountIds || [];
+    const requestedIds = Array.from(new Set(rawIds.map((id) => id?.trim()).filter(Boolean)));
+
+    if (requestedIds.length === 0) {
+      throw new BadRequestException("At least one store must be selected for bulk publishing");
+    }
+
+    if (requestedIds.length > maxTargets) {
+      throw new BadRequestException(
+        `ขณะนี้สามารถเผยแพร่ได้สูงสุด ${maxTargets} ร้านต่อครั้ง (Bulk publishing currently supports up to ${maxTargets} stores per job)`,
+      );
+    }
+
+    // Verify Template
+    const template = await this.prisma.richMenuTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        assignments: {
+          where: { lineOfficialAccountId: { in: requestedIds } },
+        },
+      },
     });
 
-    // 4. Fresh Dynamic Template Variable Resolution
-    const storeMaster = targetOa.store.storeMaster;
-    const storeContext: StoreVariableContext = {
-      storeName: targetOa.store.name,
-      externalStoreId: storeMaster?.externalStoreId ?? null,
-      accountName: targetOa.name,
-      googleMapsUrl: storeMaster?.googleMapsUrl ?? null,
-    };
+    if (!template) {
+      throw new NotFoundException(`Rich Menu template with ID '${templateId}' not found`);
+    }
 
-    const resolvedAreas: Array<{
-      bounds: { x: number; y: number; width: number; height: number };
-      actionType: "URI" | "MESSAGE";
-      rawActionData: string;
-      resolvedActionData: string;
-      label?: string;
-    }> = [];
+    if (!template.imageUrl) {
+      throw new BadRequestException("Cannot publish: template has no image uploaded");
+    }
 
-    for (const area of areas) {
-      const resolved = resolveTemplateVariables(area.actionData, storeContext);
-      if (area.actionType === "URI") {
-        const containsMapsVar = area.actionData.includes("{{store.googleMapsUrl}}") || area.actionData.includes("{{googleMapsUrl}}");
-        if (containsMapsVar) {
-          if (!storeMaster?.googleMapsUrl) {
-            throw new BadRequestException("Cannot publish: Store Master is missing Google Maps URL");
-          }
-          if (!isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
-            throw new BadRequestException("Cannot publish: Store Master has invalid Google Maps URL");
-          }
-        } else if (!/^https?:\/\//i.test(resolved)) {
-          throw new BadRequestException(`Cannot publish: invalid URI schema '${resolved}' (must start with https:// or http://)`);
-        }
-      } else if (area.actionType === "MESSAGE") {
-        if (!resolved.trim()) {
-          throw new BadRequestException("Cannot publish: message action text resolved to empty");
-        }
+    const assignedSet = new Set(template.assignments.map((a) => a.lineOfficialAccountId));
+    for (const oaId of requestedIds) {
+      if (!assignedSet.has(oaId)) {
+        throw new BadRequestException(`Store OA '${oaId}' is not assigned to this template. Please save assignment first.`);
+      }
+    }
+
+    // Verify OAs are active STORE accounts
+    const storeOas = await this.prisma.lineOfficialAccount.findMany({
+      where: {
+        id: { in: requestedIds },
+      },
+      include: {
+        store: { include: { storeMaster: true } },
+      },
+    });
+
+    for (const oa of storeOas) {
+      if (oa.accountType === "HEAD_OFFICE") {
+        throw new BadRequestException(`Cannot publish to Head Office account '${oa.name}'`);
+      }
+      if (!oa.isActive || oa.archivedAt) {
+        throw new BadRequestException(`Store OA '${oa.name}' is inactive or archived`);
+      }
+      if (!oa.encryptedChannelAccessToken) {
+        throw new BadRequestException(`Store OA '${oa.name}' has no channel access token`);
+      }
+    }
+
+    // Create Bulk Job + N Attempts in a single DB transaction
+    const job = await this.prisma.$transaction(async (tx) => {
+      const createdJob = await tx.richMenuPublishJob.create({
+        data: {
+          templateId,
+          templateVersion: template.version,
+          status: RichMenuPublishJobStatus.QUEUED,
+          totalCount: requestedIds.length,
+          pendingCount: requestedIds.length,
+          createdByUserId: user.id,
+        },
+      });
+
+      for (const oaId of requestedIds) {
+        const assignment = template.assignments.find((a) => a.lineOfficialAccountId === oaId);
+        await tx.richMenuPublishAttempt.create({
+          data: {
+            jobId: createdJob.id,
+            templateId,
+            templateVersion: template.version,
+            lineOfficialAccountId: oaId,
+            assignmentId: assignment?.id || null,
+            status: RichMenuPublishStatus.PENDING,
+            createdByUserId: user.id,
+          },
+        });
       }
 
-      resolvedAreas.push({
-        bounds: area.bounds,
-        actionType: area.actionType,
-        rawActionData: area.actionData,
-        resolvedActionData: resolved,
-        label: area.label?.trim() || undefined,
+      return createdJob;
+    });
+
+    if (this.auditLog) {
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: "RICH_MENU_BULK_JOB_CREATED",
+        metadata: {
+          jobId: job.id,
+          templateId,
+          templateVersion: template.version,
+          totalCount: requestedIds.length,
+          targetOaIds: requestedIds,
+        },
       });
     }
 
-    // 5. Construct LINE Rich Menu Payload
-    const linePayload: LineRichMenuPayload = {
-      size: {
-        width: template.width,
-        height: template.height,
+    return this.getPublishJob(job.id);
+  }
+
+  // Phase 2B Job Cancellation
+  async cancelPublishJob(jobId: string, user: AuthUser): Promise<PublishJobResponseDto> {
+    const job = await this.prisma.richMenuPublishJob.findUnique({
+      where: { id: jobId },
+      include: { attempts: true },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Publish job with ID '${jobId}' not found`);
+    }
+
+    if (
+      job.status === RichMenuPublishJobStatus.COMPLETED ||
+      job.status === RichMenuPublishJobStatus.COMPLETED_WITH_ERRORS ||
+      job.status === RichMenuPublishJobStatus.CANCELLED ||
+      job.status === RichMenuPublishJobStatus.FAILED
+    ) {
+      throw new BadRequestException(`Cannot cancel job in terminal status '${job.status}'`);
+    }
+
+    // Cancel all remaining PENDING attempts
+    await this.prisma.richMenuPublishAttempt.updateMany({
+      where: {
+        jobId,
+        status: RichMenuPublishStatus.PENDING,
       },
-      selected: template.selected ?? true,
-      name: template.name.slice(0, 300),
-      chatBarText: template.chatBarText.slice(0, 14),
-      areas: resolvedAreas.map((a) => ({
-        bounds: a.bounds,
-        action:
-          a.actionType === "URI"
-            ? {
-                type: "uri",
-                label: a.label?.slice(0, 20),
-                uri: a.resolvedActionData,
-              }
-            : {
-                type: "message",
-                label: a.label?.slice(0, 20),
-                text: a.resolvedActionData,
-              },
-      })),
-    };
-
-    // 6. Retrieve stored image content
-    const objectKey = extractMediaObjectKey(template.imageUrl);
-    if (!objectKey) {
-      throw new BadRequestException("Invalid template image URL or object key");
-    }
-
-    let imageBuffer: Buffer;
-    let mimeType: string;
-    try {
-      const stored = await this.media.get(objectKey);
-      imageBuffer = stored.body;
-      mimeType = stored.contentType || (objectKey.endsWith(".jpg") || objectKey.endsWith(".jpeg") ? "image/jpeg" : "image/png");
-    } catch (err: any) {
-      throw new BadRequestException(`Failed to retrieve template image from storage: ${err?.message || "unknown"}`);
-    }
-
-    // 7. Decrypt OA channel access token
-    let token: string;
-    try {
-      token = this.encryption.decrypt(targetOa.encryptedChannelAccessToken);
-    } catch {
-      throw new BadRequestException("Failed to decrypt LINE OA credentials");
-    }
-
-    // 8. Create initial Publish Attempt record
-    const attempt = await this.prisma.richMenuPublishAttempt.create({
       data: {
-        templateId,
-        lineOfficialAccountId,
-        assignmentId: assignment.id,
-        status: RichMenuPublishStatus.VALIDATING,
-        resolvedConfigJson: linePayload as unknown as Prisma.InputJsonValue,
-        attemptNumber: totalAttempts + 1,
-        createdByUserId: user.id,
+        status: RichMenuPublishStatus.CANCELLED,
+        errorMessage: "Job was cancelled by administrator",
+      },
+    });
+
+    // Check if in-flight attempts exist
+    const inFlightCount = await this.prisma.richMenuPublishAttempt.count({
+      where: {
+        jobId,
+        status: {
+          in: [
+            RichMenuPublishStatus.VALIDATING,
+            RichMenuPublishStatus.CREATING,
+            RichMenuPublishStatus.IMAGE_UPLOADING,
+            RichMenuPublishStatus.SETTING_DEFAULT,
+            RichMenuPublishStatus.VERIFYING,
+            RichMenuPublishStatus.ROLLING_BACK,
+          ],
+        },
+      },
+    });
+
+    const finalJobStatus = inFlightCount === 0 ? RichMenuPublishJobStatus.CANCELLED : RichMenuPublishJobStatus.CANCELLING;
+
+    await this.prisma.richMenuPublishJob.update({
+      where: { id: jobId },
+      data: {
+        status: finalJobStatus,
+        cancelRequestedAt: new Date(),
+        completedAt: inFlightCount === 0 ? new Date() : null,
       },
     });
 
     if (this.auditLog) {
       await this.auditLog.record({
         actorUserId: user.id,
-        action: "RICH_MENU_PUBLISH_STARTED",
+        action: "RICH_MENU_BULK_JOB_CANCELLED",
         metadata: {
-          templateId,
-          templateName: template.name,
-          lineOfficialAccountId,
-          storeName: targetOa.store.name,
-          attemptId: attempt.id,
+          jobId,
+          templateId: job.templateId,
         },
       });
     }
 
-    // 9. Execute Publish Pipeline
-    let lineRichMenuId: string | null = null;
-
-    try {
-      // Stage A: Validate Rich Menu
-      const validation = await this.publishAdapter.validateRichMenu(token, linePayload);
-      if (!validation.valid) {
-        throw new BadRequestException(`LINE validation failed: ${validation.message || "Invalid rich menu structure"}`);
-      }
-
-      // Stage B: Detect Previous Default
-      let prevDefault: { richMenuId: string | null; source: "MESSAGING_API" | "OTHER_OR_MANAGER" | "NONE" };
-      try {
-        prevDefault = await this.publishAdapter.getDefaultRichMenu(token);
-      } catch {
-        prevDefault = { richMenuId: null, source: "NONE" };
-      }
-
-      await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: RichMenuPublishStatus.CREATING,
-          previousDefaultRichMenuId: prevDefault.richMenuId,
-          previousDefaultSource: prevDefault.source as RichMenuPreviousDefaultSource,
-        },
-      });
-
-      // Stage C: Create Rich Menu on LINE
-      const createRes = await this.publishAdapter.createRichMenu(token, linePayload);
-      lineRichMenuId = createRes.richMenuId;
-
-      await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: RichMenuPublishStatus.IMAGE_UPLOADING,
-          lineRichMenuId,
-        },
-      });
-
-      // Stage D: Upload Image Content
-      try {
-        await this.publishAdapter.uploadRichMenuImage(token, lineRichMenuId, imageBuffer, mimeType);
-      } catch (imgErr: any) {
-        // Attempt cleanup of orphaned rich menu
-        if (lineRichMenuId) {
-          try {
-            await this.publishAdapter.deleteRichMenu(token, lineRichMenuId);
-          } catch {
-            /* ignore cleanup error */
-          }
-        }
-        await this.prisma.richMenuPublishAttempt.update({
-          where: { id: attempt.id },
-          data: {
-            status: RichMenuPublishStatus.FAILED,
-            errorStage: "IMAGE_UPLOADING",
-            errorMessage: imgErr?.message || "Failed to upload image content to LINE",
-          },
-        });
-        if (this.auditLog) {
-          await this.auditLog.record({
-            actorUserId: user.id,
-            action: "RICH_MENU_PUBLISH_FAILED",
-            metadata: {
-              templateId,
-              lineOfficialAccountId,
-              attemptId: attempt.id,
-              errorStage: "IMAGE_UPLOADING",
-              errorMessage: imgErr?.message || "Image upload failed",
-            },
-          });
-        }
-        throw imgErr;
-      }
-
-      // Stage E: Set Default Rich Menu
-      await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: { status: RichMenuPublishStatus.SETTING_DEFAULT },
-      });
-
-      try {
-        await this.publishAdapter.setDefaultRichMenu(token, lineRichMenuId);
-      } catch (setErr: any) {
-        await this.prisma.richMenuPublishAttempt.update({
-          where: { id: attempt.id },
-          data: {
-            status: RichMenuPublishStatus.FAILED,
-            errorStage: "SETTING_DEFAULT",
-            errorMessage: setErr?.message || "Failed to set default rich menu on LINE",
-          },
-        });
-        if (this.auditLog) {
-          await this.auditLog.record({
-            actorUserId: user.id,
-            action: "RICH_MENU_PUBLISH_FAILED",
-            metadata: {
-              templateId,
-              lineOfficialAccountId,
-              attemptId: attempt.id,
-              errorStage: "SETTING_DEFAULT",
-              errorMessage: setErr?.message || "Set default failed",
-            },
-          });
-        }
-        throw setErr;
-      }
-
-      // Stage F: Verify Default Rich Menu
-      await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: { status: RichMenuPublishStatus.VERIFYING },
-      });
-
-      const verifyRes = await this.publishAdapter.getDefaultRichMenu(token);
-      if (verifyRes.richMenuId !== lineRichMenuId) {
-        const mismatchErr = `Default rich menu mismatch: expected ${lineRichMenuId}, got ${verifyRes.richMenuId || "none"}`;
-        await this.prisma.richMenuPublishAttempt.update({
-          where: { id: attempt.id },
-          data: {
-            status: RichMenuPublishStatus.FAILED,
-            errorStage: "VERIFYING",
-            errorMessage: mismatchErr,
-          },
-        });
-        if (this.auditLog) {
-          await this.auditLog.record({
-            actorUserId: user.id,
-            action: "RICH_MENU_PUBLISH_FAILED",
-            metadata: {
-              templateId,
-              lineOfficialAccountId,
-              attemptId: attempt.id,
-              errorStage: "VERIFYING",
-              errorMessage: mismatchErr,
-            },
-          });
-        }
-        throw new BadGatewayException(mismatchErr);
-      }
-
-      // Final: Success! Mark PUBLISHED
-      const updatedAttempt = await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: RichMenuPublishStatus.PUBLISHED,
-          completedAt: new Date(),
-        },
-      });
-
-      if (this.auditLog) {
-        await this.auditLog.record({
-          actorUserId: user.id,
-          action: "RICH_MENU_PUBLISHED",
-          metadata: {
-            templateId,
-            lineOfficialAccountId,
-            attemptId: attempt.id,
-            richMenuId: lineRichMenuId,
-            storeName: targetOa.store.name,
-          },
-        });
-      }
-
-      return {
-        id: updatedAttempt.id,
-        templateId: updatedAttempt.templateId,
-        lineOfficialAccountId: updatedAttempt.lineOfficialAccountId,
-        lineOfficialAccountName: targetOa.name,
-        storeName: targetOa.store.name,
-        status: updatedAttempt.status,
-        lineRichMenuId: updatedAttempt.lineRichMenuId,
-        previousDefaultRichMenuId: updatedAttempt.previousDefaultRichMenuId,
-        previousDefaultSource: updatedAttempt.previousDefaultSource,
-        errorStage: updatedAttempt.errorStage,
-        errorCode: updatedAttempt.errorCode,
-        errorMessage: updatedAttempt.errorMessage,
-        attemptNumber: updatedAttempt.attemptNumber,
-        startedAt: updatedAttempt.startedAt,
-        completedAt: updatedAttempt.completedAt,
-        createdAt: updatedAttempt.createdAt,
-        updatedAt: updatedAttempt.updatedAt,
-      };
-    } catch (err: any) {
-      if (err instanceof BadRequestException || err instanceof BadGatewayException || err instanceof ConflictException) {
-        throw err;
-      }
-      await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          status: RichMenuPublishStatus.FAILED,
-          errorMessage: err?.message || "Unexpected publishing error",
-        },
-      });
-      throw err;
-    }
+    return this.getPublishJob(jobId);
   }
 
-  async rollbackPublish(
-    attemptId: string,
-    user: AuthUser,
-  ): Promise<PublishAttemptResponseDto> {
+  // Phase 2B Retry Failed Attempts Only
+  async retryFailedJobAttempts(jobId: string, user: AuthUser): Promise<PublishJobResponseDto> {
+    const job = await this.prisma.richMenuPublishJob.findUnique({
+      where: { id: jobId },
+      include: { attempts: true },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Publish job with ID '${jobId}' not found`);
+    }
+
+    const failedAttempts = job.attempts.filter(
+      (a) => a.status === RichMenuPublishStatus.FAILED || a.status === RichMenuPublishStatus.SKIPPED,
+    );
+
+    if (failedAttempts.length === 0) {
+      throw new BadRequestException("No failed or skipped attempts found to retry in this job");
+    }
+
+    const failedOaIds = failedAttempts.map((a) => a.lineOfficialAccountId);
+    const newJobDto: PublishBulkDto = {
+      lineOfficialAccountIds: failedOaIds,
+    };
+
+    const newJob = await this.createBulkPublishJob(job.templateId, newJobDto, user);
+
+    if (this.auditLog) {
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: "RICH_MENU_BULK_RETRY_CREATED",
+        metadata: {
+          originalJobId: jobId,
+          newJobId: newJob.id,
+          templateId: job.templateId,
+          retriedCount: failedOaIds.length,
+        },
+      });
+    }
+
+    return newJob;
+  }
+
+  async listPublishJobs(templateId: string): Promise<PublishJobResponseDto[]> {
+    const jobs = await this.prisma.richMenuPublishJob.findMany({
+      where: { templateId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        attempts: {
+          include: {
+            lineOfficialAccount: {
+              include: { store: true },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    return jobs.map((j) => this.formatJobResponse(j));
+  }
+
+  async getPublishJob(jobId: string): Promise<PublishJobResponseDto> {
+    const job = await this.prisma.richMenuPublishJob.findUnique({
+      where: { id: jobId },
+      include: {
+        attempts: {
+          include: {
+            lineOfficialAccount: {
+              include: { store: true },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Publish job with ID '${jobId}' not found`);
+    }
+
+    return this.formatJobResponse(job);
+  }
+
+  async getPublishCapabilities(): Promise<PublishCapabilitiesDto> {
+    const maxTargets = parseInt(
+      process.env.RICH_MENU_MAX_BULK_TARGETS || process.env.RICH_MENU_BULK_MAX_TARGETS || "5",
+      10,
+    );
+    const concurrency = Math.min(
+      parseInt(
+        process.env.RICH_MENU_PUBLISH_CONCURRENCY || process.env.RICH_MENU_BULK_CONCURRENCY || "2",
+        10,
+      ),
+      5,
+    );
+
+    const heartbeat = await this.prisma.richMenuWorkerHeartbeat.findUnique({
+      where: { id: "singleton" },
+    });
+
+    let workerReady = false;
+    let lastWorkerHeartbeatAt: string | null = null;
+
+    if (heartbeat) {
+      lastWorkerHeartbeatAt = heartbeat.lastHeartbeatAt.toISOString();
+      const ageMs = Date.now() - new Date(heartbeat.lastHeartbeatAt).getTime();
+      // Worker is ready if heartbeat recorded within last 60s
+      workerReady = ageMs < 60_000;
+    }
+
+    return {
+      bulkEnabled: true,
+      maxTargets,
+      concurrency,
+      workerReady,
+      lastWorkerHeartbeatAt,
+    };
+  }
+
+  // Rollback Publish Attempt
+  async rollbackPublish(attemptId: string, user: AuthUser): Promise<PublishAttemptResponseDto> {
     const attempt = await this.prisma.richMenuPublishAttempt.findUnique({
       where: { id: attemptId },
       include: {
@@ -1203,44 +1497,53 @@ export class RichMenuService {
     });
 
     if (!attempt) {
-      throw new NotFoundException(`Publish attempt '${attemptId}' not found`);
+      throw new NotFoundException(`Publish attempt with ID '${attemptId}' not found`);
     }
 
     if (attempt.status !== RichMenuPublishStatus.PUBLISHED) {
-      throw new BadRequestException(
-        `Cannot rollback attempt with status '${attempt.status}'. Only PUBLISHED attempts can be rolled back.`,
-      );
+      throw new BadRequestException(`Cannot rollback attempt with status '${attempt.status}'. Only PUBLISHED attempts can be rolled back.`);
     }
 
-    if (!attempt.lineOfficialAccount.encryptedChannelAccessToken) {
-      throw new BadRequestException("LINE OA access token is missing");
+    const oa = attempt.lineOfficialAccount;
+    if (!oa || !oa.encryptedChannelAccessToken) {
+      throw new BadRequestException("Target LINE OA credentials not found");
     }
 
     let token: string;
     try {
-      token = this.encryption.decrypt(attempt.lineOfficialAccount.encryptedChannelAccessToken);
+      token = this.encryption.decrypt(oa.encryptedChannelAccessToken);
     } catch {
-      throw new BadRequestException("Failed to decrypt LINE OA credentials");
+      throw new BadRequestException("Failed to decrypt LINE OA credentials for rollback");
     }
 
     await this.prisma.richMenuPublishAttempt.update({
-      where: { id: attemptId },
+      where: { id: attempt.id },
       data: { status: RichMenuPublishStatus.ROLLING_BACK },
     });
 
     try {
-      if (attempt.previousDefaultSource === "MESSAGING_API" && attempt.previousDefaultRichMenuId) {
+      if (attempt.previousDefaultRichMenuId) {
         await this.publishAdapter.setDefaultRichMenu(token, attempt.previousDefaultRichMenuId);
       } else {
-        // NONE or OTHER_OR_MANAGER: unlink Messaging API default
         await this.publishAdapter.clearDefaultRichMenu(token);
       }
 
-      const updated = await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attemptId },
+      if (attempt.lineRichMenuId) {
+        try {
+          await this.publishAdapter.deleteRichMenu(token, attempt.lineRichMenuId);
+        } catch {
+          /* ignore deletion error */
+        }
+      }
+
+      const rolledBack = await this.prisma.richMenuPublishAttempt.update({
+        where: { id: attempt.id },
         data: {
           status: RichMenuPublishStatus.ROLLED_BACK,
           completedAt: new Date(),
+          errorMessage: null,
+          errorCode: null,
+          errorStage: null,
         },
       });
 
@@ -1249,117 +1552,69 @@ export class RichMenuService {
           actorUserId: user.id,
           action: "RICH_MENU_ROLLED_BACK",
           metadata: {
+            attemptId: attempt.id,
             templateId: attempt.templateId,
             lineOfficialAccountId: attempt.lineOfficialAccountId,
-            attemptId: attempt.id,
-            restoredRichMenuId: attempt.previousDefaultRichMenuId,
-            previousDefaultSource: attempt.previousDefaultSource,
+            storeName: oa.store?.name,
+            previousDefaultRichMenuId: attempt.previousDefaultRichMenuId,
+            restoredSource: attempt.previousDefaultSource,
           },
         });
       }
 
-      return {
-        id: updated.id,
-        templateId: updated.templateId,
-        lineOfficialAccountId: updated.lineOfficialAccountId,
-        lineOfficialAccountName: attempt.lineOfficialAccount.name,
-        storeName: attempt.lineOfficialAccount.store?.name,
-        status: updated.status,
-        lineRichMenuId: updated.lineRichMenuId,
-        previousDefaultRichMenuId: updated.previousDefaultRichMenuId,
-        previousDefaultSource: updated.previousDefaultSource,
-        errorStage: updated.errorStage,
-        errorCode: updated.errorCode,
-        errorMessage: updated.errorMessage,
-        attemptNumber: updated.attemptNumber,
-        startedAt: updated.startedAt,
-        completedAt: updated.completedAt,
-        createdAt: updated.createdAt,
-        updatedAt: updated.updatedAt,
-      };
+      return this.formatAttemptResponse(rolledBack, oa.name, oa.store?.name);
     } catch (err: any) {
       await this.prisma.richMenuPublishAttempt.update({
-        where: { id: attemptId },
+        where: { id: attempt.id },
         data: {
           status: RichMenuPublishStatus.FAILED,
           errorStage: "ROLLING_BACK",
-          errorMessage: `Rollback failed: ${err?.message || "unknown"}`,
+          errorMessage: err?.message || "Failed to restore previous default rich menu",
         },
       });
       throw err;
     }
   }
 
-  async retryPublish(
-    attemptId: string,
-    user: AuthUser,
-  ): Promise<PublishAttemptResponseDto> {
+  // Retry Failed Individual Attempt
+  async retryPublish(attemptId: string, user: AuthUser): Promise<PublishAttemptResponseDto> {
     const attempt = await this.prisma.richMenuPublishAttempt.findUnique({
       where: { id: attemptId },
-      include: { lineOfficialAccount: true },
     });
 
     if (!attempt) {
-      throw new NotFoundException(`Publish attempt '${attemptId}' not found`);
+      throw new NotFoundException(`Publish attempt with ID '${attemptId}' not found`);
     }
 
-    if (attempt.status !== RichMenuPublishStatus.FAILED) {
-      throw new BadRequestException(
-        `Cannot retry attempt with status '${attempt.status}'. Only FAILED attempts can be retried.`,
-      );
+    if (attempt.status !== RichMenuPublishStatus.FAILED && attempt.status !== RichMenuPublishStatus.SKIPPED) {
+      throw new BadRequestException(`Cannot retry attempt with status '${attempt.status}'. Only FAILED or SKIPPED attempts can be retried.`);
     }
 
-    // If an unlinked menu was created on LINE, attempt to clean it up first
-    if (attempt.lineRichMenuId && attempt.lineOfficialAccount.encryptedChannelAccessToken) {
-      try {
-        const token = this.encryption.decrypt(attempt.lineOfficialAccount.encryptedChannelAccessToken);
-        await this.publishAdapter.deleteRichMenu(token, attempt.lineRichMenuId);
-      } catch {
-        /* ignore delete cleanup error */
-      }
-    }
-
-    return this.publishCanary(
-      attempt.templateId,
-      { lineOfficialAccountId: attempt.lineOfficialAccountId },
-      user,
-    );
+    return this.publishOneStore({
+      templateId: attempt.templateId,
+      lineOfficialAccountId: attempt.lineOfficialAccountId,
+      actorUserId: user.id,
+      attemptId: attempt.id,
+      jobId: attempt.jobId || undefined,
+    });
   }
 
   async getPublishAttempts(templateId: string): Promise<PublishAttemptResponseDto[]> {
     const attempts = await this.prisma.richMenuPublishAttempt.findMany({
       where: { templateId },
+      orderBy: { createdAt: "desc" },
       include: {
         lineOfficialAccount: {
           include: { store: true },
         },
       },
-      orderBy: { createdAt: "desc" },
     });
 
-    return attempts.map((a) => ({
-      id: a.id,
-      templateId: a.templateId,
-      lineOfficialAccountId: a.lineOfficialAccountId,
-      lineOfficialAccountName: a.lineOfficialAccount.name,
-      storeName: a.lineOfficialAccount.store?.name,
-      status: a.status,
-      lineRichMenuId: a.lineRichMenuId,
-      previousDefaultRichMenuId: a.previousDefaultRichMenuId,
-      previousDefaultSource: a.previousDefaultSource,
-      errorStage: a.errorStage,
-      errorCode: a.errorCode,
-      errorMessage: a.errorMessage,
-      attemptNumber: a.attemptNumber,
-      startedAt: a.startedAt,
-      completedAt: a.completedAt,
-      createdAt: a.createdAt,
-      updatedAt: a.updatedAt,
-    }));
+    return attempts.map((a) => this.formatAttemptResponse(a, a.lineOfficialAccount.name, a.lineOfficialAccount.store?.name));
   }
 
   async getPublishAttempt(attemptId: string): Promise<PublishAttemptResponseDto> {
-    const a = await this.prisma.richMenuPublishAttempt.findUnique({
+    const attempt = await this.prisma.richMenuPublishAttempt.findUnique({
       where: { id: attemptId },
       include: {
         lineOfficialAccount: {
@@ -1368,28 +1623,59 @@ export class RichMenuService {
       },
     });
 
-    if (!a) {
-      throw new NotFoundException(`Publish attempt '${attemptId}' not found`);
+    if (!attempt) {
+      throw new NotFoundException(`Publish attempt with ID '${attemptId}' not found`);
     }
 
+    return this.formatAttemptResponse(attempt, attempt.lineOfficialAccount.name, attempt.lineOfficialAccount.store?.name);
+  }
+
+  private formatAttemptResponse(attempt: any, lineOfficialAccountName?: string, storeName?: string): PublishAttemptResponseDto {
     return {
-      id: a.id,
-      templateId: a.templateId,
-      lineOfficialAccountId: a.lineOfficialAccountId,
-      lineOfficialAccountName: a.lineOfficialAccount.name,
-      storeName: a.lineOfficialAccount.store?.name,
-      status: a.status,
-      lineRichMenuId: a.lineRichMenuId,
-      previousDefaultRichMenuId: a.previousDefaultRichMenuId,
-      previousDefaultSource: a.previousDefaultSource,
-      errorStage: a.errorStage,
-      errorCode: a.errorCode,
-      errorMessage: a.errorMessage,
-      attemptNumber: a.attemptNumber,
-      startedAt: a.startedAt,
-      completedAt: a.completedAt,
-      createdAt: a.createdAt,
-      updatedAt: a.updatedAt,
+      id: attempt.id,
+      jobId: attempt.jobId ?? null,
+      templateId: attempt.templateId,
+      templateVersion: attempt.templateVersion ?? 1,
+      lineOfficialAccountId: attempt.lineOfficialAccountId,
+      lineOfficialAccountName,
+      storeName,
+      status: attempt.status,
+      lineRichMenuId: attempt.lineRichMenuId,
+      previousDefaultRichMenuId: attempt.previousDefaultRichMenuId,
+      previousDefaultSource: attempt.previousDefaultSource,
+      errorStage: attempt.errorStage,
+      errorCode: attempt.errorCode,
+      errorMessage: attempt.errorMessage,
+      attemptNumber: attempt.attemptNumber,
+      startedAt: attempt.startedAt,
+      completedAt: attempt.completedAt,
+      createdAt: attempt.createdAt,
+      updatedAt: attempt.updatedAt,
+    };
+  }
+
+  private formatJobResponse(job: any): PublishJobResponseDto {
+    return {
+      id: job.id,
+      templateId: job.templateId,
+      templateVersion: job.templateVersion ?? 1,
+      status: job.status,
+      totalCount: job.totalCount,
+      pendingCount: job.pendingCount,
+      processingCount: job.processingCount,
+      publishedCount: job.publishedCount,
+      failedCount: job.failedCount,
+      skippedCount: job.skippedCount,
+      cancelledCount: job.cancelledCount,
+      createdByUserId: job.createdByUserId,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      cancelRequestedAt: job.cancelRequestedAt,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      attempts: job.attempts?.map((a: any) =>
+        this.formatAttemptResponse(a, a.lineOfficialAccount?.name, a.lineOfficialAccount?.store?.name),
+      ),
     };
   }
 }
