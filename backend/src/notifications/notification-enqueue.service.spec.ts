@@ -10,7 +10,7 @@ void test("inbound messages enqueue one pending notification per eligible store 
     user: { findMany: async (args: any) => { where = args.where; return [{ id: "staff-1" }, { id: "staff-2" }]; } },
     pushNotification: { createMany: async (args: any) => { createArgs = args; return { count: 2 }; } },
   };
-  const input = { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" };
+  const input = { storeId: "store-1", storeName: "OPPO CentralWorld", conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "  hello\nthere  ", sentAt: "2026-08-13T00:00:00.000Z" };
   const result = await new NotificationEnqueueService().enqueueInboundMessage(tx, input);
   assert.deepEqual(result, { count: 2 });
   assert.deepEqual(where, {
@@ -26,8 +26,8 @@ void test("inbound messages enqueue one pending notification per eligible store 
   });
   assert.equal(createArgs.skipDuplicates, true);
   assert.deepEqual(createArgs.data, [
-    { userId: "staff-1", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
-    { userId: "staff-2", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", messageType: "TEXT", preview: "hello", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
+    { userId: "staff-1", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", storeName: "OPPO CentralWorld", messageType: "TEXT", preview: "hello there", title: "Customer • OPPO CentralWorld", body: "hello there", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
+    { userId: "staff-2", conversationId: "conversation-1", messageId: "message-1", type: "INBOUND_MESSAGE", payload: { conversationId: "conversation-1", messageId: "message-1", customerName: "Customer", storeName: "OPPO CentralWorld", messageType: "TEXT", preview: "hello there", title: "Customer • OPPO CentralWorld", body: "hello there", sentAt: "2026-08-13T00:00:00.000Z" }, status: PushNotificationStatus.PENDING },
   ]);
 });
 

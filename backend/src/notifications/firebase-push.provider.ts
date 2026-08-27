@@ -4,10 +4,11 @@ import { getMessaging } from "firebase-admin/messaging";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { PrismaService } from "../prisma.service";
 import type { DispatchableNotification, PushNotificationProvider } from "./notification-dispatcher.service";
+import { buildNotificationContent, DEFAULT_CUSTOMER_NAME } from "./notification-content";
 
 type FcmResponse = { success: boolean; error?: { code?: string } };
 type FcmMessaging = { sendEachForMulticast(input: { tokens: string[]; data: Record<string, string>; notification: { title: string; body: string }; android: { priority: "high"; notification: { channelId: string; sound: "default" } } }): Promise<{ responses: FcmResponse[] }> };
-type NotificationPayload = { customerName?: unknown; messageType?: unknown; preview?: unknown; sentAt?: unknown };
+type NotificationPayload = { customerName?: unknown; storeName?: unknown; messageType?: unknown; preview?: unknown; title?: unknown; body?: unknown; sentAt?: unknown };
 const invalidTokenCodes = new Set(["messaging/invalid-registration-token", "messaging/registration-token-not-registered"]);
 export const ANDROID_NOTIFICATION_CHANNEL_ID = "line_oa_messages";
 
@@ -41,24 +42,36 @@ export class FirebasePushProvider implements PushNotificationProvider {
     this.logger.log(JSON.stringify({ event: "push_delivery_targeted", notificationId: notification.id, messageId: notification.messageId, targetedDeviceCount: usable.length }));
     if (usable.length === 0) throw new Error("No active device token is available");
     const payload = notification.payload as NotificationPayload;
-    const value = (input: unknown, fallback = "") => typeof input === "string" ? input : fallback;
+    const value = (input: unknown, fallback = "") => typeof input === "string" && input.trim() ? input : fallback;
+    const content = buildNotificationContent({
+      customerName: payload.customerName || DEFAULT_CUSTOMER_NAME,
+      storeName: payload.storeName,
+      messageType: payload.messageType,
+      preview: payload.preview,
+    });
+    // New outbox records persist title/body so every FCM delivery path uses
+    // the same content. The computed fallback keeps older pending records
+    // useful after this deployment.
+    const title = value(payload.title, content.title);
+    const body = value(payload.body, content.body);
     let response: { responses: FcmResponse[] };
     try {
       response = await this.client().sendEachForMulticast({
         tokens: usable.map((device) => device.token),
         data: {
-          title: "New customer message",
-          body: "Tap to open the conversation",
+          title,
+          body,
           channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
           conversationId: notification.conversationId,
           messageId: notification.messageId,
           notificationId: notification.id,
-          customerName: value(payload.customerName, "Customer"),
+          customerName: value(payload.customerName, DEFAULT_CUSTOMER_NAME),
+          ...(typeof payload.storeName === "string" && payload.storeName.trim() ? { storeName: payload.storeName.trim() } : {}),
           messageType: value(payload.messageType, "UNSUPPORTED"),
-          preview: value(payload.preview, "New customer message"),
+          preview: body,
           sentAt: value(payload.sentAt),
         },
-        notification: { title: "New customer message", body: "Tap to open the conversation" },
+        notification: { title, body },
         android: { priority: "high", notification: { channelId: ANDROID_NOTIFICATION_CHANNEL_ID, sound: "default" } },
       });
     } catch (error) {

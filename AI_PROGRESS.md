@@ -2201,6 +2201,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Bumped Android to `1.0.18+19` and updated the permanent-signing workflow gates. Signed workflow run `32961583276` passed package/version and permanent certificate verification; the signed artifact is being independently checked before publication.
 - Added the new APK, checksum-dependent frontend release entry, and additive AppRelease migration with the updater and push-notification changelog. Full Flutter/backend/frontend and Prisma gates remain required before the PR is opened.
 
+# Current task: Android notification content (2026-08-27)
+
+- Started `feat/android-notification-content` from latest `origin/main` `ff3b269f1672eb7607c28613ea0b9e1e1de673db`. Existing unrelated frontend edits remain uncommitted and untouched.
+- Audit found the webhook passed only `messagePlaceholder` to the notification outbox, omitted the store name, and the FCM provider hard-coded a generic title/body. Android foreground rebuilt a separate title/body, so foreground and background notifications could not share useful content.
+- Added a single backend notification-content formatter for customer/store title, normalized text, 160-character truncation, and image/video/sticker/file/audio/location/unsupported fallbacks. Persisted title/body in new outbox payloads and sent identical values in FCM `data` and `notification` fields. Android consumes those fields in foreground/local and retains localized fallback handling for older payloads.
+- Added TH/EN/ZH notification fallback labels and backend/Flutter regression coverage. Flutter analyze, affected Flutter tests, full backend tests (1328/1328), backend build, and changed-file ESLint pass. Android `./gradlew assembleDebug` and package verification pass; the Flutter wrapper is locally configured to JDK 25 and fails before Gradle plugin resolution, while direct Gradle with the repository JDK 17 succeeds.
+- Next action: run final full Flutter suite, review/commit only notification-content changes, push, open the PR, and wait for green CI without merging.
+
 # Current task: Reliable Android APK updater (2026-08-26)
 
 - Created `feat/android-reliable-apk-updater-fix` from the latest clean `main` at `e919290`. Replaced the silent `canLaunchUrl`-only path with an app-scoped APK download, streamed SHA-256 verification against `/app/version/android` metadata, visible progress/error states, single-flight duplicate protection, stale/failed temporary-file cleanup, download tracking after verified download, and a retryable installer-permission state.
