@@ -174,15 +174,28 @@ export class MediaStorageService implements MediaStorage {
       return;
     }
     if (driver !== "s3") throw new Error("MEDIA_STORAGE_DRIVER must be local, s3, or google-drive");
-    const required = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const;
-    const missing = required.filter((key) => !process.env[key]?.trim());
-    if (missing.length) throw new Error(`Missing S3 media storage variables: ${missing.join(", ")}`);
+    const clean = (val?: string) => val?.trim().replace(/^["']|["']$/g, "") || undefined;
+    const bucket = clean(process.env.S3_BUCKET);
+    const endpoint = clean(process.env.S3_ENDPOINT);
+    const region = clean(process.env.S3_REGION);
+    const accessKeyId = clean(process.env.S3_ACCESS_KEY_ID);
+    const secretAccessKey = clean(process.env.S3_SECRET_ACCESS_KEY);
+
+    if (!bucket || !region || !accessKeyId || !secretAccessKey) {
+      throw new Error("Missing S3 media storage variables: S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY");
+    }
+
     console.log("[MEDIA DEBUG] Initializing S3 storage", {
-      bucket: process.env.S3_BUCKET,
-      endpoint: process.env.S3_ENDPOINT,
-      region: process.env.S3_REGION,
+      bucket,
+      endpoint,
+      region,
     });
-    this.storage = new S3MediaStorage(process.env.S3_BUCKET!, { endpoint: process.env.S3_ENDPOINT?.trim() || undefined, region: process.env.S3_REGION!, accessKeyId: process.env.S3_ACCESS_KEY_ID!, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY! });
+    this.storage = new S3MediaStorage(bucket, {
+      endpoint,
+      region,
+      accessKeyId,
+      secretAccessKey,
+    });
   }
   put(objectKey: string, body: Buffer, contentType: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.put(objectKey, body, contentType); }
   get(fileId: string) { if (!this.storage) return Promise.reject(new Error("Media storage is disabled")); return this.storage.get(fileId); }
