@@ -1,6 +1,26 @@
 # AI progress
 
-## Current task: Make JPEG/PNG Rich Menu Uploads Reliable in Production (2026-08-27)
+## Current task: Wire Rich Menu Image Storage Correctly (2026-08-27)
+
+- **Root Cause Analysis**:
+  - `RichMenuService` constructor had `@Optional() @Inject("MediaStorageService") private readonly media?: MediaStorageService`.
+  - Because `MediaStorageService` was injected by string literal token `"MediaStorageService"` instead of class token `MediaStorageService` and marked `@Optional()`, NestJS failed to inject it, leaving `this.media` as `undefined` at runtime.
+  - Calling `POST /rich-menu/upload-image` hit `if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable")` resulting in HTTP 503.
+  - In addition, image URL generation previously constructed an ad-hoc `/api/media/...` route rather than reusing the canonical signed outbound media route `createMediaPublicUrl(objectKey)`.
+- **Resolution**:
+  - **Required DI Injection**: Changed `RichMenuService` constructor to inject `MediaStorageService` directly as a required dependency with `@Inject(MediaStorageService)`.
+  - **Canonical Public Outbound Media URL**: Replaced ad-hoc URL generation with `createMediaPublicUrl(objectKey)`, returning signed URLs (`/messages/media/public?key=...&expires=...&signature=...`).
+  - **Signed URL Refresh on Read**: Added `resolveTemplateImageUrl()` in `RichMenuService` to dynamically refresh signed URLs for stored templates during `listTemplates()`, `getTemplate()`, and `preview()`, while preserving legacy URLs.
+  - **Storage Put Error Handling**: Wrapped `this.media.put` in try/catch with safe diagnostic logging and clean localized error messages (`"ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่อีกครั้ง"`).
+  - **Comprehensive Regression Tests**: Added NestJS DI injection regression tests, module wiring assertions (`RichMenuModule` imports `MediaModule`, `MediaModule` exports `MediaStorageService`), public URL verification tests, and signed URL refresh tests.
+- **Verification & Test Results**:
+  - 1344 / 1344 backend tests passing (`npm test` in `backend/`).
+  - 439 / 439 frontend tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack build succeeded cleanly (`npm run build` in `frontend/`).
+  - Backend build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean.
+
+## Previous task: Make JPEG/PNG Rich Menu Uploads Reliable in Production (2026-08-27)
 
 - **Root Cause Analysis**:
   - Image upload previously depended solely on `sharp(file.buffer).metadata()` which threw exceptions on certain valid JPEG/PNG files in containerized environments, and converted all decoder exceptions into the generic `"Invalid or corrupt image file"`.

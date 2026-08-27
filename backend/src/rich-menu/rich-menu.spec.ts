@@ -11,6 +11,13 @@ import {
   RichMenuPublishNoopAdapter,
   detectImageMagicBytes,
 } from "./rich-menu.service";
+import { createMediaPublicUrl, verifyMediaPublicUrl } from "../media/media-public-url";
+import { MediaStorageService } from "../media/media-storage";
+import { MediaModule } from "../media/media.module";
+import { Test } from "@nestjs/testing";
+import { RichMenuModule } from "./rich-menu.module";
+import { PrismaModule } from "../prisma.module";
+import { PrismaService } from "../prisma.service";
 
 test("RichMenuCanvasPreset supports 12 LINE OA presets and legacy aliases", () => {
   const largePresets: RichMenuCanvasPreset[] = [
@@ -143,7 +150,7 @@ test("detectImageMagicBytes accurately identifies PNG, JPEG, and rejects other f
   assert.equal(detectImageMagicBytes(shortBytes), "unknown");
 });
 
-test("RichMenuService image parsing and upload validations", async () => {
+test("RichMenuService image parsing, storage put, and public URL generation", async () => {
   let putObjectKey = "";
   let putBodyLength = 0;
   let putContentType = "";
@@ -156,7 +163,7 @@ test("RichMenuService image parsing and upload validations", async () => {
       return { provider: "local", fileId: key, mimeType: contentType, size: body.length };
     },
     get: async () => ({ body: Buffer.from([]) }),
-  } as any;
+  } as unknown as MediaStorageService;
 
   const service = new RichMenuService({} as any, mockMedia);
   const mockUser = { id: "u1", email: "admin@oppo.com", displayName: "Admin", role: "ADMIN" } as any;
@@ -173,9 +180,17 @@ test("RichMenuService image parsing and upload validations", async () => {
   );
   assert.equal(resLarge.width, 2500);
   assert.equal(resLarge.height, 1686);
-  assert.match(resLarge.imageUrl, /line-media\/outbound\/rich-menu\/.*\.png/);
+  assert.match(resLarge.imageUrl, /\/messages\/media\/public\?key=line-media%2Foutbound%2Frich-menu%2F.*\.png/);
   assert.equal(putContentType, "image/png");
   assert.equal(putBodyLength, validLargePng.length);
+
+  // Validate the signed public URL using verifyMediaPublicUrl
+  const parsedUrl = new URL(resLarge.imageUrl);
+  const keyParam = parsedUrl.searchParams.get("key")!;
+  const expiresParam = parsedUrl.searchParams.get("expires")!;
+  const sigParam = parsedUrl.searchParams.get("signature")!;
+  assert.equal(keyParam, putObjectKey);
+  assert.equal(verifyMediaPublicUrl(keyParam, expiresParam, sigParam), true);
 
   // 2. Valid 1200x405 JPEG upload for Compact preset
   const validCompactJpg = await sharp({
@@ -189,7 +204,7 @@ test("RichMenuService image parsing and upload validations", async () => {
   );
   assert.equal(resCompact.width, 1200);
   assert.equal(resCompact.height, 405);
-  assert.match(resCompact.imageUrl, /line-media\/outbound\/rich-menu\/.*\.jpg/);
+  assert.match(resCompact.imageUrl, /\/messages\/media\/public\?key=line-media%2Foutbound%2Frich-menu%2F.*\.jpg/);
   assert.equal(putContentType, "image/jpeg");
 
   // 3. PNG disguised with .jpg filename succeeds as PNG based on magic bytes
@@ -198,7 +213,7 @@ test("RichMenuService image parsing and upload validations", async () => {
     mockUser,
   );
   assert.equal(resDisguised.width, 2500);
-  assert.match(resDisguised.imageUrl, /\.png$/);
+  assert.match(resDisguised.imageUrl, /key=line-media%2Foutbound%2Frich-menu%2F.*\.png/);
 
   // 4. WebP disguised as .png is rejected with clear localized error
   const webpBuffer = await sharp({
@@ -234,7 +249,6 @@ test("RichMenuService image parsing and upload validations", async () => {
   );
 
   // 8. Aspect ratio mismatch with selected template
-  // Large template with Compact aspect ratio (2500x843 on LARGE_6)
   const compactShapePng = await sharp({
     create: { width: 2500, height: 843, channels: 3, background: { r: 255, g: 255, b: 255 } },
   }).png().toBuffer();
@@ -242,4 +256,117 @@ test("RichMenuService image parsing and upload validations", async () => {
     () => service.uploadImage({ buffer: compactShapePng }, mockUser, "LARGE_6"),
     /รูปภาพไม่ตรงกับสัดส่วนของเทมเพลตที่เลือก/
   );
+
+  // 9. Storage put failure handling
+  const failingStorage = {
+    put: async () => {
+      throw new Error("S3 connection timeout");
+    },
+    get: async () => ({ body: Buffer.from([]) }),
+  } as unknown as MediaStorageService;
+
+  const failingService = new RichMenuService({} as any, failingStorage);
+  await assert.rejects(
+    () => failingService.uploadImage({ buffer: validLargePng }, mockUser),
+    /ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่อีกครั้ง/
+  );
+});
+
+test("RichMenuService refreshes signed URLs for saved templates on retrieval", async () => {
+  const testKey = "line-media/outbound/rich-menu/saved-image-123.png";
+  const oldUrl = createMediaPublicUrl(testKey, -100); // expired 100s ago
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findMany: async () => [
+        {
+          id: "t1",
+          name: "Template 1",
+          description: null,
+          status: "DRAFT",
+          canvasPreset: "LARGE_6",
+          width: 2500,
+          height: 1686,
+          chatBarText: "Menu",
+          imageUrl: oldUrl,
+          areasJson: [],
+          version: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          _count: { assignments: 0 },
+        },
+      ],
+      findUnique: async () => ({
+        id: "t1",
+        name: "Template 1",
+        description: null,
+        status: "DRAFT",
+        canvasPreset: "LARGE_6",
+        width: 2500,
+        height: 1686,
+        chatBarText: "Menu",
+        imageUrl: oldUrl,
+        areasJson: [],
+        version: 1,
+        assignments: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any);
+
+  // listTemplates refreshes imageUrl
+  const list = await service.listTemplates();
+  assert.equal(list.length, 1);
+  const listUrl = new URL(list[0].imageUrl!);
+  const listKey = listUrl.searchParams.get("key")!;
+  const listExp = listUrl.searchParams.get("expires")!;
+  const listSig = listUrl.searchParams.get("signature")!;
+  assert.equal(listKey, testKey);
+  assert.equal(verifyMediaPublicUrl(listKey, listExp, listSig), true);
+
+  // getTemplate refreshes imageUrl
+  const template = await service.getTemplate("t1");
+  const getUrl = new URL(template.imageUrl!);
+  const getKey = getUrl.searchParams.get("key")!;
+  const getExp = getUrl.searchParams.get("expires")!;
+  const getSig = getUrl.searchParams.get("signature")!;
+  assert.equal(getKey, testKey);
+  assert.equal(verifyMediaPublicUrl(getKey, getExp, getSig), true);
+});
+
+test("NestJS DI regression test: RichMenuService resolves with required MediaStorageService", async () => {
+  const moduleRef = await Test.createTestingModule({
+    providers: [
+      RichMenuService,
+      MediaStorageService,
+      {
+        provide: PrismaService,
+        useValue: {},
+      },
+    ],
+  }).compile();
+
+  const richMenuService = moduleRef.get(RichMenuService);
+  assert.ok(richMenuService, "RichMenuService must resolve from DI container");
+
+  const mediaService = moduleRef.get(MediaStorageService);
+  assert.ok(mediaService, "MediaStorageService must resolve from container");
+
+  const injectedMedia = (richMenuService as any).media;
+  assert.ok(injectedMedia, "MediaStorageService must be non-null and injected into RichMenuService");
+  assert.equal(injectedMedia instanceof MediaStorageService, true);
+});
+
+test("Module wiring test: RichMenuModule imports MediaModule and exports RichMenuService", () => {
+  const richMenuImports = Reflect.getMetadata("imports", RichMenuModule);
+  assert.ok(richMenuImports.includes(MediaModule), "RichMenuModule must import MediaModule");
+
+  const richMenuExports = Reflect.getMetadata("exports", RichMenuModule);
+  assert.ok(richMenuExports.includes(RichMenuService), "RichMenuModule must export RichMenuService");
+
+  const mediaExports = Reflect.getMetadata("exports", MediaModule);
+  assert.ok(mediaExports.includes(MediaStorageService), "MediaModule must export MediaStorageService");
 });

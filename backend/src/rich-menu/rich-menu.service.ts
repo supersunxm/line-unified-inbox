@@ -13,6 +13,7 @@ import { imageSize } from "image-size";
 import sharp from "sharp";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "../media/media-storage";
+import { createMediaPublicUrl, extractMediaObjectKey } from "../media/media-public-url";
 import { AuthUser } from "../auth/auth.guard";
 import {
   extractTemplateVariables,
@@ -91,10 +92,23 @@ export class RichMenuService {
   private readonly logger = new Logger(RichMenuService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    @Optional() @Inject("MediaStorageService") private readonly media?: MediaStorageService,
-    @Optional() @Inject("RichMenuPublishService") private readonly publishAdapter: IRichMenuPublishService = new RichMenuPublishNoopAdapter(),
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(MediaStorageService) private readonly media: MediaStorageService,
+    @Optional() @Inject("IRichMenuPublishService") private readonly publishAdapter: IRichMenuPublishService = new RichMenuPublishNoopAdapter(),
   ) {}
+
+  private resolveTemplateImageUrl(imageUrl: string | null): string | null {
+    if (!imageUrl) return null;
+    const objectKey = extractMediaObjectKey(imageUrl);
+    if (objectKey) {
+      try {
+        return createMediaPublicUrl(objectKey);
+      } catch (err) {
+        this.logger.warn(`Failed to refresh signed URL for objectKey '${objectKey}': ${err}`);
+      }
+    }
+    return imageUrl;
+  }
 
   async listTemplates() {
     const templates = await this.prisma.richMenuTemplate.findMany({
@@ -115,7 +129,7 @@ export class RichMenuService {
       width: t.width,
       height: t.height,
       chatBarText: t.chatBarText,
-      imageUrl: t.imageUrl,
+      imageUrl: this.resolveTemplateImageUrl(t.imageUrl),
       areas: (t.areasJson as unknown as RichMenuArea[]) || [],
       version: t.version,
       assignedStoresCount: t._count.assignments,
@@ -147,7 +161,7 @@ export class RichMenuService {
       width: template.width,
       height: template.height,
       chatBarText: template.chatBarText,
-      imageUrl: template.imageUrl,
+      imageUrl: this.resolveTemplateImageUrl(template.imageUrl),
       areas: (template.areasJson as unknown as RichMenuArea[]) || [],
       version: template.version,
       assignedLineOfficialAccountIds: template.assignments.map((a) => a.lineOfficialAccountId),
@@ -419,19 +433,26 @@ export class RichMenuService {
       }
     }
 
-    if (!this.media) {
-      throw new ServiceUnavailableException("Media storage is unavailable");
-    }
-
     const ext = format === "jpeg" ? "jpg" : "png";
     const mime = format === "jpeg" ? "image/jpeg" : "image/png";
     const fileId = randomUUID();
     const objectKey = `line-media/outbound/rich-menu/${fileId}.${ext}`;
 
-    await this.media.put(objectKey, file.buffer, mime);
+    try {
+      await this.media.put(objectKey, file.buffer, mime);
+    } catch (storageErr: any) {
+      this.logger.error(
+        `[RichMenu Image Storage Failure] ` +
+          JSON.stringify({
+            objectKey,
+            errorName: storageErr?.name || "StorageError",
+            errorMessage: storageErr?.message || "Failed to store image",
+          }),
+      );
+      throw new BadRequestException("ไม่สามารถบันทึกรูปภาพได้ กรุณาลองใหม่อีกครั้ง");
+    }
 
-    const publicBase = process.env.PUBLIC_WEBHOOK_BASE_URL?.replace(/\/+$/, "") || "";
-    const imageUrl = `${publicBase}/api/media/${objectKey}`;
+    const imageUrl = createMediaPublicUrl(objectKey);
 
     return {
       imageUrl,
@@ -560,7 +581,7 @@ export class RichMenuService {
         width: template.width,
         height: template.height,
         chatBarText: template.chatBarText,
-        imageUrl: template.imageUrl,
+        imageUrl: this.resolveTemplateImageUrl(template.imageUrl),
       },
       store: {
         lineOfficialAccountId: targetOa.id,

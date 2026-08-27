@@ -1,3 +1,10 @@
+# Rich Menu Media Storage DI & Outbound Public URL Architecture (2026-08-27)
+
+- **Required MediaStorageService Dependency**: `RichMenuService` requires `MediaStorageService` directly from `MediaModule` via NestJS DI container, avoiding silent `undefined` injections.
+- **Canonical Outbound Public Media Endpoint**: Image uploads produce URLs via `createMediaPublicUrl(objectKey)` referencing `/messages/media/public?key=...&expires=...&signature=...` which is authenticated via HMAC signature matching the media subsystem architecture.
+- **Dynamic Signed URL Refresh**: When reading templates (`listTemplates`, `getTemplate`, `preview`), `resolveTemplateImageUrl()` detects signed outbound URLs via `extractMediaObjectKey()` and issues refreshed signed URLs with renewed expiration, preventing stale or broken preview links while maintaining backward compatibility with plain image URLs.
+- **Graceful Storage Errors**: S3 put failures are caught, safely logged without credentials or file bytes, and converted to actionable localized error messages.
+
 # Rich Menu Image Upload Reliability & Signature Architecture (2026-08-27)
 
 - **Pure JavaScript Dimension Parsing (`image-size`)**: Switched primary image dimension extraction from Sharp native decoding to pure-JS `image-size`, eliminating container runtime decoding failures while retaining Sharp as a fallback.
