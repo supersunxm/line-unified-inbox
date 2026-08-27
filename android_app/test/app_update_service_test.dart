@@ -305,25 +305,25 @@ void main() {
     });
 
     testWidgets(
-        'installed v1.0.17 (build 18) detects v1.0.18 (build 19) and shows the production APK',
+        'installed v1.0.18 (build 19) detects v1.1.0 (build 20) and shows the production APK',
         (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final currentPackageInfo = PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'click.lineoppo.chat',
-        version: '1.0.17',
-        buildNumber: '18',
+        version: '1.0.18',
+        buildNumber: '19',
       );
 
       const latestUpdateInfo = AppUpdateInfo(
-        latestVersion: '1.0.18',
-        buildNumber: 19,
+        latestVersion: '1.1.0',
+        buildNumber: 20,
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
         apkUrl:
-            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.18-production.apk?sha=8a238d1a41cffc94ee2704f51e37c76362cd086f52bf64719077ed2271516a78',
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.0-production.apk?sha=9b4351e1a7b998ff63f2ac7acfd906d0e8324d432f41382ad773f627b77f2f98',
         apkSize: '59.5 MB',
         releaseNotes: [
           'ปรับปรุงระบบอัปเดตแอป ดาวน์โหลด ตรวจสอบ SHA-256 และเปิดตัวติดตั้งได้จากในแอป',
@@ -356,7 +356,7 @@ void main() {
 
       // Verify the current production release details.
       expect(find.text('New Version Available'), findsOneWidget);
-      expect(find.textContaining('1.0.18+19'), findsOneWidget);
+      expect(find.textContaining('1.1.0+20'), findsOneWidget);
       expect(find.text(latestUpdateInfo.releaseNotes[0]), findsOneWidget);
       expect(find.text(latestUpdateInfo.releaseNotes[1]), findsOneWidget);
       expect(find.text(latestUpdateInfo.releaseNotes[2]), findsOneWidget);
@@ -364,22 +364,21 @@ void main() {
       expect(find.text('Later'), findsOneWidget);
     });
 
-    testWidgets('installed v1.0.18 build 19 reports up to date',
-        (tester) async {
+    testWidgets('installed v1.1.0 build 20 reports up to date', (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
       final current = PackageInfo(
           appName: 'OPPO LINE OA Chat',
           packageName: 'click.lineoppo.chat',
-          version: '1.0.18',
-          buildNumber: '19');
+          version: '1.1.0',
+          buildNumber: '20');
       const latest = AppUpdateInfo(
-          latestVersion: '1.0.18',
-          buildNumber: 19,
+          latestVersion: '1.1.0',
+          buildNumber: 20,
           minimumSupportedVersion: '1.0.3',
           minimumSupportedBuildNumber: 4,
           forceUpdate: false,
           apkUrl:
-              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.18-production.apk?sha=8a238d1a41cffc94ee2704f51e37c76362cd086f52bf64719077ed2271516a78');
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.0-production.apk?sha=9b4351e1a7b998ff63f2ac7acfd906d0e8324d432f41382ad773f627b77f2f98');
       await tester.pumpWidget(MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -395,7 +394,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('You are using the latest version'),
           findsOneWidget);
-      expect(find.textContaining('1.0.18+19'), findsOneWidget);
+      expect(find.textContaining('1.1.0+20'), findsOneWidget);
       expect(find.text('New Version Available'), findsNothing);
     });
 
