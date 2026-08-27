@@ -749,7 +749,10 @@ export class RichMenuService {
         blockedCount++;
       }
 
-      const isSelected = assignedSet.has(oa.id) && readinessStatus === "READY";
+      // Assignment represents the Rich Menu currently managed by this system.
+      // Publish attempts are historical and must not be treated as current after Clear Default.
+      const hasCurrentAssignment = assignedSet.has(oa.id);
+      const isSelected = hasCurrentAssignment && readinessStatus === "READY";
       if (isSelected) {
         selectedCount++;
       }
@@ -764,7 +767,7 @@ export class RichMenuService {
       let publishedTemplateVersion: number | null = null;
       let isCurrentVersionPublished = false;
 
-      if (latestAttempt) {
+      if (latestAttempt && hasCurrentAssignment) {
         publishStatus = latestAttempt.status;
         publishedRichMenuId = latestAttempt.lineRichMenuId;
         lastPublishedAt = latestAttempt.status === RichMenuPublishStatus.PUBLISHED ? latestAttempt.completedAt || latestAttempt.updatedAt : null;
