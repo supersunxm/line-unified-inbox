@@ -34,6 +34,7 @@ import {
   StoreVariableContext,
 } from "../store-master/template-variable-resolver";
 import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";
+import { buildAutoResponsePostbackData } from "../auto-response/auto-response.utils";
 import {
   CreateRichMenuTemplateDto,
   generatePresetAreas,
@@ -530,6 +531,51 @@ export class RichMenuService {
           isTemplateBlocked = true;
           blockedReason = validationError;
         }
+      } else if (area.actionType === "POSTBACK_AUTO_RESPONSE") {
+        const ruleId =
+          area.autoResponseRuleId?.trim() ||
+          (area.actionData?.startsWith("oppo_ar:v1:")
+            ? area.actionData.slice("oppo_ar:v1:".length).trim()
+            : area.actionData?.trim());
+
+        const rule = ruleId
+          ? await this.prisma.autoResponseRule.findUnique({ where: { id: ruleId } })
+          : null;
+
+        if (!rule) {
+          isValid = false;
+          validationError = "Auto-response rule not found";
+          isTemplateBlocked = true;
+          blockedReason = "Auto-response rule not found";
+        } else if (rule.status !== "ACTIVE") {
+          isValid = false;
+          validationError = `Auto-response rule '${rule.name}' is ${rule.status.toLowerCase()}`;
+          isTemplateBlocked = true;
+          blockedReason = `Auto-response rule '${rule.name}' is not active`;
+        } else {
+          const ruleVars = extractTemplateVariables(rule.textTemplate);
+          ruleVars.forEach((v) => usedVariablesSet.add(v));
+          const resolvedRuleText = resolveTemplateVariables(rule.textTemplate, storeContext);
+          const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+          if (remainingMatches && remainingMatches.length > 0) {
+            isValid = false;
+            validationError = `Auto-response contains unresolved variables: ${remainingMatches.join(", ")}`;
+            isTemplateBlocked = true;
+            blockedReason = validationError;
+          }
+          const ruleNeedsMaps =
+            ruleVars.includes("store.googleMapsUrl") ||
+            ruleVars.includes("googleMapsUrl");
+          if (ruleNeedsMaps) {
+            const mapsReadiness = getStoreGoogleMapsReadiness(storeContext.googleMapsUrl);
+            if (!mapsReadiness.ready) {
+              isValid = false;
+              validationError = mapsReadiness.reason || "Missing Google Maps URL";
+              isTemplateBlocked = true;
+              blockedReason = mapsReadiness.reason;
+            }
+          }
+        }
       } else if (area.actionType === "MESSAGE") {
         if (!resolved.trim()) {
           isValid = false;
@@ -597,12 +643,48 @@ export class RichMenuService {
     const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
 
     const usedVariablesSet = new Set<string>();
+    const autoResponseRuleIds: string[] = [];
     for (const area of areas) {
-      const vars = extractTemplateVariables(area.actionData);
-      vars.forEach((v) => usedVariablesSet.add(v));
+      if (area.actionType === "POSTBACK_AUTO_RESPONSE") {
+        const rid =
+          area.autoResponseRuleId?.trim() ||
+          (area.actionData?.startsWith("oppo_ar:v1:")
+            ? area.actionData.slice("oppo_ar:v1:".length).trim()
+            : area.actionData?.trim());
+        if (rid) autoResponseRuleIds.push(rid);
+      } else {
+        const vars = extractTemplateVariables(area.actionData);
+        vars.forEach((v) => usedVariablesSet.add(v));
+      }
     }
+
+    const referencedRules =
+      autoResponseRuleIds.length > 0
+        ? await this.prisma.autoResponseRule.findMany({
+            where: { id: { in: autoResponseRuleIds } },
+          })
+        : [];
+    const ruleMap = new Map(referencedRules.map((r) => [r.id, r]));
+
+    let globalAutoResponseBlockReason: string | null = null;
+    for (const rid of autoResponseRuleIds) {
+      const rule = ruleMap.get(rid);
+      if (!rule) {
+        globalAutoResponseBlockReason = "Auto-response rule not found";
+        break;
+      }
+      if (rule.status !== "ACTIVE") {
+        globalAutoResponseBlockReason = `Auto-response '${rule.name}' is not active`;
+        break;
+      }
+      const ruleVars = extractTemplateVariables(rule.textTemplate);
+      ruleVars.forEach((v) => usedVariablesSet.add(v));
+    }
+
     const usedVariables = Array.from(usedVariablesSet);
-    const requiresGoogleMaps = usedVariables.includes("store.googleMapsUrl") || usedVariables.includes("googleMapsUrl");
+    const requiresGoogleMaps =
+      usedVariables.includes("store.googleMapsUrl") ||
+      usedVariables.includes("googleMapsUrl");
 
     const storeOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
@@ -632,7 +714,10 @@ export class RichMenuService {
       let readinessStatus: "READY" | "BLOCKED" = "READY";
       let readinessReason: string | null = null;
 
-      if (requiresGoogleMaps) {
+      if (globalAutoResponseBlockReason) {
+        readinessStatus = "BLOCKED";
+        readinessReason = globalAutoResponseBlockReason;
+      } else if (requiresGoogleMaps) {
         const mapsReadiness = getStoreGoogleMapsReadiness(mapsUrl);
         if (mapsReadiness.status === "MISSING") {
           readinessStatus = "BLOCKED";
@@ -776,7 +861,7 @@ export class RichMenuService {
       return this.recordSkippedAttempt(params, "Target LINE OA is not linked to a store");
     }
 
-    let assignment = template.assignments[0];
+    let assignment = template.assignments?.[0];
     if (!assignment) {
       assignment = await this.prisma.richMenuStoreAssignment.upsert({
         where: {
@@ -801,13 +886,63 @@ export class RichMenuService {
 
     const resolvedAreas: Array<{
       bounds: { x: number; y: number; width: number; height: number };
-      actionType: "URI" | "MESSAGE";
+      actionType: "URI" | "MESSAGE" | "POSTBACK_AUTO_RESPONSE";
       rawActionData: string;
       resolvedActionData: string;
       label?: string;
     }> = [];
 
     for (const area of areas) {
+      if (area.actionType === "POSTBACK_AUTO_RESPONSE") {
+        const ruleId =
+          area.autoResponseRuleId?.trim() ||
+          (area.actionData?.startsWith("oppo_ar:v1:")
+            ? area.actionData.slice("oppo_ar:v1:".length).trim()
+            : area.actionData?.trim());
+
+        if (!ruleId) {
+          return this.recordSkippedAttempt(params, "Cannot publish: Area is missing Auto-response rule selection");
+        }
+
+        const rule = await this.prisma.autoResponseRule.findUnique({
+          where: { id: ruleId },
+        });
+
+        if (!rule) {
+          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${ruleId}' was not found`);
+        }
+
+        if (rule.status !== "ACTIVE") {
+          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' is not active (${rule.status.toLowerCase()})`);
+        }
+
+        const ruleVars = extractTemplateVariables(rule.textTemplate);
+        const resolvedRuleText = resolveTemplateVariables(rule.textTemplate, storeContext);
+        const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+        if (remainingMatches && remainingMatches.length > 0) {
+          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' contains unresolved variables: ${remainingMatches.join(", ")}`);
+        }
+
+        const ruleNeedsMaps =
+          ruleVars.includes("store.googleMapsUrl") ||
+          ruleVars.includes("googleMapsUrl");
+
+        if (ruleNeedsMaps) {
+          if (!storeMaster?.googleMapsUrl || !isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
+            return this.recordSkippedAttempt(params, `Cannot publish: Store '${targetOa.store?.name}' is missing a valid Google Maps URL required by Auto-response '${rule.name}'`);
+          }
+        }
+
+        resolvedAreas.push({
+          bounds: area.bounds,
+          actionType: "POSTBACK_AUTO_RESPONSE",
+          rawActionData: area.actionData,
+          resolvedActionData: buildAutoResponsePostbackData(rule.id),
+          label: area.label?.trim() || undefined,
+        });
+        continue;
+      }
+
       const resolved = resolveTemplateVariables(area.actionData, storeContext);
       if (area.actionType === "URI") {
         const containsMapsVar = area.actionData.includes("{{store.googleMapsUrl}}") || area.actionData.includes("{{googleMapsUrl}}");
@@ -853,6 +988,12 @@ export class RichMenuService {
                 type: "uri",
                 label: a.label?.slice(0, 20),
                 uri: a.resolvedActionData,
+              }
+            : a.actionType === "POSTBACK_AUTO_RESPONSE"
+            ? {
+                type: "postback",
+                label: a.label?.slice(0, 20),
+                data: a.resolvedActionData,
               }
             : {
                 type: "message",

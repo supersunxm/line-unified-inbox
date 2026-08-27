@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type {
+  AutoResponseRule,
   RichMenuArea,
   RichMenuCanvasPreset,
   RichMenuPreviewResponse,
@@ -227,11 +228,18 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [rollbackAttemptId, setRollbackAttemptId] = useState<string | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
 
-  // Load Capabilities
+  // Auto-response rules state
+  const [autoResponseRules, setAutoResponseRules] = useState<AutoResponseRule[]>([]);
+
+  // Load Capabilities & Auto-response rules
   const loadCapabilities = async () => {
     try {
-      const caps = await api.getRichMenuCapabilities();
-      setCapabilities(caps);
+      const [caps, arRules] = await Promise.all([
+        api.getRichMenuCapabilities().catch(() => null),
+        api.listAutoResponses().catch(() => []),
+      ]);
+      if (caps) setCapabilities(caps);
+      setAutoResponseRules(arRules);
     } catch {
       /* ignore */
     }
@@ -1237,84 +1245,184 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                             <label className="text-gray-500 text-[11px] font-medium">{t.actionType}:</label>
                             <select
                               value={area.actionType}
-                              onChange={(e) => updateArea(area.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
+                              onChange={(e) => {
+                                const newType = e.target.value as "URI" | "MESSAGE" | "POSTBACK_AUTO_RESPONSE";
+                                if (newType === "POSTBACK_AUTO_RESPONSE") {
+                                  const firstRule = autoResponseRules[0];
+                                  updateArea(area.id, {
+                                    actionType: "POSTBACK_AUTO_RESPONSE",
+                                    autoResponseRuleId: firstRule?.id || "",
+                                    actionData: firstRule?.id || "",
+                                    autoResponseRuleName: firstRule?.name || "",
+                                  });
+                                } else {
+                                  updateArea(area.id, {
+                                    actionType: newType,
+                                    autoResponseRuleId: undefined,
+                                    autoResponseRuleName: undefined,
+                                  });
+                                }
+                              }}
                               className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:border-[#06C755] focus:outline-none"
                             >
                               <option value="URI">{t.actionTypeUri}</option>
                               <option value="MESSAGE">{t.actionTypeMessage}</option>
+                              <option value="POSTBACK_AUTO_RESPONSE">{t.actionTypePostbackAutoResponse}</option>
                             </select>
                           </div>
                         </div>
 
-                        {/* Action Value Input with Variable Insertion */}
-                        <div className="space-y-2 text-xs">
-                          <div className="flex items-center justify-between">
-                            <label className="font-bold text-gray-700 dark:text-gray-300">
-                              {area.actionType === "URI" ? t.url : t.message} <span className="text-rose-500">*</span>
-                            </label>
-
-                            {/* Variable Injection Dropdown */}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setVariableDropdownOpenFor(
-                                    variableDropdownOpenFor === area.id ? null : area.id,
-                                  );
-                                }}
+                        {/* Action Value Input / Auto-response Rule Picker */}
+                        {area.actionType === "POSTBACK_AUTO_RESPONSE" ? (
+                          <div className="space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <label className="font-bold text-gray-700 dark:text-gray-300">
+                                {t.selectAutoResponseRule} <span className="text-rose-500">*</span>
+                              </label>
+                              <a
+                                href="/auto-responses"
+                                target="_blank"
+                                rel="noreferrer"
                                 className="text-[11px] font-semibold text-[#06C755] hover:underline"
                               >
-                                {t.insertVariable}
-                              </button>
-
-                              {variableDropdownOpenFor === area.id && (
-                                <div className="absolute right-0 top-full mt-1 z-30 w-64 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg text-xs">
-                                  <button
-                                    type="button"
-                                    onClick={() => insertToken(area.id, "{{store.googleMapsUrl}}")}
-                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col"
-                                  >
-                                    <span className="font-bold">{t.varGoogleMapsUrl}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.googleMapsUrl}}"}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => insertToken(area.id, "{{store.storeName}}")}
-                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
-                                  >
-                                    <span className="font-bold">{t.varStoreName}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.storeName}}"}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => insertToken(area.id, "{{store.lineUrl}}")}
-                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
-                                  >
-                                    <span className="font-bold">{t.varLineUrl}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.lineUrl}}"}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => insertToken(area.id, "{{store.tiktokUrl}}")}
-                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
-                                  >
-                                    <span className="font-bold">{t.varTiktokUrl}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.tiktokUrl}}"}</span>
-                                  </button>
-                                </div>
-                              )}
+                                {t.manageAutoResponses}
+                              </a>
                             </div>
-                          </div>
 
-                          <input
-                            type="text"
-                            value={area.actionData}
-                            onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
-                            placeholder={area.actionType === "URI" ? t.urlPlaceholder : t.messagePlaceholder}
-                            className="h-8 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
-                          />
-                        </div>
+                            <select
+                              value={area.autoResponseRuleId || area.actionData || ""}
+                              onChange={(e) => {
+                                const sel = autoResponseRules.find((r) => r.id === e.target.value);
+                                updateArea(area.id, {
+                                  actionType: "POSTBACK_AUTO_RESPONSE",
+                                  autoResponseRuleId: e.target.value,
+                                  actionData: e.target.value,
+                                  autoResponseRuleName: sel?.name || "",
+                                });
+                              }}
+                              className="h-8 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+                            >
+                              <option value="">-- {t.selectAutoResponseRule} --</option>
+                              {autoResponseRules.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name} (v{r.version}) - {r.status}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Rule Status & Live Preview */}
+                            {(() => {
+                              const ruleId = area.autoResponseRuleId || area.actionData;
+                              const rule = autoResponseRules.find((r) => r.id === ruleId);
+                              if (!rule) {
+                                return (
+                                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                                    ⚠ {t.noAutoResponseSelected}
+                                  </p>
+                                );
+                              }
+                              const isInactive = rule.status !== "ACTIVE";
+                              return (
+                                <div className="mt-1 space-y-1.5 rounded bg-gray-50 dark:bg-gray-900/40 p-2.5 border border-gray-100 dark:border-gray-800">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="font-semibold text-gray-500">{t.autoResponseRuleStatus}:</span>
+                                    <span
+                                      className={`font-bold ${
+                                        rule.status === "ACTIVE"
+                                          ? "text-emerald-600"
+                                          : "text-amber-600"
+                                      }`}
+                                    >
+                                      {rule.status}
+                                    </span>
+                                  </div>
+                                  {isInactive && (
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                                      ⚠ ข้อความนี้ยังไม่ได้เปิดใช้งาน (ปุ่มนี้จะไม่ตอบกลับจนกว่าจะเปิดใช้งาน)
+                                    </p>
+                                  )}
+                                  <div>
+                                    <p className="text-[10px] text-gray-500 font-semibold">
+                                      {t.autoResponsePreviewTitle}
+                                    </p>
+                                    <p className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                                      {rule.textTemplate}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <div className="space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <label className="font-bold text-gray-700 dark:text-gray-300">
+                                {area.actionType === "URI" ? t.url : t.message} <span className="text-rose-500">*</span>
+                              </label>
+
+                              {/* Variable Injection Dropdown */}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVariableDropdownOpenFor(
+                                      variableDropdownOpenFor === area.id ? null : area.id,
+                                    );
+                                  }}
+                                  className="text-[11px] font-semibold text-[#06C755] hover:underline"
+                                >
+                                  {t.insertVariable}
+                                </button>
+
+                                {variableDropdownOpenFor === area.id && (
+                                  <div className="absolute right-0 top-full mt-1 z-30 w-64 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => insertToken(area.id, "{{store.googleMapsUrl}}")}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col"
+                                    >
+                                      <span className="font-bold">{t.varGoogleMapsUrl}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{"{{store.googleMapsUrl}}"}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => insertToken(area.id, "{{store.storeName}}")}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                    >
+                                      <span className="font-bold">{t.varStoreName}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{"{{store.storeName}}"}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => insertToken(area.id, "{{store.lineUrl}}")}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                    >
+                                      <span className="font-bold">{t.varLineUrl}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{"{{store.lineUrl}}"}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => insertToken(area.id, "{{store.tiktokUrl}}")}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                    >
+                                      <span className="font-bold">{t.varTiktokUrl}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{"{{store.tiktokUrl}}"}</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={area.actionData}
+                              onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
+                              placeholder={area.actionType === "URI" ? t.urlPlaceholder : t.messagePlaceholder}
+                              className="h-8 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
+                            />
+                          </div>
+                        )}
 
                         {/* Live Resolution Preview */}
                         {isActive && (

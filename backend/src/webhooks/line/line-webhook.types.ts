@@ -13,6 +13,11 @@ export type LineMessage =
   | (LineMessageBase & { type: "location"; title?: string; address?: string; latitude?: number; longitude?: number })
   | LineMessageBase;
 
+export type LinePostback = {
+  data: string;
+  params?: Record<string, any>;
+};
+
 type LineEventBase = {
   type: string;
   timestamp: number;
@@ -25,6 +30,7 @@ type LineEventBase = {
 export type LineWebhookEvent =
   | (LineEventBase & { type: "message"; message: LineMessage })
   | (LineEventBase & { type: "follow" | "unfollow" })
+  | (LineEventBase & { type: "postback"; postback: LinePostback })
   | LineEventBase;
 
 export type LineWebhookBody = {

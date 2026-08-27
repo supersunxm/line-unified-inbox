@@ -51,6 +51,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     "mass-messages": ["ส่งข้อความ", "Mass Message", "群发消息"],
     coupons: ["คูปอง", "Coupons", "优惠券"],
     "rich-menus": ["จัดการ Rich Menu", "Rich Menu Manager", "Rich Menu 管理"],
+    "auto-responses": ["ข้อความตอบกลับอัตโนมัติ", "Auto-response", "自动回复"],
   };
   const index = language === "th" ? 0 : language === "zh" ? 2 : 1;
   return labels[section][index];

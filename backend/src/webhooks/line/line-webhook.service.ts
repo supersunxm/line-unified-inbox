@@ -12,6 +12,8 @@ import { getFriendAttributionHashSecret, hashLineUserId } from "../../friend-sou
 import { NotificationEnqueueService } from "../../notifications/notification-enqueue.service";
 import { RealtimeEventService } from "../../realtime/realtime-event.service";
 
+import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";
+
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
 };
@@ -28,7 +30,17 @@ export type LineCredentialResolution = {
 @Injectable()
 export class LineWebhookService {
   private readonly logger = new Logger(LineWebhookService.name);
-  constructor(private readonly prisma: PrismaService, private readonly config: LineWebhookConfig, private readonly encryption: CredentialEncryptionService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly images: LineImageService, private readonly notifications?: NotificationEnqueueService, private readonly realtime?: RealtimeEventService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: LineWebhookConfig,
+    private readonly encryption: CredentialEncryptionService,
+    private readonly classification: ClassificationService,
+    private readonly profiles: LineProfileService,
+    private readonly images: LineImageService,
+    private readonly notifications?: NotificationEnqueueService,
+    private readonly realtime?: RealtimeEventService,
+    private readonly autoResponseExecution?: AutoResponseExecutionService,
+  ) {}
 
   async accept(payload: LineWebhookBody, resolvedOaId: string) {
     const results: boolean[] = [];
@@ -69,6 +81,7 @@ export class LineWebhookService {
       if (event.type === "follow") await this.processFollow(event, resolvedOaId);
       else if (event.type === "unfollow") { /* Historical data is intentionally retained. */ }
       else if (event.type === "message" && "message" in event) await this.processMessage(destination, event, event.message, resolvedOaId);
+      else if (event.type === "postback" && "postback" in event) await this.processPostback(event as any, resolvedOaId);
       else {
         await this.finish(externalId, "IGNORED");
         this.logger.warn(`Unsupported LINE event ignored: ${externalId} (${event.type})`); return true;
@@ -82,6 +95,19 @@ export class LineWebhookService {
       this.logger.warn(`LINE event failed: ${externalId} (${event.type}) destination=${destination ?? "none"}`);
       return false;
     }
+  }
+
+  private async processPostback(
+    event: LineWebhookEvent & { type: "postback"; postback: { data: string } },
+    resolvedOaId: string,
+  ) {
+    if (!this.autoResponseExecution) return;
+    await this.autoResponseExecution.handleWebhookPostback({
+      postbackData: event.postback?.data,
+      lineOfficialAccountId: resolvedOaId,
+      replyToken: event.replyToken,
+      webhookEventId: event.webhookEventId,
+    });
   }
 
   private finish(externalWebhookEventId: string, processingStatus: WebhookProcessingStatus, errorMessage?: string) {

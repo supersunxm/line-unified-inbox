@@ -26,13 +26,15 @@ export type RichMenuBounds = {
   height: number;
 };
 
-export type RichMenuActionType = "URI" | "MESSAGE";
+export type RichMenuActionType = "URI" | "MESSAGE" | "POSTBACK_AUTO_RESPONSE";
 
 export type RichMenuArea = {
   id: string;
   bounds: RichMenuBounds;
   actionType: RichMenuActionType;
   actionData: string;
+  autoResponseRuleId?: string | null;
+  autoResponseRuleName?: string | null;
   label?: string | null;
 };
 
@@ -94,6 +96,11 @@ export type LineRichMenuAreaPayload = {
         type: "message";
         label?: string;
         text: string;
+      }
+    | {
+        type: "postback";
+        label?: string;
+        data: string;
       };
 };
 
@@ -447,11 +454,27 @@ export function validateRichMenuAreas(
     if (y + height > canvasHeight) {
       errors.push(`${prefix}: vertical bounds exceed canvas height (${y + height} > ${canvasHeight}).`);
     }
-    if (!area.actionType || (area.actionType !== "URI" && area.actionType !== "MESSAGE")) {
-      errors.push(`${prefix}: actionType must be 'URI' or 'MESSAGE'.`);
+    if (
+      !area.actionType ||
+      (area.actionType !== "URI" &&
+        area.actionType !== "MESSAGE" &&
+        area.actionType !== "POSTBACK_AUTO_RESPONSE")
+    ) {
+      errors.push(`${prefix}: actionType must be 'URI', 'MESSAGE', or 'POSTBACK_AUTO_RESPONSE'.`);
     }
-    if (!area.actionData || typeof area.actionData !== "string" || !area.actionData.trim()) {
-      errors.push(`${prefix}: action value is required and cannot be empty.`);
+    if (area.actionType === "POSTBACK_AUTO_RESPONSE") {
+      const ruleId =
+        area.autoResponseRuleId?.trim() ||
+        (area.actionData?.startsWith("oppo_ar:v1:")
+          ? area.actionData.slice("oppo_ar:v1:".length).trim()
+          : area.actionData?.trim());
+      if (!ruleId) {
+        errors.push(`${prefix}: Auto-response rule selection is required.`);
+      }
+    } else {
+      if (!area.actionData || typeof area.actionData !== "string" || !area.actionData.trim()) {
+        errors.push(`${prefix}: action value is required and cannot be empty.`);
+      }
     }
   });
 

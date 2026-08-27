@@ -1,3 +1,12 @@
+# Auto-response Manager Phase 1 & Rich Menu POSTBACK Architecture (2026-08-27)
+
+- **Single Source of Truth in lineoppo.click**: Auto-response rules in `lineoppo.click` operate autonomously via LINE Webhook postback ingestion and Messaging API reply tokens. LINE OA Manager native auto-responses are untouched. To prevent duplicate replies, informational warning banners guide admins to disable overlapping rules in LINE OA Manager.
+- **Stable Versioned Postback Payload (`oppo_ar:v1:<ruleId>`)**: Postback payloads adhere to `oppo_ar:v1:<ruleId>` format. All other postback data structures are safely ignored without error, avoiding collisions with external services or LIFF interactions.
+- **Decoupled Rich Menu / Auto-response Versioning**: Rich Menus store the auto-response rule UUID (`autoResponseRuleId`), not the rule version. When an admin updates an active auto-response message, it updates dynamically on mobile immediately without requiring the Rich Menu to be republished.
+- **Zero Push Message Invariance for Auto-responses**: Customer replies strictly use the incoming event `replyToken` with `LineMessagingService.replyText`. Push messaging is strictly prohibited for standard auto-response flows.
+- **Fail-Safe Variable Resolution**: When an auto-response executes, store variables (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.lineOaLink}}`, `{{store.tiktokProfileUrl}}`) are dynamically evaluated against the Store Master record. If critical variables (e.g. Google Maps URL) are missing, execution records status `SKIPPED` with a clear reason in `AutoResponseExecution`.
+- **Idempotency Guard**: Webhook event IDs (`webhookEventId`) are indexed and checked before reply execution to prevent duplicate responses caused by network retries.
+
 # Rich Menu Single Checkbox UX & Automatic Store Assignment (2026-08-27)
 
 - **Single Checkbox Paradigm**: Replaced confusing dual-checkboxes (`กำหนดให้ร้าน` and `เลือกเผยแพร่`) with a single `[ ] เลือก` column in the Target Stores table. Users only decide which stores to publish to.

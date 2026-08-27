@@ -58,10 +58,11 @@ import { MessageTrafficService } from "./message-traffic.service";
 
 import { AppVersionModule } from "./app-version/app-version.module";
 import { RichMenuModule } from "./rich-menu/rich-menu.module";
+import { AutoResponseModule } from "./auto-response/auto-response.module";
 import { MainOaController } from "./main-oa.controller";
 
 @Module({
-  imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule],
+  imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
   providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })

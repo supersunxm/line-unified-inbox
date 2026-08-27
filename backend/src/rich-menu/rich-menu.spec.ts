@@ -1227,3 +1227,189 @@ test("RichMenuService.getPublishCapabilities: returns worker readiness status fr
   assert.equal(caps.workerReady, true);
   assert.equal(caps.lastWorkerHeartbeatAt, freshDate.toISOString());
 });
+
+test("RichMenuService: translates POSTBACK_AUTO_RESPONSE area to LINE postback payload with oppo_ar:v1:<id>", async () => {
+  let createdPayload: any = null;
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tmpl-postback",
+        name: "Postback Menu",
+        width: 2500,
+        height: 1686,
+        chatBarText: "Menu",
+        selected: true,
+        imageUrl: "https://lineoppo.click/messages/media/public?key=line-media%2Foutbound%2Frich-menu%2Fimg.jpg&expires=999&signature=sig",
+        status: "ACTIVE",
+        version: 1,
+        areasJson: [
+          {
+            id: "area-1",
+            bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+            actionType: "POSTBACK_AUTO_RESPONSE",
+            autoResponseRuleId: "rule-promo-123",
+          },
+        ],
+      }),
+    },
+    autoResponseRule: {
+      findUnique: async () => ({
+        id: "rule-promo-123",
+        name: "Promo Rule",
+        status: "ACTIVE",
+        textTemplate: "Hello from {{store.storeName}}",
+      }),
+      findMany: async () => [
+        {
+          id: "rule-promo-123",
+          name: "Promo Rule",
+          status: "ACTIVE",
+          textTemplate: "Hello from {{store.storeName}}",
+        },
+      ],
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-bangna",
+        name: "OPPO Central Bangna",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "enc-token",
+        store: {
+          id: "store-1",
+          name: "OBS Central Bangna",
+          storeMaster: {
+            externalStoreId: "865",
+            googleMapsUrl: "https://maps.app.goo.gl/bangna",
+          },
+        },
+      }),
+    },
+    richMenuStoreAssignment: {
+      findUnique: async () => ({ id: "asgn-1" }),
+      upsert: async () => ({ id: "asgn-1" }),
+    },
+    richMenuPublishAttempt: {
+      create: async () => ({ id: "att-1" }),
+      update: async () => ({ id: "att-1" }),
+      count: async () => 0,
+    },
+  } as any;
+
+  let currentDefaultMenuId: string | null = null;
+  const mockClient = {
+    validateRichMenu: async () => ({ valid: true }),
+    getDefaultRichMenu: async () => ({
+      source: currentDefaultMenuId ? "MESSAGING_API" : "NONE",
+      richMenuId: currentDefaultMenuId,
+    }),
+    createRichMenu: async (_token: string, payload: any) => {
+      createdPayload = payload;
+      return { richMenuId: "line-rm-123" };
+    },
+    uploadRichMenuImage: async () => {},
+    setDefaultRichMenu: async (_token: string, id: string) => {
+      currentDefaultMenuId = id;
+    },
+  } as any;
+
+  const mockMedia = {
+    get: async () => ({ body: Buffer.from("fake-png"), contentType: "image/png" }),
+  } as any;
+
+  const mockEncryption = {
+    decrypt: () => "decrypted-token",
+  } as any;
+
+  const mockAudit = { record: async () => {} } as any;
+  const service = new RichMenuService(mockPrisma, mockMedia, mockEncryption, mockClient, mockAudit);
+
+  await service.publishOneStore({
+    templateId: "tmpl-postback",
+    lineOfficialAccountId: "oa-bangna",
+    actorUserId: "admin-1",
+  });
+
+  assert.ok(createdPayload);
+  assert.equal(createdPayload.areas.length, 1);
+  assert.deepEqual(createdPayload.areas[0].action, {
+    type: "postback",
+    label: undefined,
+    data: "oppo_ar:v1:rule-promo-123",
+  });
+});
+
+test("RichMenuService: rejects publishing when referenced auto-response rule is INACTIVE", async () => {
+  let recordedSkippedReason = "";
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tmpl-postback",
+        name: "Postback Menu",
+        width: 2500,
+        height: 1686,
+        chatBarText: "Menu",
+        selected: true,
+        imageUrl: "https://example.com/image.png",
+        status: "ACTIVE",
+        version: 1,
+        areasJson: [
+          {
+            id: "area-1",
+            bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+            actionType: "POSTBACK_AUTO_RESPONSE",
+            autoResponseRuleId: "rule-inactive-456",
+          },
+        ],
+      }),
+    },
+    autoResponseRule: {
+      findUnique: async () => ({
+        id: "rule-inactive-456",
+        name: "Old Promo",
+        status: "INACTIVE",
+        textTemplate: "Inactive promo text",
+      }),
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-bangna",
+        name: "OPPO Central Bangna",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "enc-token",
+        store: {
+          id: "store-1",
+          name: "OBS Central Bangna",
+          storeMaster: { externalStoreId: "865", googleMapsUrl: "https://maps.app.goo.gl/bangna" },
+        },
+      }),
+    },
+    richMenuStoreAssignment: {
+      findUnique: async () => ({ id: "asgn-1" }),
+      upsert: async () => ({ id: "asgn-1" }),
+    },
+    richMenuPublishAttempt: {
+      create: async () => ({ id: "att-1" }),
+      update: async () => ({ id: "att-1" }),
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, {} as any, {} as any);
+  (service as any).recordSkippedAttempt = async (_params: any, reason: string) => {
+    recordedSkippedReason = reason;
+    return { status: "SKIPPED", reason };
+  };
+
+  await service.publishOneStore({
+    templateId: "tmpl-postback",
+    lineOfficialAccountId: "oa-bangna",
+    actorUserId: "admin-1",
+  });
+
+  assert.match(recordedSkippedReason, /Auto-response rule 'Old Promo' is not active/);
+});

@@ -551,4 +551,48 @@ export const api = {
       body: formData,
     });
   },
+  listAutoResponses: (params?: { status?: string; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
+    const qs = query.toString();
+    return request<import("@/types/api").AutoResponseRule[]>(`/auto-responses${qs ? `?${qs}` : ""}`);
+  },
+  getAutoResponse: (id: string) =>
+    request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`),
+  createAutoResponse: (data: { name: string; description?: string; textTemplate: string }) =>
+    request<import("@/types/api").AutoResponseRule>("/auto-responses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateAutoResponse: (
+    id: string,
+    data: Partial<{ name: string; description?: string; textTemplate: string; status: string }>,
+  ) =>
+    request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  activateAutoResponse: (id: string) =>
+    request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}/activate`, {
+      method: "POST",
+    }),
+  deactivateAutoResponse: (id: string) =>
+    request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}/deactivate`, {
+      method: "POST",
+    }),
+  archiveAutoResponse: (id: string) =>
+    request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+    }),
+  getAutoResponseUsage: (id: string) =>
+    request<import("@/types/api").AutoResponseUsageResult>(`/auto-responses/${encodeURIComponent(id)}/usage`),
+  previewAutoResponse: (id: string, body?: { lineOfficialAccountId?: string; storeId?: string }) =>
+    request<import("@/types/api").AutoResponsePreviewResult>(
+      `/auto-responses/${encodeURIComponent(id)}/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      },
+    ),
 };

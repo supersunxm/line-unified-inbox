@@ -637,6 +637,7 @@ model LineOfficialAccount {
   massMessageStoreDeliveries  MassMessageStoreDelivery[]
   richMenuAssignments         RichMenuStoreAssignment[]
   richMenuPublishAttempts     RichMenuPublishAttempt[]
+  autoResponseExecutions      AutoResponseExecution[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -1708,4 +1709,65 @@ model RichMenuWorkerHeartbeat {
   hostname        String?
   metadata        Json?
   updatedAt       DateTime @updatedAt
+}
+
+enum AutoResponseStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AutoResponseTriggerType {
+  POSTBACK
+}
+
+enum AutoResponseContentType {
+  TEXT
+}
+
+enum AutoResponseExecutionStatus {
+  SUCCESS
+  SKIPPED
+  FAILED
+}
+
+model AutoResponseRule {
+  id              String                  @id @default(uuid())
+  name            String
+  description     String?
+  status          AutoResponseStatus      @default(DRAFT)
+  triggerType     AutoResponseTriggerType @default(POSTBACK)
+  contentType     AutoResponseContentType @default(TEXT)
+  textTemplate    String
+  version         Int                     @default(1)
+  createdByUserId String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  lastActivatedAt DateTime?
+  archivedAt      DateTime?
+
+  executions      AutoResponseExecution[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model AutoResponseExecution {
+  id                    String                      @id @default(uuid())
+  ruleId                String
+  lineOfficialAccountId String
+  webhookEventId        String?
+  status                AutoResponseExecutionStatus
+  reason                String?
+  resolvedVariablesJson Json?
+  createdAt             DateTime                    @default(now())
+
+  rule                AutoResponseRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, createdAt])
+  @@index([lineOfficialAccountId, createdAt])
+  @@index([createdAt])
+  @@index([webhookEventId])
 }

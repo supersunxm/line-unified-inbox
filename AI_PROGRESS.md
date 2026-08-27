@@ -1,6 +1,46 @@
 # AI progress
 
-## Current task: Simplify Rich Menu Target Stores UX to Single Checkbox (2026-08-27)
+## Current task: Auto-response Manager Phase 1 + Rich Menu POSTBACK Integration (2026-08-27)
+
+- **Architecture & Technical Scope**:
+  - **Single Source of Truth in lineoppo.click**:
+    - Created dedicated Auto-response Rule management within `lineoppo.click` powered by LINE Webhook postback ingestion and Messaging API reply.
+    - Zero interference or scraping of LINE OA Manager native auto-responses.
+    - Prominent informational warning banner across UI in Thai, English, and Chinese: *"เพื่อป้องกันการตอบซ้ำ ควรปิดข้อความตอบกลับอัตโนมัติที่ทำงานซ้ำกันใน LINE Official Account Manager"*.
+  - **Stable Versioned Postback Payload & Protocol**:
+    - Centralized builder `buildAutoResponsePostbackData(ruleId)` producing stable namespaced payload: `oppo_ar:v1:<autoResponseRuleId>`.
+    - Strict parser `parseAutoResponsePostbackData(data)` which safely returns `{ isAutoResponse: false }` for any non-namespaced postbacks (e.g. third-party bots, LIFF postbacks).
+    - Rich Menu area action payload configured as `{"type": "postback", "data": "oppo_ar:v1:<ruleId>"}` without `displayText`.
+  - **Database Models & Non-destructive Migration**:
+    - Added `AutoResponseRule` model with status (`DRAFT`, `ACTIVE`, `INACTIVE`, `ARCHIVED`), `triggerType: POSTBACK`, `contentType: TEXT`, `textTemplate`, `version`, and audit relations.
+    - Added `AutoResponseExecution` model tracking `ruleId`, `lineOfficialAccountId`, `webhookEventId`, `status: SUCCESS | SKIPPED | FAILED`, `reason`, `resolvedVariablesJson`, and timestamps.
+    - Created migration `20260827210000_add_auto_response_manager/migration.sql`.
+  - **Decoupled Rich Menu / Auto-response Rule Versioning**:
+    - Rich Menu areas link directly to `AutoResponseRule.id` via `autoResponseRuleId`.
+    - Editing text on an `ACTIVE` rule increments rule version and takes effect **immediately** for all published store Rich Menus without requiring Rich Menu re-publishing.
+  - **Webhook Postback Execution Engine (`AutoResponseExecutionService`)**:
+    - Postback ingestion pipeline extracts `oppo_ar:v1:<ruleId>` from verified LINE webhook event.
+    - Enforces: OA exists, active, non-archived, accountType `STORE` (excludes `HEAD_OFFICE`).
+    - Enforces: Referenced `AutoResponseRule` exists and is `ACTIVE`.
+    - Resolves store variables (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.lineOaLink}}`, `{{store.tiktokProfileUrl}}`).
+    - Decrypts store channel access token securely server-side.
+    - Sends customer reply using `LineMessagingService.replyText` via `replyToken` (zero push message usage).
+    - Idempotency deduplication using `webhookEventId`.
+    - Comprehensive execution logging in `AutoResponseExecution`.
+  - **Admin Workspace (`/auto-responses`)**:
+    - ADMIN-guarded workspace with search, filter tabs (`ALL`, `ACTIVE`, `DRAFT`, `INACTIVE`, `ARCHIVED`), rule editor, store variable inserter `[ แทรกข้อมูลร้าน ▼ ]`, live store evaluation preview with readiness indicator, and linked Rich Menu usage viewer.
+  - **Rich Menu Action Dropdown Integration**:
+    - Added `POSTBACK_AUTO_RESPONSE` ("ตอบกลับอัตโนมัติ (Auto-response)") action type.
+    - Area editor includes Auto-response Rule selector, status badge, live template preview, and warning if inactive.
+    - Publishing engine evaluates rule readiness: blocks publishing if referenced rule is DRAFT/INACTIVE or store lacks required variables.
+- **Verification & Test Results**:
+  - 1377 / 1377 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 447 / 447 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly across 28 routes (`npm run build` in `frontend/`).
+  - NestJS & Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+
+## Previous task: Simplify Rich Menu Target Stores UX to Single Checkbox (2026-08-27)
 
 - **Architecture & UX Simplification**:
   - **Single Checkbox Selection Paradigm**:

@@ -1194,7 +1194,7 @@ export type RichMenuCanvasPreset =
   | "GRID_4"
   | "GRID_3"
   | "CUSTOM";
-export type RichMenuActionType = "URI" | "MESSAGE";
+export type RichMenuActionType = "URI" | "MESSAGE" | "POSTBACK_AUTO_RESPONSE";
 
 export type RichMenuArea = {
   id: string;
@@ -1206,7 +1206,67 @@ export type RichMenuArea = {
   };
   actionType: RichMenuActionType;
   actionData: string;
+  autoResponseRuleId?: string | null;
+  autoResponseRuleName?: string | null;
   label?: string | null;
+};
+
+export type AutoResponseStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
+export type AutoResponseTriggerType = "POSTBACK";
+export type AutoResponseContentType = "TEXT";
+
+export type AutoResponseRule = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: AutoResponseStatus;
+  triggerType: AutoResponseTriggerType;
+  contentType: AutoResponseContentType;
+  textTemplate: string;
+  version: number;
+  usedVariables: string[];
+  usageCount: number;
+  linkedRichMenus?: Array<{
+    templateId: string;
+    templateName: string;
+    templateStatus: string;
+    areaCount: number;
+  }>;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastActivatedAt: string | null;
+  archivedAt: string | null;
+};
+
+export type AutoResponsePreviewResult = {
+  ruleId: string;
+  ruleName: string;
+  store: {
+    lineOfficialAccountId: string;
+    lineOfficialAccountName: string;
+    storeId: string | null;
+    storeName: string;
+    externalStoreId: string | null;
+    googleMapsUrl: string | null;
+  };
+  usedVariables: string[];
+  resolvedText: string;
+  unresolvedVariables: string[];
+  ready: boolean;
+  reason: string | null;
+};
+
+export type AutoResponseUsageResult = {
+  ruleId: string;
+  ruleName: string;
+  usageCount: number;
+  linkedRichMenus: Array<{
+    templateId: string;
+    templateName: string;
+    templateStatus: string;
+    areaCount: number;
+  }>;
 };
 
 export type RichMenuTemplate = {
