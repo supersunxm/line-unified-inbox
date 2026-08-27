@@ -1,6 +1,38 @@
 # AI progress
 
-## Current task: Fix Signed Public Media Delivery for Auto-response Images (2026-08-27)
+## Current task: Rich Menu "No Rich Menu / Clear Default" Management (2026-08-27)
+
+- **Architecture & Technical Scope**:
+  - **Messaging API Default Clear (`DELETE /v2/bot/user/all/richmenu`)**:
+    - Implemented dedicated store Rich Menu clear action via `LineRichMenuClientService.clearDefaultRichMenu()`.
+    - Guarantees zero deletion of the underlying Rich Menu resource on LINE (`DELETE /v2/bot/richmenu/{id}` is not called), keeping publication history durable and auditable.
+    - Server-side decrypted channel access token executes the unlinking and immediately verifies `GET /v2/bot/user/all/richmenu` returns HTTP 404 (`source: "NONE"`).
+  - **Backend API & Service**:
+    - Added `POST /rich-menu/accounts/:lineOfficialAccountId/clear-default` and `GET /rich-menu/accounts/:lineOfficialAccountId/current-state` guarded by `Roles(UserRole.ADMIN)`.
+    - Validated target account type (`accountType === "STORE"` only; `HEAD_OFFICE` rejected with explicit error), active status (`archivedAt === null`), and valid credentials.
+    - Captures current default `richMenuId` and matched template name before unlinking.
+    - Cleans up `RichMenuStoreAssignment` for the store while strictly preserving `RichMenuPublishAttempt` rows.
+    - Records durable audit log with action `RICH_MENU_DEFAULT_CLEARED` and metadata.
+  - **Server-Derived Store Current State**:
+    - Added `RichMenuStoreCurrentState` resolving:
+      - `PUBLISHED`: Messaging API default matches a known published template.
+      - `NO_MESSAGING_API_DEFAULT`: LINE returns 404.
+      - `OTHER_OR_MANAGER`: LINE returns 403 or an unmapped foreign richMenuId.
+      - `UNKNOWN`: LINE OA unconfigured or network failure.
+  - **Frontend UX & Confirmation Modal**:
+    - Published stores show `✓ {templateName}` with action `[ หยุดแสดง ]` (`clearDefaultButton`).
+    - Stores with no Messaging API default show `— ไม่มี Rich Menu จากระบบนี้` (`noMessagingApiDefault`).
+    - Stores with external default show `มี Rich Menu จากแหล่งอื่น / OA Manager` (`otherOrManagerDefault`).
+    - Added confirmation modal (`clearDefaultModalTitle`, `clearDefaultModalDesc`) displaying store name, LINE OA name, template name, and explanatory notice: `หากบัญชีนี้มี Rich Menu ที่ตั้งไว้ใน LINE Official Account Manager เมนูดังกล่าวอาจกลับมาแสดงแทน`.
+    - Added comprehensive i18n support across Thai, English, and Chinese.
+- **Verification & Test Results**:
+  - 1,393 / 1,393 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 448 / 448 frontend unit tests passing (`npm test` in `frontend/`).
+  - NestJS/Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - Next.js Turbopack production build succeeded cleanly across 28 routes (`npm run build` in `frontend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+
+## Previous task: Fix Signed Public Media Delivery for Auto-response Images (2026-08-27)
 
 - **Root Cause Confirmed**:
   - `MediaController.publicMedia` previously enforced `if (!key.startsWith("line-media/outbound/") || !verifyMediaPublicUrl(key, expires, signature))` which rejected all signed Auto-response image URLs under `line-media/auto-response/`.

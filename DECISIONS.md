@@ -1,3 +1,10 @@
+# Rich Menu "No Rich Menu / Clear Default" Management Architecture (2026-08-27)
+
+- **Default Unlinking Invariance (`DELETE /v2/bot/user/all/richmenu`)**: Clearing a default rich menu executes `DELETE /v2/bot/user/all/richmenu` on LINE Messaging API. The underlying Rich Menu resource (`DELETE /v2/bot/richmenu/{richMenuId}`) is strictly preserved, keeping historical publish attempt tracking and rollback capabilities intact.
+- **Accurate System-Specific Copy**: Clearing the Messaging API default rich menu reveals any default rich menu configured natively in LINE Official Account Manager. The UI copy explicitly reflects this reality by stating "ไม่มี Rich Menu จากระบบนี้" / "No Rich Menu from this system" rather than absolute "No Rich Menu", with persistent helper text advising admins about LINE OA Manager precedence.
+- **Server-Side Token Decryption & Verification Loop**: Token decryption happens securely on the server; the token is never exposed to the client or logged. Unlinking is immediately verified with `GET /v2/bot/user/all/richmenu` expecting HTTP 404 (`source: "NONE"`).
+- **Durable Audit & Assignment Management**: Action `RICH_MENU_DEFAULT_CLEARED` is written to `AuditLog` with previous menu metadata, while `RichMenuStoreAssignment` is cleaned up to keep template assignment lists synchronized without mutating historical `RichMenuPublishAttempt` records.
+
 # Auto-response Manager Phase 2: Image + Multi-message Builder Architecture (2026-08-27)
 
 - **Ordered Multi-Message Sequence Normalization**: Auto-response rules represent an ordered sequence of 1 to 5 message blocks (`TEXT` and `IMAGE`). Legacy Phase 1 single TEXT rules are transparently normalized to `{ version: 1, messages: [...] }` without requiring database data rewriting.

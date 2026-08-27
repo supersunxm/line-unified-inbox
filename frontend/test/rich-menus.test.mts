@@ -186,11 +186,13 @@ test("RichMenusView enforces simplified single-checkbox store selection and unif
   assert.doesNotMatch(viewFile, /handleSaveAssignments/);
   assert.match(viewFile, /isPublishEligible/);
 
-  // Bulk publish and Rollback modals
+  // Bulk publish, Rollback, and Clear Default modals
   assert.match(viewFile, /isBulkPublishModalOpen/);
   assert.match(viewFile, /isRollbackModalOpen/);
+  assert.match(viewFile, /isClearDefaultModalOpen/);
   assert.match(viewFile, /handlePublishBulk/);
   assert.match(viewFile, /handleRollback/);
+  assert.match(viewFile, /handleClearDefault/);
   assert.match(viewFile, /handleRetrySingle/);
 
   // Active Job progress card
@@ -209,7 +211,8 @@ test("RichMenusView enforces simplified single-checkbox store selection and unif
   assert.match(viewFile, /statusFailed/);
   assert.match(viewFile, /statusSkipped/);
   assert.match(viewFile, /statusCancelled/);
-  assert.match(viewFile, /statusRolledBack/);
+  assert.match(viewFile, /noMessagingApiDefault/);
+  assert.match(viewFile, /clearDefaultButton/);
   assert.match(viewFile, /rollbackButton/);
   assert.match(viewFile, /retryPublishButton/);
 
@@ -227,6 +230,8 @@ test("Rich Menu i18n dictionary supports Phase 2A/2B publishing, rollback, and s
   assert.equal(RICH_MENU_I18N.th.bulkPublishModalTitle, "เผยแพร่ริชเมนูไปยังหลายร้านค้า?");
   assert.equal(RICH_MENU_I18N.th.confirmAndPublish, "ยืนยันและเผยแพร่");
   assert.equal(RICH_MENU_I18N.th.rollbackButton, "ย้อนกลับริชเมนู");
+  assert.equal(RICH_MENU_I18N.th.clearDefaultButton, "หยุดแสดง");
+  assert.equal(RICH_MENU_I18N.th.clearDefaultModalTitle, "หยุดแสดง Rich Menu?");
   assert.equal(RICH_MENU_I18N.th.statusPublished, "● เผยแพร่แล้ว");
   assert.equal(RICH_MENU_I18N.th.jobStatusQueued, "อยู่ในคิวรอประมวลผล");
   assert.equal(RICH_MENU_I18N.th.cancelJobButton, "ยกเลิกงานเผยแพร่");
@@ -237,6 +242,8 @@ test("Rich Menu i18n dictionary supports Phase 2A/2B publishing, rollback, and s
   assert.equal(RICH_MENU_I18N.en.bulkPublishModalTitle, "Publish Rich Menu to Multiple Stores?");
   assert.equal(RICH_MENU_I18N.en.confirmAndPublish, "Confirm and Publish");
   assert.equal(RICH_MENU_I18N.en.rollbackButton, "Rollback");
+  assert.equal(RICH_MENU_I18N.en.clearDefaultButton, "Stop displaying");
+  assert.equal(RICH_MENU_I18N.en.clearDefaultModalTitle, "Stop displaying Rich Menu?");
   assert.equal(RICH_MENU_I18N.en.statusPublished, "● Published");
   assert.equal(RICH_MENU_I18N.en.jobStatusQueued, "Queued in background");
   assert.equal(RICH_MENU_I18N.en.cancelJobButton, "Cancel Job");
@@ -248,6 +255,8 @@ test("Rich Menu i18n dictionary supports Phase 2A/2B publishing, rollback, and s
   assert.equal(RICH_MENU_I18N.zh.bulkPublishModalTitle, "发布丰富菜单至多家门店？");
   assert.equal(RICH_MENU_I18N.zh.confirmAndPublish, "确认并发布");
   assert.equal(RICH_MENU_I18N.zh.rollbackButton, "回滚菜单");
+  assert.equal(RICH_MENU_I18N.zh.clearDefaultButton, "停止展示");
+  assert.equal(RICH_MENU_I18N.zh.clearDefaultModalTitle, "停止展示 Rich Menu？");
   assert.equal(RICH_MENU_I18N.zh.statusPublished, "● 已发布");
   assert.equal(RICH_MENU_I18N.zh.jobStatusQueued, "排队中");
   assert.equal(RICH_MENU_I18N.zh.cancelJobButton, "取消任务");

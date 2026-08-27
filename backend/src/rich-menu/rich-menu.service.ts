@@ -39,6 +39,7 @@ import {
   normalizeAutoResponseMessages,
 } from "../auto-response/auto-response.utils";
 import {
+  ClearDefaultRichMenuResult,
   CreateRichMenuTemplateDto,
   generatePresetAreas,
   LineRichMenuPayload,
@@ -54,6 +55,7 @@ import {
   RichMenuPreviewResolvedArea,
   RichMenuPreviewResult,
   RichMenuReadinessSummary,
+  RichMenuStoreCurrentState,
   RichMenuStoreReadinessItem,
   SaveAssignmentsDto,
   UpdateRichMenuTemplateDto,
@@ -1888,5 +1890,229 @@ export class RichMenuService {
         this.formatAttemptResponse(a, a.lineOfficialAccount?.name, a.lineOfficialAccount?.store?.name),
       ),
     };
+  }
+
+  async clearDefaultRichMenu(
+    lineOfficialAccountId: string,
+    user: AuthUser,
+  ): Promise<ClearDefaultRichMenuResult> {
+    const targetOa = await this.prisma.lineOfficialAccount.findUnique({
+      where: { id: lineOfficialAccountId },
+      include: {
+        store: true,
+      },
+    });
+
+    if (!targetOa) {
+      throw new NotFoundException(`LINE OA with ID '${lineOfficialAccountId}' not found`);
+    }
+
+    if (targetOa.archivedAt) {
+      throw new BadRequestException("Cannot clear default rich menu for an archived LINE OA account");
+    }
+
+    if (targetOa.accountType !== "STORE") {
+      throw new BadRequestException("Only STORE LINE OA accounts support Rich Menu operations");
+    }
+
+    if (!targetOa.encryptedChannelAccessToken) {
+      throw new BadRequestException("Target LINE OA credentials not found");
+    }
+
+    let token: string;
+    try {
+      token = this.encryption.decrypt(targetOa.encryptedChannelAccessToken);
+    } catch {
+      throw new BadRequestException("Failed to decrypt LINE OA credentials");
+    }
+
+    // 1. Inspect current Messaging API default
+    const currentDefault = await this.publishAdapter.getDefaultRichMenu(token);
+    let previousTemplateId: string | null = null;
+    let previousTemplateName: string | null = null;
+
+    if (currentDefault.richMenuId) {
+      const matchedAttempt = await this.prisma.richMenuPublishAttempt.findFirst({
+        where: {
+          lineOfficialAccountId,
+          lineRichMenuId: currentDefault.richMenuId,
+        },
+        include: {
+          template: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (matchedAttempt?.template) {
+        previousTemplateId = matchedAttempt.template.id;
+        previousTemplateName = matchedAttempt.template.name;
+      }
+    }
+
+    // 2. Clear default on LINE (DELETE /v2/bot/user/all/richmenu)
+    await this.publishAdapter.clearDefaultRichMenu(token);
+
+    // 3. Verify on LINE (GET /v2/bot/user/all/richmenu => 404/NONE)
+    const verified = await this.publishAdapter.getDefaultRichMenu(token);
+
+    // 4. Remove active store assignment if any so templates reflect unassigned state
+    await this.prisma.richMenuStoreAssignment.deleteMany({
+      where: { lineOfficialAccountId },
+    });
+
+    const clearedAt = new Date().toISOString();
+
+    // 5. Audit Log
+    if (this.auditLog) {
+      await this.auditLog.record({
+        actorUserId: user.id,
+        action: "RICH_MENU_DEFAULT_CLEARED",
+        metadata: {
+          lineOfficialAccountId,
+          lineOfficialAccountName: targetOa.name,
+          storeName: targetOa.store?.name || targetOa.name,
+          previousRichMenuId: currentDefault.richMenuId,
+          previousSource: currentDefault.source,
+          previousTemplateId,
+          previousTemplateName,
+          clearedAt,
+          verificationResult: verified.source,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      lineOfficialAccountId,
+      lineOfficialAccountName: targetOa.name,
+      storeName: targetOa.store?.name || targetOa.name,
+      previousRichMenuId: currentDefault.richMenuId,
+      previousTemplateId,
+      previousTemplateName,
+      clearedAt,
+      state: "NO_MESSAGING_API_DEFAULT",
+      verified: verified.source === "NONE" || verified.richMenuId === null,
+    };
+  }
+
+  async getStoreCurrentState(
+    lineOfficialAccountId: string,
+  ): Promise<RichMenuStoreCurrentState> {
+    const targetOa = await this.prisma.lineOfficialAccount.findUnique({
+      where: { id: lineOfficialAccountId },
+      include: {
+        store: true,
+      },
+    });
+
+    if (!targetOa) {
+      throw new NotFoundException(`LINE OA with ID '${lineOfficialAccountId}' not found`);
+    }
+
+    if (targetOa.accountType !== "STORE" || !targetOa.encryptedChannelAccessToken || targetOa.archivedAt) {
+      return {
+        lineOfficialAccountId,
+        lineOfficialAccountName: targetOa.name,
+        storeName: targetOa.store?.name || targetOa.name,
+        state: "UNKNOWN",
+        richMenuId: null,
+        verifiedAt: new Date().toISOString(),
+      };
+    }
+
+    let token: string;
+    try {
+      token = this.encryption.decrypt(targetOa.encryptedChannelAccessToken);
+    } catch {
+      return {
+        lineOfficialAccountId,
+        lineOfficialAccountName: targetOa.name,
+        storeName: targetOa.store?.name || targetOa.name,
+        state: "UNKNOWN",
+        richMenuId: null,
+        verifiedAt: new Date().toISOString(),
+      };
+    }
+
+    try {
+      const current = await this.publishAdapter.getDefaultRichMenu(token);
+      const verifiedAt = new Date().toISOString();
+
+      if (current.source === "NONE") {
+        return {
+          lineOfficialAccountId,
+          lineOfficialAccountName: targetOa.name,
+          storeName: targetOa.store?.name || targetOa.name,
+          state: "NO_MESSAGING_API_DEFAULT",
+          richMenuId: null,
+          verifiedAt,
+        };
+      }
+
+      if (current.source === "OTHER_OR_MANAGER") {
+        return {
+          lineOfficialAccountId,
+          lineOfficialAccountName: targetOa.name,
+          storeName: targetOa.store?.name || targetOa.name,
+          state: "OTHER_OR_MANAGER",
+          richMenuId: null,
+          verifiedAt,
+        };
+      }
+
+      if (current.richMenuId) {
+        const matchedAttempt = await this.prisma.richMenuPublishAttempt.findFirst({
+          where: {
+            lineOfficialAccountId,
+            lineRichMenuId: current.richMenuId,
+            status: RichMenuPublishStatus.PUBLISHED,
+          },
+          include: {
+            template: { select: { id: true, name: true, version: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (matchedAttempt?.template) {
+          return {
+            lineOfficialAccountId,
+            lineOfficialAccountName: targetOa.name,
+            storeName: targetOa.store?.name || targetOa.name,
+            state: "PUBLISHED",
+            richMenuId: current.richMenuId,
+            templateId: matchedAttempt.template.id,
+            templateName: matchedAttempt.template.name,
+            templateVersion: matchedAttempt.templateVersion ?? matchedAttempt.template.version,
+            verifiedAt,
+          };
+        }
+
+        return {
+          lineOfficialAccountId,
+          lineOfficialAccountName: targetOa.name,
+          storeName: targetOa.store?.name || targetOa.name,
+          state: "OTHER_OR_MANAGER",
+          richMenuId: current.richMenuId,
+          verifiedAt,
+        };
+      }
+
+      return {
+        lineOfficialAccountId,
+        lineOfficialAccountName: targetOa.name,
+        storeName: targetOa.store?.name || targetOa.name,
+        state: "NO_MESSAGING_API_DEFAULT",
+        richMenuId: null,
+        verifiedAt,
+      };
+    } catch {
+      return {
+        lineOfficialAccountId,
+        lineOfficialAccountName: targetOa.name,
+        storeName: targetOa.store?.name || targetOa.name,
+        state: "UNKNOWN",
+        richMenuId: null,
+        verifiedAt: new Date().toISOString(),
+      };
+    }
   }
 }

@@ -186,4 +186,19 @@ export class RichMenuController {
     }
     return this.service.uploadImage(file as any, preset);
   }
+
+  @Post("accounts/:lineOfficialAccountId/clear-default")
+  async clearDefaultRichMenu(
+    @Param("lineOfficialAccountId") lineOfficialAccountId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.clearDefaultRichMenu(lineOfficialAccountId, req.user!);
+  }
+
+  @Get("accounts/:lineOfficialAccountId/current-state")
+  async getStoreCurrentState(
+    @Param("lineOfficialAccountId") lineOfficialAccountId: string,
+  ) {
+    return this.service.getStoreCurrentState(lineOfficialAccountId);
+  }
 }

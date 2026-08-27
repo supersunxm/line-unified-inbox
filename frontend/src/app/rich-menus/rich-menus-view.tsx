@@ -228,6 +228,11 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [rollbackAttemptId, setRollbackAttemptId] = useState<string | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
 
+  // Clear Default Modal State
+  const [isClearDefaultModalOpen, setIsClearDefaultModalOpen] = useState(false);
+  const [clearDefaultLineOaId, setClearDefaultLineOaId] = useState<string | null>(null);
+  const [clearingDefault, setClearingDefault] = useState(false);
+
   // Auto-response rules state
   const [autoResponseRules, setAutoResponseRules] = useState<AutoResponseRule[]>([]);
 
@@ -305,6 +310,11 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     if (!rollbackAttemptId || !readinessData?.items) return null;
     return readinessData.items.find((i) => i.publishAttemptId === rollbackAttemptId) || null;
   }, [rollbackAttemptId, readinessData]);
+
+  const clearDefaultTargetStoreItem = useMemo(() => {
+    if (!clearDefaultLineOaId || !readinessData?.items) return null;
+    return readinessData.items.find((i) => i.lineOfficialAccountId === clearDefaultLineOaId) || null;
+  }, [clearDefaultLineOaId, readinessData]);
 
   // Load template list
   const loadTemplates = async (selectId?: string) => {
@@ -617,6 +627,26 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       setSaveMessage({ type: "error", text: err.message || t.failedRollback });
     } finally {
       setRollingBack(false);
+    }
+  };
+
+  // Handle Clear Default Rich Menu
+  const handleClearDefault = async () => {
+    if (!clearDefaultLineOaId) return;
+
+    setClearingDefault(true);
+    try {
+      await api.clearDefaultRichMenu(clearDefaultLineOaId);
+      setSaveMessage({ type: "success", text: t.clearDefaultSuccess });
+      setIsClearDefaultModalOpen(false);
+      setClearDefaultLineOaId(null);
+      if (selectedTemplateId && selectedTemplateId !== "new") {
+        await loadReadiness(selectedTemplateId);
+      }
+    } catch (err: any) {
+      setSaveMessage({ type: "error", text: err.message || "Failed to clear default Rich Menu" });
+    } finally {
+      setClearingDefault(false);
     }
   };
 
@@ -1698,17 +1728,31 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                                 {t.statusCurrentVersionPublished}
                               </span>
-                              {userRole === "ADMIN" && store.publishAttemptId && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRollbackAttemptId(store.publishAttemptId!);
-                                    setIsRollbackModalOpen(true);
-                                  }}
-                                  className="text-[10px] font-bold text-rose-600 hover:underline"
-                                >
-                                  {t.rollbackButton}
-                                </button>
+                              {userRole === "ADMIN" && (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setClearDefaultLineOaId(store.lineOfficialAccountId);
+                                      setIsClearDefaultModalOpen(true);
+                                    }}
+                                    className="text-[10px] font-bold text-rose-600 hover:underline"
+                                  >
+                                    [{t.clearDefaultButton}]
+                                  </button>
+                                  {store.publishAttemptId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRollbackAttemptId(store.publishAttemptId!);
+                                        setIsRollbackModalOpen(true);
+                                      }}
+                                      className="text-[10px] text-gray-500 hover:underline"
+                                    >
+                                      {t.rollbackButton}
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           ) : store.publishStatus === "PUBLISHED" ? (
@@ -1721,17 +1765,31 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                   {t.statusHasNewVersion}
                                 </span>
                               </div>
-                              {userRole === "ADMIN" && store.publishAttemptId && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRollbackAttemptId(store.publishAttemptId!);
-                                    setIsRollbackModalOpen(true);
-                                  }}
-                                  className="text-[10px] font-bold text-rose-600 hover:underline"
-                                >
-                                  {t.rollbackButton}
-                                </button>
+                              {userRole === "ADMIN" && (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setClearDefaultLineOaId(store.lineOfficialAccountId);
+                                      setIsClearDefaultModalOpen(true);
+                                    }}
+                                    className="text-[10px] font-bold text-rose-600 hover:underline"
+                                  >
+                                    [{t.clearDefaultButton}]
+                                  </button>
+                                  {store.publishAttemptId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRollbackAttemptId(store.publishAttemptId!);
+                                        setIsRollbackModalOpen(true);
+                                      }}
+                                      className="text-[10px] text-gray-500 hover:underline"
+                                    >
+                                      {t.rollbackButton}
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           ) : store.publishStatus === "FAILED" ? (
@@ -1789,7 +1847,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                           ) : store.publishStatus === "CANCELLED" ? (
                             <span className="text-gray-400 font-medium">{t.statusCancelled}</span>
                           ) : store.publishStatus === "ROLLED_BACK" ? (
-                            <span className="text-gray-400 font-medium">{t.statusRolledBack}</span>
+                            <span className="text-gray-400 font-normal">{t.noMessagingApiDefault}</span>
                           ) : [
                               "PENDING",
                               "VALIDATING",
@@ -1803,7 +1861,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               {t.publishingToLine}
                             </span>
                           ) : (
-                            <span className="text-gray-400 font-normal">{t.statusNotPublished}</span>
+                            <span className="text-gray-400 font-normal">{t.noMessagingApiDefault}</span>
                           )}
                         </td>
                       </tr>
@@ -1812,6 +1870,10 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="p-3 bg-gray-50 dark:bg-[var(--app-surface-subtle)] border-t border-[#e5e7eb] dark:border-[var(--app-border)] text-[11px] text-gray-500 flex items-center gap-1.5">
+            <span>💡</span>
+            <span>{t.clearDefaultOaManagerNotice}</span>
           </div>
         </section>
       </div>
@@ -2113,6 +2175,76 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 className="rounded bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
               >
                 {rollingBack ? t.stageRollingBack : t.confirmRollback}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Clear Default Confirmation Modal */}
+      {isClearDefaultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <span>✕</span>
+                <span>{t.clearDefaultModalTitle}</span>
+              </h3>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                {t.clearDefaultModalDesc}
+              </p>
+
+              {clearDefaultTargetStoreItem && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[var(--app-surface-subtle)] p-3.5 space-y-2 font-medium">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.selectedStore}:</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">
+                      {clearDefaultTargetStoreItem.storeName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.selectedLineOa}:</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {clearDefaultTargetStoreItem.lineOfficialAccountName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.selectedTemplate}:</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formName || readinessData?.templateName || "Rich Menu"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-800 dark:text-amber-300 text-[11px] leading-relaxed">
+                <span className="font-semibold">💡 หมายเหตุ: </span>
+                {t.clearDefaultOaManagerNotice}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4 bg-gray-50 dark:bg-[var(--app-surface-subtle)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClearDefaultModalOpen(false);
+                  setClearDefaultLineOaId(null);
+                }}
+                disabled={clearingDefault}
+                className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDefault}
+                disabled={clearingDefault}
+                className="rounded bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                {clearingDefault ? t.clearingDefault : t.confirmClearDefault}
               </button>
             </div>
           </div>

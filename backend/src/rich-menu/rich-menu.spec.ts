@@ -1413,3 +1413,208 @@ test("RichMenuService: rejects publishing when referenced auto-response rule is 
 
   assert.match(recordedSkippedReason, /Auto-response rule 'Old Promo' is not active/);
 });
+
+test("RichMenuService.clearDefaultRichMenu: full lifecycle, captures previous ID, calls DELETE once, verifies 404, writes audit", async () => {
+  let deleteDefaultCalled = 0;
+  let deleteRichMenuResourceCalled = 0;
+  let recordedAudits: any[] = [];
+
+  const mockEncryption = {
+    decrypt: (cipher: string) => {
+      if (cipher === "enc-token") return "decrypted-token-abc";
+      throw new Error("Invalid token");
+    },
+  } as any;
+
+  const mockAudit = {
+    record: async (payload: any) => {
+      recordedAudits.push(payload);
+    },
+  } as any;
+
+  let currentLineDefaultState: { richMenuId: string | null; source: "MESSAGING_API" | "OTHER_OR_MANAGER" | "NONE" } = {
+    richMenuId: "richmenu-current-123",
+    source: "MESSAGING_API",
+  };
+
+  const mockAdapter = {
+    getDefaultRichMenu: async (_token: string) => currentLineDefaultState,
+    clearDefaultRichMenu: async (_token: string) => {
+      deleteDefaultCalled++;
+      // After DELETE /v2/bot/user/all/richmenu, LINE returns 404 (NONE)
+      currentLineDefaultState = { richMenuId: null, source: "NONE" };
+    },
+    deleteRichMenu: async () => {
+      deleteRichMenuResourceCalled++;
+    },
+  } as any;
+
+  let assignmentsDeleted = 0;
+  const mockPrisma = {
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-store-1",
+        name: "OPPO Central World",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "enc-token",
+        store: { id: "store-1", name: "Central World Branch" },
+      }),
+    },
+    richMenuPublishAttempt: {
+      findFirst: async () => ({
+        id: "att-1",
+        lineRichMenuId: "richmenu-current-123",
+        template: { id: "tmpl-promo-1", name: "Promotion Menu v3" },
+      }),
+    },
+    richMenuStoreAssignment: {
+      deleteMany: async () => {
+        assignmentsDeleted++;
+        return { count: 1 };
+      },
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, mockEncryption, mockAdapter, mockAudit);
+
+  const result = await service.clearDefaultRichMenu("oa-store-1", {
+    id: "admin-user-1",
+    email: "admin@oppo.com",
+    role: "ADMIN",
+  } as any);
+
+  // 1. Assertions on response
+  assert.equal(result.success, true);
+  assert.equal(result.lineOfficialAccountId, "oa-store-1");
+  assert.equal(result.storeName, "Central World Branch");
+  assert.equal(result.previousRichMenuId, "richmenu-current-123");
+  assert.equal(result.previousTemplateId, "tmpl-promo-1");
+  assert.equal(result.previousTemplateName, "Promotion Menu v3");
+  assert.equal(result.state, "NO_MESSAGING_API_DEFAULT");
+  assert.equal(result.verified, true);
+
+  // 2. Clear default called exactly once
+  assert.equal(deleteDefaultCalled, 1);
+
+  // 3. Crucial: NO richMenu resource deletion
+  assert.equal(deleteRichMenuResourceCalled, 0);
+
+  // 4. Active store assignment cleaned up
+  assert.equal(assignmentsDeleted, 1);
+
+  // 5. Audit log written
+  assert.equal(recordedAudits.length, 1);
+  assert.equal(recordedAudits[0].action, "RICH_MENU_DEFAULT_CLEARED");
+  assert.equal(recordedAudits[0].actorUserId, "admin-user-1");
+  assert.equal(recordedAudits[0].metadata.previousRichMenuId, "richmenu-current-123");
+  assert.equal(recordedAudits[0].metadata.previousTemplateName, "Promotion Menu v3");
+});
+
+test("RichMenuService.clearDefaultRichMenu: rejects HEAD_OFFICE accounts and missing credentials", async () => {
+  const mockPrisma = {
+    lineOfficialAccount: {
+      findUnique: async ({ where }: any) => {
+        if (where.id === "oa-hq") {
+          return {
+            id: "oa-hq",
+            name: "OPPO Head Office",
+            accountType: "HEAD_OFFICE",
+            isActive: true,
+            archivedAt: null,
+            encryptedChannelAccessToken: "enc-token",
+            store: null,
+          };
+        }
+        if (where.id === "oa-no-cred") {
+          return {
+            id: "oa-no-cred",
+            name: "OPPO Store No Cred",
+            accountType: "STORE",
+            isActive: true,
+            archivedAt: null,
+            encryptedChannelAccessToken: null,
+            store: { id: "s-1", name: "Store 1" },
+          };
+        }
+        return null;
+      },
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, {} as any, {} as any);
+
+  await assert.rejects(
+    () => service.clearDefaultRichMenu("oa-hq", { id: "admin-1", role: "ADMIN" } as any),
+    /Only STORE LINE OA accounts support Rich Menu operations/,
+  );
+
+  await assert.rejects(
+    () => service.clearDefaultRichMenu("oa-no-cred", { id: "admin-1", role: "ADMIN" } as any),
+    /Target LINE OA credentials not found/,
+  );
+});
+
+test("RichMenuService.getStoreCurrentState: derives accurate PUBLISHED, NO_MESSAGING_API_DEFAULT, OTHER_OR_MANAGER states", async () => {
+  const mockEncryption = {
+    decrypt: () => "token-123",
+  } as any;
+
+  let mockDefaultResult: { richMenuId: string | null; source: "MESSAGING_API" | "OTHER_OR_MANAGER" | "NONE" } = {
+    richMenuId: "rm-published-1",
+    source: "MESSAGING_API",
+  };
+
+  const mockAdapter = {
+    getDefaultRichMenu: async () => mockDefaultResult,
+  } as any;
+
+  const mockPrisma = {
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-1",
+        name: "OPPO Rama 9",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "enc-token",
+        store: { id: "s-1", name: "Rama 9 Branch" },
+      }),
+    },
+    richMenuPublishAttempt: {
+      findFirst: async ({ where }: any) => {
+        if (where.lineRichMenuId === "rm-published-1") {
+          return {
+            id: "att-1",
+            lineRichMenuId: "rm-published-1",
+            templateVersion: 2,
+            template: { id: "tmpl-1", name: "Summer Promo", version: 2 },
+          };
+        }
+        return null;
+      },
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, mockEncryption, mockAdapter, {} as any);
+
+  // 1. Published state with matched template
+  const state1 = await service.getStoreCurrentState("oa-1");
+  assert.equal(state1.state, "PUBLISHED");
+  assert.equal(state1.richMenuId, "rm-published-1");
+  assert.equal(state1.templateId, "tmpl-1");
+  assert.equal(state1.templateName, "Summer Promo");
+  assert.equal(state1.templateVersion, 2);
+
+  // 2. NONE / 404 state
+  mockDefaultResult = { richMenuId: null, source: "NONE" };
+  const state2 = await service.getStoreCurrentState("oa-1");
+  assert.equal(state2.state, "NO_MESSAGING_API_DEFAULT");
+  assert.equal(state2.richMenuId, null);
+
+  // 3. OTHER_OR_MANAGER state
+  mockDefaultResult = { richMenuId: null, source: "OTHER_OR_MANAGER" };
+  const state3 = await service.getStoreCurrentState("oa-1");
+  assert.equal(state3.state, "OTHER_OR_MANAGER");
+});

@@ -1485,3 +1485,28 @@ export type RichMenuPreviewResponse = {
   readinessReason: string | null;
   areas: RichMenuPreviewResolvedArea[];
 };
+
+export type RichMenuStoreCurrentState = {
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeName: string;
+  state: "PUBLISHED" | "NO_MESSAGING_API_DEFAULT" | "OTHER_OR_MANAGER" | "UNKNOWN";
+  richMenuId: string | null;
+  templateId?: string | null;
+  templateName?: string | null;
+  templateVersion?: number | null;
+  verifiedAt: string;
+};
+
+export type ClearDefaultRichMenuResult = {
+  success: boolean;
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeName: string;
+  previousRichMenuId: string | null;
+  previousTemplateId: string | null;
+  previousTemplateName: string | null;
+  clearedAt: string;
+  state: "NO_MESSAGING_API_DEFAULT";
+  verified: boolean;
+};

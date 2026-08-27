@@ -540,6 +540,17 @@ export const api = {
         method: "POST",
       },
     ),
+  clearDefaultRichMenu: (lineOfficialAccountId: string) =>
+    request<import("@/types/api").ClearDefaultRichMenuResult>(
+      `/rich-menu/accounts/${encodeURIComponent(lineOfficialAccountId)}/clear-default`,
+      {
+        method: "POST",
+      },
+    ),
+  getStoreRichMenuCurrentState: (lineOfficialAccountId: string) =>
+    request<import("@/types/api").RichMenuStoreCurrentState>(
+      `/rich-menu/accounts/${encodeURIComponent(lineOfficialAccountId)}/current-state`,
+    ),
   uploadRichMenuImage: (file: File, preset?: string) => {
     const formData = new FormData();
     formData.append("file", file);
