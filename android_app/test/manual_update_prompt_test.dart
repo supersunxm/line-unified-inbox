@@ -27,8 +27,8 @@ class _AvailableUpdateService extends AppUpdateService {
       overridePackageInfo: PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'click.lineoppo.chat',
-        version: '1.1.0',
-        buildNumber: '20',
+        version: '1.1.1',
+        buildNumber: '21',
       ),
       overrideUpdateInfo: overrideUpdateInfo,
     );
@@ -38,8 +38,8 @@ class _AvailableUpdateService extends AppUpdateService {
   Future<AppUpdateInfo?> fetchLatestVersion() async {
     fetchCount++;
     return const AppUpdateInfo(
-      latestVersion: '1.1.1',
-      buildNumber: 21,
+      latestVersion: '1.1.2',
+      buildNumber: 22,
       minimumSupportedVersion: '1.0.3',
       minimumSupportedBuildNumber: 4,
       forceUpdate: false,
@@ -106,8 +106,8 @@ void main() {
             packageInfo: PackageInfo(
               appName: 'OPPO LINE OA Chat',
               packageName: 'click.lineoppo.chat',
-              version: '1.1.0',
-              buildNumber: '20',
+              version: '1.1.1',
+              buildNumber: '21',
             ),
           ),
         ),
@@ -125,6 +125,6 @@ void main() {
 
     expect(service.fetchCount, 1);
     expect(find.text('New Version Available'), findsOneWidget);
-    expect(find.textContaining('1.1.1+21'), findsOneWidget);
+    expect(find.textContaining('1.1.2+22'), findsOneWidget);
   });
 }
