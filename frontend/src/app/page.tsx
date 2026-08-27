@@ -52,7 +52,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -313,10 +313,22 @@ const translations = {
     exportCsv: "ดาวน์โหลด CSV",
     exportingCsv: "กำลังสร้าง CSV...",
     exportCsvFailed: "ดาวน์โหลด CSV ไม่สำเร็จ กรุณาลองอีกครั้ง",
-    syncMasterFile: "↻ Sync Master File",
-    syncingMasterFile: "กำลัง Sync...",
-    syncMasterSuccess: "Sync สำเร็จ",
-    syncMasterFailed: "Sync Master File ไม่สำเร็จ",
+    syncMasterFile: "↻ Sync Store Master",
+    syncingMasterFile: "Syncing Store Master...",
+    syncMasterSuccess: "Sync Store Master สำเร็จ",
+    syncMasterFailed: "Sync Store Master ไม่สำเร็จ",
+    syncSummaryTitle: "ผลการ Sync Store Master",
+    syncTotalRows: "ทั้งหมด (Total)",
+    syncCompleteRows: "สมบูรณ์ (Complete)",
+    syncIncompleteRows: "ไม่สมบูรณ์ (Incomplete)",
+    syncOaUpdated: "อัปเดต LINE OA แล้ว (Updated)",
+    syncOaUnchanged: "LINE OA ไม่เปลี่ยนแปลง (Unchanged)",
+    missingStoreId: "ไม่มี Store ID",
+    duplicateAccountNames: "ชื่อ Account ซ้ำ",
+    duplicateLineIds: "LINE ID ซ้ำ",
+    missingGoogleMapsUrls: "ไม่มี Google Maps URL",
+    invalidGoogleMapsUrls: "Google Maps URL ไม่ถูกต้อง",
+    dismiss: "ปิด",
     lineOaAdded: "เพิ่มร้านสำเร็จ",
     pasteWebhookInstruction: "นำ URL นี้ไปวางใน LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "การตั้งค่าขั้นสูง (ไม่บังคับ)",
@@ -634,10 +646,22 @@ const translations = {
     exportCsv: "Export CSV",
     exportingCsv: "Generating CSV...",
     exportCsvFailed: "CSV download failed. Please try again.",
-    syncMasterFile: "↻ Sync Master File",
-    syncingMasterFile: "Syncing...",
-    syncMasterSuccess: "Sync succeeded",
-    syncMasterFailed: "Master File sync failed",
+    syncMasterFile: "↻ Sync Store Master",
+    syncingMasterFile: "Syncing Store Master...",
+    syncMasterSuccess: "Store Master sync succeeded",
+    syncMasterFailed: "Store Master sync failed",
+    syncSummaryTitle: "Store Master Sync Summary",
+    syncTotalRows: "Total Rows",
+    syncCompleteRows: "Complete",
+    syncIncompleteRows: "Incomplete",
+    syncOaUpdated: "Updated",
+    syncOaUnchanged: "Unchanged",
+    missingStoreId: "Missing Store ID",
+    duplicateAccountNames: "Duplicate Account Names",
+    duplicateLineIds: "Duplicate LINE IDs",
+    missingGoogleMapsUrls: "Missing Google Maps URLs",
+    invalidGoogleMapsUrls: "Invalid Google Maps URLs",
+    dismiss: "Dismiss",
     lineOaAdded: "LINE OA added successfully",
     pasteWebhookInstruction: "Paste this URL into LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "Advanced settings (optional)",
@@ -953,10 +977,22 @@ const translations = {
     exportCsv: "下载 CSV",
     exportingCsv: "正在生成 CSV...",
     exportCsvFailed: "CSV 下载失败，请重试。",
-    syncMasterFile: "↻ 同步 Master File",
-    syncingMasterFile: "正在同步...",
-    syncMasterSuccess: "同步成功",
-    syncMasterFailed: "Master File 同步失败",
+    syncMasterFile: "↻ 同步 Store Master",
+    syncingMasterFile: "正在同步 Store Master...",
+    syncMasterSuccess: "Store Master 同步成功",
+    syncMasterFailed: "Store Master 同步失败",
+    syncSummaryTitle: "Store Master 同步结果摘要",
+    syncTotalRows: "总行数 (Total)",
+    syncCompleteRows: "完整 (Complete)",
+    syncIncompleteRows: "不完整 (Incomplete)",
+    syncOaUpdated: "已更新 (Updated)",
+    syncOaUnchanged: "未变更 (Unchanged)",
+    missingStoreId: "缺失 Store ID",
+    duplicateAccountNames: "重复 Account Name",
+    duplicateLineIds: "重复 LINE ID",
+    missingGoogleMapsUrls: "缺失 Google Maps URL",
+    invalidGoogleMapsUrls: "无效 Google Maps URL",
+    dismiss: "关闭",
     lineOaAdded: "LINE OA 添加成功",
     pasteWebhookInstruction: "请将此 URL 粘贴到 LINE Developers Console → Messaging API → Webhook URL",
     advancedSettings: "高级设置（可选）",
@@ -1471,6 +1507,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [lineOaExporting, setLineOaExporting] = useState(false);
   const [lineOaExportError, setLineOaExportError] = useState<string | null>(null);
   const [masterSyncing, setMasterSyncing] = useState(false);
+  const [masterSyncResult, setMasterSyncResult] = useState<StoreMasterSyncResult | null>(null);
   const [connectionTest, setConnectionTest] = useState<{ id: string; result: LineOaTestResult } | null>(null);
   const [showArchivedLineOas, setShowArchivedLineOas] = useState(false);
   const [showArchivedStores, setShowArchivedStores] = useState(false);
@@ -2629,11 +2666,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setLineOaError(null);
     try {
       const result = await api.syncStoreMaster();
+      setMasterSyncResult(result);
       await loadApplicationData(true);
-      setToastMessage(`${text.syncMasterSuccess} · Google Sheet: ${result.source.rows} ร้าน · Updated: ${result.connectedOaSync.updated} · Unchanged: ${result.connectedOaSync.unchanged} · Warnings: ${result.validation.incomplete} · Connected OA Updated: ${result.connectedOaSync.updated}`);
+      setToastMessage(`${text.syncMasterSuccess} · Total: ${result.validation?.total ?? result.source?.rows} · Updated: ${result.connectedOaSync?.updated} · Unchanged: ${result.connectedOaSync?.unchanged}`);
     } catch (error) {
       setLineOaError(`${text.syncMasterFailed}: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally { setMasterSyncing(false); }
+    } finally {
+      setMasterSyncing(false);
+    }
   }
 
   async function copyWebhookUrl(accountId: string, returnedUrl?: string | null) {
@@ -3017,6 +3057,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               disabled={masterSyncing}
                               isLoading={masterSyncing}
                               onClick={() => void syncMasterFile()}
+                              data-testid="sync-store-master-button"
                             >
                               {masterSyncing ? text.syncingMasterFile : text.syncMasterFile}
                             </Button>
@@ -3095,6 +3136,72 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                   {lineOaError && <ErrorState message={lineOaError} />}
                   {lineOaExportError && <ErrorState message={lineOaExportError} />}
+
+                  {masterSyncResult && (
+                    <Card className="p-4 sm:p-5 border-[var(--app-border)] bg-[var(--app-surface)] shadow-xs space-y-3" data-testid="store-master-sync-summary" data-store-master-sync-summary>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--app-success-soft)] text-[var(--app-success)] text-xs font-bold">✓</span>
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
+                            {text.syncSummaryTitle}
+                          </h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setMasterSyncResult(null)}
+                          className="text-xs text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)] px-2 py-1 rounded cursor-pointer"
+                          aria-label="Dismiss summary"
+                          data-testid="dismiss-sync-summary"
+                        >
+                          ✕ {text.dismiss}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 text-xs">
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncTotalRows}</p>
+                          <p className="mt-0.5 text-sm font-bold text-[var(--app-text-primary)]" data-testid="sync-total">{masterSyncResult.validation.total}</p>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncCompleteRows}</p>
+                          <p className="mt-0.5 text-sm font-bold text-[var(--app-success)]" data-testid="sync-complete">{masterSyncResult.validation.complete}</p>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncIncompleteRows}</p>
+                          <p className={`mt-0.5 text-sm font-bold ${masterSyncResult.validation.incomplete > 0 ? "text-[var(--app-warning)]" : "text-[var(--app-text-primary)]"}`} data-testid="sync-incomplete">{masterSyncResult.validation.incomplete}</p>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUpdated}</p>
+                          <p className="mt-0.5 text-sm font-bold text-[var(--app-accent)]" data-testid="sync-updated">{masterSyncResult.connectedOaSync.updated}</p>
+                        </div>
+                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUnchanged}</p>
+                          <p className="mt-0.5 text-sm font-bold text-[var(--app-text-secondary)]" data-testid="sync-unchanged">{masterSyncResult.connectedOaSync.unchanged}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 text-xs pt-2 border-t border-[var(--app-border-subtle)]">
+                        <div>
+                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.missingStoreId}: </span>
+                          <span className="font-semibold" data-testid="sync-missing-store-id">{masterSyncResult.validation.missingStoreId}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.duplicateAccountNames}: </span>
+                          <span className="font-semibold" data-testid="sync-duplicate-account-names">{masterSyncResult.validation.duplicateAccountNames}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.duplicateLineIds}: </span>
+                          <span className="font-semibold" data-testid="sync-duplicate-line-ids">{masterSyncResult.validation.duplicateLineIds}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.missingGoogleMapsUrls}: </span>
+                          <span className="font-semibold" data-testid="sync-missing-maps-urls">{masterSyncResult.validation.missingGoogleMapsUrls}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.invalidGoogleMapsUrls}: </span>
+                          <span className="font-semibold" data-testid="sync-invalid-maps-urls">{masterSyncResult.validation.invalidGoogleMapsUrls}</span>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
 
                   {managementWebhookInfo && !managementWebhookInfo.webhookUrlConfigured && (
                     <Card className="border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] text-xs text-[#B25E00] dark:text-[#f6c65b]">

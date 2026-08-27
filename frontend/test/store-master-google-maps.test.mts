@@ -97,3 +97,89 @@ test("Store Management UI source files contain Google Maps button and translatio
   const mobile = readFileSync(new URL("../src/app/stores/mobile-stores-app.tsx", import.meta.url), "utf8");
   assert.match(mobile, /account\.store\.googleMapsUrl/);
 });
+
+test("Store Master sync control is ADMIN-only and POSTs to /store-master/sync", () => {
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+
+  // Endpoint and HTTP method
+  assert.match(api, /syncStoreMaster:\s*\(\)\s*=>\s*request<StoreMasterSyncResult>\("\/store-master\/sync",\s*\{\s*method:\s*"POST"\s*\}\)/);
+
+  // Role check: ADMIN only
+  assert.match(page, /authUser\.role\s*===\s*"ADMIN"/);
+  assert.match(page, /syncMasterFile/);
+  assert.match(page, /sync-store-master-button/);
+
+  // Non-admin / VIEWER cannot trigger sync
+  assert.match(page, /if\s*\(masterSyncing\s*\|\|\s*authUser\?\.role\s*!==\s*"ADMIN"\)\s*return;/);
+});
+
+test("Store Master sync displays loading state and renders summary metrics", () => {
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+
+  // Loading state & text
+  assert.match(page, /disabled=\{masterSyncing\}/);
+  assert.match(page, /isLoading=\{masterSyncing\}/);
+  assert.match(page, /masterSyncing\s*\?\s*text\.syncingMasterFile\s*:\s*text\.syncMasterFile/);
+  assert.match(page, /Syncing Store Master\.\.\./);
+
+  // Summary card metrics rendered
+  assert.match(page, /data-testid="store-master-sync-summary"/);
+  assert.match(page, /data-testid="sync-total"/);
+  assert.match(page, /data-testid="sync-complete"/);
+  assert.match(page, /data-testid="sync-incomplete"/);
+  assert.match(page, /data-testid="sync-updated"/);
+  assert.match(page, /data-testid="sync-unchanged"/);
+  assert.match(page, /data-testid="sync-missing-store-id"/);
+  assert.match(page, /data-testid="sync-duplicate-account-names"/);
+  assert.match(page, /data-testid="sync-duplicate-line-ids"/);
+  assert.match(page, /data-testid="sync-missing-maps-urls"/);
+  assert.match(page, /data-testid="sync-invalid-maps-urls"/);
+  assert.match(page, /data-testid="dismiss-sync-summary"/);
+});
+
+test("Store ID 29113 / Central Pinklao refreshes Google Maps button after sync", () => {
+  type StoreRow = {
+    id: string;
+    storeId: string | null;
+    name: string;
+    googleMapsUrl: string | null;
+  };
+
+  function renderGoogleMapsAction(store: StoreRow) {
+    if (store.googleMapsUrl) {
+      return {
+        label: "Open Google Maps ↗",
+        url: store.googleMapsUrl,
+        disabled: false,
+      };
+    }
+    return {
+      label: "Not configured",
+      url: null,
+      disabled: true,
+    };
+  }
+
+  // Pre-sync state: Store ID 29113 (Central Pinklao) has no configured Google Maps URL
+  const initialPinklao: StoreRow = {
+    id: "store-pinklao-1",
+    storeId: "29113",
+    name: "OPPO Central Pinklao",
+    googleMapsUrl: null,
+  };
+  const preSyncAction = renderGoogleMapsAction(initialPinklao);
+  assert.equal(preSyncAction.label, "Not configured");
+  assert.equal(preSyncAction.url, null);
+  assert.equal(preSyncAction.disabled, true);
+
+  // Post-sync state: Store ID 29113 updated with Master File URL
+  const postSyncPinklao: StoreRow = {
+    ...initialPinklao,
+    googleMapsUrl: "https://maps.app.goo.gl/centralpinklao29113",
+  };
+  const postSyncAction = renderGoogleMapsAction(postSyncPinklao);
+  assert.equal(postSyncAction.label, "Open Google Maps ↗");
+  assert.equal(postSyncAction.url, "https://maps.app.goo.gl/centralpinklao29113");
+  assert.equal(postSyncAction.disabled, false);
+});

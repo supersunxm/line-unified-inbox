@@ -1,3 +1,9 @@
+# Store Master Production Sync Control (2026-08-27)
+
+- **Role-Gated Sync Action**: The Store Master sync trigger is exclusively available to `ADMIN` users on the Web (`authUser.role === "ADMIN"`). Unauthorized users (`VIEWER` or store-level roles) are completely restricted from seeing or executing the sync control.
+- **Immediate Data & Google Maps Refresh**: A successful sync automatically invokes `loadApplicationData(true)`, instantly pulling refreshed Store Master records and `googleMapsUrl` metadata into the Store Management view.
+- **Accurate Metric Presentation**: The sync result summary panel surfaces only authentic counts provided by `POST /store-master/sync` (`total`, `complete`, `incomplete`, `updated`, `unchanged`, `missingStoreId`, `duplicateAccountNames`, `duplicateLineIds`, `missingGoogleMapsUrls`, `invalidGoogleMapsUrls`) without inventing synthetic metrics.
+
 # Store Master Google Maps Column K Integration (2026-08-26)
 
 - **Column K Header & Aliases**: Column K header `"Google Maps links"` is mapped into nullable `googleMapsUrl` in `StoreMaster`. Aliases accepted: `"Google Maps Link"`, `"Google Maps URL"`, `"googleMapsUrl"`.

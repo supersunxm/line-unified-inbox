@@ -1135,3 +1135,41 @@ export type MassMessageCampaignDetail = {
   duplicate?: boolean;
   storeDeliveries?: StoreDeliveryDetail[];
 };
+
+export type StoreMasterSyncResult = {
+  source: { type: string; sheetName: string; fetchedAt: string; rows: number };
+  validation: {
+    total: number;
+    complete: number;
+    incomplete: number;
+    missingStoreId: number;
+    invalidManagerUrls: number;
+    duplicateAccountNames: number;
+    duplicateLineIds: number;
+    duplicateExternalStoreIds: number;
+    missingProvince?: number;
+    missingRegion?: number;
+    missingTikTokUsernames?: number;
+    duplicateTikTokUsernames?: number;
+    invalidTikTokProfileUrls?: number;
+    mismatchedTikTokUsernames?: number;
+    missingGoogleMapsUrls: number;
+    invalidGoogleMapsUrls: number;
+  };
+  import: {
+    validation: {
+      total: number;
+      complete?: number;
+      incomplete?: number;
+      missingStoreId?: number;
+      invalidManagerUrls?: number;
+      duplicateAccountNames?: number;
+      duplicateLineIds?: number;
+      duplicateExternalStoreIds?: number;
+      invalidGoogleMapsUrls?: number;
+      missingGoogleMapsUrls?: number;
+    };
+    failed: number;
+  };
+  connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
+};

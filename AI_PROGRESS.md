@@ -1,6 +1,39 @@
 # AI progress
 
-## Current task: Store Master Google Maps Column K Integration (2026-08-26)
+## Current task: Store Master Production Sync Control (2026-08-27)
+
+- **Store Management UI Sync Control**:
+  - Added dedicated `[ Sync Store Master ]` button in Store Management actions for `ADMIN` users only (`authUser.role === "ADMIN"`).
+  - Unauthorized roles (e.g. `VIEWER` or store staff) cannot view or execute the control.
+  - On click, disables button and displays `"Syncing Store Master..."` loading state.
+  - Sends authenticated `POST /store-master/sync` via `api.syncStoreMaster()`.
+  - On completion, refreshes Store Management and Store Master data (`loadApplicationData(true)`), updating `googleMapsUrl` on linked stores.
+  - Handles failure cleanly by displaying error message and re-enabling the button.
+- **Sync Result Summary Panel**:
+  - Displays compact result panel (`data-store-master-sync-summary`) with clear metrics directly from the backend endpoint:
+    - `total`: Total rows in sheet (`result.validation.total`)
+    - `complete`: Complete rows (`result.validation.complete`)
+    - `incomplete`: Incomplete rows (`result.validation.incomplete`)
+    - `updated`: Connected OA updated (`result.connectedOaSync.updated`)
+    - `unchanged`: Connected OA unchanged (`result.connectedOaSync.unchanged`)
+    - `missingStoreId`: Missing store ID count
+    - `duplicateAccountNames`: Duplicate account names count
+    - `duplicateLineIds`: Duplicate LINE IDs count
+    - `missingGoogleMapsUrls`: Missing Google Maps URLs count
+    - `invalidGoogleMapsUrls`: Invalid Google Maps URLs count
+  - Includes dismiss button to close the summary panel.
+- **Google Maps Integration Verification**:
+  - Verifies Store ID `29113` / Central Pinklao:
+    - Pre-sync / missing URL displays `"Not configured"` (disabled).
+    - Post-sync with URL displays `"Open Google Maps ↗"` with exact Store Master URL.
+- **Verification & Test Results**:
+  - Extended `frontend/test/store-master-google-maps.test.mts` with test suite covering role check, loading state, summary rendering, and Google Maps refresh for Store ID 29113.
+  - All 428 / 428 frontend tests passing (`npm test` in `frontend/`).
+  - All 1,324 / 1,324 backend tests passing (`npm test` in `backend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Store Master Google Maps Column K Integration (2026-08-26)
 
 - **Database & Prisma Schema**:
   - Added nullable `googleMapsUrl String?` to `model StoreMaster` in `backend/prisma/schema.prisma`.
