@@ -110,6 +110,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "friend-source-links":
     case "mass-messages":
     case "coupons":
+    case "rich-menus":
       return hasBackendAdminAccess(auth);
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;

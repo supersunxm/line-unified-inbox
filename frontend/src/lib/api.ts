@@ -445,4 +445,45 @@ export const api = {
     request<{ items: import("@/types/api").MassMessageCampaignDetail[]; total: number }>(
       `/mass-messages?limit=${limit}&offset=${offset}`,
     ),
+  listRichMenuTemplates: () =>
+    request<import("@/types/api").RichMenuTemplate[]>("/rich-menu/templates"),
+  getRichMenuTemplate: (id: string) =>
+    request<import("@/types/api").RichMenuTemplate>(`/rich-menu/templates/${encodeURIComponent(id)}`),
+  createRichMenuTemplate: (input: Partial<import("@/types/api").RichMenuTemplate>) =>
+    request<import("@/types/api").RichMenuTemplate>("/rich-menu/templates", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateRichMenuTemplate: (id: string, input: Partial<import("@/types/api").RichMenuTemplate>) =>
+    request<import("@/types/api").RichMenuTemplate>(`/rich-menu/templates/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  deleteRichMenuTemplate: (id: string) =>
+    request<{ deleted: boolean; id: string }>(`/rich-menu/templates/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  previewRichMenuTemplate: (id: string, input?: { storeId?: string; lineOfficialAccountId?: string }) =>
+    request<import("@/types/api").RichMenuPreviewResponse>(`/rich-menu/templates/${encodeURIComponent(id)}/preview`, {
+      method: "POST",
+      body: JSON.stringify(input || {}),
+    }),
+  getRichMenuReadiness: (id: string) =>
+    request<import("@/types/api").RichMenuReadinessResponse>(`/rich-menu/templates/${encodeURIComponent(id)}/readiness`),
+  saveRichMenuAssignments: (id: string, lineOfficialAccountIds: string[]) =>
+    request<{ templateId: string; assignedCount: number; lineOfficialAccountIds: string[] }>(
+      `/rich-menu/templates/${encodeURIComponent(id)}/assignments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ lineOfficialAccountIds }),
+      },
+    ),
+  uploadRichMenuImage: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<{ imageUrl: string; width: number; height: number }>("/rich-menu/upload-image", {
+      method: "POST",
+      body: formData,
+    });
+  },
 };

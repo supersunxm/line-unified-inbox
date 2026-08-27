@@ -1176,3 +1176,106 @@ export type StoreMasterSyncResult = {
   };
   connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
 };
+
+export type RichMenuCanvasPreset = "GRID_6" | "GRID_3" | "GRID_4" | "CUSTOM";
+export type RichMenuActionType = "URI" | "MESSAGE";
+
+export type RichMenuArea = {
+  id: string;
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  actionType: RichMenuActionType;
+  actionData: string;
+  label?: string | null;
+};
+
+export type RichMenuTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  canvasPreset: RichMenuCanvasPreset;
+  width: number;
+  height: number;
+  chatBarText: string;
+  imageUrl: string | null;
+  areas: RichMenuArea[];
+  version: number;
+  assignedStoresCount?: number;
+  assignedLineOfficialAccountIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RichMenuStoreReadinessItem = {
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeId: string | null;
+  externalStoreId: string | null;
+  storeName: string;
+  accountName: string | null;
+  province: string | null;
+  region: string | null;
+  googleMapsUrl: string | null;
+  readinessStatus: "READY" | "BLOCKED";
+  readinessReason: string | null;
+  selected: boolean;
+};
+
+export type RichMenuReadinessSummary = {
+  total: number;
+  ready: number;
+  blocked: number;
+  selected: number;
+};
+
+export type RichMenuReadinessResponse = {
+  templateId: string;
+  templateName: string;
+  usedVariables: string[];
+  summary: RichMenuReadinessSummary;
+  items: RichMenuStoreReadinessItem[];
+};
+
+export type RichMenuPreviewResolvedArea = {
+  id: string;
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  actionType: RichMenuActionType;
+  rawActionData: string;
+  resolvedActionData: string;
+  label?: string | null;
+  isValid: boolean;
+  validationError?: string | null;
+};
+
+export type RichMenuPreviewResponse = {
+  template: {
+    id: string;
+    name: string;
+    canvasPreset: string;
+    width: number;
+    height: number;
+    chatBarText: string;
+    imageUrl: string | null;
+  };
+  store: {
+    lineOfficialAccountId: string;
+    lineOfficialAccountName: string;
+    storeName: string;
+    externalStoreId: string | null;
+    googleMapsUrl: string | null;
+  };
+  usedVariables: string[];
+  readinessStatus: "READY" | "BLOCKED";
+  readinessReason: string | null;
+  areas: RichMenuPreviewResolvedArea[];
+};

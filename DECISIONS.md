@@ -1,3 +1,11 @@
+# Rich Menu Manager (Phase 1: Management + Template + Preview + Readiness) (2026-08-27)
+
+- **1 Template → N Stores Architecture**: Rather than duplicating N distinct designs in LINE OA Manager, administrators manage single high-level templates with variable placeholders (e.g. `{{store.googleMapsUrl}}`, `{{store.storeName}}`, `{{store.lineUrl}}`, `{{store.tiktokUrl}}`) that resolve dynamically per store.
+- **Phase 1 Publish Gate**: In Phase 1, live LINE Messaging API publishing is strictly prohibited and gated. `RichMenuPublishNoopAdapter` safely rejects any publishing calls, and the frontend publish button is permanently disabled with clear guidance (`"Publishing available in Phase 2"`).
+- **Template-Specific Store Readiness**: Store readiness is evaluated per template based on actual variables used. A store lacking a Google Maps URL is marked `BLOCKED` only if that template references `{{store.googleMapsUrl}}`. Templates with only `MESSAGE` actions or non-maps variables mark all eligible store accounts as `READY`.
+- **Canvas Presets & Coordinate Validation**: Standard presets (`GRID_6` 2500x1686, `GRID_3` 2500x843, `GRID_4` 2500x1686, and `CUSTOM`) are validated to ensure all bounding boxes reside strictly within the canvas boundaries.
+- **Role Isolation & Main OA Protection**: `/rich-menus` is strictly accessible to `ADMIN` users on the Web (`hasBackendAdminAccess`), hidden from `VIEWER` or store staff, and completely isolated from the `/main-oa` workspace.
+
 # Store Master Google Maps Readiness Visibility & Filtering (2026-08-27)
 
 - **Derived Readiness Model**: Rather than persisting additional columns in PostgreSQL, `googleMapsStatus` (`CONFIGURED` | `MISSING` | `INVALID`) and `googleMapsStatusReason` are derived on the fly from `googleMapsUrl` via `getStoreGoogleMapsReadiness`. This keeps the database schema lean, avoids sync discrepancies, and guarantees consistent validation logic across frontend and backend.

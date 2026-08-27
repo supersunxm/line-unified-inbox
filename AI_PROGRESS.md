@@ -1,6 +1,30 @@
 # AI progress
 
-## Current task: Store Master Google Maps Readiness Visibility & Filtering (2026-08-27)
+## Current task: Rich Menu Manager (Phase 1: Management + Template + Preview + Readiness) (2026-08-27)
+
+- **Phase 1 Architecture & Non-Destructive Boundary**:
+  - Implemented Phase 1 Management, Template, Visual Preview, and Store Readiness Evaluation.
+  - Strictly no network calls to LINE Messaging API Rich Menu endpoints in Phase 1 (gated to Phase 2 with disabled adapter and UI state).
+  - Data model added via non-destructive Prisma migration `20260827110000_add_rich_menu_templates`: `RichMenuTemplate`, `RichMenuStoreAssignment`, `RichMenuTemplateStatus` (`DRAFT`, `ACTIVE`, `ARCHIVED`).
+- **Backend Rich Menu Module (`backend/src/rich-menu/`)**:
+  - `RichMenuService`: Full CRUD for templates, canvas coordinate validation, variable extraction, dynamic per-store preview resolution, and store readiness evaluation.
+  - Image handling: Supports JPEG/PNG <= 1MB using `MediaStorageService`.
+  - Template-specific readiness: Evaluates required variables per template; stores missing `{{store.googleMapsUrl}}` are marked `BLOCKED` only if that template actually uses it. Templates with only `MESSAGE` or static actions mark all eligible stores `READY`.
+  - Main OA isolation: Only connected `STORE` LINE OAs are included in evaluation and assignments.
+  - Security: Channel access tokens and secrets are never returned in responses.
+- **Frontend 3-Pane Workspace (`/rich-menus`)**:
+  - Added ADMIN-only `/rich-menus` route and navigation link in `TopNavigation` and `AppSidebar`.
+  - Left Pane: Template list with search, status badges, and `[ + New Template ]`.
+  - Center Pane: Visual interactive canvas preview (2500x1686 / 2500x843 with area bounding boxes), canvas preset selector (6-Grid, 3-Grid, 4-Grid, Custom), area action editor (`URI` / `MESSAGE`), token insert helper chips (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.lineUrl}}`, `{{store.tiktokUrl}}`), image uploader, and `[ Save Draft ]`.
+  - Right Pane: Per-store live preview with variable resolver, Store Readiness table with filter tabs (`All`, `Ready`, `Blocked`), search, `[ Select All Ready ]`, assignment saving, and disabled Phase 2 publish button (`"Publishing available in Phase 2"`).
+- **Verification & Test Results**:
+  - 436 / 436 frontend unit tests passing (`npm test` in `frontend/`).
+  - 1,335 / 1,335 backend unit tests passing (`npm test` in `backend/`).
+  - Frontend production build succeeded (`npm run build` in `frontend/`).
+  - Backend production build succeeded (`npm run build` in `backend/`).
+  - `git diff --check` clean.
+
+## Previous task: Store Master Google Maps Readiness Visibility & Filtering (2026-08-27)
 
 - **Store-level Readiness Architecture**:
   - Implemented `getStoreGoogleMapsReadiness(store)` in `frontend/src/lib/template-variable-resolver.ts` and `backend/src/store-master/template-variable-resolver.ts`.

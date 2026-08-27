@@ -40,6 +40,7 @@ test("full-access HQ users receive HQ navigation, all branch chats, and default 
   assert.equal(canAccessPrimarySection(hq, "mass-messages"), true);
   assert.equal(canAccessPrimarySection(hq, "coupons"), true);
   assert.equal(canAccessPrimarySection(hq, "admin-registrations"), true);
+  assert.equal(canAccessPrimarySection(hq, "rich-menus"), true);
   assert.equal(canAccessPrimarySection(hq, "main-oa"), true);
 });
 
@@ -70,6 +71,7 @@ test("store users receive only store-scoped Web workspaces", () => {
   assert.equal(canAccessPrimarySection(store, "follower-insights"), true);
   assert.equal(canAccessPrimarySection(store, "home"), false);
   assert.equal(canAccessPrimarySection(store, "admin-registrations"), false);
+  assert.equal(canAccessPrimarySection(store, "rich-menus"), false);
 });
 
 test("Main OA-only users land in the isolated Main OA workspace", () => {
@@ -83,6 +85,7 @@ test("Main OA-only users land in the isolated Main OA workspace", () => {
   assert.equal(defaultRouteForUser(mainOa), "/main-oa");
   assert.equal(canAccessPrimarySection(mainOa, "main-oa"), true);
   assert.equal(canAccessPrimarySection(mainOa, "chats"), false);
+  assert.equal(canAccessPrimarySection(mainOa, "rich-menus"), false);
 });
 
 test("legacy responses are normalized during rolling deployment", () => {

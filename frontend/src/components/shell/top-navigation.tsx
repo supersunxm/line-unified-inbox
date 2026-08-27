@@ -50,6 +50,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     "friend-source-links": ["ลิงก์เพิ่มเพื่อน", "Friend Source Links", "加好友来源链接"],
     "mass-messages": ["ส่งข้อความ", "Mass Message", "群发消息"],
     coupons: ["คูปอง", "Coupons", "优惠券"],
+    "rich-menus": ["จัดการ Rich Menu", "Rich Menu Manager", "Rich Menu 管理"],
   };
   const index = language === "th" ? 0 : language === "zh" ? 2 : 1;
   return labels[section][index];

@@ -17,7 +17,7 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
 type SidebarProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "currentSection" | "language" | "logout" | "pilotMode" | "text">;
 type AccountPanel = "profile" | "settings" | null;
 type SidebarTooltip = { label: string; top: number } | null;
-type IconName = "home" | "dashboard" | "chat" | "main-oa" | "followers" | "traffic" | "coupon" | "store" | "purchase" | "friend" | "broadcast" | "approval" | "tiktok" | "profile" | "settings" | "logout";
+type IconName = "home" | "dashboard" | "chat" | "main-oa" | "followers" | "traffic" | "coupon" | "store" | "purchase" | "friend" | "broadcast" | "approval" | "tiktok" | "rich-menu" | "profile" | "settings" | "logout";
 
 type NavItem = {
   href: string;
@@ -45,6 +45,7 @@ function SidebarIcon({ name, className = "" }: { name: IconName; className?: str
       {name === "broadcast" && <><path {...common} d="M3 10v4l11 4V6L3 10Z"/><path {...common} d="M3 10H1v4h2m3 1 1.5 5h3l-1-4"/><path {...common} d="m17 8 3-2m-2 6h4m-5 4 3 2"/></>}
       {name === "approval" && <><path {...common} d="M12 3c3 2.5 6 2.7 8 3v5.5c0 4.5-2.7 7.7-8 9.5-5.3-1.8-8-5-8-9.5V6c2-.3 5-.5 8-3Z"/><path {...common} d="m8.5 12 2.2 2.2 4.8-5"/></>}
       {name === "tiktok" && <><path {...common} d="M13 4v10a4.5 4.5 0 1 1-4-4.5"/><path {...common} d="M13 4c1.6 2.8 3.7 4 6 4.3"/></>}
+      {name === "rich-menu" && <><rect {...common} x="3" y="3" width="18" height="18" rx="2"/><path {...common} d="M3 9h18M3 15h18M9 9v12M15 9v12"/></>}
       {name === "profile" && <><circle {...common} cx="12" cy="8" r="3.5"/><path {...common} d="M5 21c.7-4.6 3.2-7 7-7s6.3 2.4 7 7"/></>}
       {name === "settings" && <><path {...common} d="M12 3l1.5.5 1.4-.9 2 2-.9 1.4.5 1.5 1.8.4v2.8l-1.8.4-.5 1.5.9 1.4-2 2-1.4-.9-1.5.5-.4 1.8H8.8l-.4-1.8-1.5-.5-1.4.9-2-2 .9-1.4-.5-1.5-1.8-.4V7.9l1.8-.4.5-1.5-.9-1.4 2-2 1.4.9L8.4 3l.4-1.8h2.8L12 3Z"/><circle {...common} cx="10.2" cy="9.3" r="2.4"/></>}
       {name === "logout" && <><path {...common} d="M10 4H5v16h5"/><path {...common} d="M10 12h11m-4-4 4 4-4 4"/></>}
@@ -53,9 +54,9 @@ function SidebarIcon({ name, className = "" }: { name: IconName; className?: str
 }
 
 function labels(language: Language) {
-  if (language === "th") return { workspace: "พื้นที่ทำงาน", mainOa: "Main OA", operations: "เครื่องมือ", home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", followers: "ข้อมูลผู้ติดตาม", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", approval: "อนุมัติ BM", profile: "โปรไฟล์", settings: "ตั้งค่า", logout: "ออกจากระบบ", language: "ภาษา", appearance: "รูปแบบการแสดงผล", role: "สิทธิ์การใช้งาน", environment: "สภาพแวดล้อม", standard: "Production", pilot: "Pilot", collapse: "ย่อแถบเมนู", expand: "ขยายแถบเมนู" };
-  if (language === "zh") return { workspace: "工作区", mainOa: "Main OA", operations: "工具", home: "主页", dashboard: "仪表盘", chats: "门店聊天", followers: "关注者洞察", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友来源链接", mass: "群发消息", approval: "BM 审批", profile: "个人资料", settings: "设置", logout: "退出", language: "语言", appearance: "外观", role: "角色", environment: "环境", standard: "Production", pilot: "Pilot", collapse: "收起侧栏", expand: "展开侧栏" };
-  return { workspace: "Workspace", mainOa: "Main OA", operations: "Tools", home: "Main", dashboard: "Dashboard", chats: "Store Chats", followers: "Follower Insights", traffic: "Message Traffic", coupons: "Coupons", stores: "Store Management", purchase: "Purchase Intelligence", friendLinks: "Friend Source Links", mass: "Mass Message", approval: "BM Approval", profile: "Profile", settings: "Settings", logout: "Logout", language: "Language", appearance: "Appearance", role: "Role", environment: "Environment", standard: "Production", pilot: "Pilot", collapse: "Collapse sidebar", expand: "Expand sidebar" };
+  if (language === "th") return { workspace: "พื้นที่ทำงาน", mainOa: "Main OA", operations: "เครื่องมือ", home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", followers: "ข้อมูลผู้ติดตาม", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", profile: "โปรไฟล์", settings: "ตั้งค่า", logout: "ออกจากระบบ", language: "ภาษา", appearance: "รูปแบบการแสดงผล", role: "สิทธิ์การใช้งาน", environment: "สภาพแวดล้อม", standard: "Production", pilot: "Pilot", collapse: "ย่อแถบเมนู", expand: "ขยายแถบเมนู" };
+  if (language === "zh") return { workspace: "工作区", mainOa: "Main OA", operations: "工具", home: "主页", dashboard: "仪表盘", chats: "门店聊天", followers: "关注者洞察", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友来源链接", mass: "群发消息", approval: "BM 审批", richMenus: "Rich Menu 管理", profile: "个人资料", settings: "设置", logout: "退出", language: "语言", appearance: "外观", role: "角色", environment: "环境", standard: "Production", pilot: "Pilot", collapse: "收起侧栏", expand: "展开侧栏" };
+  return { workspace: "Workspace", mainOa: "Main OA", operations: "Tools", home: "Main", dashboard: "Dashboard", chats: "Store Chats", followers: "Follower Insights", traffic: "Message Traffic", coupons: "Coupons", stores: "Store Management", purchase: "Purchase Intelligence", friendLinks: "Friend Source Links", mass: "Mass Message", approval: "BM Approval", richMenus: "Rich Menu Manager", profile: "Profile", settings: "Settings", logout: "Logout", language: "Language", appearance: "Appearance", role: "Role", environment: "Environment", standard: "Production", pilot: "Pilot", collapse: "Collapse sidebar", expand: "Expand sidebar" };
 }
 
 export function AppSidebar({ authUser, changeLanguage, currentSection, language, logout, pilotMode, text }: SidebarProps) {
@@ -101,6 +102,7 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
     { href: "/admin/purchase-analytics", label: t.purchase, icon: "purchase", section: "purchase-analytics" },
     { href: "/friend-source-links", label: t.friendLinks, icon: "friend", section: "friend-source-links" },
     { href: "/mass-messages", label: t.mass, icon: "broadcast", section: "mass-messages" },
+    { href: "/rich-menus", label: t.richMenus, icon: "rich-menu", section: "rich-menus" },
     { href: "/admin/registrations", label: t.approval, icon: "approval", section: "admin-registrations" },
     { href: "/tiktok", label: "TikTok", icon: "tiktok", tool: "tiktok" },
   ];

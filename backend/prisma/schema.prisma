@@ -635,6 +635,7 @@ model LineOfficialAccount {
   unmatchedFollows            FriendAttributionUnmatchedFollow[]
   friendAttributionConfig     FriendAttributionConfig?
   massMessageStoreDeliveries  MassMessageStoreDelivery[]
+  richMenuAssignments         RichMenuStoreAssignment[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -1559,4 +1560,45 @@ model AppRelease {
   @@unique([platform, buildNumber])
   @@index([platform, isActive])
   @@index([platform, buildNumber])
+}
+
+enum RichMenuTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model RichMenuTemplate {
+  id              String                  @id @default(uuid())
+  name            String
+  description     String?
+  status          RichMenuTemplateStatus  @default(DRAFT)
+  canvasPreset    String                  @default("GRID_6")
+  width           Int                     @default(2500)
+  height          Int                     @default(1686)
+  chatBarText     String                  @default("Menu")
+  imageUrl        String?
+  areasJson       Json                    @default("[]")
+  version         Int                     @default(1)
+  createdByUserId String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  assignments     RichMenuStoreAssignment[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model RichMenuStoreAssignment {
+  id                    String              @id @default(uuid())
+  templateId            String
+  lineOfficialAccountId String
+  template              RichMenuTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  lineOfficialAccount   LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@unique([templateId, lineOfficialAccountId])
+  @@index([templateId])
+  @@index([lineOfficialAccountId])
 }
