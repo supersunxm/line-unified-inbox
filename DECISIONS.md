@@ -1400,3 +1400,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 # Android Summary card boundary (2026-08-27)
 
 - The Summary page intentionally exposes only monthly volume cards (`incomingMessages` and `incomingConversations`). Historical response-cycle counts stay available to the response-performance card, but are not labeled as operational `รอตอบ`/`ตอบแล้ว` on Summary. Inbox remains the sole surface for current `Conversation.bmReplyStatus` labels.
+
+# Staff sender attribution boundary (2026-08-27)
+
+- `Message.senderUserId` remains the sender source of truth. API serializers join only `User.id` and `User.displayName`; the canonical relation name wins over the historical display-name snapshot, with a safe `Staff` fallback only when an identified outbound sender has no name.
+- Sender attribution is rendered only for outbound messages. Inbound customer and system/unattributed messages return no staff author, so the client never guesses from the current operator, device, or last responder.
+- Successful authenticated text/image sends publish a realtime `message.created` event containing the same safe sender projection. Android and Web merge it by message ID; existing access filtering continues to enforce store/HQ/PC scope and Main OA isolation.
+- Web desktop/mobile and Android use the same sender semantics and compact secondary label. No new sender table, permission, token, or session state was introduced.

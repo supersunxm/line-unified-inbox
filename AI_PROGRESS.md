@@ -2617,6 +2617,15 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Summary tests now assert only the two volume cards render and response-rate/median/average/bucket metrics still render. Focused Summary tests pass, Flutter analyze/full tests pass (167/167), and Android `assembleDebug` passes. Existing Inbox status regressions remain covered by the full suite.
 - Next action: review/commit, push, open PR, and monitor CI without merging.
 
+# Current task: Staff sender attribution (2026-08-27)
+
+- Started `feat/sender-attribution` from latest `origin/main` `f138ccf92ed0751f54657e0e02e889ef83932143`; no Android version bump or release files are in scope.
+- Audited the persisted Message sender flow. Outbound text/image sends already persist the authenticated operator's `senderUserId` and display-name snapshot; conversation APIs did not join the canonical User relation, Web ignored the field, and outbound realtime events were not emitted.
+- Added a safe sender projection that prefers the canonical User display name, falls back to the persisted snapshot, and never infers a sender for inbound/system/unattributed rows. Conversation detail/list, mobile detail, Web, Android, and realtime contracts now carry/render the same attribution without exposing User fields.
+- Added outbound realtime publication after successful persistence for text/image sends. Android's existing ID-deduplicated realtime merge preserves sender data; Web desktop/mobile views now subscribe to the same filtered SSE stream with polling fallback. Main OA store isolation remains enforced by the realtime controller and existing access checks.
+- Backend build and full tests pass (1399/1399), changed backend lint passes; Flutter analyze/full tests pass (170/170), Android `assembleDebug` passes; frontend tests/build pass (451/451 and production Next build). Repository-wide backend/frontend lint still contains unrelated baseline violations; changed files are clean.
+- Next action: review the scoped diff, commit, push the feature branch, open the PR, and monitor CI without merging.
+
 # Current task: Monthly summary reply-cycle scoping (2026-08-27)
 
 - Started `feat/android-monthly-summary-reply-cycles` from latest `origin/main` `15e9451c52f94de091259fd49a9a44f5c04e3c88`.

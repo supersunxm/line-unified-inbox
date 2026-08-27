@@ -1,17 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaService } from "./prisma.service";
-import { ConversationsService, detectImageMime } from "./conversations.service";
+import { ConversationsService, detectImageMime, resolveMessageSender } from "./conversations.service";
 import { OperationsService } from "./operations/operations.service";
 import { CredentialEncryptionService } from "./credentials/credential-encryption.service";
 import { LineMessagingService } from "./line-messaging/line-messaging.service";
 import { BadGatewayException } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { MessageDirection, UserRole } from "@prisma/client";
 
 const noopOperations = {
   getOperationalConversationFilter: async () => ({}),
   getLatestResetAt: async () => null,
 } as unknown as OperationsService;
+
+void test("message sender serialization uses the canonical User relation and never invents an outbound author", () => {
+  assert.deepEqual(resolveMessageSender({ direction: MessageDirection.OUTBOUND, senderUserId: "user-1", senderDisplayName: "Old name", sender: { id: "user-1", displayName: "Canonical name" } }), { userId: "user-1", displayName: "Canonical name" });
+  assert.deepEqual(resolveMessageSender({ direction: MessageDirection.OUTBOUND, senderUserId: "user-1", senderDisplayName: "Snapshot name", sender: null }), { userId: "user-1", displayName: "Snapshot name" });
+  assert.equal(resolveMessageSender({ direction: MessageDirection.OUTBOUND, senderUserId: null, senderDisplayName: null, sender: null }), null);
+  assert.equal(resolveMessageSender({ direction: MessageDirection.INBOUND, senderUserId: "user-1", senderDisplayName: "Should not show" }), null);
+});
+
+void test("outbound realtime event carries the persisted sender without exposing User fields", () => {
+  const events: unknown[] = [];
+  const service = new ConversationsService({} as never, noopOperations, undefined, undefined, undefined, undefined, undefined, { publish: (event: unknown) => events.push(event) } as never);
+  (service as unknown as { publishOutboundMessage: (conversation: unknown, message: unknown) => void }).publishOutboundMessage(
+    { id: "conversation-1", storeId: "store-1", bmReplyStatus: "REPLIED" },
+    { id: "message-1", messageType: "TEXT", originalText: "Reply", sentAt: new Date("2026-08-20T12:00:00.000Z"), senderUserId: "user-1", senderDisplayName: "Staff" },
+  );
+  const event = events[0] as { message: { sender: unknown } };
+  assert.deepEqual(event.message.sender, { userId: "user-1", displayName: "Staff" });
+});
 
 void test("detectImageMime accepts supported signatures independently of multipart MIME", () => {
   assert.equal(detectImageMime(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), "image/png");

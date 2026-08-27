@@ -115,6 +115,34 @@ void test("mobile detail returns a ready video through the authenticated media p
   assert.deepEqual(result.messages[0]?.media, { processingStatus: "READY", mimeType: "video/mp4", fileSize: 4096, url: "/messages/message-video/media" });
 });
 
+void test("mobile detail returns canonical sender attribution for outbound history", async () => {
+  const conversation = {
+    id: "conversation-sender",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "REPLIED",
+    followUpStatus: "COMPLETED",
+    customer: { id: "customer-sender", displayName: "Customer" },
+    store: { id: "store-sender", name: "Store", code: "S1" },
+    messages: [
+      {
+        id: "message-sender",
+        direction: "OUTBOUND",
+        messageType: "TEXT",
+        originalText: "Hello",
+        sentAt: new Date(),
+        senderUserId: "user-1",
+        senderDisplayName: "Snapshot",
+        sender: { id: "user-1", displayName: "Canonical Staff" },
+        media: null,
+      },
+    ],
+    _count: { pushNotifications: 0 },
+  };
+  const service = new MobileConversationsService({ conversation: { findUnique: async () => conversation } } as never, { assertConversationAccess: async () => "store-sender" } as never, {} as never);
+  const result = await service.get(user, "conversation-sender");
+  assert.deepEqual(result.messages[0]?.sender, { userId: "user-1", displayName: "Canonical Staff" });
+});
+
 void test("mobile detail separates verified purchase data from AI insight", async () => {
   const conversation = {
     id: "conversation-1",

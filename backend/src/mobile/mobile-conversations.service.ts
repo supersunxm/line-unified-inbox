@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BmReplyStatus, CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
-import { ConversationsService } from "../conversations.service";
+import { ConversationsService, resolveMessageSender } from "../conversations.service";
 import { PrismaService } from "../prisma.service";
 import { SendConversationMessageDto } from "../dto";
 import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDto, MobileProductVariantQueryDto, SalesProductItemDto, UpdateCustomerSalesInformationDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
@@ -167,7 +167,7 @@ export class MobileConversationsService {
           where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
           take: query.limit + 1,
-          select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
+          select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
         _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
@@ -242,7 +242,7 @@ export class MobileConversationsService {
         messageType: message.messageType,
         text: message.originalText,
         sentAt: message.sentAt,
-        sender: message.direction === "OUTBOUND" ? { userId: message.senderUserId, displayName: message.senderDisplayName ?? "Store" } : null,
+        sender: resolveMessageSender(message),
         media: message.media ? { processingStatus: message.media.processingStatus, mimeType: message.media.mimeType, fileSize: message.media.fileSize, url: message.media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null,
       })),
     };

@@ -6,7 +6,15 @@ export type RealtimeEvent = {
   version: 1;
   conversationId: string;
   storeId: string | null;
-  message?: { id: string; direction: string; messageType: string; text: string; sentAt: string; media: null | { processingStatus: string; mimeType?: string | null; fileSize?: number | null; url?: string | null } };
+  message?: {
+    id: string;
+    direction: string;
+    messageType: string;
+    text: string;
+    sentAt: string;
+    sender?: { userId: string | null; displayName: string } | null;
+    media: null | { processingStatus: string; mimeType?: string | null; fileSize?: number | null; url?: string | null };
+  };
   conversation?: { id: string; latestMessageAt: string; bmReplyStatus: string };
 };
 
