@@ -1,6 +1,45 @@
 # AI progress
 
-## Current task: Wire Rich Menu Image Storage Correctly (2026-08-27)
+## Current task: Implement Rich Menu Phase 2A (Safe Single-Store Canary LINE Publishing) (2026-08-27)
+
+- **Architecture & Workflow**:
+  - **Single-Store Canary Guardrails**: Strictly enforced 1-store publishing per action on both frontend and backend. Rejects HEAD_OFFICE accounts, archived/disabled OAs, unassigned stores, or stores with blocked/missing variables (e.g. `{{store.googleMapsUrl}}`).
+  - **Prisma Schema & State Tracking**: Added `selected Boolean @default(true)` to `RichMenuTemplate`, added `RichMenuPublishStatus` and `RichMenuPreviousDefaultSource` enums, and created `RichMenuPublishAttempt` model to track publishing lifecycle, stage progress, errors, previous defaults, and attempt counts.
+  - **Centralized LINE HTTP Client (`LineRichMenuClientService`)**:
+    - `validateRichMenu`: Validates rich menu JSON against `POST https://api.line.me/v2/bot/richmenu/validate`.
+    - `getDefaultRichMenu`: Detects existing default source (`MESSAGING_API` with 200, `NONE` with 404, `OTHER_OR_MANAGER` with 403) before setting a new default.
+    - `createRichMenu`: Creates rich menu on `POST https://api.line.me/v2/bot/richmenu`.
+    - `uploadRichMenuImage`: Streams raw binary image content to `POST https://api-data.line.me/v2/bot/richmenu/{id}/content`.
+    - `setDefaultRichMenu`: Sets default menu on `POST https://api.line.me/v2/bot/user/all/richmenu/{id}`.
+    - `clearDefaultRichMenu`: Unlinks default menu on `DELETE https://api.line.me/v2/bot/user/all/richmenu`.
+    - `deleteRichMenu`: Cleans up orphaned rich menus on `DELETE https://api.line.me/v2/bot/richmenu/{id}`.
+  - **Publish Orchestration Pipeline**:
+    1. Single-store validation and eligibility checks.
+    2. Dynamic store master variable resolution (`{{store.googleMapsUrl}}`, `{{store.storeName}}`, etc.).
+    3. Retrieve stored image binary via `MediaStorageService.get()`.
+    4. Decrypt OA channel access token using `CredentialEncryptionService`.
+    5. Stage progression: `VALIDATING` $\to$ Detect previous default $\to$ `CREATING` $\to$ `IMAGE_UPLOADING` $\to$ `SETTING_DEFAULT` $\to$ `VERIFYING` $\to$ `PUBLISHED`.
+    6. Automatic cleanup delete on image upload failure.
+    7. Idempotency guard preventing concurrent publishing requests within 5 minutes.
+    8. Full rollback capability (`POST /publish-attempts/:id/rollback`) restoring previous default rich menu or unlinking default.
+    9. Stage-safe retry (`POST /publish-attempts/:id/retry`).
+  - **Audit Logging**: Recorded `RICH_MENU_PUBLISH_STARTED`, `RICH_MENU_PUBLISHED`, `RICH_MENU_PUBLISH_FAILED`, and `RICH_MENU_ROLLED_BACK`.
+  - **Privacy Guarantee**: Zero tokens or decrypted secrets logged or included in `resolvedConfigJson` or API responses.
+  - **Frontend UI & Multilingual Support**:
+    - Added Canary Publish button `[ เผยแพร่ไปยัง LINE ]` enabled when exactly 1 READY assigned store is selected with valid template and image.
+    - Added Confirmation Modal with store details, LINE OA name, template name, readiness status, and warning notice.
+    - Added Rollback Modal and Retry actions.
+    - Added LINE Publishing status column in Target Stores table (`Published`, `Not published`, `Failed` with error & retry, `Rolled back`, `Publishing...`).
+    - Added default behavior toggle: Show (`แสดง` $\to$ `selected: true`), Hide (`ซ่อนเมนู` $\to$ `selected: false`).
+    - Full multilingual support across Thai (`th`), English (`en`), and Chinese (`zh`).
+- **Verification & Test Results**:
+  - 1349 / 1349 backend tests passing (`npm test` in `backend/`).
+  - 441 / 441 frontend tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack build succeeded cleanly (`npm run build` in `frontend/`).
+  - Backend build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean.
+
+## Previous task: Wire Rich Menu Image Storage Correctly (2026-08-27)
 
 - **Root Cause Analysis**:
   - `RichMenuService` constructor had `@Optional() @Inject("MediaStorageService") private readonly media?: MediaStorageService`.

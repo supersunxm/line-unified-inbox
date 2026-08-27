@@ -42,6 +42,7 @@ export type CreateRichMenuTemplateDto = {
   canvasPreset?: RichMenuCanvasPreset;
   width?: number;
   height?: number;
+  selected?: boolean;
   chatBarText?: string;
   imageUrl?: string | null;
   areas: RichMenuArea[];
@@ -49,6 +50,61 @@ export type CreateRichMenuTemplateDto = {
 
 export type UpdateRichMenuTemplateDto = Partial<CreateRichMenuTemplateDto> & {
   status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
+};
+
+export type PublishCanaryDto = {
+  lineOfficialAccountId: string;
+};
+
+export type LineRichMenuAreaPayload = {
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  action:
+    | {
+        type: "uri";
+        label?: string;
+        uri: string;
+      }
+    | {
+        type: "message";
+        label?: string;
+        text: string;
+      };
+};
+
+export type LineRichMenuPayload = {
+  size: {
+    width: number;
+    height: number;
+  };
+  selected: boolean;
+  name: string;
+  chatBarText: string;
+  areas: LineRichMenuAreaPayload[];
+};
+
+export type PublishAttemptResponseDto = {
+  id: string;
+  templateId: string;
+  lineOfficialAccountId: string;
+  lineOfficialAccountName?: string;
+  storeName?: string;
+  status: string;
+  lineRichMenuId: string | null;
+  previousDefaultRichMenuId: string | null;
+  previousDefaultSource: string | null;
+  errorStage: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  attemptNumber: number;
+  startedAt: Date;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type RichMenuPreviewInputDto = {
@@ -73,6 +129,12 @@ export type RichMenuStoreReadinessItem = {
   readinessStatus: "READY" | "BLOCKED";
   readinessReason: string | null;
   selected: boolean;
+  publishStatus?: string;
+  publishedRichMenuId?: string | null;
+  lastPublishedAt?: Date | null;
+  lastPublishError?: string | null;
+  lastPublishErrorStage?: string | null;
+  publishAttemptId?: string | null;
 };
 
 export type RichMenuReadinessSummary = {

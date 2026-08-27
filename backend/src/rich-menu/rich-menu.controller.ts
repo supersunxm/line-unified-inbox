@@ -20,6 +20,7 @@ import { Roles } from "../auth/auth.decorators";
 import { RichMenuService } from "./rich-menu.service";
 import type {
   CreateRichMenuTemplateDto,
+  PublishCanaryDto,
   RichMenuPreviewInputDto,
   SaveAssignmentsDto,
   UpdateRichMenuTemplateDto,
@@ -81,6 +82,41 @@ export class RichMenuController {
     @Body() body: SaveAssignmentsDto,
   ) {
     return this.service.saveAssignments(id, body);
+  }
+
+  @Post("templates/:id/publish-canary")
+  async publishCanary(
+    @Param("id") id: string,
+    @Body() body: PublishCanaryDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.publishCanary(id, body, req.user!);
+  }
+
+  @Get("templates/:id/publish-attempts")
+  async getPublishAttempts(@Param("id") id: string) {
+    return this.service.getPublishAttempts(id);
+  }
+
+  @Get("publish-attempts/:attemptId")
+  async getPublishAttempt(@Param("attemptId") attemptId: string) {
+    return this.service.getPublishAttempt(attemptId);
+  }
+
+  @Post("publish-attempts/:attemptId/retry")
+  async retryPublish(
+    @Param("attemptId") attemptId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.retryPublish(attemptId, req.user!);
+  }
+
+  @Post("publish-attempts/:attemptId/rollback")
+  async rollbackPublish(
+    @Param("attemptId") attemptId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.service.rollbackPublish(attemptId, req.user!);
   }
 
   @Post("upload-image")

@@ -636,6 +636,7 @@ model LineOfficialAccount {
   friendAttributionConfig     FriendAttributionConfig?
   massMessageStoreDeliveries  MassMessageStoreDelivery[]
   richMenuAssignments         RichMenuStoreAssignment[]
+  richMenuPublishAttempts     RichMenuPublishAttempt[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -1568,6 +1569,25 @@ enum RichMenuTemplateStatus {
   ARCHIVED
 }
 
+enum RichMenuPublishStatus {
+  PENDING
+  VALIDATING
+  CREATING
+  IMAGE_UPLOADING
+  SETTING_DEFAULT
+  VERIFYING
+  PUBLISHED
+  FAILED
+  ROLLING_BACK
+  ROLLED_BACK
+}
+
+enum RichMenuPreviousDefaultSource {
+  MESSAGING_API
+  OTHER_OR_MANAGER
+  NONE
+}
+
 model RichMenuTemplate {
   id              String                  @id @default(uuid())
   name            String
@@ -1576,6 +1596,7 @@ model RichMenuTemplate {
   canvasPreset    String                  @default("GRID_6")
   width           Int                     @default(2500)
   height          Int                     @default(1686)
+  selected        Boolean                 @default(true)
   chatBarText     String                  @default("Menu")
   imageUrl        String?
   areasJson       Json                    @default("[]")
@@ -1584,6 +1605,7 @@ model RichMenuTemplate {
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   assignments     RichMenuStoreAssignment[]
+  publishAttempts RichMenuPublishAttempt[]
 
   @@index([status])
   @@index([createdAt])
@@ -1597,8 +1619,38 @@ model RichMenuStoreAssignment {
   lineOfficialAccount   LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
+  publishAttempts       RichMenuPublishAttempt[]
 
   @@unique([templateId, lineOfficialAccountId])
   @@index([templateId])
   @@index([lineOfficialAccountId])
+}
+
+model RichMenuPublishAttempt {
+  id                         String                          @id @default(uuid())
+  templateId                 String
+  lineOfficialAccountId      String
+  assignmentId               String?
+  status                     RichMenuPublishStatus           @default(PENDING)
+  lineRichMenuId             String?
+  previousDefaultRichMenuId  String?
+  previousDefaultSource      RichMenuPreviousDefaultSource?
+  resolvedConfigJson         Json?
+  errorStage                 String?
+  errorCode                  String?
+  errorMessage               String?
+  attemptNumber              Int                             @default(1)
+  createdByUserId            String?
+  startedAt                  DateTime                        @default(now())
+  completedAt                DateTime?
+  createdAt                  DateTime                        @default(now())
+  updatedAt                  DateTime                        @updatedAt
+  template                   RichMenuTemplate                @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  lineOfficialAccount        LineOfficialAccount             @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+  assignment                 RichMenuStoreAssignment?        @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+  @@index([lineOfficialAccountId])
+  @@index([status])
+  @@index([createdAt])
 }

@@ -145,7 +145,7 @@ test("RichMenusView image upload performs client validation and preserves previo
   assert.match(viewFile, /imageError \? \(/);
 });
 
-test("API client exports Rich Menu template and readiness methods", () => {
+test("API client exports Rich Menu Phase 2A canary publish, retry, and rollback methods", () => {
   const apiFile = readFileSync(resolve(process.cwd(), "src/lib/api.ts"), "utf8");
   assert.match(apiFile, /listRichMenuTemplates/);
   assert.match(apiFile, /getRichMenuTemplate/);
@@ -155,6 +155,11 @@ test("API client exports Rich Menu template and readiness methods", () => {
   assert.match(apiFile, /previewRichMenuTemplate/);
   assert.match(apiFile, /getRichMenuReadiness/);
   assert.match(apiFile, /saveRichMenuAssignments/);
+  assert.match(apiFile, /publishCanaryRichMenu/);
+  assert.match(apiFile, /listRichMenuPublishAttempts/);
+  assert.match(apiFile, /getRichMenuPublishAttempt/);
+  assert.match(apiFile, /retryRichMenuPublish/);
+  assert.match(apiFile, /rollbackRichMenuPublish/);
   assert.match(apiFile, /uploadRichMenuImage:\s*\(file:\s*File,\s*preset\?:/);
 });
 
@@ -170,4 +175,57 @@ test("RichMenusView enables vertical page scrolling while preserving chats fixed
   const pageFile = readFileSync(resolve(process.cwd(), "src/app/page.tsx"), "utf8");
   assert.match(pageFile, /data-chat-pane="conversations"/);
   assert.match(pageFile, /data-chat-message-scroll/);
+});
+
+test("RichMenusView enforces Phase 2A Single-Store Canary publishing rules and modals", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+
+  // Single-store canary eligibility check (exactly 1 store, ready, image present, saved)
+  assert.match(viewFile, /selectedOaIds\.size === 1/);
+  assert.match(viewFile, /singleSelectedStoreItem\.readinessStatus === "READY"/);
+  assert.match(viewFile, /isCanaryPublishEligible/);
+
+  // Publish and Rollback modals
+  assert.match(viewFile, /isPublishModalOpen/);
+  assert.match(viewFile, /isRollbackModalOpen/);
+  assert.match(viewFile, /handlePublishCanary/);
+  assert.match(viewFile, /handleRollback/);
+  assert.match(viewFile, /handleRetry/);
+
+  // Target stores table contains Publish status column
+  assert.match(viewFile, /colPublishStatus/);
+  assert.match(viewFile, /statusPublished/);
+  assert.match(viewFile, /statusFailed/);
+  assert.match(viewFile, /statusRolledBack/);
+  assert.match(viewFile, /rollbackButton/);
+  assert.match(viewFile, /retryPublishButton/);
+
+  // Default display behavior selector supports show / collapse
+  assert.match(viewFile, /formSelected === true/);
+  assert.match(viewFile, /formSelected === false/);
+  assert.match(viewFile, /behaviorShow/);
+  assert.match(viewFile, /behaviorCollapsed/);
+});
+
+test("Rich Menu i18n dictionary supports Phase 2A publishing, rollback, and status messages across th, en, and zh", () => {
+  // Thai
+  assert.equal(RICH_MENU_I18N.th.publishToLine, "เผยแพร่ไปยัง LINE");
+  assert.equal(RICH_MENU_I18N.th.publishCanaryModalTitle, "เผยแพร่ริชเมนูไปยัง LINE?");
+  assert.equal(RICH_MENU_I18N.th.confirmAndPublish, "ยืนยันและเผยแพร่");
+  assert.equal(RICH_MENU_I18N.th.rollbackButton, "ย้อนกลับริชเมนู");
+  assert.equal(RICH_MENU_I18N.th.statusPublished, "● เผยแพร่แล้ว");
+
+  // English
+  assert.equal(RICH_MENU_I18N.en.publishToLine, "Publish to LINE");
+  assert.equal(RICH_MENU_I18N.en.publishCanaryModalTitle, "Publish Rich Menu to LINE?");
+  assert.equal(RICH_MENU_I18N.en.confirmAndPublish, "Confirm and Publish");
+  assert.equal(RICH_MENU_I18N.en.rollbackButton, "Rollback");
+  assert.equal(RICH_MENU_I18N.en.statusPublished, "● Published");
+
+  // Chinese
+  assert.equal(RICH_MENU_I18N.zh.publishToLine, "发布至 LINE");
+  assert.equal(RICH_MENU_I18N.zh.publishCanaryModalTitle, "发布丰富菜单至 LINE？");
+  assert.equal(RICH_MENU_I18N.zh.confirmAndPublish, "确认并发布");
+  assert.equal(RICH_MENU_I18N.zh.rollbackButton, "回滚菜单");
+  assert.equal(RICH_MENU_I18N.zh.statusPublished, "● 已发布");
 });

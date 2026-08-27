@@ -1,3 +1,13 @@
+# Rich Menu Phase 2A: Safe Single-Store Canary LINE Publishing Architecture (2026-08-27)
+
+- **Single-Store Canary Scope Invariance**: Phase 2A strictly constrains real LINE publishing to exactly one store per publish request. Bulk or unattended publishing remains completely gated until Phase 2B.
+- **Centralized LINE HTTP Client (`LineRichMenuClientService`)**: All LINE Messaging API calls (validation, create, content upload, get/set default, delete, unlink) are consolidated in `LineRichMenuClientService`, avoiding scattered network calls across services or controllers.
+- **Pre-Publish Previous Default Detection**: Prior to linking a new default rich menu, the system queries `GET https://api.line.me/v2/bot/user/all/richmenu` and captures `previousDefaultSource` (`MESSAGING_API` with ID, `NONE` on 404, `OTHER_OR_MANAGER` on 403) to enable safe, complete rollback.
+- **Stage Progression & Cleanup Guarantee**: Publishing follows `VALIDATING` $\to$ Detect previous default $\to$ `CREATING` $\to$ `IMAGE_UPLOADING` $\to$ `SETTING_DEFAULT` $\to$ `VERIFYING` $\to$ `PUBLISHED`. On image upload failure, the orphaned rich menu is automatically deleted on LINE.
+- **Safe Rollback**: `POST /publish-attempts/:id/rollback` restores the previous default Messaging API rich menu or cleanly unlinks the default menu to reveal LINE Official Account Manager defaults.
+- **Store Master Dynamic Resolution at Publish Time**: Variables such as `{{store.googleMapsUrl}}` and `{{store.storeName}}` are resolved freshly from the database at publish time. Any unresolved or invalid variable safely rejects before any LINE API mutation occurs.
+- **Zero-Secret Logging**: Credentials and decrypted tokens are never logged, never included in database `resolvedConfigJson`, and never returned in API responses.
+
 # Rich Menu Media Storage DI & Outbound Public URL Architecture (2026-08-27)
 
 - **Required MediaStorageService Dependency**: `RichMenuService` requires `MediaStorageService` directly from `MediaModule` via NestJS DI container, avoiding silent `undefined` injections.

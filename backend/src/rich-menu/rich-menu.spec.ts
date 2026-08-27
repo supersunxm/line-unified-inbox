@@ -14,6 +14,9 @@ import {
 import { createMediaPublicUrl, verifyMediaPublicUrl } from "../media/media-public-url";
 import { MediaStorageService } from "../media/media-storage";
 import { MediaModule } from "../media/media.module";
+import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
+import { LineRichMenuClientService } from "./line-rich-menu-client.service";
+import { AuditLogService } from "../auth/audit-log.service";
 import { Test } from "@nestjs/testing";
 import { RichMenuModule } from "./rich-menu.module";
 import { PrismaModule } from "../prisma.module";
@@ -337,7 +340,7 @@ test("RichMenuService refreshes signed URLs for saved templates on retrieval", a
   assert.equal(verifyMediaPublicUrl(getKey, getExp, getSig), true);
 });
 
-test("NestJS DI regression test: RichMenuService resolves with required MediaStorageService", async () => {
+test("NestJS DI regression test: RichMenuService resolves with required MediaStorageService and LineRichMenuClientService", async () => {
   const moduleRef = await Test.createTestingModule({
     providers: [
       RichMenuService,
@@ -345,6 +348,18 @@ test("NestJS DI regression test: RichMenuService resolves with required MediaSto
       {
         provide: PrismaService,
         useValue: {},
+      },
+      {
+        provide: CredentialEncryptionService,
+        useValue: { decrypt: (val: string) => val },
+      },
+      {
+        provide: LineRichMenuClientService,
+        useValue: {},
+      },
+      {
+        provide: AuditLogService,
+        useValue: { record: async () => {} },
       },
     ],
   }).compile();
@@ -360,7 +375,7 @@ test("NestJS DI regression test: RichMenuService resolves with required MediaSto
   assert.equal(injectedMedia instanceof MediaStorageService, true);
 });
 
-test("Module wiring test: RichMenuModule imports MediaModule and exports RichMenuService", () => {
+test("Module wiring test: RichMenuModule imports MediaModule and CredentialsModule, and exports RichMenuService", () => {
   const richMenuImports = Reflect.getMetadata("imports", RichMenuModule);
   assert.ok(richMenuImports.includes(MediaModule), "RichMenuModule must import MediaModule");
 
@@ -369,4 +384,408 @@ test("Module wiring test: RichMenuModule imports MediaModule and exports RichMen
 
   const mediaExports = Reflect.getMetadata("exports", MediaModule);
   assert.ok(mediaExports.includes(MediaStorageService), "MediaModule must export MediaStorageService");
+});
+
+// =========================================================================
+// Phase 2A Unit Tests
+// =========================================================================
+
+test("LineRichMenuClientService: validates payload against LINE validate API", async () => {
+  const originalFetch = global.fetch;
+  try {
+    const client = new LineRichMenuClientService();
+
+    // 1. Success case (200 OK)
+    global.fetch = (async (url: any, opts: any) => {
+      assert.equal(url, "https://api.line.me/v2/bot/richmenu/validate");
+      assert.equal(opts.method, "POST");
+      assert.equal(opts.headers.Authorization, "Bearer secret-token");
+      return new Response(JSON.stringify({}), { status: 200 });
+    }) as any;
+
+    const validRes = await client.validateRichMenu("secret-token", {
+      size: { width: 2500, height: 1686 },
+      selected: true,
+      name: "Test Menu",
+      chatBarText: "Menu",
+      areas: [],
+    });
+    assert.equal(validRes.valid, true);
+
+    // 2. Error case (400 Bad Request)
+    global.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          message: "The request body is invalid.",
+          details: [{ message: "chatBarText cannot be empty" }],
+        }),
+        { status: 400 },
+      );
+    }) as any;
+
+    const invalidRes = await client.validateRichMenu("secret-token", {
+      size: { width: 2500, height: 1686 },
+      selected: true,
+      name: "Test Menu",
+      chatBarText: "",
+      areas: [],
+    });
+    assert.equal(invalidRes.valid, false);
+    assert.equal(invalidRes.message, "chatBarText cannot be empty");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("LineRichMenuClientService: detects previous default rich menu sources", async () => {
+  const originalFetch = global.fetch;
+  try {
+    const client = new LineRichMenuClientService();
+
+    // 1. MESSAGING_API (200 OK)
+    global.fetch = (async () => {
+      return new Response(JSON.stringify({ richMenuId: "richmenu-prev-123" }), { status: 200 });
+    }) as any;
+    const res200 = await client.getDefaultRichMenu("token");
+    assert.equal(res200.source, "MESSAGING_API");
+    assert.equal(res200.richMenuId, "richmenu-prev-123");
+
+    // 2. NONE (404 Not Found)
+    global.fetch = (async () => {
+      return new Response(JSON.stringify({ message: "Not found" }), { status: 404 });
+    }) as any;
+    const res404 = await client.getDefaultRichMenu("token");
+    assert.equal(res404.source, "NONE");
+    assert.equal(res404.richMenuId, null);
+
+    // 3. OTHER_OR_MANAGER (403 Forbidden)
+    global.fetch = (async () => {
+      return new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 });
+    }) as any;
+    const res403 = await client.getDefaultRichMenu("token");
+    assert.equal(res403.source, "OTHER_OR_MANAGER");
+    assert.equal(res403.richMenuId, null);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("RichMenuService.publishCanary: Phase 2A single-store end-to-end publishing pipeline", async () => {
+  const recordedAuditLogs: any[] = [];
+  const publishedLineCalls: string[] = [];
+
+  const fakeAuditLog = {
+    record: async (input: any) => {
+      recordedAuditLogs.push(input);
+    },
+  } as any;
+
+  const mockEncryption = {
+    decrypt: (val: string) => `decrypted-${val}`,
+  } as any;
+
+  const mockMedia = {
+    get: async (key: string) => ({
+      body: Buffer.from("fake-png-bytes"),
+      contentType: "image/png",
+    }),
+  } as any;
+
+  const mockPublishClient = {
+    validateRichMenu: async (_token: string, payload: any) => {
+      publishedLineCalls.push("validate");
+      assert.equal(payload.selected, true);
+      assert.equal(payload.name, "Summer Campaign");
+      assert.equal(payload.areas.length, 1);
+      assert.equal(payload.areas[0].action.uri, "https://maps.app.goo.gl/central-bangna");
+      return { valid: true };
+    },
+    getDefaultRichMenu: async (_token: string) => {
+      publishedLineCalls.push("getDefault");
+      // Initially returns existing default
+      if (publishedLineCalls.filter((c) => c === "getDefault").length === 1) {
+        return { richMenuId: "richmenu-existing-999", source: "MESSAGING_API" as const };
+      }
+      // Verification call returns newly created richmenu
+      return { richMenuId: "richmenu-new-created-123", source: "MESSAGING_API" as const };
+    },
+    createRichMenu: async (_token: string, _payload: any) => {
+      publishedLineCalls.push("create");
+      return { richMenuId: "richmenu-new-created-123" };
+    },
+    uploadRichMenuImage: async (_token: string, richMenuId: string, _buf: Buffer, contentType: string) => {
+      publishedLineCalls.push("uploadImage");
+      assert.equal(richMenuId, "richmenu-new-created-123");
+      assert.equal(contentType, "image/png");
+    },
+    setDefaultRichMenu: async (_token: string, richMenuId: string) => {
+      publishedLineCalls.push("setDefault");
+      assert.equal(richMenuId, "richmenu-new-created-123");
+    },
+    clearDefaultRichMenu: async () => {
+      publishedLineCalls.push("clearDefault");
+    },
+    deleteRichMenu: async () => {
+      publishedLineCalls.push("delete");
+    },
+  } as any;
+
+  let attemptRecord: any = null;
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tpl-1",
+        name: "Summer Campaign",
+        status: "DRAFT",
+        canvasPreset: "LARGE_1",
+        width: 2500,
+        height: 1686,
+        selected: true,
+        chatBarText: "Menu",
+        imageUrl: createMediaPublicUrl("line-media/outbound/rich-menu/image.png"),
+        areasJson: [
+          {
+            id: "area-1",
+            bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+            actionType: "URI",
+            actionData: "{{store.googleMapsUrl}}",
+            label: "Open Maps",
+          },
+        ],
+        assignments: [{ id: "assign-1", lineOfficialAccountId: "oa-bangna" }],
+      }),
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-bangna",
+        name: "OPPO Central Bangna",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "encrypted-token-bangna",
+        store: {
+          id: "store-bangna",
+          name: "OBS Central Bangna",
+          storeMaster: {
+            externalStoreId: "TH001",
+            googleMapsUrl: "https://maps.app.goo.gl/central-bangna",
+          },
+        },
+      }),
+    },
+    richMenuPublishAttempt: {
+      findFirst: async () => null, // No active attempt
+      count: async () => 0,
+      create: async (args: any) => {
+        attemptRecord = {
+          id: "attempt-1",
+          ...args.data,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        return attemptRecord;
+      },
+      update: async (args: any) => {
+        attemptRecord = {
+          ...attemptRecord,
+          ...args.data,
+          updatedAt: new Date(),
+        };
+        return attemptRecord;
+      },
+    },
+  } as any;
+
+  const service = new RichMenuService(
+    mockPrisma,
+    mockMedia,
+    mockEncryption,
+    mockPublishClient,
+    fakeAuditLog,
+  );
+
+  const result = await service.publishCanary(
+    "tpl-1",
+    { lineOfficialAccountId: "oa-bangna" },
+    { id: "admin-user-1", username: "admin", role: "ADMIN" } as any,
+  );
+
+  // Assert pipeline execution sequence
+  assert.deepEqual(publishedLineCalls, [
+    "validate",
+    "getDefault",
+    "create",
+    "uploadImage",
+    "setDefault",
+    "getDefault",
+  ]);
+
+  assert.equal(result.status, "PUBLISHED");
+  assert.equal(result.lineRichMenuId, "richmenu-new-created-123");
+  assert.equal(result.previousDefaultRichMenuId, "richmenu-existing-999");
+  assert.equal(result.previousDefaultSource, "MESSAGING_API");
+
+  // Verify Audit Logs
+  assert.equal(recordedAuditLogs.length, 2);
+  assert.equal(recordedAuditLogs[0].action, "RICH_MENU_PUBLISH_STARTED");
+  assert.equal(recordedAuditLogs[1].action, "RICH_MENU_PUBLISHED");
+
+  // Privacy Check: No secret token in config or logs
+  const configString = JSON.stringify(attemptRecord.resolvedConfigJson);
+  assert.equal(configString.includes("decrypted-encrypted-token-bangna"), false);
+  assert.equal(configString.includes("secret"), false);
+});
+
+test("RichMenuService.publishCanary: handles image upload failure with automatic cleanup delete", async () => {
+  const publishedLineCalls: string[] = [];
+
+  const mockEncryption = {
+    decrypt: (val: string) => `decrypted-${val}`,
+  } as any;
+
+  const mockMedia = {
+    get: async () => ({
+      body: Buffer.from("fake-png-bytes"),
+      contentType: "image/png",
+    }),
+  } as any;
+
+  const mockPublishClient = {
+    validateRichMenu: async () => ({ valid: true }),
+    getDefaultRichMenu: async () => ({ richMenuId: null, source: "NONE" as const }),
+    createRichMenu: async () => {
+      publishedLineCalls.push("create");
+      return { richMenuId: "richmenu-failed-upload-999" };
+    },
+    uploadRichMenuImage: async () => {
+      publishedLineCalls.push("uploadImageFail");
+      throw new Error("LINE API server error during image upload");
+    },
+    deleteRichMenu: async (_token: string, richMenuId: string) => {
+      publishedLineCalls.push(`delete:${richMenuId}`);
+    },
+  } as any;
+
+  let attemptStatus = "";
+  let errorStage = "";
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tpl-1",
+        name: "Test",
+        status: "DRAFT",
+        width: 2500,
+        height: 1686,
+        selected: true,
+        chatBarText: "Menu",
+        imageUrl: createMediaPublicUrl("line-media/outbound/rich-menu/image.png"),
+        areasJson: [
+          {
+            id: "area-1",
+            bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+            actionType: "URI",
+            actionData: "https://example.com",
+          },
+        ],
+        assignments: [{ id: "assign-1", lineOfficialAccountId: "oa-1" }],
+      }),
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-1",
+        name: "OPPO Test",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "enc-token",
+        store: { id: "s-1", name: "Store 1", storeMaster: {} },
+      }),
+    },
+    richMenuPublishAttempt: {
+      findFirst: async () => null,
+      count: async () => 0,
+      create: async (args: any) => ({ id: "att-fail", ...args.data }),
+      update: async (args: any) => {
+        if (args.data.status) attemptStatus = args.data.status;
+        if (args.data.errorStage) errorStage = args.data.errorStage;
+        return { id: "att-fail", ...args.data };
+      },
+    },
+  } as any;
+
+  const service = new RichMenuService(
+    mockPrisma,
+    mockMedia,
+    mockEncryption,
+    mockPublishClient,
+  );
+
+  await assert.rejects(
+    async () => {
+      await service.publishCanary("tpl-1", { lineOfficialAccountId: "oa-1" }, { id: "user-1" } as any);
+    },
+    { message: "LINE API server error during image upload" },
+  );
+
+  assert.deepEqual(publishedLineCalls, [
+    "create",
+    "uploadImageFail",
+    "delete:richmenu-failed-upload-999",
+  ]);
+  assert.equal(attemptStatus, "FAILED");
+  assert.equal(errorStage, "IMAGE_UPLOADING");
+});
+
+test("RichMenuService.rollbackPublish: restores previous default or clears default", async () => {
+  const publishedLineCalls: string[] = [];
+
+  const mockPublishClient = {
+    setDefaultRichMenu: async (_token: string, richMenuId: string) => {
+      publishedLineCalls.push(`setDefault:${richMenuId}`);
+    },
+    clearDefaultRichMenu: async () => {
+      publishedLineCalls.push("clearDefault");
+    },
+    getDefaultRichMenu: async () => ({ richMenuId: "restored-prev-id", source: "MESSAGING_API" as const }),
+  } as any;
+
+  const mockEncryption = { decrypt: (val: string) => val } as any;
+
+  const mockPrisma = {
+    richMenuPublishAttempt: {
+      findUnique: async () => ({
+        id: "att-pub",
+        templateId: "tpl-1",
+        lineOfficialAccountId: "oa-1",
+        status: "PUBLISHED",
+        lineRichMenuId: "richmenu-to-rollback",
+        previousDefaultRichMenuId: "richmenu-previous-default",
+        previousDefaultSource: "MESSAGING_API",
+        lineOfficialAccount: {
+          name: "OPPO Store",
+          encryptedChannelAccessToken: "tok",
+          store: { name: "Store 1" },
+        },
+      }),
+      update: async (args: any) => ({
+        id: "att-pub",
+        templateId: "tpl-1",
+        lineOfficialAccountId: "oa-1",
+        ...args.data,
+      }),
+    },
+  } as any;
+
+  const service = new RichMenuService(
+    mockPrisma,
+    {} as any,
+    mockEncryption,
+    mockPublishClient,
+  );
+
+  const res = await service.rollbackPublish("att-pub", { id: "admin-1" } as any);
+  assert.equal(res.status, "ROLLED_BACK");
+  assert.deepEqual(publishedLineCalls, ["setDefault:richmenu-previous-default"]);
 });

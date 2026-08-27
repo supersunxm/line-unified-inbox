@@ -2,19 +2,22 @@ import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma.module";
 import { AuthModule } from "../auth/auth.module";
 import { MediaModule } from "../media/media.module";
+import { CredentialsModule } from "../credentials/credentials.module";
 import { RichMenuController } from "./rich-menu.controller";
-import { RichMenuPublishNoopAdapter, RichMenuService } from "./rich-menu.service";
+import { RichMenuService } from "./rich-menu.service";
+import { LineRichMenuClientService } from "./line-rich-menu-client.service";
 
 @Module({
-  imports: [PrismaModule, AuthModule, MediaModule],
+  imports: [PrismaModule, AuthModule, MediaModule, CredentialsModule],
   controllers: [RichMenuController],
   providers: [
     RichMenuService,
+    LineRichMenuClientService,
     {
       provide: "IRichMenuPublishService",
-      useClass: RichMenuPublishNoopAdapter,
+      useClass: LineRichMenuClientService,
     },
   ],
-  exports: [RichMenuService],
+  exports: [RichMenuService, LineRichMenuClientService],
 })
 export class RichMenuModule {}

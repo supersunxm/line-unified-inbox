@@ -478,6 +478,36 @@ export const api = {
         body: JSON.stringify({ lineOfficialAccountIds }),
       },
     ),
+  publishCanaryRichMenu: (templateId: string, lineOfficialAccountId: string) =>
+    request<import("@/types/api").RichMenuPublishAttempt>(
+      `/rich-menu/templates/${encodeURIComponent(templateId)}/publish-canary`,
+      {
+        method: "POST",
+        body: JSON.stringify({ lineOfficialAccountId }),
+      },
+    ),
+  listRichMenuPublishAttempts: (templateId: string) =>
+    request<import("@/types/api").RichMenuPublishAttempt[]>(
+      `/rich-menu/templates/${encodeURIComponent(templateId)}/publish-attempts`,
+    ),
+  getRichMenuPublishAttempt: (attemptId: string) =>
+    request<import("@/types/api").RichMenuPublishAttempt>(
+      `/rich-menu/publish-attempts/${encodeURIComponent(attemptId)}`,
+    ),
+  retryRichMenuPublish: (attemptId: string) =>
+    request<import("@/types/api").RichMenuPublishAttempt>(
+      `/rich-menu/publish-attempts/${encodeURIComponent(attemptId)}/retry`,
+      {
+        method: "POST",
+      },
+    ),
+  rollbackRichMenuPublish: (attemptId: string) =>
+    request<import("@/types/api").RichMenuPublishAttempt>(
+      `/rich-menu/publish-attempts/${encodeURIComponent(attemptId)}/rollback`,
+      {
+        method: "POST",
+      },
+    ),
   uploadRichMenuImage: (file: File, preset?: string) => {
     const formData = new FormData();
     formData.append("file", file);

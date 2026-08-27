@@ -1217,12 +1217,33 @@ export type RichMenuTemplate = {
   canvasPreset: RichMenuCanvasPreset;
   width: number;
   height: number;
+  selected: boolean;
   chatBarText: string;
   imageUrl: string | null;
   areas: RichMenuArea[];
   version: number;
   assignedStoresCount?: number;
   assignedLineOfficialAccountIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RichMenuPublishAttempt = {
+  id: string;
+  templateId: string;
+  lineOfficialAccountId: string;
+  lineOfficialAccountName?: string;
+  storeName?: string;
+  status: string;
+  lineRichMenuId: string | null;
+  previousDefaultRichMenuId: string | null;
+  previousDefaultSource: string | null;
+  errorStage: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  attemptNumber: number;
+  startedAt: string;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1240,6 +1261,12 @@ export type RichMenuStoreReadinessItem = {
   readinessStatus: "READY" | "BLOCKED";
   readinessReason: string | null;
   selected: boolean;
+  publishStatus?: string;
+  publishedRichMenuId?: string | null;
+  lastPublishedAt?: string | null;
+  lastPublishError?: string | null;
+  lastPublishErrorStage?: string | null;
+  publishAttemptId?: string | null;
 };
 
 export type RichMenuReadinessSummary = {

@@ -7,6 +7,7 @@ import type {
   RichMenuCanvasPreset,
   RichMenuPreviewResponse,
   RichMenuReadinessResponse,
+  RichMenuStoreReadinessItem,
   RichMenuTemplate,
 } from "@/types/api";
 import type { Language } from "@/components/shell/top-navigation";
@@ -154,28 +155,16 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       LARGE_2_ROWS: { label: t.presetLarge2Rows, description: "2500 × 1686 px" },
       LARGE_2_COLS: { label: t.presetLarge2Cols, description: "2500 × 1686 px" },
       LARGE_1: { label: t.presetLarge1, description: "2500 × 1686 px" },
-
       COMPACT_3: { label: t.presetCompact3, description: "2500 × 843 px" },
       COMPACT_LEFT_SMALL: { label: t.presetCompactLeftSmall, description: "2500 × 843 px" },
       COMPACT_LEFT_LARGE: { label: t.presetCompactLeftLarge, description: "2500 × 843 px" },
       COMPACT_2: { label: t.presetCompact2, description: "2500 × 843 px" },
       COMPACT_1: { label: t.presetCompact1, description: "2500 × 843 px" },
-
       GRID_6: { label: t.presetLarge6, description: "2500 × 1686 px" },
       GRID_4: { label: t.presetLarge4, description: "2500 × 1686 px" },
       GRID_3: { label: t.presetCompact3, description: "2500 × 843 px" },
-      CUSTOM: { label: t.presetCustom, description: "Custom" },
+      CUSTOM: { label: t.presetCustom, description: "2500 × 1686 px" },
     }),
-    [t],
-  );
-
-  const supportedVariables = useMemo(
-    () => [
-      { token: "{{store.storeName}}", label: t.varStoreName, example: "OBS Central Pinklao" },
-      { token: "{{store.googleMapsUrl}}", label: t.varGoogleMapsUrl, example: "https://maps.app.goo.gl/..." },
-      { token: "{{store.lineUrl}}", label: t.varLineUrl, example: "https://line.me/R/ti/p/..." },
-      { token: "{{store.tiktokUrl}}", label: t.varTiktokUrl, example: "https://tiktok.com/@..." },
-    ],
     [t],
   );
 
@@ -191,6 +180,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [formPreset, setFormPreset] = useState<RichMenuCanvasPreset>("LARGE_6");
   const [formWidth, setFormWidth] = useState(2500);
   const [formHeight, setFormHeight] = useState(1686);
+  const [formSelected, setFormSelected] = useState(true);
   const [formChatBarText, setFormChatBarText] = useState("Menu");
   const [formImageUrl, setFormImageUrl] = useState<string | null>(null);
   const [formAreas, setFormAreas] = useState<RichMenuArea[]>([]);
@@ -225,6 +215,38 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [previewData, setPreviewData] = useState<RichMenuPreviewResponse | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // Phase 2A: Single-Store Canary Publishing State
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishStage, setPublishStage] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  // Phase 2A: Rollback Modal State
+  const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
+  const [rollbackAttemptId, setRollbackAttemptId] = useState<string | null>(null);
+  const [rollingBack, setRollingBack] = useState(false);
+
+  // Computed Canary Publish eligibility
+  const singleSelectedOaId = selectedOaIds.size === 1 ? Array.from(selectedOaIds)[0] : null;
+  const singleSelectedStoreItem = useMemo(() => {
+    if (!singleSelectedOaId || !readinessData?.items) return null;
+    return readinessData.items.find((i) => i.lineOfficialAccountId === singleSelectedOaId) || null;
+  }, [singleSelectedOaId, readinessData]);
+
+  const isCanaryPublishEligible = Boolean(
+    userRole === "ADMIN" &&
+      selectedTemplateId &&
+      selectedTemplateId !== "new" &&
+      formImageUrl &&
+      singleSelectedStoreItem &&
+      singleSelectedStoreItem.readinessStatus === "READY",
+  );
+
+  const rollbackTargetStoreItem = useMemo(() => {
+    if (!rollbackAttemptId || !readinessData?.items) return null;
+    return readinessData.items.find((i) => i.publishAttemptId === rollbackAttemptId) || null;
+  }, [rollbackAttemptId, readinessData]);
+
   // Load template list
   const loadTemplates = async (selectId?: string) => {
     setLoadingTemplates(true);
@@ -257,6 +279,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormPreset("LARGE_6");
     setFormWidth(2500);
     setFormHeight(1686);
+    setFormSelected(true);
     setFormChatBarText(t.menuBarDefault);
     setFormImageUrl(null);
     const presetAreas = generatePresetAreasClient("LARGE_6", 2500, 1686);
@@ -280,6 +303,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormPreset(tmpl.canvasPreset);
     setFormWidth(tmpl.width);
     setFormHeight(tmpl.height);
+    setFormSelected(tmpl.selected !== false);
     setFormChatBarText(tmpl.chatBarText || t.menuBarDefault);
     setFormImageUrl(tmpl.imageUrl || null);
     setFormAreas(tmpl.areas || []);
@@ -386,22 +410,10 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     try {
       const res = await api.uploadRichMenuImage(file, formPreset);
       setFormImageUrl(res.imageUrl);
-      if (res.width && res.height) {
-        setFormWidth(res.width);
-        setFormHeight(res.height);
-      }
-      setImageError(null);
+      setFormWidth(res.width);
+      setFormHeight(res.height);
     } catch (err: any) {
-      const msg = err.message || "";
-      if (msg.includes("JPG") || msg.includes("PNG") || msg.includes("format") || msg.includes("Unsupported")) {
-        setImageError(t.unsupportedFormatError);
-      } else if (msg.includes("สัดส่วน") || msg.includes("aspect") || msg.includes("ratio")) {
-        setImageError(t.aspectRatioMismatchError);
-      } else if (msg.includes("1 MB") || msg.includes("1MB") || msg.includes("exceeds")) {
-        setImageError(t.imageSizeError);
-      } else {
-        setImageError(err.message || t.imageUploadError);
-      }
+      setImageError(err.message || t.imageUploadError);
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -417,7 +429,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
     setSavingTemplate(true);
     setSaveMessage(null);
-
     try {
       const payload = {
         name: formName.trim(),
@@ -425,6 +436,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         canvasPreset: formPreset,
         width: formWidth,
         height: formHeight,
+        selected: formSelected,
         chatBarText: formChatBarText.trim() || t.menuBarDefault,
         imageUrl: formImageUrl,
         areas: formAreas,
@@ -493,6 +505,60 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     }
   };
 
+  // Phase 2A: Handle Canary Publish
+  const handlePublishCanary = async () => {
+    if (!selectedTemplateId || selectedTemplateId === "new" || !singleSelectedOaId) return;
+
+    setPublishing(true);
+    setPublishError(null);
+    setPublishStage(t.stageValidating);
+    try {
+      await api.publishCanaryRichMenu(selectedTemplateId, singleSelectedOaId);
+      setSaveMessage({ type: "success", text: t.publishSuccess });
+      setIsPublishModalOpen(false);
+      await loadReadiness(selectedTemplateId);
+    } catch (err: any) {
+      setPublishError(err.message || t.failedPublish);
+    } finally {
+      setPublishing(false);
+      setPublishStage(null);
+    }
+  };
+
+  // Phase 2A: Handle Rollback
+  const handleRollback = async () => {
+    if (!rollbackAttemptId || !selectedTemplateId) return;
+
+    setRollingBack(true);
+    try {
+      await api.rollbackRichMenuPublish(rollbackAttemptId);
+      setSaveMessage({ type: "success", text: t.rollbackSuccess });
+      setIsRollbackModalOpen(false);
+      setRollbackAttemptId(null);
+      await loadReadiness(selectedTemplateId);
+    } catch (err: any) {
+      setSaveMessage({ type: "error", text: err.message || t.failedRollback });
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
+  // Phase 2A: Handle Retry
+  const handleRetry = async (attemptId: string) => {
+    if (!selectedTemplateId) return;
+
+    setPublishing(true);
+    try {
+      await api.retryRichMenuPublish(attemptId);
+      setSaveMessage({ type: "success", text: t.publishSuccess });
+      await loadReadiness(selectedTemplateId);
+    } catch (err: any) {
+      setSaveMessage({ type: "error", text: err.message || t.failedPublish });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   // Filtered stores
   const filteredStores = useMemo(() => {
     if (!readinessData?.items) return [];
@@ -524,7 +590,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t.pageTitle}</h1>
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+              <span className="text-[11px] font-semibold text-[#06C755] bg-[#06C755]/10 px-2 py-0.5 rounded">
                 {t.phase1Badge}
               </span>
             </div>
@@ -541,6 +607,30 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 {saveMessage.text}
               </span>
             )}
+
+            {/* Canary Publish Button */}
+            {userRole === "ADMIN" && (
+              <button
+                type="button"
+                onClick={() => setIsPublishModalOpen(true)}
+                disabled={!isCanaryPublishEligible || publishing}
+                title={
+                  selectedOaIds.size === 0
+                    ? t.selectSingleStoreToPublish
+                    : selectedOaIds.size > 1
+                    ? t.publishCanaryNoticeSingle
+                    : !formImageUrl
+                    ? t.uploadImageFirst
+                    : !selectedTemplateId || selectedTemplateId === "new"
+                    ? t.saveTemplateFirst
+                    : undefined
+                }
+                className="inline-flex items-center justify-center gap-1.5 rounded border border-[#06C755] bg-[#06C755]/10 hover:bg-[#06C755]/20 text-[#06C755] dark:text-[#06C755] px-4 py-2 text-xs font-bold transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {publishing ? t.publishingToLine : t.publishToLine}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleSaveTemplate}
@@ -567,35 +657,37 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   setSelectedTemplateId(e.target.value);
                 }
               }}
+              disabled={loadingTemplates}
               className="h-8 rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
             >
+              <option value="new">{t.newTemplateOption}</option>
               {templates.map((tmpl) => (
                 <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name} ({presetLabels[tmpl.canvasPreset]?.label || tmpl.canvasPreset})
+                  {tmpl.name} ({tmpl.assignedStoresCount || 0} stores)
                 </option>
               ))}
-              <option value="new">{t.newTemplateOption}</option>
             </select>
           </div>
 
           <button
             type="button"
             onClick={initNewTemplate}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#06C755] hover:underline"
+            className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-gray-50 dark:bg-[var(--app-surface-subtle)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-[var(--app-surface-hover)] transition"
           >
             {t.newTemplateButton}
           </button>
         </div>
 
         {/* 2. Main Settings Section */}
-        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-4">
+        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] pb-2.5">
             {t.mainSettings}
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+            {/* Title */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+              <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
                 {t.title} <span className="text-rose-500">*</span>
               </label>
               <input
@@ -603,234 +695,229 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder={t.titlePlaceholder}
-                className="h-9 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+                className="h-9 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-[#06C755] focus:outline-none"
               />
               <p className="text-[11px] text-gray-400 mt-1">{t.titleHint}</p>
             </div>
 
+            {/* Display Period */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+              <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
                 {t.displayPeriod}
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  disabled
-                  value={t.notConfiguredPhase1}
-                  className="h-9 flex-1 rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-gray-50 dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-400 cursor-not-allowed"
-                />
+              <div className="flex items-center gap-2 h-9">
+                <span className="inline-flex items-center rounded bg-gray-100 dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+                  {t.notConfiguredPhase1}
+                </span>
+                <span className="text-[11px] text-gray-400">{t.displayPeriodHint}</span>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">{t.displayPeriodHint}</p>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
+          {/* Advanced description toggle */}
+          <div className="pt-2">
             <button
               type="button"
               onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-medium hover:text-[#06C755]"
+              className="text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1.5"
             >
-              <span>{showAdvancedSettings ? "▾" : "▸"}</span> {t.advancedSettings}
+              <span>{showAdvancedSettings ? "▾" : "▸"}</span>
+              <span>{t.advancedSettings}</span>
             </button>
             {showAdvancedSettings && (
               <div className="mt-2.5 max-w-xl">
                 <textarea
-                  rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder={t.descriptionPlaceholder}
-                  className="w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] p-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+                  rows={2}
+                  className="w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-2.5 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-[#06C755] focus:outline-none"
                 />
               </div>
             )}
           </div>
         </section>
 
-        {/* 3. Menu Content Section (2-Column Editor: Preview Left ~36%, Editor Right ~64%) */}
-        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-5">
-            {t.menuContent}
-          </h2>
+        {/* 3. Menu Content Section (Full Layout Editor) */}
+        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] pb-3">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.menuContent}</h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* ===================== LEFT: Preview Panel (36%) ===================== */}
-            <div className="lg:col-span-5 flex flex-col space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{t.preview}</span>
-                {loadingPreview && <span className="text-[10px] text-gray-400 animate-pulse">{t.resolvingStore}</span>}
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium">{t.templateLabel}:</span>
+              <span className="rounded bg-gray-100 dark:bg-gray-800 px-2.5 py-1 text-xs font-bold text-gray-800 dark:text-gray-200">
+                {presetLabels[formPreset]?.label || formPreset} ({t.areasCount(formAreas.length)})
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalSelectedPreset(formPreset);
+                  setIsPresetModalOpen(true);
+                }}
+                className="rounded border border-[#06C755] bg-white dark:bg-[var(--app-surface)] px-3 py-1 text-xs font-bold text-[#06C755] hover:bg-[#06C755]/5 transition"
+              >
+                {t.changeTemplate}
+              </button>
+            </div>
+          </div>
 
-              {/* Store Selector */}
-              <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] p-2.5 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{t.previewAs}</label>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Visual Canvas & Image Upload */}
+            <div className="lg:col-span-5 space-y-4">
+              {/* Preview Store Selector */}
+              <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-700 dark:text-gray-300">{t.previewAs}</span>
                   {selectedStoreItem && (
                     <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
                         selectedStoreItem.readinessStatus === "READY"
-                          ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                          : "text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"
+                          ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300"
+                          : "bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300"
                       }`}
                     >
                       {selectedStoreItem.readinessStatus === "READY" ? t.statusReady : t.statusBlocked}
                     </span>
                   )}
                 </div>
-
                 <select
                   value={previewStoreOaId}
                   onChange={(e) => {
                     setPreviewStoreOaId(e.target.value);
-                    if (selectedTemplateId) loadPreview(selectedTemplateId, e.target.value);
+                    if (selectedTemplateId && selectedTemplateId !== "new") {
+                      void loadPreview(selectedTemplateId, e.target.value);
+                    }
                   }}
                   className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
                 >
-                  {readinessData?.items.map((item) => (
-                    <option key={item.lineOfficialAccountId} value={item.lineOfficialAccountId}>
-                      {item.storeName} ({item.externalStoreId || "—"})
+                  {readinessData?.items.map((store) => (
+                    <option key={store.lineOfficialAccountId} value={store.lineOfficialAccountId}>
+                      {store.storeName} ({store.lineOfficialAccountName}) {store.externalStoreId ? `[${store.externalStoreId}]` : ""}
                     </option>
                   ))}
                 </select>
-
                 {selectedStoreItem && (
-                  <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
-                    <span>{t.storeId}: {selectedStoreItem.externalStoreId || "—"}</span>
+                  <div className="text-[11px] text-gray-500 flex flex-wrap gap-x-3 gap-y-1 pt-1">
+                    <span>
+                      {t.storeId}: <strong className="text-gray-700 dark:text-gray-300">{selectedStoreItem.externalStoreId || "—"}</strong>
+                    </span>
                     <span>
                       {t.googleMaps}:{" "}
-                      {selectedStoreItem.googleMapsUrl ? (
-                        <span className="text-emerald-600 font-medium">✓ {t.configured}</span>
-                      ) : (
-                        <span className="text-rose-500 font-medium">⚠ {t.notConfigured}</span>
-                      )}
+                      <strong className={selectedStoreItem.googleMapsUrl ? "text-emerald-600" : "text-rose-500"}>
+                        {selectedStoreItem.googleMapsUrl ? t.configured : t.notConfigured}
+                      </strong>
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* LINE Phone-like Canvas Mockup */}
-              <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#f3f4f6] dark:bg-[var(--app-surface-subtle)] p-2 shadow-xs">
+              {/* Rich Menu Canvas (Aspect Ratio Preserved) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-700 dark:text-gray-300">{t.preview}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-gray-500 select-none">
+                    <input
+                      type="checkbox"
+                      checked={showOutline}
+                      onChange={(e) => setShowOutline(e.target.checked)}
+                      className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
+                    />
+                    <span>{t.showTemplateOutline}</span>
+                  </label>
+                </div>
+
                 <div
-                  className="relative w-full rounded border border-gray-300 dark:border-gray-700 bg-slate-900 overflow-hidden flex items-center justify-center"
-                  style={{ aspectRatio: `${formWidth} / ${formHeight}` }}
+                  className="relative w-full overflow-hidden rounded border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 shadow-inner"
+                  style={{
+                    aspectRatio: `${formWidth} / ${formHeight}`,
+                  }}
                 >
+                  {/* Background Image */}
                   {formImageUrl ? (
                     <img
                       src={formImageUrl}
-                      alt="Rich Menu Preview Background"
-                      className="absolute inset-0 h-full w-full object-cover"
+                      alt={formName}
+                      className="absolute inset-0 h-full w-full object-cover select-none pointer-events-none"
                     />
                   ) : (
-                    <div className="text-center p-4 text-gray-400 text-xs font-mono">
-                      {t.noImageUploaded(formWidth, formHeight)}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center text-gray-400">
+                      <span className="text-2xl mb-1">🖼</span>
+                      <span className="text-xs font-medium">{t.noImageUploaded(formWidth, formHeight)}</span>
                     </div>
                   )}
 
-                  {/* Area Overlays with LINE OA Letters */}
-                  {showOutline &&
-                    formAreas.map((area, index) => {
-                      const letter = getAreaLetter(index);
-                      const leftPct = (area.bounds.x / formWidth) * 100;
-                      const topPct = (area.bounds.y / formHeight) * 100;
-                      const widthPct = (area.bounds.width / formWidth) * 100;
-                      const heightPct = (area.bounds.height / formHeight) * 100;
-                      const isSelected = area.id === activeAreaId;
+                  {/* Interactive Area Overlays */}
+                  {formAreas.map((area, index) => {
+                    const letter = getAreaLetter(index);
+                    const isActive = area.id === activeAreaId;
+                    const leftPct = (area.bounds.x / formWidth) * 100;
+                    const topPct = (area.bounds.y / formHeight) * 100;
+                    const widthPct = (area.bounds.width / formWidth) * 100;
+                    const heightPct = (area.bounds.height / formHeight) * 100;
 
-                      return (
-                        <div
-                          key={area.id}
-                          onClick={() => setActiveAreaId(area.id)}
-                          className={`absolute cursor-pointer transition select-none flex flex-col items-center justify-center p-1.5 text-center ${
-                            isSelected
-                              ? "border-2 border-[#06C755] bg-[#06C755]/20 ring-2 ring-[#06C755]/30 z-20"
-                              : "border border-white/40 bg-black/25 hover:bg-black/15 z-10"
+                    return (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() => setActiveAreaId(area.id)}
+                        style={{
+                          left: `${leftPct}%`,
+                          top: `${topPct}%`,
+                          width: `${widthPct}%`,
+                          height: `${heightPct}%`,
+                        }}
+                        className={`absolute flex flex-col items-center justify-center transition-all ${
+                          showOutline ? "border border-dashed" : "border-none"
+                        } ${
+                          isActive
+                            ? "border-2 border-[#06C755] bg-[#06C755]/20 shadow-md z-10"
+                            : "border-gray-400/80 hover:bg-black/10 z-0"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow-sm ${
+                            isActive
+                              ? "bg-[#06C755] text-white"
+                              : "bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-gray-100"
                           }`}
-                          style={{
-                            left: `${leftPct}%`,
-                            top: `${topPct}%`,
-                            width: `${widthPct}%`,
-                            height: `${heightPct}%`,
-                          }}
                         >
-                          <span
-                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow ${
-                              isSelected ? "bg-[#06C755] text-white" : "bg-white text-gray-800"
-                            }`}
-                          >
-                            {letter}
+                          {letter}
+                        </span>
+                        {area.label && (
+                          <span className="mt-1 max-w-[85%] truncate rounded bg-black/60 px-1 text-[10px] font-medium text-white shadow-xs">
+                            {area.label}
                           </span>
-                        </div>
-                      );
-                    })}
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Simulated LINE Chat Bar at bottom */}
-                <div className="mt-1.5 flex items-center justify-between rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300">
-                  <span className="text-gray-400">⌨</span>
-                  <span className="font-medium text-gray-800 dark:text-gray-200">{formChatBarText || t.menuBarDefault} ▾</span>
-                  <span className="text-gray-400">···</span>
+                {/* Bottom Chat Bar Mockup */}
+                <div className="flex items-center justify-between rounded bg-[#eef1f4] dark:bg-gray-800 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-gray-400">≡</span>
+                    <span>{formChatBarText || t.menuBarDefault}</span>
+                  </span>
+                  <span className="text-[10px] text-gray-400">▲</span>
                 </div>
               </div>
 
-              {/* Show template outline toggle */}
-              <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none pt-1">
-                <input
-                  type="checkbox"
-                  checked={showOutline}
-                  onChange={(e) => setShowOutline(e.target.checked)}
-                  className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
-                />
-                <span>{t.showTemplateOutline}</span>
-              </label>
-            </div>
-
-            {/* ===================== RIGHT: Template / Image / Actions Editor (64%) ===================== */}
-            <div className="lg:col-span-7 flex flex-col space-y-6">
-              {/* Template Row */}
-              <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
-                <div>
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{t.templateLabel}</span>
-                  <p className="text-xs text-gray-900 dark:text-gray-100 font-semibold mt-0.5">
-                    {presetLabels[formPreset]?.label || formPreset} ({formWidth} x {formHeight} px, {t.areasCount(formAreas.length)})
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalSelectedPreset(formPreset);
-                    setIsPresetModalOpen(true);
-                  }}
-                  className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition"
-                >
-                  {t.changeTemplate}
-                </button>
-              </div>
-
-              {/* Image Row */}
-              <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
-                <div className="min-w-0 flex-1 pr-3">
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{t.image}</span>
-                  {formImageUrl ? (
-                    <p className="truncate text-xs text-gray-900 dark:text-gray-100 font-medium mt-0.5">
+              {/* Image Upload Box */}
+              <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{t.image}</span>
+                  {formImageUrl && (
+                    <span className="text-[11px] font-semibold text-emerald-600">
                       {t.imageUploaded(formWidth, formHeight)}
-                    </p>
-                  ) : imageError ? (
-                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-0.5 flex items-center gap-1">
-                      <span>⚠</span> {imageError}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-400 mt-0.5">{t.noImageSelected}</p>
-                  )}
-                  {formImageUrl && imageError && (
-                    <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium mt-1 flex items-center gap-1">
-                      <span>⚠</span> {imageError}
-                    </p>
+                    </span>
                   )}
                 </div>
 
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png"
+                  accept="image/jpeg,image/png,image/jpg"
                   onChange={handleImageFileChange}
                   className="hidden"
                 />
@@ -840,7 +927,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingImage}
-                    className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
+                    className="rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-3.5 py-1.5 text-xs font-bold transition disabled:opacity-50"
                   >
                     {uploadingImage ? t.uploadingImage : formImageUrl ? t.replaceImage : t.selectImage}
                   </button>
@@ -848,153 +935,176 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     <button
                       type="button"
                       onClick={() => setFormImageUrl(null)}
-                      className="text-xs text-rose-500 hover:underline px-2 py-1"
+                      className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition"
                     >
                       {t.removeImage}
                     </button>
                   )}
                 </div>
+
+                {imageError ? (
+                  <p className="text-[11px] font-medium text-rose-600">{imageError}</p>
+                ) : (
+                  <p className="text-[11px] text-gray-400">{t.noImageSelected}</p>
+                )}
               </div>
+            </div>
 
-              {/* Actions Section */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                  {t.actions}
-                </h3>
+            {/* Right Column: Actions Editor for each Area */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] pb-2.5">
+                  <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+                    {t.actions} ({t.areasCount(formAreas.length)})
+                  </h3>
+                  <span className="text-xs font-mono text-gray-400">
+                    {formWidth} × {formHeight} px
+                  </span>
+                </div>
 
-                <div className="space-y-2">
+                {/* Area Tabs / Cards */}
+                <div className="space-y-3">
                   {formAreas.map((area, index) => {
                     const letter = getAreaLetter(index);
-                    const isExpanded = area.id === activeAreaId;
-                    const previewAreaResolved = previewData?.areas.find((a) => a.id === area.id);
+                    const isActive = area.id === activeAreaId;
+                    const previewAreaResolved = previewData?.areas?.find((a) => a.id === area.id);
 
                     return (
                       <div
                         key={area.id}
-                        className={`rounded border transition ${
-                          isExpanded
-                            ? "border-[#06C755] bg-white dark:bg-[var(--app-surface)] shadow-2xs"
-                            : "border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] hover:border-gray-300"
+                        onClick={() => setActiveAreaId(area.id)}
+                        className={`rounded-lg border p-3.5 transition ${
+                          isActive
+                            ? "border-[#06C755] bg-[#06C755]/5 shadow-xs"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[var(--app-surface)] hover:border-gray-300"
                         }`}
                       >
-                        {/* Area Header Bar */}
-                        <div
-                          onClick={() => setActiveAreaId(area.id)}
-                          className="flex cursor-pointer items-center justify-between px-3.5 py-2.5 text-xs select-none"
-                        >
-                          <div className="flex items-center gap-2.5">
+                        {/* Area Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
                             <span
                               className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
-                                isExpanded ? "bg-[#06C755] text-white" : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                                isActive ? "bg-[#06C755] text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                               }`}
                             >
                               {letter}
                             </span>
-                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                              {t.actionType}: {area.actionType === "URI" ? t.actionTypeUri : t.actionTypeMessage}
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                              Area {letter} ({area.bounds.width} × {area.bounds.height} px)
                             </span>
-                            {!isExpanded && area.actionData && (
-                              <span className="truncate max-w-xs text-[11px] text-gray-500 dark:text-gray-400 font-mono">
-                                {area.actionData}
-                              </span>
-                            )}
                           </div>
 
-                          <span className="text-gray-400 text-xs font-mono">{isExpanded ? "▾" : "▸"}</span>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <label className="text-gray-500 text-[11px] font-medium">{t.actionType}:</label>
+                            <select
+                              value={area.actionType}
+                              onChange={(e) => updateArea(area.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
+                              className="h-7 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:border-[#06C755] focus:outline-none"
+                            >
+                              <option value="URI">{t.actionTypeUri}</option>
+                              <option value="MESSAGE">{t.actionTypeMessage}</option>
+                            </select>
+                          </div>
                         </div>
 
-                        {/* Expanded Area Form */}
-                        {isExpanded && (
-                          <div className="p-4 pt-1 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)] space-y-3.5">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-                              <div>
-                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                  {t.actionType}
-                                </label>
-                                <select
-                                  value={area.actionType}
-                                  onChange={(e) => updateArea(area.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
-                                  className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
-                                >
-                                  <option value="URI">{t.actionTypeUri}</option>
-                                  <option value="MESSAGE">{t.actionTypeMessage}</option>
-                                </select>
-                              </div>
+                        {/* Action Value Input with Variable Insertion */}
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <label className="font-bold text-gray-700 dark:text-gray-300">
+                              {area.actionType === "URI" ? t.url : t.message} <span className="text-rose-500">*</span>
+                            </label>
 
-                              <div className="md:col-span-2">
-                                <div className="flex items-center justify-between mb-1">
-                                  <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300">
-                                    {area.actionType === "URI" ? t.url : t.message}
-                                  </label>
+                            {/* Variable Injection Dropdown */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVariableDropdownOpenFor(
+                                    variableDropdownOpenFor === area.id ? null : area.id,
+                                  );
+                                }}
+                                className="text-[11px] font-semibold text-[#06C755] hover:underline"
+                              >
+                                {t.insertVariable}
+                              </button>
 
-                                  {/* Variable Insert Dropdown */}
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setVariableDropdownOpenFor(variableDropdownOpenFor === area.id ? null : area.id)
-                                      }
-                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#06C755] hover:underline"
-                                    >
-                                      {t.insertVariable}
-                                    </button>
-
-                                    {variableDropdownOpenFor === area.id && (
-                                      <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-md border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] py-1 shadow-lg">
-                                        {supportedVariables.map((v) => (
-                                          <button
-                                            key={v.token}
-                                            type="button"
-                                            onClick={() => insertToken(area.id, v.token)}
-                                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] flex flex-col"
-                                          >
-                                            <span className="font-semibold text-gray-800 dark:text-gray-200">{v.label}</span>
-                                            <span className="font-mono text-[10px] text-gray-400">{v.token}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <input
-                                  type="text"
-                                  value={area.actionData}
-                                  onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
-                                  placeholder={area.actionType === "URI" ? t.urlPlaceholder : t.messagePlaceholder}
-                                  className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Resolved Store Preview Context under Area */}
-                            {previewAreaResolved && (
-                              <div className="rounded bg-[#f9fafb] dark:bg-[var(--app-surface-subtle)] border border-[#e5e7eb] dark:border-[var(--app-border)] p-2 text-xs space-y-1">
-                                <div className="flex items-center justify-between text-[11px]">
-                                  <span className="text-gray-500 dark:text-gray-400">
-                                    {t.resolvedFor} <strong>{previewData?.store.storeName}</strong>:
-                                  </span>
-                                  <span
-                                    className={`font-semibold ${
-                                      previewAreaResolved.isValid ? "text-emerald-600" : "text-rose-500"
-                                    }`}
+                              {variableDropdownOpenFor === area.id && (
+                                <div className="absolute right-0 top-full mt-1 z-30 w-64 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => insertToken(area.id, "{{store.googleMapsUrl}}")}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col"
                                   >
-                                    {previewAreaResolved.isValid
-                                      ? t.valid
-                                      : t.invalid(
-                                          previewAreaResolved.validationError === "Missing Google Maps URL"
-                                            ? t.missingGoogleMapsReason
-                                            : previewAreaResolved.validationError === "Invalid Google Maps URL"
-                                            ? t.invalidGoogleMapsReason
-                                            : previewAreaResolved.validationError || ""
-                                        )}
-                                  </span>
+                                    <span className="font-bold">{t.varGoogleMapsUrl}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.googleMapsUrl}}"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => insertToken(area.id, "{{store.storeName}}")}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                  >
+                                    <span className="font-bold">{t.varStoreName}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.storeName}}"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => insertToken(area.id, "{{store.lineUrl}}")}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                  >
+                                    <span className="font-bold">{t.varLineUrl}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.lineUrl}}"}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => insertToken(area.id, "{{store.tiktokUrl}}")}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex flex-col border-t border-gray-100 dark:border-gray-700/50"
+                                  >
+                                    <span className="font-bold">{t.varTiktokUrl}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">{"{{store.tiktokUrl}}"}</span>
+                                  </button>
                                 </div>
-                                <p className="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
-                                  {previewAreaResolved.resolvedActionData || t.emptyValue}
-                                </p>
-                              </div>
-                            )}
+                              )}
+                            </div>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={area.actionData}
+                            onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
+                            placeholder={area.actionType === "URI" ? t.urlPlaceholder : t.messagePlaceholder}
+                            className="h-8 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Live Resolution Preview */}
+                        {isActive && (
+                          <div className="mt-2.5 rounded bg-gray-50 dark:bg-gray-900/40 p-2 text-xs border border-gray-100 dark:border-gray-800 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-gray-500">
+                                {t.resolvedFor} {selectedStoreItem?.storeName || "—"}:
+                              </span>
+                              {previewAreaResolved && (
+                                <span
+                                  className={`font-semibold ${
+                                    previewAreaResolved.isValid ? "text-emerald-600" : "text-rose-600"
+                                  }`}
+                                >
+                                  {previewAreaResolved.isValid
+                                    ? t.valid
+                                    : t.invalid(
+                                        previewAreaResolved.validationError === "Missing Google Maps URL"
+                                          ? t.missingGoogleMapsReason
+                                          : previewAreaResolved.validationError === "Invalid Google Maps URL"
+                                          ? t.invalidGoogleMapsReason
+                                          : previewAreaResolved.validationError || "",
+                                      )}
+                                </span>
+                              )}
+                            </div>
+                            <p className="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                              {previewAreaResolved?.resolvedActionData || area.actionData || t.emptyValue}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1029,11 +1139,23 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     </label>
                     <div className="flex items-center gap-4 text-xs pt-1.5 text-gray-700 dark:text-gray-300">
                       <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="radio" name="defaultBehavior" checked readOnly className="text-[#06C755]" />
+                        <input
+                          type="radio"
+                          name="defaultBehavior"
+                          checked={formSelected === true}
+                          onChange={() => setFormSelected(true)}
+                          className="text-[#06C755] focus:ring-[#06C755]"
+                        />
                         <span>{t.behaviorShow}</span>
                       </label>
-                      <label className="flex items-center gap-1.5 text-gray-400 cursor-not-allowed">
-                        <input type="radio" name="defaultBehavior" disabled className="text-gray-400" />
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="defaultBehavior"
+                          checked={formSelected === false}
+                          onChange={() => setFormSelected(false)}
+                          className="text-[#06C755] focus:ring-[#06C755]"
+                        />
                         <span>{t.behaviorCollapsed}</span>
                       </label>
                     </div>
@@ -1044,7 +1166,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
           </div>
         </section>
 
-        {/* 4. Target Stores Section (Store Readiness Table below Editor) */}
+        {/* 4. Target Stores Section (Store Readiness & Publish Table) */}
         <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
             <div>
@@ -1068,6 +1190,19 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   {assignmentsMessage.text}
                 </span>
               )}
+
+              {/* Publish Canary in Target Stores Bar */}
+              {userRole === "ADMIN" && (
+                <button
+                  type="button"
+                  onClick={() => setIsPublishModalOpen(true)}
+                  disabled={!isCanaryPublishEligible || publishing}
+                  className="inline-flex items-center justify-center gap-1 rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-3.5 py-1.5 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs"
+                >
+                  {publishing ? t.publishingToLine : t.publishToLine}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleSaveAssignments}
@@ -1138,19 +1273,20 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   <th className="px-3 py-2.5">{t.colStoreName}</th>
                   <th className="px-3 py-2.5">{t.colLineOaName}</th>
                   <th className="px-3 py-2.5">{t.colProvince}</th>
-                  <th className="w-36 px-3 py-2.5">{t.colStatus}</th>
+                  <th className="w-32 px-3 py-2.5">{t.colStatus}</th>
+                  <th className="w-48 px-3 py-2.5">{t.colPublishStatus}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f3f4f6] dark:divide-[var(--app-border-subtle)]">
                 {loadingReadiness ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
                       {t.evaluatingReadiness}
                     </td>
                   </tr>
                 ) : filteredStores.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
                       {t.noStoresFound}
                     </td>
                   </tr>
@@ -1212,6 +1348,70 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                             )}
                           </div>
                         </td>
+                        {/* Publish Status Column */}
+                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          {store.publishStatus === "PUBLISHED" ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                {t.statusPublished}
+                              </span>
+                              {userRole === "ADMIN" && store.publishAttemptId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRollbackAttemptId(store.publishAttemptId!);
+                                    setIsRollbackModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-bold text-rose-600 hover:underline"
+                                >
+                                  {t.rollbackButton}
+                                </button>
+                              )}
+                            </div>
+                          ) : store.publishStatus === "FAILED" ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-rose-600 dark:text-rose-400">
+                                  {t.statusFailed}
+                                </span>
+                                {store.lastPublishError && (
+                                  <span
+                                    className="text-[10px] text-rose-500 truncate max-w-[100px]"
+                                    title={store.lastPublishError}
+                                  >
+                                    {store.lastPublishError}
+                                  </span>
+                                )}
+                              </div>
+                              {userRole === "ADMIN" && store.publishAttemptId && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetry(store.publishAttemptId!)}
+                                  disabled={publishing}
+                                  className="text-[10px] font-bold text-[#06C755] hover:underline"
+                                >
+                                  {t.retryPublishButton}
+                                </button>
+                              )}
+                            </div>
+                          ) : store.publishStatus === "ROLLED_BACK" ? (
+                            <span className="text-gray-400 font-medium">{t.statusRolledBack}</span>
+                          ) : [
+                              "PENDING",
+                              "VALIDATING",
+                              "CREATING",
+                              "IMAGE_UPLOADING",
+                              "SETTING_DEFAULT",
+                              "VERIFYING",
+                              "ROLLING_BACK",
+                            ].includes(store.publishStatus || "") ? (
+                            <span className="font-semibold text-amber-600 animate-pulse">
+                              {t.publishingToLine}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 font-normal">{t.statusNotPublished}</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -1249,110 +1449,120 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               {/* Group 1: Large (7 templates) */}
               <div className="space-y-3">
                 <div>
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-center gap-2">
                     <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.templateGroupLarge}</h4>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{t.templateGroupLargeDims}</span>
+                    <span className="text-xs text-gray-500 font-normal">{t.templateGroupLargeDims}</span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.templateGroupLargeDesc}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.templateGroupLargeDesc}</p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {LARGE_PRESETS.map((preset) => {
                     const isSelected = modalSelectedPreset === preset;
-                    const dim = PRESET_DIMENSIONS[preset];
-                    const areas = generatePresetAreasClient(preset, dim.width, dim.height);
-
+                    const meta = presetLabels[preset];
                     return (
-                      <div
+                      <button
                         key={preset}
+                        type="button"
                         onClick={() => setModalSelectedPreset(preset)}
-                        onDoubleClick={() => handleApplyPreset(preset)}
-                        className={`cursor-pointer rounded transition p-2 flex flex-col items-center justify-center ${
+                        className={`group relative flex flex-col items-center rounded-lg border-2 p-3 text-center transition ${
                           isSelected
-                            ? "border-2 border-[#06C755] bg-[#06C755]/5 shadow-xs"
-                            : "border border-[#d1d5db] dark:border-gray-700 bg-[#f8f9fa] dark:bg-gray-800 hover:border-gray-400"
+                            ? "border-[#06C755] bg-[#06C755]/5 shadow-sm"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[var(--app-surface)] hover:border-gray-300"
                         }`}
                       >
                         <div
-                          className="w-full relative rounded overflow-hidden shadow-2xs"
-                          style={{ aspectRatio: `${dim.width} / ${dim.height}` }}
+                          className="relative w-full overflow-hidden rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-2.5"
+                          style={{ aspectRatio: "2500 / 1686" }}
                         >
-                          <svg
-                            viewBox={`0 0 ${dim.width} ${dim.height}`}
-                            className="w-full h-full block bg-white dark:bg-gray-900"
-                          >
-                            {areas.map((area) => (
-                              <rect
+                          {generatePresetAreasClient(preset).map((area, idx) => {
+                            const letter = getAreaLetter(idx);
+                            const lPct = (area.bounds.x / 2500) * 100;
+                            const tPct = (area.bounds.y / 1686) * 100;
+                            const wPct = (area.bounds.width / 2500) * 100;
+                            const hPct = (area.bounds.height / 1686) * 100;
+                            return (
+                              <div
                                 key={area.id}
-                                x={area.bounds.x}
-                                y={area.bounds.y}
-                                width={area.bounds.width}
-                                height={area.bounds.height}
-                                fill={isSelected ? "rgba(6, 199, 85, 0.08)" : "#ffffff"}
-                                stroke="#b6babf"
-                                strokeWidth="2"
-                                vectorEffect="non-scaling-stroke"
-                              />
-                            ))}
-                          </svg>
+                                style={{
+                                  left: `${lPct}%`,
+                                  top: `${tPct}%`,
+                                  width: `${wPct}%`,
+                                  height: `${hPct}%`,
+                                }}
+                                className="absolute border border-gray-300 dark:border-gray-700 flex items-center justify-center bg-white/60 dark:bg-black/40"
+                              >
+                                <span className="text-[10px] font-bold text-gray-500">{letter}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 group-hover:text-[#06C755]">
+                          {meta?.label || preset}
+                        </span>
+                        <span className="text-[10px] text-gray-400">{meta?.description}</span>
+                      </button>
                     );
                   })}
                 </div>
               </div>
 
               {/* Group 2: Compact (5 templates) */}
-              <div className="space-y-3">
+              <div className="space-y-3 pt-4 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
                 <div>
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-center gap-2">
                     <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.templateGroupCompact}</h4>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{t.templateGroupCompactDims}</span>
+                    <span className="text-xs text-gray-500 font-normal">{t.templateGroupCompactDims}</span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.templateGroupCompactDesc}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.templateGroupCompactDesc}</p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {COMPACT_PRESETS.map((preset) => {
                     const isSelected = modalSelectedPreset === preset;
-                    const dim = PRESET_DIMENSIONS[preset];
-                    const areas = generatePresetAreasClient(preset, dim.width, dim.height);
-
+                    const meta = presetLabels[preset];
                     return (
-                      <div
+                      <button
                         key={preset}
+                        type="button"
                         onClick={() => setModalSelectedPreset(preset)}
-                        onDoubleClick={() => handleApplyPreset(preset)}
-                        className={`cursor-pointer rounded transition p-2 flex flex-col items-center justify-center ${
+                        className={`group relative flex flex-col items-center rounded-lg border-2 p-3 text-center transition ${
                           isSelected
-                            ? "border-2 border-[#06C755] bg-[#06C755]/5 shadow-xs"
-                            : "border border-[#d1d5db] dark:border-gray-700 bg-[#f8f9fa] dark:bg-gray-800 hover:border-gray-400"
+                            ? "border-[#06C755] bg-[#06C755]/5 shadow-sm"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[var(--app-surface)] hover:border-gray-300"
                         }`}
                       >
                         <div
-                          className="w-full relative rounded overflow-hidden shadow-2xs"
-                          style={{ aspectRatio: `${dim.width} / ${dim.height}` }}
+                          className="relative w-full overflow-hidden rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-2.5"
+                          style={{ aspectRatio: "2500 / 843" }}
                         >
-                          <svg
-                            viewBox={`0 0 ${dim.width} ${dim.height}`}
-                            className="w-full h-full block bg-white dark:bg-gray-900"
-                          >
-                            {areas.map((area) => (
-                              <rect
+                          {generatePresetAreasClient(preset).map((area, idx) => {
+                            const letter = getAreaLetter(idx);
+                            const lPct = (area.bounds.x / 2500) * 100;
+                            const tPct = (area.bounds.y / 843) * 100;
+                            const wPct = (area.bounds.width / 2500) * 100;
+                            const hPct = (area.bounds.height / 843) * 100;
+                            return (
+                              <div
                                 key={area.id}
-                                x={area.bounds.x}
-                                y={area.bounds.y}
-                                width={area.bounds.width}
-                                height={area.bounds.height}
-                                fill={isSelected ? "rgba(6, 199, 85, 0.08)" : "#ffffff"}
-                                stroke="#b6babf"
-                                strokeWidth="2"
-                                vectorEffect="non-scaling-stroke"
-                              />
-                            ))}
-                          </svg>
+                                style={{
+                                  left: `${lPct}%`,
+                                  top: `${tPct}%`,
+                                  width: `${wPct}%`,
+                                  height: `${hPct}%`,
+                                }}
+                                className="absolute border border-gray-300 dark:border-gray-700 flex items-center justify-center bg-white/60 dark:bg-black/40"
+                              >
+                                <span className="text-[10px] font-bold text-gray-500">{letter}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 group-hover:text-[#06C755]">
+                          {meta?.label || preset}
+                        </span>
+                        <span className="text-[10px] text-gray-400">{meta?.description}</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -1360,20 +1570,155 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#e5e7eb] dark:border-[var(--app-border)] bg-gray-50/80 dark:bg-gray-900/40">
+            <div className="flex items-center justify-end gap-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4 bg-gray-50 dark:bg-[var(--app-surface-subtle)]">
               <button
                 type="button"
                 onClick={() => setIsPresetModalOpen(false)}
-                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] px-5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100"
+                className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition"
               >
                 {t.cancel}
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyPreset(modalSelectedPreset)}
-                className="rounded bg-[#06C755] hover:bg-[#05b34c] px-6 py-1.5 text-xs font-bold text-white shadow-xs transition"
+                className="rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs"
               >
                 {t.apply}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Phase 2A: Single-Store Canary Publish Confirmation Modal */}
+      {isPublishModalOpen && singleSelectedStoreItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <span>🚀</span>
+                <span>{t.publishCanaryModalTitle}</span>
+              </h3>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                {t.publishCanaryModalDesc}
+              </p>
+
+              {/* Target Details Card */}
+              <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[var(--app-surface-subtle)] p-3.5 space-y-2 font-medium">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.selectedStore}:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">
+                    {singleSelectedStoreItem.storeName} ({singleSelectedStoreItem.externalStoreId || "—"})
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.selectedLineOa}:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {singleSelectedStoreItem.lineOfficialAccountName}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.selectedTemplate}:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">{formName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t.colStatus}:</span>
+                  <span className="font-bold text-emerald-600">{t.statusReady}</span>
+                </div>
+              </div>
+
+              {publishStage && (
+                <div className="flex items-center gap-2 rounded bg-emerald-50 dark:bg-emerald-950/50 p-2.5 text-emerald-700 dark:text-emerald-300 font-semibold animate-pulse">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>{publishStage}</span>
+                </div>
+              )}
+
+              {publishError && (
+                <div className="rounded bg-rose-50 dark:bg-rose-950/50 p-3 text-rose-600 dark:text-rose-400 font-medium">
+                  {publishError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4 bg-gray-50 dark:bg-[var(--app-surface-subtle)]">
+              <button
+                type="button"
+                onClick={() => setIsPublishModalOpen(false)}
+                disabled={publishing}
+                className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handlePublishCanary}
+                disabled={publishing}
+                className="rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                {publishing ? t.publishingToLine : t.confirmAndPublish}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Phase 2A: Rollback Confirmation Modal */}
+      {isRollbackModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
+              <h3 className="text-base font-bold text-rose-600 flex items-center gap-2">
+                <span>↩</span>
+                <span>{t.rollbackModalTitle}</span>
+              </h3>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                {t.rollbackModalDesc}
+              </p>
+
+              {rollbackTargetStoreItem && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[var(--app-surface-subtle)] p-3.5 space-y-2 font-medium">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.selectedStore}:</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">
+                      {rollbackTargetStoreItem.storeName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{t.selectedLineOa}:</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      {rollbackTargetStoreItem.lineOfficialAccountName}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4 bg-gray-50 dark:bg-[var(--app-surface-subtle)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRollbackModalOpen(false);
+                  setRollbackAttemptId(null);
+                }}
+                disabled={rollingBack}
+                className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[var(--app-surface)] px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleRollback}
+                disabled={rollingBack}
+                className="rounded bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                {rollingBack ? t.stageRollingBack : t.confirmRollback}
               </button>
             </div>
           </div>
