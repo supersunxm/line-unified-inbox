@@ -1361,3 +1361,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Render the Flutter shell before provider/network work: `main()` registers the FCM background callback synchronously and calls `runApp` without awaiting Firebase. Notification/Firebase setup and the long-lived realtime connection begin only after a session has selected Login, retry, or Home.
 - Startup restoration is an explicit two-stage state machine. Secure-storage access and `/auth/me` each have a 15-second coordinator timeout; temporary failures produce a retryable state while retaining credentials, and only `SESSION_EXPIRED`/a rejected refresh can select Login. API request, refresh, connectivity, and secure-storage operations are bounded at 20 seconds and recovery failures are classified so a temporary refresh outage cannot be rethrown as a terminal 401.
 - Safe diagnostics record stage, outcome, and elapsed time only. No token, password, message body, or secret is emitted. The updater remains manual-only; the separate active-install resume lifecycle is unchanged.
+
+# Android 1.1.2 release boundary (2026-08-27)
+
+- Release `1.1.2+22` is additive over the merged PR #63 manual-only update prompt and PR #64 bounded startup/auth restoration fixes. No new product behavior, Main OA behavior, session policy, or notification/realtime contract is authorized.
+- The existing GitHub Actions permanent signing identity is the only production signing path. The APK is published and copied into release metadata only after independent package, version, certificate, and SHA-256 verification.
+- `/app/version/android` remains backed by the additive `AppRelease` migration, while `/download` and `/download/history` retain every prior APK and release entry. The new migration is idempotent/upsert-based and only deactivates older Android releases; it does not delete production data.
+- The signed artifact was produced by the existing permanent-key GitHub workflow and independently checked before publication. Metadata uses the verified SHA-256 and a content-addressed APK URL; the local migration was deployed only to the verification database, not production.

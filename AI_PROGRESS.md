@@ -2476,3 +2476,11 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Notifications/Firebase and realtime start after navigation and are never awaited by the startup state machine. The manual-only updater behavior from PR #63 remains intact, including the active unknown-source install-resume path.
 - Flutter analyze passes; the full Flutter suite passes 167/167; Android `assembleDebug` passes; backend full tests pass 1,349/1,349; Prisma generation and backend build pass. No production APK was built or released.
 - Next action: review and commit only the scoped startup/auth changes, push the feature branch, open a PR, and monitor CI without merging. A physical Android APK test is still required before calling the real-device startup issue fully verified.
+
+# Current task: Android 1.1.2+22 hotfix release (2026-08-27)
+
+- Created clean release worktree/branch `release/android-1.1.2` from latest `origin/main` at `c7c83ab907c8a9ff95d8b612bf35cf1888f42cea`, preserving unrelated edits in the shared checkout.
+- Release scope is limited to the merged manual-only update prompt behavior (PR #63), bounded startup restoration/provider work (PR #64), and the existing updater/install improvements. Android version/workflow gates are prepared for `1.1.2+22`; no product feature changes are included.
+- Permanent-key workflow `33048872351` passed. The signed APK is 59,605,662 bytes with SHA-256 `151b0b074d3b6beb8171d62385c485e5fb4a0481c2cd9a530041e8937e441c50`; independent verification confirms package `click.lineoppo.chat`, version `1.1.2+22`, and the required permanent certificate. Flutter-driven debug metadata also reports versionCode 22/versionName 1.1.2.
+- Flutter analyze and full tests pass (167/167); backend tests pass (1349/1349), Prisma validate/generate/migrate deploy pass locally (including the additive release migration), backend build passes, and frontend tests/build pass (441/441). The isolated production frontend serves `/download`, `/download/history`, and the exact APK bytes/checksum successfully.
+- Release-only metadata, migration, APK, and fixture updates remain to be committed and pushed; then open the PR and monitor required CI without merging. Physical-device updater/startup verification remains explicitly required before declaring those real-device issues fully verified.

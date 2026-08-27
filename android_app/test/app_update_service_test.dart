@@ -350,12 +350,12 @@ void main() {
       final current = PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'click.lineoppo.chat',
-        version: '1.1.0',
-        buildNumber: '20',
+        version: '1.1.1',
+        buildNumber: '21',
       );
       const latest = AppUpdateInfo(
-        latestVersion: '1.1.1',
-        buildNumber: 21,
+        latestVersion: '1.1.2',
+        buildNumber: 22,
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
@@ -390,30 +390,31 @@ void main() {
     });
 
     testWidgets(
-      'installed v1.1.0 (build 20) detects v1.1.1 (build 21) and shows the production APK',
+      'installed v1.1.1 (build 21) detects v1.1.2 (build 22) and shows the production APK',
       (tester) async {
         final updateService = AppUpdateService(ApiClient(TokenStore()));
 
         final currentPackageInfo = PackageInfo(
           appName: 'OPPO LINE OA Chat',
           packageName: 'click.lineoppo.chat',
-          version: '1.1.0',
-          buildNumber: '20',
+          version: '1.1.1',
+          buildNumber: '21',
         );
 
         const latestUpdateInfo = AppUpdateInfo(
-          latestVersion: '1.1.1',
-          buildNumber: 21,
+          latestVersion: '1.1.2',
+          buildNumber: 22,
           minimumSupportedVersion: '1.0.3',
           minimumSupportedBuildNumber: 4,
           forceUpdate: false,
           apkUrl:
-              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
-          apkSize: '59.5 MB',
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.2-production.apk?sha=151b0b074d3b6beb8171d62385c485e5fb4a0481c2cd9a530041e8937e441c50',
+          apkSize: '59.6 MB',
           releaseNotes: [
-            'แก้ไขระบบอัปเดตแอปภายในแอป',
-            'แก้ไขการแสดงเวอร์ชันของแอปให้ตรงกับเวอร์ชันที่ติดตั้ง',
-            'ปรับปรุงความเสถียรของกระบวนการดาวน์โหลดและติดตั้งอัปเดต',
+            'ปรับการตรวจสอบอัปเดตให้ทำงานเฉพาะเมื่อผู้ใช้กดตรวจสอบ',
+            'แก้ปัญหาแอปค้างระหว่างเริ่มต้นใช้งาน',
+            'เพิ่ม timeout และการกู้คืนเมื่อเครือข่ายหรือบริการภายนอกมีปัญหา',
+            'ปรับปรุงความเสถียรของระบบอัปเดตและ session',
           ],
         );
 
@@ -442,7 +443,7 @@ void main() {
 
         // Verify the current production release details.
         expect(find.text('New Version Available'), findsOneWidget);
-        expect(find.textContaining('1.1.1+21'), findsOneWidget);
+        expect(find.textContaining('1.1.2+22'), findsOneWidget);
         expect(find.text(latestUpdateInfo.releaseNotes[0]), findsOneWidget);
         expect(find.text(latestUpdateInfo.releaseNotes[1]), findsOneWidget);
         expect(find.text(latestUpdateInfo.releaseNotes[2]), findsOneWidget);
@@ -451,22 +452,22 @@ void main() {
       },
     );
 
-    testWidgets('installed v1.1.1 build 21 reports up to date', (tester) async {
+    testWidgets('installed v1.1.2 build 22 reports up to date', (tester) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
       final current = PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'click.lineoppo.chat',
-        version: '1.1.1',
-        buildNumber: '21',
+        version: '1.1.2',
+        buildNumber: '22',
       );
       const latest = AppUpdateInfo(
-        latestVersion: '1.1.1',
-        buildNumber: 21,
+        latestVersion: '1.1.2',
+        buildNumber: 22,
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
         apkUrl:
-            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.2-production.apk?sha=151b0b074d3b6beb8171d62385c485e5fb4a0481c2cd9a530041e8937e441c50',
       );
       await tester.pumpWidget(
         MaterialApp(
@@ -493,7 +494,7 @@ void main() {
         find.textContaining('You are using the latest version'),
         findsOneWidget,
       );
-      expect(find.textContaining('1.1.1+21'), findsOneWidget);
+      expect(find.textContaining('1.1.2+22'), findsOneWidget);
       expect(find.text('New Version Available'), findsNothing);
     });
 
@@ -727,8 +728,8 @@ void main() {
       (tester) async {
         final service = _PermissionThenInstallService();
         const info = AppUpdateInfo(
-          latestVersion: '1.1.1',
-          buildNumber: 21,
+          latestVersion: '1.1.2',
+          buildNumber: 22,
           minimumSupportedVersion: '1.0.3',
           minimumSupportedBuildNumber: 4,
           forceUpdate: false,
@@ -748,8 +749,8 @@ void main() {
                     overridePackageInfo: PackageInfo(
                       appName: 'OPPO LINE OA Chat',
                       packageName: 'click.lineoppo.chat',
-                      version: '1.1.0',
-                      buildNumber: '20',
+                      version: '1.1.1',
+                      buildNumber: '21',
                     ),
                     overrideUpdateInfo: info,
                   ),
