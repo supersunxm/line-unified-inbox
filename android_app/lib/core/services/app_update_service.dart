@@ -101,8 +101,9 @@ class AndroidApkInstaller {
 
   Future<ApkInstallResult> call(String path) async {
     try {
-      final result =
-          await _channel.invokeMethod<String>('installApk', {'path': path});
+      final result = await _channel.invokeMethod<String>('installApk', {
+        'path': path,
+      });
       return switch (result) {
         'launched' => ApkInstallResult.launched,
         'permission_required' => ApkInstallResult.permissionRequired,
@@ -125,7 +126,7 @@ class AppUpdateService {
   })  : _downloadClient = downloadClient ?? http.Client(),
         _installer = installer ?? const AndroidApkInstaller().call,
         _cacheDirectoryProvider =
-            cacheDirectoryProvider ?? getTemporaryDirectory;
+            cacheDirectoryProvider ?? getApplicationSupportDirectory;
 
   final ApiClient _api;
   final http.Client _downloadClient;
@@ -259,8 +260,9 @@ class AppUpdateService {
         _verifiedApkPath = apkPath;
         _verifiedBuildNumber = info.buildNumber;
       } else {
-        onProgress
-            ?.call(const UpdateProgress(UpdateProgressStatus.readyToInstall));
+        onProgress?.call(
+          const UpdateProgress(UpdateProgressStatus.readyToInstall),
+        );
       }
 
       if (downloadedThisRun && _trackedBuildNumber != info.buildNumber) {
@@ -275,23 +277,33 @@ class AppUpdateService {
           return UpdateFlowResult.installed;
         case ApkInstallResult.permissionRequired:
           onProgress?.call(
-              const UpdateProgress(UpdateProgressStatus.permissionRequired));
+            const UpdateProgress(UpdateProgressStatus.permissionRequired),
+          );
           return UpdateFlowResult.permissionRequired;
         case ApkInstallResult.failed:
           onProgress?.call(
-              const UpdateProgress(UpdateProgressStatus.installationFailed));
+            const UpdateProgress(UpdateProgressStatus.installationFailed),
+          );
           await _discardVerifiedApk(apkPath);
           return UpdateFlowResult.installationFailed;
       }
     } on _ChecksumMismatch catch (error) {
-      onProgress?.call(UpdateProgress(UpdateProgressStatus.checksumFailed,
-          error: error.message));
+      onProgress?.call(
+        UpdateProgress(
+          UpdateProgressStatus.checksumFailed,
+          error: error.message,
+        ),
+      );
       await _discardVerifiedApk(apkPath);
       return UpdateFlowResult.checksumFailed;
     } catch (error) {
       SafeLogger.updateDownloadFailed(error.runtimeType.toString());
-      onProgress?.call(UpdateProgress(UpdateProgressStatus.downloadFailed,
-          error: error.toString()));
+      onProgress?.call(
+        UpdateProgress(
+          UpdateProgressStatus.downloadFailed,
+          error: error.toString(),
+        ),
+      );
       await _discardVerifiedApk(apkPath);
       return UpdateFlowResult.downloadFailed;
     }
@@ -322,7 +334,8 @@ class AppUpdateService {
     final directory = await _cacheDirectoryProvider();
     directory.createSync(recursive: true);
     final file = File(
-        '${directory.path}/line_oa_update_${info.buildNumber}_${DateTime.now().microsecondsSinceEpoch}.apk');
+      '${directory.path}/line_oa_update_${info.buildNumber}_${DateTime.now().microsecondsSinceEpoch}.apk',
+    );
     final sink = file.openWrite();
     final digestOutput = _DigestSink();
     final digestInput = sha256.startChunkedConversion(digestOutput);
@@ -330,13 +343,15 @@ class AppUpdateService {
     var sinkClosed = false;
     try {
       onProgress?.call(
-          const UpdateProgress(UpdateProgressStatus.downloading, fraction: 0));
+        const UpdateProgress(UpdateProgressStatus.downloading, fraction: 0),
+      );
       final request = http.Request('GET', uri)
         ..headers['Accept'] = 'application/vnd.android.package-archive';
       final response = await _downloadClient.send(request);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
-            'APK download returned HTTP ${response.statusCode}');
+          'APK download returned HTTP ${response.statusCode}',
+        );
       }
       final total = response.contentLength;
       await for (final chunk in response.stream) {
@@ -344,12 +359,14 @@ class AppUpdateService {
         sink.add(bytes);
         digestInput.add(bytes);
         received += bytes.length;
-        onProgress?.call(UpdateProgress(
-          UpdateProgressStatus.downloading,
-          fraction: total == null || total <= 0
-              ? null
-              : (received / total).clamp(0, 1),
-        ));
+        onProgress?.call(
+          UpdateProgress(
+            UpdateProgressStatus.downloading,
+            fraction: total == null || total <= 0
+                ? null
+                : (received / total).clamp(0, 1),
+          ),
+        );
       }
       await sink.flush();
       await sink.close();
@@ -362,10 +379,12 @@ class AppUpdateService {
           !RegExp(r'^[a-f0-9]{64}$').hasMatch(expected) ||
           actual != expected) {
         throw _ChecksumMismatch(
-            'Downloaded APK checksum does not match release metadata');
+          'Downloaded APK checksum does not match release metadata',
+        );
       }
-      onProgress
-          ?.call(const UpdateProgress(UpdateProgressStatus.readyToInstall));
+      onProgress?.call(
+        const UpdateProgress(UpdateProgressStatus.readyToInstall),
+      );
       return file.path;
     } catch (_) {
       if (!sinkClosed) await sink.close();
@@ -373,7 +392,8 @@ class AppUpdateService {
         if (await file.exists()) await file.delete();
       } catch (error) {
         SafeLogger.updateDownloadFailed(
-            'download_cleanup_${error.runtimeType}');
+          'download_cleanup_${error.runtimeType}',
+        );
       }
       rethrow;
     }
@@ -462,9 +482,34 @@ class _AppUpdateDialog extends StatefulWidget {
   State<_AppUpdateDialog> createState() => _AppUpdateDialogState();
 }
 
-class _AppUpdateDialogState extends State<_AppUpdateDialog> {
+class _AppUpdateDialogState extends State<_AppUpdateDialog>
+    with WidgetsBindingObserver {
   UpdateProgress? _progress;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _progress?.status == UpdateProgressStatus.permissionRequired &&
+        !_busy) {
+      // Android opens the app-specific install permission settings when
+      // permission is missing. Retry the already-verified APK as soon as the
+      // user returns, without downloading it again.
+      unawaited(_startUpdate());
+    }
+  }
 
   Future<void> _startUpdate() async {
     if (_busy) return;
@@ -479,8 +524,11 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
     } catch (error) {
       SafeLogger.updateDownloadFailed('ui_${error.runtimeType}');
       if (mounted) {
-        setState(() => _progress =
-            const UpdateProgress(UpdateProgressStatus.downloadFailed));
+        setState(
+          () => _progress = const UpdateProgress(
+            UpdateProgressStatus.downloadFailed,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -546,8 +594,11 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.system_update_alt,
-                      size: 16, color: Colors.green),
+                  const Icon(
+                    Icons.system_update_alt,
+                    size: 16,
+                    color: Colors.green,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -573,41 +624,51 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
             if (widget.info.releaseNotes.isNotEmpty) ...[
               Text(
                 l10n.whatsNew,
-                style:
-                    const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 6),
-              ...widget.info.releaseNotes.map((note) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('✓ ',
-                            style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12)),
-                        Expanded(
-                          child: Text(
-                            note,
-                            style: const TextStyle(fontSize: 12, height: 1.3),
-                          ),
+              ...widget.info.releaseNotes.map(
+                (note) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '✓ ',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
-                      ],
-                    ),
-                  )),
+                      ),
+                      Expanded(
+                        child: Text(
+                          note,
+                          style: const TextStyle(fontSize: 12, height: 1.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
             ],
 
             if (progress != null) ...[
               const SizedBox(height: AppSpacing.sm),
-              Text(_statusText(l10n, progress),
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: hasError
-                          ? Colors.red.shade700
-                          : theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                _statusText(l10n, progress),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasError
+                      ? Colors.red.shade700
+                      : theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               if (progress.status == UpdateProgressStatus.downloading &&
                   progress.fraction != null) ...[
                 const SizedBox(height: 8),
@@ -616,8 +677,10 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
               if (progress.status == UpdateProgressStatus.permissionRequired)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(l10n.installPermissionInstructions,
-                      style: TextStyle(fontSize: 11, color: theme.hintColor)),
+                  child: Text(
+                    l10n.installPermissionInstructions,
+                    style: TextStyle(fontSize: 11, color: theme.hintColor),
+                  ),
                 ),
             ],
 
@@ -625,9 +688,10 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
               Text(
                 'This version contains critical updates required to continue using the application.',
                 style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.orange.shade800,
-                    fontStyle: FontStyle.italic),
+                  fontSize: 11,
+                  color: Colors.orange.shade800,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
           ],
         ),
@@ -646,12 +710,12 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
           onPressed: _busy ? null : _startUpdate,
           icon: const Icon(Icons.download, size: 16),
           label: Text(
-              hasError ||
-                      progress?.status ==
-                          UpdateProgressStatus.permissionRequired
-                  ? l10n.retryUpdate
-                  : l10n.updateNow,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+            hasError ||
+                    progress?.status == UpdateProgressStatus.permissionRequired
+                ? l10n.retryUpdate
+                : l10n.updateNow,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
