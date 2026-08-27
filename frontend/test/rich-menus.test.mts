@@ -59,28 +59,55 @@ test("TopNavigation and AppSidebar contain Rich Menu Manager routes and icons", 
   assert.match(appSidebarFile, /name === "rich-menu"/);
 });
 
-test("RichMenusView defines Phase 1 boundary, token insertion, preset layouts, and Phase 2 publish lock", () => {
+test("RichMenusView is aligned with LINE OA Manager layout, controls, and readiness table", () => {
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
-  // Phase 1 guarantees
-  assert.match(viewFile, /Phase 1: Template & Readiness Preview/);
-  assert.match(viewFile, /Publishing available in Phase 2/);
-  assert.match(viewFile, /Phase 1 is Management \+ Template \+ Preview \+ Readiness only/);
 
-  // Layout presets
-  assert.match(viewFile, /GRID_6/);
-  assert.match(viewFile, /GRID_3/);
-  assert.match(viewFile, /GRID_4/);
-  assert.match(viewFile, /CUSTOM/);
+  // Page Header & Save Draft
+  assert.match(viewFile, /Rich Menu/);
+  assert.match(viewFile, /Create and manage rich menu templates for store LINE OAs\./);
+  assert.match(viewFile, /Publishing to LINE is available in Phase 2/);
+  assert.match(viewFile, /Save Draft/);
 
-  // Token variables
+  // Main settings section
+  assert.match(viewFile, /Main settings/);
+  assert.match(viewFile, /Title/);
+  assert.match(viewFile, /Display period/);
+  assert.match(viewFile, /Not configured in Phase 1/);
+  assert.match(viewFile, /Advanced settings/);
+
+  // Menu content section (Preview & Editor)
+  assert.match(viewFile, /Menu content/);
+  assert.match(viewFile, /Preview as:/);
+  assert.match(viewFile, /Show template outline/);
+  assert.match(viewFile, /Template/);
+  assert.match(viewFile, /Select a template/);
+  assert.match(viewFile, /6-grid/);
+  assert.match(viewFile, /4-grid/);
+  assert.match(viewFile, /3-grid/);
+  assert.match(viewFile, /Custom/);
+
+  // Actions & Variable Insertion
+  assert.match(viewFile, /Actions/);
+  assert.match(viewFile, /Action type/);
+  assert.match(viewFile, /Insert variable/);
   assert.match(viewFile, /\{\{store\.storeName\}\}/);
   assert.match(viewFile, /\{\{store\.googleMapsUrl\}\}/);
   assert.match(viewFile, /\{\{store\.lineUrl\}\}/);
   assert.match(viewFile, /\{\{store\.tiktokUrl\}\}/);
 
-  // Store readiness actions
-  assert.match(viewFile, /Select All Ready/);
-  assert.match(viewFile, /Save Assigned Stores/);
+  // Target stores section
+  assert.match(viewFile, /Target stores/);
+  assert.match(viewFile, /Select all ready/);
+  assert.match(viewFile, /Save assigned stores/);
+  assert.match(viewFile, /Store ID/);
+  assert.match(viewFile, /Store Name/);
+  assert.match(viewFile, /LINE OA Name/);
+  assert.match(viewFile, /Status/);
+
+  // Other settings
+  assert.match(viewFile, /Other settings/);
+  assert.match(viewFile, /Menu bar label/);
+  assert.match(viewFile, /Default behavior/);
 });
 
 test("API client exports Rich Menu template and readiness methods", () => {

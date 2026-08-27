@@ -1,3 +1,10 @@
+# Rich Menu Workspace Redesign: Alignment with LINE OA Manager (2026-08-27)
+
+- **2-Column Editor + Lower Target Stores Structure**: Aligned the `/rich-menus` workspace structure with LINE Official Account Manager's Rich Menu editor. The editor uses a 2-column layout (Preview Left ~36%, Editor Right ~64%) with Target Stores positioned full-width underneath rather than crowded beside the form.
+- **LINE Color & Control Palette**: Adopted LINE's signature green (`#06C755`) for primary save actions and active area highlights, neutral white/light-gray backgrounds, thin borders, letter-based area tags (`A`, `B`, `C`, ...), and minimal card clutter.
+- **Top Template Selector**: Consolidated template selection into a compact top dropdown `Template: [ Select Template ▼ ] [ + New ]` to keep focus on editing one menu at a time.
+- **Non-Destructive Boundary**: Maintained 100% of Phase 1 backend architecture, database schema, variable resolution logic, store readiness evaluation, and no-op LINE publishing protection.
+
 # Rich Menu Manager (Phase 1: Management + Template + Preview + Readiness) (2026-08-27)
 
 - **1 Template → N Stores Architecture**: Rather than duplicating N distinct designs in LINE OA Manager, administrators manage single high-level templates with variable placeholders (e.g. `{{store.googleMapsUrl}}`, `{{store.storeName}}`, `{{store.lineUrl}}`, `{{store.tiktokUrl}}`) that resolve dynamically per store.

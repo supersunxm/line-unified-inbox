@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import type {
   RichMenuArea,
   RichMenuCanvasPreset,
   RichMenuPreviewResponse,
   RichMenuReadinessResponse,
-  RichMenuStoreReadinessItem,
   RichMenuTemplate,
 } from "@/types/api";
 import type { Language } from "@/components/shell/top-navigation";
@@ -17,11 +16,14 @@ interface RichMenusViewProps {
   userRole?: "ADMIN" | "VIEWER";
 }
 
-const PRESET_CONFIGS: Record<RichMenuCanvasPreset, { name: string; width: number; height: number; description: string }> = {
-  GRID_6: { name: "6-Grid (2x3)", width: 2500, height: 1686, description: "Standard 6-tile layout (2 cols x 3 rows)" },
-  GRID_3: { name: "3-Grid (3x1)", width: 2500, height: 843, description: "Compact banner layout (3 cols x 1 row)" },
-  GRID_4: { name: "4-Grid (2x2)", width: 2500, height: 1686, description: "Standard 4-tile layout (2 cols x 2 rows)" },
-  CUSTOM: { name: "Custom Canvas", width: 2500, height: 1686, description: "Fully customizable area coordinates" },
+const PRESET_CONFIGS: Record<
+  RichMenuCanvasPreset,
+  { label: string; width: number; height: number; description: string; tilesCount: number }
+> = {
+  GRID_6: { label: "6-grid", width: 2500, height: 1686, description: "2 columns x 3 rows (2500 x 1686 px)", tilesCount: 6 },
+  GRID_4: { label: "4-grid", width: 2500, height: 1686, description: "2 columns x 2 rows (2500 x 1686 px)", tilesCount: 4 },
+  GRID_3: { label: "3-grid", width: 2500, height: 843, description: "3 columns x 1 row compact banner (2500 x 843 px)", tilesCount: 3 },
+  CUSTOM: { label: "Custom", width: 2500, height: 1686, description: "Custom canvas coordinates", tilesCount: 1 },
 };
 
 function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, height = 1686): RichMenuArea[] {
@@ -37,14 +39,6 @@ function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, h
       { id: "area-6", bounds: { x: colW, y: rowH * 2, width: colW, height: height - rowH * 2 }, actionType: "MESSAGE", actionData: "สอบถามราคา", label: "Inquire Price" },
     ];
   }
-  if (preset === "GRID_3") {
-    const colW = Math.floor(width / 3);
-    return [
-      { id: "area-1", bounds: { x: 0, y: 0, width: colW, height }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-      { id: "area-2", bounds: { x: colW, y: 0, width: colW, height }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-      { id: "area-3", bounds: { x: colW * 2, y: 0, width: width - colW * 2, height }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
-    ];
-  }
   if (preset === "GRID_4") {
     const colW = Math.floor(width / 2);
     const rowH = Math.floor(height / 2);
@@ -55,59 +49,78 @@ function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, h
       { id: "area-4", bounds: { x: colW, y: rowH, width: colW, height: height - rowH }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
     ];
   }
+  if (preset === "GRID_3") {
+    const colW = Math.floor(width / 3);
+    return [
+      { id: "area-1", bounds: { x: 0, y: 0, width: colW, height }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+      { id: "area-2", bounds: { x: colW, y: 0, width: colW, height }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+      { id: "area-3", bounds: { x: colW * 2, y: 0, width: width - colW * 2, height }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+    ];
+  }
   return [
     { id: "area-1", bounds: { x: 0, y: 0, width, height }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Full Area" },
   ];
 }
 
-const VARIABLE_TOKENS = [
-  { token: "{{store.storeName}}", label: "Store Name", desc: "e.g. OBS Central Pinklao" },
-  { token: "{{store.googleMapsUrl}}", label: "Google Maps URL", desc: "Dynamic Store Google Maps link" },
-  { token: "{{store.lineUrl}}", label: "LINE OA URL", desc: "Store LINE URL" },
-  { token: "{{store.tiktokUrl}}", label: "TikTok URL", desc: "Store TikTok Profile URL" },
+const SUPPORTED_VARIABLES = [
+  { token: "{{store.storeName}}", label: "Store name", example: "OBS Central Pinklao" },
+  { token: "{{store.googleMapsUrl}}", label: "Google Maps URL", example: "https://maps.app.goo.gl/..." },
+  { token: "{{store.lineUrl}}", label: "LINE OA Link", example: "https://line.me/R/ti/p/..." },
+  { token: "{{store.tiktokUrl}}", label: "TikTok URL", example: "https://tiktok.com/@..." },
 ];
+
+function getAreaLetter(index: number): string {
+  return String.fromCharCode(65 + index); // A, B, C, D, ...
+}
 
 export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenusViewProps) {
   // Templates state
   const [templates, setTemplates] = useState<RichMenuTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [templateSearch, setTemplateSearch] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
-  // Editor form state
+  // Form / Editor state
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [formPreset, setFormPreset] = useState<RichMenuCanvasPreset>("GRID_6");
   const [formWidth, setFormWidth] = useState(2500);
   const [formHeight, setFormHeight] = useState(1686);
   const [formChatBarText, setFormChatBarText] = useState("Menu");
   const [formImageUrl, setFormImageUrl] = useState<string | null>(null);
   const [formAreas, setFormAreas] = useState<RichMenuArea[]>([]);
-  const [selectedAreaId, setSelectedAreaId] = useState<string | null>("area-1");
+  const [activeAreaId, setActiveAreaId] = useState<string>("area-1");
+  const [showOutline, setShowOutline] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
-  const [editorError, setEditorError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Image upload state
+  // Template Change Modal
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [modalSelectedPreset, setModalSelectedPreset] = useState<RichMenuCanvasPreset>("GRID_6");
+
+  // Image Upload state
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Readiness & Store assignments state
+  // Variable dropdown state per area
+  const [variableDropdownOpenFor, setVariableDropdownOpenFor] = useState<string | null>(null);
+
+  // Readiness / Target Stores state
   const [readinessData, setReadinessData] = useState<RichMenuReadinessResponse | null>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [readinessFilter, setReadinessFilter] = useState<"all" | "ready" | "blocked">("all");
   const [storeSearch, setStoreSearch] = useState("");
   const [selectedOaIds, setSelectedOaIds] = useState<Set<string>>(new Set());
   const [savingAssignments, setSavingAssignments] = useState(false);
-  const [assignmentsMessage, setAssignmentsMessage] = useState<string | null>(null);
+  const [assignmentsMessage, setAssignmentsMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Live store preview state
+  // Live Store Preview state
   const [previewStoreOaId, setPreviewStoreOaId] = useState<string>("");
   const [previewData, setPreviewData] = useState<RichMenuPreviewResponse | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  // Load templates list
+  // Load template list
   const loadTemplates = async (selectId?: string) => {
     setLoadingTemplates(true);
     try {
@@ -120,7 +133,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         initNewTemplate();
       }
     } catch (err: any) {
-      setEditorError(err.message || "Failed to load templates");
+      setSaveMessage({ type: "error", text: err.message || "Failed to load templates" });
     } finally {
       setLoadingTemplates(false);
     }
@@ -130,11 +143,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     loadTemplates();
   }, []);
 
-  // Initialize new template form
+  // Initialize new template
   const initNewTemplate = () => {
     setSelectedTemplateId("new");
-    setFormName("New Rich Menu Template");
+    setFormName("Untitled rich menu");
     setFormDescription("");
+    setShowAdvancedSettings(false);
     setFormPreset("GRID_6");
     setFormWidth(2500);
     setFormHeight(1686);
@@ -142,15 +156,14 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormImageUrl(null);
     const presetAreas = generatePresetAreasClient("GRID_6", 2500, 1686);
     setFormAreas(presetAreas);
-    setSelectedAreaId("area-1");
+    setActiveAreaId("area-1");
     setReadinessData(null);
     setPreviewData(null);
     setSelectedOaIds(new Set());
-    setEditorError(null);
-    setSaveSuccessMessage(null);
+    setSaveMessage(null);
   };
 
-  // Populate editor when template selection changes
+  // Populate editor when template changes
   useEffect(() => {
     if (!selectedTemplateId || selectedTemplateId === "new") return;
     const tmpl = templates.find((t) => t.id === selectedTemplateId);
@@ -158,17 +171,17 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
     setFormName(tmpl.name);
     setFormDescription(tmpl.description || "");
+    setShowAdvancedSettings(Boolean(tmpl.description));
     setFormPreset(tmpl.canvasPreset);
     setFormWidth(tmpl.width);
     setFormHeight(tmpl.height);
     setFormChatBarText(tmpl.chatBarText || "Menu");
     setFormImageUrl(tmpl.imageUrl || null);
     setFormAreas(tmpl.areas || []);
-    setSelectedAreaId(tmpl.areas?.[0]?.id || null);
-    setEditorError(null);
-    setSaveSuccessMessage(null);
+    setActiveAreaId(tmpl.areas?.[0]?.id || "area-1");
+    setSaveMessage(null);
 
-    // Load readiness for this template
+    // Load store readiness
     loadReadiness(tmpl.id);
   }, [selectedTemplateId, templates]);
 
@@ -183,22 +196,21 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       const preSelected = new Set(res.items.filter((item) => item.selected).map((item) => item.lineOfficialAccountId));
       setSelectedOaIds(preSelected);
 
-      // Trigger preview for first store
-      if (res.items.length > 0 && !previewStoreOaId) {
-        const firstOa = res.items[0].lineOfficialAccountId;
-        setPreviewStoreOaId(firstOa);
-        void loadPreview(templateId, firstOa);
-      } else if (previewStoreOaId) {
-        void loadPreview(templateId, previewStoreOaId);
+      if (res.items.length > 0) {
+        const nextOaId = previewStoreOaId && res.items.some((i) => i.lineOfficialAccountId === previewStoreOaId)
+          ? previewStoreOaId
+          : res.items[0].lineOfficialAccountId;
+        setPreviewStoreOaId(nextOaId);
+        void loadPreview(templateId, nextOaId);
       }
-    } catch (err: any) {
-      // Non-blocking error
+    } catch {
+      // Non-blocking
     } finally {
       setLoadingReadiness(false);
     }
   };
 
-  // Load single-store live preview
+  // Load single store preview
   const loadPreview = async (templateId: string, lineOfficialAccountId?: string) => {
     if (!templateId || templateId === "new") return;
     setLoadingPreview(true);
@@ -213,14 +225,15 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   };
 
   // Change Canvas Preset
-  const handlePresetChange = (preset: RichMenuCanvasPreset) => {
+  const handleApplyPreset = (preset: RichMenuCanvasPreset) => {
     setFormPreset(preset);
     const conf = PRESET_CONFIGS[preset];
     setFormWidth(conf.width);
     setFormHeight(conf.height);
     const newAreas = generatePresetAreasClient(preset, conf.width, conf.height);
     setFormAreas(newAreas);
-    setSelectedAreaId(newAreas[0]?.id || null);
+    setActiveAreaId(newAreas[0]?.id || "area-1");
+    setIsPresetModalOpen(false);
   };
 
   // Update Area
@@ -230,26 +243,27 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     );
   };
 
-  // Insert token helper
+  // Insert Variable Token
   const insertToken = (areaId: string, token: string) => {
     const area = formAreas.find((a) => a.id === areaId);
     if (!area) return;
     const current = area.actionData || "";
     updateArea(areaId, { actionData: current ? `${current} ${token}` : token });
+    setVariableDropdownOpenFor(null);
   };
 
-  // Handle Image Upload
+  // Image Upload
   const handleImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (file.size > 1 * 1024 * 1024) {
-      setUploadError("Image file size exceeds 1 MB limit (LINE Messaging API requirement).");
+      setImageError("Image file size exceeds 1 MB limit (LINE Messaging API requirement).");
       return;
     }
 
     setUploadingImage(true);
-    setUploadError(null);
+    setImageError(null);
     try {
       const res = await api.uploadRichMenuImage(file);
       setFormImageUrl(res.imageUrl);
@@ -258,22 +272,21 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         setFormHeight(res.height);
       }
     } catch (err: any) {
-      setUploadError(err.message || "Failed to upload image.");
+      setImageError(err.message || "Failed to upload image.");
     } finally {
       setUploadingImage(false);
     }
   };
 
-  // Save Template Draft
+  // Save Template
   const handleSaveTemplate = async () => {
     if (!formName.trim()) {
-      setEditorError("Template name is required");
+      setSaveMessage({ type: "error", text: "Please enter a template title." });
       return;
     }
 
     setSavingTemplate(true);
-    setEditorError(null);
-    setSaveSuccessMessage(null);
+    setSaveMessage(null);
 
     try {
       const payload = {
@@ -294,28 +307,17 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         saved = await api.createRichMenuTemplate(payload);
       }
 
-      setSaveSuccessMessage("Template draft saved successfully.");
+      setSaveMessage({ type: "success", text: "Rich menu draft saved." });
       await loadTemplates(saved.id);
       await loadReadiness(saved.id);
     } catch (err: any) {
-      setEditorError(err.message || "Failed to save template.");
+      setSaveMessage({ type: "error", text: err.message || "Failed to save rich menu template." });
     } finally {
       setSavingTemplate(false);
     }
   };
 
-  // Delete / Archive Template
-  const handleDeleteTemplate = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete template "${name}"?`)) return;
-    try {
-      await api.deleteRichMenuTemplate(id);
-      await loadTemplates();
-    } catch (err: any) {
-      setEditorError(err.message || "Failed to delete template");
-    }
-  };
-
-  // Select all ready stores
+  // Target Store selection helpers
   const handleSelectAllReady = () => {
     if (!readinessData) return;
     const readyIds = readinessData.items
@@ -324,14 +326,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setSelectedOaIds(new Set(readyIds));
   };
 
-  // Clear selection
   const handleClearSelection = () => {
     setSelectedOaIds(new Set());
   };
 
-  // Toggle individual store selection
   const handleToggleStore = (oaId: string, status: "READY" | "BLOCKED") => {
-    if (status === "BLOCKED") return; // Blocked stores cannot be selected
+    if (status === "BLOCKED") return;
     setSelectedOaIds((prev) => {
       const next = new Set(prev);
       if (next.has(oaId)) {
@@ -343,10 +343,9 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     });
   };
 
-  // Save Store Assignments
   const handleSaveAssignments = async () => {
     if (!selectedTemplateId || selectedTemplateId === "new") {
-      setEditorError("Please save the template before assigning stores.");
+      setAssignmentsMessage({ type: "error", text: "Save the template first before assigning stores." });
       return;
     }
 
@@ -354,26 +353,17 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setAssignmentsMessage(null);
     try {
       const res = await api.saveRichMenuAssignments(selectedTemplateId, Array.from(selectedOaIds));
-      setAssignmentsMessage(`Saved ${res.assignedCount} store assignments.`);
+      setAssignmentsMessage({ type: "success", text: `Saved ${res.assignedCount} store assignments.` });
       await loadReadiness(selectedTemplateId);
       await loadTemplates(selectedTemplateId);
     } catch (err: any) {
-      setAssignmentsMessage(`Error: ${err.message || "Failed to save assignments"}`);
+      setAssignmentsMessage({ type: "error", text: err.message || "Failed to save assignments." });
     } finally {
       setSavingAssignments(false);
     }
   };
 
-  // Filtered Templates
-  const filteredTemplates = useMemo(() => {
-    if (!templateSearch.trim()) return templates;
-    const q = templateSearch.toLowerCase();
-    return templates.filter(
-      (t) => t.name.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)),
-    );
-  }, [templates, templateSearch]);
-
-  // Filtered Readiness Stores
+  // Filtered stores
   const filteredStores = useMemo(() => {
     if (!readinessData?.items) return [];
     return readinessData.items.filter((item) => {
@@ -391,557 +381,786 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     });
   }, [readinessData, readinessFilter, storeSearch]);
 
-  const activeArea = formAreas.find((a) => a.id === selectedAreaId);
+  const selectedStoreItem = readinessData?.items.find((i) => i.lineOfficialAccountId === previewStoreOaId);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
-      {/* Top Banner & Title Bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-6 py-3.5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent-soft)] text-[var(--app-accent)]">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M3 9h18M3 15h18M9 9v12M15 9v12" />
-            </svg>
-          </div>
+    <div className="min-h-full w-full bg-[#f7f8f9] dark:bg-[var(--app-bg)] text-[#111] dark:text-[#f3f4f6] font-sans pb-16">
+      {/* 1. Page Header (LINE OA Manager Style) */}
+      <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-6 py-4">
+        <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-[var(--app-text-primary)]">Rich Menu Manager</h1>
-              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                Phase 1: Template & Readiness Preview
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Rich Menu</h1>
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                Publishing to LINE is available in Phase 2
               </span>
             </div>
-            <p className="text-xs text-[var(--app-text-tertiary)]">
-              Multi-store dynamic Rich Menu templates with per-store Google Maps & variable resolution
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Create and manage rich menu templates for store LINE OAs.
             </p>
           </div>
-        </div>
 
-        {/* Global Action Bar */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={initNewTemplate}
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-semibold text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"
-          >
-            <span className="text-sm font-bold">+</span> New Template
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveTemplate}
-            disabled={savingTemplate}
-            className="flex h-9 items-center gap-1.5 rounded-xl bg-[var(--app-accent)] px-4 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
-          >
-            {savingTemplate ? "Saving Draft..." : "Save Draft"}
-          </button>
+          <div className="flex items-center gap-3">
+            {saveMessage && (
+              <span
+                className={`text-xs font-medium ${
+                  saveMessage.type === "success" ? "text-[#06C755]" : "text-rose-600"
+                }`}
+              >
+                {saveMessage.text}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveTemplate}
+              disabled={savingTemplate}
+              className="inline-flex items-center justify-center rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+            >
+              {savingTemplate ? "Saving..." : "Save Draft"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main 3-Pane Workspace */}
-      <div className="grid flex-1 grid-cols-12 overflow-hidden">
-        {/* ===================== LEFT PANE: Template List ===================== */}
-        <div className="col-span-12 flex flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)] lg:col-span-3">
-          <div className="border-b border-[var(--app-border-subtle)] p-3">
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--app-text-tertiary)]">⌕</span>
-              <input
-                type="search"
-                value={templateSearch}
-                onChange={(e) => setTemplateSearch(e.target.value)}
-                placeholder="Search templates..."
-                className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-8 pr-3 text-xs placeholder:text-[var(--app-text-tertiary)] focus:border-[var(--app-accent)] focus:outline-none"
-              />
-            </div>
+      <div className="mx-auto max-w-7xl px-6 pt-5 space-y-6">
+        {/* Template Selector Bar */}
+        <div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-4 py-2.5 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Template:</span>
+            <select
+              value={selectedTemplateId || "new"}
+              onChange={(e) => {
+                if (e.target.value === "new") {
+                  initNewTemplate();
+                } else {
+                  setSelectedTemplateId(e.target.value);
+                }
+              }}
+              className="h-8 rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
+            >
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({PRESET_CONFIGS[t.canvasPreset]?.label || t.canvasPreset})
+                </option>
+              ))}
+              <option value="new">+ New template...</option>
+            </select>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-            {loadingTemplates ? (
-              <div className="p-4 text-center text-xs text-[var(--app-text-tertiary)]">Loading templates...</div>
-            ) : filteredTemplates.length === 0 ? (
-              <div className="p-6 text-center text-xs text-[var(--app-text-tertiary)]">
-                No templates found. Click <strong>+ New Template</strong> to create one.
-              </div>
-            ) : (
-              filteredTemplates.map((t) => {
-                const isSelected = t.id === selectedTemplateId;
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => setSelectedTemplateId(t.id)}
-                    className={`group relative flex cursor-pointer flex-col gap-1.5 rounded-xl border p-3 text-left transition ${
-                      isSelected
-                        ? "border-[var(--app-accent)] bg-[var(--app-accent-soft)] shadow-sm"
-                        : "border-transparent bg-[var(--app-surface-subtle)] hover:border-[var(--app-border)] hover:bg-[var(--app-surface-hover)]"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="truncate text-xs font-bold text-[var(--app-text-primary)]">{t.name}</span>
-                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-gray-500/10 text-gray-600 dark:text-gray-400">
-                        {t.canvasPreset}
-                      </span>
-                    </div>
-
-                    {t.description && (
-                      <p className="line-clamp-1 text-[11px] text-[var(--app-text-secondary)]">{t.description}</p>
-                    )}
-
-                    <div className="flex items-center justify-between text-[10px] text-[var(--app-text-tertiary)] pt-1">
-                      <span>{t.areas?.length || 0} areas · {t.assignedStoresCount ?? 0} stores</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTemplate(t.id, t.name);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-rose-500 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={initNewTemplate}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#06C755] hover:underline"
+          >
+            + New
+          </button>
         </div>
 
-        {/* ===================== CENTER PANE: Visual Editor & Canvas ===================== */}
-        <div className="col-span-12 flex flex-col overflow-y-auto border-r border-[var(--app-border)] bg-[var(--app-bg)] p-5 lg:col-span-5">
-          {editorError && (
-            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
-              {editorError}
-            </div>
-          )}
-          {saveSuccessMessage && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-              {saveSuccessMessage}
-            </div>
-          )}
+        {/* 2. Main Settings Section */}
+        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-4">
+            Main settings
+          </h2>
 
-          {/* Template Details Card */}
-          <div className="mb-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Template Metadata</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Template Name</label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g. Master Store Rich Menu"
-                  className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Layout Preset</label>
-                <select
-                  value={formPreset}
-                  onChange={(e) => handlePresetChange(e.target.value as RichMenuCanvasPreset)}
-                  className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                >
-                  <option value="GRID_6">6-Grid (2x3) - 2500x1686</option>
-                  <option value="GRID_3">3-Grid (3x1) - 2500x843</option>
-                  <option value="GRID_4">4-Grid (2x2) - 2500x1686</option>
-                  <option value="CUSTOM">Custom Canvas</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Chat Bar Text</label>
-                <input
-                  type="text"
-                  value={formChatBarText}
-                  onChange={(e) => setFormChatBarText(e.target.value)}
-                  placeholder="e.g. Menu"
-                  className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Image upload */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)]">Template Image (JPEG/PNG ≤ 1MB)</label>
-                {formImageUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setFormImageUrl(null)}
-                    className="text-[10px] text-rose-500 hover:underline"
-                  >
-                    Remove Image
-                  </button>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                Title <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g. Store Default Rich Menu"
+                className="h-9 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Displayed in internal LINE management.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                Display period
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  disabled
+                  value="Not configured in Phase 1"
+                  className="h-9 flex-1 rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-gray-50 dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-400 cursor-not-allowed"
+                />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Live schedule publishing is enabled in Phase 2.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-medium hover:text-[#06C755]"
+            >
+              <span>{showAdvancedSettings ? "▾" : "▸"}</span> Advanced settings (Description)
+            </button>
+            {showAdvancedSettings && (
+              <div className="mt-2.5 max-w-xl">
+                <textarea
+                  rows={2}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Optional internal notes or description"
+                  className="w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] p-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 3. Menu Content Section (2-Column Editor: Preview Left ~36%, Editor Right ~64%) */}
+        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-5">
+            Menu content
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* ===================== LEFT: Preview Panel (36%) ===================== */}
+            <div className="lg:col-span-5 flex flex-col space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Preview</span>
+                {loadingPreview && <span className="text-[10px] text-gray-400 animate-pulse">Resolving store...</span>}
+              </div>
+
+              {/* Store Selector */}
+              <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] p-2.5 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">Preview as:</label>
+                  {selectedStoreItem && (
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                        selectedStoreItem.readinessStatus === "READY"
+                          ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          : "text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"
+                      }`}
+                    >
+                      {selectedStoreItem.readinessStatus === "READY" ? "● Ready" : "⚠ Blocked"}
+                    </span>
+                  )}
+                </div>
+
+                <select
+                  value={previewStoreOaId}
+                  onChange={(e) => {
+                    setPreviewStoreOaId(e.target.value);
+                    if (selectedTemplateId) loadPreview(selectedTemplateId, e.target.value);
+                  }}
+                  className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
+                >
+                  {readinessData?.items.map((item) => (
+                    <option key={item.lineOfficialAccountId} value={item.lineOfficialAccountId}>
+                      {item.storeName} ({item.externalStoreId || "No ID"})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedStoreItem && (
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
+                    <span>Store ID: {selectedStoreItem.externalStoreId || "—"}</span>
+                    <span>
+                      Google Maps:{" "}
+                      {selectedStoreItem.googleMapsUrl ? (
+                        <span className="text-emerald-600 font-medium">✓ Configured</span>
+                      ) : (
+                        <span className="text-rose-500 font-medium">⚠ Not configured</span>
+                      )}
+                    </span>
+                  </div>
                 )}
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png"
-                onChange={handleImageFileChange}
-                className="hidden"
-              />
+
+              {/* LINE Phone-like Canvas Mockup */}
+              <div className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#f3f4f6] dark:bg-[var(--app-surface-subtle)] p-2 shadow-xs">
+                <div
+                  className="relative w-full rounded border border-gray-300 dark:border-gray-700 bg-slate-900 overflow-hidden flex items-center justify-center"
+                  style={{ aspectRatio: `${formWidth} / ${formHeight}` }}
+                >
+                  {formImageUrl ? (
+                    <img
+                      src={formImageUrl}
+                      alt="Rich Menu Preview Background"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center p-4 text-gray-400 text-xs font-mono">
+                      No image uploaded ({formWidth}x{formHeight}px)
+                    </div>
+                  )}
+
+                  {/* Area Overlays with LINE OA Letters */}
+                  {showOutline &&
+                    formAreas.map((area, index) => {
+                      const letter = getAreaLetter(index);
+                      const leftPct = (area.bounds.x / formWidth) * 100;
+                      const topPct = (area.bounds.y / formHeight) * 100;
+                      const widthPct = (area.bounds.width / formWidth) * 100;
+                      const heightPct = (area.bounds.height / formHeight) * 100;
+                      const isSelected = area.id === activeAreaId;
+
+                      return (
+                        <div
+                          key={area.id}
+                          onClick={() => setActiveAreaId(area.id)}
+                          className={`absolute cursor-pointer transition select-none flex flex-col items-center justify-center p-1.5 text-center ${
+                            isSelected
+                              ? "border-2 border-[#06C755] bg-[#06C755]/20 ring-2 ring-[#06C755]/30 z-20"
+                              : "border border-white/40 bg-black/25 hover:bg-black/15 z-10"
+                          }`}
+                          style={{
+                            left: `${leftPct}%`,
+                            top: `${topPct}%`,
+                            width: `${widthPct}%`,
+                            height: `${heightPct}%`,
+                          }}
+                        >
+                          <span
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow ${
+                              isSelected ? "bg-[#06C755] text-white" : "bg-white text-gray-800"
+                            }`}
+                          >
+                            {letter}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Simulated LINE Chat Bar at bottom */}
+                <div className="mt-1.5 flex items-center justify-between rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300">
+                  <span className="text-gray-400">⌨</span>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{formChatBarText || "Menu"} ▾</span>
+                  <span className="text-gray-400">···</span>
+                </div>
+              </div>
+
+              {/* Show template outline toggle */}
+              <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none pt-1">
+                <input
+                  type="checkbox"
+                  checked={showOutline}
+                  onChange={(e) => setShowOutline(e.target.checked)}
+                  className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
+                />
+                <span>Show template outline</span>
+              </label>
+            </div>
+
+            {/* ===================== RIGHT: Template / Image / Actions Editor (64%) ===================== */}
+            <div className="lg:col-span-7 flex flex-col space-y-6">
+              {/* Template Row */}
+              <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
+                <div>
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Template</span>
+                  <p className="text-xs text-gray-900 dark:text-gray-100 font-semibold mt-0.5">
+                    {PRESET_CONFIGS[formPreset]?.label || formPreset} ({formWidth} x {formHeight} px, {formAreas.length} areas)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalSelectedPreset(formPreset);
+                    setIsPresetModalOpen(true);
+                  }}
+                  className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition"
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* Image Row */}
+              <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
+                <div className="min-w-0 flex-1 pr-3">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Image</span>
+                  {formImageUrl ? (
+                    <p className="truncate text-xs text-gray-900 dark:text-gray-100 font-medium mt-0.5">
+                      ✓ Image uploaded ({formWidth} x {formHeight} px)
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 mt-0.5">No image selected (JPEG/PNG ≤ 1MB)</p>
+                  )}
+                  {imageError && <p className="text-[11px] text-rose-500 mt-1">{imageError}</p>}
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
+                  >
+                    {uploadingImage ? "Uploading..." : formImageUrl ? "Replace" : "Select image"}
+                  </button>
+                  {formImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormImageUrl(null)}
+                      className="text-xs text-rose-500 hover:underline px-2 py-1"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions Section */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+                  Actions
+                </h3>
+
+                <div className="space-y-2">
+                  {formAreas.map((area, index) => {
+                    const letter = getAreaLetter(index);
+                    const isExpanded = area.id === activeAreaId;
+                    const previewAreaResolved = previewData?.areas.find((a) => a.id === area.id);
+
+                    return (
+                      <div
+                        key={area.id}
+                        className={`rounded border transition ${
+                          isExpanded
+                            ? "border-[#06C755] bg-white dark:bg-[var(--app-surface)] shadow-2xs"
+                            : "border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] hover:border-gray-300"
+                        }`}
+                      >
+                        {/* Area Header Bar */}
+                        <div
+                          onClick={() => setActiveAreaId(area.id)}
+                          className="flex cursor-pointer items-center justify-between px-3.5 py-2.5 text-xs select-none"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
+                                isExpanded ? "bg-[#06C755] text-white" : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                              }`}
+                            >
+                              {letter}
+                            </span>
+                            <span className="font-bold text-gray-800 dark:text-gray-200">
+                              Action type: {area.actionType === "URI" ? "URI (Link)" : "Message"}
+                            </span>
+                            {!isExpanded && area.actionData && (
+                              <span className="truncate max-w-xs text-[11px] text-gray-500 dark:text-gray-400 font-mono">
+                                {area.actionData}
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="text-gray-400 text-xs font-mono">{isExpanded ? "▾" : "▸"}</span>
+                        </div>
+
+                        {/* Expanded Area Form */}
+                        {isExpanded && (
+                          <div className="p-4 pt-1 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)] space-y-3.5">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                  Action type
+                                </label>
+                                <select
+                                  value={area.actionType}
+                                  onChange={(e) => updateArea(area.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
+                                  className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
+                                >
+                                  <option value="URI">URI</option>
+                                  <option value="MESSAGE">Message</option>
+                                </select>
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                    {area.actionType === "URI" ? "URL" : "Message"}
+                                  </label>
+
+                                  {/* Variable Insert Dropdown */}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setVariableDropdownOpenFor(variableDropdownOpenFor === area.id ? null : area.id)
+                                      }
+                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#06C755] hover:underline"
+                                    >
+                                      Insert variable ▾
+                                    </button>
+
+                                    {variableDropdownOpenFor === area.id && (
+                                      <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-md border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] py-1 shadow-lg">
+                                        {SUPPORTED_VARIABLES.map((v) => (
+                                          <button
+                                            key={v.token}
+                                            type="button"
+                                            onClick={() => insertToken(area.id, v.token)}
+                                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] flex flex-col"
+                                          >
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">{v.label}</span>
+                                            <span className="font-mono text-[10px] text-gray-400">{v.token}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <input
+                                  type="text"
+                                  value={area.actionData}
+                                  onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
+                                  placeholder={area.actionType === "URI" ? "https://... or {{store.googleMapsUrl}}" : "Message text"}
+                                  className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Resolved Store Preview Context under Area */}
+                            {previewAreaResolved && (
+                              <div className="rounded bg-[#f9fafb] dark:bg-[var(--app-surface-subtle)] border border-[#e5e7eb] dark:border-[var(--app-border)] p-2 text-xs space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    Resolved for <strong>{previewData?.store.storeName}</strong>:
+                                  </span>
+                                  <span
+                                    className={`font-semibold ${
+                                      previewAreaResolved.isValid ? "text-emerald-600" : "text-rose-500"
+                                    }`}
+                                  >
+                                    {previewAreaResolved.isValid ? "✓ Valid" : `⚠ ${previewAreaResolved.validationError}`}
+                                  </span>
+                                </div>
+                                <p className="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                                  {previewAreaResolved.resolvedActionData || "(empty)"}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Other Settings Section */}
+              <div className="py-4 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)] space-y-4">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+                  Other settings
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Menu bar label
+                    </label>
+                    <input
+                      type="text"
+                      value={formChatBarText}
+                      onChange={(e) => setFormChatBarText(e.target.value)}
+                      placeholder="Menu"
+                      className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Default behavior
+                    </label>
+                    <div className="flex items-center gap-4 text-xs pt-1.5 text-gray-700 dark:text-gray-300">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="defaultBehavior" checked readOnly className="text-[#06C755]" />
+                        <span>Show</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-gray-400 cursor-not-allowed">
+                        <input type="radio" name="defaultBehavior" disabled className="text-gray-400" />
+                        <span>Collapsed (Phase 2)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Target Stores Section (Store Readiness Table below Editor) */}
+        <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Target stores</h2>
+              {readinessData?.summary && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Ready: <strong className="text-emerald-600">{readinessData.summary.ready}</strong> · Blocked:{" "}
+                  <strong className="text-rose-600">{readinessData.summary.blocked}</strong> · Selected:{" "}
+                  <strong className="text-gray-900 dark:text-gray-100">{selectedOaIds.size}</strong>
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              {assignmentsMessage && (
+                <span
+                  className={`text-xs font-medium ${
+                    assignmentsMessage.type === "success" ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {assignmentsMessage.text}
+                </span>
+              )}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingImage}
-                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-xs text-[var(--app-text-secondary)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] disabled:opacity-50"
+                onClick={handleSaveAssignments}
+                disabled={savingAssignments}
+                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3.5 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
               >
-                {uploadingImage ? "Uploading Image..." : formImageUrl ? "Replace Background Image" : "Upload Canvas Background Image"}
+                {savingAssignments ? "Saving..." : "Save assigned stores"}
               </button>
-              {uploadError && <p className="mt-1 text-[11px] text-rose-500">{uploadError}</p>}
             </div>
           </div>
 
-          {/* Interactive Visual Canvas Preview */}
-          <div className="mb-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Visual Canvas Preview</h2>
-              <span className="text-[11px] text-[var(--app-text-tertiary)] font-mono">{formWidth} x {formHeight} px</span>
-            </div>
+          {/* Table Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="search"
+                value={storeSearch}
+                onChange={(e) => setStoreSearch(e.target.value)}
+                placeholder="Search stores..."
+                className="h-8 w-60 rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-2.5 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-[#06C755] focus:outline-none"
+              />
 
-            <div
-              className="relative w-full rounded-xl border border-[var(--app-border)] bg-slate-900/90 overflow-hidden shadow-inner flex items-center justify-center"
-              style={{ aspectRatio: `${formWidth} / ${formHeight}` }}
-            >
-              {formImageUrl && (
-                <img
-                  src={formImageUrl}
-                  alt="Rich Menu Canvas Background"
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              )}
-
-              {/* Area Overlays */}
-              {formAreas.map((area, index) => {
-                const leftPct = (area.bounds.x / formWidth) * 100;
-                const topPct = (area.bounds.y / formHeight) * 100;
-                const widthPct = (area.bounds.width / formWidth) * 100;
-                const heightPct = (area.bounds.height / formHeight) * 100;
-                const isSelected = area.id === selectedAreaId;
-
-                return (
-                  <div
-                    key={area.id}
-                    onClick={() => setSelectedAreaId(area.id)}
-                    className={`absolute cursor-pointer transition flex flex-col items-center justify-center p-2 text-center select-none border ${
-                      isSelected
-                        ? "border-emerald-400 bg-emerald-500/25 ring-2 ring-emerald-400/80 z-20"
-                        : "border-white/30 bg-black/35 hover:bg-black/20 hover:border-white/60 z-10"
-                    }`}
-                    style={{
-                      left: `${leftPct}%`,
-                      top: `${topPct}%`,
-                      width: `${widthPct}%`,
-                      height: `${heightPct}%`,
-                    }}
-                  >
-                    <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white shadow">
-                      #{index + 1} {area.label || area.actionType}
-                    </span>
-                    <span className="mt-1 line-clamp-1 max-w-full text-[10px] text-white/80 font-mono">
-                      {area.actionData || "(empty)"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-center text-[11px] text-[var(--app-text-tertiary)]">
-              Click any area box on the canvas above to configure its action.
-            </p>
-          </div>
-
-          {/* Area Configuration Card */}
-          {activeArea && (
-            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
-                  Configure Area: {activeArea.label || activeArea.id}
-                </h2>
-                <span className="text-[10px] font-mono text-[var(--app-text-tertiary)]">
-                  [{activeArea.bounds.x}, {activeArea.bounds.y}] - {activeArea.bounds.width}x{activeArea.bounds.height}px
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Area Label (Optional)</label>
-                  <input
-                    type="text"
-                    value={activeArea.label || ""}
-                    onChange={(e) => updateArea(activeArea.id, { label: e.target.value })}
-                    placeholder="e.g. Store Location"
-                    className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Action Type</label>
-                  <select
-                    value={activeArea.actionType}
-                    onChange={(e) => updateArea(activeArea.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
-                    className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                  >
-                    <option value="URI">URI (Web Link / Maps URL)</option>
-                    <option value="MESSAGE">MESSAGE (Send Chat Text)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
-                  Action Value / Template String
-                </label>
-                <input
-                  type="text"
-                  value={activeArea.actionData}
-                  onChange={(e) => updateArea(activeArea.id, { actionData: e.target.value })}
-                  placeholder={activeArea.actionType === "URI" ? "e.g. {{store.googleMapsUrl}}" : "e.g. สนใจโปรโมชั่น"}
-                  className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs font-mono text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                />
-              </div>
-
-              {/* Token Insertion Helper */}
-              <div>
-                <span className="block text-[10px] font-semibold text-[var(--app-text-tertiary)] mb-1.5 uppercase tracking-wider">
-                  Insert Store Variable Tokens:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {VARIABLE_TOKENS.map((token) => (
-                    <button
-                      key={token.token}
-                      type="button"
-                      onClick={() => insertToken(activeArea.id, token.token)}
-                      title={token.desc}
-                      className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 py-1 text-[11px] font-mono text-[var(--app-accent)] transition hover:bg-[var(--app-accent-soft)]"
-                    >
-                      + {token.token}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ===================== RIGHT PANE: Store Readiness & Live Preview ===================== */}
-        <div className="col-span-12 flex flex-col overflow-y-auto bg-[var(--app-surface)] p-5 lg:col-span-4 space-y-4">
-          {/* Live Store Variable Preview Card */}
-          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-bg)] p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Per-Store Preview</h2>
-              {loadingPreview && <span className="text-[10px] text-[var(--app-text-tertiary)] animate-pulse">Resolving...</span>}
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">Select Store to Preview</label>
-              <select
-                value={previewStoreOaId}
-                onChange={(e) => {
-                  setPreviewStoreOaId(e.target.value);
-                  if (selectedTemplateId) loadPreview(selectedTemplateId, e.target.value);
-                }}
-                className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-              >
-                {readinessData?.items.map((item) => (
-                  <option key={item.lineOfficialAccountId} value={item.lineOfficialAccountId}>
-                    {item.storeName} ({item.externalStoreId || "No ID"}) - {item.readinessStatus}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {previewData && (
-              <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-[var(--app-text-primary)]">{previewData.store.storeName}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      previewData.readinessStatus === "READY"
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                    }`}
-                  >
-                    {previewData.readinessStatus}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-[11px]">
-                  {previewData.areas.map((a, idx) => (
-                    <div key={a.id} className="rounded-lg bg-[var(--app-surface-subtle)] p-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[var(--app-text-primary)]">Area #{idx + 1} ({a.actionType})</span>
-                        <span className={`text-[10px] font-semibold ${a.isValid ? "text-emerald-500" : "text-rose-500"}`}>
-                          {a.isValid ? "✓ Valid" : `⚠ ${a.validationError}`}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 truncate font-mono text-[10px] text-[var(--app-text-secondary)]">
-                        {a.resolvedActionData}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Store Readiness Matrix */}
-          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-tertiary)]">Store Readiness Evaluation</h2>
-              {loadingReadiness && <span className="text-[10px] text-[var(--app-text-tertiary)] animate-pulse">Evaluating...</span>}
-            </div>
-
-            {/* KPI Counter Badges */}
-            {readinessData?.summary && (
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2">
-                  <div className="text-xs font-bold text-[var(--app-text-primary)]">{readinessData.summary.total}</div>
-                  <div className="text-[10px] text-[var(--app-text-tertiary)]">Total</div>
-                </div>
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2">
-                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{readinessData.summary.ready}</div>
-                  <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80">Ready</div>
-                </div>
-                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-2">
-                  <div className="text-xs font-bold text-rose-600 dark:text-rose-400">{readinessData.summary.blocked}</div>
-                  <div className="text-[10px] text-rose-600/80 dark:text-rose-400/80">Blocked</div>
-                </div>
-                <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-2">
-                  <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{selectedOaIds.size}</div>
-                  <div className="text-[10px] text-indigo-600/80 dark:text-indigo-400/80">Selected</div>
-                </div>
-              </div>
-            )}
-
-            {/* Filter Tabs & Search */}
-            <div className="space-y-2">
-              <div className="flex rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-0.5 text-xs">
+              {/* Filter Tabs */}
+              <div className="flex rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] p-0.5 text-xs">
                 {(["all", "ready", "blocked"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => setReadinessFilter(tab)}
-                    className={`flex-1 py-1 text-center font-semibold rounded-md capitalize transition ${
+                    className={`px-3 py-1 font-semibold rounded capitalize transition ${
                       readinessFilter === tab
-                        ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-sm"
-                        : "text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)]"
+                        ? "bg-white dark:bg-[var(--app-surface)] text-gray-900 dark:text-gray-100 shadow-2xs"
+                        : "text-gray-500 hover:text-gray-900"
                     }`}
                   >
                     {tab}
                   </button>
                 ))}
               </div>
-
-              <input
-                type="search"
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                placeholder="Search stores by ID / name..."
-                className="h-8 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus:border-[var(--app-accent)] focus:outline-none"
-              />
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center justify-between text-xs pt-1">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllReady}
-                  className="text-[11px] font-semibold text-[var(--app-accent)] hover:underline"
-                >
-                  Select All Ready
-                </button>
-                <span className="text-[var(--app-border)]">|</span>
-                <button
-                  type="button"
-                  onClick={handleClearSelection}
-                  className="text-[11px] text-[var(--app-text-tertiary)] hover:underline"
-                >
-                  Clear
-                </button>
-              </div>
+            <div className="flex items-center gap-3 text-xs">
               <button
                 type="button"
-                onClick={handleSaveAssignments}
-                disabled={savingAssignments}
-                className="rounded-lg bg-[var(--app-surface-subtle)] border border-[var(--app-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-50"
+                onClick={handleSelectAllReady}
+                className="font-semibold text-[#06C755] hover:underline"
               >
-                {savingAssignments ? "Saving..." : "Save Assigned Stores"}
+                Select all ready
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="text-gray-500 hover:text-gray-800 hover:underline"
+              >
+                Clear
               </button>
             </div>
-            {assignmentsMessage && (
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">{assignmentsMessage}</p>
-            )}
+          </div>
 
-            {/* Store List */}
-            <div className="max-h-64 overflow-y-auto space-y-1 rounded-xl border border-[var(--app-border)] p-2">
-              {filteredStores.length === 0 ? (
-                <div className="p-4 text-center text-xs text-[var(--app-text-tertiary)]">No stores match filters.</div>
-              ) : (
-                filteredStores.map((store) => {
-                  const isChecked = selectedOaIds.has(store.lineOfficialAccountId);
-                  const isBlocked = store.readinessStatus === "BLOCKED";
+          {/* Compact Store Table */}
+          <div className="overflow-x-auto rounded border border-[#e5e7eb] dark:border-[var(--app-border)]">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] text-gray-500 font-semibold">
+                <tr>
+                  <th className="w-10 px-3 py-2.5 text-center">#</th>
+                  <th className="w-24 px-3 py-2.5">Store ID</th>
+                  <th className="px-3 py-2.5">Store Name</th>
+                  <th className="px-3 py-2.5">LINE OA Name</th>
+                  <th className="px-3 py-2.5">Province</th>
+                  <th className="w-36 px-3 py-2.5">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f3f4f6] dark:divide-[var(--app-border-subtle)]">
+                {loadingReadiness ? (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
+                      Evaluating store readiness...
+                    </td>
+                  </tr>
+                ) : filteredStores.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
+                      No stores found matching filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStores.map((store) => {
+                    const isChecked = selectedOaIds.has(store.lineOfficialAccountId);
+                    const isBlocked = store.readinessStatus === "BLOCKED";
 
-                  return (
-                    <div
-                      key={store.lineOfficialAccountId}
-                      onClick={() => handleToggleStore(store.lineOfficialAccountId, store.readinessStatus)}
-                      className={`flex items-center gap-2.5 rounded-lg p-2 transition text-left ${
-                        isBlocked
-                          ? "opacity-60 bg-rose-500/5 cursor-not-allowed"
-                          : isChecked
-                          ? "bg-[var(--app-accent-soft)] cursor-pointer"
-                          : "bg-[var(--app-surface-subtle)] hover:bg-[var(--app-surface-hover)] cursor-pointer"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        disabled={isBlocked}
-                        onChange={() => {}}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-[var(--app-accent)] focus:ring-[var(--app-accent)]"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="truncate text-xs font-semibold text-[var(--app-text-primary)]">
-                            {store.storeName}
-                          </span>
-                          <span
-                            className={`shrink-0 text-[10px] font-bold ${
-                              isBlocked ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"
-                            }`}
-                          >
-                            {store.readinessStatus}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-[var(--app-text-tertiary)]">
-                          <span>ID: {store.externalStoreId || "—"}</span>
-                          {store.province && <span>· {store.province}</span>}
-                          {isBlocked && (
-                            <span className="text-rose-500 font-medium">· {store.readinessReason}</span>
-                          )}
-                        </div>
-                      </div>
+                    return (
+                      <tr
+                        key={store.lineOfficialAccountId}
+                        onClick={() => handleToggleStore(store.lineOfficialAccountId, store.readinessStatus)}
+                        className={`transition ${
+                          isBlocked
+                            ? "bg-gray-50/50 dark:bg-gray-900/20 text-gray-400 cursor-not-allowed"
+                            : isChecked
+                            ? "bg-[#06C755]/5 hover:bg-[#06C755]/10 cursor-pointer"
+                            : "hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] cursor-pointer"
+                        }`}
+                      >
+                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isBlocked}
+                            onChange={() => handleToggleStore(store.lineOfficialAccountId, store.readinessStatus)}
+                            className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-gray-600 dark:text-gray-400">
+                          {store.externalStoreId || "—"}
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-gray-900 dark:text-gray-100">
+                          {store.storeName}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-600 dark:text-gray-300">
+                          {store.lineOfficialAccountName}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-500 dark:text-gray-400">
+                          {store.province || "—"}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col">
+                            <span
+                              className={`font-semibold ${
+                                isBlocked ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {isBlocked ? "⚠ Blocked" : "● Ready"}
+                            </span>
+                            {isBlocked && store.readinessReason && (
+                              <span className="text-[10px] text-rose-500 leading-tight mt-0.5">
+                                {store.readinessReason}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      {/* 5. Select a Template Modal (LINE OA Manager Preset Selector) */}
+      {isPresetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-6 shadow-xl space-y-5">
+            <div className="flex items-center justify-between border-b border-[#e5e7eb] dark:border-[var(--app-border)] pb-3">
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Select a template</h3>
+              <button
+                type="button"
+                onClick={() => setIsPresetModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+              {(["GRID_6", "GRID_4", "GRID_3", "CUSTOM"] as const).map((preset) => {
+                const conf = PRESET_CONFIGS[preset];
+                const isSelected = modalSelectedPreset === preset;
+
+                return (
+                  <div
+                    key={preset}
+                    onClick={() => setModalSelectedPreset(preset)}
+                    className={`cursor-pointer rounded-lg border p-3 text-center transition flex flex-col items-center justify-between ${
+                      isSelected
+                        ? "border-[#06C755] bg-[#06C755]/5 ring-2 ring-[#06C755]/30"
+                        : "border-[#e5e7eb] dark:border-[var(--app-border)] hover:border-gray-300"
+                    }`}
+                  >
+                    {/* SVG Diagram */}
+                    <div className="h-20 w-full flex items-center justify-center mb-2">
+                      {preset === "GRID_6" && (
+                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
+                          <rect x="2" y="2" width="96" height="64" rx="2" className="stroke-gray-400" />
+                          <line x1="50" y1="2" x2="50" y2="66" />
+                          <line x1="2" y1="23" x2="98" y2="23" />
+                          <line x1="2" y1="45" x2="98" y2="45" />
+                        </svg>
+                      )}
+                      {preset === "GRID_4" && (
+                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
+                          <rect x="2" y="2" width="96" height="64" rx="2" className="stroke-gray-400" />
+                          <line x1="50" y1="2" x2="50" y2="66" />
+                          <line x1="2" y1="34" x2="98" y2="34" />
+                        </svg>
+                      )}
+                      {preset === "GRID_3" && (
+                        <svg viewBox="0 0 100 34" className="h-10 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
+                          <rect x="2" y="2" width="96" height="30" rx="2" className="stroke-gray-400" />
+                          <line x1="33" y1="2" x2="33" y2="32" />
+                          <line x1="66" y1="2" x2="66" y2="32" />
+                        </svg>
+                      )}
+                      {preset === "CUSTOM" && (
+                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
+                          <rect x="2" y="2" width="96" height="64" rx="2" strokeDasharray="3 3" className="stroke-gray-400" />
+                          <circle cx="50" cy="34" r="6" />
+                        </svg>
+                      )}
                     </div>
-                  );
-                })
-              )}
+
+                    <div>
+                      <span className="block text-xs font-bold text-gray-900 dark:text-gray-100">{conf.label}</span>
+                      <span className="block text-[10px] text-gray-400">{conf.width}x{conf.height}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Future Phase 2 Publishing Gate */}
-            <div className="pt-2 border-t border-[var(--app-border-subtle)] space-y-2">
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)]">
               <button
                 type="button"
-                disabled
-                title="Publishing will be enabled in Phase 2"
-                className="flex h-10 w-full items-center justify-center rounded-xl bg-gray-400/20 text-xs font-bold text-gray-500 cursor-not-allowed"
+                onClick={() => setIsPresetModalOpen(false)}
+                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] px-4 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50"
               >
-                Publishing available in Phase 2
+                Cancel
               </button>
-              <p className="text-center text-[10px] text-[var(--app-text-tertiary)] leading-tight">
-                Phase 1 is Management + Template + Preview + Readiness only. Live LINE OA publishing will be enabled in Phase 2.
-              </p>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(modalSelectedPreset)}
+                className="rounded bg-[#06C755] hover:bg-[#05b34c] px-4 py-1.5 text-xs font-bold text-white shadow-xs"
+              >
+                Apply
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

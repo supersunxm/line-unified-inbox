@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: Rich Menu Manager (Phase 1: Management + Template + Preview + Readiness) (2026-08-27)
+## Current task: Rich Menu Workspace Redesign to Align with LINE OA Manager (2026-08-27)
+
+- **Visual & Structural Alignment with LINE OA Manager**:
+  - Replaced oversized 3-column dashboard layout with LINE OA Manager's 2-column form structure (Preview Left ~36%, Editor Right ~64%) with Target Stores full-width below.
+  - Page Header: Clean white/light gray header with title `Rich Menu`, subtitle, and green `[ Save Draft ]` primary action (`#06C755`). Subtle Phase 1 notice badge.
+  - Template Selector: Compact top selector dropdown `Template: [ Template Name ▼ ] [ + New ]` eliminating unnecessary permanent sidebar columns.
+  - Main Settings: Clean horizontal layout for `Title`, disabled `Display period` ("Not configured in Phase 1"), and collapsible `Advanced settings (Description)`.
+  - Preview Panel: Simulated LINE phone container with canvas background, translucent area overlays with LINE-style letter badges (`A`, `B`, `C`, `D`, `E`, `F`), chat bar mockup, and `[ Show template outline ]` toggle.
+  - Template Preset Modal: Clean "Select a template" modal with neutral line diagrams for `6-grid`, `4-grid`, `3-grid`, and `Custom`.
+  - Image Upload: Compact image row with JPEG/PNG ≤ 1MB validation, preview dimensions, `[ Select image ]`, `[ Replace ]`, and `[ Remove ]`.
+  - Actions Section: Collapsed/expanded area rows labeled `A`, `B`, `C`, ... with `URI` / `Message` inputs, live store resolution validation badges, and compact `[ Insert variable ▾ ]` dropdown (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.lineUrl}}`, `{{store.tiktokUrl}}`).
+  - Target Stores Section: Full-width table below the editor with `Ready`, `Blocked`, `Selected` summary stats, search, `[ All ] [ Ready ] [ Blocked ]` tabs, `[ Select all ready ]`, and disabled checkboxes with clear reason tooltips for blocked stores.
+- **Verification & Test Results**:
+  - 436 / 436 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Rich Menu Manager (Phase 1: Management + Template + Preview + Readiness) (2026-08-27)
 
 - **Phase 1 Architecture & Non-Destructive Boundary**:
   - Implemented Phase 1 Management, Template, Visual Preview, and Store Readiness Evaluation.
