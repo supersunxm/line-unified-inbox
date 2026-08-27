@@ -5,6 +5,36 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
 
 const maxConversationNotificationMessages = 8;
+const maxNotificationTextLength = 160;
+
+String normalizeNotificationText(
+  Object? value, {
+  String fallback = '',
+  int maxLength = maxNotificationTextLength,
+}) {
+  final source = value is String ? value : fallback;
+  final compact = source.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (compact.isEmpty) {
+    return fallback.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+  if (compact.length <= maxLength) return compact;
+  const suffix = '...';
+  return '${compact.substring(0, maxLength - suffix.length)}$suffix';
+}
+
+String notificationTitle({
+  String? customerName,
+  String? storeName,
+  String fallbackCustomer = 'Customer',
+}) {
+  final customer = normalizeNotificationText(
+    customerName,
+    fallback: fallbackCustomer,
+    maxLength: 80,
+  );
+  final store = normalizeNotificationText(storeName, maxLength: 80);
+  return store.isEmpty ? customer : '$customer • $store';
+}
 
 class ConversationNotificationMessage {
   const ConversationNotificationMessage({
@@ -227,11 +257,26 @@ class MemoryConversationNotificationHistoryStore
 }
 
 String notificationPreview({required String messageType, String? preview}) {
-  if (messageType.toUpperCase() == 'IMAGE') return 'Sent an image';
-  if (messageType.toUpperCase() == 'VIDEO') return 'Sent a video';
-  final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (compact.isEmpty) return 'New customer message';
-  return compact.length <= 160 ? compact : '${compact.substring(0, 157)}...';
+  switch (messageType.toUpperCase()) {
+    case 'IMAGE':
+      return '📷 Image sent';
+    case 'VIDEO':
+      return '🎥 Video sent';
+    case 'STICKER':
+      return 'Sticker sent';
+    case 'FILE':
+      return 'File sent';
+    case 'AUDIO':
+      return 'Audio sent';
+    case 'LOCATION':
+      return 'Location sent';
+    case 'UNSUPPORTED':
+      return 'Customer message unavailable';
+  }
+  return normalizeNotificationText(
+    preview,
+    fallback: 'Customer message unavailable',
+  );
 }
 
 String localizedNotificationPreview({
@@ -240,12 +285,28 @@ String localizedNotificationPreview({
   String? preview,
 }) {
   if (messageType.toUpperCase() == 'IMAGE') {
-    return localizations.sentAnImage;
+    return '📷 ${localizations.sentAnImage}';
   }
   if (messageType.toUpperCase() == 'VIDEO') {
-    return localizations.sentAVideo;
+    return '🎥 ${localizations.sentAVideo}';
   }
-  final compact = (preview ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (compact.isEmpty) return localizations.newCustomerMessage;
-  return compact.length <= 160 ? compact : '${compact.substring(0, 157)}...';
+  if (messageType.toUpperCase() == 'STICKER') {
+    return localizations.sentASticker;
+  }
+  if (messageType.toUpperCase() == 'FILE') {
+    return localizations.sentAFile;
+  }
+  if (messageType.toUpperCase() == 'AUDIO') {
+    return localizations.sentAudio;
+  }
+  if (messageType.toUpperCase() == 'LOCATION') {
+    return localizations.sentLocation;
+  }
+  if (messageType.toUpperCase() == 'UNSUPPORTED') {
+    return localizations.unsupportedCustomerMessage;
+  }
+  return normalizeNotificationText(
+    preview,
+    fallback: localizations.unsupportedCustomerMessage,
+  );
 }

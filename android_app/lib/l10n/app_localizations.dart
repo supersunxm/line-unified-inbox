@@ -299,6 +299,36 @@ abstract class AppLocalizations {
   /// **'Sent a video'**
   String get sentAVideo;
 
+  /// No description provided for @sentASticker.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent a sticker'**
+  String get sentASticker;
+
+  /// No description provided for @sentAFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent a file'**
+  String get sentAFile;
+
+  /// No description provided for @sentAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent audio'**
+  String get sentAudio;
+
+  /// No description provided for @sentLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent a location'**
+  String get sentLocation;
+
+  /// No description provided for @unsupportedCustomerMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer message unavailable'**
+  String get unsupportedCustomerMessage;
+
   /// No description provided for @newCustomerMessage.
   ///
   /// In en, this message translates to:

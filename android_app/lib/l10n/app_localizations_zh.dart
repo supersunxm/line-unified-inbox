@@ -112,6 +112,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sentAVideo => '发送视频';
 
   @override
+  String get sentASticker => '发送了贴纸';
+
+  @override
+  String get sentAFile => '发送了文件';
+
+  @override
+  String get sentAudio => '发送了音频';
+
+  @override
+  String get sentLocation => '发送了位置';
+
+  @override
+  String get unsupportedCustomerMessage => '无法显示客户消息';
+
+  @override
   String get newCustomerMessage => '新的客户消息';
 
   @override
@@ -1008,6 +1023,21 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get sentAVideo => '发送视频';
+
+  @override
+  String get sentASticker => '发送了贴纸';
+
+  @override
+  String get sentAFile => '发送了文件';
+
+  @override
+  String get sentAudio => '发送了音频';
+
+  @override
+  String get sentLocation => '发送了位置';
+
+  @override
+  String get unsupportedCustomerMessage => '无法显示客户消息';
 
   @override
   String get newCustomerMessage => '新的客户消息';

@@ -112,6 +112,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sentAVideo => 'Sent a video';
 
   @override
+  String get sentASticker => 'Sent a sticker';
+
+  @override
+  String get sentAFile => 'Sent a file';
+
+  @override
+  String get sentAudio => 'Sent audio';
+
+  @override
+  String get sentLocation => 'Sent a location';
+
+  @override
+  String get unsupportedCustomerMessage => 'Customer message unavailable';
+
+  @override
   String get newCustomerMessage => 'New customer message';
 
   @override

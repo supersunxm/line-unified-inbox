@@ -19,12 +19,12 @@ void test("inbound customer messages enqueue notifications only after the messag
   };
   const prisma = {
     webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
-    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1", name: "OPPO CentralWorld" } }), update: () => Promise.resolve({}) },
     customer: { upsert: () => Promise.resolve({ id: "customer-1", displayName: "LINE Customer" }) },
     conversation: { findFirst: () => Promise.resolve(null) },
     $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
   } as unknown as PrismaService;
-  const notifications = { enqueueInboundMessage: async (_tx: unknown, input: { storeId: string; conversationId: string; messageId: string; customerName: string; messageType: string; preview: string; sentAt: string }) => { sequence.push("notification"); assert.deepEqual(input, { storeId: "store-1", conversationId: "conversation-1", messageId: "message-1", customerName: "LINE Customer", messageType: "TEXT", preview: "hello", sentAt: input.sentAt }); assert.match(input.sentAt, /^\d{4}-\d{2}-\d{2}T/); } } as unknown as NotificationEnqueueService;
+  const notifications = { enqueueInboundMessage: async (_tx: unknown, input: { storeId: string; storeName?: string; conversationId: string; messageId: string; customerName: string; messageType: string; preview: string; sentAt: string }) => { sequence.push("notification"); assert.deepEqual(input, { storeId: "store-1", storeName: "OPPO CentralWorld", conversationId: "conversation-1", messageId: "message-1", customerName: "LINE Customer", messageType: "TEXT", preview: "hello", sentAt: input.sentAt }); assert.match(input.sentAt, /^\d{4}-\d{2}-\d{2}T/); } } as unknown as NotificationEnqueueService;
   const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, { analyze: () => Promise.resolve({}) } as ClassificationService, { refresh: () => Promise.resolve({}) } as unknown as LineProfileService, {} as LineImageService, notifications);
   await service.accept({ events: [{ type: "message", webhookEventId: "event-notify", timestamp: Date.now(), source: { type: "user", userId: "line-user-1" }, message: { type: "text", id: "line-message-1", text: "hello" } }] }, "oa-1");
   assert.deepEqual(sequence, ["message", "notification"]);

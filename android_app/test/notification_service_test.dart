@@ -5,6 +5,9 @@ import 'package:line_oa_chat_hub/core/network/api_client.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/features/notifications/notification_service.dart';
 import 'package:line_oa_chat_hub/features/notifications/conversation_notification_history.dart';
+import 'package:line_oa_chat_hub/l10n/app_localizations_en.dart';
+import 'package:line_oa_chat_hub/l10n/app_localizations_th.dart';
+import 'package:line_oa_chat_hub/l10n/app_localizations_zh.dart';
 
 class _AuthenticatedTokenStore extends TokenStore {
   @override
@@ -193,16 +196,59 @@ void main() {
     expect(store.read('conversation-b'), isNull);
   });
 
-  test('image notifications use a safe image fallback and text is bounded', () {
+  test(
+      'notification content normalizes text and uses localized media fallbacks',
+      () {
     expect(notificationPreview(messageType: 'IMAGE', preview: 'private URL'),
-        'Sent an image');
+        '📷 Image sent');
     expect(notificationPreview(messageType: 'VIDEO', preview: 'private URL'),
-        'Sent a video');
+        '🎥 Video sent');
+    expect(notificationPreview(messageType: 'STICKER', preview: 'private URL'),
+        'Sticker sent');
+    expect(notificationPreview(messageType: 'FILE', preview: 'private URL'),
+        'File sent');
     expect(
         notificationPreview(messageType: 'TEXT', preview: '  hello\nthere  '),
         'hello there');
     expect(notificationPreview(messageType: 'TEXT', preview: 'x' * 200).length,
         160);
+  });
+
+  test('notification title includes store when available and omits it safely',
+      () {
+    expect(
+      notificationTitle(
+        customerName: ' Somchai Jaidee ',
+        storeName: ' OPPO CentralWorld ',
+      ),
+      'Somchai Jaidee • OPPO CentralWorld',
+    );
+    expect(notificationTitle(customerName: '', storeName: ''), 'Customer');
+    expect(notificationTitle(customerName: 'Somchai'), 'Somchai');
+  });
+
+  test('media fallbacks are localized for Thai, English, and Chinese', () {
+    expect(
+      localizedNotificationPreview(
+        localizations: AppLocalizationsTh(),
+        messageType: 'VIDEO',
+      ),
+      '🎥 ส่งวิดีโอ',
+    );
+    expect(
+      localizedNotificationPreview(
+        localizations: AppLocalizationsEn(),
+        messageType: 'FILE',
+      ),
+      'Sent a file',
+    );
+    expect(
+      localizedNotificationPreview(
+        localizations: AppLocalizationsZhCn(),
+        messageType: 'STICKER',
+      ),
+      '发送了贴纸',
+    );
   });
 
   test('registers the current FCM token for an authenticated session',

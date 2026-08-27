@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Prisma, PushNotificationStatus, UserRole, UserStatus } from "@prisma/client";
+import { buildNotificationContent, DEFAULT_CUSTOMER_NAME } from "./notification-content";
 
 type NotificationClient = Prisma.TransactionClient;
 
@@ -7,7 +8,7 @@ type NotificationClient = Prisma.TransactionClient;
 export class NotificationEnqueueService {
   private readonly logger = new Logger(NotificationEnqueueService.name);
 
-  async enqueueInboundMessage(tx: NotificationClient, input: { storeId: string; conversationId: string; messageId: string; customerName: string; messageType: string; preview: string; sentAt: string }) {
+  async enqueueInboundMessage(tx: NotificationClient, input: { storeId: string; storeName?: string | null; conversationId: string; messageId: string; customerName?: string | null; messageType: string; preview: string; sentAt: string }) {
     const users = await tx.user.findMany({
       where: {
         isActive: true,
@@ -26,13 +27,30 @@ export class NotificationEnqueueService {
       this.logger.log(JSON.stringify({ event: "push_notification_enqueued", messageId: input.messageId, conversationId: input.conversationId, targetedUserCount: 0 }));
       return { count: 0 };
     }
+    const content = buildNotificationContent({
+      customerName: input.customerName || DEFAULT_CUSTOMER_NAME,
+      storeName: input.storeName,
+      messageType: input.messageType,
+      preview: input.preview,
+    });
+    const payload = {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      customerName: input.customerName || DEFAULT_CUSTOMER_NAME,
+      ...(input.storeName?.trim() ? { storeName: input.storeName.trim() } : {}),
+      messageType: input.messageType,
+      preview: content.body,
+      title: content.title,
+      body: content.body,
+      sentAt: input.sentAt,
+    };
     const result = await tx.pushNotification.createMany({
       data: users.map((user) => ({
         userId: user.id,
         conversationId: input.conversationId,
         messageId: input.messageId,
         type: "INBOUND_MESSAGE",
-        payload: { conversationId: input.conversationId, messageId: input.messageId, customerName: input.customerName, messageType: input.messageType, preview: input.preview, sentAt: input.sentAt },
+        payload,
         status: PushNotificationStatus.PENDING,
       })),
       skipDuplicates: true,

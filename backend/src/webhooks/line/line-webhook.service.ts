@@ -211,7 +211,7 @@ export class LineWebhookService {
           lineReplyTokenReceivedAt,
         },
       });
-      if (this.notifications && conversation.storeId) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
+      if (this.notifications && conversation.storeId) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, storeName: oa.store?.name, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
       const mediaType = message.type === "image" || message.type === "video" ? messageTypeMap[message.type] : null;
       const media = mediaType ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType } }) : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });

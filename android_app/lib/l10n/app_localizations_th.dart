@@ -112,6 +112,21 @@ class AppLocalizationsTh extends AppLocalizations {
   String get sentAVideo => 'ส่งวิดีโอ';
 
   @override
+  String get sentASticker => 'ส่งสติกเกอร์';
+
+  @override
+  String get sentAFile => 'ส่งไฟล์';
+
+  @override
+  String get sentAudio => 'ส่งเสียง';
+
+  @override
+  String get sentLocation => 'ส่งตำแหน่ง';
+
+  @override
+  String get unsupportedCustomerMessage => 'ไม่สามารถแสดงข้อความจากลูกค้าได้';
+
+  @override
   String get newCustomerMessage => 'ข้อความใหม่จากลูกค้า';
 
   @override

@@ -143,8 +143,11 @@ Future<void> _showRemoteNotification(
   final conversationId = message.data['conversationId'];
   final messageId = message.data['messageId'];
   final customerName = message.data['customerName'];
+  final storeName = message.data['storeName'];
   final messageType = message.data['messageType'];
   final preview = message.data['preview'];
+  final remoteTitle = message.data['title'];
+  final remoteBody = message.data['body'];
   final sentAt = message.data['sentAt'];
   SafeLogger.fcmMessageReceived(
     hasNotificationId: notificationId is String && notificationId.isNotEmpty,
@@ -165,6 +168,24 @@ Future<void> _showRemoteNotification(
   }
   try {
     final localizations = await _loadNotificationLocalizations();
+    final title = remoteTitle is String && remoteTitle.trim().isNotEmpty
+        ? normalizeNotificationText(remoteTitle,
+            fallback: localizations.customer, maxLength: 180)
+        : notificationTitle(
+            customerName: customerName is String ? customerName : null,
+            storeName: storeName is String ? storeName : null,
+            fallbackCustomer: localizations.customer,
+          );
+    final body = remoteBody is String && remoteBody.trim().isNotEmpty
+        ? normalizeNotificationText(
+            remoteBody,
+            fallback: localizations.unsupportedCustomerMessage,
+          )
+        : localizedNotificationPreview(
+            localizations: localizations,
+            messageType: messageType is String ? messageType : 'UNSUPPORTED',
+            preview: preview is String ? preview : null,
+          );
     await _initializeLocalNotifications();
     if (await _effectiveBackgroundHistory.contains(
         conversationId: conversationId, messageId: messageId)) {
@@ -178,11 +199,7 @@ Future<void> _showRemoteNotification(
           : localizations.customer,
       message: ConversationNotificationMessage(
         messageId: messageId,
-        preview: localizedNotificationPreview(
-          localizations: localizations,
-          messageType: messageType is String ? messageType : '',
-          preview: preview is String ? preview : null,
-        ),
+        preview: body,
         sentAt: sentAt is String
             ? (DateTime.tryParse(sentAt)?.toUtc() ?? DateTime.now().toUtc())
             : DateTime.now().toUtc(),
@@ -194,10 +211,8 @@ Future<void> _showRemoteNotification(
     );
     await _localNotifications.show(
       conversationNotificationId(conversationId),
-      history.customerName,
-      history.messages.length == 1
-          ? history.messages.single.preview
-          : localizations.newMessages(history.messages.length),
+      title,
+      body,
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
@@ -211,7 +226,7 @@ Future<void> _showRemoteNotification(
           enableVibration: true,
           styleInformation: MessagingStyleInformation(
             Person(name: localizations.you),
-            conversationTitle: history.customerName,
+            conversationTitle: title,
             groupConversation: false,
             messages: history.messages
                 .map((item) => Message(item.preview, item.sentAt, customer))
