@@ -3,6 +3,7 @@ import test from "node:test";
 import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import type { PrimarySection } from "../src/app/primary-navigation.ts";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
+import { RICH_MENU_I18N } from "../src/app/rich-menus/rich-menu-i18n.ts";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -59,55 +60,46 @@ test("TopNavigation and AppSidebar contain Rich Menu Manager routes and icons", 
   assert.match(appSidebarFile, /name === "rich-menu"/);
 });
 
-test("RichMenusView is aligned with LINE OA Manager layout, controls, and readiness table", () => {
+test("RichMenusView supports multilingual dictionary across Thai, English, and Chinese", () => {
+  // Thai
+  assert.equal(RICH_MENU_I18N.th.pageTitle, "ริชเมนู");
+  assert.equal(RICH_MENU_I18N.th.saveDraft, "บันทึกแบบร่าง");
+  assert.equal(RICH_MENU_I18N.th.mainSettings, "การตั้งค่าหลัก");
+  assert.equal(RICH_MENU_I18N.th.title, "ชื่อริชเมนู");
+  assert.equal(RICH_MENU_I18N.th.menuContent, "เนื้อหาเมนู");
+  assert.equal(RICH_MENU_I18N.th.preview, "ตัวอย่าง");
+  assert.equal(RICH_MENU_I18N.th.targetStores, "ร้านเป้าหมาย");
+  assert.equal(RICH_MENU_I18N.th.selectAllReady, "เลือกร้านที่พร้อมทั้งหมด");
+  assert.equal(RICH_MENU_I18N.th.missingGoogleMapsReason, "ไม่มีลิงก์ Google Maps");
+
+  // English
+  assert.equal(RICH_MENU_I18N.en.pageTitle, "Rich Menu");
+  assert.equal(RICH_MENU_I18N.en.saveDraft, "Save Draft");
+  assert.equal(RICH_MENU_I18N.en.mainSettings, "Main settings");
+  assert.equal(RICH_MENU_I18N.en.title, "Title");
+  assert.equal(RICH_MENU_I18N.en.menuContent, "Menu content");
+  assert.equal(RICH_MENU_I18N.en.preview, "Preview");
+  assert.equal(RICH_MENU_I18N.en.targetStores, "Target stores");
+  assert.equal(RICH_MENU_I18N.en.selectAllReady, "Select all ready");
+  assert.equal(RICH_MENU_I18N.en.missingGoogleMapsReason, "Missing Google Maps URL");
+
+  // Chinese
+  assert.equal(RICH_MENU_I18N.zh.pageTitle, "丰富菜单");
+  assert.equal(RICH_MENU_I18N.zh.saveDraft, "保存草稿");
+  assert.equal(RICH_MENU_I18N.zh.mainSettings, "主要设置");
+  assert.equal(RICH_MENU_I18N.zh.title, "菜单名称");
+  assert.equal(RICH_MENU_I18N.zh.menuContent, "菜单内容");
+  assert.equal(RICH_MENU_I18N.zh.preview, "预览");
+  assert.equal(RICH_MENU_I18N.zh.targetStores, "目标门店");
+  assert.equal(RICH_MENU_I18N.zh.selectAllReady, "选择全部可用门店");
+  assert.equal(RICH_MENU_I18N.zh.missingGoogleMapsReason, "缺少 Google Maps 链接");
+
+  // Structural & variable placeholders unchanged across languages
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
-
-  // Page Header & Save Draft
-  assert.match(viewFile, /Rich Menu/);
-  assert.match(viewFile, /Create and manage rich menu templates for store LINE OAs\./);
-  assert.match(viewFile, /Publishing to LINE is available in Phase 2/);
-  assert.match(viewFile, /Save Draft/);
-
-  // Main settings section
-  assert.match(viewFile, /Main settings/);
-  assert.match(viewFile, /Title/);
-  assert.match(viewFile, /Display period/);
-  assert.match(viewFile, /Not configured in Phase 1/);
-  assert.match(viewFile, /Advanced settings/);
-
-  // Menu content section (Preview & Editor)
-  assert.match(viewFile, /Menu content/);
-  assert.match(viewFile, /Preview as:/);
-  assert.match(viewFile, /Show template outline/);
-  assert.match(viewFile, /Template/);
-  assert.match(viewFile, /Select a template/);
-  assert.match(viewFile, /6-grid/);
-  assert.match(viewFile, /4-grid/);
-  assert.match(viewFile, /3-grid/);
-  assert.match(viewFile, /Custom/);
-
-  // Actions & Variable Insertion
-  assert.match(viewFile, /Actions/);
-  assert.match(viewFile, /Action type/);
-  assert.match(viewFile, /Insert variable/);
   assert.match(viewFile, /\{\{store\.storeName\}\}/);
   assert.match(viewFile, /\{\{store\.googleMapsUrl\}\}/);
   assert.match(viewFile, /\{\{store\.lineUrl\}\}/);
   assert.match(viewFile, /\{\{store\.tiktokUrl\}\}/);
-
-  // Target stores section
-  assert.match(viewFile, /Target stores/);
-  assert.match(viewFile, /Select all ready/);
-  assert.match(viewFile, /Save assigned stores/);
-  assert.match(viewFile, /Store ID/);
-  assert.match(viewFile, /Store Name/);
-  assert.match(viewFile, /LINE OA Name/);
-  assert.match(viewFile, /Status/);
-
-  // Other settings
-  assert.match(viewFile, /Other settings/);
-  assert.match(viewFile, /Menu bar label/);
-  assert.match(viewFile, /Default behavior/);
 });
 
 test("API client exports Rich Menu template and readiness methods", () => {

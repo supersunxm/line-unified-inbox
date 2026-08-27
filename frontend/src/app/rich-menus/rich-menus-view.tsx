@@ -10,20 +10,18 @@ import type {
   RichMenuTemplate,
 } from "@/types/api";
 import type { Language } from "@/components/shell/top-navigation";
+import { RICH_MENU_I18N } from "./rich-menu-i18n";
 
 interface RichMenusViewProps {
   language?: Language;
   userRole?: "ADMIN" | "VIEWER";
 }
 
-const PRESET_CONFIGS: Record<
-  RichMenuCanvasPreset,
-  { label: string; width: number; height: number; description: string; tilesCount: number }
-> = {
-  GRID_6: { label: "6-grid", width: 2500, height: 1686, description: "2 columns x 3 rows (2500 x 1686 px)", tilesCount: 6 },
-  GRID_4: { label: "4-grid", width: 2500, height: 1686, description: "2 columns x 2 rows (2500 x 1686 px)", tilesCount: 4 },
-  GRID_3: { label: "3-grid", width: 2500, height: 843, description: "3 columns x 1 row compact banner (2500 x 843 px)", tilesCount: 3 },
-  CUSTOM: { label: "Custom", width: 2500, height: 1686, description: "Custom canvas coordinates", tilesCount: 1 },
+const PRESET_DIMENSIONS: Record<RichMenuCanvasPreset, { width: number; height: number }> = {
+  GRID_6: { width: 2500, height: 1686 },
+  GRID_4: { width: 2500, height: 1686 },
+  GRID_3: { width: 2500, height: 843 },
+  CUSTOM: { width: 2500, height: 1686 },
 };
 
 function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, height = 1686): RichMenuArea[] {
@@ -62,18 +60,34 @@ function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, h
   ];
 }
 
-const SUPPORTED_VARIABLES = [
-  { token: "{{store.storeName}}", label: "Store name", example: "OBS Central Pinklao" },
-  { token: "{{store.googleMapsUrl}}", label: "Google Maps URL", example: "https://maps.app.goo.gl/..." },
-  { token: "{{store.lineUrl}}", label: "LINE OA Link", example: "https://line.me/R/ti/p/..." },
-  { token: "{{store.tiktokUrl}}", label: "TikTok URL", example: "https://tiktok.com/@..." },
-];
-
 function getAreaLetter(index: number): string {
   return String.fromCharCode(65 + index); // A, B, C, D, ...
 }
 
 export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenusViewProps) {
+  const t = RICH_MENU_I18N[language] || RICH_MENU_I18N.th;
+
+  // Preset labels/descriptions localized
+  const presetLabels: Record<RichMenuCanvasPreset, { label: string; description: string }> = useMemo(
+    () => ({
+      GRID_6: { label: t.presetGrid6, description: t.presetGrid6Desc },
+      GRID_4: { label: t.presetGrid4, description: t.presetGrid4Desc },
+      GRID_3: { label: t.presetGrid3, description: t.presetGrid3Desc },
+      CUSTOM: { label: t.presetCustom, description: t.presetCustomDesc },
+    }),
+    [t],
+  );
+
+  const supportedVariables = useMemo(
+    () => [
+      { token: "{{store.storeName}}", label: t.varStoreName, example: "OBS Central Pinklao" },
+      { token: "{{store.googleMapsUrl}}", label: t.varGoogleMapsUrl, example: "https://maps.app.goo.gl/..." },
+      { token: "{{store.lineUrl}}", label: t.varLineUrl, example: "https://line.me/R/ti/p/..." },
+      { token: "{{store.tiktokUrl}}", label: t.varTiktokUrl, example: "https://tiktok.com/@..." },
+    ],
+    [t],
+  );
+
   // Templates state
   const [templates, setTemplates] = useState<RichMenuTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -133,7 +147,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         initNewTemplate();
       }
     } catch (err: any) {
-      setSaveMessage({ type: "error", text: err.message || "Failed to load templates" });
+      setSaveMessage({ type: "error", text: err.message || t.failedSaveTemplate });
     } finally {
       setLoadingTemplates(false);
     }
@@ -146,13 +160,13 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   // Initialize new template
   const initNewTemplate = () => {
     setSelectedTemplateId("new");
-    setFormName("Untitled rich menu");
+    setFormName(language === "th" ? "ริชเมนูใหม่" : language === "zh" ? "新建丰富菜单" : "Untitled rich menu");
     setFormDescription("");
     setShowAdvancedSettings(false);
     setFormPreset("GRID_6");
     setFormWidth(2500);
     setFormHeight(1686);
-    setFormChatBarText("Menu");
+    setFormChatBarText(t.menuBarDefault);
     setFormImageUrl(null);
     const presetAreas = generatePresetAreasClient("GRID_6", 2500, 1686);
     setFormAreas(presetAreas);
@@ -175,7 +189,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormPreset(tmpl.canvasPreset);
     setFormWidth(tmpl.width);
     setFormHeight(tmpl.height);
-    setFormChatBarText(tmpl.chatBarText || "Menu");
+    setFormChatBarText(tmpl.chatBarText || t.menuBarDefault);
     setFormImageUrl(tmpl.imageUrl || null);
     setFormAreas(tmpl.areas || []);
     setActiveAreaId(tmpl.areas?.[0]?.id || "area-1");
@@ -227,10 +241,10 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   // Change Canvas Preset
   const handleApplyPreset = (preset: RichMenuCanvasPreset) => {
     setFormPreset(preset);
-    const conf = PRESET_CONFIGS[preset];
-    setFormWidth(conf.width);
-    setFormHeight(conf.height);
-    const newAreas = generatePresetAreasClient(preset, conf.width, conf.height);
+    const dim = PRESET_DIMENSIONS[preset];
+    setFormWidth(dim.width);
+    setFormHeight(dim.height);
+    const newAreas = generatePresetAreasClient(preset, dim.width, dim.height);
     setFormAreas(newAreas);
     setActiveAreaId(newAreas[0]?.id || "area-1");
     setIsPresetModalOpen(false);
@@ -258,7 +272,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     if (!file) return;
 
     if (file.size > 1 * 1024 * 1024) {
-      setImageError("Image file size exceeds 1 MB limit (LINE Messaging API requirement).");
+      setImageError(t.imageSizeError);
       return;
     }
 
@@ -272,7 +286,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         setFormHeight(res.height);
       }
     } catch (err: any) {
-      setImageError(err.message || "Failed to upload image.");
+      setImageError(err.message || t.imageUploadError);
     } finally {
       setUploadingImage(false);
     }
@@ -281,7 +295,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   // Save Template
   const handleSaveTemplate = async () => {
     if (!formName.trim()) {
-      setSaveMessage({ type: "error", text: "Please enter a template title." });
+      setSaveMessage({ type: "error", text: t.enterTitleError });
       return;
     }
 
@@ -295,7 +309,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         canvasPreset: formPreset,
         width: formWidth,
         height: formHeight,
-        chatBarText: formChatBarText.trim() || "Menu",
+        chatBarText: formChatBarText.trim() || t.menuBarDefault,
         imageUrl: formImageUrl,
         areas: formAreas,
       };
@@ -307,11 +321,11 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         saved = await api.createRichMenuTemplate(payload);
       }
 
-      setSaveMessage({ type: "success", text: "Rich menu draft saved." });
+      setSaveMessage({ type: "success", text: t.draftSaved });
       await loadTemplates(saved.id);
       await loadReadiness(saved.id);
     } catch (err: any) {
-      setSaveMessage({ type: "error", text: err.message || "Failed to save rich menu template." });
+      setSaveMessage({ type: "error", text: err.message || t.failedSaveTemplate });
     } finally {
       setSavingTemplate(false);
     }
@@ -345,7 +359,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
   const handleSaveAssignments = async () => {
     if (!selectedTemplateId || selectedTemplateId === "new") {
-      setAssignmentsMessage({ type: "error", text: "Save the template first before assigning stores." });
+      setAssignmentsMessage({ type: "error", text: t.saveTemplateFirst });
       return;
     }
 
@@ -353,11 +367,11 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setAssignmentsMessage(null);
     try {
       const res = await api.saveRichMenuAssignments(selectedTemplateId, Array.from(selectedOaIds));
-      setAssignmentsMessage({ type: "success", text: `Saved ${res.assignedCount} store assignments.` });
+      setAssignmentsMessage({ type: "success", text: t.savedAssignmentsSuccess(res.assignedCount) });
       await loadReadiness(selectedTemplateId);
       await loadTemplates(selectedTemplateId);
     } catch (err: any) {
-      setAssignmentsMessage({ type: "error", text: err.message || "Failed to save assignments." });
+      setAssignmentsMessage({ type: "error", text: err.message || t.failedSaveAssignments });
     } finally {
       setSavingAssignments(false);
     }
@@ -393,14 +407,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Rich Menu</h1>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t.pageTitle}</h1>
               <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
-                Publishing to LINE is available in Phase 2
+                {t.phase1Badge}
               </span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Create and manage rich menu templates for store LINE OAs.
-            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.pageSubtitle}</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -419,7 +431,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               disabled={savingTemplate}
               className="inline-flex items-center justify-center rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
             >
-              {savingTemplate ? "Saving..." : "Save Draft"}
+              {savingTemplate ? t.saving : t.saveDraft}
             </button>
           </div>
         </div>
@@ -429,7 +441,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         {/* Template Selector Bar */}
         <div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-4 py-2.5 shadow-2xs">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Template:</span>
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{t.templateLabel}:</span>
             <select
               value={selectedTemplateId || "new"}
               onChange={(e) => {
@@ -441,12 +453,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               }}
               className="h-8 rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
             >
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({PRESET_CONFIGS[t.canvasPreset]?.label || t.canvasPreset})
+              {templates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name} ({presetLabels[tmpl.canvasPreset]?.label || tmpl.canvasPreset})
                 </option>
               ))}
-              <option value="new">+ New template...</option>
+              <option value="new">{t.newTemplateOption}</option>
             </select>
           </div>
 
@@ -455,44 +467,44 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             onClick={initNewTemplate}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[#06C755] hover:underline"
           >
-            + New
+            {t.newTemplateButton}
           </button>
         </div>
 
         {/* 2. Main Settings Section */}
         <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
           <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-4">
-            Main settings
+            {t.mainSettings}
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                Title <span className="text-rose-500">*</span>
+                {t.title} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Store Default Rich Menu"
+                placeholder={t.titlePlaceholder}
                 className="h-9 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
               />
-              <p className="text-[11px] text-gray-400 mt-1">Displayed in internal LINE management.</p>
+              <p className="text-[11px] text-gray-400 mt-1">{t.titleHint}</p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                Display period
+                {t.displayPeriod}
               </label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   disabled
-                  value="Not configured in Phase 1"
+                  value={t.notConfiguredPhase1}
                   className="h-9 flex-1 rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-gray-50 dark:bg-[var(--app-surface-subtle)] px-3 text-xs text-gray-400 cursor-not-allowed"
                 />
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">Live schedule publishing is enabled in Phase 2.</p>
+              <p className="text-[11px] text-gray-400 mt-1">{t.displayPeriodHint}</p>
             </div>
           </div>
 
@@ -502,7 +514,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
               className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-medium hover:text-[#06C755]"
             >
-              <span>{showAdvancedSettings ? "▾" : "▸"}</span> Advanced settings (Description)
+              <span>{showAdvancedSettings ? "▾" : "▸"}</span> {t.advancedSettings}
             </button>
             {showAdvancedSettings && (
               <div className="mt-2.5 max-w-xl">
@@ -510,7 +522,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="Optional internal notes or description"
+                  placeholder={t.descriptionPlaceholder}
                   className="w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] p-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
                 />
               </div>
@@ -521,21 +533,21 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         {/* 3. Menu Content Section (2-Column Editor: Preview Left ~36%, Editor Right ~64%) */}
         <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs">
           <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)] mb-5">
-            Menu content
+            {t.menuContent}
           </h2>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* ===================== LEFT: Preview Panel (36%) ===================== */}
             <div className="lg:col-span-5 flex flex-col space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Preview</span>
-                {loadingPreview && <span className="text-[10px] text-gray-400 animate-pulse">Resolving store...</span>}
+                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{t.preview}</span>
+                {loadingPreview && <span className="text-[10px] text-gray-400 animate-pulse">{t.resolvingStore}</span>}
               </div>
 
               {/* Store Selector */}
               <div className="rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] p-2.5 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">Preview as:</label>
+                  <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">{t.previewAs}</label>
                   {selectedStoreItem && (
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
@@ -544,7 +556,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                           : "text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"
                       }`}
                     >
-                      {selectedStoreItem.readinessStatus === "READY" ? "● Ready" : "⚠ Blocked"}
+                      {selectedStoreItem.readinessStatus === "READY" ? t.statusReady : t.statusBlocked}
                     </span>
                   )}
                 </div>
@@ -559,20 +571,20 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 >
                   {readinessData?.items.map((item) => (
                     <option key={item.lineOfficialAccountId} value={item.lineOfficialAccountId}>
-                      {item.storeName} ({item.externalStoreId || "No ID"})
+                      {item.storeName} ({item.externalStoreId || "—"})
                     </option>
                   ))}
                 </select>
 
                 {selectedStoreItem && (
                   <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 pt-0.5">
-                    <span>Store ID: {selectedStoreItem.externalStoreId || "—"}</span>
+                    <span>{t.storeId}: {selectedStoreItem.externalStoreId || "—"}</span>
                     <span>
-                      Google Maps:{" "}
+                      {t.googleMaps}:{" "}
                       {selectedStoreItem.googleMapsUrl ? (
-                        <span className="text-emerald-600 font-medium">✓ Configured</span>
+                        <span className="text-emerald-600 font-medium">✓ {t.configured}</span>
                       ) : (
-                        <span className="text-rose-500 font-medium">⚠ Not configured</span>
+                        <span className="text-rose-500 font-medium">⚠ {t.notConfigured}</span>
                       )}
                     </span>
                   </div>
@@ -593,7 +605,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     />
                   ) : (
                     <div className="text-center p-4 text-gray-400 text-xs font-mono">
-                      No image uploaded ({formWidth}x{formHeight}px)
+                      {t.noImageUploaded(formWidth, formHeight)}
                     </div>
                   )}
 
@@ -638,7 +650,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 {/* Simulated LINE Chat Bar at bottom */}
                 <div className="mt-1.5 flex items-center justify-between rounded border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300">
                   <span className="text-gray-400">⌨</span>
-                  <span className="font-medium text-gray-800 dark:text-gray-200">{formChatBarText || "Menu"} ▾</span>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{formChatBarText || t.menuBarDefault} ▾</span>
                   <span className="text-gray-400">···</span>
                 </div>
               </div>
@@ -651,7 +663,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   onChange={(e) => setShowOutline(e.target.checked)}
                   className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755]"
                 />
-                <span>Show template outline</span>
+                <span>{t.showTemplateOutline}</span>
               </label>
             </div>
 
@@ -660,9 +672,9 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               {/* Template Row */}
               <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
                 <div>
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Template</span>
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{t.templateLabel}</span>
                   <p className="text-xs text-gray-900 dark:text-gray-100 font-semibold mt-0.5">
-                    {PRESET_CONFIGS[formPreset]?.label || formPreset} ({formWidth} x {formHeight} px, {formAreas.length} areas)
+                    {presetLabels[formPreset]?.label || formPreset} ({formWidth} x {formHeight} px, {t.areasCount(formAreas.length)})
                   </p>
                 </div>
                 <button
@@ -673,20 +685,20 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                   }}
                   className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition"
                 >
-                  Change
+                  {t.changeTemplate}
                 </button>
               </div>
 
               {/* Image Row */}
               <div className="flex items-center justify-between py-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
                 <div className="min-w-0 flex-1 pr-3">
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Image</span>
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{t.image}</span>
                   {formImageUrl ? (
                     <p className="truncate text-xs text-gray-900 dark:text-gray-100 font-medium mt-0.5">
-                      ✓ Image uploaded ({formWidth} x {formHeight} px)
+                      {t.imageUploaded(formWidth, formHeight)}
                     </p>
                   ) : (
-                    <p className="text-xs text-gray-400 mt-0.5">No image selected (JPEG/PNG ≤ 1MB)</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.noImageSelected}</p>
                   )}
                   {imageError && <p className="text-[11px] text-rose-500 mt-1">{imageError}</p>}
                 </div>
@@ -706,7 +718,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     disabled={uploadingImage}
                     className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
                   >
-                    {uploadingImage ? "Uploading..." : formImageUrl ? "Replace" : "Select image"}
+                    {uploadingImage ? t.uploadingImage : formImageUrl ? t.replaceImage : t.selectImage}
                   </button>
                   {formImageUrl && (
                     <button
@@ -714,7 +726,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                       onClick={() => setFormImageUrl(null)}
                       className="text-xs text-rose-500 hover:underline px-2 py-1"
                     >
-                      Remove
+                      {t.removeImage}
                     </button>
                   )}
                 </div>
@@ -723,7 +735,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               {/* Actions Section */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                  Actions
+                  {t.actions}
                 </h3>
 
                 <div className="space-y-2">
@@ -755,7 +767,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               {letter}
                             </span>
                             <span className="font-bold text-gray-800 dark:text-gray-200">
-                              Action type: {area.actionType === "URI" ? "URI (Link)" : "Message"}
+                              {t.actionType}: {area.actionType === "URI" ? t.actionTypeUri : t.actionTypeMessage}
                             </span>
                             {!isExpanded && area.actionData && (
                               <span className="truncate max-w-xs text-[11px] text-gray-500 dark:text-gray-400 font-mono">
@@ -773,22 +785,22 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
                               <div>
                                 <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                  Action type
+                                  {t.actionType}
                                 </label>
                                 <select
                                   value={area.actionType}
                                   onChange={(e) => updateArea(area.id, { actionType: e.target.value as "URI" | "MESSAGE" })}
                                   className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2 text-xs text-gray-900 dark:text-gray-100 font-medium focus:border-[#06C755] focus:outline-none"
                                 >
-                                  <option value="URI">URI</option>
-                                  <option value="MESSAGE">Message</option>
+                                  <option value="URI">{t.actionTypeUri}</option>
+                                  <option value="MESSAGE">{t.actionTypeMessage}</option>
                                 </select>
                               </div>
 
                               <div className="md:col-span-2">
                                 <div className="flex items-center justify-between mb-1">
                                   <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300">
-                                    {area.actionType === "URI" ? "URL" : "Message"}
+                                    {area.actionType === "URI" ? t.url : t.message}
                                   </label>
 
                                   {/* Variable Insert Dropdown */}
@@ -800,12 +812,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                       }
                                       className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#06C755] hover:underline"
                                     >
-                                      Insert variable ▾
+                                      {t.insertVariable}
                                     </button>
 
                                     {variableDropdownOpenFor === area.id && (
                                       <div className="absolute right-0 top-full z-30 mt-1 w-56 rounded-md border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] py-1 shadow-lg">
-                                        {SUPPORTED_VARIABLES.map((v) => (
+                                        {supportedVariables.map((v) => (
                                           <button
                                             key={v.token}
                                             type="button"
@@ -825,7 +837,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                   type="text"
                                   value={area.actionData}
                                   onChange={(e) => updateArea(area.id, { actionData: e.target.value })}
-                                  placeholder={area.actionType === "URI" ? "https://... or {{store.googleMapsUrl}}" : "Message text"}
+                                  placeholder={area.actionType === "URI" ? t.urlPlaceholder : t.messagePlaceholder}
                                   className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 font-mono focus:border-[#06C755] focus:outline-none"
                                 />
                               </div>
@@ -836,18 +848,26 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               <div className="rounded bg-[#f9fafb] dark:bg-[var(--app-surface-subtle)] border border-[#e5e7eb] dark:border-[var(--app-border)] p-2 text-xs space-y-1">
                                 <div className="flex items-center justify-between text-[11px]">
                                   <span className="text-gray-500 dark:text-gray-400">
-                                    Resolved for <strong>{previewData?.store.storeName}</strong>:
+                                    {t.resolvedFor} <strong>{previewData?.store.storeName}</strong>:
                                   </span>
                                   <span
                                     className={`font-semibold ${
                                       previewAreaResolved.isValid ? "text-emerald-600" : "text-rose-500"
                                     }`}
                                   >
-                                    {previewAreaResolved.isValid ? "✓ Valid" : `⚠ ${previewAreaResolved.validationError}`}
+                                    {previewAreaResolved.isValid
+                                      ? t.valid
+                                      : t.invalid(
+                                          previewAreaResolved.validationError === "Missing Google Maps URL"
+                                            ? t.missingGoogleMapsReason
+                                            : previewAreaResolved.validationError === "Invalid Google Maps URL"
+                                            ? t.invalidGoogleMapsReason
+                                            : previewAreaResolved.validationError || ""
+                                        )}
                                   </span>
                                 </div>
                                 <p className="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
-                                  {previewAreaResolved.resolvedActionData || "(empty)"}
+                                  {previewAreaResolved.resolvedActionData || t.emptyValue}
                                 </p>
                               </div>
                             )}
@@ -862,35 +882,35 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               {/* Other Settings Section */}
               <div className="py-4 border-t border-[#f3f4f6] dark:border-[var(--app-border-subtle)] space-y-4">
                 <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-                  Other settings
+                  {t.otherSettings}
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                      Menu bar label
+                      {t.menuBarLabel}
                     </label>
                     <input
                       type="text"
                       value={formChatBarText}
                       onChange={(e) => setFormChatBarText(e.target.value)}
-                      placeholder="Menu"
+                      placeholder={t.menuBarDefault}
                       className="h-8 w-full rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-[#06C755] focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                      Default behavior
+                      {t.defaultBehavior}
                     </label>
                     <div className="flex items-center gap-4 text-xs pt-1.5 text-gray-700 dark:text-gray-300">
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input type="radio" name="defaultBehavior" checked readOnly className="text-[#06C755]" />
-                        <span>Show</span>
+                        <span>{t.behaviorShow}</span>
                       </label>
                       <label className="flex items-center gap-1.5 text-gray-400 cursor-not-allowed">
                         <input type="radio" name="defaultBehavior" disabled className="text-gray-400" />
-                        <span>Collapsed (Phase 2)</span>
+                        <span>{t.behaviorCollapsed}</span>
                       </label>
                     </div>
                   </div>
@@ -904,11 +924,11 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         <section className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-5 shadow-2xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#f3f4f6] dark:border-[var(--app-border-subtle)]">
             <div>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Target stores</h2>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.targetStores}</h2>
               {readinessData?.summary && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Ready: <strong className="text-emerald-600">{readinessData.summary.ready}</strong> · Blocked:{" "}
-                  <strong className="text-rose-600">{readinessData.summary.blocked}</strong> · Selected:{" "}
+                  {t.readyCount}: <strong className="text-emerald-600">{readinessData.summary.ready}</strong> · {t.blockedCount}:{" "}
+                  <strong className="text-rose-600">{readinessData.summary.blocked}</strong> · {t.selectedCount}:{" "}
                   <strong className="text-gray-900 dark:text-gray-100">{selectedOaIds.size}</strong>
                 </p>
               )}
@@ -930,7 +950,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 disabled={savingAssignments}
                 className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3.5 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
               >
-                {savingAssignments ? "Saving..." : "Save assigned stores"}
+                {savingAssignments ? t.savingAssignments : t.saveAssignedStores}
               </button>
             </div>
           </div>
@@ -942,7 +962,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 type="search"
                 value={storeSearch}
                 onChange={(e) => setStoreSearch(e.target.value)}
-                placeholder="Search stores..."
+                placeholder={t.searchStoresPlaceholder}
                 className="h-8 w-60 rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface-subtle)] px-2.5 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-[#06C755] focus:outline-none"
               />
 
@@ -959,7 +979,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                         : "text-gray-500 hover:text-gray-900"
                     }`}
                   >
-                    {tab}
+                    {tab === "all" ? t.tabAll : tab === "ready" ? t.tabReady : t.tabBlocked}
                   </button>
                 ))}
               </div>
@@ -971,7 +991,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 onClick={handleSelectAllReady}
                 className="font-semibold text-[#06C755] hover:underline"
               >
-                Select all ready
+                {t.selectAllReady}
               </button>
               <span className="text-gray-300">|</span>
               <button
@@ -979,7 +999,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 onClick={handleClearSelection}
                 className="text-gray-500 hover:text-gray-800 hover:underline"
               >
-                Clear
+                {t.clearSelection}
               </button>
             </div>
           </div>
@@ -989,25 +1009,25 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] text-gray-500 font-semibold">
                 <tr>
-                  <th className="w-10 px-3 py-2.5 text-center">#</th>
-                  <th className="w-24 px-3 py-2.5">Store ID</th>
-                  <th className="px-3 py-2.5">Store Name</th>
-                  <th className="px-3 py-2.5">LINE OA Name</th>
-                  <th className="px-3 py-2.5">Province</th>
-                  <th className="w-36 px-3 py-2.5">Status</th>
+                  <th className="w-10 px-3 py-2.5 text-center">{t.colHash}</th>
+                  <th className="w-24 px-3 py-2.5">{t.colStoreId}</th>
+                  <th className="px-3 py-2.5">{t.colStoreName}</th>
+                  <th className="px-3 py-2.5">{t.colLineOaName}</th>
+                  <th className="px-3 py-2.5">{t.colProvince}</th>
+                  <th className="w-36 px-3 py-2.5">{t.colStatus}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f3f4f6] dark:divide-[var(--app-border-subtle)]">
                 {loadingReadiness ? (
                   <tr>
                     <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
-                      Evaluating store readiness...
+                      {t.evaluatingReadiness}
                     </td>
                   </tr>
                 ) : filteredStores.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-6 text-center text-xs text-gray-400">
-                      No stores found matching filters.
+                      {t.noStoresFound}
                     </td>
                   </tr>
                 ) : (
@@ -1055,11 +1075,15 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 isBlocked ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
                               }`}
                             >
-                              {isBlocked ? "⚠ Blocked" : "● Ready"}
+                              {isBlocked ? t.statusBlocked : t.statusReady}
                             </span>
                             {isBlocked && store.readinessReason && (
                               <span className="text-[10px] text-rose-500 leading-tight mt-0.5">
-                                {store.readinessReason}
+                                {store.readinessReason === "Missing Google Maps URL"
+                                  ? t.missingGoogleMapsReason
+                                  : store.readinessReason === "Invalid Google Maps URL"
+                                  ? t.invalidGoogleMapsReason
+                                  : store.readinessReason}
                               </span>
                             )}
                           </div>
@@ -1079,7 +1103,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-2xl rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-[#e5e7eb] dark:border-[var(--app-border)] pb-3">
-              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Select a template</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">{t.selectTemplateTitle}</h3>
               <button
                 type="button"
                 onClick={() => setIsPresetModalOpen(false)}
@@ -1091,7 +1115,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
               {(["GRID_6", "GRID_4", "GRID_3", "CUSTOM"] as const).map((preset) => {
-                const conf = PRESET_CONFIGS[preset];
+                const conf = PRESET_DIMENSIONS[preset];
+                const labelInfo = presetLabels[preset];
                 const isSelected = modalSelectedPreset === preset;
 
                 return (
@@ -1137,7 +1162,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     </div>
 
                     <div>
-                      <span className="block text-xs font-bold text-gray-900 dark:text-gray-100">{conf.label}</span>
+                      <span className="block text-xs font-bold text-gray-900 dark:text-gray-100">{labelInfo.label}</span>
                       <span className="block text-[10px] text-gray-400">{conf.width}x{conf.height}</span>
                     </div>
                   </div>
@@ -1151,14 +1176,14 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 onClick={() => setIsPresetModalOpen(false)}
                 className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] px-4 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50"
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyPreset(modalSelectedPreset)}
                 className="rounded bg-[#06C755] hover:bg-[#05b34c] px-4 py-1.5 text-xs font-bold text-white shadow-xs"
               >
-                Apply
+                {t.apply}
               </button>
             </div>
           </div>

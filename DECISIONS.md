@@ -1,3 +1,8 @@
+# Multilingual UI Architecture for /rich-menus (2026-08-27)
+
+- **Dedicated Dictionary Module (`rich-menu-i18n.ts`)**: Structured the complete copy dictionary `RICH_MENU_I18N` in a standalone `.ts` file supporting `th`, `en`, and `zh`. This pattern ensures clean separation of concerns, zero bundle overhead from third-party i18n libraries, and full compatibility with Node test runner ESM strip-types.
+- **Data & Enum Invariance**: All data attributes, API contracts, template variable placeholders (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.lineUrl}}`, `{{store.tiktokUrl}}`), and preset identifiers (`GRID_6`, `GRID_4`, `GRID_3`, `CUSTOM`) remain strictly identical across all language selections.
+
 # Route-Level Vertical Scrolling Architecture for /rich-menus (2026-08-27)
 
 - **Isolated Route-Level Scrolling**: To preserve the fixed single-screen layout and internal message timeline scrolling required for `/chats`, `/rich-menus` enables vertical scrolling on its own root wrapper (`w-full flex-1 min-h-0 overflow-y-auto`) rather than modifying the outer application shell.

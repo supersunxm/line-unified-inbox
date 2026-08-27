@@ -1,6 +1,19 @@
 # AI progress
 
-## Current task: Fix Vertical Page Scrolling on /rich-menus (2026-08-27)
+## Current task: Full Multilingual Support on /rich-menus (2026-08-27)
+
+- **Multilingual UI Dictionary Architecture**:
+  - Implemented `RICH_MENU_I18N` in `frontend/src/app/rich-menus/rich-menu-i18n.ts` supporting Thai (`th`), English (`en`), and Chinese (`zh`).
+  - Replaced all visible hardcoded English strings across the workspace: Page Header, Template Selector, Main Settings, Menu Content, Preview, Preset Picker Modal, Image Upload, Actions, Variable Insertion chips, Other Settings, and Target Stores.
+  - Natural Thai translations tailored for operations: "ริชเมนู", "บันทึกแบบร่าง", "การตั้งค่าหลัก", "เนื้อหาเมนู", "ร้านเป้าหมาย", "เลือกร้านที่พร้อมทั้งหมด", "ไม่มีลิงก์ Google Maps".
+  - Concise Simplified Chinese translations: "丰富菜单", "保存草稿", "主要设置", "菜单内容", "目标门店", "选择全部可用门店", "缺少 Google Maps 链接".
+  - Preserved internal enum and data contracts unchanged (`GRID_6`, `GRID_4`, `GRID_3`, `CUSTOM`, `URI`, `MESSAGE`, `READY`, `BLOCKED`, and variable placeholders `{{store.*}}`).
+- **Verification & Test Results**:
+  - 437 / 437 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Fix Vertical Page Scrolling on /rich-menus (2026-08-27)
 
 - **Root Cause**:
   - The route shell `<PageContainer variant="full">` uses `overflow-hidden` for fixed-height chat layouts. Inside this, the root element of `RichMenusView` lacked `flex-1 min-h-0 overflow-y-auto`, causing the tall form content and lower Target Stores section to be cut off without browser/container scrolling.
