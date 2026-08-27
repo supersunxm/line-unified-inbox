@@ -13,6 +13,9 @@ class SafeLogger {
   static void lifecycle(String event) => _write('lifecycle event=$event');
   static void sessionRestoration(String outcome) =>
       _write('session_restoration outcome=$outcome');
+  static void startupStage(String stage, String outcome, {Duration? elapsed}) =>
+      _write(
+          'startup.$stage.$outcome${elapsed == null ? '' : ' durationMs=${elapsed.inMilliseconds}'}');
   static void sessionRefresh(String outcome, {int? statusCode, String? code}) =>
       _write('session_refresh outcome=$outcome status=$statusCode code=$code');
   static void forcedLogout(String reason) =>

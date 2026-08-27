@@ -1339,3 +1339,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Version detection and presentation are user initiated only: startup restoration and app-resume lifecycle hooks no longer call the updater, and `AppUpdateService.checkForUpdates` returns immediately for non-manual callers as defense in depth.
 - Keep install-resume lifecycle separate from version prompting. The update dialog's lifecycle observer still retries a verified APK after the user returns from Android's unknown-source settings, without downloading it again; no auth/session state is touched by updater failures.
+
+# Android startup loading boundary (2026-08-27)
+
+- Render the Flutter shell before provider/network work: `main()` registers the FCM background callback synchronously and calls `runApp` without awaiting Firebase. Notification/Firebase setup and the long-lived realtime connection begin only after a session has selected Login, retry, or Home.
+- Startup restoration is an explicit two-stage state machine. Secure-storage access and `/auth/me` each have a 15-second coordinator timeout; temporary failures produce a retryable state while retaining credentials, and only `SESSION_EXPIRED`/a rejected refresh can select Login. API request, refresh, connectivity, and secure-storage operations are bounded at 20 seconds and recovery failures are classified so a temporary refresh outage cannot be rethrown as a terminal 401.
+- Safe diagnostics record stage, outcome, and elapsed time only. No token, password, message body, or secret is emitted. The updater remains manual-only; the separate active-install resume lifecycle is unchanged.

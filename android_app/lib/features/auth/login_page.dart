@@ -11,7 +11,7 @@ class LoginPage extends StatefulWidget {
       required this.onLoggedIn,
       required this.onRegister});
   final AuthRepository auth;
-  final VoidCallback onLoggedIn;
+  final Future<void> Function() onLoggedIn;
   final VoidCallback onRegister;
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -31,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
     });
     try {
       await widget.auth.login(_identifier.text, _password.text);
-      widget.onLoggedIn();
+      await widget.onLoggedIn();
     } on ApiException catch (error) {
       setState(() => _error = switch (error.code) {
             'ACCOUNT_PENDING_APPROVAL' => localizations.accountPendingMessage,

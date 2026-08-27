@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -120,6 +121,59 @@ void main() {
     await expectLater(client.get('/resource'), throwsA(isA<ApiException>()));
     expect(logouts, 1);
     expect(await store.readCredentials(), isNull);
+  });
+
+  test('refresh timeout preserves the session and does not force logout',
+      () async {
+    final store = TokenStore();
+    await store.saveCredentials(_credentials());
+    var logouts = 0;
+    final never = Completer<http.Response>();
+    final client = ApiClient(
+      store,
+      connectivity: _Online(),
+      requestTimeout: const Duration(milliseconds: 20),
+      onSessionExpired: () async => logouts++,
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/auth/mobile/refresh') return never.future;
+        return http.Response('{"code":"SESSION_EXPIRED"}', 401);
+      }),
+    );
+
+    await expectLater(
+      client.get('/resource'),
+      throwsA(isA<ApiException>()
+          .having((error) => error.code, 'code', 'SESSION_RECOVERY_TEMPORARY')),
+    );
+    expect(logouts, 0);
+    expect(await store.readCredentials(), isNotNull);
+  });
+
+  test(
+      'temporary refresh response does not turn an expired request into logout',
+      () async {
+    final store = TokenStore();
+    await store.saveCredentials(_credentials());
+    var logouts = 0;
+    final client = ApiClient(
+      store,
+      connectivity: _Online(),
+      onSessionExpired: () async => logouts++,
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/auth/mobile/refresh') {
+          return http.Response('{}', 503);
+        }
+        return http.Response('{"code":"SESSION_EXPIRED"}', 401);
+      }),
+    );
+
+    await expectLater(
+      client.get('/resource'),
+      throwsA(isA<ApiException>()
+          .having((error) => error.code, 'code', 'SESSION_RECOVERY_TEMPORARY')),
+    );
+    expect(logouts, 0);
+    expect(await store.readCredentials(), isNotNull);
   });
 
   test('explicit logout revokes by refresh credential and clears storage',
