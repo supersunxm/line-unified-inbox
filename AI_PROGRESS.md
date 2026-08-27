@@ -2364,3 +2364,11 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Profile About now loads the installed `PackageInfo` version/build instead of hardcoded `1.0.6+7`. TH/EN/ZH updater states are generated from ARB resources.
 - Focused updater/Profile tests pass 20/20 (including start/progress, checksum success/mismatch, network failure, installer launch/permission retry, duplicate taps, stale-file cleanup, and installed version rendering). Flutter analyzer passes. Full Flutter tests pass 140/140. Android `assembleDebug` passes with the native bridge and manifest.
 - The installed 1.0.16+17 binary cannot be made reliable solely through release metadata: its manifest has no package-visibility query and it only calls `canLaunchUrl`, so changing the APK URL cannot guarantee a launch. No production metadata was changed; this branch fixes new binaries through direct download/install.
+
+# Current task: Android manual update checks (2026-08-27)
+
+- Created `feat/android-manual-update-check` from clean latest `origin/main` at `6ca01aa99ccd1ece324976bc28f38c0114ece41b`. No Android version/build or APK release files are in scope.
+- Removed automatic update-check calls from app startup restoration and lifecycle resume. The update service now fails closed for non-manual callers, while the Profile About row remains the explicit manual entry point.
+- Preserved the active install lifecycle: verified APKs remain available when Android requests unknown-source permission, and returning to the app retries installation without re-downloading. Session restoration/refresh behavior is unchanged.
+- Added regression coverage for startup/login/resume non-prompt behavior, automatic-call suppression, and manual Profile detection. Flutter analyzer, full Flutter tests (154/154), and Android `assembleDebug` pass.
+- Next action: review, commit, push, open the PR, and monitor CI without merging.
