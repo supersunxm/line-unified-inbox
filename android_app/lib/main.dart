@@ -90,10 +90,6 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       if (_user != null) {
         _refreshSession();
       }
-      final ctx = _navigator.currentContext;
-      if (ctx != null) {
-        unawaited(_updateService.checkForUpdates(ctx));
-      }
     }
   }
 
@@ -120,12 +116,6 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       unawaited(_notifications.initialize(_openConversation));
       _realtime.connect();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _navigator.currentContext;
-      if (ctx != null) {
-        unawaited(_updateService.checkForUpdates(ctx));
-      }
-    });
   }
 
   Future<void> _openConversation(String id, [String? notificationId]) async {

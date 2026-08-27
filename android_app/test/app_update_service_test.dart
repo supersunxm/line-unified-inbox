@@ -204,6 +204,7 @@ void main() {
               body: ElevatedButton(
                 onPressed: () => updateService.checkForUpdates(
                   ctx,
+                  isManual: true,
                   overridePackageInfo: testPackageInfo,
                   overrideUpdateInfo: testUpdateInfo,
                 ),
@@ -265,6 +266,7 @@ void main() {
                 body: ElevatedButton(
                   onPressed: () => updateService.checkForUpdates(
                     ctx,
+                    isManual: true,
                     overridePackageInfo: oldPackageInfo,
                     overrideUpdateInfo: forcedUpdateInfo,
                   ),
@@ -341,6 +343,52 @@ void main() {
       );
     });
 
+    testWidgets('automatic checks never present an update dialog', (
+      tester,
+    ) async {
+      final updateService = AppUpdateService(ApiClient(TokenStore()));
+      final current = PackageInfo(
+        appName: 'OPPO LINE OA Chat',
+        packageName: 'click.lineoppo.chat',
+        version: '1.1.0',
+        buildNumber: '20',
+      );
+      const latest = AppUpdateInfo(
+        latestVersion: '1.1.1',
+        buildNumber: 21,
+        minimumSupportedVersion: '1.0.3',
+        minimumSupportedBuildNumber: 4,
+        forceUpdate: false,
+        apkUrl: 'https://lineoppo.click/downloads/update.apk',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => updateService.checkForUpdates(
+                  context,
+                  overridePackageInfo: current,
+                  overrideUpdateInfo: latest,
+                ),
+                child: const Text('Automatic check'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Automatic check'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('New Version Available'), findsNothing);
+      expect(find.text('Update Required'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
     testWidgets(
       'installed v1.1.0 (build 20) detects v1.1.1 (build 21) and shows the production APK',
       (tester) async {
@@ -378,6 +426,7 @@ void main() {
                 body: ElevatedButton(
                   onPressed: () => updateService.checkForUpdates(
                     ctx,
+                    isManual: true,
                     overridePackageInfo: currentPackageInfo,
                     overrideUpdateInfo: latestUpdateInfo,
                   ),
@@ -523,6 +572,7 @@ void main() {
               body: ElevatedButton(
                 onPressed: () => service.checkForUpdates(
                   context,
+                  isManual: true,
                   overridePackageInfo: PackageInfo(
                     appName: 'OPPO LINE OA Chat',
                     packageName: 'click.lineoppo.chat',
@@ -694,6 +744,7 @@ void main() {
                 body: ElevatedButton(
                   onPressed: () => service.checkForUpdates(
                     context,
+                    isManual: true,
                     overridePackageInfo: PackageInfo(
                       appName: 'OPPO LINE OA Chat',
                       packageName: 'click.lineoppo.chat',

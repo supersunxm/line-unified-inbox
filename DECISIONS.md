@@ -1324,3 +1324,8 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Customer names use the existing `LINE Customer` fallback; blank store names are omitted rather than replaced with IDs or null text. Customer text is whitespace-normalized and bounded to 160 characters. Media uses readable safe labels (`📷`, `🎥`, sticker, file, audio, location, or localized unsupported fallback) and never includes temporary URLs or internal metadata.
 - Recipient targeting remains unchanged: enqueue is still scoped to a stored store conversation and uses the existing active mobile/all-store/membership authorization filters. Main OA remains excluded because it has no store conversation target.
 - Android uses backend title/body whenever present and only computes localized fallbacks for legacy/data-only payloads. Existing HIGH channel, sound/vibration, deep-link, deduplication, token lifecycle, and auth/session behavior are unchanged.
+
+# Android manual update prompt boundary (2026-08-27)
+
+- Version detection and presentation are user initiated only: startup restoration and app-resume lifecycle hooks no longer call the updater, and `AppUpdateService.checkForUpdates` returns immediately for non-manual callers as defense in depth.
+- Keep install-resume lifecycle separate from version prompting. The update dialog's lifecycle observer still retries a verified APK after the user returns from Android's unknown-source settings, without downloading it again; no auth/session state is touched by updater failures.

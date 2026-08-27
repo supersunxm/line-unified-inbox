@@ -154,6 +154,10 @@ class AppUpdateService {
     PackageInfo? overridePackageInfo,
     AppUpdateInfo? overrideUpdateInfo,
   }) async {
+    // Version checks are deliberately user initiated. The only automatic
+    // updater activity left in the app is retrying an install that already
+    // reached Android's permission settings from the active update dialog.
+    if (!isManual) return;
     if (_dialogShowing) return;
 
     try {
