@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'firebase_options.dart';
 import 'core/logging/safe_logger.dart';
 import 'core/localization/localization.dart';
 import 'core/network/api_client.dart';
@@ -13,6 +11,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_scroll_behavior.dart';
 import 'core/widgets/error_state.dart';
 import 'core/services/app_update_service.dart';
+import 'core/services/startup_restore_service.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/change_password_page.dart';
 import 'features/auth/login_page.dart';
@@ -25,9 +24,11 @@ import 'features/realtime/realtime_service.dart';
 import 'features/shell/authenticated_shell.dart';
 import 'features/summary/summary_repository.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Register the background entry point synchronously, but leave Firebase
+  // initialization to the post-navigation notification service. A provider
+  // outage must never prevent Flutter from rendering Login/Home.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   runApp(const LineOaApp());
 }
@@ -50,12 +51,15 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   late final NotificationService _notifications;
   late final AppLanguageController _language;
   late final AppUpdateService _updateService;
+  late final StartupRestoreService _startupRestore;
   CurrentUser? _user;
   bool _registering = false;
   bool _pendingApproval = false;
   bool _loading = true;
   bool _loggingOut = false;
   bool _restoreDeferred = false;
+  Future<void>? _restoreInFlight;
+  static const _nonCriticalStartupTimeout = Duration(seconds: 15);
 
   @override
   void initState() {
@@ -70,6 +74,10 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     _notifications = NotificationService(_api, _tokens);
     _language = AppLanguageController();
     _updateService = AppUpdateService(_api);
+    _startupRestore = StartupRestoreService(
+      hasStoredCredentials: _auth.hasToken,
+      loadAuthenticatedUser: _auth.me,
+    );
     unawaited(_language.load());
     _restore();
   }
@@ -93,28 +101,66 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _restore() async {
+  Future<void> _restore() {
+    final inFlight = _restoreInFlight;
+    if (inFlight != null) return inFlight;
+    final operation = _performRestore();
+    _restoreInFlight = operation;
+    return operation.whenComplete(() {
+      if (identical(_restoreInFlight, operation)) _restoreInFlight = null;
+    });
+  }
+
+  Future<void> _performRestore() async {
     SafeLogger.sessionRestoration('started');
-    if (await _auth.hasToken()) {
-      try {
-        _user = await _auth.me();
-        _restoreDeferred = false;
-        SafeLogger.sessionRestoration('success');
-      } catch (_) {
-        // A terminal refresh rejection clears credentials through
-        // _expireSession. All other failures retain the session and offer a
-        // retry instead of incorrectly presenting Login.
-        _restoreDeferred = await _auth.hasToken();
-        SafeLogger.sessionRestoration(
-            _restoreDeferred ? 'deferred' : 'invalid');
-      }
-    } else {
-      SafeLogger.sessionRestoration('no_credentials');
+    late final StartupRestoreResult result;
+    try {
+      result = await _startupRestore.restore();
+    } catch (_) {
+      // Keep the state machine total even if a future restore dependency
+      // escapes its own guarded stage.
+      SafeLogger.startupStage('restore', 'failed');
+      result = const StartupRestoreResult(
+        status: StartupRestoreStatus.temporarilyUnavailable,
+      );
     }
-    if (mounted) setState(() => _loading = false);
-    if (_user != null) {
-      unawaited(_notifications.initialize(_openConversation));
-      _realtime.connect();
+    if (!mounted) return;
+    setState(() {
+      _user = result.user;
+      _restoreDeferred = result.shouldShowRetry;
+      _loading = false;
+    });
+    SafeLogger.sessionRestoration(
+      switch (result.status) {
+        StartupRestoreStatus.authenticated => 'success',
+        StartupRestoreStatus.noCredentials => 'no_credentials',
+        StartupRestoreStatus.temporarilyUnavailable => 'deferred',
+        StartupRestoreStatus.invalidSession => 'invalid',
+      },
+    );
+    if (result.isAuthenticated) _startPostNavigationServices();
+  }
+
+  void _startPostNavigationServices() {
+    SafeLogger.startupStage('navigation', 'services_start');
+    unawaited(_initializeNotificationsSafely());
+    SafeLogger.startupStage('realtime', 'start');
+    // Realtime is intentionally long-lived and reconnecting; never await it
+    // as part of the session/navigation decision.
+    unawaited(_realtime.connect());
+  }
+
+  Future<void> _initializeNotificationsSafely() async {
+    SafeLogger.startupStage('notifications', 'start');
+    try {
+      await _notifications
+          .initialize(_openConversation)
+          .timeout(_nonCriticalStartupTimeout);
+      SafeLogger.startupStage('notifications', 'success');
+    } on TimeoutException {
+      SafeLogger.startupStage('notifications', 'timeout');
+    } catch (_) {
+      SafeLogger.startupStage('notifications', 'failed');
     }
   }
 
@@ -137,12 +183,14 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   }
 
   Future<void> _finishLogin() async {
-    final user = await _auth.me();
+    final result = await _startupRestore.restore();
     if (_loggingOut) return;
-    _user = user;
-    if (mounted) setState(() {});
-    unawaited(_notifications.initialize(_openConversation));
-    _realtime.connect();
+    if (!mounted) return;
+    setState(() {
+      _user = result.user;
+      _restoreDeferred = result.shouldShowRetry;
+    });
+    if (result.isAuthenticated) _startPostNavigationServices();
   }
 
   Future<void> _refreshSession() async {

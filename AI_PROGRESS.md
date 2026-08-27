@@ -2411,3 +2411,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Preserved the active install lifecycle: verified APKs remain available when Android requests unknown-source permission, and returning to the app retries installation without re-downloading. Session restoration/refresh behavior is unchanged.
 - Added regression coverage for startup/login/resume non-prompt behavior, automatic-call suppression, and manual Profile detection. Flutter analyzer, full Flutter tests (154/154), and Android `assembleDebug` pass.
 - Next action: review, commit, push, open the PR, and monitor CI without merging.
+
+# Current task: Android startup loading hotfix (2026-08-27)
+
+- Started `fix/android-startup-loading` from the clean latest `main` commit `7a7da3e1a2334a0db96e257ed96a478bae0d79d4`. No Android version/build, APK, release metadata, or backend schema changes are in scope.
+- Audit found the pre-render `main()` awaited Firebase initialization without a timeout, while startup restoration could wait indefinitely on secure storage or `/auth/me`; exceptions before the final state update could strand the loading spinner. Realtime, notification initialization, and update prompting were also not explicitly separated from the navigation decision.
+- `runApp` now occurs synchronously after registering the FCM background entry point. Secure-storage and authenticated-user restoration use bounded, classified stages with safe timing/outcome diagnostics and a retryable state that preserves credentials for network, timeout, 5xx, 403, or temporary refresh failures. Only an explicitly rejected/expired refresh remains terminal.
+- Notifications/Firebase and realtime start after navigation and are never awaited by the startup state machine. The manual-only updater behavior from PR #63 remains intact, including the active unknown-source install-resume path.
+- Flutter analyze passes; the full Flutter suite passes 167/167; Android `assembleDebug` passes; backend full tests pass 1,349/1,349; Prisma generation and backend build pass. No production APK was built or released.
+- Next action: review and commit only the scoped startup/auth changes, push the feature branch, open a PR, and monitor CI without merging. A physical Android APK test is still required before calling the real-device startup issue fully verified.

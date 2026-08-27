@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../firebase_options.dart';
 import '../../core/logging/safe_logger.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
@@ -62,6 +63,7 @@ String? notificationConversationId(Map<String, dynamic> data) {
 const _channelId = 'line_oa_messages';
 const _channelName = 'Customer messages';
 const _notificationIcon = '@drawable/ic_stat_line_oa';
+const _firebaseInitializationTimeout = Duration(seconds: 15);
 final _localNotifications = FlutterLocalNotificationsPlugin();
 ConversationNotificationHistoryStore? _backgroundHistory;
 bool _localNotificationsInitialized = false;
@@ -84,7 +86,11 @@ Future<AppLocalizations> _loadNotificationLocalizations() async {
 }
 
 Future<void> _ensureFirebaseInitialized() async {
-  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(_firebaseInitializationTimeout);
+  }
 }
 
 int conversationNotificationId(String conversationId) {
@@ -269,7 +275,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       hasSystemNotification: message.notification != null)) {
     return;
   }
-  await _ensureFirebaseInitialized();
+  try {
+    await _ensureFirebaseInitialized();
+  } catch (_) {
+    SafeLogger.startupStage('notifications', 'firebase_failed');
+    return;
+  }
   await _showRemoteNotification(message,
       path: NotificationReceivePath.background);
 }
@@ -333,7 +344,12 @@ class NotificationService {
       await inFlight;
       return;
     }
-    final operation = _initialize(onConversation);
+    final operation = _initialize(onConversation).timeout(
+      _firebaseInitializationTimeout,
+      onTimeout: () {
+        SafeLogger.startupStage('notifications', 'timeout');
+      },
+    );
     _initializationInFlight = operation;
     try {
       await operation;
