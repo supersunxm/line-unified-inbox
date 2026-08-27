@@ -1,12 +1,87 @@
-name: ChatGPT Validate Fix Workflow
+name: ChatGPT Fix Rich Menu Clear State
 
 on:
   push:
     branches:
       - "chatgpt/fix-rich-menu-clear-state"
 
+permissions:
+  contents: write
+
 jobs:
-  validate:
+  fix-and-test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "workflow-ok"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Patch current state and add regression test
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          service_path = Path('backend/src/rich-menu/rich-menu.service.ts')
+          source = service_path.read_text()
+
+          old_selection = '      const isSelected = assignedSet.has(oa.id) && readinessStatus === "READY";\n'
+          new_selection = (
+              '      // Assignment represents the Rich Menu currently managed by this system.\n'
+              '      // Publish attempts are historical and must not be treated as current after Clear Default.\n'
+              '      const hasCurrentAssignment = assignedSet.has(oa.id);\n'
+              '      const isSelected = hasCurrentAssignment && readinessStatus === "READY";\n'
+          )
+          if source.count(old_selection) != 1:
+              raise SystemExit('Readiness selection anchor mismatch')
+          source = source.replace(old_selection, new_selection, 1)
+
+          latest_anchor = '      const latestAttempt = oa.richMenuPublishAttempts?.[0];\n'
+          latest_index = source.find(latest_anchor)
+          if latest_index < 0:
+              raise SystemExit('latestAttempt anchor missing')
+          if_anchor = '      if (latestAttempt) {'
+          if_index = source.find(if_anchor, latest_index)
+          if if_index < 0:
+              raise SystemExit('latestAttempt status block missing')
+          source = source[:if_index] + '      if (latestAttempt && hasCurrentAssignment) {' + source[if_index + len(if_anchor):]
+          service_path.write_text(source)
+
+          spec_path = Path('backend/src/rich-menu/rich-menu.spec.ts')
+          spec = spec_path.read_text()
+          test_name = 'RichMenuService.evaluateReadiness separates current assignment from historical publish attempts after clear default'
+          if test_name not in spec:
+              spec += '''\n\ntest("RichMenuService.evaluateReadiness separates current assignment from historical publish attempts after clear default", async () => {\n  const now = new Date();\n  let assignments: Array<{ lineOfficialAccountId: string }> = [];\n\n  const mockPrisma = {\n    richMenuTemplate: {\n      findUnique: async () => ({\n        id: "tmpl-1",\n        name: "Promotion Menu",\n        areasJson: [],\n        version: 3,\n        assignments,\n      }),\n    },\n    lineOfficialAccount: {\n      findMany: async () => [\n        {\n          id: "oa-central-bangna",\n          name: "OPPO Central Bangna",\n          store: {\n            id: "store-865",\n            name: "OBS Central Bangna By OPPO",\n            area: "Bangkok",\n            region: null,\n            storeMaster: {\n              externalStoreId: "865",\n              accountName: "OPPO Central Bangna",\n              googleMapsUrl: null,\n              province: "Bangkok",\n            },\n          },\n          richMenuPublishAttempts: [\n            {\n              id: "attempt-old-published",\n              status: "PUBLISHED",\n              lineRichMenuId: "richmenu-old-123",\n              completedAt: now,\n              updatedAt: now,\n              errorMessage: null,\n              errorStage: null,\n              templateVersion: 3,\n            },\n          ],\n        },\n      ],\n    },\n  } as any;\n\n  const service = new RichMenuService(mockPrisma, {} as any);\n\n  const afterClear = await service.evaluateReadiness("tmpl-1");\n  assert.equal(afterClear.items[0].selected, false);\n  assert.equal(afterClear.items[0].publishStatus, "NOT_PUBLISHED");\n  assert.equal(afterClear.items[0].publishedRichMenuId, null);\n  assert.equal(afterClear.items[0].publishAttemptId, null);\n  assert.equal(afterClear.items[0].isCurrentVersionPublished, false);\n\n  assignments = [{ lineOfficialAccountId: "oa-central-bangna" }];\n  const currentlyAssigned = await service.evaluateReadiness("tmpl-1");\n  assert.equal(currentlyAssigned.items[0].publishStatus, "PUBLISHED");\n  assert.equal(currentlyAssigned.items[0].publishedRichMenuId, "richmenu-old-123");\n  assert.equal(currentlyAssigned.items[0].publishAttemptId, "attempt-old-published");\n  assert.equal(currentlyAssigned.items[0].isCurrentVersionPublished, true);\n});\n'''
+              spec_path.write_text(spec)
+          PY
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Backend tests
+        working-directory: backend
+        run: npm test
+
+      - name: Backend build
+        working-directory: backend
+        run: npm run build
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit tested fix
+        shell: bash
+        run: |
+          rm .github/workflows/chatgpt-fix-rich-menu-clear-state.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/src/rich-menu/rich-menu.service.ts backend/src/rich-menu/rich-menu.spec.ts .github/workflows/chatgpt-fix-rich-menu-clear-state.yml
+          git commit -m "fix(rich-menu): refresh state after clear default"
+          git push origin HEAD:chatgpt/fix-rich-menu-clear-state
