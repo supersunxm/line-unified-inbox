@@ -34,7 +34,10 @@ import {
   StoreVariableContext,
 } from "../store-master/template-variable-resolver";
 import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";
-import { buildAutoResponsePostbackData } from "../auto-response/auto-response.utils";
+import {
+  buildAutoResponsePostbackData,
+  normalizeAutoResponseMessages,
+} from "../auto-response/auto-response.utils";
 import {
   CreateRichMenuTemplateDto,
   generatePresetAreas,
@@ -553,26 +556,31 @@ export class RichMenuService {
           isTemplateBlocked = true;
           blockedReason = `Auto-response rule '${rule.name}' is not active`;
         } else {
-          const ruleVars = extractTemplateVariables(rule.textTemplate);
-          ruleVars.forEach((v) => usedVariablesSet.add(v));
-          const resolvedRuleText = resolveTemplateVariables(rule.textTemplate, storeContext);
-          const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
-          if (remainingMatches && remainingMatches.length > 0) {
-            isValid = false;
-            validationError = `Auto-response contains unresolved variables: ${remainingMatches.join(", ")}`;
-            isTemplateBlocked = true;
-            blockedReason = validationError;
-          }
-          const ruleNeedsMaps =
-            ruleVars.includes("store.googleMapsUrl") ||
-            ruleVars.includes("googleMapsUrl");
-          if (ruleNeedsMaps) {
-            const mapsReadiness = getStoreGoogleMapsReadiness(storeContext.googleMapsUrl);
-            if (!mapsReadiness.ready) {
-              isValid = false;
-              validationError = mapsReadiness.reason || "Missing Google Maps URL";
-              isTemplateBlocked = true;
-              blockedReason = mapsReadiness.reason;
+          const ruleMessages = normalizeAutoResponseMessages(rule);
+          for (const msg of ruleMessages) {
+            if (msg.type === "TEXT" && msg.textTemplate) {
+              const ruleVars = extractTemplateVariables(msg.textTemplate);
+              ruleVars.forEach((v) => usedVariablesSet.add(v));
+              const resolvedRuleText = resolveTemplateVariables(msg.textTemplate, storeContext);
+              const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+              if (remainingMatches && remainingMatches.length > 0) {
+                isValid = false;
+                validationError = `Auto-response contains unresolved variables: ${remainingMatches.join(", ")}`;
+                isTemplateBlocked = true;
+                blockedReason = validationError;
+              }
+              const ruleNeedsMaps =
+                ruleVars.includes("store.googleMapsUrl") ||
+                ruleVars.includes("googleMapsUrl");
+              if (ruleNeedsMaps) {
+                const mapsReadiness = getStoreGoogleMapsReadiness(storeContext.googleMapsUrl);
+                if (!mapsReadiness.ready) {
+                  isValid = false;
+                  validationError = mapsReadiness.reason || "Missing Google Maps URL";
+                  isTemplateBlocked = true;
+                  blockedReason = mapsReadiness.reason;
+                }
+              }
             }
           }
         }
@@ -677,8 +685,13 @@ export class RichMenuService {
         globalAutoResponseBlockReason = `Auto-response '${rule.name}' is not active`;
         break;
       }
-      const ruleVars = extractTemplateVariables(rule.textTemplate);
-      ruleVars.forEach((v) => usedVariablesSet.add(v));
+      const ruleMessages = normalizeAutoResponseMessages(rule);
+      for (const msg of ruleMessages) {
+        if (msg.type === "TEXT" && msg.textTemplate) {
+          const ruleVars = extractTemplateVariables(msg.textTemplate);
+          ruleVars.forEach((v) => usedVariablesSet.add(v));
+        }
+      }
     }
 
     const usedVariables = Array.from(usedVariablesSet);
@@ -916,20 +929,25 @@ export class RichMenuService {
           return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' is not active (${rule.status.toLowerCase()})`);
         }
 
-        const ruleVars = extractTemplateVariables(rule.textTemplate);
-        const resolvedRuleText = resolveTemplateVariables(rule.textTemplate, storeContext);
-        const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
-        if (remainingMatches && remainingMatches.length > 0) {
-          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' contains unresolved variables: ${remainingMatches.join(", ")}`);
-        }
+        const ruleMessages = normalizeAutoResponseMessages(rule);
+        for (const msg of ruleMessages) {
+          if (msg.type === "TEXT" && msg.textTemplate) {
+            const ruleVars = extractTemplateVariables(msg.textTemplate);
+            const resolvedRuleText = resolveTemplateVariables(msg.textTemplate, storeContext);
+            const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+            if (remainingMatches && remainingMatches.length > 0) {
+              return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' contains unresolved variables: ${remainingMatches.join(", ")}`);
+            }
 
-        const ruleNeedsMaps =
-          ruleVars.includes("store.googleMapsUrl") ||
-          ruleVars.includes("googleMapsUrl");
+            const ruleNeedsMaps =
+              ruleVars.includes("store.googleMapsUrl") ||
+              ruleVars.includes("googleMapsUrl");
 
-        if (ruleNeedsMaps) {
-          if (!storeMaster?.googleMapsUrl || !isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
-            return this.recordSkippedAttempt(params, `Cannot publish: Store '${targetOa.store?.name}' is missing a valid Google Maps URL required by Auto-response '${rule.name}'`);
+            if (ruleNeedsMaps) {
+              if (!storeMaster?.googleMapsUrl || !isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
+                return this.recordSkippedAttempt(params, `Cannot publish: Store '${targetOa.store?.name}' is missing a valid Google Maps URL required by Auto-response '${rule.name}'`);
+              }
+            }
           }
         }
 

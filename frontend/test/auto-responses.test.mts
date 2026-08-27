@@ -59,7 +59,7 @@ test("Auto-response I18N dictionary has required warning copy and translations",
   );
   assert.match(
     autoResponseI18n.th.activeEditWarning,
-    /การแก้ไขข้อความที่เปิดใช้งานอยู่จะมีผลกับ Rich Menu ที่เชื่อมโยงทันที/,
+    /การแก้ไขข้อความ(หรือรูปภาพ)?ที่เปิดใช้งานอยู่จะมีผลกับ Rich Menu ที่เชื่อมโยงทันที/,
   );
 
   // English
@@ -108,10 +108,11 @@ test("TopNavigation and AppSidebar contain Auto-response Manager routes and icon
   assert.match(appSidebarFile, /name === "auto-response"/);
 });
 
-test("API client contains all required Auto-response endpoints", () => {
+test("API client contains all required Auto-response endpoints including media upload", () => {
   const apiFile = readFileSync(resolve(process.cwd(), "src/lib/api.ts"), "utf8");
   assert.match(apiFile, /listAutoResponses:/);
   assert.match(apiFile, /getAutoResponse:/);
+  assert.match(apiFile, /uploadAutoResponseMedia:/);
   assert.match(apiFile, /createAutoResponse:/);
   assert.match(apiFile, /updateAutoResponse:/);
   assert.match(apiFile, /activateAutoResponse:/);
@@ -119,4 +120,24 @@ test("API client contains all required Auto-response endpoints", () => {
   assert.match(apiFile, /archiveAutoResponse:/);
   assert.match(apiFile, /getAutoResponseUsage:/);
   assert.match(apiFile, /previewAutoResponse:/);
+});
+
+test("Auto-response I18N dictionary has Phase 2 Message Builder copy", () => {
+  // Thai
+  assert.equal(autoResponseI18n.th.typeText, "ข้อความ");
+  assert.equal(autoResponseI18n.th.typeImage, "รูปภาพ");
+  assert.equal(autoResponseI18n.th.addMessageButton, "เพิ่มข้อความ");
+  assert.equal(autoResponseI18n.th.blocksCount(3), "3 / 5 ข้อความ");
+
+  // English
+  assert.equal(autoResponseI18n.en.typeText, "Text");
+  assert.equal(autoResponseI18n.en.typeImage, "Image");
+  assert.equal(autoResponseI18n.en.addMessageButton, "Add Message");
+  assert.equal(autoResponseI18n.en.blocksCount(5), "5 / 5 messages");
+
+  // Chinese
+  assert.equal(autoResponseI18n.zh.typeText, "文本");
+  assert.equal(autoResponseI18n.zh.typeImage, "图片");
+  assert.equal(autoResponseI18n.zh.addMessageButton, "添加消息");
+  assert.equal(autoResponseI18n.zh.blocksCount(2), "2 / 5 条消息");
 });

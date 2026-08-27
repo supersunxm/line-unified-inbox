@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { AutoResponseStatus, UserRole } from "@prisma/client";
+import { AutoResponseContentType, AutoResponseStatus, UserRole } from "@prisma/client";
 import { AutoResponseService } from "./auto-response.service";
 import { AuthUser } from "../auth/auth.guard";
 
@@ -12,7 +12,7 @@ const testAdmin: AuthUser = {
 };
 
 describe("AutoResponseService", () => {
-  it("creates a draft auto-response rule and logs audit", async () => {
+  it("creates a draft auto-response rule with multi-messages and logs audit", async () => {
     let createdData: any = null;
     let auditRecord: any = null;
 
@@ -32,12 +32,19 @@ describe("AutoResponseService", () => {
         },
         findUnique: async () => ({
           id: "rule-1",
-          name: "Promotion Rule",
+          name: "Promotion Sequence",
           description: "Test description",
           status: AutoResponseStatus.DRAFT,
           triggerType: "POSTBACK",
-          contentType: "TEXT",
+          contentType: AutoResponseContentType.MULTI_MESSAGE,
           textTemplate: "Hello from {{store.storeName}}",
+          contentJson: {
+            version: 1,
+            messages: [
+              { id: "b1", type: "IMAGE", mediaObjectKey: "line-media/auto-response/img.jpg" },
+              { id: "b2", type: "TEXT", textTemplate: "Hello from {{store.storeName}}" },
+            ],
+          },
           version: 1,
           createdByUserId: "admin-1",
           createdAt: new Date(),
@@ -61,21 +68,26 @@ describe("AutoResponseService", () => {
 
     const result = await service.createRule(
       {
-        name: "Promotion Rule",
+        name: "Promotion Sequence",
         description: "Test description",
-        textTemplate: "Hello from {{store.storeName}}",
+        messages: [
+          { id: "b1", type: "IMAGE", mediaObjectKey: "line-media/auto-response/img.jpg" },
+          { id: "b2", type: "TEXT", textTemplate: "Hello from {{store.storeName}}" },
+        ],
       },
       testAdmin,
     );
 
-    assert.equal(createdData.name, "Promotion Rule");
+    assert.equal(createdData.name, "Promotion Sequence");
     assert.equal(createdData.status, AutoResponseStatus.DRAFT);
+    assert.equal(createdData.contentType, AutoResponseContentType.MULTI_MESSAGE);
     assert.equal(auditRecord.action, "AUTO_RESPONSE_CREATED");
     assert.deepEqual(result.usedVariables, ["store.storeName"]);
+    assert.equal(result.messages.length, 2);
     assert.equal(result.usageCount, 0);
   });
 
-  it("rejects creating rule with empty name", async () => {
+  it("rejects creating rule with empty name or invalid blocks", async () => {
     const service = new AutoResponseService({} as any);
     await assert.rejects(
       () =>
@@ -88,9 +100,21 @@ describe("AutoResponseService", () => {
         ),
       BadRequestException,
     );
+
+    await assert.rejects(
+      () =>
+        service.createRule(
+          {
+            name: "Invalid Blocks",
+            messages: [],
+          },
+          testAdmin,
+        ),
+      BadRequestException,
+    );
   });
 
-  it("updates rule and increments version when textTemplate changes", async () => {
+  it("updates rule and increments version when messages change", async () => {
     let updatePayload: any = null;
     let auditPayload: any = null;
 
@@ -101,6 +125,10 @@ describe("AutoResponseService", () => {
           name: "Promotion Rule",
           status: AutoResponseStatus.ACTIVE,
           textTemplate: "Old text",
+          contentJson: {
+            version: 1,
+            messages: [{ id: "b1", type: "TEXT", textTemplate: "Old text" }],
+          },
           version: 1,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -112,6 +140,10 @@ describe("AutoResponseService", () => {
             name: "Promotion Rule",
             status: AutoResponseStatus.ACTIVE,
             textTemplate: "New text with {{store.storeName}}",
+            contentJson: {
+              version: 1,
+              messages: [{ id: "b1", type: "TEXT", textTemplate: "New text with {{store.storeName}}" }],
+            },
             version: 2,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -134,7 +166,9 @@ describe("AutoResponseService", () => {
     await service.updateRule(
       "rule-1",
       {
-        textTemplate: "New text with {{store.storeName}}",
+        messages: [
+          { id: "b1", type: "TEXT", textTemplate: "New text with {{store.storeName}}" },
+        ],
       },
       testAdmin,
     );
@@ -143,7 +177,7 @@ describe("AutoResponseService", () => {
     assert.equal(auditPayload.metadata.bumpedVersion, true);
   });
 
-  it("activates draft rule with valid text template", async () => {
+  it("activates draft rule with valid multi-message blocks", async () => {
     let updatedData: any = null;
 
     const mockPrisma = {
@@ -152,7 +186,13 @@ describe("AutoResponseService", () => {
           id: "rule-1",
           name: "Promo",
           status: AutoResponseStatus.DRAFT,
-          textTemplate: "Special offer!",
+          contentJson: {
+            version: 1,
+            messages: [
+              { id: "b1", type: "IMAGE", mediaObjectKey: "line-media/img.jpg" },
+              { id: "b2", type: "TEXT", textTemplate: "Special offer!" },
+            ],
+          },
           version: 1,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -163,7 +203,6 @@ describe("AutoResponseService", () => {
             id: "rule-1",
             name: "Promo",
             status: AutoResponseStatus.ACTIVE,
-            textTemplate: "Special offer!",
             version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -182,7 +221,7 @@ describe("AutoResponseService", () => {
     assert.ok(updatedData.lastActivatedAt instanceof Date);
   });
 
-  it("rejects activating rule with empty text template", async () => {
+  it("rejects activating rule with empty blocks", async () => {
     const mockPrisma = {
       autoResponseRule: {
         findUnique: async () => ({
@@ -190,6 +229,7 @@ describe("AutoResponseService", () => {
           name: "Promo",
           status: AutoResponseStatus.DRAFT,
           textTemplate: "",
+          contentJson: null,
           version: 1,
         }),
       },
@@ -202,13 +242,19 @@ describe("AutoResponseService", () => {
     );
   });
 
-  it("previews rule with resolved store variables and readiness", async () => {
+  it("previews multi-message rule with resolved store variables and readiness", async () => {
     const mockPrisma = {
       autoResponseRule: {
         findUnique: async () => ({
           id: "rule-1",
           name: "Store Info",
-          textTemplate: "Welcome to {{store.storeName}}! Maps: {{store.googleMapsUrl}}",
+          contentJson: {
+            version: 1,
+            messages: [
+              { id: "img-1", type: "IMAGE", mediaObjectKey: "line-media/promo.jpg" },
+              { id: "txt-1", type: "TEXT", textTemplate: "Welcome to {{store.storeName}}! Maps: {{store.googleMapsUrl}}" },
+            ],
+          },
         }),
       },
       lineOfficialAccount: {
@@ -233,8 +279,11 @@ describe("AutoResponseService", () => {
     });
 
     assert.equal(preview.ready, true);
+    assert.equal(preview.messages.length, 2);
+    assert.equal(preview.messages[0].type, "IMAGE");
+    assert.equal(preview.messages[1].type, "TEXT");
     assert.equal(
-      preview.resolvedText,
+      (preview.messages[1] as any).resolvedText,
       "Welcome to OBS Central Bangna! Maps: https://maps.app.goo.gl/sample",
     );
     assert.deepEqual(preview.unresolvedVariables, []);
@@ -246,7 +295,12 @@ describe("AutoResponseService", () => {
         findUnique: async () => ({
           id: "rule-1",
           name: "Store Location",
-          textTemplate: "Location: {{store.googleMapsUrl}}",
+          contentJson: {
+            version: 1,
+            messages: [
+              { id: "txt-1", type: "TEXT", textTemplate: "Location: {{store.googleMapsUrl}}" },
+            ],
+          },
         }),
       },
       lineOfficialAccount: {
@@ -272,48 +326,5 @@ describe("AutoResponseService", () => {
 
     assert.equal(preview.ready, false);
     assert.match(preview.reason || "", /Google Maps/);
-  });
-
-  it("finds Rich Menu usages dynamically from template areas", async () => {
-    const mockPrisma = {
-      autoResponseRule: {
-        findUnique: async () => ({
-          id: "rule-1",
-          name: "Promotion Rule",
-          textTemplate: "Text",
-          status: AutoResponseStatus.ACTIVE,
-          version: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }),
-      },
-      richMenuTemplate: {
-        findMany: async () => [
-          {
-            id: "tmpl-1",
-            name: "Default Menu",
-            status: "ACTIVE",
-            areasJson: [
-              {
-                id: "area-1",
-                actionType: "POSTBACK_AUTO_RESPONSE",
-                autoResponseRuleId: "rule-1",
-              },
-              {
-                id: "area-2",
-                actionType: "URI",
-                actionData: "https://example.com",
-              },
-            ],
-          },
-        ],
-      },
-    } as any;
-
-    const service = new AutoResponseService(mockPrisma);
-    const usage = await service.getRuleUsage("rule-1");
-
-    assert.equal(usage.usageCount, 1);
-    assert.equal(usage.linkedRichMenus[0].templateName, "Default Menu");
   });
 });

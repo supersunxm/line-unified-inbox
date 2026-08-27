@@ -1213,7 +1213,44 @@ export type RichMenuArea = {
 
 export type AutoResponseStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 export type AutoResponseTriggerType = "POSTBACK";
-export type AutoResponseContentType = "TEXT";
+export type AutoResponseContentType = "TEXT" | "IMAGE" | "MULTI_MESSAGE";
+
+export type AutoResponseTextBlock = {
+  id: string;
+  type: "TEXT";
+  textTemplate: string;
+};
+
+export type AutoResponseImageBlock = {
+  id: string;
+  type: "IMAGE";
+  mediaObjectKey: string;
+  previewObjectKey?: string;
+  imageUrl?: string;
+  previewUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+};
+
+export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock;
+
+export type AutoResponseContentJson = {
+  version: number;
+  messages: AutoResponseMessageBlock[];
+};
+
+export type AutoResponseUploadMediaResult = {
+  mediaObjectKey: string;
+  previewObjectKey: string;
+  imageUrl: string;
+  previewUrl: string;
+  mimeType: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
+};
 
 export type AutoResponseRule = {
   id: string;
@@ -1223,6 +1260,8 @@ export type AutoResponseRule = {
   triggerType: AutoResponseTriggerType;
   contentType: AutoResponseContentType;
   textTemplate: string;
+  contentJson?: AutoResponseContentJson | null;
+  messages?: AutoResponseMessageBlock[];
   version: number;
   usedVariables: string[];
   usageCount: number;
@@ -1239,6 +1278,27 @@ export type AutoResponseRule = {
   archivedAt: string | null;
 };
 
+export type ResolvedAutoResponseBlock =
+  | {
+      id: string;
+      type: "TEXT";
+      resolvedText: string;
+      usedVariables: string[];
+      unresolvedVariables: string[];
+      isValid: boolean;
+      validationError?: string;
+    }
+  | {
+      id: string;
+      type: "IMAGE";
+      imageUrl: string;
+      previewUrl: string;
+      mediaObjectKey: string;
+      previewObjectKey?: string;
+      isValid: boolean;
+      validationError?: string;
+    };
+
 export type AutoResponsePreviewResult = {
   ruleId: string;
   ruleName: string;
@@ -1253,6 +1313,7 @@ export type AutoResponsePreviewResult = {
   usedVariables: string[];
   resolvedText: string;
   unresolvedVariables: string[];
+  messages?: ResolvedAutoResponseBlock[];
   ready: boolean;
   reason: string | null;
 };

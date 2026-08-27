@@ -5,19 +5,61 @@ import {
   AutoResponseTriggerType,
 } from "@prisma/client";
 
-export type CreateAutoResponseDto = {
-  name: string;
-  description?: string | null;
+export type AutoResponseTextBlock = {
+  id: string;
+  type: "TEXT";
   textTemplate: string;
 };
 
-export type UpdateAutoResponseDto = Partial<CreateAutoResponseDto> & {
+export type AutoResponseImageBlock = {
+  id: string;
+  type: "IMAGE";
+  mediaObjectKey: string;
+  previewObjectKey?: string;
+  imageUrl?: string;
+  previewUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+};
+
+export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock;
+
+export type AutoResponseContentJson = {
+  version: number;
+  messages: AutoResponseMessageBlock[];
+};
+
+export type CreateAutoResponseDto = {
+  name: string;
+  description?: string | null;
+  textTemplate?: string;
+  messages?: AutoResponseMessageBlock[];
+};
+
+export type UpdateAutoResponseDto = {
+  name?: string;
+  description?: string | null;
+  textTemplate?: string;
+  messages?: AutoResponseMessageBlock[];
   status?: AutoResponseStatus;
 };
 
 export type AutoResponsePreviewDto = {
   lineOfficialAccountId?: string;
   storeId?: string;
+};
+
+export type AutoResponseUploadMediaResult = {
+  mediaObjectKey: string;
+  previewObjectKey: string;
+  imageUrl: string;
+  previewUrl: string;
+  mimeType: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
 };
 
 export type AutoResponseRuleResponseDto = {
@@ -28,6 +70,8 @@ export type AutoResponseRuleResponseDto = {
   triggerType: AutoResponseTriggerType;
   contentType: AutoResponseContentType;
   textTemplate: string;
+  contentJson: AutoResponseContentJson | null;
+  messages: AutoResponseMessageBlock[];
   version: number;
   usedVariables: string[];
   usageCount: number;
@@ -44,6 +88,27 @@ export type AutoResponseRuleResponseDto = {
   archivedAt: Date | null;
 };
 
+export type ResolvedAutoResponseBlock =
+  | {
+      id: string;
+      type: "TEXT";
+      resolvedText: string;
+      usedVariables: string[];
+      unresolvedVariables: string[];
+      isValid: boolean;
+      validationError?: string;
+    }
+  | {
+      id: string;
+      type: "IMAGE";
+      imageUrl: string;
+      previewUrl: string;
+      mediaObjectKey: string;
+      previewObjectKey?: string;
+      isValid: boolean;
+      validationError?: string;
+    };
+
 export type AutoResponsePreviewResult = {
   ruleId: string;
   ruleName: string;
@@ -58,6 +123,7 @@ export type AutoResponsePreviewResult = {
   usedVariables: string[];
   resolvedText: string;
   unresolvedVariables: string[];
+  messages: ResolvedAutoResponseBlock[];
   ready: boolean;
   reason: string | null;
 };

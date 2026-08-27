@@ -1322,18 +1322,29 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 );
                               }
                               const isInactive = rule.status !== "ACTIVE";
+                              const messageCount = rule.messages?.length || 1;
+                              const hasImage = rule.messages?.some((m) => m.type === "IMAGE") || rule.contentType === "IMAGE";
+                              const firstText = rule.textTemplate || rule.messages?.find((m) => m.type === "TEXT")?.textTemplate || "";
+
                               return (
                                 <div className="mt-1 space-y-1.5 rounded bg-gray-50 dark:bg-gray-900/40 p-2.5 border border-gray-100 dark:border-gray-800">
                                   <div className="flex items-center justify-between text-[11px]">
-                                    <span className="font-semibold text-gray-500">{t.autoResponseRuleStatus}:</span>
-                                    <span
-                                      className={`font-bold ${
-                                        rule.status === "ACTIVE"
-                                          ? "text-emerald-600"
-                                          : "text-amber-600"
-                                      }`}
-                                    >
-                                      {rule.status}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-semibold text-gray-500">{t.autoResponseRuleStatus}:</span>
+                                      <span
+                                        className={`font-bold ${
+                                          rule.status === "ACTIVE"
+                                            ? "text-emerald-600"
+                                            : "text-amber-600"
+                                        }`}
+                                      >
+                                        {rule.status}
+                                      </span>
+                                    </div>
+                                    <span className="rounded bg-gray-200/60 dark:bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-400">
+                                      {hasImage && "🖼 "}
+                                      {firstText && "💬 "}
+                                      {messageCount} ข้อความ
                                     </span>
                                   </div>
                                   {isInactive && (
@@ -1345,8 +1356,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                     <p className="text-[10px] text-gray-500 font-semibold">
                                       {t.autoResponsePreviewTitle}
                                     </p>
-                                    <p className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] text-gray-700 dark:text-gray-300">
-                                      {rule.textTemplate}
+                                    <p className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] text-gray-700 dark:text-gray-300 line-clamp-2">
+                                      {firstText || (hasImage ? "[รูปภาพ]" : "-")}
                                     </p>
                                   </div>
                                 </div>

@@ -1,3 +1,10 @@
+# Auto-response Manager Phase 2: Image + Multi-message Builder Architecture (2026-08-27)
+
+- **Ordered Multi-Message Sequence Normalization**: Auto-response rules represent an ordered sequence of 1 to 5 message blocks (`TEXT` and `IMAGE`). Legacy Phase 1 single TEXT rules are transparently normalized to `{ version: 1, messages: [...] }` without requiring database data rewriting.
+- **Single-Request Atomic Reply Invariance**: Regardless of the number of blocks (up to 5), the execution engine executes exactly **one** single `POST /v2/bot/message/reply` call with `{ replyToken, messages: [...] }`. Pre-flight validation atomically evaluates all variables and media assets across all blocks before making any network call, guaranteeing zero partial or broken replies.
+- **Dedicated Object-Key Namespace & Ephemeral Signed URLs**: Image media is stored in S3 under `line-media/auto-response/${fileId}-original.${ext}` and `preview.${previewExt}`. Database records persist only the canonical object key. Signed HTTPS public URLs are dynamically generated at webhook execution time with sufficient TTL for LINE servers to fetch the media assets.
+- **Server-Side Preview Generation**: Large images uploaded by admins are validated for magic bytes (JPEG/PNG only) and automatically scaled down server-side to $\le 1$ MB using Sharp, fulfilling LINE Messaging API preview image constraints without requiring admins to prepare two files.
+
 # Auto-response Manager Phase 1 & Rich Menu POSTBACK Architecture (2026-08-27)
 
 - **Single Source of Truth in lineoppo.click**: Auto-response rules in `lineoppo.click` operate autonomously via LINE Webhook postback ingestion and Messaging API reply tokens. LINE OA Manager native auto-responses are untouched. To prevent duplicate replies, informational warning banners guide admins to disable overlapping rules in LINE OA Manager.

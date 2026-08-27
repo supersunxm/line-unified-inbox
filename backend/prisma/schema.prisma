@@ -1724,6 +1724,8 @@ enum AutoResponseTriggerType {
 
 enum AutoResponseContentType {
   TEXT
+  IMAGE
+  MULTI_MESSAGE
 }
 
 enum AutoResponseExecutionStatus {
@@ -1739,7 +1741,8 @@ model AutoResponseRule {
   status          AutoResponseStatus      @default(DRAFT)
   triggerType     AutoResponseTriggerType @default(POSTBACK)
   contentType     AutoResponseContentType @default(TEXT)
-  textTemplate    String
+  textTemplate    String?
+  contentJson     Json?
   version         Int                     @default(1)
   createdByUserId String?
   createdAt       DateTime                @default(now())
@@ -1760,6 +1763,8 @@ model AutoResponseExecution {
   webhookEventId        String?
   status                AutoResponseExecutionStatus
   reason                String?
+  messageCount          Int?
+  messageTypesJson      Json?
   resolvedVariablesJson Json?
   createdAt             DateTime                    @default(now())
 

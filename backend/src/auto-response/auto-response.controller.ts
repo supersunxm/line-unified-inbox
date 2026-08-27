@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,8 +8,12 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { AutoResponseStatus, UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
@@ -39,6 +44,33 @@ export class AutoResponseController {
     @Req() req: AuthRequest,
   ) {
     return this.service.createRule(body, req.user!);
+  }
+
+  @Post("media")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  async uploadMedia(
+    @UploadedFile()
+    file:
+      | {
+          buffer: Buffer;
+          originalname?: string;
+          mimetype?: string;
+          size?: number;
+        }
+      | undefined,
+    @Req() req: AuthRequest,
+  ) {
+    if (!file || !file.buffer || !file.buffer.length) {
+      throw new BadRequestException("Image file is required and cannot be empty");
+    }
+    return this.service.uploadMedia(file, req.user!);
   }
 
   @Get(":id")

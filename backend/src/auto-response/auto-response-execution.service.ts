@@ -3,13 +3,17 @@ import { AutoResponseExecutionStatus, AutoResponseStatus } from "@prisma/client"
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { LineMessagingService } from "../line-messaging/line-messaging.service";
+import { createMediaPublicUrl } from "../media/media-public-url";
 import {
   extractTemplateVariables,
   getStoreGoogleMapsReadiness,
   resolveTemplateVariables,
   StoreVariableContext,
 } from "../store-master/template-variable-resolver";
-import { parseAutoResponsePostbackData } from "./auto-response.utils";
+import {
+  normalizeAutoResponseMessages,
+  parseAutoResponsePostbackData,
+} from "./auto-response.utils";
 
 export type PostbackExecutionResult = {
   handled: boolean;
@@ -157,7 +161,7 @@ export class AutoResponseExecutionService {
 
     if (oa.accountType === "HEAD_OFFICE") {
       this.logger.log(
-        `[AutoResponse] OA '${oa.name}' is HEAD_OFFICE. Auto-response is STORE-only in Phase 1.`,
+        `[AutoResponse] OA '${oa.name}' is HEAD_OFFICE. Auto-response is STORE-only in Phase 2.`,
       );
       const execution = await this.recordExecution({
         ruleId,
@@ -225,7 +229,7 @@ export class AutoResponseExecutionService {
       };
     }
 
-    // 4. Resolve Template Variables
+    // 4. Resolve Ordered Message Blocks (Atomic Pre-Flight)
     const storeMaster = oa.store?.storeMaster;
     const storeContext: StoreVariableContext = {
       storeName: oa.store?.name ?? oa.name,
@@ -234,53 +238,143 @@ export class AutoResponseExecutionService {
       googleMapsUrl: storeMaster?.googleMapsUrl ?? null,
     };
 
-    const usedVariables = extractTemplateVariables(rule.textTemplate);
-    const resolvedText = resolveTemplateVariables(rule.textTemplate, storeContext);
-
-    // Fail-safe variable check: never send broken {{...}} text
-    const remainingMatches = resolvedText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
-    if (remainingMatches && remainingMatches.length > 0) {
-      this.logger.warn(
-        `[AutoResponse] Unresolved variables in rule '${rule.name}': ${remainingMatches.join(", ")}`,
-      );
+    const rawBlocks = normalizeAutoResponseMessages(rule);
+    if (!rawBlocks.length || rawBlocks.length > 5) {
+      this.logger.warn(`[AutoResponse] Invalid block count (${rawBlocks.length}) for rule '${rule.name}'`);
       const execution = await this.recordExecution({
         ruleId,
         lineOfficialAccountId,
         webhookEventId,
         status: AutoResponseExecutionStatus.FAILED,
-        reason: `UNRESOLVED_VARIABLE: ${remainingMatches.join(", ")}`,
+        reason: `INVALID_BLOCK_COUNT_${rawBlocks.length}`,
       });
       return {
         handled: true,
         success: false,
-        reason: "UNRESOLVED_VARIABLE",
+        reason: "INVALID_BLOCK_COUNT",
         executionId: execution?.id,
       };
     }
 
-    const requiresGoogleMaps =
-      usedVariables.includes("store.googleMapsUrl") ||
-      usedVariables.includes("googleMapsUrl");
+    const lineMessages: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+    > = [];
+    const usedVarsSet = new Set<string>();
+    const messageTypes: string[] = [];
 
-    if (requiresGoogleMaps) {
-      const mapsReadiness = getStoreGoogleMapsReadiness(storeContext.googleMapsUrl);
-      if (!mapsReadiness.ready) {
-        this.logger.warn(
-          `[AutoResponse] Google Maps URL not ready for store '${oa.store?.name}': ${mapsReadiness.reason}`,
-        );
-        const execution = await this.recordExecution({
-          ruleId,
-          lineOfficialAccountId,
-          webhookEventId,
-          status: AutoResponseExecutionStatus.FAILED,
-          reason: `GOOGLE_MAPS_NOT_READY: ${mapsReadiness.reason}`,
+    for (const block of rawBlocks) {
+      if (block.type === "TEXT") {
+        messageTypes.push("TEXT");
+        const used = extractTemplateVariables(block.textTemplate || "");
+        used.forEach((v) => usedVarsSet.add(v));
+
+        const resolved = resolveTemplateVariables(block.textTemplate || "", storeContext);
+        const remainingMatches = resolved.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
+
+        if (remainingMatches && remainingMatches.length > 0) {
+          this.logger.warn(
+            `[AutoResponse] Unresolved variables in rule '${rule.name}': ${remainingMatches.join(", ")}`,
+          );
+          const execution = await this.recordExecution({
+            ruleId,
+            lineOfficialAccountId,
+            webhookEventId,
+            status: AutoResponseExecutionStatus.FAILED,
+            reason: `UNRESOLVED_VARIABLE: ${remainingMatches.join(", ")}`,
+            messageCount: rawBlocks.length,
+            messageTypesJson: messageTypes,
+          });
+          return {
+            handled: true,
+            success: false,
+            reason: "UNRESOLVED_VARIABLE",
+            executionId: execution?.id,
+          };
+        }
+
+        const requiresGoogleMaps =
+          used.includes("store.googleMapsUrl") ||
+          used.includes("googleMapsUrl");
+
+        if (requiresGoogleMaps) {
+          const mapsReadiness = getStoreGoogleMapsReadiness(storeContext.googleMapsUrl);
+          if (!mapsReadiness.ready) {
+            this.logger.warn(
+              `[AutoResponse] Google Maps URL not ready for store '${oa.store?.name}': ${mapsReadiness.reason}`,
+            );
+            const execution = await this.recordExecution({
+              ruleId,
+              lineOfficialAccountId,
+              webhookEventId,
+              status: AutoResponseExecutionStatus.FAILED,
+              reason: `GOOGLE_MAPS_NOT_READY: ${mapsReadiness.reason}`,
+              messageCount: rawBlocks.length,
+              messageTypesJson: messageTypes,
+            });
+            return {
+              handled: true,
+              success: false,
+              reason: "GOOGLE_MAPS_NOT_READY",
+              executionId: execution?.id,
+            };
+          }
+        }
+
+        if (!resolved.trim()) {
+          this.logger.warn(`[AutoResponse] Empty text block encountered in rule '${rule.name}'`);
+          const execution = await this.recordExecution({
+            ruleId,
+            lineOfficialAccountId,
+            webhookEventId,
+            status: AutoResponseExecutionStatus.FAILED,
+            reason: "EMPTY_TEXT_BLOCK",
+            messageCount: rawBlocks.length,
+            messageTypesJson: messageTypes,
+          });
+          return {
+            handled: true,
+            success: false,
+            reason: "EMPTY_TEXT_BLOCK",
+            executionId: execution?.id,
+          };
+        }
+
+        lineMessages.push({
+          type: "text",
+          text: resolved,
         });
-        return {
-          handled: true,
-          success: false,
-          reason: "GOOGLE_MAPS_NOT_READY",
-          executionId: execution?.id,
-        };
+      } else if (block.type === "IMAGE") {
+        messageTypes.push("IMAGE");
+        if (!block.mediaObjectKey || typeof block.mediaObjectKey !== "string") {
+          this.logger.warn(`[AutoResponse] Missing media object key in rule '${rule.name}'`);
+          const execution = await this.recordExecution({
+            ruleId,
+            lineOfficialAccountId,
+            webhookEventId,
+            status: AutoResponseExecutionStatus.FAILED,
+            reason: "MISSING_MEDIA_OBJECT_KEY",
+            messageCount: rawBlocks.length,
+            messageTypesJson: messageTypes,
+          });
+          return {
+            handled: true,
+            success: false,
+            reason: "MISSING_MEDIA_OBJECT_KEY",
+            executionId: execution?.id,
+          };
+        }
+
+        const originalContentUrl = createMediaPublicUrl(block.mediaObjectKey);
+        const previewImageUrl = createMediaPublicUrl(
+          block.previewObjectKey || block.mediaObjectKey,
+        );
+
+        lineMessages.push({
+          type: "image",
+          originalContentUrl,
+          previewImageUrl,
+        });
       }
     }
 
@@ -307,33 +401,35 @@ export class AutoResponseExecutionService {
       };
     }
 
-    // 6. Send LINE Reply Message
+    // 6. Send LINE Reply Messages (Single One-Request Call)
     try {
-      await this.lineMessaging.replyText({
+      await this.lineMessaging.replyMessages(
         accessToken,
         replyToken,
-        text: resolvedText,
-        context: {
+        lineMessages,
+        {
           storeId: oa.store?.id,
           storeName: oa.store?.name,
           messageType: "AUTO_RESPONSE",
         },
-      });
+      );
 
       const execution = await this.recordExecution({
         ruleId,
         lineOfficialAccountId,
         webhookEventId,
         status: AutoResponseExecutionStatus.SUCCESS,
+        messageCount: lineMessages.length,
+        messageTypesJson: messageTypes,
         resolvedVariablesJson: {
-          usedVariables,
+          usedVariables: Array.from(usedVarsSet),
           storeName: storeContext.storeName,
           hasGoogleMapsUrl: Boolean(storeContext.googleMapsUrl),
         },
       });
 
       this.logger.log(
-        `[AutoResponse] Successfully replied to postback: rule='${rule.name}' store='${oa.store?.name}'`,
+        `[AutoResponse] Successfully replied ${lineMessages.length} messages to postback: rule='${rule.name}' store='${oa.store?.name}'`,
       );
 
       return {
@@ -351,6 +447,8 @@ export class AutoResponseExecutionService {
         webhookEventId,
         status: AutoResponseExecutionStatus.FAILED,
         reason: err?.message || "LINE_REPLY_FAILED",
+        messageCount: lineMessages.length,
+        messageTypesJson: messageTypes,
       });
       return {
         handled: true,
@@ -367,6 +465,8 @@ export class AutoResponseExecutionService {
     webhookEventId?: string;
     status: AutoResponseExecutionStatus;
     reason?: string;
+    messageCount?: number;
+    messageTypesJson?: any;
     resolvedVariablesJson?: any;
   }) {
     try {
@@ -388,6 +488,8 @@ export class AutoResponseExecutionService {
           webhookEventId: data.webhookEventId || null,
           status: data.status,
           reason: data.reason || null,
+          messageCount: data.messageCount || null,
+          messageTypesJson: data.messageTypesJson || undefined,
           resolvedVariablesJson: data.resolvedVariablesJson || undefined,
         },
       });

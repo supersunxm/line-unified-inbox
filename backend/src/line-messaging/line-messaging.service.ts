@@ -70,7 +70,7 @@ export class LineMessagingService {
     });
   }
 
-  private async replyMessages(
+  async replyMessages(
     accessToken: string,
     replyToken: string,
     messages: unknown[],

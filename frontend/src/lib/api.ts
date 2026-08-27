@@ -560,14 +560,33 @@ export const api = {
   },
   getAutoResponse: (id: string) =>
     request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`),
-  createAutoResponse: (data: { name: string; description?: string; textTemplate: string }) =>
+  uploadAutoResponseMedia: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<import("@/types/api").AutoResponseUploadMediaResult>("/auto-responses/media", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  createAutoResponse: (data: {
+    name: string;
+    description?: string;
+    textTemplate?: string;
+    messages?: import("@/types/api").AutoResponseMessageBlock[];
+  }) =>
     request<import("@/types/api").AutoResponseRule>("/auto-responses", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   updateAutoResponse: (
     id: string,
-    data: Partial<{ name: string; description?: string; textTemplate: string; status: string }>,
+    data: Partial<{
+      name: string;
+      description?: string;
+      textTemplate?: string;
+      messages?: import("@/types/api").AutoResponseMessageBlock[];
+      status: string;
+    }>,
   ) =>
     request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`, {
       method: "PATCH",

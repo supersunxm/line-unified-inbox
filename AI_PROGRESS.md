@@ -1,6 +1,42 @@
 # AI progress
 
-## Current task: Auto-response Manager Phase 1 + Rich Menu POSTBACK Integration (2026-08-27)
+## Current task: Auto-response Manager Phase 2: Image + Multi-message Builder (2026-08-27)
+
+- **Architecture & Technical Scope**:
+  - **Multi-Message Sequence Builder**:
+    - Replaced the single text area with a dynamic ordered Message Builder supporting 1 to 5 message blocks (`TEXT` and `IMAGE`).
+    - Enforced maximum limit of 5 message objects per auto-response (LINE Messaging API limit) on both backend and frontend.
+    - Implemented explicit stable ordering controls (Move Up `↑`, Move Down `↓`, Delete `ลบ`) without external heavy libraries.
+    - Added variable injection `[ แทรกข้อมูลร้าน ▼ ]` across any individual `TEXT` block.
+  - **Database & Backward Compatibility**:
+    - Extended enum `AutoResponseContentType` with `'IMAGE'` and `'MULTI_MESSAGE'`.
+    - Added `contentJson JSONB` to `AutoResponseRule` and made `textTemplate` nullable.
+    - Added `messageCount INTEGER` and `messageTypesJson JSONB` to `AutoResponseExecution`.
+    - Legacy Phase 1 rules automatically normalize into `{ version: 1, messages: [{ type: "TEXT", textTemplate: ... }] }` without destructive migrations.
+    - When saving Phase 2 rules, `contentJson` is canonical and single-text rules mirror into `textTemplate`.
+    - Applied non-destructive migration `20260827220000_add_auto_response_multi_message`.
+  - **Image Storage & Media Handling**:
+    - Reused existing `MediaStorageService` / S3 bucket infrastructure with dedicated object-key namespace: `line-media/auto-response/${fileId}-original.${ext}` and `preview.${previewExt}`.
+    - Added `POST /auto-responses/media` guarded with `ADMIN` and Multer memory storage (max 10 MB).
+    - Validated image magic bytes (`detectImageMime`) allowing only JPEG and PNG; rejected GIF, WEBP, SVG, PDF, video.
+    - Generated optimized server-side preview image ($\le 1$ MB) using Sharp for LINE Messaging API compliance.
+    - At webhook execution time, fresh signed HTTPS public URLs are dynamically generated via `createMediaPublicUrl()`.
+  - **Single-Request Atomic LINE Dispatch (`LineMessagingService.replyMessages`)**:
+    - Extended `LineMessagingService` with public `replyMessages()` accepting an array of message descriptors.
+    - Webhook execution resolves all blocks atomically in pre-flight before any network call. If any required variable or media object fails, 0 messages are sent and the attempt is skipped/logged cleanly.
+    - Dispatches all 1–5 message blocks in **ONE single HTTP request** to `POST https://api.line.me/v2/bot/message/reply` using the incoming `replyToken`. Zero push message fallback.
+  - **Frontend Workspace & Rich Menu Integration**:
+    - Extracted modular frontend components: `AutoResponseMessageBuilder`, `AutoResponseImageBlock`, `AutoResponsePreviewStream`.
+    - Renders simulated mobile LINE chat stream with store variable resolution and per-block validation status.
+    - In Rich Menu area editor, compact Auto-response preview shows message count badge (`🖼 💬 2 ข้อความ`), status badge, and first text snippet.
+- **Verification & Test Results**:
+  - 1387 / 1387 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 448 / 448 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly across 28 routes (`npm run build` in `frontend/`).
+  - NestJS & Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+
+## Previous task: Auto-response Manager Phase 1 + Rich Menu POSTBACK Integration (2026-08-27)
 
 - **Architecture & Technical Scope**:
   - **Single Source of Truth in lineoppo.click**:
