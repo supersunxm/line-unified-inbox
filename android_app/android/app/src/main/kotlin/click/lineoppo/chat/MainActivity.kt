@@ -2,6 +2,7 @@ package click.lineoppo.chat
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     private val installerChannel = "click.lineoppo.chat/apk_installer"
     private val notificationSettingsChannel = "click.lineoppo.chat/notification_settings"
+    private val apkMimeType = "application/vnd.android.package-archive"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,9 +117,17 @@ class MainActivity : FlutterActivity() {
         try {
             val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apk)
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(contentUri, "application/vnd.android.package-archive")
+                setDataAndType(contentUri, apkMimeType)
+                // Some Android/OEM package installers only honor URI grants
+                // when the URI is also present in ClipData.
+                clipData = ClipData.newRawUri("APK", contentUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            if (installIntent.resolveActivity(packageManager) == null) {
+                result.error("INSTALLER_UNAVAILABLE", "Unable to resolve Android package installer", null)
+                return
             }
             startActivity(installIntent)
             result.success("launched")

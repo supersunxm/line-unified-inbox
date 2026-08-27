@@ -8,14 +8,16 @@ import '../../../core/theme/app_spacing.dart';
 
 import '../../../core/services/app_update_service.dart';
 import '../../notifications/notification_service.dart';
+import 'installed_app_version.dart';
 
 class SettingsSection extends StatefulWidget {
-  const SettingsSection(
-      {super.key,
-      this.onPersonalInformation,
-      this.updateService,
-      this.packageInfo,
-      this.notificationService});
+  const SettingsSection({
+    super.key,
+    this.onPersonalInformation,
+    this.updateService,
+    this.packageInfo,
+    this.notificationService,
+  });
 
   final VoidCallback? onPersonalInformation;
   final AppUpdateService? updateService;
@@ -73,8 +75,10 @@ class _SettingsSectionState extends State<SettingsSection> {
               ListTile(
                 leading: const Icon(Icons.language),
                 title: Text(l10n.language),
-                subtitle: Text(languageController?.language.nativeName ??
-                    AppLanguage.english.nativeName),
+                subtitle: Text(
+                  languageController?.language.nativeName ??
+                      AppLanguage.english.nativeName,
+                ),
                 onTap: languageController == null
                     ? null
                     : () => _showLanguagePicker(context),
@@ -105,9 +109,11 @@ class _SettingsSectionState extends State<SettingsSection> {
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: Text(l10n.about),
-                subtitle: Text(_packageInfo == null
-                    ? 'OPPO LINE OA Chat'
-                    : 'OPPO LINE OA Chat · v${_packageInfo!.version}+${_packageInfo!.buildNumber}'),
+                subtitle: Text(
+                  _packageInfo == null
+                      ? l10n.appName
+                      : formatInstalledAppVersion(_packageInfo!),
+                ),
                 trailing: Text(
                   l10n.checkForUpdates,
                   style: TextStyle(
@@ -118,8 +124,10 @@ class _SettingsSectionState extends State<SettingsSection> {
                 ),
                 onTap: widget.updateService == null
                     ? null
-                    : () => widget.updateService!
-                        .checkForUpdates(context, isManual: true),
+                    : () => widget.updateService!.checkForUpdates(
+                          context,
+                          isManual: true,
+                        ),
               ),
             ],
           ),

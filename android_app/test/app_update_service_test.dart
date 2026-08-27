@@ -56,10 +56,31 @@ class _StartOnlyUpdateService extends AppUpdateService {
     UpdateProgressCallback? onProgress,
   }) async {
     started = true;
-    onProgress?.call(const UpdateProgress(
-      UpdateProgressStatus.downloading,
-      fraction: 0.25,
-    ));
+    onProgress?.call(
+      const UpdateProgress(UpdateProgressStatus.downloading, fraction: 0.25),
+    );
+    return UpdateFlowResult.installed;
+  }
+}
+
+class _PermissionThenInstallService extends AppUpdateService {
+  _PermissionThenInstallService() : super(ApiClient(TokenStore()));
+
+  var attempts = 0;
+
+  @override
+  Future<UpdateFlowResult> downloadAndInstallApk(
+    AppUpdateInfo info, {
+    UpdateProgressCallback? onProgress,
+  }) async {
+    attempts++;
+    if (attempts == 1) {
+      onProgress?.call(const UpdateProgress(
+        UpdateProgressStatus.permissionRequired,
+      ));
+      return UpdateFlowResult.permissionRequired;
+    }
+    onProgress?.call(const UpdateProgress(UpdateProgressStatus.installing));
     return UpdateFlowResult.installed;
   }
 }
@@ -106,7 +127,9 @@ void main() {
       );
 
       expect(
-          info.isUpdateAvailable(5), true); // Older build 5 -> update available
+        info.isUpdateAvailable(5),
+        true,
+      ); // Older build 5 -> update available
       expect(info.isUpdateAvailable(6), false); // Same build 6 -> up to date
       expect(info.isUpdateAvailable(7), false); // Newer build 7 -> up to date
     });
@@ -121,10 +144,14 @@ void main() {
         apkUrl: 'https://example.com/app.apk',
       );
 
-      expect(normalUpdate.isForceUpdateRequired(5),
-          false); // build 5 >= 4 -> optional
-      expect(normalUpdate.isForceUpdateRequired(3),
-          true); // build 3 < 4 -> force update
+      expect(
+        normalUpdate.isForceUpdateRequired(5),
+        false,
+      ); // build 5 >= 4 -> optional
+      expect(
+        normalUpdate.isForceUpdateRequired(3),
+        true,
+      ); // build 3 < 4 -> force update
 
       const forcedUpdate = AppUpdateInfo(
         latestVersion: '1.0.5',
@@ -135,14 +162,18 @@ void main() {
         apkUrl: 'https://example.com/app.apk',
       );
 
-      expect(forcedUpdate.isForceUpdateRequired(5),
-          true); // forceUpdate flag true -> forced
+      expect(
+        forcedUpdate.isForceUpdateRequired(5),
+        true,
+      ); // forceUpdate flag true -> forced
     });
   });
 
   group('AppUpdateService UI Flow', () {
     testWidgets('shows optional update dialog when newer version is available',
-        (tester) async {
+        (
+      tester,
+    ) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final testPackageInfo = PackageInfo(
@@ -202,60 +233,64 @@ void main() {
     });
 
     testWidgets(
-        'shows non-dismissible force update dialog when below minimum version',
-        (tester) async {
-      final updateService = AppUpdateService(ApiClient(TokenStore()));
+      'shows non-dismissible force update dialog when below minimum version',
+      (tester) async {
+        final updateService = AppUpdateService(ApiClient(TokenStore()));
 
-      final oldPackageInfo = PackageInfo(
-        appName: 'OPPO LINE OA Chat',
-        packageName: 'com.oppo.lineoahub',
-        version: '1.0.2',
-        buildNumber: '3', // Below minimumSupportedBuildNumber 4
-      );
+        final oldPackageInfo = PackageInfo(
+          appName: 'OPPO LINE OA Chat',
+          packageName: 'com.oppo.lineoahub',
+          version: '1.0.2',
+          buildNumber: '3', // Below minimumSupportedBuildNumber 4
+        );
 
-      const forcedUpdateInfo = AppUpdateInfo(
-        latestVersion: '1.0.5',
-        buildNumber: 6,
-        minimumSupportedVersion: '1.0.3',
-        minimumSupportedBuildNumber: 4,
-        forceUpdate: false,
-        apkUrl:
-            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
-        apkSize: '57.1 MB',
-        releaseNotes: ['Critical security and CRM upgrade'],
-      );
+        const forcedUpdateInfo = AppUpdateInfo(
+          latestVersion: '1.0.5',
+          buildNumber: 6,
+          minimumSupportedVersion: '1.0.3',
+          minimumSupportedBuildNumber: 4,
+          forceUpdate: false,
+          apkUrl:
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
+          apkSize: '57.1 MB',
+          releaseNotes: ['Critical security and CRM upgrade'],
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Builder(
-            builder: (ctx) => Scaffold(
-              body: ElevatedButton(
-                onPressed: () => updateService.checkForUpdates(
-                  ctx,
-                  overridePackageInfo: oldPackageInfo,
-                  overrideUpdateInfo: forcedUpdateInfo,
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (ctx) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => updateService.checkForUpdates(
+                    ctx,
+                    overridePackageInfo: oldPackageInfo,
+                    overrideUpdateInfo: forcedUpdateInfo,
+                  ),
+                  child: const Text('Check'),
                 ),
-                child: const Text('Check'),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Check'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Check'));
+        await tester.pumpAndSettle();
 
-      // Verify Forced Update dialog
-      expect(find.text('Update Required'), findsOneWidget);
-      expect(find.text('Later'),
-          findsNothing); // No "Later" button for forced update
-      expect(find.text('Update Now'), findsOneWidget);
-    });
+        // Verify Forced Update dialog
+        expect(find.text('Update Required'), findsOneWidget);
+        expect(
+          find.text('Later'),
+          findsNothing,
+        ); // No "Later" button for forced update
+        expect(find.text('Update Now'), findsOneWidget);
+      },
+    );
 
-    testWidgets('shows already up to date SnackBar on manual check',
-        (tester) async {
+    testWidgets('shows already up to date SnackBar on manual check', (
+      tester,
+    ) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
 
       final currentPackageInfo = PackageInfo(
@@ -300,138 +335,176 @@ void main() {
 
       // Verify no dialog, but SnackBar shows up
       expect(find.text('New Version Available'), findsNothing);
-      expect(find.textContaining('You are using the latest version'),
-          findsOneWidget);
+      expect(
+        find.textContaining('You are using the latest version'),
+        findsOneWidget,
+      );
     });
 
     testWidgets(
-        'installed v1.0.18 (build 19) detects v1.1.0 (build 20) and shows the production APK',
-        (tester) async {
-      final updateService = AppUpdateService(ApiClient(TokenStore()));
+      'installed v1.1.0 (build 20) detects v1.1.1 (build 21) and shows the production APK',
+      (tester) async {
+        final updateService = AppUpdateService(ApiClient(TokenStore()));
 
-      final currentPackageInfo = PackageInfo(
+        final currentPackageInfo = PackageInfo(
+          appName: 'OPPO LINE OA Chat',
+          packageName: 'click.lineoppo.chat',
+          version: '1.1.0',
+          buildNumber: '20',
+        );
+
+        const latestUpdateInfo = AppUpdateInfo(
+          latestVersion: '1.1.1',
+          buildNumber: 21,
+          minimumSupportedVersion: '1.0.3',
+          minimumSupportedBuildNumber: 4,
+          forceUpdate: false,
+          apkUrl:
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
+          apkSize: '59.5 MB',
+          releaseNotes: [
+            'แก้ไขระบบอัปเดตแอปภายในแอป',
+            'แก้ไขการแสดงเวอร์ชันของแอปให้ตรงกับเวอร์ชันที่ติดตั้ง',
+            'ปรับปรุงความเสถียรของกระบวนการดาวน์โหลดและติดตั้งอัปเดต',
+          ],
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (ctx) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => updateService.checkForUpdates(
+                    ctx,
+                    overridePackageInfo: currentPackageInfo,
+                    overrideUpdateInfo: latestUpdateInfo,
+                  ),
+                  child: const Text('Check'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Check'));
+        await tester.pumpAndSettle();
+
+        // Verify the current production release details.
+        expect(find.text('New Version Available'), findsOneWidget);
+        expect(find.textContaining('1.1.1+21'), findsOneWidget);
+        expect(find.text(latestUpdateInfo.releaseNotes[0]), findsOneWidget);
+        expect(find.text(latestUpdateInfo.releaseNotes[1]), findsOneWidget);
+        expect(find.text(latestUpdateInfo.releaseNotes[2]), findsOneWidget);
+        expect(find.text('Update Now'), findsOneWidget);
+        expect(find.text('Later'), findsOneWidget);
+      },
+    );
+
+    testWidgets('installed v1.1.1 build 21 reports up to date', (tester) async {
+      final updateService = AppUpdateService(ApiClient(TokenStore()));
+      final current = PackageInfo(
         appName: 'OPPO LINE OA Chat',
         packageName: 'click.lineoppo.chat',
-        version: '1.0.18',
-        buildNumber: '19',
+        version: '1.1.1',
+        buildNumber: '21',
       );
-
-      const latestUpdateInfo = AppUpdateInfo(
-        latestVersion: '1.1.0',
-        buildNumber: 20,
+      const latest = AppUpdateInfo(
+        latestVersion: '1.1.1',
+        buildNumber: 21,
         minimumSupportedVersion: '1.0.3',
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
         apkUrl:
-            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.0-production.apk?sha=9b4351e1a7b998ff63f2ac7acfd906d0e8324d432f41382ad773f627b77f2f98',
-        apkSize: '59.5 MB',
-        releaseNotes: [
-          'ปรับปรุงระบบอัปเดตแอป ดาวน์โหลด ตรวจสอบ SHA-256 และเปิดตัวติดตั้งได้จากในแอป',
-          'ปรับปรุงความเสถียรของ Push Notification สำหรับข้อความลูกค้า',
-          'รองรับการแจ้งเตือนสำหรับ BM / HQ / PC ตามสิทธิ์การเข้าถึง',
-        ],
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
       );
-
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Builder(
-            builder: (ctx) => Scaffold(
+            builder: (context) => Scaffold(
               body: ElevatedButton(
                 onPressed: () => updateService.checkForUpdates(
-                  ctx,
-                  overridePackageInfo: currentPackageInfo,
-                  overrideUpdateInfo: latestUpdateInfo,
+                  context,
+                  isManual: true,
+                  overridePackageInfo: current,
+                  overrideUpdateInfo: latest,
                 ),
-                child: const Text('Check'),
+                child: const Text('Check current'),
               ),
             ),
           ),
         ),
       );
-
-      await tester.tap(find.text('Check'));
-      await tester.pumpAndSettle();
-
-      // Verify the current production release details.
-      expect(find.text('New Version Available'), findsOneWidget);
-      expect(find.textContaining('1.1.0+20'), findsOneWidget);
-      expect(find.text(latestUpdateInfo.releaseNotes[0]), findsOneWidget);
-      expect(find.text(latestUpdateInfo.releaseNotes[1]), findsOneWidget);
-      expect(find.text(latestUpdateInfo.releaseNotes[2]), findsOneWidget);
-      expect(find.text('Update Now'), findsOneWidget);
-      expect(find.text('Later'), findsOneWidget);
-    });
-
-    testWidgets('installed v1.1.0 build 20 reports up to date', (tester) async {
-      final updateService = AppUpdateService(ApiClient(TokenStore()));
-      final current = PackageInfo(
-          appName: 'OPPO LINE OA Chat',
-          packageName: 'click.lineoppo.chat',
-          version: '1.1.0',
-          buildNumber: '20');
-      const latest = AppUpdateInfo(
-          latestVersion: '1.1.0',
-          buildNumber: 20,
-          minimumSupportedVersion: '1.0.3',
-          minimumSupportedBuildNumber: 4,
-          forceUpdate: false,
-          apkUrl:
-              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.0-production.apk?sha=9b4351e1a7b998ff63f2ac7acfd906d0e8324d432f41382ad773f627b77f2f98');
-      await tester.pumpWidget(MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Builder(
-              builder: (context) => Scaffold(
-                  body: ElevatedButton(
-                      onPressed: () => updateService.checkForUpdates(context,
-                          isManual: true,
-                          overridePackageInfo: current,
-                          overrideUpdateInfo: latest),
-                      child: const Text('Check current'))))));
       await tester.tap(find.text('Check current'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('You are using the latest version'),
-          findsOneWidget);
-      expect(find.textContaining('1.1.0+20'), findsOneWidget);
+      expect(
+        find.textContaining('You are using the latest version'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('1.1.1+21'), findsOneWidget);
       expect(find.text('New Version Available'), findsNothing);
     });
 
     testWidgets(
-        'update metadata network failure is recoverable and preserves session',
-        (tester) async {
-      final tokens = TokenStore();
-      await tokens.saveCredentials(const MobileCredentials(
-          accessToken: 'access', refreshToken: 'refresh'));
-      final updateService = AppUpdateService(ApiClient(tokens,
-          connectivity: _OnlineConnectivity(),
-          httpClient: MockClient(
-              (_) async => throw http.ClientException('temporary outage'))));
-      final current = PackageInfo(
+      'update metadata network failure is recoverable and preserves session',
+      (tester) async {
+        final tokens = TokenStore();
+        await tokens.saveCredentials(
+          const MobileCredentials(
+            accessToken: 'access',
+            refreshToken: 'refresh',
+          ),
+        );
+        final updateService = AppUpdateService(
+          ApiClient(
+            tokens,
+            connectivity: _OnlineConnectivity(),
+            httpClient: MockClient(
+              (_) async => throw http.ClientException('temporary outage'),
+            ),
+          ),
+        );
+        final current = PackageInfo(
           appName: 'OPPO LINE OA Chat',
           packageName: 'click.lineoppo.chat',
           version: '1.0.17',
-          buildNumber: '18');
-      await tester.pumpWidget(MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Builder(
+          buildNumber: '18',
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
               builder: (context) => Scaffold(
-                  body: ElevatedButton(
-                      onPressed: () => updateService.checkForUpdates(context,
-                          isManual: true, overridePackageInfo: current),
-                      child: const Text('Check network'))))));
-      await tester.tap(find.text('Check network'));
-      await tester.pumpAndSettle();
-      expect(
-          find.textContaining('Unable to check for updates'), findsOneWidget);
-      expect((await tokens.readCredentials())?.refreshToken, 'refresh');
-      expect(find.text('New Version Available'), findsNothing);
-    });
+                body: ElevatedButton(
+                  onPressed: () => updateService.checkForUpdates(
+                    context,
+                    isManual: true,
+                    overridePackageInfo: current,
+                  ),
+                  child: const Text('Check network'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Check network'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Unable to check for updates'),
+          findsOneWidget,
+        );
+        expect((await tokens.readCredentials())?.refreshToken, 'refresh');
+        expect(find.text('New Version Available'), findsNothing);
+      },
+    );
 
-    testWidgets('tapping Update Now starts the APK download immediately',
-        (tester) async {
+    testWidgets('tapping Update Now starts the APK download immediately', (
+      tester,
+    ) async {
       final service = _StartOnlyUpdateService();
       const info = AppUpdateInfo(
         latestVersion: '1.0.18',
@@ -441,27 +514,29 @@ void main() {
         forceUpdate: false,
         apkUrl: 'https://lineoppo.click/downloads/update.apk',
       );
-      await tester.pumpWidget(MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: ElevatedButton(
-              onPressed: () => service.checkForUpdates(
-                context,
-                overridePackageInfo: PackageInfo(
-                  appName: 'OPPO LINE OA Chat',
-                  packageName: 'click.lineoppo.chat',
-                  version: '1.0.17',
-                  buildNumber: '18',
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () => service.checkForUpdates(
+                  context,
+                  overridePackageInfo: PackageInfo(
+                    appName: 'OPPO LINE OA Chat',
+                    packageName: 'click.lineoppo.chat',
+                    version: '1.0.17',
+                    buildNumber: '18',
+                  ),
+                  overrideUpdateInfo: info,
                 ),
-                overrideUpdateInfo: info,
+                child: const Text('Check'),
               ),
-              child: const Text('Check'),
             ),
           ),
         ),
-      ));
+      );
       await tester.tap(find.text('Check'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Update Now'));
@@ -477,8 +552,9 @@ void main() {
       String? installedPath;
       final service = AppUpdateService(
         _trackingApi(),
-        downloadClient:
-            MockClient((_) async => http.Response.bytes(payload, 200)),
+        downloadClient: MockClient(
+          (_) async => http.Response.bytes(payload, 200),
+        ),
         cacheDirectoryProvider: () => Future.value(temporaryDirectory),
         installer: (path) async {
           installedPath = path;
@@ -493,104 +569,169 @@ void main() {
       expect(result, UpdateFlowResult.installed);
       expect(File(installedPath!).existsSync(), true);
       expect(
-          statuses,
-          containsAll(<UpdateProgressStatus>[
-            UpdateProgressStatus.preparing,
-            UpdateProgressStatus.downloading,
-            UpdateProgressStatus.verifying,
-            UpdateProgressStatus.readyToInstall,
-            UpdateProgressStatus.installing,
-          ]));
-    });
-
-    test('checksum mismatch blocks installation and removes the temporary APK',
-        () async {
-      final payload = _apkPayload();
-      final temporaryDirectory = await _testCacheDirectory('update-checksum');
-      addTearDown(() => temporaryDirectory.delete(recursive: true));
-      var installerCalled = false;
-      final service = AppUpdateService(
-        _trackingApi(),
-        downloadClient:
-            MockClient((_) async => http.Response.bytes(payload, 200)),
-        cacheDirectoryProvider: () => Future.value(temporaryDirectory),
-        installer: (_) async {
-          installerCalled = true;
-          return ApkInstallResult.launched;
-        },
+        statuses,
+        containsAll(<UpdateProgressStatus>[
+          UpdateProgressStatus.preparing,
+          UpdateProgressStatus.downloading,
+          UpdateProgressStatus.verifying,
+          UpdateProgressStatus.readyToInstall,
+          UpdateProgressStatus.installing,
+        ]),
       );
-      final statuses = <UpdateProgressStatus>[];
-      final result = await service.downloadAndInstallApk(
-        _downloadableInfo(<int>[1, 2, 3]),
-        onProgress: (progress) => statuses.add(progress.status),
-      );
-      expect(result, UpdateFlowResult.checksumFailed);
-      expect(installerCalled, false);
-      expect(statuses, contains(UpdateProgressStatus.checksumFailed));
-      expect(temporaryDirectory.listSync(), isEmpty);
-    });
-
-    test('download/network failure shows an error state and does not install',
-        () async {
-      final temporaryDirectory = await _testCacheDirectory('update-network');
-      addTearDown(() => temporaryDirectory.delete(recursive: true));
-      var installerCalled = false;
-      final service = AppUpdateService(
-        _trackingApi(),
-        downloadClient:
-            MockClient((_) async => throw const SocketException('offline')),
-        cacheDirectoryProvider: () => Future.value(temporaryDirectory),
-        installer: (_) async {
-          installerCalled = true;
-          return ApkInstallResult.launched;
-        },
-      );
-      final statuses = <UpdateProgressStatus>[];
-      final result = await service.downloadAndInstallApk(
-        _downloadableInfo(_apkPayload()),
-        onProgress: (progress) => statuses.add(progress.status),
-      );
-      expect(result, UpdateFlowResult.downloadFailed);
-      expect(installerCalled, false);
-      expect(statuses, contains(UpdateProgressStatus.downloadFailed));
     });
 
     test(
-        'permission-required installer opens settings and retry reuses verified APK',
-        () async {
-      final payload = _apkPayload();
-      final temporaryDirectory = await _testCacheDirectory('update-permission');
-      addTearDown(() => temporaryDirectory.delete(recursive: true));
-      var requestCount = 0;
-      var attempts = 0;
-      final service = AppUpdateService(
-        _trackingApi(),
-        downloadClient: MockClient((_) async {
-          requestCount++;
-          return http.Response.bytes(payload, 200);
-        }),
-        cacheDirectoryProvider: () => Future.value(temporaryDirectory),
-        installer: (_) async {
-          attempts++;
-          return attempts == 1
-              ? ApkInstallResult.permissionRequired
-              : ApkInstallResult.launched;
-        },
-      );
-      final info = _downloadableInfo(payload);
-      final first = await service.downloadAndInstallApk(info);
-      final second = await service.downloadAndInstallApk(info);
-      expect(first, UpdateFlowResult.permissionRequired);
-      expect(second, UpdateFlowResult.installed);
-      expect(requestCount, 1);
-      expect(attempts, 2);
-    });
+      'checksum mismatch blocks installation and removes the temporary APK',
+      () async {
+        final payload = _apkPayload();
+        final temporaryDirectory = await _testCacheDirectory('update-checksum');
+        addTearDown(() => temporaryDirectory.delete(recursive: true));
+        var installerCalled = false;
+        final service = AppUpdateService(
+          _trackingApi(),
+          downloadClient: MockClient(
+            (_) async => http.Response.bytes(payload, 200),
+          ),
+          cacheDirectoryProvider: () => Future.value(temporaryDirectory),
+          installer: (_) async {
+            installerCalled = true;
+            return ApkInstallResult.launched;
+          },
+        );
+        final statuses = <UpdateProgressStatus>[];
+        final result = await service.downloadAndInstallApk(
+          _downloadableInfo(<int>[1, 2, 3]),
+          onProgress: (progress) => statuses.add(progress.status),
+        );
+        expect(result, UpdateFlowResult.checksumFailed);
+        expect(installerCalled, false);
+        expect(statuses, contains(UpdateProgressStatus.checksumFailed));
+        expect(temporaryDirectory.listSync(), isEmpty);
+      },
+    );
+
+    test(
+      'download/network failure shows an error state and does not install',
+      () async {
+        final temporaryDirectory = await _testCacheDirectory('update-network');
+        addTearDown(() => temporaryDirectory.delete(recursive: true));
+        var installerCalled = false;
+        final service = AppUpdateService(
+          _trackingApi(),
+          downloadClient: MockClient(
+            (_) async => throw const SocketException('offline'),
+          ),
+          cacheDirectoryProvider: () => Future.value(temporaryDirectory),
+          installer: (_) async {
+            installerCalled = true;
+            return ApkInstallResult.launched;
+          },
+        );
+        final statuses = <UpdateProgressStatus>[];
+        final result = await service.downloadAndInstallApk(
+          _downloadableInfo(_apkPayload()),
+          onProgress: (progress) => statuses.add(progress.status),
+        );
+        expect(result, UpdateFlowResult.downloadFailed);
+        expect(installerCalled, false);
+        expect(statuses, contains(UpdateProgressStatus.downloadFailed));
+      },
+    );
+
+    test(
+      'permission-required installer opens settings and retry reuses verified APK',
+      () async {
+        final payload = _apkPayload();
+        final temporaryDirectory = await _testCacheDirectory(
+          'update-permission',
+        );
+        addTearDown(() => temporaryDirectory.delete(recursive: true));
+        var requestCount = 0;
+        var attempts = 0;
+        final service = AppUpdateService(
+          _trackingApi(),
+          downloadClient: MockClient((_) async {
+            requestCount++;
+            return http.Response.bytes(payload, 200);
+          }),
+          cacheDirectoryProvider: () => Future.value(temporaryDirectory),
+          installer: (_) async {
+            attempts++;
+            return attempts == 1
+                ? ApkInstallResult.permissionRequired
+                : ApkInstallResult.launched;
+          },
+        );
+        final info = _downloadableInfo(payload);
+        final first = await service.downloadAndInstallApk(info);
+        final second = await service.downloadAndInstallApk(info);
+        expect(first, UpdateFlowResult.permissionRequired);
+        expect(second, UpdateFlowResult.installed);
+        expect(requestCount, 1);
+        expect(attempts, 2);
+      },
+    );
+
+    testWidgets(
+      'returning from install permission settings retries the verified APK',
+      (tester) async {
+        final service = _PermissionThenInstallService();
+        const info = AppUpdateInfo(
+          latestVersion: '1.1.1',
+          buildNumber: 21,
+          minimumSupportedVersion: '1.0.3',
+          minimumSupportedBuildNumber: 4,
+          forceUpdate: false,
+          apkUrl: 'https://lineoppo.click/downloads/update.apk',
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => service.checkForUpdates(
+                    context,
+                    overridePackageInfo: PackageInfo(
+                      appName: 'OPPO LINE OA Chat',
+                      packageName: 'click.lineoppo.chat',
+                      version: '1.1.0',
+                      buildNumber: '20',
+                    ),
+                    overrideUpdateInfo: info,
+                  ),
+                  child: const Text('Check'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Check'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Update Now'));
+        await tester.pumpAndSettle();
+        expect(service.attempts, 1);
+        expect(find.text('Install permission is required'), findsOneWidget);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpAndSettle();
+
+        expect(service.attempts, 2);
+      },
+    );
 
     test('repeated taps share one in-flight download', () async {
       final payload = _apkPayload();
       final gate = Completer<void>();
-      final temporaryDirectory =
-          await _testCacheDirectory('update-single-flight');
+      final temporaryDirectory = await _testCacheDirectory(
+        'update-single-flight',
+      );
       addTearDown(() => temporaryDirectory.delete(recursive: true));
       var requestCount = 0;
       final service = AppUpdateService(
@@ -617,44 +758,64 @@ void main() {
       final payload = _apkPayload();
       final temporaryDirectory = await _testCacheDirectory('update-stale');
       addTearDown(() => temporaryDirectory.delete(recursive: true));
-      final stale =
-          File('${temporaryDirectory.path}/line_oa_update_18_old.apk');
+      final stale = File(
+        '${temporaryDirectory.path}/line_oa_update_18_old.apk',
+      );
       stale.writeAsBytesSync(<int>[1, 2, 3]);
       final service = AppUpdateService(
         _trackingApi(),
-        downloadClient:
-            MockClient((_) async => http.Response.bytes(payload, 200)),
+        downloadClient: MockClient(
+          (_) async => http.Response.bytes(payload, 200),
+        ),
         cacheDirectoryProvider: () => Future.value(temporaryDirectory),
         installer: (_) async => ApkInstallResult.launched,
       );
-      expect(await service.downloadAndInstallApk(_downloadableInfo(payload)),
-          UpdateFlowResult.installed);
+      expect(
+        await service.downloadAndInstallApk(_downloadableInfo(payload)),
+        UpdateFlowResult.installed,
+      );
       expect(stale.existsSync(), false);
     });
 
     test('Android installer bridge launches the package installer', () async {
       const channel = MethodChannel('click.lineoppo.chat/apk_installer');
+      MethodCall? receivedCall;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async => 'launched');
-      addTearDown(() => TestDefaultBinaryMessengerBinding
-          .instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null));
-      expect(await const AndroidApkInstaller().call('/cache/update.apk'),
-          ApkInstallResult.launched);
+          .setMockMethodCallHandler(channel, (call) async {
+        receivedCall = call;
+        return 'launched';
+      });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      expect(
+        await const AndroidApkInstaller().call('/cache/update.apk'),
+        ApkInstallResult.launched,
+      );
+      expect(receivedCall?.method, 'installApk');
+      expect(receivedCall?.arguments, {'path': '/cache/update.apk'});
     });
 
     test(
-        'Android installer bridge reports missing install permission for retry',
-        () async {
-      const channel = MethodChannel('click.lineoppo.chat/apk_installer');
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-              channel, (call) async => 'permission_required');
-      addTearDown(() => TestDefaultBinaryMessengerBinding
-          .instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null));
-      expect(await const AndroidApkInstaller().call('/cache/update.apk'),
-          ApkInstallResult.permissionRequired);
-    });
+      'Android installer bridge reports missing install permission for retry',
+      () async {
+        const channel = MethodChannel('click.lineoppo.chat/apk_installer');
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+          channel,
+          (call) async => 'permission_required',
+        );
+        addTearDown(
+          () => TestDefaultBinaryMessengerBinding
+              .instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, null),
+        );
+        expect(
+          await const AndroidApkInstaller().call('/cache/update.apk'),
+          ApkInstallResult.permissionRequired,
+        );
+      },
+    );
   });
 }
