@@ -5,6 +5,7 @@ import type { StoreMasterSuggestion, ApiStore } from "../src/types/api.ts";
 import { synchronizedStoreMasterData } from "../src/app/store-master-form.ts";
 import {
   extractTemplateVariables,
+  getStoreGoogleMapsReadiness,
   getStoreVariableValue,
   isValidGoogleMapsUrl,
   resolveTemplateVariables,
@@ -91,7 +92,7 @@ test("Store Management UI source files contain Google Maps button and translatio
   const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /openGoogleMaps/);
   assert.match(page, /googleMapsNotConfigured/);
-  assert.match(page, /account\.store\.googleMapsUrl\s*\?/);
+  assert.match(page, /account\.store\.googleMapsUrl/);
   assert.match(page, /synchronizedMaster\.googleMapsUrl/);
 
   const mobile = readFileSync(new URL("../src/app/stores/mobile-stores-app.tsx", import.meta.url), "utf8");
@@ -182,4 +183,157 @@ test("Store ID 29113 / Central Pinklao refreshes Google Maps button after sync",
   assert.equal(postSyncAction.label, "Open Google Maps ↗");
   assert.equal(postSyncAction.url, "https://maps.app.goo.gl/centralpinklao29113");
   assert.equal(postSyncAction.disabled, false);
+});
+
+test("getStoreGoogleMapsReadiness returns CONFIGURED, MISSING, or INVALID correctly", () => {
+  // Store ID 29113 / Central Pinklao post-sync
+  const pinklao = {
+    storeId: "29113",
+    name: "OBS Central Pinklao",
+    googleMapsUrl: "https://maps.app.goo.gl/pinklao29113",
+  };
+  assert.deepEqual(getStoreGoogleMapsReadiness(pinklao), {
+    status: "CONFIGURED",
+    ready: true,
+    reason: null,
+  });
+
+  // null URL => MISSING
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: null }), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness(null), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+
+  // Blank URL => MISSING
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: "" }), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: "   " }), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness("   "), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+
+  // valid maps.app.goo.gl => CONFIGURED
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://maps.app.goo.gl/xyz123"), {
+    status: "CONFIGURED",
+    ready: true,
+    reason: null,
+  });
+
+  // valid google.com/maps => CONFIGURED
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://www.google.com/maps/place/OPPO+Store"), {
+    status: "CONFIGURED",
+    ready: true,
+    reason: null,
+  });
+
+  // http:// URL => INVALID
+  assert.deepEqual(getStoreGoogleMapsReadiness("http://maps.google.com/test"), {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  });
+
+  // unrelated HTTPS URL => INVALID
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://facebook.com/oppothai"), {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: "https://not-google.com/maps" }), {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  });
+});
+
+test("Store Management Google Maps filter and counts compute accurately", () => {
+  const accounts = [
+    { id: "oa-1", name: "Pinklao", store: { name: "Central Pinklao", googleMapsUrl: "https://maps.app.goo.gl/pinklao" } },
+    { id: "oa-2", name: "Rama 9", store: { name: "Central Rama 9", googleMapsUrl: "https://www.google.com/maps/place/Rama9" } },
+    { id: "oa-3", name: "Siam", store: { name: "Siam Paragon", googleMapsUrl: null } },
+    { id: "oa-4", name: "Westgate", store: { name: "Central Westgate", googleMapsUrl: "   " } },
+    { id: "oa-5", name: "Chonburi", store: { name: "Central Chonburi", googleMapsUrl: "http://insecure.com" } },
+    { id: "oa-6", name: "Chiangmai", store: { name: "Central Chiangmai", googleMapsUrl: "https://example.com/not-maps" } },
+  ];
+
+  // Derive counts
+  let configured = 0;
+  let missing = 0;
+  let invalid = 0;
+  for (const account of accounts) {
+    const readiness = getStoreGoogleMapsReadiness(account.store);
+    if (readiness.status === "CONFIGURED") configured++;
+    else if (readiness.status === "MISSING") missing++;
+    else if (readiness.status === "INVALID") invalid++;
+  }
+
+  assert.equal(configured, 2);
+  assert.equal(missing, 2);
+  assert.equal(invalid, 2);
+  assert.equal(accounts.length, 6);
+
+  // Filter 'all'
+  const filterAll = accounts.filter(() => true);
+  assert.equal(filterAll.length, 6);
+
+  // Filter 'CONFIGURED'
+  const filterConfigured = accounts.filter((a) => getStoreGoogleMapsReadiness(a.store).status === "CONFIGURED");
+  assert.equal(filterConfigured.length, 2);
+  assert.deepEqual(filterConfigured.map((a) => a.id), ["oa-1", "oa-2"]);
+
+  // Filter 'MISSING'
+  const filterMissing = accounts.filter((a) => getStoreGoogleMapsReadiness(a.store).status === "MISSING");
+  assert.equal(filterMissing.length, 2);
+  assert.deepEqual(filterMissing.map((a) => a.id), ["oa-3", "oa-4"]);
+
+  // Filter 'INVALID'
+  const filterInvalid = accounts.filter((a) => getStoreGoogleMapsReadiness(a.store).status === "INVALID");
+  assert.equal(filterInvalid.length, 2);
+  assert.deepEqual(filterInvalid.map((a) => a.id), ["oa-5", "oa-6"]);
+
+  // Search combination: filter CONFIGURED + search "rama"
+  const filterConfiguredAndSearch = accounts.filter(
+    (a) => getStoreGoogleMapsReadiness(a.store).status === "CONFIGURED" && a.name.toLowerCase().includes("rama"),
+  );
+  assert.equal(filterConfiguredAndSearch.length, 1);
+  assert.equal(filterConfiguredAndSearch[0].id, "oa-2");
+});
+
+test("Store Management UI contains Google Maps readiness indicators, filter buttons, and summary click actions", () => {
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+
+  // Filter controls
+  assert.match(page, /data-testid="google-maps-filter-group"/);
+  assert.match(page, /data-testid="filter-maps-all"/);
+  assert.match(page, /data-testid="filter-maps-configured"/);
+  assert.match(page, /data-testid="filter-maps-missing"/);
+  assert.match(page, /data-testid="filter-maps-invalid"/);
+
+  // Row readiness indicator
+  assert.match(page, /data-testid="google-maps-readiness-indicator"/);
+  assert.match(page, /data-testid="open-google-maps-link"/);
+  assert.match(page, /data-testid="invalid-google-maps-button"/);
+  assert.match(page, /data-testid="not-configured-google-maps-button"/);
+
+  // Sync summary click-to-filter
+  assert.match(page, /data-testid="sync-summary-click-missing"/);
+  assert.match(page, /data-testid="sync-summary-click-invalid"/);
+  assert.match(page, /data-testid="sync-summary-filter-configured"/);
+  assert.match(page, /data-testid="sync-summary-filter-missing"/);
+  assert.match(page, /data-testid="sync-summary-filter-invalid"/);
 });

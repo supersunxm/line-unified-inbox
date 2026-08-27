@@ -371,7 +371,10 @@ export type StorePrioritySummaryResponse = {
     oldestWaitingMinutes?: number;
   }>;
 };
-export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; googleMapsUrl?: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
+export type GoogleMapsReadinessStatus = "CONFIGURED" | "MISSING" | "INVALID";
+export type GoogleMapsReadiness = { status: GoogleMapsReadinessStatus; ready: boolean; reason: string | null };
+
+export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
 export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
 export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };
 export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };
@@ -399,7 +402,7 @@ export type LineOfficialAccountResponse = {
   channelId: string | null;
   maskedChannelId: string | null;
   destinationId: string | null;
-  store: { id: string; storeId?: string | null; name: string; code: string | null; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; googleMapsUrl?: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
+  store: { id: string; storeId?: string | null; name: string; code: string | null; region: string | null; area: string | null; storeMasterId: string | null; accountName: string | null; externalStoreId: string | null; province: string | null; lineId: string | null; lineOaLink: string | null; lineManagerUrl: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; dataQualityStatus: StoreMasterSuggestion["dataQualityStatus"] | null; dataSource: "MASTER" | "MANUAL" };
   connectionStatus: LineOaConnectionStatus;
   isActive: boolean;
   lastWebhookReceivedAt: string | null;
@@ -442,7 +445,7 @@ export type CreateLineOaInput = {
 export type StoreMasterSuggestion = {
   id: string; accountName: string; storeName: string; externalStoreId: string | null;
   province: string | null; region: string | null; lineId: string | null; lineOaLink: string | null;
-  lineManagerUrl: string | null; googleMapsUrl?: string | null; matchScore: number; matchReason: "EXACT_ACCOUNT_NAME" | "NORMALIZED_ACCOUNT_NAME" | "PARTIAL_ACCOUNT_NAME" | "FUZZY_SUGGESTION";
+  lineManagerUrl: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; matchScore: number; matchReason: "EXACT_ACCOUNT_NAME" | "NORMALIZED_ACCOUNT_NAME" | "PARTIAL_ACCOUNT_NAME" | "FUZZY_SUGGESTION";
   dataQualityStatus: "COMPLETE" | "MISSING_STORE_ID" | "INVALID_MANAGER_URL" | "DUPLICATE_ACCOUNT_NAME" | "INCOMPLETE";
   existingStore: { id: string; name: string } | null;
 };

@@ -14,6 +14,7 @@ import { MessageImage } from "./message-image";
 import { MessageTranslationAction } from "./message-translation-action";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
+import { getStoreGoogleMapsReadiness, type GoogleMapsReadinessStatus } from "@/lib/template-variable-resolver";
 import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
@@ -328,6 +329,12 @@ const translations = {
     duplicateLineIds: "LINE ID ซ้ำ",
     missingGoogleMapsUrls: "ไม่มี Google Maps URL",
     invalidGoogleMapsUrls: "Google Maps URL ไม่ถูกต้อง",
+    invalidGoogleMapsUrl: "Google Maps URL ไม่ถูกต้อง",
+    googleMapsStatusLabel: "Google Maps",
+    all: "ทั้งหมด",
+    configured: "ตั้งค่าแล้ว",
+    missing: "ยังไม่ได้ตั้งค่า",
+    invalid: "ไม่ถูกต้อง",
     dismiss: "ปิด",
     lineOaAdded: "เพิ่มร้านสำเร็จ",
     pasteWebhookInstruction: "นำ URL นี้ไปวางใน LINE Developers Console → Messaging API → Webhook URL",
@@ -661,6 +668,12 @@ const translations = {
     duplicateLineIds: "Duplicate LINE IDs",
     missingGoogleMapsUrls: "Missing Google Maps URLs",
     invalidGoogleMapsUrls: "Invalid Google Maps URLs",
+    invalidGoogleMapsUrl: "Invalid Google Maps URL",
+    googleMapsStatusLabel: "Google Maps",
+    all: "All",
+    configured: "Configured",
+    missing: "Missing",
+    invalid: "Invalid",
     dismiss: "Dismiss",
     lineOaAdded: "LINE OA added successfully",
     pasteWebhookInstruction: "Paste this URL into LINE Developers Console → Messaging API → Webhook URL",
@@ -992,6 +1005,12 @@ const translations = {
     duplicateLineIds: "重复 LINE ID",
     missingGoogleMapsUrls: "缺失 Google Maps URL",
     invalidGoogleMapsUrls: "无效 Google Maps URL",
+    invalidGoogleMapsUrl: "无效 Google Maps URL",
+    googleMapsStatusLabel: "Google Maps",
+    all: "全部",
+    configured: "已配置",
+    missing: "未配置",
+    invalid: "无效",
     dismiss: "关闭",
     lineOaAdded: "LINE OA 添加成功",
     pasteWebhookInstruction: "请将此 URL 粘贴到 LINE Developers Console → Messaging API → Webhook URL",
@@ -1508,6 +1527,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [lineOaExportError, setLineOaExportError] = useState<string | null>(null);
   const [masterSyncing, setMasterSyncing] = useState(false);
   const [masterSyncResult, setMasterSyncResult] = useState<StoreMasterSyncResult | null>(null);
+  const [googleMapsFilter, setGoogleMapsFilter] = useState<"all" | GoogleMapsReadinessStatus>("all");
   const [connectionTest, setConnectionTest] = useState<{ id: string; result: LineOaTestResult } | null>(null);
   const [showArchivedLineOas, setShowArchivedLineOas] = useState(false);
   const [showArchivedStores, setShowArchivedStores] = useState(false);
@@ -1643,16 +1663,44 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     () => lineOas.map(({ id }) => id),
     [lineOas],
   );
+  const googleMapsCounts = useMemo(() => {
+    let configured = 0;
+    let missing = 0;
+    let invalid = 0;
+    for (const account of lineOas) {
+      const readiness = getStoreGoogleMapsReadiness(account.store);
+      if (readiness.status === "CONFIGURED") configured++;
+      else if (readiness.status === "MISSING") missing++;
+      else if (readiness.status === "INVALID") invalid++;
+    }
+    return {
+      all: lineOas.length,
+      CONFIGURED: configured,
+      MISSING: missing,
+      INVALID: invalid,
+    };
+  }, [lineOas]);
   const normalizedStoreManagementSearch = storeManagementSearch.trim().toLowerCase();
   const visibleLineOas = useMemo(
-    () => lineOas.filter((account) =>
-      (storeRouteStatus === "all" || (storeRouteStatus === "active" ? account.isActive : account.connectionStatus === "ERROR" || account.connectionStatus === "NOT_CONFIGURED")) &&
-      (!normalizedStoreManagementSearch ||
-        [account.name, account.store.name, account.store.accountName, account.store.storeId, account.store.externalStoreId, account.store.code]
+    () => lineOas.filter((account) => {
+      const statusMatch = (storeRouteStatus === "all" || (storeRouteStatus === "active" ? account.isActive : account.connectionStatus === "ERROR" || account.connectionStatus === "NOT_CONFIGURED"));
+      if (!statusMatch) return false;
+
+      if (googleMapsFilter !== "all") {
+        const mapsReadiness = getStoreGoogleMapsReadiness(account.store);
+        if (mapsReadiness.status !== googleMapsFilter) return false;
+      }
+
+      if (normalizedStoreManagementSearch) {
+        const searchMatch = [account.name, account.store.name, account.store.accountName, account.store.storeId, account.store.externalStoreId, account.store.code]
           .filter(Boolean)
-          .some((value) => value?.toLowerCase().includes(normalizedStoreManagementSearch))),
-    ),
-    [lineOas, normalizedStoreManagementSearch, storeRouteStatus],
+          .some((value) => value?.toLowerCase().includes(normalizedStoreManagementSearch));
+        if (!searchMatch) return false;
+      }
+
+      return true;
+    }),
+    [lineOas, normalizedStoreManagementSearch, storeRouteStatus, googleMapsFilter],
   );
   const synchronizedMaster = selectedMaster ? synchronizedStoreMasterData(selectedMaster) : null;
   const masterResults = masterSearchState.status === "success" ? masterSearchState.suggestions : [];
@@ -3098,9 +3146,66 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       />
                     }
                     actionSlot={
-                      <span className="text-xs text-[var(--app-text-tertiary)] font-tabular">
-                        {visibleLineOas.length} / {lineOas.length} {text.lineOaManagement}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-1.5" data-testid="google-maps-filter-group">
+                          <span className="text-xs font-medium text-[var(--app-text-secondary)] whitespace-nowrap">
+                            {text.googleMapsStatusLabel}:
+                          </span>
+                          <div className="inline-flex rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-0.5 border border-[var(--app-border-subtle)]">
+                            <button
+                              type="button"
+                              onClick={() => setGoogleMapsFilter("all")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-[calc(var(--app-radius-md)-2px)] transition-colors cursor-pointer ${
+                                googleMapsFilter === "all"
+                                  ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-xs font-semibold"
+                                  : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                              }`}
+                              data-testid="filter-maps-all"
+                            >
+                              {text.all} <span className="text-[10px] opacity-75 font-tabular font-normal">({googleMapsCounts.all})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGoogleMapsFilter("CONFIGURED")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-[calc(var(--app-radius-md)-2px)] transition-colors cursor-pointer ${
+                                googleMapsFilter === "CONFIGURED"
+                                  ? "bg-[var(--app-surface)] text-[var(--app-success)] shadow-xs font-semibold"
+                                  : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                              }`}
+                              data-testid="filter-maps-configured"
+                            >
+                              {text.configured} <span className="text-[10px] opacity-75 font-tabular font-normal">({googleMapsCounts.CONFIGURED})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGoogleMapsFilter("MISSING")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-[calc(var(--app-radius-md)-2px)] transition-colors cursor-pointer ${
+                                googleMapsFilter === "MISSING"
+                                  ? "bg-[var(--app-surface)] text-[var(--app-warning)] shadow-xs font-semibold"
+                                  : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                              }`}
+                              data-testid="filter-maps-missing"
+                            >
+                              {text.missing} <span className="text-[10px] opacity-75 font-tabular font-normal">({googleMapsCounts.MISSING})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGoogleMapsFilter("INVALID")}
+                              className={`px-2.5 py-1 text-xs font-medium rounded-[calc(var(--app-radius-md)-2px)] transition-colors cursor-pointer ${
+                                googleMapsFilter === "INVALID"
+                                  ? "bg-[var(--app-surface)] text-[var(--app-danger)] shadow-xs font-semibold"
+                                  : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
+                              }`}
+                              data-testid="filter-maps-invalid"
+                            >
+                              {text.invalid} <span className="text-[10px] opacity-75 font-tabular font-normal">({googleMapsCounts.INVALID})</span>
+                            </button>
+                          </div>
+                        </div>
+                        <span className="text-xs text-[var(--app-text-tertiary)] font-tabular">
+                          {visibleLineOas.length} / {lineOas.length} {text.lineOaManagement}
+                        </span>
+                      </div>
                     }
                   />
 
@@ -3192,13 +3297,77 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           <span className="font-semibold" data-testid="sync-duplicate-line-ids">{masterSyncResult.validation.duplicateLineIds}</span>
                         </div>
                         <div>
-                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.missingGoogleMapsUrls}: </span>
-                          <span className="font-semibold" data-testid="sync-missing-maps-urls">{masterSyncResult.validation.missingGoogleMapsUrls}</span>
+                          <button
+                            type="button"
+                            onClick={() => setGoogleMapsFilter("MISSING")}
+                            className="text-left group cursor-pointer"
+                            data-testid="sync-summary-click-missing"
+                          >
+                            <span className="text-[11px] text-[var(--app-text-secondary)] group-hover:text-[var(--app-warning)] underline-offset-2 group-hover:underline">{text.missingGoogleMapsUrls}: </span>
+                            <span className="font-semibold text-[var(--app-warning)]" data-testid="sync-missing-maps-urls">{masterSyncResult.validation.missingGoogleMapsUrls}</span>
+                          </button>
                         </div>
                         <div>
-                          <span className="text-[11px] text-[var(--app-text-secondary)]">{text.invalidGoogleMapsUrls}: </span>
-                          <span className="font-semibold" data-testid="sync-invalid-maps-urls">{masterSyncResult.validation.invalidGoogleMapsUrls}</span>
+                          <button
+                            type="button"
+                            onClick={() => setGoogleMapsFilter("INVALID")}
+                            className="text-left group cursor-pointer"
+                            data-testid="sync-summary-click-invalid"
+                          >
+                            <span className="text-[11px] text-[var(--app-text-secondary)] group-hover:text-[var(--app-danger)] underline-offset-2 group-hover:underline">{text.invalidGoogleMapsUrls}: </span>
+                            <span className="font-semibold text-[var(--app-danger)]" data-testid="sync-invalid-maps-urls">{masterSyncResult.validation.invalidGoogleMapsUrls}</span>
+                          </button>
                         </div>
+                      </div>
+                      <div className="pt-2 border-t border-[var(--app-border-subtle)] flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+                          {text.googleMapsStatusLabel} Readiness:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setGoogleMapsFilter("CONFIGURED")}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors cursor-pointer ${
+                            googleMapsFilter === "CONFIGURED"
+                              ? "bg-[var(--app-success-soft)] border-[var(--app-success)] text-[var(--app-success)] font-semibold"
+                              : "bg-[var(--app-surface-subtle)] border-[var(--app-border-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-success)]"
+                          }`}
+                          data-testid="sync-summary-filter-configured"
+                        >
+                          <span>✓ {text.configured}</span>
+                          <span className="font-bold text-[var(--app-success)]">
+                            {Math.max(0, (masterSyncResult.validation.total ?? 0) - (masterSyncResult.validation.missingGoogleMapsUrls ?? 0) - (masterSyncResult.validation.invalidGoogleMapsUrls ?? 0))}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGoogleMapsFilter("MISSING")}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors cursor-pointer ${
+                            googleMapsFilter === "MISSING"
+                              ? "bg-[var(--app-warning-soft)] border-[var(--app-warning)] text-[var(--app-warning)] font-semibold"
+                              : "bg-[var(--app-surface-subtle)] border-[var(--app-border-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-warning)]"
+                          }`}
+                          data-testid="sync-summary-filter-missing"
+                        >
+                          <span>⚠ {text.missing}</span>
+                          <span className="font-bold text-[var(--app-warning)]">
+                            {masterSyncResult.validation.missingGoogleMapsUrls}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGoogleMapsFilter("INVALID")}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors cursor-pointer ${
+                            googleMapsFilter === "INVALID"
+                              ? "bg-[var(--app-danger-soft)] border-[var(--app-danger)] text-[var(--app-danger)] font-semibold"
+                              : "bg-[var(--app-surface-subtle)] border-[var(--app-border-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-danger)]"
+                          }`}
+                          data-testid="sync-summary-filter-invalid"
+                        >
+                          <span>⚠ {text.invalid}</span>
+                          <span className="font-bold text-[var(--app-danger)]">
+                            {masterSyncResult.validation.invalidGoogleMapsUrls}
+                          </span>
+                        </button>
                       </div>
                     </Card>
                   )}
@@ -3308,11 +3477,37 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                       account.store.lineId,
                                     ].filter(Boolean).join(" · ") || "—"}
                                   </span>
-                                  <span className="mt-1 inline-block">
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="store-badges">
                                     <Badge size="sm" variant={account.store.dataSource === "MASTER" ? "success" : "neutral"} dot={account.store.dataSource === "MASTER"}>
                                       {account.store.dataSource === "MASTER" ? text.masterFile : text.dataSource}
                                     </Badge>
-                                  </span>
+                                    {(() => {
+                                      const mapsReadiness = getStoreGoogleMapsReadiness(account.store);
+                                      return (
+                                        <span
+                                          className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${
+                                            mapsReadiness.status === "CONFIGURED"
+                                              ? "text-[var(--app-success)]"
+                                              : mapsReadiness.status === "INVALID"
+                                              ? "text-[var(--app-danger)]"
+                                              : "text-[var(--app-text-tertiary)]"
+                                          }`}
+                                          data-testid="google-maps-readiness-indicator"
+                                          data-status={mapsReadiness.status}
+                                          title={mapsReadiness.reason ?? undefined}
+                                        >
+                                          <span>{mapsReadiness.status === "CONFIGURED" ? "✓" : "⚠"}</span>
+                                          <span>
+                                            {mapsReadiness.status === "CONFIGURED"
+                                              ? text.configured
+                                              : mapsReadiness.status === "INVALID"
+                                              ? text.invalid
+                                              : text.missing}
+                                          </span>
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                 </TableCell>
                                 <TableCell>
                                   <Badge size="md" variant={statusVariant} dot>
@@ -3372,20 +3567,44 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                         {text.openLineOa}
                                       </button>
                                     )}
-                                    {account.store.googleMapsUrl ? (
-                                      <a
-                                        href={account.store.googleMapsUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-accent)]/30 text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] transition-colors"
-                                      >
-                                        {text.openGoogleMaps} ↗
-                                      </a>
-                                    ) : (
-                                      <button disabled title={text.googleMapsNotConfigured} className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-border)] text-[var(--app-text-disabled)] opacity-50 cursor-not-allowed">
-                                        {text.googleMapsNotConfigured}
-                                      </button>
-                                    )}
+                                    {(() => {
+                                      const mapsReadiness = getStoreGoogleMapsReadiness(account.store);
+                                      if (mapsReadiness.status === "CONFIGURED" && account.store.googleMapsUrl) {
+                                        return (
+                                          <a
+                                            href={account.store.googleMapsUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-accent)]/30 text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] transition-colors"
+                                            data-testid="open-google-maps-link"
+                                          >
+                                            {text.openGoogleMaps} ↗
+                                          </a>
+                                        );
+                                      }
+                                      if (mapsReadiness.status === "INVALID") {
+                                        return (
+                                          <button
+                                            disabled
+                                            title={mapsReadiness.reason ?? text.invalidGoogleMapsUrl}
+                                            className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-danger)]/30 text-[var(--app-danger)] opacity-70 cursor-not-allowed"
+                                            data-testid="invalid-google-maps-button"
+                                          >
+                                            ⚠ {text.invalid}
+                                          </button>
+                                        );
+                                      }
+                                      return (
+                                        <button
+                                          disabled
+                                          title={text.googleMapsNotConfigured}
+                                          className="inline-flex items-center h-7 px-2.5 text-xs font-medium rounded-[var(--app-radius-sm)] border border-[var(--app-border)] text-[var(--app-text-disabled)] opacity-50 cursor-not-allowed"
+                                          data-testid="not-configured-google-maps-button"
+                                        >
+                                          {text.googleMapsNotConfigured}
+                                        </button>
+                                      );
+                                    })()}
                                     <Button size="sm" variant="secondary" disabled={lineOaSubmitting} onClick={() => void testLineOa(account)}>
                                       {text.testConnection}
                                     </Button>

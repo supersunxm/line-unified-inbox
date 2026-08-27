@@ -1,6 +1,31 @@
 # AI progress
 
-## Current task: Store Master Production Sync Control (2026-08-27)
+## Current task: Store Master Google Maps Readiness Visibility & Filtering (2026-08-27)
+
+- **Store-level Readiness Architecture**:
+  - Implemented `getStoreGoogleMapsReadiness(store)` in `frontend/src/lib/template-variable-resolver.ts` and `backend/src/store-master/template-variable-resolver.ts`.
+  - Derives readiness status (`CONFIGURED` | `MISSING` | `INVALID`), `ready` (boolean), and reason (`null` | `"Missing Google Maps URL"` | `"Invalid Google Maps URL"`).
+  - Serialized `googleMapsStatus` and `googleMapsStatusReason` across `LineOfficialAccountsService`, `StoreMasterService.search()`, and frontend API types (`frontend/src/types/api.ts`).
+- **Store Management Filter & Counts**:
+  - Added compact Google Maps readiness filter buttons in Store Management toolbar: `Google Maps: [ All (N) ] [ Configured (N) ] [ Missing (N) ] [ Invalid (N) ]`.
+  - Derived live counts dynamically from loaded Store data without hardcoding.
+  - Multiplicative filter combination with existing search query and connection/route status filters.
+- **Table Row Visual Indicators**:
+  - Store column: Added compact readiness badge indicator (`✓ Configured` / `⚠ Missing` / `⚠ Invalid`).
+  - Action column: Shows `Open Google Maps ↗` (configured link), `⚠ Invalid` (disabled with validation tooltip), or `Not configured` (missing).
+  - Preserved all LINE OA connection, webhook, edit, and monitoring action buttons without regression.
+- **Sync Summary Interactive Filters**:
+  - Made Missing, Invalid, and Configured metric elements in Store Master Sync Summary panel clickable to apply the corresponding filter directly.
+  - Calculated configured count safely as `total - missingGoogleMapsUrls - invalidGoogleMapsUrls`.
+- **Verification & Test Results**:
+  - Extended frontend unit tests in `frontend/test/store-master-google-maps.test.mts` covering helper status derivations, Store ID 29113 post-sync verification, filter computations, and UI element test IDs.
+  - Extended backend unit tests in `backend/src/store-master/template-variable-resolver.spec.ts`.
+  - All 431 / 431 frontend tests passing (`npm test` in `frontend/`).
+  - All 1,329 / 1,329 backend tests passing (`npm test` in `backend/`).
+  - TypeScript compilation and Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/` and `backend/`).
+  - `git diff --check` passed cleanly.
+
+## Previous task: Store Master Production Sync Control (2026-08-27)
 
 - **Store Management UI Sync Control**:
   - Added dedicated `[ Sync Store Master ]` button in Store Management actions for `ADMIN` users only (`authUser.role === "ADMIN"`).

@@ -12,6 +12,7 @@ import {
   similarity,
 } from "./store-master.utils";
 import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
+import { getStoreGoogleMapsReadiness } from "./template-variable-resolver";
 
 @Injectable()
 export class StoreMasterService {
@@ -308,6 +309,8 @@ export class StoreMasterService {
           tiktokUsername: item.tiktokUsername,
           tiktokProfileUrl: item.tiktokProfileUrl,
           googleMapsUrl: item.googleMapsUrl ?? null,
+          googleMapsStatus: getStoreGoogleMapsReadiness(item.googleMapsUrl).status,
+          googleMapsStatusReason: getStoreGoogleMapsReadiness(item.googleMapsUrl).reason,
           matchScore: Number(score.toFixed(3)),
           matchReason: reason,
           dataQualityStatus: item.dataQualityStatus,
