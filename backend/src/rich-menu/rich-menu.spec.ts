@@ -808,15 +808,21 @@ test("RichMenuService.createBulkPublishJob: enforces max targets limit and creat
     },
     lineOfficialAccount: {
       findMany: async (args: any) => [
-        { id: "oa-1", name: "OA 1", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1" },
-        { id: "oa-2", name: "OA 2", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2" },
-        { id: "oa-3", name: "OA 3", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-3" },
+        { id: "oa-1", name: "OA 1", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1", store: { id: "s-1", name: "Store 1" } },
+        { id: "oa-2", name: "OA 2", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2", store: { id: "s-2", name: "Store 2" } },
+        { id: "oa-3", name: "OA 3", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-3", store: { id: "s-3", name: "Store 3" } },
       ],
     },
     $transaction: async (fn: any) => {
       return fn({
         richMenuPublishJob: {
           create: async (args: any) => ({ id: "job-100", ...args.data }),
+        },
+        richMenuStoreAssignment: {
+          upsert: async (args: any) => ({
+            id: `asgn-${args.where.templateId_lineOfficialAccountId.lineOfficialAccountId}`,
+            ...args.create,
+          }),
         },
         richMenuPublishAttempt: {
           create: async (args: any) => ({ id: `att-${args.data.lineOfficialAccountId}`, ...args.data }),
@@ -872,6 +878,90 @@ test("RichMenuService.createBulkPublishJob: enforces max targets limit and creat
   assert.equal(jobRes.id, "job-100");
   assert.equal(jobRes.status, "QUEUED");
   assert.equal(jobRes.totalCount, 3);
+});
+
+test("RichMenuService.createBulkPublishJob: automatically creates/upserts missing assignments in transaction", async () => {
+  const upsertedAssignments: any[] = [];
+  const createdAttempts: any[] = [];
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tpl-1",
+        name: "Auto Assign Menu",
+        version: 1,
+        imageUrl: "https://lineoppo.click/messages/media/public?key=line-media%2Foutbound%2Frich-menu%2Fimg.jpg&expires=999&signature=sig",
+        assignments: [], // Notice: NO pre-existing assignments!
+      }),
+    },
+    lineOfficialAccount: {
+      findMany: async () => [
+        { id: "oa-unassigned-1", name: "OA 1", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1", store: { id: "s-1", name: "Store 1" } },
+        { id: "oa-unassigned-2", name: "OA 2", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2", store: { id: "s-2", name: "Store 2" } },
+      ],
+    },
+    $transaction: async (fn: any) => {
+      return fn({
+        richMenuPublishJob: {
+          create: async (args: any) => ({ id: "job-auto-1", ...args.data }),
+        },
+        richMenuStoreAssignment: {
+          upsert: async (args: any) => {
+            const asgn = {
+              id: `asgn-${args.where.templateId_lineOfficialAccountId.lineOfficialAccountId}`,
+              ...args.create,
+            };
+            upsertedAssignments.push(asgn);
+            return asgn;
+          },
+        },
+        richMenuPublishAttempt: {
+          create: async (args: any) => {
+            createdAttempts.push(args.data);
+            return { id: `att-${args.data.lineOfficialAccountId}`, ...args.data };
+          },
+        },
+      });
+    },
+    richMenuPublishJob: {
+      findUnique: async () => ({
+        id: "job-auto-1",
+        templateId: "tpl-1",
+        templateVersion: 1,
+        status: "QUEUED",
+        totalCount: 2,
+        pendingCount: 2,
+        processingCount: 0,
+        publishedCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        cancelledCount: 0,
+        createdByUserId: "admin-1",
+        startedAt: null,
+        completedAt: null,
+        cancelRequestedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        attempts: [],
+      }),
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, {} as any, {} as any);
+
+  const jobRes = await service.createBulkPublishJob(
+    "tpl-1",
+    { lineOfficialAccountIds: ["oa-unassigned-1", "oa-unassigned-2"] },
+    { id: "admin-1" } as any,
+  );
+
+  assert.equal(jobRes.id, "job-auto-1");
+  assert.equal(upsertedAssignments.length, 2);
+  assert.equal(upsertedAssignments[0].lineOfficialAccountId, "oa-unassigned-1");
+  assert.equal(upsertedAssignments[1].lineOfficialAccountId, "oa-unassigned-2");
+  assert.equal(createdAttempts.length, 2);
+  assert.equal(createdAttempts[0].assignmentId, "asgn-oa-unassigned-1");
+  assert.equal(createdAttempts[1].assignmentId, "asgn-oa-unassigned-2");
 });
 
 test("RichMenuService.publishOneStore: skips attempt if template version changed", async () => {
@@ -1076,14 +1166,20 @@ test("RichMenuService.retryFailedJobAttempts: creates new job only for failed or
     },
     lineOfficialAccount: {
       findMany: async () => [
-        { id: "oa-failed-1", name: "OA Fail", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1" },
-        { id: "oa-skipped-2", name: "OA Skip", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2" },
+        { id: "oa-failed-1", name: "OA Fail", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1", store: { id: "s-fail", name: "Store Fail" } },
+        { id: "oa-skipped-2", name: "OA Skip", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2", store: { id: "s-skip", name: "Store Skip" } },
       ],
     },
     $transaction: async (fn: any) => {
       return fn({
         richMenuPublishJob: {
           create: async (args: any) => ({ id: "job-new-retry", ...args.data }),
+        },
+        richMenuStoreAssignment: {
+          upsert: async (args: any) => ({
+            id: `asgn-${args.where.templateId_lineOfficialAccountId.lineOfficialAccountId}`,
+            ...args.create,
+          }),
         },
         richMenuPublishAttempt: {
           create: async (args: any) => {

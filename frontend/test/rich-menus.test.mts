@@ -177,12 +177,13 @@ test("RichMenusView enables vertical page scrolling while preserving chats fixed
   assert.match(pageFile, /data-chat-message-scroll/);
 });
 
-test("RichMenusView enforces Phase 2B bulk publishing rules and modals", () => {
+test("RichMenusView enforces simplified single-checkbox store selection and unified publishing rules", () => {
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
 
-  // Dual-checkbox paradigm: assignedOaIds + publishSelectedOaIds
-  assert.match(viewFile, /assignedOaIds/);
+  // Single-checkbox paradigm: publishSelectedOaIds
   assert.match(viewFile, /publishSelectedOaIds/);
+  assert.doesNotMatch(viewFile, /assignedOaIds/);
+  assert.doesNotMatch(viewFile, /handleSaveAssignments/);
   assert.match(viewFile, /isPublishEligible/);
 
   // Bulk publish and Rollback modals
@@ -198,11 +199,13 @@ test("RichMenusView enforces Phase 2B bulk publishing rules and modals", () => {
   assert.match(viewFile, /handleRetryFailedJob/);
   assert.match(viewFile, /capabilities/);
 
-  // Target stores table contains dual checkbox columns and Publish status column
-  assert.match(viewFile, /colAssignCheckbox/);
-  assert.match(viewFile, /colPublishCheckbox/);
+  // Target stores table contains single checkbox column and Publish status column
+  assert.match(viewFile, /colSelectCheckbox/);
+  assert.doesNotMatch(viewFile, /colAssignCheckbox/);
   assert.match(viewFile, /colPublishStatus/);
   assert.match(viewFile, /statusPublished/);
+  assert.match(viewFile, /statusCurrentVersionPublished/);
+  assert.match(viewFile, /statusHasNewVersion/);
   assert.match(viewFile, /statusFailed/);
   assert.match(viewFile, /statusSkipped/);
   assert.match(viewFile, /statusCancelled/);

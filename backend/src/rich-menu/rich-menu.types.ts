@@ -179,6 +179,8 @@ export type RichMenuStoreReadinessItem = {
   lastPublishError?: string | null;
   lastPublishErrorStage?: string | null;
   publishAttemptId?: string | null;
+  publishedTemplateVersion?: number | null;
+  isCurrentVersionPublished?: boolean;
 };
 
 export type RichMenuReadinessSummary = {

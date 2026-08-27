@@ -1,6 +1,31 @@
 # AI progress
 
-## Current task: Implement Rich Menu Phase 2B (Durable Multi-Store Bulk Publishing with Background Queue) (2026-08-27)
+## Current task: Simplify Rich Menu Target Stores UX to Single Checkbox (2026-08-27)
+
+- **Architecture & UX Simplification**:
+  - **Single Checkbox Selection Paradigm**:
+    - Replaced the dual-checkbox columns (`กำหนดให้ร้าน` and `เลือกเผยแพร่`) with a single, clear `[ ] เลือก` checkbox column.
+    - Removed manual store assignment UI, `[ บันทึกร้านที่เลือก ]` button, assignment save notices, and all manual assignment prerequisite steps from `/rich-menus`.
+    - Maintained one unified user-facing selection state: `publishSelectedOaIds`.
+  - **Internal Automatic Assignment**:
+    - Retained the `RichMenuStoreAssignment` Prisma database model and tables for audit, historical tracking, and backward compatibility.
+    - When creating a bulk publish job (or single canary publish), missing `RichMenuStoreAssignment` records are automatically created/upserted inside the database transaction before creating publish attempts.
+  - **Readiness & Selection Rules**:
+    - Checkbox enabled only for stores with `readinessStatus === "READY"` (evaluating template variables such as Google Maps URL).
+    - Stores already published for the exact current template version show `✓ เผยแพร่แล้ว` with checkbox disabled to prevent duplicate re-publishes. If template version changes, stores show `[มีเวอร์ชันใหม่]` and selection is re-enabled.
+  - **Unified Action Controls**:
+    - Added dynamic helper button `[ เลือกสูงสุด 5 ร้านที่พร้อมใช้งาน ]` respecting `maxTargets`.
+    - Added `[ ล้างการเลือก ]` button and selection count indicator (`เลือกแล้ว X / สูงสุด 5 ร้าน`).
+    - Unified publish button `[ เผยแพร่ร้านที่เลือก (N) ]` handling 1–5 stores seamlessly.
+    - Updated translations across Thai (`th`), English (`en`), and Simplified Chinese (`zh`).
+- **Verification & Test Results**:
+  - 1356 / 1356 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 441 / 441 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly across 27 routes (`npm run build` in `frontend/`).
+  - NestJS & Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with 0 whitespace errors.
+
+## Previous task: Implement Rich Menu Phase 2B (Durable Multi-Store Bulk Publishing with Background Queue) (2026-08-27)
 
 - **Architecture & Workflow**:
   - **Durable Bulk Publish Job & Queue Architecture**:

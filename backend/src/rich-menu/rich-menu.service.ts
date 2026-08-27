@@ -661,6 +661,8 @@ export class RichMenuService {
       let lastPublishError: string | null = null;
       let lastPublishErrorStage: string | null = null;
       let publishAttemptId: string | null = null;
+      let publishedTemplateVersion: number | null = null;
+      let isCurrentVersionPublished = false;
 
       if (latestAttempt) {
         publishStatus = latestAttempt.status;
@@ -669,6 +671,8 @@ export class RichMenuService {
         lastPublishError = latestAttempt.errorMessage;
         lastPublishErrorStage = latestAttempt.errorStage;
         publishAttemptId = latestAttempt.id;
+        publishedTemplateVersion = latestAttempt.templateVersion;
+        isCurrentVersionPublished = latestAttempt.status === RichMenuPublishStatus.PUBLISHED && latestAttempt.templateVersion === template.version;
       }
 
       return {
@@ -690,6 +694,8 @@ export class RichMenuService {
         lastPublishError,
         lastPublishErrorStage,
         publishAttemptId,
+        publishedTemplateVersion,
+        isCurrentVersionPublished,
       };
     });
 
@@ -770,9 +776,18 @@ export class RichMenuService {
       return this.recordSkippedAttempt(params, "Target LINE OA is not linked to a store");
     }
 
-    const assignment = template.assignments[0];
+    let assignment = template.assignments[0];
     if (!assignment) {
-      return this.recordSkippedAttempt(params, "Target store is not assigned to this template. Please save assignment first.");
+      assignment = await this.prisma.richMenuStoreAssignment.upsert({
+        where: {
+          templateId_lineOfficialAccountId: { templateId, lineOfficialAccountId },
+        },
+        create: {
+          templateId,
+          lineOfficialAccountId,
+        },
+        update: {},
+      });
     }
 
     // 3. Live Dynamic Store Master Variable Resolution
@@ -1201,9 +1216,7 @@ export class RichMenuService {
     const template = await this.prisma.richMenuTemplate.findUnique({
       where: { id: templateId },
       include: {
-        assignments: {
-          where: { lineOfficialAccountId: { in: requestedIds } },
-        },
+        assignments: true,
       },
     });
 
@@ -1215,14 +1228,16 @@ export class RichMenuService {
       throw new BadRequestException("Cannot publish: template has no image uploaded");
     }
 
-    const assignedSet = new Set(template.assignments.map((a) => a.lineOfficialAccountId));
-    for (const oaId of requestedIds) {
-      if (!assignedSet.has(oaId)) {
-        throw new BadRequestException(`Store OA '${oaId}' is not assigned to this template. Please save assignment first.`);
-      }
+    // Extract template variable requirements
+    const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
+    const usedVarsSet = new Set<string>();
+    for (const area of areas) {
+      const vars = extractTemplateVariables(area.actionData);
+      vars.forEach((v) => usedVarsSet.add(v));
     }
+    const requiresGoogleMaps = usedVarsSet.has("store.googleMapsUrl") || usedVarsSet.has("googleMapsUrl");
 
-    // Verify OAs are active STORE accounts
+    // Verify OAs are active STORE accounts and satisfy template readiness
     const storeOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
         id: { in: requestedIds },
@@ -1232,7 +1247,13 @@ export class RichMenuService {
       },
     });
 
-    for (const oa of storeOas) {
+    const foundMap = new Map(storeOas.map((oa) => [oa.id, oa]));
+
+    for (const oaId of requestedIds) {
+      const oa = foundMap.get(oaId);
+      if (!oa) {
+        throw new BadRequestException(`Store OA '${oaId}' not found`);
+      }
       if (oa.accountType === "HEAD_OFFICE") {
         throw new BadRequestException(`Cannot publish to Head Office account '${oa.name}'`);
       }
@@ -1242,9 +1263,27 @@ export class RichMenuService {
       if (!oa.encryptedChannelAccessToken) {
         throw new BadRequestException(`Store OA '${oa.name}' has no channel access token`);
       }
+      if (!oa.store) {
+        throw new BadRequestException(`Store OA '${oa.name}' is not linked to a store`);
+      }
+
+      if (requiresGoogleMaps) {
+        const mapsUrl = oa.store.storeMaster?.googleMapsUrl;
+        const mapsReadiness = getStoreGoogleMapsReadiness(mapsUrl);
+        if (mapsReadiness.status === "MISSING") {
+          throw new BadRequestException(
+            `ร้านค้า '${oa.store.name}' ยังไม่พร้อมใช้งาน: ไม่มีลิงก์ Google Maps ใน Store Master (Store is missing Google Maps URL)`,
+          );
+        }
+        if (mapsReadiness.status === "INVALID") {
+          throw new BadRequestException(
+            `ร้านค้า '${oa.store.name}' ยังไม่พร้อมใช้งาน: ลิงก์ Google Maps ไม่ถูกต้อง (Invalid Google Maps URL)`,
+          );
+        }
+      }
     }
 
-    // Create Bulk Job + N Attempts in a single DB transaction
+    // Create Bulk Job + N Attempts in a single DB transaction with automatic assignment upsert
     const job = await this.prisma.$transaction(async (tx) => {
       const createdJob = await tx.richMenuPublishJob.create({
         data: {
@@ -1258,14 +1297,27 @@ export class RichMenuService {
       });
 
       for (const oaId of requestedIds) {
-        const assignment = template.assignments.find((a) => a.lineOfficialAccountId === oaId);
+        const assignment = await tx.richMenuStoreAssignment.upsert({
+          where: {
+            templateId_lineOfficialAccountId: {
+              templateId,
+              lineOfficialAccountId: oaId,
+            },
+          },
+          create: {
+            templateId,
+            lineOfficialAccountId: oaId,
+          },
+          update: {},
+        });
+
         await tx.richMenuPublishAttempt.create({
           data: {
             jobId: createdJob.id,
             templateId,
             templateVersion: template.version,
             lineOfficialAccountId: oaId,
-            assignmentId: assignment?.id || null,
+            assignmentId: assignment.id,
             status: RichMenuPublishStatus.PENDING,
             createdByUserId: user.id,
           },

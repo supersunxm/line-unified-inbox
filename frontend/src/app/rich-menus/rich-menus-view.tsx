@@ -206,10 +206,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [readinessFilter, setReadinessFilter] = useState<"all" | "ready" | "blocked">("all");
   const [storeSearch, setStoreSearch] = useState("");
-  const [assignedOaIds, setAssignedOaIds] = useState<Set<string>>(new Set());
   const [publishSelectedOaIds, setPublishSelectedOaIds] = useState<Set<string>>(new Set());
-  const [savingAssignments, setSavingAssignments] = useState(false);
-  const [assignmentsMessage, setAssignmentsMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Live Store Preview state
   const [previewStoreOaId, setPreviewStoreOaId] = useState<string>("");
@@ -341,7 +338,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setActiveAreaId("area-1");
     setReadinessData(null);
     setPreviewData(null);
-    setAssignedOaIds(new Set());
     setPublishSelectedOaIds(new Set());
     setActiveJob(null);
     setSaveMessage(null);
@@ -378,10 +374,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       const data = await api.getRichMenuReadiness(templateId);
       setReadinessData(data);
 
-      const assigned = new Set(data.items.filter((i) => i.selected).map((i) => i.lineOfficialAccountId));
-      setAssignedOaIds(assigned);
-
-      const defaultPreview = data.items.find((i) => i.selected && i.readinessStatus === "READY") || data.items.find((i) => i.readinessStatus === "READY") || data.items[0];
+      const defaultPreview = data.items.find((i) => i.readinessStatus === "READY") || data.items[0];
       if (defaultPreview) {
         setPreviewStoreOaId(defaultPreview.lineOfficialAccountId);
       }
@@ -519,39 +512,16 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     }
   };
 
-  // Target Store Assignment Checkbox helpers
-  const handleSelectAllReadyForAssignment = () => {
-    if (!readinessData) return;
-    const readyIds = readinessData.items
-      .filter((item) => item.readinessStatus === "READY")
-      .map((item) => item.lineOfficialAccountId);
-    setAssignedOaIds(new Set(readyIds));
-  };
-
-  const handleClearAssignments = () => {
-    setAssignedOaIds(new Set());
-  };
-
-  const handleToggleAssignment = (oaId: string, status: "READY" | "BLOCKED") => {
-    if (status === "BLOCKED") return;
-    setAssignedOaIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(oaId)) next.delete(oaId);
-      else next.add(oaId);
-      return next;
-    });
-  };
-
-  // Publish Selection Checkbox helpers
-  const handleTogglePublishSelection = (oaId: string, status: "READY" | "BLOCKED") => {
-    if (status === "BLOCKED") return;
+  // Target Store Publish Selection Checkbox helpers
+  const handleTogglePublishSelection = (oaId: string, status: "READY" | "BLOCKED", isCurrentVersionPublished?: boolean) => {
+    if (status === "BLOCKED" || isCurrentVersionPublished) return;
     setPublishSelectedOaIds((prev) => {
       const next = new Set(prev);
       if (next.has(oaId)) {
         next.delete(oaId);
       } else {
         if (next.size >= maxTargets) {
-          setAssignmentsMessage({ type: "error", text: t.exceededMaxTargets(maxTargets) });
+          setSaveMessage({ type: "error", text: t.exceededMaxTargets(maxTargets) });
           return prev;
         }
         next.add(oaId);
@@ -562,31 +532,15 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
   const handleSelectAllReadyForPublish = () => {
     if (!readinessData) return;
-    const readyAssignedIds = readinessData.items
-      .filter((item) => item.readinessStatus === "READY" && assignedOaIds.has(item.lineOfficialAccountId))
+    const readyIds = readinessData.items
+      .filter((item) => item.readinessStatus === "READY" && !item.isCurrentVersionPublished)
       .slice(0, maxTargets)
       .map((item) => item.lineOfficialAccountId);
-    setPublishSelectedOaIds(new Set(readyAssignedIds));
+    setPublishSelectedOaIds(new Set(readyIds));
   };
 
-  const handleSaveAssignments = async () => {
-    if (!selectedTemplateId || selectedTemplateId === "new") {
-      setAssignmentsMessage({ type: "error", text: t.saveTemplateFirst });
-      return;
-    }
-
-    setSavingAssignments(true);
-    setAssignmentsMessage(null);
-    try {
-      const res = await api.saveRichMenuAssignments(selectedTemplateId, Array.from(assignedOaIds));
-      setAssignmentsMessage({ type: "success", text: t.savedAssignmentsSuccess(res.assignedCount) });
-      await loadReadiness(selectedTemplateId);
-      await loadTemplates(selectedTemplateId);
-    } catch (err: any) {
-      setAssignmentsMessage({ type: "error", text: err.message || t.failedSaveAssignments });
-    } finally {
-      setSavingAssignments(false);
-    }
+  const handleClearSelection = () => {
+    setPublishSelectedOaIds(new Set());
   };
 
   // Phase 2B: Handle Bulk Publish Submission
@@ -747,7 +701,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 {publishing
                   ? t.publishingToLine
                   : publishSelectedOaIds.size > 0
-                  ? t.bulkPublishButton(publishSelectedOaIds.size)
+                  ? t.publishSelectedButton(publishSelectedOaIds.size)
                   : t.publishToLine}
               </button>
             )}
@@ -1460,30 +1414,9 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {t.readyCount}: <strong className="text-emerald-600">{readinessData.summary.ready}</strong> · {t.blockedCount}:{" "}
                   <strong className="text-rose-600">{readinessData.summary.blocked}</strong> · {t.selectedCount}:{" "}
-                  <strong className="text-gray-900 dark:text-gray-100">{assignedOaIds.size}</strong>
+                  <strong className="text-gray-900 dark:text-gray-100">{publishSelectedOaIds.size}</strong>
                 </p>
               )}
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              {assignmentsMessage && (
-                <span
-                  className={`text-xs font-medium ${
-                    assignmentsMessage.type === "success" ? "text-emerald-600" : "text-rose-600"
-                  }`}
-                >
-                  {assignmentsMessage.text}
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={handleSaveAssignments}
-                disabled={savingAssignments}
-                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-3.5 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)] transition disabled:opacity-50"
-              >
-                {savingAssignments ? t.savingAssignments : t.saveAssignedStores}
-              </button>
             </div>
           </div>
 
@@ -1527,23 +1460,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 onClick={handleSelectAllReadyForPublish}
                 className="font-semibold text-[#06C755] hover:underline"
               >
-                {`Select ${maxTargets} for publish`}
+                {t.selectAllReadyMax(maxTargets)}
               </button>
               <span className="text-gray-300">|</span>
               <button
                 type="button"
-                onClick={handleSelectAllReadyForAssignment}
-                className="font-semibold text-gray-600 dark:text-gray-400 hover:underline"
-              >
-                {t.selectAllReady}
-              </button>
-              <span className="text-gray-300">|</span>
-              <button
-                type="button"
-                onClick={() => {
-                  handleClearAssignments();
-                  setPublishSelectedOaIds(new Set());
-                }}
+                onClick={handleClearSelection}
                 className="text-gray-500 hover:text-gray-800 hover:underline"
               >
                 {t.clearSelection}
@@ -1551,13 +1473,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             </div>
           </div>
 
-          {/* Compact Store Table with Dual Checkboxes */}
+          {/* Compact Store Table with Single Checkbox */}
           <div className="overflow-x-auto rounded border border-[#e5e7eb] dark:border-[var(--app-border)]">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-[#fafafa] dark:bg-[var(--app-surface-subtle)] text-gray-500 font-semibold">
                 <tr>
-                  <th className="w-12 px-3 py-2.5 text-center">{t.colAssignCheckbox}</th>
-                  <th className="w-12 px-3 py-2.5 text-center">{t.colPublishCheckbox}</th>
+                  <th className="w-12 px-3 py-2.5 text-center">{t.colSelectCheckbox}</th>
                   <th className="w-20 px-3 py-2.5">{t.colStoreId}</th>
                   <th className="px-3 py-2.5">{t.colStoreName}</th>
                   <th className="px-3 py-2.5">{t.colLineOaName}</th>
@@ -1569,21 +1490,21 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               <tbody className="divide-y divide-[#f3f4f6] dark:divide-[var(--app-border-subtle)]">
                 {loadingReadiness ? (
                   <tr>
-                    <td colSpan={8} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
                       {t.evaluatingReadiness}
                     </td>
                   </tr>
                 ) : filteredStores.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-6 text-center text-xs text-gray-400">
+                    <td colSpan={7} className="p-6 text-center text-xs text-gray-400">
                       {t.noStoresFound}
                     </td>
                   </tr>
                 ) : (
                   filteredStores.map((store) => {
-                    const isAssigned = assignedOaIds.has(store.lineOfficialAccountId);
                     const isPublishSelected = publishSelectedOaIds.has(store.lineOfficialAccountId);
                     const isBlocked = store.readinessStatus === "BLOCKED";
+                    const isCurrentPublished = store.isCurrentVersionPublished;
 
                     return (
                       <tr
@@ -1593,30 +1514,29 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                             ? "bg-gray-50/50 dark:bg-gray-900/20 text-gray-400"
                             : isPublishSelected
                             ? "bg-[#06C755]/10 hover:bg-[#06C755]/15"
-                            : isAssigned
-                            ? "bg-[#06C755]/5 hover:bg-[#06C755]/10"
                             : "hover:bg-gray-50 dark:hover:bg-[var(--app-surface-hover)]"
                         }`}
                       >
-                        {/* Checkbox 1: Assign */}
-                        <td className="px-3 py-2.5 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isAssigned}
-                            disabled={isBlocked}
-                            onChange={() => handleToggleAssignment(store.lineOfficialAccountId, store.readinessStatus)}
-                            title={t.colAssignCheckbox}
-                            className="rounded border-gray-300 text-gray-700 focus:ring-gray-400 cursor-pointer disabled:cursor-not-allowed"
-                          />
-                        </td>
-                        {/* Checkbox 2: Publish */}
+                        {/* Single Checkbox: Select for Publish */}
                         <td className="px-3 py-2.5 text-center">
                           <input
                             type="checkbox"
                             checked={isPublishSelected}
-                            disabled={isBlocked || !isAssigned}
-                            onChange={() => handleTogglePublishSelection(store.lineOfficialAccountId, store.readinessStatus)}
-                            title={!isAssigned ? "Must be assigned first" : t.colPublishCheckbox}
+                            disabled={isBlocked || isCurrentPublished}
+                            onChange={() =>
+                              handleTogglePublishSelection(
+                                store.lineOfficialAccountId,
+                                store.readinessStatus,
+                                store.isCurrentVersionPublished,
+                              )
+                            }
+                            title={
+                              isBlocked
+                                ? t.statusBlocked
+                                : isCurrentPublished
+                                ? t.statusCurrentVersionPublished
+                                : t.colSelectCheckbox
+                            }
                             className="rounded border-gray-300 text-[#06C755] focus:ring-[#06C755] cursor-pointer disabled:cursor-not-allowed"
                           />
                         </td>
@@ -1654,11 +1574,34 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                         </td>
                         {/* Publish Status Column */}
                         <td className="px-3 py-2.5">
-                          {store.publishStatus === "PUBLISHED" ? (
+                          {store.isCurrentVersionPublished ? (
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                {t.statusPublished}
+                                {t.statusCurrentVersionPublished}
                               </span>
+                              {userRole === "ADMIN" && store.publishAttemptId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRollbackAttemptId(store.publishAttemptId!);
+                                    setIsRollbackModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-bold text-rose-600 hover:underline"
+                                >
+                                  {t.rollbackButton}
+                                </button>
+                              )}
+                            </div>
+                          ) : store.publishStatus === "PUBLISHED" ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {t.statusPublished}
+                                </span>
+                                <span className="text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                                  {t.statusHasNewVersion}
+                                </span>
+                              </div>
                               {userRole === "ADMIN" && store.publishAttemptId && (
                                 <button
                                   type="button"
@@ -1929,13 +1872,15 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
               <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <span>🚀</span>
-                <span>{t.bulkPublishModalTitle}</span>
+                <span>
+                  {publishTargetItems.length === 1 ? t.publishCanaryModalTitle : t.bulkPublishModalTitle}
+                </span>
               </h3>
             </div>
 
             <div className="p-6 space-y-4 text-xs">
               <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                {t.bulkPublishModalDesc}
+                {publishTargetItems.length === 1 ? t.publishCanaryModalDesc : t.bulkPublishModalDesc}
               </p>
 
               <div className="rounded bg-blue-50 dark:bg-blue-950/40 p-2.5 text-blue-700 dark:text-blue-300 font-medium">

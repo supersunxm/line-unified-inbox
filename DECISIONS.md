@@ -1,3 +1,9 @@
+# Rich Menu Single Checkbox UX & Automatic Store Assignment (2026-08-27)
+
+- **Single Checkbox Paradigm**: Replaced confusing dual-checkboxes (`กำหนดให้ร้าน` and `เลือกเผยแพร่`) with a single `[ ] เลือก` column in the Target Stores table. Users only decide which stores to publish to.
+- **Internal Automatic Assignment**: `RichMenuStoreAssignment` remains in the database for audit, history, and readiness tracking, but is automatically upserted during bulk job creation and canary publishing inside the database transaction, removing the need for manual store assignment saving in the UI.
+- **Template Version-Aware Publish Status**: Stores already published for the exact current template version show `✓ เผยแพร่แล้ว` with checkbox disabled to prevent duplicate re-publishes. If the template version increments, stores indicate `[มีเวอร์ชันใหม่]` and selection is re-enabled.
+
 # Rich Menu Phase 2B: Durable Multi-Store Bulk Publishing Architecture (2026-08-27)
 
 - **Job-Attempt Hierarchy**: Bulk publishing creates a parent `RichMenuPublishJob` linked to $N$ individual `RichMenuPublishAttempt` rows. This maintains per-store granular audit history, rollback capabilities, and individual retry records while providing an aggregate lifecycle (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED` / `COMPLETED_WITH_ERRORS` / `CANCELLED` / `FAILED`).
