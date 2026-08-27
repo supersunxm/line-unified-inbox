@@ -260,15 +260,15 @@ export class MonthlySummaryService {
     })));
     const earliestInbound = analyticsMessages.filter((message) => message.direction === MessageDirection.INBOUND).map((message) => message.sentAt).sort((a, b) => a.getTime() - b.getTime())[0];
     const comparisonAvailable = Boolean(earliestInbound && earliestInbound <= previous.start && previousVolume.incomingMessages > 0);
-    const statuses = await this.prisma.conversation.findMany({ where: conversationScope, select: { bmReplyStatus: true } });
-    const needReply = statuses.filter((conversation) => conversation.bmReplyStatus === "NOT_REPLIED" || conversation.bmReplyStatus === "NOTIFIED_BM").length;
-    const completed = statuses.filter((conversation) => conversation.bmReplyStatus === "REPLIED").length;
     const ambiguousOutboundExcluded = analyticsMessages.filter((message) => message.direction === MessageDirection.OUTBOUND && !message.senderUserId && intervalContains(message.sentAt, bounds.start, periodEnd)).length;
     return {
       period: { month, timezone: REPORTING_TIMEZONE, isCurrentMonth, throughDate: localDate(periodEnd.getTime() === bounds.end.getTime() ? new Date(periodEnd.getTime() - 1) : periodEnd), asOf: asOf.toISOString(), comparisonBasis: isCurrentMonth ? "same_day_range" : "full_month" },
       volume: periodVolume,
       response: periodResponse,
-      operational: { needReply, completed, asOf: asOf.toISOString() },
+      // Keep the legacy operational field for mobile API compatibility, but derive
+      // these monthly cards from the same response cycles used by responseMetrics.
+      // Conversation.bmReplyStatus is a live snapshot and must not affect history.
+      operational: { needReply: periodResponse.unanswered, completed: periodResponse.cyclesAnswered, asOf: asOf.toISOString() },
       comparison: comparisonAvailable
         ? {
             available: true,
