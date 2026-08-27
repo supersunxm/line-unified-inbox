@@ -2420,3 +2420,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Notifications/Firebase and realtime start after navigation and are never awaited by the startup state machine. The manual-only updater behavior from PR #63 remains intact, including the active unknown-source install-resume path.
 - Flutter analyze passes; the full Flutter suite passes 167/167; Android `assembleDebug` passes; backend full tests pass 1,349/1,349; Prisma generation and backend build pass. No production APK was built or released.
 - Next action: review and commit only the scoped startup/auth changes, push the feature branch, open a PR, and monitor CI without merging. A physical Android APK test is still required before calling the real-device startup issue fully verified.
+
+# Current task: Android 1.1.2+22 hotfix release (2026-08-27)
+
+- Created clean release worktree/branch `release/android-1.1.2` from latest `origin/main` at `c7c83ab907c8a9ff95d8b612bf35cf1888f42cea`, preserving unrelated edits in the shared checkout.
+- Release scope is limited to the merged manual-only update prompt behavior (PR #63), bounded startup restoration/provider work (PR #64), and the existing updater/install improvements. Android version/workflow gates are prepared for `1.1.2+22`; no product feature changes are included.
+- Next action: run the remaining backend/Prisma/frontend gates, trigger the permanent-key signed workflow, verify the resulting APK package/certificate/checksum, then add the exact APK and canonical release metadata before opening the PR. Do not merge or deploy.
