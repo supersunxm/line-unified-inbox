@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Generate implementation and compile fixes
+      - name: Generate implementation and compatibility fixes
         shell: bash
         run: |
           python <<'PY'
@@ -35,12 +35,7 @@ jobs:
               if line.startswith('      - name:'): break
               block.append(line[10:] if line.startswith('          ') else line)
           block=[line for line in block if 'npx --prefix backend prisma' not in line]
-          script='\n'.join(block)+'\n'
-          script=script.replace('            isValidGoogleMapsUrl,\n','')
-          script=script.replace('import { extractTemplateVariables, getStoreVariableValue, isValidGoogleMapsUrl, resolveTemplateVariables, type StoreVariableContext } from "../store-master/template-variable-resolver";', 'import { extractTemplateVariables, getStoreVariableValue, resolveTemplateVariables, type StoreVariableContext } from "../store-master/template-variable-resolver";\n          import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";')
-          marker='          } from "../store-master/template-variable-resolver";'
-          script=script.replace(marker, marker+'\n          import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";', 1)
-          Path('/tmp/greeting-impl.sh').write_text(script)
+          Path('/tmp/greeting-impl.sh').write_text('\n'.join(block)+'\n')
           PY
           bash /tmp/greeting-impl.sh
 
@@ -49,6 +44,11 @@ jobs:
 
           p=Path('backend/src/greeting/greeting.service.ts')
           s=p.read_text()
+          s=s.replace('    isValidGoogleMapsUrl,\n','')
+          resolver='} from "../store-master/template-variable-resolver";'
+          if resolver not in s:
+              raise SystemExit('template variable resolver import not found')
+          s=s.replace(resolver, resolver+'\nimport { isValidGoogleMapsUrl } from "../store-master/store-master.utils";', 1)
           s=s.replace('const where: Prisma.GreetingTemplateWhereInput = {};','const where: any = {};')
           s=s.replace('this.prisma.greetingTemplate','(this.prisma as any).greetingTemplate')
           s=s.replace('this.prisma.greetingStoreAssignment','(this.prisma as any).greetingStoreAssignment')
@@ -58,6 +58,7 @@ jobs:
           s=s.replace('const items = oas.map((oa) =>','const items = oas.map((oa: any) =>')
           s=s.replace('filter((item) =>','filter((item: any) =>')
           s=s.replace('map((item) =>','map((item: any) =>')
+          s=s.replace('messages.map((msg) =>','messages.map((msg: any) =>')
           s=s.replace('await this.prisma.$transaction(async (tx) => {','await this.prisma.$transaction(async (tx: any) => {')
           p.write_text(s)
 
@@ -69,11 +70,11 @@ jobs:
           s=s.replace('const refreshed = await this.profiles.refresh', 'const refreshed: any = await this.profiles.refresh')
           s=s.replace('const messages: unknown[] = [];','const messages: any[] = [];')
           old='''const result = await this.messaging.replyMessages(accessToken, replyToken, messages, {
-                  userId: lineUserIdHash,
-                  storeId: oa.store?.id,
-                  storeName: oa.store?.name,
-                  messageType: "GREETING",
-                });'''
+        userId: lineUserIdHash,
+        storeId: oa.store?.id,
+        storeName: oa.store?.name,
+        messageType: "GREETING",
+      });'''
           new='''const result = await this.messaging.replyMessages(accessToken, replyToken, messages);'''
           if old not in s:
               raise SystemExit('replyMessages 4-argument block not found')
@@ -87,29 +88,9 @@ jobs:
       - name: Validate and generate Prisma
         working-directory: backend
         run: npx prisma validate && npx prisma generate
-      - name: Backend build with captured log
-        id: backend_build
-        shell: bash
+      - name: Backend build
         working-directory: backend
-        run: |
-          set +e
-          npm run build > ../greeting-backend-build.log 2>&1
-          code=$?
-          cat ../greeting-backend-build.log
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Commit backend build failure log
-        if: steps.backend_build.outputs.exit_code != '0'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add greeting-backend-build.log
-          git commit -m "chore: capture greeting backend build failure"
-          git push origin HEAD:chatgpt/greeting-manager
-      - name: Fail when backend build failed
-        if: steps.backend_build.outputs.exit_code != '0'
-        run: exit 1
+        run: npm run build
       - name: Backend tests
         working-directory: backend
         run: npm test
@@ -130,6 +111,6 @@ jobs:
           rm -f .github/workflows/chatgpt-greeting-manager.yml .github/workflows/chatgpt-greeting-manager-v2.yml .github/workflows/chatgpt-greeting-manager-v3.yml .github/workflows/chatgpt-greeting-manager-v4.yml .github/workflows/chatgpt-greeting-manager-v5.yml .github/workflows/chatgpt-greeting-manager-v6.yml .github/workflows/chatgpt-greeting-manager-v7.yml .github/workflows/chatgpt-greeting-manager-v8.yml greeting-backend-build.log greeting-backend-test.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend frontend .github/workflows greeting-backend-build.log greeting-backend-test.log
+          git add -A backend frontend .github/workflows
           git commit -m "feat(greeting): add multi-store greeting manager"
           git push origin HEAD:chatgpt/greeting-manager
