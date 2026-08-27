@@ -360,7 +360,7 @@ void main() {
           minimumSupportedBuildNumber: 4,
           forceUpdate: false,
           apkUrl:
-              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk',
+              'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
           apkSize: '59.5 MB',
           releaseNotes: [
             'แก้ไขระบบอัปเดตแอปภายในแอป',
@@ -417,7 +417,7 @@ void main() {
         minimumSupportedBuildNumber: 4,
         forceUpdate: false,
         apkUrl:
-            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk',
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.1-production.apk?sha=c4942a9ca1bc9b15bff9bc7408e8b2d535726d7a4946e2d4218df17cb6dc69e5',
       );
       await tester.pumpWidget(
         MaterialApp(
