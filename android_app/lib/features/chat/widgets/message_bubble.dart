@@ -27,11 +27,11 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // An outbound message is attributed only from its persisted sender
+    // payload. Do not substitute the currently logged-in user (or a generic
+    // store label) when the backend has no sender identity.
     final senderLabel = outbound
-        ? (message?.sender?.displayName ??
-            (message == null
-                ? appLocalizations(context).you
-                : appLocalizations(context).store))
+        ? message?.sender?.displayName
         : appLocalizations(context).customer;
     final footerText = footer?.trim();
     final isFailed = footerText?.toLowerCase().contains('fail') ?? false;
@@ -72,16 +72,18 @@ class MessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                senderLabel,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: outbound
-                          ? AppColors.onPrimaryContainer
-                          : AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
+              if (senderLabel != null) ...[
+                Text(
+                  senderLabel,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: outbound
+                            ? AppColors.onPrimaryContainer
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+              ],
               DefaultTextStyle(
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                       color: AppColors.textPrimary,

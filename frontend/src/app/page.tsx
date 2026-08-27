@@ -12,6 +12,8 @@ import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStore
 import { formatRelativeTime } from "./relative-time";
 import { MessageImage } from "./message-image";
 import { MessageTranslationAction } from "./message-translation-action";
+import { getMessageSenderName } from "./message-sender";
+import { mapRealtimeMessage, subscribeToRealtimeEvents } from "./realtime";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { getStoreGoogleMapsReadiness, type GoogleMapsReadinessStatus } from "@/lib/template-variable-resolver";
@@ -2154,6 +2156,30 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     const poll = window.setInterval(() => void load(), 12_000);
     return () => { active = false; window.clearInterval(poll); };
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!authUser || !selectedConversationId) return;
+    return subscribeToRealtimeEvents((event) => {
+      if (event.conversationId !== selectedConversationId || !event.message) return;
+      const incoming = mapRealtimeMessage(event.message);
+      if (event.type === "message.created") {
+        setChatHistory((current) => current.items.some((item) => item.id === incoming.id)
+          ? current
+          : { ...current, items: [...current.items, incoming], total: current.total + 1 });
+        setSelectedApiConversation((current) => current && current.id === selectedConversationId && !current.messages.some((item) => item.id === incoming.id)
+          ? { ...current, messages: [...current.messages, incoming] }
+          : current);
+        return;
+      }
+      setChatHistory((current) => ({
+        ...current,
+        items: current.items.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item),
+      }));
+      setSelectedApiConversation((current) => current && current.id === selectedConversationId
+        ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }
+        : current);
+    });
+  }, [authUser, selectedConversationId]);
 
   useEffect(() => {
     let active = true;
@@ -4524,7 +4550,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         </div>
                         <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
                           {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
-                          {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                          {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; const senderName = getMessageSenderName(message); return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{senderName && <p data-message-sender className="mb-1 text-[11px] font-semibold text-[var(--app-text-secondary)]">{senderName}</p>}{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
                           {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">{text.noMessages}</p>}
                           <div ref={chatEndRef} />
                         </div>

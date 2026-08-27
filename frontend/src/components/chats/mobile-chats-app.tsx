@@ -10,6 +10,8 @@ import type {
   ConversationMessagesResponse,
 } from "@/types/api";
 import { MessageImage } from "@/app/message-image";
+import { getMessageSenderName } from "@/app/message-sender";
+import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
 import { formatRelativeTime } from "@/app/relative-time";
 import { openLineOaManager } from "@/app/line-oa-manager";
 
@@ -206,6 +208,25 @@ export function MobileChatsApp() {
       .finally(() => { if (active) setAuthChecked(true); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user || !selected?.id) return;
+    return subscribeToRealtimeEvents((event) => {
+      if (event.conversationId !== selected.id || !event.message) return;
+      const incoming = mapRealtimeMessage(event.message);
+      if (event.type === "message.created") {
+        setMessages((current) => current.items.some((item) => item.id === incoming.id)
+          ? current
+          : { ...current, items: [...current.items, incoming], total: current.total + 1 });
+        setSelected((current) => current && !current.messages.some((item) => item.id === incoming.id)
+          ? { ...current, messages: [...current.messages, incoming] }
+          : current);
+        return;
+      }
+      setMessages((current) => ({ ...current, items: current.items.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }));
+      setSelected((current) => current ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) } : current);
+    });
+  }, [selected?.id, user]);
 
   const loadList = useCallback(async () => {
     if (!user) return;
@@ -501,6 +522,7 @@ export function MobileChatsApp() {
                   const previous = messages.items[index - 1];
                   const showDate = !previous || new Date(previous.sentAt).toDateString() !== new Date(message.sentAt).toDateString();
                   const inbound = message.direction === "INBOUND";
+                  const senderName = getMessageSenderName(message);
                   const translated = message.translatedThai;
                   const content = showOriginal || !translated ? message.originalText : translated;
                   return (
@@ -512,6 +534,7 @@ export function MobileChatsApp() {
                         <div className={`flex items-end gap-1.5 ${inbound ? "justify-start" : "justify-end"}`}>
                           {inbound && selected && <Avatar conversation={selected} size="sm" />}
                           <div className={`max-w-[84%] rounded-2xl px-3 py-2 shadow-sm ${inbound ? "rounded-bl-sm border border-[var(--app-border)] bg-[var(--app-surface)]" : "rounded-br-sm bg-[var(--app-accent)] text-white"}`}>
+                            {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${inbound ? "text-[var(--app-text-secondary)]" : "text-white/80"}`}>{senderName}</p>}
                             {message.messageType === "IMAGE" ? (
                               <MessageImage messageId={message.id} media={message.media} alt="รูปภาพจากลูกค้า" unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ" errorLabel="โหลดรูปภาพไม่สำเร็จ" retryLabel="ลองอีกครั้ง" />
                             ) : (

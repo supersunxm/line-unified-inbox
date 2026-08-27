@@ -13,6 +13,7 @@ import type { AuthUser } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { AuditLogService } from "./auth/audit-log.service";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
+import { RealtimeEventService } from "./realtime/realtime-event.service";
 
 const conversationBaseInclude = {
   customer: true,
@@ -26,17 +27,39 @@ const conversationBaseInclude = {
 } satisfies Prisma.ConversationInclude;
 export const conversationListInclude = {
   ...conversationBaseInclude,
-  messages: { orderBy: { sentAt: "desc" as const }, take: 1, include: { media: true } },
+  messages: { orderBy: { sentAt: "desc" as const }, take: 1, include: { media: true, sender: { select: { id: true, displayName: true } } } },
   notes: { orderBy: { createdAt: "desc" as const }, take: 1 },
   activityHistory: { orderBy: { createdAt: "desc" as const }, take: 1 },
 } satisfies Prisma.ConversationInclude;
 export const conversationDetailInclude = {
   ...conversationBaseInclude,
-  messages: { orderBy: { sentAt: "desc" as const }, include: { media: true } },
+  messages: { orderBy: { sentAt: "desc" as const }, include: { media: true, sender: { select: { id: true, displayName: true } } } },
   notes: { orderBy: { createdAt: "desc" as const } },
   activityHistory: { orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.ConversationInclude;
 type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conversationDetailInclude }>;
+
+/**
+ * Serialize the persisted author of a message without leaking User fields.
+ * The relation is preferred for the canonical current display name; the
+ * snapshot remains useful for historical rows created before the relation was
+ * populated. An outbound row with no author stays unattributed rather than
+ * being guessed as the current operator.
+ */
+export function resolveMessageSender(message: {
+  direction: MessageDirection;
+  senderUserId?: string | null;
+  senderDisplayName?: string | null;
+  sender?: { id: string; displayName: string | null } | null;
+}) {
+  if (message.direction !== MessageDirection.OUTBOUND) return null;
+  const displayName = message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
+  if (!message.senderUserId && !message.sender) return null;
+  return {
+    userId: message.senderUserId ?? message.sender?.id ?? null,
+    displayName: displayName ?? "Staff",
+  };
+}
 
 export function getReplyTokenAgeBucket(ageMs: number): string {
   if (ageMs < 30_000) return "< 30 seconds";
@@ -65,6 +88,7 @@ export class ConversationsService {
     private readonly media: MediaStorageService = undefined as unknown as MediaStorageService,
     private readonly storeAccess?: StoreAccessService,
     private readonly auditLog?: AuditLogService,
+    private readonly realtime?: RealtimeEventService,
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
@@ -91,15 +115,35 @@ export class ConversationsService {
     };
   }
 
-  private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
-    const { media, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
+  private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; sender?: { id: string; displayName: string | null } | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
+    const { media, sender: senderUser, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
     void _encToken;
     void _tokenRecv;
     void _tokenUsed;
-    const sender = safe.direction === MessageDirection.OUTBOUND
-      ? { userId: senderUserId ?? null, displayName: senderDisplayName ?? "Store" }
-      : null;
+    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser });
     return { ...safe, sender, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
+  }
+
+  private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null) {
+    if (!this.realtime) return;
+    this.realtime.publish({
+      type: "message.created",
+      version: 1,
+      conversationId: conversation.id,
+      storeId: conversation.storeId,
+      message: {
+        id: message.id,
+        direction: MessageDirection.OUTBOUND,
+        messageType: message.messageType,
+        text: message.originalText,
+        sentAt: message.sentAt.toISOString(),
+        sender: resolveMessageSender({ ...message, direction: MessageDirection.OUTBOUND }),
+        media: media
+          ? { processingStatus: media.processingStatus, mimeType: media.mimeType ?? null, fileSize: media.fileSize ?? null, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null }
+          : null,
+      },
+      conversation: { id: conversation.id, latestMessageAt: message.sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
+    });
   }
 
   async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null, accountType: "STORE" | "HEAD_OFFICE" = "STORE") {
@@ -516,7 +560,7 @@ export class ConversationsService {
     const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
     const total = await this.prisma.message.count({ where: { conversationId: id } });
-    const items = await this.prisma.message.findMany({ where: { conversationId: id }, include: { media: true }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
+    const items = await this.prisma.message.findMany({ where: { conversationId: id }, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
     return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
@@ -693,6 +737,7 @@ export class ConversationsService {
         });
         return created;
       });
+      this.publishOutboundMessage(conversation, message);
       return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -808,6 +853,7 @@ export class ConversationsService {
         await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
         return message;
       });
+      this.publishOutboundMessage(conversation, created, { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size });
       return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
