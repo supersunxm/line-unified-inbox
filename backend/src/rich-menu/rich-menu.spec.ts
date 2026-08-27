@@ -1618,3 +1618,69 @@ test("RichMenuService.getStoreCurrentState: derives accurate PUBLISHED, NO_MESSA
   const state3 = await service.getStoreCurrentState("oa-1");
   assert.equal(state3.state, "OTHER_OR_MANAGER");
 });
+
+
+test("RichMenuService.evaluateReadiness separates current assignment from historical publish attempts after clear default", async () => {
+  const now = new Date();
+  let assignments: Array<{ lineOfficialAccountId: string }> = [];
+
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tmpl-1",
+        name: "Promotion Menu",
+        areasJson: [],
+        version: 3,
+        assignments,
+      }),
+    },
+    lineOfficialAccount: {
+      findMany: async () => [
+        {
+          id: "oa-central-bangna",
+          name: "OPPO Central Bangna",
+          store: {
+            id: "store-865",
+            name: "OBS Central Bangna By OPPO",
+            area: "Bangkok",
+            region: null,
+            storeMaster: {
+              externalStoreId: "865",
+              accountName: "OPPO Central Bangna",
+              googleMapsUrl: null,
+              province: "Bangkok",
+            },
+          },
+          richMenuPublishAttempts: [
+            {
+              id: "attempt-old-published",
+              status: "PUBLISHED",
+              lineRichMenuId: "richmenu-old-123",
+              completedAt: now,
+              updatedAt: now,
+              errorMessage: null,
+              errorStage: null,
+              templateVersion: 3,
+            },
+          ],
+        },
+      ],
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any);
+
+  const afterClear = await service.evaluateReadiness("tmpl-1");
+  assert.equal(afterClear.items[0].selected, false);
+  assert.equal(afterClear.items[0].publishStatus, "NOT_PUBLISHED");
+  assert.equal(afterClear.items[0].publishedRichMenuId, null);
+  assert.equal(afterClear.items[0].publishAttemptId, null);
+  assert.equal(afterClear.items[0].isCurrentVersionPublished, false);
+
+  assignments = [{ lineOfficialAccountId: "oa-central-bangna" }];
+  const currentlyAssigned = await service.evaluateReadiness("tmpl-1");
+  assert.equal(currentlyAssigned.items[0].publishStatus, "PUBLISHED");
+  assert.equal(currentlyAssigned.items[0].publishedRichMenuId, "richmenu-old-123");
+  assert.equal(currentlyAssigned.items[0].publishAttemptId, "attempt-old-published");
+  assert.equal(currentlyAssigned.items[0].isCurrentVersionPublished, true);
+});
