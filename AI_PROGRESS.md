@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: Full Multilingual Support on /rich-menus (2026-08-27)
+## Current task: Match LINE OA Template Presets (12 Official-Style Presets) (2026-08-27)
+
+- **12 Canonical LINE OA Template Presets**:
+  - Implemented 7 Large layouts (2500x1686 canonical canvas: `LARGE_6`, `LARGE_4`, `LARGE_TOP_1_BOTTOM_3`, `LARGE_LEFT_1_RIGHT_2`, `LARGE_2_ROWS`, `LARGE_2_COLS`, `LARGE_1`).
+  - Implemented 5 Compact layouts (2500x843 canonical canvas: `COMPACT_3`, `COMPACT_LEFT_SMALL`, `COMPACT_LEFT_LARGE`, `COMPACT_2`, `COMPACT_1`).
+  - Maintained backward-compatibility for legacy presets (`GRID_6`, `GRID_4`, `GRID_3`) and custom coordinates (`CUSTOM`).
+- **Template Selector UI**:
+  - Expanded modal to match LINE OA Manager layout (`width: min(1080px, calc(100vw - 40px))`, `maxHeight: calc(100vh - 32px)`, `overflow-y-auto`).
+  - Organized into Large and Compact groups with localized dimensions and descriptions in Thai, English, and Chinese.
+  - Thumbnails rendered with crisp SVG dividers (`#b6babf`), aspect ratios, and LINE green `#06C755` selection styling.
+- **Verification & Test Results**:
+  - 1339 / 1339 backend tests passing (`npm test` in `backend/`).
+  - 438 / 438 frontend tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack build succeeded cleanly (`npm run build` in `frontend/`).
+  - Backend build succeeded cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean.
+
+## Previous task: Full Multilingual Support on /rich-menus (2026-08-27)
 
 - **Multilingual UI Dictionary Architecture**:
   - Implemented `RICH_MENU_I18N` in `frontend/src/app/rich-menus/rich-menu-i18n.ts` supporting Thai (`th`), English (`en`), and Chinese (`zh`).

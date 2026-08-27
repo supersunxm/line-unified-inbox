@@ -60,39 +60,61 @@ test("TopNavigation and AppSidebar contain Rich Menu Manager routes and icons", 
   assert.match(appSidebarFile, /name === "rich-menu"/);
 });
 
-test("RichMenusView supports multilingual dictionary across Thai, English, and Chinese", () => {
+test("Template selector modal contains 12 LINE-style presets organized in Large and Compact groups", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+
+  // 7 Large Presets
+  assert.match(viewFile, /"LARGE_6"/);
+  assert.match(viewFile, /"LARGE_4"/);
+  assert.match(viewFile, /"LARGE_TOP_1_BOTTOM_3"/);
+  assert.match(viewFile, /"LARGE_LEFT_1_RIGHT_2"/);
+  assert.match(viewFile, /"LARGE_2_ROWS"/);
+  assert.match(viewFile, /"LARGE_2_COLS"/);
+  assert.match(viewFile, /"LARGE_1"/);
+
+  // 5 Compact Presets
+  assert.match(viewFile, /"COMPACT_3"/);
+  assert.match(viewFile, /"COMPACT_LEFT_SMALL"/);
+  assert.match(viewFile, /"COMPACT_LEFT_LARGE"/);
+  assert.match(viewFile, /"COMPACT_2"/);
+  assert.match(viewFile, /"COMPACT_1"/);
+
+  // Backward compatibility
+  assert.match(viewFile, /GRID_6/);
+  assert.match(viewFile, /GRID_4/);
+  assert.match(viewFile, /GRID_3/);
+  assert.match(viewFile, /CUSTOM/);
+
+  // Dimension displays
+  assert.match(viewFile, /templateGroupLarge/);
+  assert.match(viewFile, /templateGroupLargeDims/);
+  assert.match(viewFile, /templateGroupCompact/);
+  assert.match(viewFile, /templateGroupCompactDims/);
+});
+
+test("RichMenusView supports multilingual dictionary across Thai, English, and Chinese for 12 presets", () => {
   // Thai
   assert.equal(RICH_MENU_I18N.th.pageTitle, "ริชเมนู");
   assert.equal(RICH_MENU_I18N.th.saveDraft, "บันทึกแบบร่าง");
-  assert.equal(RICH_MENU_I18N.th.mainSettings, "การตั้งค่าหลัก");
-  assert.equal(RICH_MENU_I18N.th.title, "ชื่อริชเมนู");
-  assert.equal(RICH_MENU_I18N.th.menuContent, "เนื้อหาเมนู");
-  assert.equal(RICH_MENU_I18N.th.preview, "ตัวอย่าง");
-  assert.equal(RICH_MENU_I18N.th.targetStores, "ร้านเป้าหมาย");
-  assert.equal(RICH_MENU_I18N.th.selectAllReady, "เลือกร้านที่พร้อมทั้งหมด");
-  assert.equal(RICH_MENU_I18N.th.missingGoogleMapsReason, "ไม่มีลิงก์ Google Maps");
+  assert.equal(RICH_MENU_I18N.th.selectTemplateTitle, "เลือกเทมเพลต");
+  assert.equal(RICH_MENU_I18N.th.templateGroupLarge, "ขนาดใหญ่");
+  assert.equal(RICH_MENU_I18N.th.templateGroupLargeDesc, "เมนูขนาดใหญ่ เหมาะสำหรับแสดงรายการเมนูจำนวนมาก");
+  assert.equal(RICH_MENU_I18N.th.templateGroupCompact, "แบบกะทัดรัด");
+  assert.equal(RICH_MENU_I18N.th.templateGroupCompactDesc, "เมนูขนาดเล็ก เหมาะสำหรับใช้งานร่วมกับพื้นที่แชท");
 
   // English
   assert.equal(RICH_MENU_I18N.en.pageTitle, "Rich Menu");
   assert.equal(RICH_MENU_I18N.en.saveDraft, "Save Draft");
-  assert.equal(RICH_MENU_I18N.en.mainSettings, "Main settings");
-  assert.equal(RICH_MENU_I18N.en.title, "Title");
-  assert.equal(RICH_MENU_I18N.en.menuContent, "Menu content");
-  assert.equal(RICH_MENU_I18N.en.preview, "Preview");
-  assert.equal(RICH_MENU_I18N.en.targetStores, "Target stores");
-  assert.equal(RICH_MENU_I18N.en.selectAllReady, "Select all ready");
-  assert.equal(RICH_MENU_I18N.en.missingGoogleMapsReason, "Missing Google Maps URL");
+  assert.equal(RICH_MENU_I18N.en.selectTemplateTitle, "Select a template");
+  assert.equal(RICH_MENU_I18N.en.templateGroupLarge, "Large");
+  assert.equal(RICH_MENU_I18N.en.templateGroupCompact, "Compact");
 
   // Chinese
   assert.equal(RICH_MENU_I18N.zh.pageTitle, "丰富菜单");
   assert.equal(RICH_MENU_I18N.zh.saveDraft, "保存草稿");
-  assert.equal(RICH_MENU_I18N.zh.mainSettings, "主要设置");
-  assert.equal(RICH_MENU_I18N.zh.title, "菜单名称");
-  assert.equal(RICH_MENU_I18N.zh.menuContent, "菜单内容");
-  assert.equal(RICH_MENU_I18N.zh.preview, "预览");
-  assert.equal(RICH_MENU_I18N.zh.targetStores, "目标门店");
-  assert.equal(RICH_MENU_I18N.zh.selectAllReady, "选择全部可用门店");
-  assert.equal(RICH_MENU_I18N.zh.missingGoogleMapsReason, "缺少 Google Maps 链接");
+  assert.equal(RICH_MENU_I18N.zh.selectTemplateTitle, "选择模板");
+  assert.equal(RICH_MENU_I18N.zh.templateGroupLarge, "大型");
+  assert.equal(RICH_MENU_I18N.zh.templateGroupCompact, "紧凑型");
 
   // Structural & variable placeholders unchanged across languages
   const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");

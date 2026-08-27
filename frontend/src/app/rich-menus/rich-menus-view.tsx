@@ -18,46 +18,123 @@ interface RichMenusViewProps {
 }
 
 const PRESET_DIMENSIONS: Record<RichMenuCanvasPreset, { width: number; height: number }> = {
+  LARGE_6: { width: 2500, height: 1686 },
+  LARGE_4: { width: 2500, height: 1686 },
+  LARGE_TOP_1_BOTTOM_3: { width: 2500, height: 1686 },
+  LARGE_LEFT_1_RIGHT_2: { width: 2500, height: 1686 },
+  LARGE_2_ROWS: { width: 2500, height: 1686 },
+  LARGE_2_COLS: { width: 2500, height: 1686 },
+  LARGE_1: { width: 2500, height: 1686 },
+
+  COMPACT_3: { width: 2500, height: 843 },
+  COMPACT_LEFT_SMALL: { width: 2500, height: 843 },
+  COMPACT_LEFT_LARGE: { width: 2500, height: 843 },
+  COMPACT_2: { width: 2500, height: 843 },
+  COMPACT_1: { width: 2500, height: 843 },
+
   GRID_6: { width: 2500, height: 1686 },
   GRID_4: { width: 2500, height: 1686 },
   GRID_3: { width: 2500, height: 843 },
   CUSTOM: { width: 2500, height: 1686 },
 };
 
+const LARGE_PRESETS: RichMenuCanvasPreset[] = [
+  "LARGE_6",
+  "LARGE_4",
+  "LARGE_TOP_1_BOTTOM_3",
+  "LARGE_LEFT_1_RIGHT_2",
+  "LARGE_2_ROWS",
+  "LARGE_2_COLS",
+  "LARGE_1",
+];
+
+const COMPACT_PRESETS: RichMenuCanvasPreset[] = [
+  "COMPACT_3",
+  "COMPACT_LEFT_SMALL",
+  "COMPACT_LEFT_LARGE",
+  "COMPACT_2",
+  "COMPACT_1",
+];
+
 function generatePresetAreasClient(preset: RichMenuCanvasPreset, width = 2500, height = 1686): RichMenuArea[] {
-  if (preset === "GRID_6") {
-    const colW = Math.floor(width / 2);
-    const rowH = Math.floor(height / 3);
-    return [
-      { id: "area-1", bounds: { x: 0, y: 0, width: colW, height: rowH }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-      { id: "area-2", bounds: { x: colW, y: 0, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
-      { id: "area-3", bounds: { x: 0, y: rowH, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-      { id: "area-4", bounds: { x: colW, y: rowH, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
-      { id: "area-5", bounds: { x: 0, y: rowH * 2, width: colW, height: height - rowH * 2 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
-      { id: "area-6", bounds: { x: colW, y: rowH * 2, width: colW, height: height - rowH * 2 }, actionType: "MESSAGE", actionData: "สอบถามราคา", label: "Inquire Price" },
-    ];
+  switch (preset) {
+    case "LARGE_6":
+    case "GRID_6":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 833, y: 0, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        { id: "area-3", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        { id: "area-4", bounds: { x: 0, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
+        { id: "area-5", bounds: { x: 833, y: 843, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
+        { id: "area-6", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "สอบถามราคา", label: "Inquire Price" },
+      ];
+    case "LARGE_4":
+    case "GRID_4":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        { id: "area-3", bounds: { x: 0, y: 843, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
+        { id: "area-4", bounds: { x: 1250, y: 843, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
+      ];
+    case "LARGE_TOP_1_BOTTOM_3":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 0, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        { id: "area-3", bounds: { x: 833, y: 843, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        { id: "area-4", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
+      ];
+    case "LARGE_LEFT_1_RIGHT_2":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 1667, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        { id: "area-3", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+      ];
+    case "LARGE_2_ROWS":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 0, y: 843, width: 2500, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+      ];
+    case "LARGE_2_COLS":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 1686 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+      ];
+    case "LARGE_1":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+      ];
+    case "COMPACT_3":
+    case "GRID_3":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 833, y: 0, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        { id: "area-3", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+      ];
+    case "COMPACT_LEFT_SMALL":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 833, y: 0, width: 1667, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+      ];
+    case "COMPACT_LEFT_LARGE":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 1667, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+      ];
+    case "COMPACT_2":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
+      ];
+    case "COMPACT_1":
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+      ];
+    case "CUSTOM":
+    default:
+      return [
+        { id: "area-1", bounds: { x: 0, y: 0, width: width || 2500, height: height || 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Full Area" },
+      ];
   }
-  if (preset === "GRID_4") {
-    const colW = Math.floor(width / 2);
-    const rowH = Math.floor(height / 2);
-    return [
-      { id: "area-1", bounds: { x: 0, y: 0, width: colW, height: rowH }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-      { id: "area-2", bounds: { x: colW, y: 0, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-      { id: "area-3", bounds: { x: 0, y: rowH, width: colW, height: height - rowH }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
-      { id: "area-4", bounds: { x: colW, y: rowH, width: colW, height: height - rowH }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
-    ];
-  }
-  if (preset === "GRID_3") {
-    const colW = Math.floor(width / 3);
-    return [
-      { id: "area-1", bounds: { x: 0, y: 0, width: colW, height }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-      { id: "area-2", bounds: { x: colW, y: 0, width: colW, height }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-      { id: "area-3", bounds: { x: colW * 2, y: 0, width: width - colW * 2, height }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
-    ];
-  }
-  return [
-    { id: "area-1", bounds: { x: 0, y: 0, width, height }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Full Area" },
-  ];
 }
 
 function getAreaLetter(index: number): string {
@@ -70,10 +147,24 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   // Preset labels/descriptions localized
   const presetLabels: Record<RichMenuCanvasPreset, { label: string; description: string }> = useMemo(
     () => ({
-      GRID_6: { label: t.presetGrid6, description: t.presetGrid6Desc },
-      GRID_4: { label: t.presetGrid4, description: t.presetGrid4Desc },
-      GRID_3: { label: t.presetGrid3, description: t.presetGrid3Desc },
-      CUSTOM: { label: t.presetCustom, description: t.presetCustomDesc },
+      LARGE_6: { label: t.presetLarge6, description: "2500 × 1686 px" },
+      LARGE_4: { label: t.presetLarge4, description: "2500 × 1686 px" },
+      LARGE_TOP_1_BOTTOM_3: { label: t.presetLargeTop1Bottom3, description: "2500 × 1686 px" },
+      LARGE_LEFT_1_RIGHT_2: { label: t.presetLargeLeft1Right2, description: "2500 × 1686 px" },
+      LARGE_2_ROWS: { label: t.presetLarge2Rows, description: "2500 × 1686 px" },
+      LARGE_2_COLS: { label: t.presetLarge2Cols, description: "2500 × 1686 px" },
+      LARGE_1: { label: t.presetLarge1, description: "2500 × 1686 px" },
+
+      COMPACT_3: { label: t.presetCompact3, description: "2500 × 843 px" },
+      COMPACT_LEFT_SMALL: { label: t.presetCompactLeftSmall, description: "2500 × 843 px" },
+      COMPACT_LEFT_LARGE: { label: t.presetCompactLeftLarge, description: "2500 × 843 px" },
+      COMPACT_2: { label: t.presetCompact2, description: "2500 × 843 px" },
+      COMPACT_1: { label: t.presetCompact1, description: "2500 × 843 px" },
+
+      GRID_6: { label: t.presetLarge6, description: "2500 × 1686 px" },
+      GRID_4: { label: t.presetLarge4, description: "2500 × 1686 px" },
+      GRID_3: { label: t.presetCompact3, description: "2500 × 843 px" },
+      CUSTOM: { label: t.presetCustom, description: "Custom" },
     }),
     [t],
   );
@@ -97,7 +188,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [formPreset, setFormPreset] = useState<RichMenuCanvasPreset>("GRID_6");
+  const [formPreset, setFormPreset] = useState<RichMenuCanvasPreset>("LARGE_6");
   const [formWidth, setFormWidth] = useState(2500);
   const [formHeight, setFormHeight] = useState(1686);
   const [formChatBarText, setFormChatBarText] = useState("Menu");
@@ -110,7 +201,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
   // Template Change Modal
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
-  const [modalSelectedPreset, setModalSelectedPreset] = useState<RichMenuCanvasPreset>("GRID_6");
+  const [modalSelectedPreset, setModalSelectedPreset] = useState<RichMenuCanvasPreset>("LARGE_6");
 
   // Image Upload state
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -163,12 +254,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormName(language === "th" ? "ริชเมนูใหม่" : language === "zh" ? "新建丰富菜单" : "Untitled rich menu");
     setFormDescription("");
     setShowAdvancedSettings(false);
-    setFormPreset("GRID_6");
+    setFormPreset("LARGE_6");
     setFormWidth(2500);
     setFormHeight(1686);
     setFormChatBarText(t.menuBarDefault);
     setFormImageUrl(null);
-    const presetAreas = generatePresetAreasClient("GRID_6", 2500, 1686);
+    const presetAreas = generatePresetAreasClient("LARGE_6", 2500, 1686);
     setFormAreas(presetAreas);
     setActiveAreaId("area-1");
     setReadinessData(null);
@@ -1098,90 +1189,156 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
         </section>
       </div>
 
-      {/* 5. Select a Template Modal (LINE OA Manager Preset Selector) */}
+      {/* 5. Select a Template Modal (Full LINE OA Manager 12-Preset Template Set) */}
       {isPresetModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-[#e5e7eb] dark:border-[var(--app-border)] pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="rounded-lg border border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] shadow-2xl flex flex-col overflow-hidden"
+            style={{
+              width: "min(1080px, calc(100vw - 40px))",
+              maxHeight: "calc(100vh - 32px)",
+            }}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#e5e7eb] dark:border-[var(--app-border)] px-6 py-4">
               <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">{t.selectTemplateTitle}</h3>
               <button
                 type="button"
                 onClick={() => setIsPresetModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none p-1"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              {(["GRID_6", "GRID_4", "GRID_3", "CUSTOM"] as const).map((preset) => {
-                const conf = PRESET_DIMENSIONS[preset];
-                const labelInfo = presetLabels[preset];
-                const isSelected = modalSelectedPreset === preset;
-
-                return (
-                  <div
-                    key={preset}
-                    onClick={() => setModalSelectedPreset(preset)}
-                    className={`cursor-pointer rounded-lg border p-3 text-center transition flex flex-col items-center justify-between ${
-                      isSelected
-                        ? "border-[#06C755] bg-[#06C755]/5 ring-2 ring-[#06C755]/30"
-                        : "border-[#e5e7eb] dark:border-[var(--app-border)] hover:border-gray-300"
-                    }`}
-                  >
-                    {/* SVG Diagram */}
-                    <div className="h-20 w-full flex items-center justify-center mb-2">
-                      {preset === "GRID_6" && (
-                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
-                          <rect x="2" y="2" width="96" height="64" rx="2" className="stroke-gray-400" />
-                          <line x1="50" y1="2" x2="50" y2="66" />
-                          <line x1="2" y1="23" x2="98" y2="23" />
-                          <line x1="2" y1="45" x2="98" y2="45" />
-                        </svg>
-                      )}
-                      {preset === "GRID_4" && (
-                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
-                          <rect x="2" y="2" width="96" height="64" rx="2" className="stroke-gray-400" />
-                          <line x1="50" y1="2" x2="50" y2="66" />
-                          <line x1="2" y1="34" x2="98" y2="34" />
-                        </svg>
-                      )}
-                      {preset === "GRID_3" && (
-                        <svg viewBox="0 0 100 34" className="h-10 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
-                          <rect x="2" y="2" width="96" height="30" rx="2" className="stroke-gray-400" />
-                          <line x1="33" y1="2" x2="33" y2="32" />
-                          <line x1="66" y1="2" x2="66" y2="32" />
-                        </svg>
-                      )}
-                      {preset === "CUSTOM" && (
-                        <svg viewBox="0 0 100 68" className="h-16 w-24 stroke-[#06C755] fill-none" strokeWidth="1.5">
-                          <rect x="2" y="2" width="96" height="64" rx="2" strokeDasharray="3 3" className="stroke-gray-400" />
-                          <circle cx="50" cy="34" r="6" />
-                        </svg>
-                      )}
-                    </div>
-
-                    <div>
-                      <span className="block text-xs font-bold text-gray-900 dark:text-gray-100">{labelInfo.label}</span>
-                      <span className="block text-[10px] text-gray-400">{conf.width}x{conf.height}</span>
-                    </div>
+            {/* Modal Body / Template Gallery */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+              {/* Group 1: Large (7 templates) */}
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.templateGroupLarge}</h4>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{t.templateGroupLargeDims}</span>
                   </div>
-                );
-              })}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.templateGroupLargeDesc}</p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {LARGE_PRESETS.map((preset) => {
+                    const isSelected = modalSelectedPreset === preset;
+                    const dim = PRESET_DIMENSIONS[preset];
+                    const areas = generatePresetAreasClient(preset, dim.width, dim.height);
+
+                    return (
+                      <div
+                        key={preset}
+                        onClick={() => setModalSelectedPreset(preset)}
+                        onDoubleClick={() => handleApplyPreset(preset)}
+                        className={`cursor-pointer rounded transition p-2 flex flex-col items-center justify-center ${
+                          isSelected
+                            ? "border-2 border-[#06C755] bg-[#06C755]/5 shadow-xs"
+                            : "border border-[#d1d5db] dark:border-gray-700 bg-[#f8f9fa] dark:bg-gray-800 hover:border-gray-400"
+                        }`}
+                      >
+                        <div
+                          className="w-full relative rounded overflow-hidden shadow-2xs"
+                          style={{ aspectRatio: `${dim.width} / ${dim.height}` }}
+                        >
+                          <svg
+                            viewBox={`0 0 ${dim.width} ${dim.height}`}
+                            className="w-full h-full block bg-white dark:bg-gray-900"
+                          >
+                            {areas.map((area) => (
+                              <rect
+                                key={area.id}
+                                x={area.bounds.x}
+                                y={area.bounds.y}
+                                width={area.bounds.width}
+                                height={area.bounds.height}
+                                fill={isSelected ? "rgba(6, 199, 85, 0.08)" : "#ffffff"}
+                                stroke="#b6babf"
+                                strokeWidth="2"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            ))}
+                          </svg>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Group 2: Compact (5 templates) */}
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{t.templateGroupCompact}</h4>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{t.templateGroupCompactDims}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.templateGroupCompactDesc}</p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {COMPACT_PRESETS.map((preset) => {
+                    const isSelected = modalSelectedPreset === preset;
+                    const dim = PRESET_DIMENSIONS[preset];
+                    const areas = generatePresetAreasClient(preset, dim.width, dim.height);
+
+                    return (
+                      <div
+                        key={preset}
+                        onClick={() => setModalSelectedPreset(preset)}
+                        onDoubleClick={() => handleApplyPreset(preset)}
+                        className={`cursor-pointer rounded transition p-2 flex flex-col items-center justify-center ${
+                          isSelected
+                            ? "border-2 border-[#06C755] bg-[#06C755]/5 shadow-xs"
+                            : "border border-[#d1d5db] dark:border-gray-700 bg-[#f8f9fa] dark:bg-gray-800 hover:border-gray-400"
+                        }`}
+                      >
+                        <div
+                          className="w-full relative rounded overflow-hidden shadow-2xs"
+                          style={{ aspectRatio: `${dim.width} / ${dim.height}` }}
+                        >
+                          <svg
+                            viewBox={`0 0 ${dim.width} ${dim.height}`}
+                            className="w-full h-full block bg-white dark:bg-gray-900"
+                          >
+                            {areas.map((area) => (
+                              <rect
+                                key={area.id}
+                                x={area.bounds.x}
+                                y={area.bounds.y}
+                                width={area.bounds.width}
+                                height={area.bounds.height}
+                                fill={isSelected ? "rgba(6, 199, 85, 0.08)" : "#ffffff"}
+                                stroke="#b6babf"
+                                strokeWidth="2"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            ))}
+                          </svg>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-3 border-t border-[#e5e7eb] dark:border-[var(--app-border)]">
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#e5e7eb] dark:border-[var(--app-border)] bg-gray-50/80 dark:bg-gray-900/40">
               <button
                 type="button"
                 onClick={() => setIsPresetModalOpen(false)}
-                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] px-4 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50"
+                className="rounded border border-[#d1d5db] dark:border-[var(--app-border)] px-5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100"
               >
                 {t.cancel}
               </button>
               <button
                 type="button"
                 onClick={() => handleApplyPreset(modalSelectedPreset)}
-                className="rounded bg-[#06C755] hover:bg-[#05b34c] px-4 py-1.5 text-xs font-bold text-white shadow-xs"
+                className="rounded bg-[#06C755] hover:bg-[#05b34c] px-6 py-1.5 text-xs font-bold text-white shadow-xs transition"
               >
                 {t.apply}
               </button>

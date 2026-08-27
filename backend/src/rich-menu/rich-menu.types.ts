@@ -1,7 +1,23 @@
 import { BadRequestException } from "@nestjs/common";
 import { extractTemplateVariables } from "../store-master/template-variable-resolver";
 
-export type RichMenuCanvasPreset = "GRID_6" | "GRID_3" | "GRID_4" | "CUSTOM";
+export type RichMenuCanvasPreset =
+  | "LARGE_6"
+  | "LARGE_4"
+  | "LARGE_TOP_1_BOTTOM_3"
+  | "LARGE_LEFT_1_RIGHT_2"
+  | "LARGE_2_ROWS"
+  | "LARGE_2_COLS"
+  | "LARGE_1"
+  | "COMPACT_3"
+  | "COMPACT_LEFT_SMALL"
+  | "COMPACT_LEFT_LARGE"
+  | "COMPACT_2"
+  | "COMPACT_1"
+  | "GRID_6"
+  | "GRID_4"
+  | "GRID_3"
+  | "CUSTOM";
 
 export type RichMenuBounds = {
   x: number;
@@ -101,7 +117,8 @@ export type RichMenuPreviewResult = {
 };
 
 /**
- * Standard preset geometries for LINE Rich Menu canvas.
+ * Standard preset geometries for LINE Official Account Rich Menu canvas.
+ * Supports 7 Large layouts (2500x1686), 5 Compact layouts (2500x843), and backward-compatible legacy presets.
  */
 export function generatePresetAreas(
   preset: RichMenuCanvasPreset,
@@ -109,51 +126,158 @@ export function generatePresetAreas(
   height = 1686,
 ): { width: number; height: number; areas: RichMenuArea[] } {
   switch (preset) {
+    case "LARGE_6":
     case "GRID_6": {
       const w = 2500;
       const h = 1686;
-      const colW = Math.floor(w / 2); // 1250
-      const rowH = Math.floor(h / 3); // 562
       return {
         width: w,
         height: h,
         areas: [
-          { id: "area-1", bounds: { x: 0, y: 0, width: colW, height: rowH }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-          { id: "area-2", bounds: { x: colW, y: 0, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
-          { id: "area-3", bounds: { x: 0, y: rowH, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-          { id: "area-4", bounds: { x: colW, y: rowH, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
-          { id: "area-5", bounds: { x: 0, y: rowH * 2, width: colW, height: h - rowH * 2 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
-          { id: "area-6", bounds: { x: colW, y: rowH * 2, width: colW, height: h - rowH * 2 }, actionType: "MESSAGE", actionData: "สอบถามราคา", label: "Inquire Price" },
+          { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 833, y: 0, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+          { id: "area-3", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+          { id: "area-4", bounds: { x: 0, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
+          { id: "area-5", bounds: { x: 833, y: 843, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
+          { id: "area-6", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "สอบถามราคา", label: "Inquire Price" },
         ],
       };
     }
-    case "GRID_3": {
-      const w = 2500;
-      const h = 843;
-      const colW = Math.floor(w / 3); // 833
-      return {
-        width: w,
-        height: h,
-        areas: [
-          { id: "area-1", bounds: { x: 0, y: 0, width: colW, height: h }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-          { id: "area-2", bounds: { x: colW, y: 0, width: colW, height: h }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-          { id: "area-3", bounds: { x: colW * 2, y: 0, width: w - colW * 2, height: h }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
-        ],
-      };
-    }
+    case "LARGE_4":
     case "GRID_4": {
       const w = 2500;
       const h = 1686;
-      const colW = Math.floor(w / 2); // 1250
-      const rowH = Math.floor(h / 2); // 843
       return {
         width: w,
         height: h,
         areas: [
-          { id: "area-1", bounds: { x: 0, y: 0, width: colW, height: rowH }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
-          { id: "area-2", bounds: { x: colW, y: 0, width: colW, height: rowH }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
-          { id: "area-3", bounds: { x: 0, y: rowH, width: colW, height: h - rowH }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
-          { id: "area-4", bounds: { x: colW, y: rowH, width: colW, height: h - rowH }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
+          { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+          { id: "area-3", bounds: { x: 0, y: 843, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "สินค้าใหม่", label: "New Products" },
+          { id: "area-4", bounds: { x: 1250, y: 843, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
+        ],
+      };
+    }
+    case "LARGE_TOP_1_BOTTOM_3": {
+      const w = 2500;
+      const h = 1686;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 0, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+          { id: "area-3", bounds: { x: 833, y: 843, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+          { id: "area-4", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "บริการหลังการขาย", label: "After Sales" },
+        ],
+      };
+    }
+    case "LARGE_LEFT_1_RIGHT_2": {
+      const w = 2500;
+      const h = 1686;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 1667, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+          { id: "area-3", bounds: { x: 1667, y: 843, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        ],
+      };
+    }
+    case "LARGE_2_ROWS": {
+      const w = 2500;
+      const h = 1686;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 0, y: 843, width: 2500, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        ],
+      };
+    }
+    case "LARGE_2_COLS": {
+      const w = 2500;
+      const h = 1686;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 1686 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        ],
+      };
+    }
+    case "LARGE_1": {
+      const w = 2500;
+      const h = 1686;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 1686 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+        ],
+      };
+    }
+    case "COMPACT_3":
+    case "GRID_3": {
+      const w = 2500;
+      const h = 843;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 833, y: 0, width: 834, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+          { id: "area-3", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเจ้าหน้าที่", label: "Contact Staff" },
+        ],
+      };
+    }
+    case "COMPACT_LEFT_SMALL": {
+      const w = 2500;
+      const h = 843;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 833, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 833, y: 0, width: 1667, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        ],
+      };
+    }
+    case "COMPACT_LEFT_LARGE": {
+      const w = 2500;
+      const h = 843;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 1667, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 1667, y: 0, width: 833, height: 843 }, actionType: "MESSAGE", actionData: "โปรโมชั่น", label: "Promotions" },
+        ],
+      };
+    }
+    case "COMPACT_2": {
+      const w = 2500;
+      const h = 843;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
+          { id: "area-2", bounds: { x: 1250, y: 0, width: 1250, height: 843 }, actionType: "MESSAGE", actionData: "ติดต่อเรา", label: "Contact Us" },
+        ],
+      };
+    }
+    case "COMPACT_1": {
+      const w = 2500;
+      const h = 843;
+      return {
+        width: w,
+        height: h,
+        areas: [
+          { id: "area-1", bounds: { x: 0, y: 0, width: 2500, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}", label: "Store Location" },
         ],
       };
     }

@@ -1177,7 +1177,23 @@ export type StoreMasterSyncResult = {
   connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
 };
 
-export type RichMenuCanvasPreset = "GRID_6" | "GRID_3" | "GRID_4" | "CUSTOM";
+export type RichMenuCanvasPreset =
+  | "LARGE_6"
+  | "LARGE_4"
+  | "LARGE_TOP_1_BOTTOM_3"
+  | "LARGE_LEFT_1_RIGHT_2"
+  | "LARGE_2_ROWS"
+  | "LARGE_2_COLS"
+  | "LARGE_1"
+  | "COMPACT_3"
+  | "COMPACT_LEFT_SMALL"
+  | "COMPACT_LEFT_LARGE"
+  | "COMPACT_2"
+  | "COMPACT_1"
+  | "GRID_6"
+  | "GRID_4"
+  | "GRID_3"
+  | "CUSTOM";
 export type RichMenuActionType = "URI" | "MESSAGE";
 
 export type RichMenuArea = {

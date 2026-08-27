@@ -1,3 +1,9 @@
+# Canonical LINE Official Account Template Preset Geometry (2026-08-27)
+
+- **12-Preset LINE OA Geometry System**: Implemented the complete official LINE OA template system consisting of 7 Large layouts (2500x1686 canonical canvas) and 5 Compact layouts (2500x843 canonical canvas).
+- **Exact Tiling & Non-Overlap Invariance**: Every preset geometry partitions the exact canvas coordinate system without gaps or overlaps (`sum(area_w * area_h) == canvas_w * canvas_h`), while displaying equivalent LINE-supported resolutions (Large: 2500x1686, 1200x810, 800x540; Compact: 2500x843, 1200x405, 800x270).
+- **Backward Compatibility**: Legacy preset names (`GRID_6`, `GRID_4`, `GRID_3`) and `CUSTOM` continue to load and render correctly without breaking existing database templates.
+
 # Multilingual UI Architecture for /rich-menus (2026-08-27)
 
 - **Dedicated Dictionary Module (`rich-menu-i18n.ts`)**: Structured the complete copy dictionary `RICH_MENU_I18N` in a standalone `.ts` file supporting `th`, `en`, and `zh`. This pattern ensures clean separation of concerns, zero bundle overhead from third-party i18n libraries, and full compatibility with Node test runner ESM strip-types.

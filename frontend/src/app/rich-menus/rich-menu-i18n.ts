@@ -16,14 +16,31 @@ export const RICH_MENU_I18N = {
     changeTemplate: "เปลี่ยนเทมเพลต",
     apply: "นำไปใช้",
     cancel: "ยกเลิก",
-    presetGrid6: "6 ช่อง (6-grid)",
-    presetGrid4: "4 ช่อง (4-grid)",
-    presetGrid3: "3 ช่อง (3-grid)",
+
+    // Template groups & presets
+    templateGroupLarge: "ขนาดใหญ่",
+    templateGroupLargeDims: "(2500 × 1686 พิกเซล, 1200 × 810 พิกเซล, 800 × 540 พิกเซล)",
+    templateGroupLargeDesc: "เมนูขนาดใหญ่ เหมาะสำหรับแสดงรายการเมนูจำนวนมาก",
+
+    templateGroupCompact: "แบบกะทัดรัด",
+    templateGroupCompactDims: "(2500 × 843 พิกเซล, 1200 × 405 พิกเซล, 800 × 270 พิกเซล)",
+    templateGroupCompactDesc: "เมนูขนาดเล็ก เหมาะสำหรับใช้งานร่วมกับพื้นที่แชท",
+
+    presetLarge6: "6 ช่อง",
+    presetLarge4: "4 ช่อง",
+    presetLargeTop1Bottom3: "บน 1 ล่าง 3",
+    presetLargeLeft1Right2: "ซ้าย 1 ขวา 2",
+    presetLarge2Rows: "2 แถว",
+    presetLarge2Cols: "2 คอลัมน์",
+    presetLarge1: "1 ช่อง",
+
+    presetCompact3: "3 ช่อง",
+    presetCompactLeftSmall: "ซ้ายเล็ก ขวาใหญ่",
+    presetCompactLeftLarge: "ซ้ายใหญ่ ขวาเล็ก",
+    presetCompact2: "2 ช่อง",
+    presetCompact1: "1 ช่อง",
+
     presetCustom: "กำหนดเอง (Custom)",
-    presetGrid6Desc: "2 คอลัมน์ x 3 แถว (2500 x 1686 px)",
-    presetGrid4Desc: "2 คอลัมน์ x 2 แถว (2500 x 1686 px)",
-    presetGrid3Desc: "3 คอลัมน์ x 1 แถว แบนเนอร์กะทัดรัด (2500 x 843 px)",
-    presetCustomDesc: "กำหนดพิกัดพื้นที่เอง",
     areasCount: (count: number) => `${count} พื้นที่`,
 
     // Main settings
@@ -136,14 +153,31 @@ export const RICH_MENU_I18N = {
     changeTemplate: "Change",
     apply: "Apply",
     cancel: "Cancel",
-    presetGrid6: "6-grid",
-    presetGrid4: "4-grid",
-    presetGrid3: "3-grid",
+
+    // Template groups & presets
+    templateGroupLarge: "Large",
+    templateGroupLargeDims: "(2500 × 1686 px, 1200 × 810 px, 800 × 540 px)",
+    templateGroupLargeDesc: "Large menu, suitable for displaying a large number of menu items.",
+
+    templateGroupCompact: "Compact",
+    templateGroupCompactDims: "(2500 × 843 px, 1200 × 405 px, 800 × 270 px)",
+    templateGroupCompactDesc: "Compact menu, suitable for use together with the chat area.",
+
+    presetLarge6: "6-grid",
+    presetLarge4: "4-grid",
+    presetLargeTop1Bottom3: "Top 1, Bottom 3",
+    presetLargeLeft1Right2: "Left 1, Right 2",
+    presetLarge2Rows: "2 rows",
+    presetLarge2Cols: "2 columns",
+    presetLarge1: "1 full area",
+
+    presetCompact3: "3-grid",
+    presetCompactLeftSmall: "Left small, Right large",
+    presetCompactLeftLarge: "Left large, Right small",
+    presetCompact2: "2-grid",
+    presetCompact1: "1 full area",
+
     presetCustom: "Custom",
-    presetGrid6Desc: "2 columns x 3 rows (2500 x 1686 px)",
-    presetGrid4Desc: "2 columns x 2 rows (2500 x 1686 px)",
-    presetGrid3Desc: "3 columns x 1 row compact banner (2500 x 843 px)",
-    presetCustomDesc: "Custom canvas coordinates",
     areasCount: (count: number) => `${count} areas`,
 
     // Main settings
@@ -256,14 +290,31 @@ export const RICH_MENU_I18N = {
     changeTemplate: "更改模板",
     apply: "应用",
     cancel: "取消",
-    presetGrid6: "6 格 (6-grid)",
-    presetGrid4: "4 格 (4-grid)",
-    presetGrid3: "3 格 (3-grid)",
+
+    // Template groups & presets
+    templateGroupLarge: "大型",
+    templateGroupLargeDims: "(2500 × 1686 像素, 1200 × 810 像素, 800 × 540 像素)",
+    templateGroupLargeDesc: "大型菜单，适合展示较多的菜单项。",
+
+    templateGroupCompact: "紧凑型",
+    templateGroupCompactDims: "(2500 × 843 像素, 1200 × 405 像素, 800 × 270 像素)",
+    templateGroupCompactDesc: "紧凑型菜单，适合与聊天区域搭配使用。",
+
+    presetLarge6: "6 格",
+    presetLarge4: "4 格",
+    presetLargeTop1Bottom3: "上1 下3",
+    presetLargeLeft1Right2: "左1 右2",
+    presetLarge2Rows: "2 行",
+    presetLarge2Cols: "2 列",
+    presetLarge1: "1 个区域",
+
+    presetCompact3: "3 格",
+    presetCompactLeftSmall: "左小 右大",
+    presetCompactLeftLarge: "左大 右小",
+    presetCompact2: "2 格",
+    presetCompact1: "1 个区域",
+
     presetCustom: "自定义 (Custom)",
-    presetGrid6Desc: "2 列 x 3 行 (2500 x 1686 像素)",
-    presetGrid4Desc: "2 列 x 2 行 (2500 x 1686 像素)",
-    presetGrid3Desc: "3 列 x 1 行 横幅 (2500 x 843 像素)",
-    presetCustomDesc: "自定义坐标区域",
     areasCount: (count: number) => `${count} 个区域`,
 
     // Main settings
