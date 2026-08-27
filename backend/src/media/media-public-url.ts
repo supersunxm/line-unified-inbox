@@ -2,6 +2,29 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const defaultTtlSeconds = 7 * 24 * 60 * 60; // 7 days (604,800s)
 
+export const PUBLIC_MEDIA_PREFIXES = [
+  "line-media/outbound/",
+  "line-media/auto-response/",
+] as const;
+
+export function isAllowedPublicMediaObjectKey(key: string): boolean {
+  if (typeof key !== "string" || !key || key.length > 500) {
+    return false;
+  }
+  // Reject traversal attempts: .., \, leading /, or encoded path traversal
+  if (
+    key.includes("..") ||
+    key.includes("\\") ||
+    key.startsWith("/") ||
+    /%2e/i.test(key) ||
+    /%2f/i.test(key) ||
+    /%5c/i.test(key)
+  ) {
+    return false;
+  }
+  return PUBLIC_MEDIA_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
 function secret() {
   return process.env.LINE_CREDENTIAL_ENCRYPTION_KEY?.trim() || "development-media-url-secret";
 }
@@ -25,7 +48,7 @@ export function extractMediaObjectKey(url: string): string | null {
   try {
     const parsed = new URL(url);
     const key = parsed.searchParams.get("key");
-    if (key && (key.startsWith("line-media/") || key.startsWith("line-media/outbound/"))) {
+    if (key && isAllowedPublicMediaObjectKey(key)) {
       return key;
     }
   } catch {
@@ -35,7 +58,9 @@ export function extractMediaObjectKey(url: string): string | null {
 }
 
 export function verifyMediaPublicUrl(objectKey: string, expires: string, provided: string) {
-  if (!/^\d+$/.test(expires) || Number(expires) < Math.floor(Date.now() / 1000) || objectKey.length > 500) return false;
+  if (!isAllowedPublicMediaObjectKey(objectKey)) return false;
+  if (!/^\d+$/.test(expires) || Number(expires) < Math.floor(Date.now() / 1000)) return false;
+  if (typeof provided !== "string" || !provided) return false;
   const expected = Buffer.from(signature(objectKey, expires));
   const actual = Buffer.from(provided);
   return expected.length === actual.length && timingSafeEqual(expected, actual);

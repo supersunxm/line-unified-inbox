@@ -1,6 +1,23 @@
 # AI progress
 
-## Current task: Auto-response Manager Phase 2: Image + Multi-message Builder (2026-08-27)
+## Current task: Fix Signed Public Media Delivery for Auto-response Images (2026-08-27)
+
+- **Root Cause Confirmed**:
+  - `MediaController.publicMedia` previously enforced `if (!key.startsWith("line-media/outbound/") || !verifyMediaPublicUrl(key, expires, signature))` which rejected all signed Auto-response image URLs under `line-media/auto-response/`.
+- **Public Media Prefixes & Security Hardening**:
+  - Created centralized helper `isAllowedPublicMediaObjectKey(key)` in `media-public-url.ts` allowing:
+    - `line-media/outbound/`
+    - `line-media/auto-response/`
+  - Enforced strict validation rejecting traversal sequences (`..`, `\`, leading `/`, and URI-encoded traversal `%2e%2e`, `%2f`, `%5c`).
+  - Maintained cryptographic signature verification via `verifyMediaPublicUrl(key, expires, signature)` using timing-safe comparison and expiry check.
+  - Automatically resolved image `Content-Type` (`image/jpeg` or `image/png`) and set `Content-Disposition: inline`.
+- **Verification & Test Results**:
+  - 1,392 / 1,392 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 448 / 448 frontend unit tests passing (`npm test` in `frontend/`).
+  - Backend and frontend production builds succeeded cleanly.
+  - `git diff --check` clean.
+
+## Previous task: Auto-response Manager Phase 2: Image + Multi-message Builder (2026-08-27)
 
 - **Architecture & Technical Scope**:
   - **Multi-Message Sequence Builder**:
