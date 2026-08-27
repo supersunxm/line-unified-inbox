@@ -132,14 +132,15 @@ Widget app(FakeSummaryRepository repository) =>
     MaterialApp(home: SummaryPage(repository: repository));
 
 void main() {
-  testWidgets('summary tab loads incoming, Need Reply, and Completed metrics',
+  testWidgets('summary monthly activity shows only volume metrics',
       (tester) async {
     await tester.pumpWidget(app(FakeSummaryRepository()));
     await tester.pumpAndSettle();
     expect(find.text('Incoming Messages'), findsOneWidget);
     expect(find.text('12'), findsOneWidget);
-    expect(find.text('Need Reply'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Customer Conversations'), findsOneWidget);
+    expect(find.text('Need Reply'), findsNothing);
+    expect(find.text('Completed'), findsNothing);
   });
 
   testWidgets('summary shows loading state while request is pending',
@@ -190,7 +191,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Response rate'), findsOneWidget);
     expect(find.text('83%'), findsOneWidget);
+    expect(find.text('Median response time'), findsOneWidget);
+    expect(find.text('Average response time'), findsOneWidget);
     expect(find.text('80% · 8 responses'), findsOneWidget);
+    expect(find.text('Need Reply'), findsNothing);
+    expect(find.text('Completed'), findsNothing);
   });
 
   testWidgets('summary renders snapshot coverage and manual insights',

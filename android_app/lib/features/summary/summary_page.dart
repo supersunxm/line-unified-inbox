@@ -186,74 +186,52 @@ class _MetricGrid extends StatelessWidget {
   final MonthlySummary summary;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final width = (constraints.maxWidth - AppSpacing.md) / 2;
-          return Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              _MetricCard(
-                  width: width,
-                  label: appLocalizations(context).incomingMessages,
-                  value: _formatCount(context, summary.volume.incomingMessages),
-                  icon: Icons.markunread_outlined),
-              _MetricCard(
-                  width: width,
-                  label: appLocalizations(context).customerConversations,
-                  value: _formatCount(
-                      context, summary.volume.incomingConversations),
-                  icon: Icons.forum_outlined),
-              _MetricCard(
-                  width: width,
-                  label: appLocalizations(context).needReply,
-                  value: _formatCount(context, summary.operational.needReply),
-                  icon: Icons.priority_high,
-                  color: AppColors.warning),
-              _MetricCard(
-                  width: width,
-                  label: appLocalizations(context).completed,
-                  value: _formatCount(context, summary.operational.completed),
-                  icon: Icons.check_circle_outline,
-                  color: AppColors.success),
-            ],
-          );
-        },
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _MetricCard(
+                label: appLocalizations(context).incomingMessages,
+                value: _formatCount(context, summary.volume.incomingMessages),
+                icon: Icons.markunread_outlined),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _MetricCard(
+                label: appLocalizations(context).customerConversations,
+                value: _formatCount(
+                    context, summary.volume.incomingConversations),
+                icon: Icons.forum_outlined),
+          ),
+        ],
       );
 }
 
 class _MetricCard extends StatelessWidget {
   const _MetricCard(
-      {required this.width,
-      required this.label,
+      {required this.label,
       required this.value,
-      required this.icon,
-      this.color});
-  final double width;
+      required this.icon});
   final String label;
   final String value;
   final IconData icon;
-  final Color? color;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: width,
-        child: Card(
-          child: Padding(
-            padding: AppSpacing.card,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(icon, color: color ?? AppColors.primary),
-              const SizedBox(height: AppSpacing.md),
-              Text(value, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: AppSpacing.xs),
-              Text(label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.textSecondary)),
-            ]),
-          ),
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: AppSpacing.card,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, color: AppColors.primary),
+            const SizedBox(height: AppSpacing.md),
+            Text(value, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: AppSpacing.xs),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textSecondary)),
+          ]),
         ),
       );
 }

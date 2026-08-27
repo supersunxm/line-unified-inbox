@@ -2610,6 +2610,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Flutter analyze and full tests pass (167/167); backend tests pass (1349/1349), Prisma validate/generate/migrate deploy pass locally (including the additive release migration), backend build passes, and frontend tests/build pass (441/441). The isolated production frontend serves `/download`, `/download/history`, and the exact APK bytes/checksum successfully.
 - Release-only metadata, migration, APK, and fixture updates remain to be committed and pushed; then open the PR and monitor required CI without merging. Physical-device updater/startup verification remains explicitly required before declaring those real-device issues fully verified.
 
+# Current task: Remove operational reply cards from Android Summary (2026-08-27)
+
+- Started `feat/android-summary-remove-operational-cards` from latest `origin/main` `9ccfdd29b7041a03249eeed2cc8982eaafb1b71b`, which includes the merged monthly response-cycle backend fix.
+- Removed `รอตอบ`/`ตอบแล้ว` from the Summary monthly activity grid and kept only equal-width incoming-message and customer-conversation cards. The backend response-cycle calculation and `operational` compatibility fields remain unchanged for response-performance analytics; Inbox still uses live `bmReplyStatus`.
+- Summary tests now assert only the two volume cards render and response-rate/median/average/bucket metrics still render. Focused Summary tests pass, Flutter analyze/full tests pass (167/167), and Android `assembleDebug` passes. Existing Inbox status regressions remain covered by the full suite.
+- Next action: review/commit, push, open PR, and monitor CI without merging.
+
 # Current task: Monthly summary reply-cycle scoping (2026-08-27)
 
 - Started `feat/android-monthly-summary-reply-cycles` from latest `origin/main` `15e9451c52f94de091259fd49a9a44f5c04e3c88`.

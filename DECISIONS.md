@@ -1396,3 +1396,7 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Monthly `รอตอบ`/`ตอบแล้ว` retain the existing `operational` response shape for mobile compatibility, but are now aliases of `response.unanswered`/`response.cyclesAnswered` for the requested Bangkok month. The source of truth is the same cycle calculation used by response-performance.
 - A response cycle starts at the first inbound message after the previous qualifying BM/user outbound in a conversation; only outbound messages with a non-null `senderUserId` answer it. Cycles are attributed to their inbound start month, including replies that cross a month boundary. Current `Conversation.bmReplyStatus` remains exclusively an operational inbox snapshot and is not used for historical cards.
+
+# Android Summary card boundary (2026-08-27)
+
+- The Summary page intentionally exposes only monthly volume cards (`incomingMessages` and `incomingConversations`). Historical response-cycle counts stay available to the response-performance card, but are not labeled as operational `รอตอบ`/`ตอบแล้ว` on Summary. Inbox remains the sole surface for current `Conversation.bmReplyStatus` labels.
