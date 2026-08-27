@@ -1,0 +1,863 @@
+name: ChatGPT Greeting Manager
+
+on:
+  push:
+    branches:
+      - chatgpt/greeting-manager
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Implement Greeting Message Manager
+        shell: bash
+        run: |
+          mkdir -p backend/src/greeting backend/prisma/migrations/20260827103000_add_greeting_messages frontend/src/app/greeting-messages
+
+          cat > backend/src/greeting/greeting.types.ts <<'EOF'
+          import type { AutoResponseMessageBlock } from "../auto-response/auto-response.types";
+          import type { GreetingSendPolicy, GreetingTemplateStatus } from "@prisma/client";
+
+          export type GreetingMessageBlock = AutoResponseMessageBlock;
+          export type CreateGreetingTemplateDto = {
+            name: string;
+            description?: string | null;
+            sendPolicy?: GreetingSendPolicy;
+            messages?: GreetingMessageBlock[];
+          };
+          export type UpdateGreetingTemplateDto = Partial<CreateGreetingTemplateDto> & {
+            status?: GreetingTemplateStatus;
+          };
+          export type GreetingPreviewDto = {
+            lineOfficialAccountId?: string;
+            sampleUserDisplayName?: string;
+          };
+          export type GreetingAssignmentsDto = { lineOfficialAccountIds: string[] };
+          EOF
+
+          cat > backend/src/greeting/greeting.service.ts <<'EOF'
+          import {
+            BadRequestException,
+            Injectable,
+            NotFoundException,
+            Optional,
+            ServiceUnavailableException,
+          } from "@nestjs/common";
+          import { GreetingSendPolicy, GreetingTemplateStatus, Prisma } from "@prisma/client";
+          import { randomUUID } from "node:crypto";
+          import sharp from "sharp";
+          import { PrismaService } from "../prisma.service";
+          import { AuditLogService } from "../auth/audit-log.service";
+          import type { AuthUser } from "../auth/auth.guard";
+          import { MediaStorageService } from "../media/media-storage";
+          import { createMediaPublicUrl } from "../media/media-public-url";
+          import {
+            detectImageMime,
+            IMAGE_EXTENSIONS,
+            validateAutoResponseMessages,
+          } from "../auto-response/auto-response.utils";
+          import type { AutoResponseMessageBlock } from "../auto-response/auto-response.types";
+          import {
+            extractTemplateVariables,
+            getStoreVariableValue,
+            isValidGoogleMapsUrl,
+            resolveTemplateVariables,
+            type StoreVariableContext,
+          } from "../store-master/template-variable-resolver";
+          import type {
+            CreateGreetingTemplateDto,
+            GreetingAssignmentsDto,
+            GreetingMessageBlock,
+            GreetingPreviewDto,
+            UpdateGreetingTemplateDto,
+          } from "./greeting.types";
+
+          const USER_DISPLAY_NAME = "user.displayName";
+          const ACCOUNT_NAME = "account.name";
+
+          @Injectable()
+          export class GreetingService {
+            constructor(
+              private readonly prisma: PrismaService,
+              @Optional() private readonly auditLog?: AuditLogService,
+              @Optional() private readonly media?: MediaStorageService,
+            ) {}
+
+            private messagesFrom(template: { contentJson: unknown }): GreetingMessageBlock[] {
+              const json = template.contentJson as { messages?: GreetingMessageBlock[] } | null;
+              return Array.isArray(json?.messages) ? json!.messages! : [];
+            }
+
+            private enrich(messages: GreetingMessageBlock[]) {
+              return messages.map((message) => message.type === "IMAGE" ? {
+                ...message,
+                imageUrl: createMediaPublicUrl(message.mediaObjectKey),
+                previewUrl: createMediaPublicUrl(message.previewObjectKey || message.mediaObjectKey),
+              } : message);
+            }
+
+            private storeContext(oa: any): StoreVariableContext {
+              const store = oa.store;
+              const master = store?.storeMaster;
+              return {
+                id: store?.id,
+                name: store?.name,
+                storeName: store?.name || master?.storeName,
+                code: store?.code,
+                storeId: master?.externalStoreId || store?.code,
+                externalStoreId: master?.externalStoreId,
+                accountName: master?.accountName || oa.name,
+                province: master?.province || store?.area,
+                region: master?.region || store?.region,
+                lineId: master?.lineId,
+                lineOaLink: master?.lineOaLink,
+                lineManagerUrl: master?.lineManagerUrl,
+                tiktokUsername: master?.tiktokUsername,
+                tiktokProfileUrl: master?.tiktokProfileUrl,
+                googleMapsUrl: master?.googleMapsUrl,
+              };
+            }
+
+            private usedVariables(messages: GreetingMessageBlock[]) {
+              const vars = new Set<string>();
+              for (const message of messages) {
+                if (message.type !== "TEXT") continue;
+                extractTemplateVariables(message.textTemplate).forEach((item) => vars.add(item));
+              }
+              return [...vars];
+            }
+
+            private readiness(messages: GreetingMessageBlock[], store: StoreVariableContext) {
+              const missing: string[] = [];
+              for (const variable of this.usedVariables(messages)) {
+                if (variable === USER_DISPLAY_NAME || variable === ACCOUNT_NAME) continue;
+                const value = getStoreVariableValue(variable, store);
+                const prop = variable.startsWith("store.") ? variable.slice(6) : variable;
+                if (!value || (prop === "googleMapsUrl" && !isValidGoogleMapsUrl(value))) missing.push(variable);
+              }
+              return { ready: missing.length === 0, missingVariables: missing };
+            }
+
+            async uploadMedia(file: { buffer: Buffer; mimetype?: string; size?: number }) {
+              if (!file?.buffer?.length) throw new BadRequestException("Image file is required");
+              if (file.buffer.length > 10 * 1024 * 1024) throw new BadRequestException("Image must not exceed 10 MB");
+              const mime = detectImageMime(file.buffer);
+              if (!mime || !IMAGE_EXTENSIONS[mime]) throw new BadRequestException("รองรับเฉพาะไฟล์ JPG และ PNG");
+              if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
+
+              const ext = IMAGE_EXTENSIONS[mime];
+              const id = randomUUID();
+              const originalObjectKey = `line-media/greeting/${id}-original.${ext}`;
+              await this.media.put(originalObjectKey, file.buffer, mime);
+
+              const metadata = await sharp(file.buffer).metadata();
+              let previewMime: "image/jpeg" | "image/png" = mime;
+              let previewExt = ext;
+              let preview = mime === "image/jpeg"
+                ? await sharp(file.buffer).resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer()
+                : await sharp(file.buffer).resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true }).png({ compressionLevel: 8 }).toBuffer();
+              if (preview.length > 1024 * 1024) {
+                preview = await sharp(file.buffer).resize({ width: 900, height: 900, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+                previewMime = "image/jpeg";
+                previewExt = "jpg";
+              }
+              if (preview.length > 1024 * 1024) throw new BadRequestException("Preview image exceeds 1 MB");
+              const previewObjectKey = `line-media/greeting/${id}-preview.${previewExt}`;
+              await this.media.put(previewObjectKey, preview, previewMime);
+              return {
+                mediaObjectKey: originalObjectKey,
+                previewObjectKey,
+                imageUrl: createMediaPublicUrl(originalObjectKey),
+                previewUrl: createMediaPublicUrl(previewObjectKey),
+                mimeType: mime,
+                fileSize: file.buffer.length,
+                width: metadata.width,
+                height: metadata.height,
+              };
+            }
+
+            async listTemplates(query?: { status?: GreetingTemplateStatus; search?: string }) {
+              const where: Prisma.GreetingTemplateWhereInput = {};
+              where.status = query?.status || { not: GreetingTemplateStatus.ARCHIVED };
+              if (query?.search?.trim()) {
+                where.OR = [
+                  { name: { contains: query.search.trim(), mode: "insensitive" } },
+                  { description: { contains: query.search.trim(), mode: "insensitive" } },
+                ];
+              }
+              const templates = await this.prisma.greetingTemplate.findMany({
+                where,
+                include: { _count: { select: { assignments: true, executions: true } } },
+                orderBy: { updatedAt: "desc" },
+              });
+              return templates.map((template) => ({
+                ...template,
+                messages: this.enrich(this.messagesFrom(template)),
+                assignedStoresCount: template._count.assignments,
+                executionCount: template._count.executions,
+                _count: undefined,
+              }));
+            }
+
+            async getTemplate(id: string) {
+              const template = await this.prisma.greetingTemplate.findUnique({
+                where: { id },
+                include: { assignments: { select: { lineOfficialAccountId: true } }, _count: { select: { executions: true } } },
+              });
+              if (!template) throw new NotFoundException("Greeting template not found");
+              return {
+                ...template,
+                messages: this.enrich(this.messagesFrom(template)),
+                assignedLineOfficialAccountIds: template.assignments.map((item) => item.lineOfficialAccountId),
+                executionCount: template._count.executions,
+                assignments: undefined,
+                _count: undefined,
+              };
+            }
+
+            async createTemplate(dto: CreateGreetingTemplateDto, user: AuthUser) {
+              const name = dto.name?.trim();
+              if (!name) throw new BadRequestException("Greeting template name is required");
+              const messages = dto.messages?.length ? dto.messages.map((message) => ({ ...message, id: message.id || randomUUID() })) : [{ id: randomUUID(), type: "TEXT" as const, textTemplate: "" }];
+              const created = await this.prisma.greetingTemplate.create({ data: {
+                name,
+                description: dto.description?.trim() || null,
+                sendPolicy: dto.sendPolicy || GreetingSendPolicy.FIRST_TIME_ONLY,
+                contentJson: { version: 1, messages } as unknown as Prisma.InputJsonValue,
+                createdByUserId: user.id,
+              }});
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_CREATED", metadata: { templateId: created.id } });
+              return this.getTemplate(created.id);
+            }
+
+            async updateTemplate(id: string, dto: UpdateGreetingTemplateDto, user: AuthUser) {
+              const existing = await this.prisma.greetingTemplate.findUnique({ where: { id } });
+              if (!existing) throw new NotFoundException("Greeting template not found");
+              const existingMessages = this.messagesFrom(existing);
+              const messages = dto.messages === undefined ? existingMessages : dto.messages.map((message) => ({ ...message, id: message.id || randomUUID() }));
+              if (messages.length > 5) throw new BadRequestException("Greeting cannot exceed 5 messages");
+              const meaningfulChange = dto.messages !== undefined || dto.sendPolicy !== undefined;
+              await this.prisma.greetingTemplate.update({ where: { id }, data: {
+                name: dto.name !== undefined ? dto.name.trim() : existing.name,
+                description: dto.description !== undefined ? dto.description?.trim() || null : existing.description,
+                sendPolicy: dto.sendPolicy ?? existing.sendPolicy,
+                contentJson: { version: 1, messages } as unknown as Prisma.InputJsonValue,
+                ...(meaningfulChange ? { version: { increment: 1 } } : {}),
+              }});
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_UPDATED", metadata: { templateId: id } });
+              return this.getTemplate(id);
+            }
+
+            async activateTemplate(id: string, user: AuthUser) {
+              const template = await this.prisma.greetingTemplate.findUnique({ where: { id } });
+              if (!template) throw new NotFoundException("Greeting template not found");
+              const messages = this.messagesFrom(template);
+              const validation = validateAutoResponseMessages(messages as AutoResponseMessageBlock[]);
+              if (!validation.valid) throw new BadRequestException(validation.errors.join("; "));
+              await this.prisma.greetingTemplate.update({ where: { id }, data: { status: GreetingTemplateStatus.ACTIVE, activatedAt: new Date(), archivedAt: null } });
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_ACTIVATED", metadata: { templateId: id } });
+              return this.getTemplate(id);
+            }
+
+            async deactivateTemplate(id: string, user: AuthUser) {
+              await this.getTemplate(id);
+              await this.prisma.greetingTemplate.update({ where: { id }, data: { status: GreetingTemplateStatus.INACTIVE } });
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_DEACTIVATED", metadata: { templateId: id } });
+              return this.getTemplate(id);
+            }
+
+            async archiveTemplate(id: string, user: AuthUser) {
+              await this.getTemplate(id);
+              await this.prisma.greetingTemplate.update({ where: { id }, data: { status: GreetingTemplateStatus.ARCHIVED, archivedAt: new Date() } });
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_ARCHIVED", metadata: { templateId: id } });
+              return this.getTemplate(id);
+            }
+
+            async evaluateReadiness(id: string) {
+              const template = await this.prisma.greetingTemplate.findUnique({ where: { id } });
+              if (!template) throw new NotFoundException("Greeting template not found");
+              const messages = this.messagesFrom(template);
+              const oas = await this.prisma.lineOfficialAccount.findMany({
+                where: { accountType: "STORE", isActive: true, archivedAt: null, storeId: { not: null } },
+                include: { store: { include: { storeMaster: true } }, greetingAssignment: { include: { template: true } } },
+                orderBy: { name: "asc" },
+              });
+              const items = oas.map((oa) => {
+                const store = this.storeContext(oa);
+                const variableState = this.readiness(messages, store);
+                const ready = Boolean(oa.encryptedChannelAccessToken) && variableState.ready;
+                return {
+                  lineOfficialAccountId: oa.id,
+                  lineOfficialAccountName: oa.name,
+                  storeId: oa.store?.id || null,
+                  externalStoreId: oa.store?.storeMaster?.externalStoreId || null,
+                  storeName: oa.store?.name || oa.name,
+                  province: oa.store?.storeMaster?.province || oa.store?.area || null,
+                  readinessStatus: ready ? "READY" : "BLOCKED",
+                  readinessReason: !oa.encryptedChannelAccessToken ? "Missing Channel Access Token" : (variableState.ready ? null : `Missing ${variableState.missingVariables.join(", ")}`),
+                  selected: oa.greetingAssignment?.templateId === id,
+                  currentGreeting: oa.greetingAssignment ? {
+                    templateId: oa.greetingAssignment.templateId,
+                    templateName: oa.greetingAssignment.template.name,
+                    templateVersion: oa.greetingAssignment.template.version,
+                  } : null,
+                };
+              });
+              return {
+                templateId: id,
+                usedVariables: this.usedVariables(messages),
+                summary: {
+                  total: items.length,
+                  ready: items.filter((item) => item.readinessStatus === "READY").length,
+                  blocked: items.filter((item) => item.readinessStatus === "BLOCKED").length,
+                  selected: items.filter((item) => item.selected).length,
+                },
+                items,
+              };
+            }
+
+            async saveAssignments(id: string, dto: GreetingAssignmentsDto, user: AuthUser) {
+              await this.getTemplate(id);
+              const readiness = await this.evaluateReadiness(id);
+              const readyIds = new Set(readiness.items.filter((item) => item.readinessStatus === "READY").map((item) => item.lineOfficialAccountId));
+              const requested = [...new Set(dto.lineOfficialAccountIds || [])];
+              const invalid = requested.filter((oaId) => !readyIds.has(oaId));
+              if (invalid.length) throw new BadRequestException(`Some stores are not ready: ${invalid.join(", ")}`);
+              await this.prisma.$transaction(async (tx) => {
+                await tx.greetingStoreAssignment.deleteMany({ where: { templateId: id, lineOfficialAccountId: { notIn: requested } } });
+                for (const lineOfficialAccountId of requested) {
+                  await tx.greetingStoreAssignment.upsert({
+                    where: { lineOfficialAccountId },
+                    create: { templateId: id, lineOfficialAccountId },
+                    update: { templateId: id },
+                  });
+                }
+              });
+              await this.auditLog?.record({ actorUserId: user.id, action: "GREETING_ASSIGNMENTS_UPDATED", metadata: { templateId: id, assignedCount: requested.length } });
+              return { templateId: id, assignedCount: requested.length, assignedLineOfficialAccountIds: requested };
+            }
+
+            async previewTemplate(id: string, dto?: GreetingPreviewDto) {
+              const template = await this.prisma.greetingTemplate.findUnique({ where: { id } });
+              if (!template) throw new NotFoundException("Greeting template not found");
+              const oa = dto?.lineOfficialAccountId ? await this.prisma.lineOfficialAccount.findUnique({
+                where: { id: dto.lineOfficialAccountId }, include: { store: { include: { storeMaster: true } } },
+              }) : await this.prisma.lineOfficialAccount.findFirst({
+                where: { accountType: "STORE", isActive: true, archivedAt: null, storeId: { not: null } }, include: { store: { include: { storeMaster: true } } }, orderBy: { name: "asc" },
+              });
+              if (!oa) throw new NotFoundException("No store LINE OA available for preview");
+              const store = this.storeContext(oa);
+              const sampleName = dto?.sampleUserDisplayName?.trim() || "Sunn";
+              const messages = this.messagesFrom(template);
+              const state = this.readiness(messages, store);
+              const resolved = this.enrich(messages).map((message) => {
+                if (message.type === "IMAGE") return message;
+                let text = message.textTemplate.replace(/\{\{\s*user\.displayName\s*\}\}/g, sampleName).replace(/\{\{\s*account\.name\s*\}\}/g, oa.name);
+                text = resolveTemplateVariables(text, store);
+                return { ...message, resolvedText: text };
+              });
+              return { templateId: id, lineOfficialAccountId: oa.id, storeName: oa.store?.name || oa.name, ready: state.ready, missingVariables: state.missingVariables, messages: resolved };
+            }
+          }
+          EOF
+
+          cat > backend/src/greeting/greeting-execution.service.ts <<'EOF'
+          import { Injectable, Logger } from "@nestjs/common";
+          import { GreetingExecutionStatus, GreetingSendPolicy, GreetingTemplateStatus } from "@prisma/client";
+          import { createHash } from "node:crypto";
+          import { PrismaService } from "../prisma.service";
+          import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
+          import { LineMessagingService } from "../line-messaging/line-messaging.service";
+          import { LineProfileService } from "../line-profile.service";
+          import { MediaStorageService } from "../media/media-storage";
+          import { createMediaPublicUrl } from "../media/media-public-url";
+          import { getFriendAttributionHashSecret, hashLineUserId } from "../friend-source-links/friend-attribution.config";
+          import { extractTemplateVariables, getStoreVariableValue, isValidGoogleMapsUrl, resolveTemplateVariables, type StoreVariableContext } from "../store-master/template-variable-resolver";
+          import type { GreetingMessageBlock } from "./greeting.types";
+
+          export function shouldSendGreeting(policy: GreetingSendPolicy, isUnblocked: boolean, hasPriorSuccess: boolean) {
+            if (policy === GreetingSendPolicy.FIRST_TIME_ONLY && isUnblocked) return false;
+            if (policy === GreetingSendPolicy.FIRST_TIME_ONLY && hasPriorSuccess) return false;
+            return true;
+          }
+
+          @Injectable()
+          export class GreetingExecutionService {
+            private readonly logger = new Logger(GreetingExecutionService.name);
+            constructor(
+              private readonly prisma: PrismaService,
+              private readonly encryption: CredentialEncryptionService,
+              private readonly messaging: LineMessagingService,
+              private readonly profiles: LineProfileService,
+              private readonly media: MediaStorageService,
+            ) {}
+
+            private hashUser(userId: string) {
+              try { return hashLineUserId(userId, getFriendAttributionHashSecret()); }
+              catch { return createHash("sha256").update(userId).digest("hex"); }
+            }
+
+            private messages(template: any): GreetingMessageBlock[] {
+              const json = template.contentJson as { messages?: GreetingMessageBlock[] } | null;
+              return Array.isArray(json?.messages) ? json!.messages! : [];
+            }
+
+            private storeContext(oa: any): StoreVariableContext {
+              const store = oa.store;
+              const master = store?.storeMaster;
+              return {
+                name: store?.name,
+                storeName: store?.name || master?.storeName,
+                storeId: master?.externalStoreId || store?.code,
+                externalStoreId: master?.externalStoreId,
+                accountName: master?.accountName || oa.name,
+                province: master?.province || store?.area,
+                region: master?.region || store?.region,
+                lineId: master?.lineId,
+                lineOaLink: master?.lineOaLink,
+                lineManagerUrl: master?.lineManagerUrl,
+                tiktokUsername: master?.tiktokUsername,
+                tiktokProfileUrl: master?.tiktokProfileUrl,
+                googleMapsUrl: master?.googleMapsUrl,
+              };
+            }
+
+            private async record(input: any) {
+              try { await this.prisma.greetingExecution.create({ data: input }); }
+              catch (error) { this.logger.warn(`Greeting execution log failed: ${error instanceof Error ? error.message : String(error)}`); }
+            }
+
+            async handleFollow(params: { lineOfficialAccountId: string; lineUserId: string; replyToken?: string; webhookEventId?: string; isUnblocked?: boolean }) {
+              const { lineOfficialAccountId, lineUserId, replyToken, webhookEventId } = params;
+              const isUnblocked = Boolean(params.isUnblocked);
+              const lineUserIdHash = this.hashUser(lineUserId);
+              const assignment = await this.prisma.greetingStoreAssignment.findUnique({
+                where: { lineOfficialAccountId },
+                include: { template: true, lineOfficialAccount: { include: { store: { include: { storeMaster: true } } } } },
+              });
+              if (!assignment) return { status: "SKIPPED", reason: "NO_ASSIGNMENT" };
+              const template = assignment.template;
+              const oa = assignment.lineOfficialAccount;
+              const baseLog = { templateId: template.id, lineOfficialAccountId, webhookEventId: webhookEventId || null, lineUserIdHash, isUnblocked };
+              if (oa.accountType !== "STORE" || !oa.isActive || oa.archivedAt) {
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.SKIPPED, reason: "OA_NOT_ELIGIBLE" });
+                return { status: "SKIPPED", reason: "OA_NOT_ELIGIBLE" };
+              }
+              if (template.status !== GreetingTemplateStatus.ACTIVE) {
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.SKIPPED, reason: "TEMPLATE_NOT_ACTIVE" });
+                return { status: "SKIPPED", reason: "TEMPLATE_NOT_ACTIVE" };
+              }
+              const prior = template.sendPolicy === GreetingSendPolicy.FIRST_TIME_ONLY
+                ? await this.prisma.greetingExecution.findFirst({ where: { lineOfficialAccountId, lineUserIdHash, status: GreetingExecutionStatus.SUCCESS } })
+                : null;
+              if (!shouldSendGreeting(template.sendPolicy, isUnblocked, Boolean(prior))) {
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.SKIPPED, reason: isUnblocked ? "UNBLOCK_SKIPPED" : "ALREADY_GREETED" });
+                return { status: "SKIPPED" };
+              }
+              if (!replyToken) {
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.FAILED, reason: "MISSING_REPLY_TOKEN" });
+                return { status: "FAILED" };
+              }
+
+              try {
+                const blocks = this.messages(template);
+                if (!blocks.length || blocks.length > 5) throw new Error("INVALID_MESSAGE_COUNT");
+                const store = this.storeContext(oa);
+                const needsDisplayName = blocks.some((block) => block.type === "TEXT" && extractTemplateVariables(block.textTemplate).includes("user.displayName"));
+                let displayName = "ลูกค้าคนสำคัญ";
+                if (needsDisplayName) {
+                  const customer = await this.prisma.customer.findUnique({ where: { lineUserId } });
+                  if (customer) {
+                    const refreshed = await this.profiles.refresh(customer.id, oa.id, true, "GREETING_MESSAGE").catch(() => customer);
+                    if (refreshed.displayName && refreshed.displayName !== "LINE Customer") displayName = refreshed.displayName;
+                  }
+                }
+
+                const messages: unknown[] = [];
+                for (const block of blocks) {
+                  if (block.type === "IMAGE") {
+                    await this.media.get(block.mediaObjectKey);
+                    const previewKey = block.previewObjectKey || block.mediaObjectKey;
+                    await this.media.get(previewKey);
+                    messages.push({ type: "image", originalContentUrl: createMediaPublicUrl(block.mediaObjectKey), previewImageUrl: createMediaPublicUrl(previewKey) });
+                    continue;
+                  }
+                  let text = block.textTemplate.replace(/\{\{\s*user\.displayName\s*\}\}/g, displayName).replace(/\{\{\s*account\.name\s*\}\}/g, oa.name);
+                  for (const variable of extractTemplateVariables(text)) {
+                    const value = getStoreVariableValue(variable, store);
+                    const prop = variable.startsWith("store.") ? variable.slice(6) : variable;
+                    if (!value || (prop === "googleMapsUrl" && !isValidGoogleMapsUrl(value))) throw new Error(`UNRESOLVED_VARIABLE:${variable}`);
+                  }
+                  text = resolveTemplateVariables(text, store);
+                  if (!text.trim()) throw new Error("EMPTY_TEXT");
+                  messages.push({ type: "text", text });
+                }
+                if (!oa.encryptedChannelAccessToken) throw new Error("MISSING_CHANNEL_ACCESS_TOKEN");
+                const accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken);
+                const result = await this.messaging.replyMessages(accessToken, replyToken, messages, {
+                  userId: lineUserIdHash,
+                  storeId: oa.store?.id,
+                  storeName: oa.store?.name,
+                  messageType: "GREETING",
+                });
+                if (!result.success) throw new Error(result.invalidReplyToken ? "INVALID_REPLY_TOKEN" : "LINE_REPLY_FAILED");
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.SUCCESS, messageCount: messages.length, messageTypesJson: blocks.map((block) => block.type) });
+                return { status: "SUCCESS", messageCount: messages.length };
+              } catch (error) {
+                const reason = error instanceof Error ? error.message.slice(0, 250) : "GREETING_FAILED";
+                await this.record({ ...baseLog, status: GreetingExecutionStatus.FAILED, reason });
+                this.logger.warn(`Greeting failed for OA ${lineOfficialAccountId}: ${reason}`);
+                return { status: "FAILED", reason };
+              }
+            }
+          }
+          EOF
+
+          cat > backend/src/greeting/greeting.controller.ts <<'EOF'
+          import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+          import { FileInterceptor } from "@nestjs/platform-express";
+          import { memoryStorage } from "multer";
+          import { GreetingTemplateStatus, UserRole } from "@prisma/client";
+          import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
+          import { Roles } from "../auth/auth.decorators";
+          import { GreetingService } from "./greeting.service";
+          import type { CreateGreetingTemplateDto, GreetingAssignmentsDto, GreetingPreviewDto, UpdateGreetingTemplateDto } from "./greeting.types";
+
+          @Controller("greeting-messages")
+          @UseGuards(AuthGuard)
+          @Roles(UserRole.ADMIN)
+          export class GreetingController {
+            constructor(private readonly service: GreetingService) {}
+
+            @Get()
+            list(@Query("status") status?: GreetingTemplateStatus, @Query("search") search?: string) { return this.service.listTemplates({ status, search }); }
+
+            @Post("media")
+            @UseInterceptors(FileInterceptor("file", { storage: memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }))
+            upload(@UploadedFile() file?: { buffer: Buffer; mimetype?: string; size?: number }) {
+              if (!file?.buffer?.length) throw new BadRequestException("Image file is required");
+              return this.service.uploadMedia(file);
+            }
+
+            @Post()
+            create(@Body() body: CreateGreetingTemplateDto, @Req() req: AuthRequest) { return this.service.createTemplate(body, req.user!); }
+            @Get(":id/readiness")
+            readiness(@Param("id") id: string) { return this.service.evaluateReadiness(id); }
+            @Post(":id/assignments")
+            assignments(@Param("id") id: string, @Body() body: GreetingAssignmentsDto, @Req() req: AuthRequest) { return this.service.saveAssignments(id, body, req.user!); }
+            @Post(":id/preview")
+            preview(@Param("id") id: string, @Body() body?: GreetingPreviewDto) { return this.service.previewTemplate(id, body); }
+            @Post(":id/activate")
+            activate(@Param("id") id: string, @Req() req: AuthRequest) { return this.service.activateTemplate(id, req.user!); }
+            @Post(":id/deactivate")
+            deactivate(@Param("id") id: string, @Req() req: AuthRequest) { return this.service.deactivateTemplate(id, req.user!); }
+            @Post(":id/archive")
+            archive(@Param("id") id: string, @Req() req: AuthRequest) { return this.service.archiveTemplate(id, req.user!); }
+            @Get(":id")
+            get(@Param("id") id: string) { return this.service.getTemplate(id); }
+            @Patch(":id")
+            update(@Param("id") id: string, @Body() body: UpdateGreetingTemplateDto, @Req() req: AuthRequest) { return this.service.updateTemplate(id, body, req.user!); }
+          }
+          EOF
+
+          cat > backend/src/greeting/greeting.module.ts <<'EOF'
+          import { Module } from "@nestjs/common";
+          import { AuthModule } from "../auth/auth.module";
+          import { MediaModule } from "../media/media.module";
+          import { PrismaService } from "../prisma.service";
+          import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
+          import { LineMessagingService } from "../line-messaging/line-messaging.service";
+          import { AuditLogService } from "../auth/audit-log.service";
+          import { GreetingController } from "./greeting.controller";
+          import { GreetingService } from "./greeting.service";
+          import { GreetingExecutionService } from "./greeting-execution.service";
+
+          @Module({
+            imports: [AuthModule, MediaModule],
+            controllers: [GreetingController],
+            providers: [PrismaService, CredentialEncryptionService, LineMessagingService, AuditLogService, GreetingService, GreetingExecutionService],
+            exports: [GreetingService, GreetingExecutionService],
+          })
+          export class GreetingModule {}
+          EOF
+
+          cat > backend/src/greeting/greeting.spec.ts <<'EOF'
+          import assert from "node:assert/strict";
+          import test from "node:test";
+          import { GreetingSendPolicy } from "@prisma/client";
+          import { shouldSendGreeting } from "./greeting-execution.service";
+
+          test("Greeting FIRST_TIME_ONLY skips unblock and prior successful greeting", () => {
+            assert.equal(shouldSendGreeting(GreetingSendPolicy.FIRST_TIME_ONLY, true, false), false);
+            assert.equal(shouldSendGreeting(GreetingSendPolicy.FIRST_TIME_ONLY, false, true), false);
+            assert.equal(shouldSendGreeting(GreetingSendPolicy.FIRST_TIME_ONLY, false, false), true);
+          });
+
+          test("Greeting ADD_AND_UNBLOCK sends on add and unblock", () => {
+            assert.equal(shouldSendGreeting(GreetingSendPolicy.ADD_AND_UNBLOCK, false, true), true);
+            assert.equal(shouldSendGreeting(GreetingSendPolicy.ADD_AND_UNBLOCK, true, true), true);
+          });
+          EOF
+
+          cat > backend/prisma/migrations/20260827103000_add_greeting_messages/migration.sql <<'EOF'
+          CREATE TYPE "GreetingTemplateStatus" AS ENUM ('DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED');
+          CREATE TYPE "GreetingSendPolicy" AS ENUM ('FIRST_TIME_ONLY', 'ADD_AND_UNBLOCK');
+          CREATE TYPE "GreetingExecutionStatus" AS ENUM ('SUCCESS', 'SKIPPED', 'FAILED');
+
+          CREATE TABLE "GreetingTemplate" (
+            "id" TEXT NOT NULL,
+            "name" TEXT NOT NULL,
+            "description" TEXT,
+            "status" "GreetingTemplateStatus" NOT NULL DEFAULT 'DRAFT',
+            "sendPolicy" "GreetingSendPolicy" NOT NULL DEFAULT 'FIRST_TIME_ONLY',
+            "contentJson" JSONB NOT NULL,
+            "version" INTEGER NOT NULL DEFAULT 1,
+            "createdByUserId" TEXT,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) NOT NULL,
+            "activatedAt" TIMESTAMP(3),
+            "archivedAt" TIMESTAMP(3),
+            CONSTRAINT "GreetingTemplate_pkey" PRIMARY KEY ("id")
+          );
+          CREATE TABLE "GreetingStoreAssignment" (
+            "id" TEXT NOT NULL,
+            "templateId" TEXT NOT NULL,
+            "lineOfficialAccountId" TEXT NOT NULL,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) NOT NULL,
+            CONSTRAINT "GreetingStoreAssignment_pkey" PRIMARY KEY ("id")
+          );
+          CREATE TABLE "GreetingExecution" (
+            "id" TEXT NOT NULL,
+            "templateId" TEXT,
+            "lineOfficialAccountId" TEXT NOT NULL,
+            "webhookEventId" TEXT,
+            "lineUserIdHash" TEXT,
+            "status" "GreetingExecutionStatus" NOT NULL,
+            "reason" TEXT,
+            "messageCount" INTEGER,
+            "messageTypesJson" JSONB,
+            "isUnblocked" BOOLEAN,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "GreetingExecution_pkey" PRIMARY KEY ("id")
+          );
+          CREATE UNIQUE INDEX "GreetingStoreAssignment_lineOfficialAccountId_key" ON "GreetingStoreAssignment"("lineOfficialAccountId");
+          CREATE INDEX "GreetingStoreAssignment_templateId_idx" ON "GreetingStoreAssignment"("templateId");
+          CREATE INDEX "GreetingTemplate_status_idx" ON "GreetingTemplate"("status");
+          CREATE INDEX "GreetingTemplate_updatedAt_idx" ON "GreetingTemplate"("updatedAt");
+          CREATE UNIQUE INDEX "GreetingExecution_webhookEventId_key" ON "GreetingExecution"("webhookEventId");
+          CREATE INDEX "GreetingExecution_templateId_createdAt_idx" ON "GreetingExecution"("templateId", "createdAt");
+          CREATE INDEX "GreetingExecution_lineOfficialAccountId_createdAt_idx" ON "GreetingExecution"("lineOfficialAccountId", "createdAt");
+          CREATE INDEX "GreetingExecution_lineUserIdHash_lineOfficialAccountId_createdAt_idx" ON "GreetingExecution"("lineUserIdHash", "lineOfficialAccountId", "createdAt");
+          ALTER TABLE "GreetingStoreAssignment" ADD CONSTRAINT "GreetingStoreAssignment_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "GreetingTemplate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          ALTER TABLE "GreetingStoreAssignment" ADD CONSTRAINT "GreetingStoreAssignment_lineOfficialAccountId_fkey" FOREIGN KEY ("lineOfficialAccountId") REFERENCES "LineOfficialAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          ALTER TABLE "GreetingExecution" ADD CONSTRAINT "GreetingExecution_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "GreetingTemplate"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+          ALTER TABLE "GreetingExecution" ADD CONSTRAINT "GreetingExecution_lineOfficialAccountId_fkey" FOREIGN KEY ("lineOfficialAccountId") REFERENCES "LineOfficialAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          EOF
+
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit(f"anchor missing in {path}: {old[:80]}")
+              p.write_text(s.replace(old,new,1))
+
+          schema=Path('backend/prisma/schema.prisma')
+          s=schema.read_text()
+          enum_block='''enum GreetingTemplateStatus {\n  DRAFT\n  ACTIVE\n  INACTIVE\n  ARCHIVED\n}\n\nenum GreetingSendPolicy {\n  FIRST_TIME_ONLY\n  ADD_AND_UNBLOCK\n}\n\nenum GreetingExecutionStatus {\n  SUCCESS\n  SKIPPED\n  FAILED\n}\n\n'''
+          s=s.replace('model User {', enum_block+'model User {',1)
+          start=s.index('model LineOfficialAccount {')
+          end=s.index('\n}', start)
+          insert='''\n  greetingAssignment          GreetingStoreAssignment?\n  greetingExecutions          GreetingExecution[]\n'''
+          s=s[:end]+insert+s[end:]
+          s += '''\n\nmodel GreetingTemplate {\n  id              String                 @id @default(uuid())\n  name            String\n  description     String?\n  status          GreetingTemplateStatus @default(DRAFT)\n  sendPolicy      GreetingSendPolicy     @default(FIRST_TIME_ONLY)\n  contentJson     Json\n  version         Int                    @default(1)\n  createdByUserId String?\n  createdAt       DateTime               @default(now())\n  updatedAt       DateTime               @updatedAt\n  activatedAt     DateTime?\n  archivedAt      DateTime?\n  assignments     GreetingStoreAssignment[]\n  executions      GreetingExecution[]\n\n  @@index([status])\n  @@index([updatedAt])\n}\n\nmodel GreetingStoreAssignment {\n  id                    String              @id @default(uuid())\n  templateId            String\n  lineOfficialAccountId String              @unique\n  createdAt             DateTime            @default(now())\n  updatedAt             DateTime            @updatedAt\n  template              GreetingTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)\n  lineOfficialAccount   LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)\n\n  @@index([templateId])\n}\n\nmodel GreetingExecution {\n  id                    String                  @id @default(uuid())\n  templateId            String?\n  lineOfficialAccountId String\n  webhookEventId        String?                 @unique\n  lineUserIdHash        String?\n  status                GreetingExecutionStatus\n  reason                String?\n  messageCount          Int?\n  messageTypesJson      Json?\n  isUnblocked           Boolean?\n  createdAt             DateTime                @default(now())\n  template              GreetingTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)\n  lineOfficialAccount   LineOfficialAccount     @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)\n\n  @@index([templateId, createdAt])\n  @@index([lineOfficialAccountId, createdAt])\n  @@index([lineUserIdHash, lineOfficialAccountId, createdAt])\n}\n'''
+          schema.write_text(s)
+
+          replace_once('backend/src/media/media-public-url.ts', '  "line-media/auto-response/",\n', '  "line-media/auto-response/",\n  "line-media/greeting/",\n')
+          replace_once('backend/src/webhooks/line/line-webhook.types.ts', '  | (LineEventBase & { type: "follow" | "unfollow" })', '  | (LineEventBase & { type: "follow"; follow?: { isUnblocked?: boolean } })\n  | (LineEventBase & { type: "unfollow" })')
+          replace_once('backend/src/webhooks/line/line-webhook.module.ts', 'import { AutoResponseModule } from "../../auto-response/auto-response.module";\n', 'import { AutoResponseModule } from "../../auto-response/auto-response.module";\nimport { GreetingModule } from "../../greeting/greeting.module";\n')
+          replace_once('backend/src/webhooks/line/line-webhook.module.ts', 'imports: [NotificationsModule, AutoResponseModule]', 'imports: [NotificationsModule, AutoResponseModule, GreetingModule]')
+          replace_once('backend/src/app.module.ts', 'import { AutoResponseModule } from "./auto-response/auto-response.module";\n', 'import { AutoResponseModule } from "./auto-response/auto-response.module";\nimport { GreetingModule } from "./greeting/greeting.module";\n')
+          replace_once('backend/src/app.module.ts', 'RichMenuModule, AutoResponseModule]', 'RichMenuModule, AutoResponseModule, GreetingModule]')
+
+          p=Path('backend/src/webhooks/line/line-webhook.service.ts'); s=p.read_text()
+          s=s.replace('import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";\n', 'import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";\nimport { GreetingExecutionService } from "../../greeting/greeting-execution.service";\n',1)
+          s=s.replace('    private readonly autoResponseExecution?: AutoResponseExecutionService,\n', '    private readonly autoResponseExecution?: AutoResponseExecutionService,\n    private readonly greetingExecution?: GreetingExecutionService,\n',1)
+          old='''  private async processFollow(event: LineWebhookEvent, resolvedOaId: string) {\n    if (!event.source.userId) return;\n    await this.prisma.customer.upsert({ where: { lineUserId: event.source.userId }, update: {}, create: { lineUserId: event.source.userId, displayName: "LINE Customer" } });\n'''
+          new='''  private async processFollow(event: LineWebhookEvent, resolvedOaId: string) {\n    if (!event.source.userId) return;\n    await this.prisma.customer.upsert({ where: { lineUserId: event.source.userId }, update: {}, create: { lineUserId: event.source.userId, displayName: "LINE Customer" } });\n'''
+          if old not in s: raise SystemExit('processFollow anchor missing')
+          # Keep existing attribution body, insert greeting before method close by locating next resolveOa method.
+          marker='''    } catch (err: unknown) {\n      this.logger.warn(`Failed to process friend attribution for follow event: ${err instanceof Error ? err.message : String(err)}`);\n    }\n  }\n\n  private async resolveOa'''
+          repl='''    } catch (err: unknown) {\n      this.logger.warn(`Failed to process friend attribution for follow event: ${err instanceof Error ? err.message : String(err)}`);\n    }\n\n    if (this.greetingExecution) {\n      await this.greetingExecution.handleFollow({\n        lineOfficialAccountId: resolvedOaId,\n        lineUserId: event.source.userId,\n        replyToken: event.replyToken,\n        webhookEventId: event.webhookEventId,\n        isUnblocked: event.type === "follow" && "follow" in event ? Boolean(event.follow?.isUnblocked) : false,\n      });\n    }\n  }\n\n  private async resolveOa'''
+          if marker not in s: raise SystemExit('follow end anchor missing')
+          p.write_text(s.replace(marker,repl,1))
+          PY
+
+          cat > frontend/src/app/greeting-messages/page.tsx <<'EOF'
+          "use client";
+          import { AuthorizedWorkspace } from "../authorized-workspace";
+          export default function GreetingMessagesPage() { return <AuthorizedWorkspace section="greeting-messages" />; }
+          EOF
+
+          cat > frontend/src/app/greeting-messages/greeting-messages-view.tsx <<'EOF'
+          "use client";
+          import { useEffect, useMemo, useRef, useState } from "react";
+          import { api } from "@/lib/api";
+          import type { GreetingMessageBlock, GreetingReadiness, GreetingTemplate } from "@/types/api";
+
+          type Language = "th" | "en" | "zh";
+          const copy = {
+            th: { title:"ข้อความต้อนรับ", desc:"สร้างข้อความที่ส่งอัตโนมัติเมื่อลูกค้าเพิ่ม LINE OA เป็นเพื่อน", create:"สร้างข้อความต้อนรับ", warning:"เพื่อป้องกันการส่งข้อความต้อนรับซ้ำ ควรปิด Greeting message ที่ตั้งไว้ใน LINE Official Account Manager สำหรับบัญชีที่ใช้ข้อความต้อนรับจากระบบนี้", name:"ชื่อข้อความต้อนรับ", description:"คำอธิบาย", first:"ส่งเฉพาะเพื่อนใหม่ครั้งแรก", content:"เนื้อหาข้อความ", addText:"+ ข้อความ", addImage:"+ รูปภาพ", save:"บันทึก", activate:"เปิดใช้งาน", deactivate:"ปิดใช้งาน", archive:"เก็บถาวร", preview:"ดูตัวอย่างสำหรับร้าน", sample:"ชื่อผู้ใช้ตัวอย่าง", stores:"ร้านเป้าหมาย", selectReady:"เลือกร้านทั้งหมดที่พร้อมใช้งาน", clear:"ล้างการเลือก", apply:"ใช้ข้อความนี้กับร้านที่เลือก", ready:"พร้อมใช้งาน", blocked:"ไม่พร้อม", assigned:"ข้อความต้อนรับปัจจุบัน", noTemplates:"ยังไม่มีข้อความต้อนรับ", native:"การกำหนดนี้ไม่ส่งข้อความย้อนหลังให้ผู้ติดตามเดิม", draft:"แบบร่าง", active:"ใช้งานอยู่", inactive:"ปิดใช้งาน" },
+            en: { title:"Greeting messages", desc:"Create messages sent automatically when customers add a store LINE OA", create:"Create greeting", warning:"To avoid duplicate greetings, disable overlapping Greeting messages in LINE Official Account Manager for accounts using this system.", name:"Greeting name", description:"Description", first:"Only send for first-time friends", content:"Message content", addText:"+ Text", addImage:"+ Image", save:"Save", activate:"Activate", deactivate:"Deactivate", archive:"Archive", preview:"Preview as store", sample:"Sample user name", stores:"Target stores", selectReady:"Select all ready stores", clear:"Clear selection", apply:"Use greeting for selected stores", ready:"Ready", blocked:"Blocked", assigned:"Current greeting", noTemplates:"No greeting templates yet", native:"Assignment does not send anything retroactively to existing followers.", draft:"Draft", active:"Active", inactive:"Inactive" },
+            zh: { title:"欢迎消息", desc:"客户添加门店 LINE OA 为好友时自动发送", create:"创建欢迎消息", warning:"为避免重复发送，请在使用本系统的账号中关闭 LINE Official Account Manager 中重叠的 Greeting message。", name:"欢迎消息名称", description:"说明", first:"仅首次加好友时发送", content:"消息内容", addText:"+ 文字", addImage:"+ 图片", save:"保存", activate:"启用", deactivate:"停用", archive:"归档", preview:"按门店预览", sample:"示例用户名", stores:"目标门店", selectReady:"选择所有可用门店", clear:"清除选择", apply:"应用到已选门店", ready:"可用", blocked:"不可用", assigned:"当前欢迎消息", noTemplates:"暂无欢迎消息", native:"分配模板不会向现有关注者追溯发送消息。", draft:"草稿", active:"启用", inactive:"停用" },
+          } as const;
+
+          function uid(){ return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
+
+          export function GreetingMessagesView({ language }: { language: Language }) {
+            const t=copy[language];
+            const [templates,setTemplates]=useState<GreetingTemplate[]>([]);
+            const [selectedId,setSelectedId]=useState<string>("");
+            const selected=templates.find(x=>x.id===selectedId)||null;
+            const [name,setName]=useState(""); const [description,setDescription]=useState("");
+            const [messages,setMessages]=useState<GreetingMessageBlock[]>([]); const [firstOnly,setFirstOnly]=useState(true);
+            const [readiness,setReadiness]=useState<GreetingReadiness|null>(null); const [storeIds,setStoreIds]=useState<string[]>([]);
+            const [previewStore,setPreviewStore]=useState(""); const [sampleName,setSampleName]=useState("Sunn"); const [preview,setPreview]=useState<any>(null);
+            const [busy,setBusy]=useState(false); const [error,setError]=useState<string|null>(null); const fileRef=useRef<HTMLInputElement>(null); const [imageTarget,setImageTarget]=useState<string|null>(null);
+
+            async function reload(preferred?:string){ const list=await api.listGreetingMessages(); setTemplates(list); const id=preferred||selectedId||list[0]?.id||""; setSelectedId(id); }
+            useEffect(()=>{ void reload().catch(e=>setError(e.message)); },[]);
+            useEffect(()=>{ if(!selected){ setName("");setDescription("");setMessages([]);setReadiness(null);return;} setName(selected.name);setDescription(selected.description||"");setMessages(selected.messages||[]);setFirstOnly(selected.sendPolicy==="FIRST_TIME_ONLY"); void api.getGreetingReadiness(selected.id).then(r=>{setReadiness(r);setStoreIds(r.items.filter(i=>i.selected).map(i=>i.lineOfficialAccountId));setPreviewStore(p=>p||r.items.find(i=>i.readinessStatus==="READY")?.lineOfficialAccountId||"");}).catch(e=>setError(e.message)); },[selectedId,templates.length]);
+            useEffect(()=>{ if(!selectedId||!previewStore)return; const h=setTimeout(()=>void api.previewGreetingMessage(selectedId,{lineOfficialAccountId:previewStore,sampleUserDisplayName:sampleName}).then(setPreview).catch(()=>setPreview(null)),250); return()=>clearTimeout(h); },[selectedId,previewStore,sampleName,messages]);
+
+            const readyIds=useMemo(()=>readiness?.items.filter(i=>i.readinessStatus==="READY").map(i=>i.lineOfficialAccountId)||[],[readiness]);
+            async function create(){ setBusy(true);setError(null);try{const x=await api.createGreetingMessage({name: language==="th"?"ข้อความต้อนรับใหม่":"New greeting",messages:[{id:uid(),type:"TEXT",textTemplate:""}],sendPolicy:"FIRST_TIME_ONLY"});await reload(x.id);}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            async function save(){if(!selected)return;setBusy(true);setError(null);try{const updated=await api.updateGreetingMessage(selected.id,{name,description,messages,sendPolicy:firstOnly?"FIRST_TIME_ONLY":"ADD_AND_UNBLOCK"});await reload(updated.id);}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            async function activate(){if(!selected)return;await save();setBusy(true);try{await api.activateGreetingMessage(selected.id);await reload(selected.id);}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            async function deactivate(){if(!selected)return;if(!confirm(language==="th"?`ปิดใช้งานข้อความนี้? ร้านที่ผูกไว้จะไม่ได้รับ Greeting จากระบบนี้จนกว่าจะเปิดใช้งานอีกครั้ง`:`Deactivate this greeting?`))return;setBusy(true);try{await api.deactivateGreetingMessage(selected.id);await reload(selected.id);}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            async function archive(){if(!selected)return;if(!confirm(language==="th"?"เก็บข้อความนี้ถาวร?":"Archive this greeting?"))return;setBusy(true);try{await api.archiveGreetingMessage(selected.id);await reload();}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            async function apply(){if(!selected)return;if(!confirm(language==="th"?`ใช้ข้อความต้อนรับนี้กับ ${storeIds.length} ร้าน?\nระบบจะไม่ส่งข้อความย้อนหลังให้ผู้ติดตามเดิม`:`Apply this greeting to ${storeIds.length} stores?`))return;setBusy(true);try{await api.assignGreetingMessage(selected.id,storeIds);await reload(selected.id);}catch(e:any){setError(e.message)}finally{setBusy(false)} }
+            function addText(){if(messages.length<5)setMessages([...messages,{id:uid(),type:"TEXT",textTemplate:""}])}
+            function addImage(){if(messages.length>=5)return;const id=uid();setMessages([...messages,{id,type:"IMAGE",mediaObjectKey:""}]);setImageTarget(id);setTimeout(()=>fileRef.current?.click(),0)}
+            async function upload(file:File){if(!imageTarget)return;setBusy(true);try{const r=await api.uploadGreetingMedia(file);setMessages(current=>current.map(m=>m.id===imageTarget&&m.type==="IMAGE"?{...m,...r,fileName:file.name}:m));}catch(e:any){setError(e.message)}finally{setBusy(false);setImageTarget(null)} }
+            function move(index:number,delta:number){const next=[...messages];const to=index+delta;if(to<0||to>=next.length)return;[next[index],next[to]]=[next[to],next[index]];setMessages(next)}
+
+            return <div className="min-h-full bg-[var(--app-bg)] p-6 text-[var(--app-text-primary)]">
+              <div className="mx-auto max-w-[1500px] space-y-5">
+                <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">{t.title}</h1><p className="mt-1 text-sm text-[var(--app-text-secondary)]">{t.desc}</p></div><button onClick={()=>void create()} disabled={busy} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">＋ {t.create}</button></div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">⚠ {t.warning}</div>
+                {error&&<div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+                <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+                  <aside className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3"><div className="space-y-2">{templates.length===0?<p className="p-4 text-sm text-[var(--app-text-secondary)]">{t.noTemplates}</p>:templates.map(x=><button key={x.id} onClick={()=>setSelectedId(x.id)} className={`w-full rounded-xl border p-3 text-left ${selectedId===x.id?"border-[var(--app-accent)] bg-[var(--app-accent-soft)]":"border-transparent hover:bg-[var(--app-surface-hover)]"}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold">{x.name}</span><span className="text-xs">v{x.version}</span></div><div className="mt-1 flex items-center justify-between text-xs text-[var(--app-text-secondary)]"><span>{x.status==="ACTIVE"?t.active:x.status==="DRAFT"?t.draft:t.inactive}</span><span>{x.assignedStoresCount??0} stores</span></div></button>)}</div></aside>
+                  <main className="space-y-5">{selected&&<>
+                    <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><div className="grid gap-4 md:grid-cols-2"><label className="text-sm">{t.name}<input value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-3"/></label><label className="text-sm">{t.description}<input value={description} onChange={e=>setDescription(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-3"/></label></div><label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={firstOnly} onChange={e=>setFirstOnly(e.target.checked)}/>{t.first}</label></section>
+                    <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">{t.content}</h2><span className="text-xs text-[var(--app-text-secondary)]">{messages.length} / 5</span></div><input ref={fileRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void upload(f)}}/><div className="space-y-3">{messages.map((m,index)=><div key={m.id} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-4"><div className="mb-2 flex items-center justify-between"><b className="text-sm">{index+1}. {m.type}</b><div className="flex gap-1"><button onClick={()=>move(index,-1)} className="rounded border px-2">↑</button><button onClick={()=>move(index,1)} className="rounded border px-2">↓</button><button onClick={()=>setMessages(messages.filter(x=>x.id!==m.id))} className="rounded border border-red-200 px-2 text-red-600">×</button></div></div>{m.type==="TEXT"?<><textarea value={m.textTemplate} onChange={e=>setMessages(messages.map(x=>x.id===m.id&&x.type==="TEXT"?{...x,textTemplate:e.target.value}:x))} rows={4} className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3"/><div className="mt-2 flex flex-wrap gap-2 text-xs">{["{{user.displayName}}","{{account.name}}","{{store.storeName}}","{{store.googleMapsUrl}}"].map(v=><button key={v} onClick={()=>setMessages(messages.map(x=>x.id===m.id&&x.type==="TEXT"?{...x,textTemplate:x.textTemplate+v}:x))} className="rounded-lg bg-[var(--app-surface-hover)] px-2 py-1">{v}</button>)}</div></>:<div className="flex items-center gap-3">{m.previewUrl&&<img src={m.previewUrl} alt="Greeting" className="h-24 w-24 rounded-xl object-cover"/>}<button onClick={()=>{setImageTarget(m.id);fileRef.current?.click()}} className="rounded-xl border px-3 py-2 text-sm">{m.mediaObjectKey?"เปลี่ยนรูป":"อัปโหลดรูปภาพ"}</button></div>}</div>)}</div><div className="mt-4 flex gap-2"><button disabled={messages.length>=5} onClick={addText} className="rounded-xl border px-3 py-2 text-sm">{t.addText}</button><button disabled={messages.length>=5} onClick={addImage} className="rounded-xl border px-3 py-2 text-sm">{t.addImage}</button></div><div className="mt-5 flex flex-wrap gap-2"><button disabled={busy} onClick={()=>void save()} className="rounded-xl border px-4 py-2 text-sm font-semibold">{t.save}</button>{selected.status!=="ACTIVE"?<button disabled={busy} onClick={()=>void activate()} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">{t.activate}</button>:<button disabled={busy} onClick={()=>void deactivate()} className="rounded-xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">{t.deactivate}</button>}<button disabled={busy} onClick={()=>void archive()} className="rounded-xl border px-4 py-2 text-sm">{t.archive}</button></div></section>
+                    <section className="grid gap-5 xl:grid-cols-2"><div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><h2 className="font-semibold">{t.preview}</h2><div className="mt-3 grid gap-3 sm:grid-cols-2"><select value={previewStore} onChange={e=>setPreviewStore(e.target.value)} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-2 text-sm"><option value="">-</option>{readiness?.items.map(i=><option key={i.lineOfficialAccountId} value={i.lineOfficialAccountId}>{i.storeName}</option>)}</select><input value={sampleName} onChange={e=>setSampleName(e.target.value)} placeholder={t.sample} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-2 text-sm"/></div><div className="mt-4 space-y-2 rounded-2xl bg-[var(--app-bg)] p-4">{preview?.messages?.map((m:any)=><div key={m.id}>{m.type==="IMAGE"?<img src={m.previewUrl||m.imageUrl} alt="Preview" className="max-h-52 rounded-xl"/>:<div className="whitespace-pre-wrap rounded-xl bg-white p-3 text-sm shadow-sm">{m.resolvedText}</div>}</div>)}</div></div><div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><h2 className="font-semibold">Summary</h2><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--app-bg)] p-3"><b>{readiness?.summary.ready??0}</b><div className="text-xs">{t.ready}</div></div><div className="rounded-xl bg-[var(--app-bg)] p-3"><b>{readiness?.summary.blocked??0}</b><div className="text-xs">{t.blocked}</div></div><div className="rounded-xl bg-[var(--app-bg)] p-3"><b>{storeIds.length}</b><div className="text-xs">Selected</div></div></div><p className="mt-4 text-xs text-[var(--app-text-secondary)]">{t.native}</p></div></section>
+                    <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{t.stores}</h2><div className="flex gap-2"><button onClick={()=>setStoreIds(readyIds)} className="rounded-xl border px-3 py-2 text-sm">{t.selectReady}</button><button onClick={()=>setStoreIds([])} className="rounded-xl border px-3 py-2 text-sm">{t.clear}</button><button disabled={busy} onClick={()=>void apply()} className="rounded-xl bg-[var(--app-accent)] px-3 py-2 text-sm font-semibold text-white">{t.apply} ({storeIds.length})</button></div></div><div className="mt-4 max-h-[480px] overflow-auto rounded-xl border border-[var(--app-border)]"><table className="w-full text-sm"><thead className="sticky top-0 bg-[var(--app-surface)]"><tr><th className="p-3 text-left">✓</th><th className="p-3 text-left">Store ID</th><th className="p-3 text-left">Store</th><th className="p-3 text-left">LINE OA</th><th className="p-3 text-left">Province</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">{t.assigned}</th></tr></thead><tbody>{readiness?.items.map(i=><tr key={i.lineOfficialAccountId} className="border-t border-[var(--app-border)]"><td className="p-3"><input type="checkbox" disabled={i.readinessStatus!=="READY"} checked={storeIds.includes(i.lineOfficialAccountId)} onChange={e=>setStoreIds(current=>e.target.checked?[...current,i.lineOfficialAccountId]:current.filter(x=>x!==i.lineOfficialAccountId))}/></td><td className="p-3">{i.externalStoreId||"—"}</td><td className="p-3 font-medium">{i.storeName}</td><td className="p-3">{i.lineOfficialAccountName}</td><td className="p-3">{i.province||"—"}</td><td className="p-3"><span className={i.readinessStatus==="READY"?"text-emerald-600":"text-amber-600"}>{i.readinessStatus==="READY"?t.ready:t.blocked}</span>{i.readinessReason&&<div className="text-xs text-[var(--app-text-secondary)]">{i.readinessReason}</div>}</td><td className="p-3">{i.currentGreeting?.templateName||"—"}</td></tr>)}</tbody></table></div></section>
+                  </>}</main>
+                </div>
+              </div>
+            </div>;
+          }
+          EOF
+
+          cat > frontend/test/greeting-messages.test.mts <<'EOF'
+          import assert from "node:assert/strict";
+          import test from "node:test";
+          import { readFileSync } from "node:fs";
+          const view=readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url),"utf8");
+          const nav=readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url),"utf8");
+          test("Greeting Manager exposes one store checkbox and all-ready assignment",()=>{ assert.match(view,/selectReady/); assert.match(view,/type="checkbox"/); assert.match(view,/assignGreetingMessage/); });
+          test("Greeting Manager supports TEXT IMAGE and first-time policy",()=>{ assert.match(view,/addText/); assert.match(view,/addImage/); assert.match(view,/FIRST_TIME_ONLY/); });
+          test("Greeting nav is separate from Rich Menu and Auto-response",()=>{ assert.match(nav,/\/greeting-messages/); });
+          EOF
+
+          python <<'PY'
+          from pathlib import Path
+          def replace_once(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit(f"anchor missing in {path}: {old[:120]}")
+              p.write_text(s.replace(old,new,1))
+
+          # Frontend public types
+          p=Path('frontend/src/types/api.ts'); s=p.read_text(); s += r'''
+
+          export type GreetingMessageBlock =
+            | { id: string; type: "TEXT"; textTemplate: string }
+            | { id: string; type: "IMAGE"; mediaObjectKey: string; previewObjectKey?: string; imageUrl?: string; previewUrl?: string; fileName?: string; fileSize?: number; width?: number; height?: number };
+          export type GreetingTemplate = {
+            id: string; name: string; description: string | null; status: "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
+            sendPolicy: "FIRST_TIME_ONLY" | "ADD_AND_UNBLOCK"; version: number; messages: GreetingMessageBlock[];
+            assignedStoresCount?: number; assignedLineOfficialAccountIds?: string[]; executionCount?: number; updatedAt: string;
+          };
+          export type GreetingReadinessItem = { lineOfficialAccountId: string; lineOfficialAccountName: string; storeId: string | null; externalStoreId: string | null; storeName: string; province: string | null; readinessStatus: "READY" | "BLOCKED"; readinessReason: string | null; selected: boolean; currentGreeting: { templateId: string; templateName: string; templateVersion: number } | null };
+          export type GreetingReadiness = { templateId: string; usedVariables: string[]; summary: { total: number; ready: number; blocked: number; selected: number }; items: GreetingReadinessItem[] };
+          export type GreetingUploadMediaResult = { mediaObjectKey: string; previewObjectKey: string; imageUrl: string; previewUrl: string; mimeType: string; fileSize: number; width?: number; height?: number };
+          '''
+          p.write_text(s)
+
+          # API methods before final object close.
+          p=Path('frontend/src/lib/api.ts'); s=p.read_text()
+          anchor='''  previewAutoResponse: (id: string, body?: { lineOfficialAccountId?: string; storeId?: string }) =>\n    request<import("@/types/api").AutoResponsePreviewResult>(\n      `/auto-responses/${encodeURIComponent(id)}/preview`,\n      {\n        method: "POST",\n        body: JSON.stringify(body || {}),\n      },\n    ),\n};'''
+          add='''  previewAutoResponse: (id: string, body?: { lineOfficialAccountId?: string; storeId?: string }) =>\n    request<import("@/types/api").AutoResponsePreviewResult>(\n      `/auto-responses/${encodeURIComponent(id)}/preview`,\n      { method: "POST", body: JSON.stringify(body || {}) },\n    ),\n  listGreetingMessages: () => request<import("@/types/api").GreetingTemplate[]>("/greeting-messages"),\n  createGreetingMessage: (data: any) => request<import("@/types/api").GreetingTemplate>("/greeting-messages", { method: "POST", body: JSON.stringify(data) }),\n  updateGreetingMessage: (id: string, data: any) => request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) }),\n  activateGreetingMessage: (id: string) => request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/activate`, { method: "POST" }),\n  deactivateGreetingMessage: (id: string) => request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/deactivate`, { method: "POST" }),\n  archiveGreetingMessage: (id: string) => request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/archive`, { method: "POST" }),\n  getGreetingReadiness: (id: string) => request<import("@/types/api").GreetingReadiness>(`/greeting-messages/${encodeURIComponent(id)}/readiness`),\n  assignGreetingMessage: (id: string, lineOfficialAccountIds: string[]) => request<{ templateId: string; assignedCount: number; assignedLineOfficialAccountIds: string[] }>(`/greeting-messages/${encodeURIComponent(id)}/assignments`, { method: "POST", body: JSON.stringify({ lineOfficialAccountIds }) }),\n  previewGreetingMessage: (id: string, body: { lineOfficialAccountId?: string; sampleUserDisplayName?: string }) => request<any>(`/greeting-messages/${encodeURIComponent(id)}/preview`, { method: "POST", body: JSON.stringify(body || {}) }),\n  uploadGreetingMedia: (file: File) => { const formData = new FormData(); formData.append("file", file); return request<import("@/types/api").GreetingUploadMediaResult>("/greeting-messages/media", { method: "POST", body: formData }); },\n};'''
+          if anchor not in s: raise SystemExit('api end anchor missing')
+          p.write_text(s.replace(anchor,add,1))
+
+          replace_once('frontend/src/app/primary-navigation.ts', '| "auto-responses";', '| "auto-responses" | "greeting-messages";')
+          replace_once('frontend/src/lib/authorization.ts', '    case "auto-responses":\n      return hasBackendAdminAccess(auth);', '    case "auto-responses":\n    case "greeting-messages":\n      return hasBackendAdminAccess(auth);')
+
+          p=Path('frontend/src/components/shell/app-sidebar.tsx'); s=p.read_text()
+          s=s.replace('| "auto-response" | "profile"', '| "auto-response" | "greeting" | "profile"',1)
+          s=s.replace('{name === "auto-response" && <><path', '{name === "greeting" && <><path {...common} d="M4 5h16v14H4z"/><path {...common} d="M8 9h8M8 13h5"/><path {...common} d="M12 2v3"/></>}\n      {name === "auto-response" && <><path',1)
+          s=s.replace('autoResponses: "ข้อความตอบกลับอัตโนมัติ",', 'autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ",',1)
+          s=s.replace('autoResponses: "自动回复",', 'autoResponses: "自动回复", greetingMessages: "欢迎消息",',1)
+          s=s.replace('autoResponses: "Auto-response",', 'autoResponses: "Auto-response", greetingMessages: "Greeting messages",',1)
+          s=s.replace('{ href: "/auto-responses", label: t.autoResponses, icon: "auto-response", section: "auto-responses" },', '{ href: "/auto-responses", label: t.autoResponses, icon: "auto-response", section: "auto-responses" },\n    { href: "/greeting-messages", label: t.greetingMessages, icon: "greeting", section: "greeting-messages" },',1)
+          p.write_text(s)
+
+          p=Path('frontend/src/app/page.tsx'); s=p.read_text()
+          s=s.replace('import { AutoResponsesView } from "./auto-responses/auto-responses-view";', 'import { AutoResponsesView } from "./auto-responses/auto-responses-view";\nimport { GreetingMessagesView } from "./greeting-messages/greeting-messages-view";',1)
+          anchor='''          ) : initialSection === "stores" ? ('''
+          insert='''          ) : initialSection === "greeting-messages" ? (\n            <section className="col-span-full min-h-0 overflow-y-auto">\n              <GreetingMessagesView language={language} />\n            </section>\n          ) : initialSection === "stores" ? ('''
+          if anchor not in s: raise SystemExit('page section anchor missing')
+          p.write_text(s.replace(anchor,insert,1))
+          PY
+
+          npx --prefix backend prisma validate --schema backend/prisma/schema.prisma
+          npx --prefix backend prisma generate --schema backend/prisma/schema.prisma
+
+      - name: Backend tests
+        working-directory: backend
+        run: npm test
+      - name: Backend build
+        working-directory: backend
+        run: npm run build
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+      - name: Diff check
+        run: git diff --check
+      - name: Commit tested implementation
+        shell: bash
+        run: |
+          rm .github/workflows/chatgpt-greeting-manager.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend frontend .github/workflows/chatgpt-greeting-manager.yml
+          git commit -m "feat(greeting): add multi-store greeting manager"
+          git push origin HEAD:chatgpt/greeting-manager
