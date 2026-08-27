@@ -1,5 +1,39 @@
 import { isValidGoogleMapsUrl } from "./store-master.utils";
 
+export type GoogleMapsReadinessStatus = "CONFIGURED" | "MISSING" | "INVALID";
+
+export type GoogleMapsReadiness = {
+  status: GoogleMapsReadinessStatus;
+  ready: boolean;
+  reason: string | null;
+};
+
+export function getStoreGoogleMapsReadiness(
+  store?: { googleMapsUrl?: string | null } | null | string,
+): GoogleMapsReadiness {
+  const rawUrl = typeof store === "string" ? store : store?.googleMapsUrl;
+  const url = rawUrl?.trim();
+  if (!url) {
+    return {
+      status: "MISSING",
+      ready: false,
+      reason: "Missing Google Maps URL",
+    };
+  }
+  if (isValidGoogleMapsUrl(url)) {
+    return {
+      status: "CONFIGURED",
+      ready: true,
+      reason: null,
+    };
+  }
+  return {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  };
+}
+
 export type StoreVariableContext = {
   id?: string | null;
   name?: string | null;

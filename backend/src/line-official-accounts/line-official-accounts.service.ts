@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto } from "./line-official-account.dto";
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
+import { getStoreGoogleMapsReadiness } from "../store-master/template-variable-resolver";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
@@ -67,10 +68,11 @@ export class LineOfficialAccountsService {
     if (!item.store || item.accountType === "HEAD_OFFICE") throw new InternalServerErrorException("Store LINE OA is missing its store relationship");
     const webhook = this.webhookConfiguration(item.webhookKey);
     const resolvedLineOaManagerUrl = resolveLineOaManagerUrl(item.store, latestManagerUrls);
+    const googleMapsReadiness = getStoreGoogleMapsReadiness(item.store.storeMaster?.googleMapsUrl);
     return {
       id: item.id, name: item.name, basicId: item.basicId, channelId: item.channelId,
       maskedChannelId: item.channelId ? `${item.channelId.slice(0, 4)}••••${item.channelId.slice(-4)}` : null,
-      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, storeId: item.store.storeMaster?.externalStoreId ?? null, name: item.store.name, code: item.store.code, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, googleMapsUrl: item.store.storeMaster?.googleMapsUrl ?? null, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
+      destinationId: item.destinationId, resolvedLineOaManagerUrl, store: { id: item.store.id, storeId: item.store.storeMaster?.externalStoreId ?? null, name: item.store.name, code: item.store.code, region: item.store.region, area: item.store.area, storeMasterId: item.store.storeMasterId, accountName: item.store.storeMaster?.accountName ?? null, externalStoreId: item.store.storeMaster?.externalStoreId ?? null, province: item.store.storeMaster?.province ?? item.store.area, lineId: item.store.storeMaster?.lineId ?? null, lineOaLink: isValidLineOaUrl(item.store.storeMaster?.lineOaLink ?? null) ? item.store.storeMaster?.lineOaLink ?? null : null, lineManagerUrl: resolvedLineOaManagerUrl, googleMapsUrl: item.store.storeMaster?.googleMapsUrl ?? null, googleMapsStatus: googleMapsReadiness.status, googleMapsStatusReason: googleMapsReadiness.reason, dataQualityStatus: item.store.storeMaster?.dataQualityStatus ?? null, dataSource: item.store.storeMaster ? "MASTER" : "MANUAL" },
       connectionStatus: this.calculatedStatus(item), isActive: item.isActive, lastWebhookReceivedAt: item.lastWebhookReceivedAt,
       lastConnectionTestAt: item.lastConnectionTestAt, lastConnectionError: item.lastConnectionError,
       hasChannelSecret: Boolean(item.encryptedChannelSecret), hasChannelAccessToken: Boolean(item.encryptedChannelAccessToken),

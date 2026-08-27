@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractTemplateVariables,
+  getStoreGoogleMapsReadiness,
   getStoreVariableValue,
   resolveTemplateVariables,
   validateTemplateVariables,
@@ -112,4 +113,61 @@ void test("validateTemplateVariables handles multiple variables with mixed statu
   assert.equal(validation.status, "BLOCKED");
   assert.ok(validation.missingVariables.includes("store.googleMapsUrl"));
   assert.ok(validation.missingVariables.includes("store.province"));
+});
+
+void test("getStoreGoogleMapsReadiness returns CONFIGURED, MISSING, and INVALID appropriately", () => {
+  // Store ID 29113 / OBS Central Pinklao post-sync
+  assert.deepEqual(
+    getStoreGoogleMapsReadiness({
+      storeId: "29113",
+      storeName: "OBS Central Pinklao",
+      googleMapsUrl: "https://maps.app.goo.gl/centralpinklao",
+    }),
+    {
+      status: "CONFIGURED",
+      ready: true,
+      reason: null,
+    },
+  );
+
+  // Null & blank -> MISSING
+  assert.deepEqual(getStoreGoogleMapsReadiness(null), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: null }), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness({ googleMapsUrl: "   " }), {
+    status: "MISSING",
+    ready: false,
+    reason: "Missing Google Maps URL",
+  });
+
+  // Valid HTTPS Google Maps URLs -> CONFIGURED
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://maps.app.goo.gl/abc1234"), {
+    status: "CONFIGURED",
+    ready: true,
+    reason: null,
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://www.google.com/maps/place/OPPO+Rama9"), {
+    status: "CONFIGURED",
+    ready: true,
+    reason: null,
+  });
+
+  // Insecure and invalid URLs -> INVALID
+  assert.deepEqual(getStoreGoogleMapsReadiness("http://maps.google.com/test"), {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  });
+  assert.deepEqual(getStoreGoogleMapsReadiness("https://example.com/other-page"), {
+    status: "INVALID",
+    ready: false,
+    reason: "Invalid Google Maps URL",
+  });
 });

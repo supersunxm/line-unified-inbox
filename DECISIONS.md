@@ -1,3 +1,10 @@
+# Store Master Google Maps Readiness Visibility & Filtering (2026-08-27)
+
+- **Derived Readiness Model**: Rather than persisting additional columns in PostgreSQL, `googleMapsStatus` (`CONFIGURED` | `MISSING` | `INVALID`) and `googleMapsStatusReason` are derived on the fly from `googleMapsUrl` via `getStoreGoogleMapsReadiness`. This keeps the database schema lean, avoids sync discrepancies, and guarantees consistent validation logic across frontend and backend.
+- **Multiplicative Filtering**: Google Maps readiness filter buttons (`All`, `Configured`, `Missing`, `Invalid`) combine multiplicatively with existing store search, connection status, and archived filters.
+- **Accurate Count Derivation**: Readiness counts displayed on filter buttons (`All (N)`, `Configured (N)`, `Missing (N)`, `Invalid (N)`) are derived dynamically from currently loaded store data.
+- **Interactive Sync Summary Card**: Clicking on Missing, Invalid, or Configured metrics in the Store Master Sync summary panel immediately applies the corresponding Google Maps readiness filter to the store list.
+
 # Store Master Production Sync Control (2026-08-27)
 
 - **Role-Gated Sync Action**: The Store Master sync trigger is exclusively available to `ADMIN` users on the Web (`authUser.role === "ADMIN"`). Unauthorized users (`VIEWER` or store-level roles) are completely restricted from seeing or executing the sync control.
