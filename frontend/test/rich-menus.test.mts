@@ -122,3 +122,17 @@ test("API client exports Rich Menu template and readiness methods", () => {
   assert.match(apiFile, /saveRichMenuAssignments/);
   assert.match(apiFile, /uploadRichMenuImage/);
 });
+
+test("RichMenusView enables vertical page scrolling while preserving chats fixed-height layout", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+  // Asserts rich-menus has scrollable root container with sticky header
+  assert.match(viewFile, /data-rich-menus-scroll/);
+  assert.match(viewFile, /overflow-y-auto/);
+  assert.match(viewFile, /flex-1 min-h-0/);
+  assert.match(viewFile, /sticky top-0/);
+
+  // Asserts /chats maintains its dedicated single-screen layout and scrolling rules
+  const pageFile = readFileSync(resolve(process.cwd(), "src/app/page.tsx"), "utf8");
+  assert.match(pageFile, /data-chat-pane="conversations"/);
+  assert.match(pageFile, /data-chat-message-scroll/);
+});

@@ -384,9 +384,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const selectedStoreItem = readinessData?.items.find((i) => i.lineOfficialAccountId === previewStoreOaId);
 
   return (
-    <div className="min-h-full w-full bg-[#f7f8f9] dark:bg-[var(--app-bg)] text-[#111] dark:text-[#f3f4f6] font-sans pb-16">
+    <div
+      data-rich-menus-scroll
+      className="w-full flex-1 min-h-0 overflow-y-auto bg-[#f7f8f9] dark:bg-[var(--app-bg)] text-[#111] dark:text-[#f3f4f6] font-sans pb-16"
+    >
       {/* 1. Page Header (LINE OA Manager Style) */}
-      <div className="border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-white dark:bg-[var(--app-surface)] px-6 py-4">
+      <div className="sticky top-0 z-20 border-b border-[#e5e7eb] dark:border-[var(--app-border)] bg-white/95 dark:bg-[var(--app-surface)]/95 backdrop-blur-xs px-6 py-4">
         <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">

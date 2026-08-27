@@ -1,3 +1,8 @@
+# Route-Level Vertical Scrolling Architecture for /rich-menus (2026-08-27)
+
+- **Isolated Route-Level Scrolling**: To preserve the fixed single-screen layout and internal message timeline scrolling required for `/chats`, `/rich-menus` enables vertical scrolling on its own root wrapper (`w-full flex-1 min-h-0 overflow-y-auto`) rather than modifying the outer application shell.
+- **Sticky Actions Header**: The page header with `[ Save Draft ]` and template state uses `sticky top-0 z-20` with a subtle backdrop blur to remain continuously accessible as users scroll through lengthy action lists and the Target Stores table.
+
 # Rich Menu Workspace Redesign: Alignment with LINE OA Manager (2026-08-27)
 
 - **2-Column Editor + Lower Target Stores Structure**: Aligned the `/rich-menus` workspace structure with LINE Official Account Manager's Rich Menu editor. The editor uses a 2-column layout (Preview Left ~36%, Editor Right ~64%) with Target Stores positioned full-width underneath rather than crowded beside the form.

@@ -1,6 +1,19 @@
 # AI progress
 
-## Current task: Rich Menu Workspace Redesign to Align with LINE OA Manager (2026-08-27)
+## Current task: Fix Vertical Page Scrolling on /rich-menus (2026-08-27)
+
+- **Root Cause**:
+  - The route shell `<PageContainer variant="full">` uses `overflow-hidden` for fixed-height chat layouts. Inside this, the root element of `RichMenusView` lacked `flex-1 min-h-0 overflow-y-auto`, causing the tall form content and lower Target Stores section to be cut off without browser/container scrolling.
+- **Resolution**:
+  - Configured `RichMenusView` root container as `w-full flex-1 min-h-0 overflow-y-auto` (`data-rich-menus-scroll`), allowing natural vertical scrolling for mouse wheels, trackpads, touch gestures, and scrollbars down to the bottom Target Stores section.
+  - Made the top Page Header bar `sticky top-0 z-20 bg-white/95 backdrop-blur-xs` so that `[ Save Draft ]` and template state remain persistently accessible while scrolling.
+  - Preserved 100% of the fixed single-screen `/chats` internal pane layout without regression.
+- **Verification & Test Results**:
+  - 437 / 437 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly (`npm run build` in `frontend/`).
+  - `git diff --check` clean.
+
+## Previous task: Rich Menu Workspace Redesign to Align with LINE OA Manager (2026-08-27)
 
 - **Visual & Structural Alignment with LINE OA Manager**:
   - Replaced oversized 3-column dashboard layout with LINE OA Manager's 2-column form structure (Preview Left ~36%, Editor Right ~64%) with Target Stores full-width below.
