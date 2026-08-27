@@ -1384,3 +1384,8 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The existing GitHub Actions permanent signing identity is the only production signing path. The APK is published and copied into release metadata only after independent package, version, certificate, and SHA-256 verification.
 - `/app/version/android` remains backed by the additive `AppRelease` migration, while `/download` and `/download/history` retain every prior APK and release entry. The new migration is idempotent/upsert-based and only deactivates older Android releases; it does not delete production data.
 - The signed artifact was produced by the existing permanent-key GitHub workflow and independently checked before publication. Metadata uses the verified SHA-256 and a content-addressed APK URL; the local migration was deployed only to the verification database, not production.
+
+# Monthly summary reply-cycle boundary (2026-08-27)
+
+- Monthly `รอตอบ`/`ตอบแล้ว` retain the existing `operational` response shape for mobile compatibility, but are now aliases of `response.unanswered`/`response.cyclesAnswered` for the requested Bangkok month. The source of truth is the same cycle calculation used by response-performance.
+- A response cycle starts at the first inbound message after the previous qualifying BM/user outbound in a conversation; only outbound messages with a non-null `senderUserId` answer it. Cycles are attributed to their inbound start month, including replies that cross a month boundary. Current `Conversation.bmReplyStatus` remains exclusively an operational inbox snapshot and is not used for historical cards.

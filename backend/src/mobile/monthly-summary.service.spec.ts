@@ -39,6 +39,15 @@ void test("unanswered cycle remains open", () => {
   assert.equal(cycles[0]?.durationSeconds, null);
 });
 
+void test("outbound without senderUserId does not answer a monthly cycle", () => {
+  const cycles = calculateResponseCycles([
+    inbound("1", "c1", "2026-08-01T00:00:00Z"),
+    outbound("2", "c1", "2026-08-01T01:00:00Z", null),
+  ]);
+  assert.equal(cycles.length, 1);
+  assert.equal(cycles[0]?.answeredAt, null);
+});
+
 void test("image and sticker inbound messages start cycles", () => {
   const cycles = calculateResponseCycles([inbound("1", "c1", "2026-08-01T00:00:00Z", "IMAGE"), outbound("2", "c1", "2026-08-01T01:00:00Z"), inbound("3", "c1", "2026-08-01T02:00:00Z", "STICKER")]);
   assert.equal(cycles.length, 2);
@@ -119,15 +128,47 @@ void test("summary queries explicitly constrain analytics to non-QA conversation
   assert.deepEqual(captured, { conversation: { isQa: false, store: { isActive: true, archivedAt: null }, storeId: { in: ["store-1"] } }, sentAt: { lte: captured && (captured as { sentAt: { lte: Date } }).sentAt.lte } });
 });
 
-void test("operational status mapping is Need Reply and Completed", async () => {
+void test("monthly reply cards use selected response cycles rather than current conversation status", async () => {
+  const messages = [
+    inbound("jul-answered-in", "jul-answered", "2026-07-05T02:00:00Z"),
+    outbound("jul-answered-out", "jul-answered", "2026-07-05T03:00:00Z"),
+    inbound("jul-open-in", "jul-open", "2026-07-10T02:00:00Z"),
+    inbound("aug-open-in", "aug-open", "2026-08-05T02:00:00Z"),
+  ];
+  const conversationQueries: Array<{ select?: Record<string, unknown> }> = [];
   const prisma = {
-    message: { findMany: async () => [] },
-    conversation: { findMany: async () => [{ bmReplyStatus: "NOT_REPLIED" }, { bmReplyStatus: "NOTIFIED_BM" }, { bmReplyStatus: "REPLIED" }] },
+    message: { findMany: async () => messages },
+    conversation: { findMany: async (args: { select?: Record<string, unknown> }) => { conversationQueries.push(args); return []; } },
   };
   const service = new MonthlySummaryService(prisma as never, { accessibleStoreIds: async () => null } as never);
-  const result = await service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-08");
-  assert.equal(result.operational.needReply, 2);
-  assert.equal(result.operational.completed, 1);
+  const july = await service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-07");
+  const august = await service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-08");
+
+  assert.deepEqual(july.operational, { needReply: 1, completed: 1, asOf: july.period.asOf });
+  assert.deepEqual(august.operational, { needReply: 1, completed: 0, asOf: august.period.asOf });
+  assert.equal(july.operational.needReply + july.operational.completed, july.response.cyclesStarted);
+  assert.equal(august.operational.needReply + august.operational.completed, august.response.cyclesStarted);
+  assert.equal(july.response.cyclesStarted, 2);
+  assert.equal(august.response.cyclesStarted, 1);
+  assert.ok(conversationQueries.every(({ select }) => !select || !("bmReplyStatus" in select)));
+});
+
+void test("historical monthly reply counts are unaffected by current bmReplyStatus changes", async () => {
+  const messages = [inbound("in", "c1", "2026-07-05T02:00:00Z"), outbound("out", "c1", "2026-07-05T03:00:00Z")];
+  let currentStatus = "NOT_REPLIED";
+  const prisma = {
+    message: { findMany: async () => messages },
+    conversation: { findMany: async (args: { select?: Record<string, unknown> }) => {
+      if (args.select && "bmReplyStatus" in args.select) return [{ bmReplyStatus: currentStatus }];
+      return [];
+    } },
+  };
+  const service = new MonthlySummaryService(prisma as never, { accessibleStoreIds: async () => null } as never);
+  const before = await service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-07");
+  currentStatus = "REPLIED";
+  const after = await service.get({ id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" }, "2026-07");
+  assert.deepEqual(before.operational, { needReply: 0, completed: 1, asOf: before.period.asOf });
+  assert.deepEqual(after.operational, { needReply: 0, completed: 1, asOf: after.period.asOf });
 });
 
 void test("current month comparison uses same elapsed range", () => {
