@@ -1245,6 +1245,12 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - A verified APK is retained only while the installer reports permission required, enabling retry without a duplicate download. Other failures delete the temporary file; concurrent Update Now calls share one in-flight operation. The dialog remains visible and renders localized preparing/downloading/verifying/ready/error states so failures cannot disappear silently.
 - Server-side compatibility for 1.0.16+17 was investigated but not changed. That binary cannot download itself and its `canLaunchUrl` result is constrained by its already-installed manifest; a different release URL cannot safely correct that client behavior. Production release metadata remains untouched until a new fixed APK is released.
 
+# Android 1.0.18 release boundary (2026-08-26)
+
+- Release `1.0.18+19` is additive over the merged updater and push-notification fixes. The permanent GitHub Actions signing identity remains the only authorized signing path; no key is generated or substituted.
+- The APK checksum, size, filename, and Thai release notes are copied into both the Web release history and the additive `AppRelease` migration so `/download` and `/app/version/android` cannot drift. Existing releases and download counters remain preserved.
+- This release does not alter Main OA behavior, auth/session semantics, Firebase project/package identity, or production data. Real-device FCM and updater checks remain a post-install requirement; CI only validates build, static wiring, and automated behavior.
+
 # Android push notification delivery boundary (2026-08-26)
 
 - Use a mixed FCM notification+data payload. Android system rendering is the reliable background/terminated path; the Flutter `onMessage` listener renders foreground alerts, and the background isolate renders only data-only fallback messages so a notification envelope can never double-alert.
