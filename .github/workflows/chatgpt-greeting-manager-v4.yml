@@ -1,0 +1,78 @@
+name: ChatGPT Greeting Manager V4
+
+on:
+  push:
+    branches:
+      - chatgpt/greeting-manager
+
+permissions:
+  contents: write
+
+jobs:
+  implement-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate implementation
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          lines=Path('.github/workflows/chatgpt-greeting-manager.yml').read_text().splitlines()
+          start=next(i for i,l in enumerate(lines) if l.strip()=='- name: Implement Greeting Message Manager')
+          run=next(i for i in range(start+1,len(lines)) if lines[i].strip()=='run: |')+1
+          block=[]
+          for line in lines[run:]:
+              if line.startswith('      - name:'): break
+              block.append(line[10:] if line.startswith('          ') else line)
+          block=[line for line in block if 'npx --prefix backend prisma' not in line]
+          script='\n'.join(block)+'\n'
+          script=script.replace('            isValidGoogleMapsUrl,\n','')
+          script=script.replace('import { extractTemplateVariables, getStoreVariableValue, isValidGoogleMapsUrl, resolveTemplateVariables, type StoreVariableContext } from "../store-master/template-variable-resolver";', 'import { extractTemplateVariables, getStoreVariableValue, resolveTemplateVariables, type StoreVariableContext } from "../store-master/template-variable-resolver";\n          import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";')
+          marker='          } from "../store-master/template-variable-resolver";'
+          script=script.replace(marker, marker+'\n          import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";', 1)
+          Path('/tmp/greeting-impl.sh').write_text(script)
+          PY
+          bash /tmp/greeting-impl.sh
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Validate and generate Prisma
+        working-directory: backend
+        run: npx prisma validate && npx prisma generate
+      - name: Backend tests
+        working-directory: backend
+        run: npm test
+      - name: Backend build
+        working-directory: backend
+        run: npm run build
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+      - name: Diff check
+        run: git diff --check
+      - name: Commit tested implementation
+        shell: bash
+        run: |
+          rm -f .github/workflows/chatgpt-greeting-manager.yml .github/workflows/chatgpt-greeting-manager-v2.yml .github/workflows/chatgpt-greeting-manager-v3.yml .github/workflows/chatgpt-greeting-manager-v4.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend frontend .github/workflows/chatgpt-greeting-manager.yml .github/workflows/chatgpt-greeting-manager-v2.yml .github/workflows/chatgpt-greeting-manager-v3.yml .github/workflows/chatgpt-greeting-manager-v4.yml
+          git commit -m "feat(greeting): add multi-store greeting manager"
+          git push origin HEAD:chatgpt/greeting-manager
