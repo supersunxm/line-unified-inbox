@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - release/android-1.1.3
+    paths:
+      - android_app/pubspec.yaml
+      - .github/workflows/android-production-release.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-signed-apk:
@@ -88,6 +91,25 @@ jobs:
 
       - name: Rename release APK
         run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.3-production.apk
+
+      - name: Stage signed APK in release branch
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.3-production.apk"
+          DEST="../frontend/public/downloads/oppo-line-oa-chat-v1.1.3-production.apk"
+          mkdir -p ../frontend/public/downloads
+          cp "$APK" "$DEST"
+          SHA256="$(sha256sum "$DEST" | awk '{print $1}')"
+          BYTES="$(stat -c%s "$DEST")"
+          echo "Release SHA-256: $SHA256"
+          echo "Release bytes: $BYTES"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "chore(android): stage signed 1.1.3 APK [skip release-build]"
+          git push origin "HEAD:${RELEASE_BRANCH}"
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
