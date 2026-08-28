@@ -1,28 +1,26 @@
 # AI progress
 
-## Current task: Greeting Message Manager Phase 1 (2026-08-28) [COMPLETED]
+## Current task: Greeting Message Manager UI Polish & LINE OA Alignment (2026-08-28) [COMPLETED]
 
-- **Architecture & Technical Scope**:
-  - Independent subsystem for multi-store Greeting Message management (Phase 1).
-  - Database schema: `GreetingTemplate`, `GreetingStoreAssignment`, `GreetingExecution` with non-destructive migration `20260828100000_add_greeting_message_manager`.
-  - Webhook integration on LINE `follow` event with zero push fallback, idempotency via `webhookEventId`, and single-request `replyMessages` execution.
-  - Send policy evaluation: `FIRST_TIME_ONLY` (skips unblock events and users who already received a greeting for the same OA) vs `ADD_AND_UNBLOCK` (replies on both new adds and unblocks).
-  - Template variable resolver supporting runtime context variables `{{user.displayName}}`, `{{account.name}}`, and store variables (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.province}}`, `{{store.region}}`, etc.) without blocking store configuration readiness.
-  - Media public URL namespace `line-media/greeting/` in `PUBLIC_MEDIA_PREFIXES`, Sharp preview generation (<= 1MB), magic byte validation, and upload endpoint.
-  - Controller endpoints guarded by `Roles(UserRole.ADMIN)`.
-  - Frontend UI at `/greeting-messages`: message sequence builder (1–5 blocks), store readiness table with single checkbox selection, live mobile preview, active edit warning modal, permanent native OA Manager duplication warning banner, and multilingual support (`th`, `en`, `zh`).
+- **UI Scope & Alignment**:
+  - Redesigned `/greeting-messages` content workspace to visually and structurally match native LINE Official Account Manager.
+  - Section hierarchy:
+    - **Header**: `ข้อความต้อนรับ` with helper notice, quick template switcher, and top-right `#06c755` LINE Green `[ บันทึกการเปลี่ยนแปลง ]` action button.
+    - **Native OA Manager Notice**: Compact pale amber notice with direct link to LINE Official Account Manager (`https://manager.line.biz/`).
+    - **Sending Restrictions (`ข้อจำกัดการส่ง`)**: Single clean checkbox `[ ] ส่งเฉพาะเพื่อนใหม่ครั้งแรก` (`Only send for first-time friends`) mapped directly to `FIRST_TIME_ONLY` vs `ADD_AND_UNBLOCK`.
+    - **Message Content Grid (68% Editor / 32% Sticky Preview)**:
+      - Clean single editor frame per message block with gray header toolbar (`T` / `🖼️` icons and `▲`, `▼`, `✕` controls).
+      - Textarea with character count (`171 / 5000`) and LINE OA-style variable buttons (`[ 😊 อิโมจิ ]`, `[ ชื่อผู้ใช้ ]`, `[ ชื่อบัญชี ]`, `[ ชื่อร้าน ]`, `[ Google Maps ]`, `[ ตัวแปรเพิ่มเติม ▾ ]`).
+      - Image block integrated into editor frame.
+      - `[ + เพิ่ม ]` button with popover for Text / Image up to 5 blocks.
+      - Sticky LINE chat screen preview on desktop with realistic wallpaper, avatar, account name, and green variable pill badges.
+    - **Store Assignments (`การใช้งานกับสาขา`)**: Compact summary bar with `[ เลือกสาขา ]` expandable table.
 - **Verification & Test Results**:
-  - 1,410 / 1,410 backend unit & integration tests passing (`npm test` in `backend/`).
-  - 455 / 455 frontend unit tests passing (`npm test` in `frontend/`).
-  - NestJS/Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - 456 / 456 frontend unit tests passing (`npm test` in `frontend/`).
   - Next.js Turbopack production build succeeded cleanly across 29 routes (`npm run build` in `frontend/`).
   - `git diff --check` clean with zero whitespace or line-ending errors.
-- **Safety Directives Followed**:
-  - No Greeting Template assigned automatically.
-  - No real LINE Greeting sent during deployment.
-  - No existing follower received an unintended message.
-  - Push fallback disallowed.
-  - Migration is fully non-destructive.
+
+## Previous task: Greeting Message Manager Phase 1 (2026-08-28) [COMPLETED]
 
 ## Previous task: Rich Menu "No Rich Menu / Clear Default" Management (2026-08-27)
 

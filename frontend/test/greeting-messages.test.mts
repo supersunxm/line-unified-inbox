@@ -72,7 +72,7 @@ test("Greeting I18N dictionary contains duplication warning and send policy copy
   // Duplication warning banner
   assert.match(th.duplicationWarning, /LINE Official Account Manager/);
   assert.match(en.duplicationWarning, /LINE Official Account Manager/);
-  assert.match(zh.duplicationWarning, /LINE Official Account Manager/);
+  assert.match(zh.duplicationWarning, /LINE 官方账号管理器/);
 
   // Send policy descriptions
   assert.match(th.sendPolicyFirstTime, /เพิ่มเพื่อนครั้งแรก/);
@@ -83,6 +83,46 @@ test("Greeting I18N dictionary contains duplication warning and send policy copy
 
   assert.match(zh.sendPolicyFirstTime, /仅首次加好友/);
   assert.match(zh.sendPolicyAddAndUnblock, /解除拉黑/);
+});
+
+test("LINE OA visual layout strings are defined across all supported languages", () => {
+  const th = getGreetingDict("th");
+  const en = getGreetingDict("en");
+  const zh = getGreetingDict("zh");
+
+  // Section headers
+  assert.equal(th.sendingRestrictions, "ข้อจำกัดการส่ง");
+  assert.equal(en.sendingRestrictions, "Sending restrictions");
+  assert.equal(zh.sendingRestrictions, "发送限制");
+
+  assert.equal(th.onlySendFirstTime, "ส่งเฉพาะเพื่อนใหม่ครั้งแรก");
+  assert.equal(en.onlySendFirstTime, "Only send for first-time friends");
+  assert.equal(zh.onlySendFirstTime, "仅向首次加好友的用户发送");
+
+  assert.equal(th.messageContent, "เนื้อหาข้อความ");
+  assert.equal(en.messageContent, "Message content");
+  assert.equal(zh.messageContent, "消息内容");
+
+  assert.equal(th.saveChanges, "บันทึกการเปลี่ยนแปลง");
+  assert.equal(en.saveChanges, "Save changes");
+  assert.equal(zh.saveChanges, "保存更改");
+
+  // Variable button labels
+  assert.equal(th.userDisplayName, "ชื่อผู้ใช้");
+  assert.equal(en.userDisplayName, "User's display name");
+  assert.equal(zh.userDisplayName, "用户显示名称");
+
+  assert.equal(th.accountName, "ชื่อบัญชี");
+  assert.equal(en.accountName, "Account name");
+  assert.equal(zh.accountName, "账号名称");
+
+  assert.equal(th.storeName, "ชื่อร้าน");
+  assert.equal(en.storeName, "Store name");
+  assert.equal(zh.storeName, "门店名称");
+
+  assert.equal(th.googleMaps, "Google Maps");
+  assert.equal(en.googleMaps, "Google Maps");
+  assert.equal(zh.googleMaps, "Google Maps");
 });
 
 test("Frontend variable resolver handles user.displayName and account.name without blocking store readiness", () => {
