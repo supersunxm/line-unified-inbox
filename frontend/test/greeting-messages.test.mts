@@ -161,3 +161,15 @@ test("greeting page owns vertical scrolling inside full workspace", () => {
   const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
   assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);
 });
+
+
+test("greeting target stores are directly visible like rich menu targeting", () => {
+  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
+  assert.match(source, /data-testid="greeting-store-targeting"/);
+  assert.doesNotMatch(source, /showStoreSection/);
+  assert.doesNotMatch(source, /handleOpenStoreTargeting/);
+  assert.match(source, /handleSelectAllReadyStores/);
+  assert.match(source, /handleSelectFilteredReadyStores/);
+  assert.match(source, /storeReadinessFilter === value/);
+  assert.match(source, /selectedStoreOaIds\.length/);
+});
