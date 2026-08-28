@@ -1,0 +1,144 @@
+name: ChatGPT Greeting Target Store UI
+
+on:
+  push:
+    branches:
+      - feat/greeting-rich-menu-targeting
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/greeting-rich-menu-targeting
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply target store UI refactor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('frontend/src/app/greeting-messages/greeting-messages-view.tsx')
+          text = path.read_text()
+
+          # Preserve Greeting's all-store capability. This is a UI refactor only.
+          text = text.replace('        storeUsage: "Store usage",', '        storeUsage: "Target stores",')
+          text = text.replace('        storeUsage: "门店使用范围",', '        storeUsage: "目标门店",')
+          text = text.replace('      storeUsage: "การใช้งานกับสาขา",', '      storeUsage: "ร้านเป้าหมาย",')
+
+          # The selection table should be visible directly, not hidden behind Manage stores.
+          state_line = '  const [showStoreSection, setShowStoreSection] = useState(false);\n'
+          text = text.replace(state_line, '')
+
+          open_fn = '''  const handleOpenStoreTargeting = () => {\n    setShowStoreSection(true);\n    window.setTimeout(() => {\n      document\n        .getElementById("greeting-store-targeting")\n        ?.scrollIntoView({ behavior: "smooth", block: "start" });\n    }, 0);\n  };\n\n'''
+          text = text.replace(open_fn, '')
+
+          quick_start_marker = '''        <section\n          data-testid="greeting-store-quick-targeting"'''
+          quick_start = text.find(quick_start_marker)
+          if quick_start < 0:
+              raise SystemExit('quick targeting section not found')
+          warning_marker = '''        <div className="flex items-center justify-between rounded-md border border-amber-200'''
+          quick_end = text.find(warning_marker, quick_start)
+          if quick_end < 0:
+              raise SystemExit('warning marker after quick section not found')
+
+          bottom_start_marker = '''        <section\n          id="greeting-store-targeting"'''
+          bottom_start = text.find(bottom_start_marker, quick_end)
+          if bottom_start < 0:
+              raise SystemExit('bottom targeting section not found')
+          modal_marker = '''\n      </div>\n\n      {showActiveEditModal'''
+          after_section_area = text.find(modal_marker, bottom_start)
+          if after_section_area < 0:
+              raise SystemExit('modal marker after targeting section not found')
+          bottom_section_end = text.rfind('        </section>', bottom_start, after_section_area)
+          if bottom_section_end < 0:
+              raise SystemExit('targeting section closing tag not found')
+          bottom_section_end += len('        </section>')
+
+          section = text[bottom_start:bottom_section_end]
+
+          # Turn the old lower assignment section into the always-visible Rich Menu-style target card.
+          section = section.replace(
+              'className="scroll-mt-24 space-y-4 border-t border-gray-200 pb-12 pt-8"',
+              'data-testid="greeting-store-targeting"\n          className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"',
+              1,
+          )
+
+          # Remove the old collapse/manage buttons from the section header.
+          old_actions = '''            <div className="flex flex-wrap gap-2">\n              <button\n                type="button"\n                onClick={handleSelectAllReadyStores}\n                disabled={!currentTemplate || readyCount === 0}\n                className="rounded border border-[#06c755] bg-white px-3.5 py-2 text-xs font-semibold text-[#06c755] hover:bg-emerald-50 disabled:opacity-40"\n              >\n                {ui.selectAllReady}\n              </button>\n              <button\n                type="button"\n                onClick={() => setShowStoreSection((value) => !value)}\n                disabled={!currentTemplate}\n                className="rounded bg-[#06c755] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-40"\n              >\n                {showStoreSection ? ui.hideStores : ui.manageStores}\n              </button>\n            </div>'''
+          section = section.replace(old_actions, '''            {currentTemplate && readinessData && (\n              <div className="flex flex-wrap items-center gap-2 text-xs">\n                <span className="text-gray-500">{ui.selected} <strong className="text-gray-900">{selectedStoreOaIds.length}</strong></span>\n                <span className="text-gray-300">|</span>\n                <button\n                  type="button"\n                  onClick={handleSelectAllReadyStores}\n                  disabled={readyCount === 0}\n                  className="font-semibold text-[#059669] hover:underline disabled:opacity-40"\n                >\n                  {ui.selectAllReady}\n                </button>\n                <span className="text-gray-300">|</span>\n                <button\n                  type="button"\n                  onClick={() => setSelectedStoreOaIds([])}\n                  className="font-medium text-gray-600 hover:underline"\n                >\n                  {ui.clearSelection}\n                </button>\n              </div>\n            )}''', 1)
+
+          # Always show the targeting table for a selected template.
+          section = section.replace(
+              '{showStoreSection && currentTemplate && readinessData && (',
+              '{currentTemplate && readinessData && (',
+              1,
+          )
+
+          # Replace the dropdown readiness filter with Rich Menu-style segmented tabs.
+          old_filter = '''                <select\n                  value={storeReadinessFilter}\n                  onChange={(event) => setStoreReadinessFilter(event.target.value as ReadinessFilter)}\n                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"\n                >\n                  <option value="ALL">{ui.allStatuses}</option>\n                  <option value="READY">{ui.readyOnly}</option>\n                  <option value="BLOCKED">{ui.blockedOnly}</option>\n                </select>'''
+          new_filter = '''                <div className="inline-flex h-9 overflow-hidden rounded border border-gray-300 bg-white">\n                  {([\n                    ["ALL", ui.allStatuses],\n                    ["READY", ui.readyOnly],\n                    ["BLOCKED", ui.blockedOnly],\n                  ] as const).map(([value, label]) => (\n                    <button\n                      key={value}\n                      type="button"\n                      onClick={() => setStoreReadinessFilter(value)}\n                      className={`px-3 text-xs font-medium ${\n                        storeReadinessFilter === value\n                          ? "bg-gray-100 text-gray-900"\n                          : "text-gray-600 hover:bg-gray-50"\n                      }`}\n                    >\n                      {label}\n                    </button>\n                  ))}\n                </div>'''
+          if old_filter not in section:
+              raise SystemExit('readiness select block not found')
+          section = section.replace(old_filter, new_filter, 1)
+
+          # Make the action bar mirror Rich Menu target selection: select ready results / all ready / clear, with save on right.
+          old_bar = '''              <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">\n                <div className="flex flex-wrap gap-2">\n                  <button\n                    type="button"\n                    onClick={handleSelectFilteredReadyStores}\n                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"\n                  >\n                    {ui.selectFilteredReady}\n                  </button>\n                  <button\n                    type="button"\n                    onClick={() => setSelectedStoreOaIds([])}\n                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"\n                  >\n                    {ui.clearSelection}\n                  </button>\n                </div>\n                <button\n                  type="button"\n                  onClick={() => void handleSaveStoreAssignments()}\n                  disabled={savingAssignments}\n                  className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"\n                >\n                  {savingAssignments ? ui.savingAssignments : ui.saveAssignments(selectedStoreOaIds.length)}\n                </button>\n              </div>'''
+          new_bar = '''              <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">\n                <div className="flex flex-wrap items-center gap-3 text-xs">\n                  <span className="font-medium text-gray-700">{ui.selected} {selectedStoreOaIds.length}</span>\n                  <span className="text-gray-300">|</span>\n                  <button\n                    type="button"\n                    onClick={handleSelectFilteredReadyStores}\n                    className="font-semibold text-[#059669] hover:underline"\n                  >\n                    {ui.selectFilteredReady}\n                  </button>\n                  <button\n                    type="button"\n                    onClick={handleSelectAllReadyStores}\n                    className="font-semibold text-[#059669] hover:underline"\n                  >\n                    {ui.selectAllReady}\n                  </button>\n                  <button\n                    type="button"\n                    onClick={() => setSelectedStoreOaIds([])}\n                    className="font-medium text-gray-600 hover:underline"\n                  >\n                    {ui.clearSelection}\n                  </button>\n                </div>\n                <button\n                  type="button"\n                  onClick={() => void handleSaveStoreAssignments()}\n                  disabled={savingAssignments}\n                  className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"\n                >\n                  {savingAssignments ? ui.savingAssignments : ui.saveAssignments(selectedStoreOaIds.length)}\n                </button>\n              </div>'''
+          if old_bar not in section:
+              raise SystemExit('selection action bar not found')
+          section = section.replace(old_bar, new_bar, 1)
+
+          # Remove the old quick summary and old lower section, then place the full target card directly under Template selector.
+          text = text[:quick_start] + section + '\n\n' + text[quick_end:bottom_start] + text[bottom_section_end:]
+
+          if 'showStoreSection' in text or 'handleOpenStoreTargeting' in text:
+              raise SystemExit('collapsed store targeting references still remain')
+
+          path.write_text(text)
+
+          test_path = Path('frontend/test/greeting-messages.test.mts')
+          tests = test_path.read_text()
+          marker = 'greeting target stores are directly visible like rich menu targeting'
+          if marker not in tests:
+              tests += '''\n\ntest("greeting target stores are directly visible like rich menu targeting", () => {\n  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");\n  assert.match(source, /data-testid="greeting-store-targeting"/);\n  assert.doesNotMatch(source, /showStoreSection/);\n  assert.doesNotMatch(source, /handleOpenStoreTargeting/);\n  assert.match(source, /handleSelectAllReadyStores/);\n  assert.match(source, /handleSelectFilteredReadyStores/);\n  assert.match(source, /storeReadinessFilter === value/);\n  assert.match(source, /selectedStoreOaIds\.length/);\n});\n'''
+          test_path.write_text(tests)
+          PY
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit application changes
+        run: |
+          git config user.name "chatgpt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/app/greeting-messages/greeting-messages-view.tsx frontend/test/greeting-messages.test.mts
+          if git diff --cached --quiet; then
+            echo "No application changes to commit"
+            exit 0
+          fi
+          git commit -m "feat(greeting): show rich-menu-style store targeting"
+          git push origin HEAD:feat/greeting-rich-menu-targeting
