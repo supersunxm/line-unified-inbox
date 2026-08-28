@@ -542,7 +542,7 @@ export function GreetingMessagesView({
   const pageTo = Math.min(storePage * STORE_PAGE_SIZE, filteredStores.length);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="h-full min-h-0 overflow-y-auto bg-white text-gray-900">
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         {error && (
           <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
