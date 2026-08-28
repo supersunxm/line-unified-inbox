@@ -18,24 +18,22 @@ class ConversationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final unread = conversation.unreadCount > 0;
     return Card(
       margin: EdgeInsets.zero,
-      color: unread ? AppColors.primaryContainer.withValues(alpha: 0.35) : null,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: hqLayout
-              ? _buildHqLayout(context, unread)
-              : _buildStoreLayout(context, unread),
+              ? _buildHqLayout(context)
+              : _buildStoreLayout(context),
         ),
       ),
     );
   }
 
-  Widget _buildHqLayout(BuildContext context, bool unread) => Column(
+  Widget _buildHqLayout(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -62,10 +60,6 @@ class ConversationCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                 ),
-              if (unread) ...[
-                const SizedBox(width: 6),
-                UnreadBadge(count: conversation.unreadCount),
-              ],
             ],
           ),
           const SizedBox(height: 5),
@@ -110,7 +104,7 @@ class ConversationCard extends StatelessWidget {
         ],
       );
 
-  Widget _buildStoreLayout(BuildContext context, bool unread) => Row(
+  Widget _buildStoreLayout(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           UserAvatar(
@@ -136,10 +130,6 @@ class ConversationCard extends StatelessWidget {
                             ),
                       ),
                     ),
-                    if (unread) ...[
-                      const SizedBox(width: 6),
-                      UnreadBadge(count: conversation.unreadCount),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 2),
