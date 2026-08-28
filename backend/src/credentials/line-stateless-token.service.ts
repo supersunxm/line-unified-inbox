@@ -82,9 +82,10 @@ export class LineStatelessTokenService implements OnApplicationBootstrap, OnAppl
       throw new ServiceUnavailableException("LINE could not issue a channel access token");
     }
 
+    const expiresIn = typeof body.expires_in === "number" && Number.isFinite(body.expires_in) ? body.expires_in : 900;
     return {
       accessToken: body.access_token,
-      expiresIn: Number.isFinite(body.expires_in) ? Number(body.expires_in) : 900,
+      expiresIn,
       tokenType: body.token_type || "Bearer",
     };
   }
