@@ -556,6 +556,7 @@ model Store {
   memberships                UserStoreMembership[]
   registrationRequests       RegistrationRequest[]
   massMessageStoreDeliveries MassMessageStoreDelivery[]
+  autoResponseRules          AutoResponseRule[]         @relation("AutoResponseRuleScope")
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -826,6 +827,7 @@ model Conversation {
   purchaseRecordedBy    User?                       @relation("ConversationPurchaseRecorder", fields: [purchaseRecordedById], references: [id], onDelete: SetNull)
   salesRecordedBy       User?                       @relation("ConversationSalesRecorder", fields: [salesRecordedById], references: [id], onDelete: SetNull)
   pushNotifications     PushNotification[]
+  autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
 
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -871,6 +873,7 @@ model Message {
   media                    MessageMedia?
   translationFeedback      MessageTranslationFeedback[]
   pushNotifications        PushNotification[]
+  autoResponseExecutions   AutoResponseExecution[]      @relation("AutoResponseSourceMessage")
 
   @@index([conversationId, sentAt])
   @@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])
@@ -1723,6 +1726,18 @@ enum AutoResponseStatus {
 
 enum AutoResponseTriggerType {
   POSTBACK
+  INBOUND_TEXT
+}
+
+enum AutoResponseIntent {
+  STORE_LOCATION
+  FINANCE_INFO
+}
+
+enum AutoResponsePilotMode {
+  OFF
+  SHADOW
+  LIVE
 }
 
 enum AutoResponseContentType {
@@ -1732,8 +1747,19 @@ enum AutoResponseContentType {
 }
 
 enum AutoResponseExecutionStatus {
+  PENDING
   SUCCESS
   SKIPPED
+  FAILED
+}
+
+enum AutoResponseExecutionOutcome {
+  MATCHED_SHADOW
+  SENT
+  NO_MATCH
+  EXCLUDED
+  AMBIGUOUS
+  DUPLICATE
   FAILED
 }
 
@@ -1743,6 +1769,9 @@ model AutoResponseRule {
   description     String?
   status          AutoResponseStatus      @default(DRAFT)
   triggerType     AutoResponseTriggerType @default(POSTBACK)
+  intent          AutoResponseIntent?
+  scopeStoreId    String?
+  triggerConfig   Json?
   contentType     AutoResponseContentType @default(TEXT)
   textTemplate    String?
   contentJson     Json?
@@ -1754,16 +1783,25 @@ model AutoResponseRule {
   archivedAt      DateTime?
 
   executions      AutoResponseExecution[]
+  scopeStore      Store?                  @relation("AutoResponseRuleScope", fields: [scopeStoreId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([createdAt])
+  @@index([triggerType, status, scopeStoreId])
 }
 
 model AutoResponseExecution {
   id                    String                      @id @default(uuid())
-  ruleId                String
+  ruleId                String?
   lineOfficialAccountId String
   webhookEventId        String?
+  sourceMessageId       String?                       @unique
+  conversationId        String?
+  intent                AutoResponseIntent?
+  matcherVersion        Int?
+  mode                  AutoResponsePilotMode?
+  outcome               AutoResponseExecutionOutcome?
+  exclusionReason       String?
   status                AutoResponseExecutionStatus
   reason                String?
   messageCount          Int?
@@ -1771,13 +1809,17 @@ model AutoResponseExecution {
   resolvedVariablesJson Json?
   createdAt             DateTime                    @default(now())
 
-  rule                AutoResponseRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  rule                AutoResponseRule?   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+  sourceMessage       Message?            @relation("AutoResponseSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  conversation        Conversation?       @relation("ConversationAutoResponseExecutions", fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([ruleId, createdAt])
   @@index([lineOfficialAccountId, createdAt])
   @@index([createdAt])
   @@index([webhookEventId])
+  @@index([conversationId, createdAt])
+  @@index([intent, outcome, createdAt])
 }
 
 enum GreetingTemplateStatus {

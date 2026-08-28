@@ -91,6 +91,28 @@ export type AutoResponseDict = {
   errorRequiredName: string;
   errorRequiredText: string;
   errorInvalidBlocks: string;
+
+  triggerTypeLabel: string;
+  triggerPostback: string;
+  triggerInboundText: string;
+  intentLabel: string;
+  intentLocation: string;
+  intentFinance: string;
+  pilotScopeLabel: string;
+  pilotScopeRestricted: string;
+  pilotTriggerPatterns: string;
+  pilotExclusions: string;
+  pilotSummaryTitle: string;
+  pilotSummarySubtitle: string;
+  pilotModeLabel: (mode: string) => string;
+  pilotEligibleLabel: string;
+  pilotLocationLabel: string;
+  pilotFinanceLabel: string;
+  pilotExcludedLabel: string;
+  pilotAmbiguousLabel: string;
+  pilotWouldSendLabel: string;
+  pilotSentLabel: string;
+  pilotFailedLabel: string;
 };
 
 export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
@@ -191,6 +213,27 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     errorRequiredName: "กรุณากรอกชื่อข้อความตอบกลับ",
     errorRequiredText: "กรุณากรอกข้อความตอบกลับ",
     errorInvalidBlocks: "กรุณาตรวจสอบข้อความตอบกลับ (ต้องมี 1-5 ข้อความและกรอกข้อมูลครบถ้วน)",
+    triggerTypeLabel: "ประเภททริกเกอร์",
+    triggerPostback: "Postback (Rich Menu)",
+    triggerInboundText: "ข้อความขาเข้า (Pilot)",
+    intentLabel: "Intent ของข้อความขาเข้า",
+    intentLocation: "STORE_LOCATION (ที่ตั้งร้าน)",
+    intentFinance: "FINANCE_INFO (ข้อมูลสินเชื่อ)",
+    pilotScopeLabel: "ขอบเขต Pilot",
+    pilotScopeRestricted: "จำกัดเฉพาะ OBS Robinson Chonburi By OPPO (28375)",
+    pilotTriggerPatterns: "คำที่ผ่านการทบทวน: ร้านอยู่ที่ไหน, ร้านอยู่ตรงไหน, ขอพิกัด, โลเคชั่น, ชั้นไหน; สนใจผ่อน, ผ่อนยังไง, สมัครสินเชื่อ, เครดิตบูโร, คนค้ำ",
+    pilotExclusions: "ไม่ตอบอัตโนมัติ: ยอดเงิน/งวด/ระยะเวลา/ราคา/สี/สต็อก, คำว่า 'ผ่อน' เดี่ยว ๆ, ผ่อนออนไลน์ หรือข้อความกำกวม",
+    pilotSummaryTitle: "Robinson Chonburi Pilot",
+    pilotSummarySubtitle: "ผลการประเมิน auto-reply แบบไม่เก็บข้อมูลส่วนตัว",
+    pilotModeLabel: (mode) => `โหมดปัจจุบัน: ${mode}`,
+    pilotEligibleLabel: "ข้อความขาเข้าที่เข้าเกณฑ์",
+    pilotLocationLabel: "ที่ตั้งร้าน",
+    pilotFinanceLabel: "ข้อมูลสินเชื่อ",
+    pilotExcludedLabel: "ตัดออก",
+    pilotAmbiguousLabel: "กำกวม",
+    pilotWouldSendLabel: "เข้าเกณฑ์ตอบ",
+    pilotSentLabel: "ส่งจริง",
+    pilotFailedLabel: "ล้มเหลว",
   },
   en: {
     title: "Auto-responses",
@@ -289,6 +332,27 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     errorRequiredName: "Rule name is required",
     errorRequiredText: "Response message text is required",
     errorInvalidBlocks: "Please check message blocks (1 to 5 valid blocks required)",
+    triggerTypeLabel: "Trigger type",
+    triggerPostback: "Postback (Rich Menu)",
+    triggerInboundText: "Inbound text (Pilot)",
+    intentLabel: "Inbound intent",
+    intentLocation: "STORE_LOCATION (Store location)",
+    intentFinance: "FINANCE_INFO (Finance information)",
+    pilotScopeLabel: "Pilot scope",
+    pilotScopeRestricted: "Restricted to OBS Robinson Chonburi By OPPO (28375)",
+    pilotTriggerPatterns: "Reviewed phrases: store location questions, map/location, floor, interest in installments, how to finance, credit bureau, guarantor",
+    pilotExclusions: "No automatic reply for amounts/terms/durations/prices/stock/colors, bare 'installment', online installments, or ambiguous text",
+    pilotSummaryTitle: "Robinson Chonburi Pilot",
+    pilotSummarySubtitle: "Auto-response evaluation with no customer message content",
+    pilotModeLabel: (mode) => `Current mode: ${mode}`,
+    pilotEligibleLabel: "Eligible inbound texts",
+    pilotLocationLabel: "Store location",
+    pilotFinanceLabel: "Finance information",
+    pilotExcludedLabel: "Excluded",
+    pilotAmbiguousLabel: "Ambiguous",
+    pilotWouldSendLabel: "Would send",
+    pilotSentLabel: "Sent",
+    pilotFailedLabel: "Failed",
   },
   zh: {
     title: "自动回复",
@@ -387,5 +451,26 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     errorRequiredName: "请输入规则名称",
     errorRequiredText: "请输入回复消息内容",
     errorInvalidBlocks: "请检查消息内容（需包含 1 至 5 条完整有效的消息）",
+    triggerTypeLabel: "触发类型",
+    triggerPostback: "Postback（Rich Menu）",
+    triggerInboundText: "入站文本（Pilot）",
+    intentLabel: "入站意图",
+    intentLocation: "STORE_LOCATION（门店位置）",
+    intentFinance: "FINANCE_INFO（金融信息）",
+    pilotScopeLabel: "Pilot 范围",
+    pilotScopeRestricted: "仅限 OBS Robinson Chonburi By OPPO（28375）",
+    pilotTriggerPatterns: "已审核短语：门店位置、地图/定位、楼层；分期意向、如何分期、征信、担保人",
+    pilotExclusions: "不会自动回复金额/期数/期限/价格/库存/颜色、单独的“分期”、在线分期或含糊文本",
+    pilotSummaryTitle: "Robinson Chonburi Pilot",
+    pilotSummarySubtitle: "不保存客户消息内容的自动回复评估",
+    pilotModeLabel: (mode) => `当前模式：${mode}`,
+    pilotEligibleLabel: "符合条件的入站文本",
+    pilotLocationLabel: "门店位置",
+    pilotFinanceLabel: "金融信息",
+    pilotExcludedLabel: "已排除",
+    pilotAmbiguousLabel: "模糊",
+    pilotWouldSendLabel: "将发送",
+    pilotSentLabel: "已发送",
+    pilotFailedLabel: "失败",
   },
 };

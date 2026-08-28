@@ -1429,3 +1429,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Reuse `Conversation.customerSalesStatus` as the sole persisted source of truth and add `ONLINE` as an additive Prisma enum value/migration. This keeps Android, Web, and APIs on one value without rewriting historical statuses.
 - Treat Online as a distinct inquiry category, not as Interested or Purchased. Selecting it clears purchase-only fields (interest level, purchase channels, payment method, installment flag) while preserving linked inquiry products; no inbound message is auto-classified.
 - Expose Online in Web conversation tags and purchase-audience analytics as its own filter/category. Existing authorization/store scope, Main OA isolation, inbox `bmReplyStatus`, and response/session behavior are deliberately unchanged.
+
+# Robinson Chonburi auto-reply pilot boundary (2026-08-28)
+
+- Keep the pilot behind an environment kill switch with `OFF` as the code default. `SHADOW` records matched outcomes without sending; `LIVE` is implemented but must not be enabled in production until separately approved. No database seed changes the mode or creates active rules.
+- Match only normalized inbound LINE `TEXT` messages from the canonical active STORE OA whose `Store.code` and `StoreMaster.externalStoreId` both equal `28375`. Require a current LINE reply token before evaluating or sending, and require exactly one active scoped text rule for a sendable intent.
+- Use reviewed deterministic aliases only. Ambiguous location/finance text, amount/term/product-specific finance questions, bare low-confidence finance words, and non-text messages are excluded or left unmatched. There is no fuzzy or AI matching and no generated factual answer text.
+- Record one execution per persisted inbound source message with matcher version, intent, mode, safe outcome, rule/conversation/OA/source references, and no message PII. Pilot replies use the existing canonical LINE service and never persist a fake outbound message or mutate `Conversation.bmReplyStatus`.

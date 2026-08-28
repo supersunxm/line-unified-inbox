@@ -1,5 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { AutoResponseExecutionStatus, AutoResponseStatus } from "@prisma/client";
+import {
+  AutoResponseExecutionOutcome,
+  AutoResponseExecutionStatus,
+  AutoResponseIntent,
+  AutoResponsePilotMode,
+  AutoResponseStatus,
+  AutoResponseTriggerType,
+  Prisma,
+} from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { LineMessagingService } from "../line-messaging/line-messaging.service";
@@ -14,10 +22,26 @@ import {
   normalizeAutoResponseMessages,
   parseAutoResponsePostbackData,
 } from "./auto-response.utils";
+import {
+  getAutoResponsePilotMode,
+  PILOT_APPROVED_RESPONSE_TEMPLATES,
+  PILOT_MATCHER_VERSION,
+  PILOT_STORE_EXTERNAL_ID,
+} from "./auto-response-pilot.config";
+import { matchPilotInboundText, PilotIntent } from "./auto-response-pilot";
 
 export type PostbackExecutionResult = {
   handled: boolean;
   success: boolean;
+  reason?: string;
+  executionId?: string;
+};
+
+export type InboundTextExecutionResult = {
+  handled: boolean;
+  success: boolean;
+  outcome?: AutoResponseExecutionOutcome;
+  intent?: AutoResponseIntent;
   reason?: string;
   executionId?: string;
 };
@@ -31,6 +55,326 @@ export class AutoResponseExecutionService {
     private readonly encryption: CredentialEncryptionService,
     private readonly lineMessaging: LineMessagingService,
   ) {}
+
+  async handleWebhookInboundText(params: {
+    text: string;
+    messageId: string;
+    conversationId: string;
+    lineOfficialAccountId: string;
+    replyToken?: string;
+    webhookEventId?: string;
+  }): Promise<InboundTextExecutionResult> {
+    const configuredMode = getAutoResponsePilotMode();
+    if (configuredMode === "OFF") {
+      return { handled: false, success: false, reason: "PILOT_MODE_OFF" };
+    }
+
+    const sourceMessage = await this.prisma.message.findUnique({
+      where: { id: params.messageId },
+      select: {
+        direction: true,
+        messageType: true,
+        conversationId: true,
+        conversation: {
+          select: {
+            lineOfficialAccountId: true,
+            isQa: true,
+          },
+        },
+      },
+    });
+    if (
+      !sourceMessage ||
+      sourceMessage.direction !== "INBOUND" ||
+      sourceMessage.messageType !== "TEXT" ||
+      sourceMessage.conversationId !== params.conversationId ||
+      sourceMessage.conversation.lineOfficialAccountId !== params.lineOfficialAccountId ||
+      sourceMessage.conversation.isQa
+    ) {
+      return { handled: false, success: false, reason: "SOURCE_MESSAGE_NOT_ELIGIBLE" };
+    }
+
+    const oa = await this.prisma.lineOfficialAccount.findUnique({
+      where: { id: params.lineOfficialAccountId },
+      include: { store: { include: { storeMaster: true } } },
+    });
+    const storeCode = oa?.store?.code?.trim() || null;
+    const externalStoreId = oa?.store?.storeMaster?.externalStoreId?.trim() || null;
+    if (
+      !oa ||
+      oa.accountType !== "STORE" ||
+      !oa.isActive ||
+      oa.archivedAt ||
+      !oa.store ||
+      storeCode !== PILOT_STORE_EXTERNAL_ID ||
+      externalStoreId !== PILOT_STORE_EXTERNAL_ID
+    ) {
+      return { handled: false, success: false, reason: "PILOT_SCOPE_MISMATCH" };
+    }
+
+    // A LINE reply token is required before evaluating a pilot rule. This keeps
+    // the eligibility gate identical in SHADOW and LIVE modes and prevents an
+    // otherwise eligible event from being treated as sendable without a valid
+    // reply window.
+    if (!params.replyToken?.trim()) {
+      const claim = await this.claimInboundExecution({
+        ruleId: null,
+        lineOfficialAccountId: oa.id,
+        webhookEventId: params.webhookEventId,
+        sourceMessageId: params.messageId,
+        conversationId: params.conversationId,
+        mode: configuredMode,
+        outcome: AutoResponseExecutionOutcome.EXCLUDED,
+        reason: "MISSING_REPLY_TOKEN",
+        exclusionReason: "MISSING_REPLY_TOKEN",
+      });
+      return {
+        handled: true,
+        success: true,
+        outcome: claim.created
+          ? AutoResponseExecutionOutcome.EXCLUDED
+          : AutoResponseExecutionOutcome.DUPLICATE,
+        reason: claim.created ? "MISSING_REPLY_TOKEN" : "DUPLICATE_SOURCE_MESSAGE",
+        executionId: claim.executionId,
+      };
+    }
+
+    const match = matchPilotInboundText(params.text);
+    const mode = configuredMode;
+    let rule: Prisma.AutoResponseRuleGetPayload<{
+      include: { scopeStore: { include: { storeMaster: true } } };
+    }> | null = null;
+    let outcome: AutoResponseExecutionOutcome =
+      match.outcome === "EXCLUDED"
+        ? AutoResponseExecutionOutcome.EXCLUDED
+        : match.outcome === "AMBIGUOUS"
+          ? AutoResponseExecutionOutcome.AMBIGUOUS
+          : AutoResponseExecutionOutcome.NO_MATCH;
+    let reason = match.reason;
+
+    if (match.outcome === "MATCHED" && match.intent) {
+      const rules = await this.prisma.autoResponseRule.findMany({
+        where: {
+          status: AutoResponseStatus.ACTIVE,
+          triggerType: AutoResponseTriggerType.INBOUND_TEXT,
+          intent: match.intent,
+          scopeStoreId: oa.store.id,
+        },
+        orderBy: [{ updatedAt: "desc" }],
+        include: { scopeStore: { include: { storeMaster: true } } },
+      });
+      if (rules.length === 1) {
+        rule = rules[0];
+        outcome = configuredMode === "SHADOW"
+          ? AutoResponseExecutionOutcome.MATCHED_SHADOW
+          : AutoResponseExecutionOutcome.SENT;
+      } else if (rules.length === 0) {
+        outcome = AutoResponseExecutionOutcome.NO_MATCH;
+        reason = "NO_ACTIVE_TEXT_RULE";
+      } else {
+        outcome = AutoResponseExecutionOutcome.AMBIGUOUS;
+        reason = "MULTIPLE_ACTIVE_TEXT_RULES";
+      }
+    }
+
+    if (configuredMode === "LIVE" && outcome === AutoResponseExecutionOutcome.SENT) {
+      if (!oa.encryptedChannelAccessToken) {
+        outcome = AutoResponseExecutionOutcome.FAILED;
+        reason = "MISSING_CHANNEL_ACCESS_TOKEN";
+      }
+    }
+
+    const claim = await this.claimInboundExecution({
+      ruleId: rule?.id ?? null,
+      lineOfficialAccountId: oa.id,
+      webhookEventId: params.webhookEventId,
+      sourceMessageId: params.messageId,
+      conversationId: params.conversationId,
+      intent: match.intent,
+      mode,
+      outcome: outcome === AutoResponseExecutionOutcome.SENT ? null : outcome,
+      reason,
+      exclusionReason:
+        outcome === AutoResponseExecutionOutcome.EXCLUDED ? reason : undefined,
+    });
+    if (!claim.created) {
+      return {
+        handled: true,
+        success: true,
+        outcome: AutoResponseExecutionOutcome.DUPLICATE,
+        intent: match.intent,
+        reason: "DUPLICATE_SOURCE_MESSAGE",
+        executionId: claim.executionId,
+      };
+    }
+
+    if (configuredMode === "SHADOW" || outcome !== AutoResponseExecutionOutcome.SENT || !rule) {
+      await this.finalizeExecution(claim.executionId, {
+        status: outcome === AutoResponseExecutionOutcome.FAILED
+          ? AutoResponseExecutionStatus.FAILED
+          : AutoResponseExecutionStatus.SKIPPED,
+        outcome,
+        reason: reason ?? undefined,
+        exclusionReason: outcome === AutoResponseExecutionOutcome.EXCLUDED ? reason : undefined,
+      });
+      this.logger.log(
+        `[AutoResponse] Pilot ${configuredMode} evaluation outcome=${outcome} intent=${match.intent ?? "none"} store=${PILOT_STORE_EXTERNAL_ID}`,
+      );
+      return {
+        handled: true,
+        success: outcome !== AutoResponseExecutionOutcome.FAILED,
+        outcome,
+        intent: match.intent,
+        reason,
+        executionId: claim.executionId,
+      };
+    }
+
+    try {
+      await this.sendInboundTextRule(oa, rule, params.replyToken.trim(), params.conversationId);
+      await this.finalizeExecution(claim.executionId, {
+        status: AutoResponseExecutionStatus.SUCCESS,
+        outcome: AutoResponseExecutionOutcome.SENT,
+      });
+      this.logger.log(
+        `[AutoResponse] Pilot LIVE sent intent=${match.intent} store=${PILOT_STORE_EXTERNAL_ID}`,
+      );
+      return {
+        handled: true,
+        success: true,
+        outcome: AutoResponseExecutionOutcome.SENT,
+        intent: match.intent,
+        executionId: claim.executionId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 300) : "LINE_REPLY_FAILED";
+      await this.finalizeExecution(claim.executionId, {
+        status: AutoResponseExecutionStatus.FAILED,
+        outcome: AutoResponseExecutionOutcome.FAILED,
+        reason: message,
+      });
+      this.logger.warn(
+        `[AutoResponse] Pilot LIVE delivery failed intent=${match.intent} store=${PILOT_STORE_EXTERNAL_ID}`,
+      );
+      return {
+        handled: true,
+        success: false,
+        outcome: AutoResponseExecutionOutcome.FAILED,
+        intent: match.intent,
+        reason: message,
+        executionId: claim.executionId,
+      };
+    }
+  }
+
+  private async sendInboundTextRule(
+    oa: Prisma.LineOfficialAccountGetPayload<{
+      include: { store: { include: { storeMaster: true } } };
+    }>,
+    rule: Prisma.AutoResponseRuleGetPayload<{
+      include: { scopeStore: { include: { storeMaster: true } } };
+    }>,
+    replyToken: string,
+    conversationId: string,
+  ) {
+    const blocks = normalizeAutoResponseMessages(rule);
+    if (!blocks.length || blocks.some((block) => block.type !== "TEXT")) {
+      throw new Error("TEXT_PILOT_REQUIRES_TEXT_ONLY_RULE");
+    }
+    if (!oa.encryptedChannelAccessToken) throw new Error("MISSING_CHANNEL_ACCESS_TOKEN");
+
+    const storeContext: StoreVariableContext = {
+      storeName: oa.store?.name ?? oa.name,
+      externalStoreId: oa.store?.storeMaster?.externalStoreId ?? null,
+      accountName: oa.name,
+      googleMapsUrl: oa.store?.storeMaster?.googleMapsUrl ?? null,
+    };
+    const textBlocks = blocks.filter((block): block is Extract<typeof block, { type: "TEXT" }> => block.type === "TEXT");
+    const lineMessages = textBlocks.map((block) => {
+      const text = resolveTemplateVariables(block.textTemplate, storeContext);
+      if (!text.trim() || /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/u.test(text)) {
+        throw new Error("INVALID_TEXT_PILOT_TEMPLATE");
+      }
+      return { type: "text" as const, text };
+    });
+
+    const approvedTemplate = PILOT_APPROVED_RESPONSE_TEMPLATES[rule.intent ?? "STORE_LOCATION"];
+    if (rule.intent === null || lineMessages.length !== 1 || lineMessages[0].text.trim() !== approvedTemplate.trim()) {
+      throw new Error("PILOT_TEMPLATE_NOT_APPROVED");
+    }
+
+    const accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken);
+    await this.lineMessaging.replyMessages(accessToken, replyToken, lineMessages, {
+      storeId: oa.store?.id,
+      storeName: oa.store?.name,
+      conversationId,
+      messageType: "AUTO_RESPONSE",
+    });
+  }
+
+  private async claimInboundExecution(data: {
+    ruleId: string | null;
+    lineOfficialAccountId: string;
+    webhookEventId?: string;
+    sourceMessageId: string;
+    conversationId: string;
+    intent?: PilotIntent;
+    mode: AutoResponsePilotMode;
+    outcome: AutoResponseExecutionOutcome | null;
+    reason?: string;
+    exclusionReason?: string;
+  }): Promise<{ created: boolean; executionId: string }> {
+    try {
+      const execution = await this.prisma.autoResponseExecution.create({
+        data: {
+          ruleId: data.ruleId,
+          lineOfficialAccountId: data.lineOfficialAccountId,
+          webhookEventId: data.webhookEventId ?? null,
+          sourceMessageId: data.sourceMessageId,
+          conversationId: data.conversationId,
+          intent: data.intent ?? null,
+          matcherVersion: PILOT_MATCHER_VERSION,
+          mode: data.mode,
+          outcome: data.outcome,
+          status: data.outcome === null ? AutoResponseExecutionStatus.PENDING : data.outcome === AutoResponseExecutionOutcome.FAILED ? AutoResponseExecutionStatus.FAILED : AutoResponseExecutionStatus.SKIPPED,
+          reason: data.reason ?? null,
+          exclusionReason: data.exclusionReason ?? null,
+          messageCount: 1,
+          messageTypesJson: ["TEXT"],
+        },
+      });
+      return { created: true, executionId: execution.id };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await this.prisma.autoResponseExecution.findUnique({
+          where: { sourceMessageId: data.sourceMessageId },
+          select: { id: true },
+        });
+        if (existing) return { created: false, executionId: existing.id };
+      }
+      throw error;
+    }
+  }
+
+  private async finalizeExecution(
+    id: string,
+    data: {
+      status: AutoResponseExecutionStatus;
+      outcome: AutoResponseExecutionOutcome;
+      reason?: string;
+      exclusionReason?: string;
+    },
+  ) {
+    await this.prisma.autoResponseExecution.update({
+      where: { id },
+      data: {
+        status: data.status,
+        outcome: data.outcome,
+        reason: data.reason ?? undefined,
+        exclusionReason: data.exclusionReason ?? undefined,
+      },
+    });
+  }
 
   /**
    * Main entrypoint invoked by the LINE Webhook pipeline when event.type === 'postback'.
@@ -460,7 +804,7 @@ export class AutoResponseExecutionService {
   }
 
   private async recordExecution(data: {
-    ruleId: string;
+    ruleId: string | null;
     lineOfficialAccountId: string;
     webhookEventId?: string;
     status: AutoResponseExecutionStatus;
@@ -472,10 +816,11 @@ export class AutoResponseExecutionService {
     try {
       // Check if rule actually exists before linking foreign key
       const ruleExists =
-        data.ruleId !== "unknown" &&
-        (await this.prisma.autoResponseRule.count({
-          where: { id: data.ruleId },
-        })) > 0;
+        data.ruleId === null ||
+        (data.ruleId !== "unknown" &&
+          (await this.prisma.autoResponseRule.count({
+            where: { id: data.ruleId },
+          })) > 0);
 
       if (!ruleExists) {
         return null;

@@ -2663,3 +2663,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Web conversation status tags and purchase-audience filters expose Online as a distinct category. Store/HQ/PC authorization, Main OA isolation, inbox reply status, and existing historical values remain unchanged.
 - Prisma validate/generate, backend build and full tests, Flutter analyze/full tests, Android assembleDebug, frontend tests/build, and scoped lint checks pass. Frontend lint still reports two pre-existing hook errors and three warnings in the existing mobile/desktop analytics files; no new errors were introduced.
 - Next action: review the scoped diff, commit, push the feature branch, open the PR, and monitor CI without merging.
+
+# Current task: Robinson Chonburi auto-reply pilot (2026-08-28)
+
+- Started `feat/robinson-auto-reply-pilot` from clean latest `origin/main` `b6aadbe`, following the approved read-only analysis of store `28375` historical inbound text.
+- Added additive Prisma support for scoped inbound-text rules, explicit `OFF`/`SHADOW`/`LIVE` pilot modes, deterministic intent/outcome audit records, and a unique source-message claim for webhook deduplication. No rules are seeded or enabled; the default mode remains `OFF`.
+- Added strict dual store identity and STORE OA gates, reviewed high-confidence Thai aliases/exclusions for `STORE_LOCATION` and `FINANCE_INFO`, text-only template sending through the canonical LINE reply service, and a read-only pilot summary endpoint/UI with localized scope/mode warnings. POSTBACK execution, BM reply status, authorization, and Main OA isolation remain unchanged.
+- Focused backend and frontend tests/builds have been run during implementation; final full suites, diff review, commit, push, PR creation, and green-CI monitoring remain.

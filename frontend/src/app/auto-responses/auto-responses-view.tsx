@@ -7,6 +7,9 @@ import type {
   AutoResponseStatus,
   AutoResponsePreviewResult,
   AutoResponseMessageBlock,
+  AutoResponsePilotSummary,
+  AutoResponseTriggerType,
+  AutoResponseIntent,
   ApiStore,
 } from "@/types/api";
 import { autoResponseI18n } from "./auto-response-i18n";
@@ -24,6 +27,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
 
   const [rules, setRules] = useState<AutoResponseRule[]>([]);
   const [stores, setStores] = useState<ApiStore[]>([]);
+  const [pilotSummary, setPilotSummary] = useState<AutoResponsePilotSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | AutoResponseStatus>("ALL");
@@ -43,6 +47,9 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       textTemplate: "",
     },
   ]);
+  const [formTriggerType, setFormTriggerType] = useState<AutoResponseTriggerType>("POSTBACK");
+  const [formIntent, setFormIntent] = useState<AutoResponseIntent | "">("");
+  const [formScopeStoreId, setFormScopeStoreId] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   // Preview State
@@ -73,6 +80,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       ]);
       setRules(rulesData);
       setStores(storesData);
+      setPilotSummary(await api.getAutoResponsePilotSummary().catch(() => null));
       if (storesData.length > 0 && !previewStoreId) {
         setPreviewStoreId(storesData[0].id);
       }
@@ -244,6 +252,9 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
         textTemplate: "",
       },
     ]);
+    setFormTriggerType("POSTBACK");
+    setFormIntent("");
+    setFormScopeStoreId(stores.find((store) => (store.code || store.storeId) === "28375")?.id || "");
     setIsCreating(true);
     setIsEditing(false);
   };
@@ -264,6 +275,9 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
         ];
 
     setFormMessages(msgs);
+    setFormTriggerType(rule.triggerType || "POSTBACK");
+    setFormIntent(rule.intent || "");
+    setFormScopeStoreId(rule.scopeStoreId || "");
     setIsEditing(true);
     setIsCreating(false);
   };
@@ -284,6 +298,9 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
             },
           ];
       setFormMessages(msgs);
+      setFormTriggerType(selectedRule.triggerType || "POSTBACK");
+      setFormIntent(selectedRule.intent || "");
+      setFormScopeStoreId(selectedRule.scopeStoreId || "");
     }
   };
 
@@ -309,6 +326,15 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       }
     }
 
+    if (formTriggerType === "INBOUND_TEXT") {
+      const selectedPilotStore = stores.find((store) => store.id === formScopeStoreId);
+      const selectedCode = selectedPilotStore?.code || selectedPilotStore?.storeId;
+      if (!formIntent || selectedCode !== "28375") {
+        showToast(t.pilotScopeRestricted, "error");
+        return;
+      }
+    }
+
     try {
       setSaving(true);
       if (isCreating) {
@@ -316,6 +342,10 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
           name: formName.trim(),
           description: formDesc.trim() || undefined,
           messages: formMessages,
+          triggerType: formTriggerType,
+          intent: formTriggerType === "INBOUND_TEXT" ? (formIntent || null) : null,
+          scopeStoreId: formTriggerType === "INBOUND_TEXT" ? (formScopeStoreId || null) : null,
+          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : null,
         });
         if (activateImmediately) {
           const activated = await api.activateAutoResponse(created.id);
@@ -330,6 +360,10 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
           name: formName.trim(),
           description: formDesc.trim() || undefined,
           messages: formMessages,
+          triggerType: formTriggerType,
+          intent: formTriggerType === "INBOUND_TEXT" ? (formIntent || null) : null,
+          scopeStoreId: formTriggerType === "INBOUND_TEXT" ? (formScopeStoreId || null) : null,
+          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : null,
         });
         if (activateImmediately && updated.status !== "ACTIVE") {
           const activated = await api.activateAutoResponse(updated.id);
@@ -458,6 +492,37 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
         </p>
       </div>
 
+      {pilotSummary && (
+        <div className="mb-6 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-[var(--app-text-primary)]">{t.pilotSummaryTitle}</h2>
+              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.pilotSummarySubtitle}</p>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${pilotSummary.mode === "LIVE" ? "bg-red-500/15 text-red-500" : pilotSummary.mode === "SHADOW" ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"}`}>
+              {t.pilotModeLabel(pilotSummary.mode)}
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-8">
+            {[
+              [t.pilotEligibleLabel, pilotSummary.counts.totalEligibleInboundTexts],
+              [t.pilotLocationLabel, pilotSummary.counts.storeLocationMatches],
+              [t.pilotFinanceLabel, pilotSummary.counts.financeInfoMatches],
+              [t.pilotExcludedLabel, pilotSummary.counts.excluded],
+              [t.pilotAmbiguousLabel, pilotSummary.counts.ambiguous],
+              [t.pilotWouldSendLabel, pilotSummary.counts.wouldSend],
+              [t.pilotSentLabel, pilotSummary.counts.sent],
+              [t.pilotFailedLabel, pilotSummary.counts.failed],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-xl bg-[var(--app-bg)] px-3 py-2">
+                <div className="text-[10px] text-[var(--app-text-secondary)]">{label}</div>
+                <div className="mt-0.5 text-base font-bold text-[var(--app-text-primary)]">{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main Workspace Layout */}
       {isCreating || isEditing ? (
         /* Editor & Preview Split Mode */
@@ -509,6 +574,63 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                   className="mt-1.5 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-4 py-2.5 text-sm text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
                 />
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--app-text-secondary)] uppercase tracking-wider">
+                    {t.triggerTypeLabel}
+                  </label>
+                  <select
+                    value={formTriggerType}
+                    onChange={(e) => setFormTriggerType(e.target.value as AutoResponseTriggerType)}
+                    className="mt-1.5 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-4 py-2.5 text-sm text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                  >
+                    <option value="POSTBACK">{t.triggerPostback}</option>
+                    <option value="INBOUND_TEXT">{t.triggerInboundText}</option>
+                  </select>
+                </div>
+                {formTriggerType === "INBOUND_TEXT" && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--app-text-secondary)] uppercase tracking-wider">
+                      {t.intentLabel}
+                    </label>
+                    <select
+                      value={formIntent}
+                      onChange={(e) => setFormIntent(e.target.value as AutoResponseIntent)}
+                      className="mt-1.5 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-4 py-2.5 text-sm text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                    >
+                      <option value="">—</option>
+                      <option value="STORE_LOCATION">{t.intentLocation}</option>
+                      <option value="FINANCE_INFO">{t.intentFinance}</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {formTriggerType === "INBOUND_TEXT" && (
+                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-3.5 text-xs text-blue-500">
+                  <div className="font-semibold">{t.pilotScopeLabel}</div>
+                  <div className="mt-1">{t.pilotScopeRestricted}</div>
+                  <select
+                    value={formScopeStoreId}
+                    onChange={(e) => setFormScopeStoreId(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+                  >
+                    <option value="">—</option>
+                    {stores
+                      .filter((store) => (store.code || store.storeId) === "28375")
+                      .map((store) => (
+                        <option key={store.id} value={store.id}>
+                          {store.name} ({store.code || store.storeId})
+                        </option>
+                      ))}
+                  </select>
+                  <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-blue-500/90">
+                    <div>{t.pilotTriggerPatterns}</div>
+                    <div>{t.pilotExclusions}</div>
+                  </div>
+                </div>
+              )}
 
               {/* Message Builder */}
               <div className="pt-2">
@@ -706,6 +828,17 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                           >
                             <span>{t.usageLabel(rule.usageCount)}</span>
                           </button>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold text-[var(--app-text-secondary)]">
+                        <span className="rounded-lg border border-[var(--app-border)] px-2 py-1">
+                          {rule.triggerType === "INBOUND_TEXT" ? t.triggerInboundText : t.triggerPostback}
+                        </span>
+                        {rule.triggerType === "INBOUND_TEXT" && rule.intent && (
+                          <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-blue-500">
+                            {rule.intent === "STORE_LOCATION" ? t.intentLocation : t.intentFinance}
+                          </span>
                         )}
                       </div>
 

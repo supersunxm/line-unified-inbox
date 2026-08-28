@@ -120,6 +120,7 @@ test("API client contains all required Auto-response endpoints including media u
   assert.match(apiFile, /archiveAutoResponse:/);
   assert.match(apiFile, /getAutoResponseUsage:/);
   assert.match(apiFile, /previewAutoResponse:/);
+  assert.match(apiFile, /getAutoResponsePilotSummary:/);
 });
 
 test("Auto-response I18N dictionary has Phase 2 Message Builder copy", () => {
@@ -140,4 +141,20 @@ test("Auto-response I18N dictionary has Phase 2 Message Builder copy", () => {
   assert.equal(autoResponseI18n.zh.typeImage, "图片");
   assert.equal(autoResponseI18n.zh.addMessageButton, "添加消息");
   assert.equal(autoResponseI18n.zh.blocksCount(2), "2 / 5 条消息");
+});
+
+test("Auto-response pilot UI exposes the scoped trigger controls and safe mode summary", () => {
+  const viewFile = readFileSync(
+    resolve(process.cwd(), "src/app/auto-responses/auto-responses-view.tsx"),
+    "utf8",
+  );
+  assert.match(viewFile, /INBOUND_TEXT/);
+  assert.match(viewFile, /28375/);
+  assert.match(viewFile, /pilotTriggerPatterns/);
+  assert.match(viewFile, /pilotExclusions/);
+  assert.match(viewFile, /pilotSummary/);
+  assert.match(viewFile, /getAutoResponsePilotSummary/);
+  assert.equal(autoResponseI18n.th.triggerInboundText, "ข้อความขาเข้า (Pilot)");
+  assert.equal(autoResponseI18n.en.triggerInboundText, "Inbound text (Pilot)");
+  assert.equal(autoResponseI18n.zh.triggerInboundText, "入站文本（Pilot）");
 });

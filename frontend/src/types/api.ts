@@ -1213,7 +1213,10 @@ export type RichMenuArea = {
 };
 
 export type AutoResponseStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
-export type AutoResponseTriggerType = "POSTBACK";
+export type AutoResponseTriggerType = "POSTBACK" | "INBOUND_TEXT";
+export type AutoResponseIntent = "STORE_LOCATION" | "FINANCE_INFO";
+export type AutoResponsePilotMode = "OFF" | "SHADOW" | "LIVE";
+export type AutoResponseExecutionOutcome = "MATCHED_SHADOW" | "SENT" | "NO_MATCH" | "EXCLUDED" | "AMBIGUOUS" | "DUPLICATE" | "FAILED";
 export type AutoResponseContentType = "TEXT" | "IMAGE" | "MULTI_MESSAGE";
 
 export type AutoResponseTextBlock = {
@@ -1242,6 +1245,11 @@ export type AutoResponseContentJson = {
   messages: AutoResponseMessageBlock[];
 };
 
+export type AutoResponseTextTriggerConfig = {
+  matcherVersion: number;
+  reviewedAliases?: string[];
+};
+
 export type AutoResponseUploadMediaResult = {
   mediaObjectKey: string;
   previewObjectKey: string;
@@ -1259,6 +1267,10 @@ export type AutoResponseRule = {
   description: string | null;
   status: AutoResponseStatus;
   triggerType: AutoResponseTriggerType;
+  intent: AutoResponseIntent | null;
+  scopeStoreId: string | null;
+  scopeStoreExternalId: string | null;
+  triggerConfig: AutoResponseTextTriggerConfig | null;
   contentType: AutoResponseContentType;
   textTemplate: string;
   contentJson?: AutoResponseContentJson | null;
@@ -1328,6 +1340,31 @@ export type AutoResponseUsageResult = {
     templateName: string;
     templateStatus: string;
     areaCount: number;
+  }>;
+};
+
+export type AutoResponsePilotSummary = {
+  mode: AutoResponsePilotMode;
+  storeExternalId: string;
+  matcherVersion: number;
+  counts: {
+    totalEligibleInboundTexts: number;
+    storeLocationMatches: number;
+    financeInfoMatches: number;
+    excluded: number;
+    ambiguous: number;
+    noMatch: number;
+    wouldSend: number;
+    sent: number;
+    failed: number;
+    duplicate: number;
+  };
+  recent: Array<{
+    intent: AutoResponseIntent | null;
+    outcome: AutoResponseExecutionOutcome | null;
+    mode: AutoResponsePilotMode | null;
+    reason: string | null;
+    createdAt: string;
   }>;
 };
 

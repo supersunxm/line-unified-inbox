@@ -571,6 +571,8 @@ export const api = {
   },
   getAutoResponse: (id: string) =>
     request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`),
+  getAutoResponsePilotSummary: () =>
+    request<import("@/types/api").AutoResponsePilotSummary>("/auto-responses/pilot/summary"),
   uploadAutoResponseMedia: (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -584,6 +586,10 @@ export const api = {
     description?: string;
     textTemplate?: string;
     messages?: import("@/types/api").AutoResponseMessageBlock[];
+    triggerType?: import("@/types/api").AutoResponseTriggerType;
+    intent?: import("@/types/api").AutoResponseIntent | null;
+    scopeStoreId?: string | null;
+    triggerConfig?: import("@/types/api").AutoResponseTextTriggerConfig | null;
   }) =>
     request<import("@/types/api").AutoResponseRule>("/auto-responses", {
       method: "POST",
@@ -597,6 +603,10 @@ export const api = {
       textTemplate?: string;
       messages?: import("@/types/api").AutoResponseMessageBlock[];
       status: string;
+      triggerType?: import("@/types/api").AutoResponseTriggerType;
+      intent?: import("@/types/api").AutoResponseIntent | null;
+      scopeStoreId?: string | null;
+      triggerConfig?: import("@/types/api").AutoResponseTextTriggerConfig | null;
     }>,
   ) =>
     request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`, {
