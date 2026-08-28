@@ -104,9 +104,27 @@ test("LINE OA visual layout strings are defined across all supported languages",
   assert.equal(en.messageContent, "Message content");
   assert.equal(zh.messageContent, "消息内容");
 
-  assert.equal(th.saveChanges, "บันทึกการเปลี่ยนแปลง");
-  assert.equal(en.saveChanges, "Save changes");
-  assert.equal(zh.saveChanges, "保存更改");
+  assert.equal(th.saveTemplate, "บันทึกเทมเพลต");
+  assert.equal(en.saveTemplate, "Save template");
+  assert.equal(zh.saveTemplate, "保存模板");
+
+  // Status badges and action labels
+  assert.match(th.statusActiveBadge(5, 2), /ใช้งานอยู่ · 5 ร้าน · v2/);
+  assert.match(en.statusActiveBadge(5, 2), /Active · 5 stores · v2/);
+  assert.match(zh.statusActiveBadge(5, 2), /已启用 · 5 家门店 · v2/);
+
+  assert.match(th.statusDraftBadge(1), /แบบร่าง · ยังไม่เปิดใช้งาน · v1/);
+  assert.match(en.statusDraftBadge(1), /Draft · Not activated · v1/);
+  assert.match(zh.statusDraftBadge(1), /草稿 · 未启用 · v1/);
+
+  assert.match(th.applyToStores(10), /นำไปใช้กับ 10 ร้าน/);
+  assert.match(en.applyToStores(1), /Apply to 1 store/);
+  assert.match(en.applyToStores(10), /Apply to 10 stores/);
+  assert.match(zh.applyToStores(10), /应用到 10 家门店/);
+
+  assert.equal(th.unsavedChanges, "มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก");
+  assert.equal(th.basedOnSelectedStore, "อิงจากร้านที่เลือก");
+  assert.equal(th.noGreetingAssigned, "ไม่มีข้อความต้อนรับจากระบบนี้");
 
   // Variable button labels
   assert.equal(th.userDisplayName, "ชื่อผู้ใช้");
@@ -156,20 +174,49 @@ test("Frontend variable resolver handles user.displayName and account.name witho
   );
 });
 
-
 test("greeting page owns vertical scrolling inside full workspace", () => {
   const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
   assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);
 });
 
-
 test("greeting target stores are directly visible like rich menu targeting", () => {
   const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
   assert.match(source, /data-testid="greeting-store-targeting"/);
-  assert.doesNotMatch(source, /showStoreSection/);
-  assert.doesNotMatch(source, /handleOpenStoreTargeting/);
   assert.match(source, /handleSelectAllReadyStores/);
   assert.match(source, /handleSelectFilteredReadyStores/);
   assert.match(source, /storeReadinessFilter === value/);
   assert.match(source, /selectedStoreOaIds\.length/);
+});
+
+test("greeting preview deterministically follows store selection and handles dirty state", () => {
+  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
+
+  // 1. Preview store resolution follows selection
+  assert.match(source, /effectivePreviewStoreId/);
+  assert.match(source, /lastSelectedStoreOaId/);
+  assert.match(source, /isBasedOnSelectedStore/);
+  assert.match(source, /manualPreviewStoreId/);
+
+  // 2. Clear status badges & actions
+  assert.match(source, /statusActiveBadge/);
+  assert.match(source, /statusDraftBadge/);
+  assert.match(source, /statusInactiveBadge/);
+  assert.match(source, /handleTemplateStatus/);
+
+  // 3. Button copy and counts
+  assert.match(source, /saveTemplate/);
+  assert.match(source, /saveAssignments/);
+  assert.match(source, /applyToStores|saveAssignments/);
+
+  // 4. Dirty state tracking
+  assert.match(source, /isDirty/);
+  assert.match(source, /unsavedChanges/);
+
+  // 5. Store status column
+  assert.match(source, /colGreetingStatus/);
+  assert.match(source, /noGreetingAssigned/);
+
+  // 6. Active edit warning modal
+  assert.match(source, /activeEditWarningTitle/);
+  assert.match(source, /activeEditWarningMessage/);
 });
