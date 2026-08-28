@@ -74,6 +74,11 @@ export type StoreVariableContext = {
   tiktokUsername?: string | null;
   tiktokProfileUrl?: string | null;
   googleMapsUrl?: string | null;
+  user?: { displayName?: string | null; name?: string | null } | null;
+  account?: { name?: string | null } | null;
+  lineOfficialAccountName?: string | null;
+  userDisplayName?: string | null;
+  userName?: string | null;
   [key: string]: unknown;
 };
 
@@ -103,6 +108,49 @@ export function getStoreVariableValue(
 ): string | null {
   if (!store) return null;
   const normalized = variable.trim();
+
+  if (
+    normalized === "user.displayName" ||
+    normalized === "user.name" ||
+    normalized === "customer.displayName"
+  ) {
+    if (
+      store.user &&
+      typeof store.user === "object" &&
+      typeof store.user.displayName === "string"
+    ) {
+      return store.user.displayName.trim() || null;
+    }
+    if (typeof store.userDisplayName === "string") {
+      return store.userDisplayName.trim() || null;
+    }
+    if (typeof store.userName === "string") {
+      return store.userName.trim() || null;
+    }
+    return null;
+  }
+
+  if (
+    normalized === "account.name" ||
+    normalized === "lineOfficialAccount.name" ||
+    normalized === "oa.name"
+  ) {
+    if (
+      store.account &&
+      typeof store.account === "object" &&
+      typeof store.account.name === "string"
+    ) {
+      return store.account.name.trim() || null;
+    }
+    if (typeof store.lineOfficialAccountName === "string") {
+      return store.lineOfficialAccountName.trim() || null;
+    }
+    if (typeof store.accountName === "string") {
+      return store.accountName.trim() || null;
+    }
+    return store.storeName?.trim() || store.name?.trim() || null;
+  }
+
   const prop = normalized.startsWith("store.") ? normalized.slice(6) : normalized;
 
   switch (prop) {
@@ -151,8 +199,18 @@ export function validateTemplateVariables(
   const reasons: string[] = [];
 
   for (const v of variables) {
+    const normalized = v.trim();
+    if (
+      normalized === "user.displayName" ||
+      normalized === "user.name" ||
+      normalized === "customer.displayName"
+    ) {
+      // Runtime context variable: evaluated during event execution, does not block store readiness
+      continue;
+    }
+
     const value = getStoreVariableValue(v, store);
-    const prop = v.startsWith("store.") ? v.slice(6) : v;
+    const prop = normalized.startsWith("store.") ? normalized.slice(6) : normalized;
 
     if (prop === "googleMapsUrl") {
       if (!value || !isValidGoogleMapsUrl(value)) {

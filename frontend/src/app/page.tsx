@@ -25,6 +25,7 @@ import { FriendSourceLinksView } from "./friend-source-links/friend-source-links
 import { MassMessagesView } from "./mass-messages/mass-messages-view";
 import { RichMenusView } from "./rich-menus/rich-menus-view";
 import { AutoResponsesView } from "./auto-responses/auto-responses-view";
+import { GreetingMessagesView } from "./greeting-messages/greeting-messages-view";
 import { DashboardView } from "./dashboard/dashboard-view";
 import { AppShell, ContextSidebar, PageContainer, PageHeader, FilterBar } from "@/components/shell";
 import {
@@ -4081,6 +4082,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ) : initialSection === "auto-responses" ? (
             <PageContainer variant="full">
               <AutoResponsesView language={language} userRole={authUser.role} />
+            </PageContainer>
+          ) : initialSection === "greeting-messages" ? (
+            <PageContainer variant="full">
+              <GreetingMessagesView language={language} userRole={authUser.role} />
             </PageContainer>
           ) : (
             <>

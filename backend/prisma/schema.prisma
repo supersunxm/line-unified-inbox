@@ -638,6 +638,8 @@ model LineOfficialAccount {
   richMenuAssignments         RichMenuStoreAssignment[]
   richMenuPublishAttempts     RichMenuPublishAttempt[]
   autoResponseExecutions      AutoResponseExecution[]
+  greetingStoreAssignment     GreetingStoreAssignment?
+  greetingExecutions          GreetingExecution[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -1775,4 +1777,79 @@ model AutoResponseExecution {
   @@index([lineOfficialAccountId, createdAt])
   @@index([createdAt])
   @@index([webhookEventId])
+}
+
+enum GreetingTemplateStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum GreetingSendPolicy {
+  FIRST_TIME_ONLY
+  ADD_AND_UNBLOCK
+}
+
+enum GreetingExecutionStatus {
+  SUCCESS
+  SKIPPED
+  FAILED
+}
+
+model GreetingTemplate {
+  id              String                 @id @default(uuid())
+  name            String
+  description     String?
+  status          GreetingTemplateStatus @default(DRAFT)
+  sendPolicy      GreetingSendPolicy     @default(FIRST_TIME_ONLY)
+  contentJson     Json?
+  version         Int                    @default(1)
+  createdByUserId String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  activatedAt     DateTime?
+  archivedAt      DateTime?
+
+  assignments GreetingStoreAssignment[]
+  executions  GreetingExecution[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model GreetingStoreAssignment {
+  id                    String              @id @default(uuid())
+  templateId            String
+  lineOfficialAccountId String              @unique
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  template            GreetingTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model GreetingExecution {
+  id                    String                  @id @default(uuid())
+  templateId            String?
+  lineOfficialAccountId String
+  webhookEventId        String?
+  lineUserIdHash        String
+  status                GreetingExecutionStatus
+  reason                String?
+  messageCount          Int?
+  messageTypesJson      Json?
+  isUnblocked           Boolean?
+  createdAt             DateTime                @default(now())
+
+  template            GreetingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, createdAt])
+  @@index([lineOfficialAccountId, createdAt])
+  @@index([lineOfficialAccountId, lineUserIdHash, status])
+  @@index([webhookEventId])
+  @@index([createdAt])
 }

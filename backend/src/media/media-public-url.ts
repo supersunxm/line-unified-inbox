@@ -5,6 +5,7 @@ const defaultTtlSeconds = 7 * 24 * 60 * 60; // 7 days (604,800s)
 export const PUBLIC_MEDIA_PREFIXES = [
   "line-media/outbound/",
   "line-media/auto-response/",
+  "line-media/greeting/",
 ] as const;
 
 export function isAllowedPublicMediaObjectKey(key: string): boolean {

@@ -625,4 +625,76 @@ export const api = {
         body: JSON.stringify(body || {}),
       },
     ),
+
+  listGreetingTemplates: (params?: { status?: string; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.search) searchParams.set("search", params.search);
+    const qs = searchParams.toString();
+    return request<import("@/types/api").GreetingTemplate[]>(`/greeting-messages${qs ? `?${qs}` : ""}`);
+  },
+  getGreetingTemplate: (id: string) =>
+    request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}`),
+  uploadGreetingMedia: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<import("@/types/api").GreetingUploadMediaResult>("/greeting-messages/media", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  createGreetingTemplate: (data: {
+    name: string;
+    description?: string | null;
+    sendPolicy?: import("@/types/api").GreetingSendPolicy;
+    messages?: import("@/types/api").GreetingMessageBlock[];
+  }) =>
+    request<import("@/types/api").GreetingTemplate>("/greeting-messages", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateGreetingTemplate: (
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      sendPolicy?: import("@/types/api").GreetingSendPolicy;
+      messages?: import("@/types/api").GreetingMessageBlock[];
+      status?: import("@/types/api").GreetingTemplateStatus;
+    },
+  ) =>
+    request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  activateGreetingTemplate: (id: string) =>
+    request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/activate`, {
+      method: "POST",
+    }),
+  deactivateGreetingTemplate: (id: string) =>
+    request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/deactivate`, {
+      method: "POST",
+    }),
+  archiveGreetingTemplate: (id: string) =>
+    request<import("@/types/api").GreetingTemplate>(`/greeting-messages/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+    }),
+  getGreetingReadiness: (id: string) =>
+    request<import("@/types/api").GreetingReadinessResponse>(`/greeting-messages/${encodeURIComponent(id)}/readiness`),
+  assignGreetingStores: (id: string, body: { lineOfficialAccountIds: string[] }) =>
+    request<{ assignedCount: number }>(`/greeting-messages/${encodeURIComponent(id)}/assignments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  previewGreeting: (
+    id: string,
+    body?: { lineOfficialAccountId?: string; storeId?: string; sampleCustomerName?: string },
+  ) =>
+    request<import("@/types/api").GreetingPreviewResult>(
+      `/greeting-messages/${encodeURIComponent(id)}/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      },
+    ),
 };

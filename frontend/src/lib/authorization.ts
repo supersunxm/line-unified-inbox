@@ -112,6 +112,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "coupons":
     case "rich-menus":
     case "auto-responses":
+    case "greeting-messages":
       return hasBackendAdminAccess(auth);
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;

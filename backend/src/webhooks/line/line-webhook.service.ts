@@ -13,6 +13,7 @@ import { NotificationEnqueueService } from "../../notifications/notification-enq
 import { RealtimeEventService } from "../../realtime/realtime-event.service";
 
 import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";
+import { GreetingExecutionService } from "../../greeting-message/greeting-execution.service";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -40,6 +41,7 @@ export class LineWebhookService {
     private readonly notifications?: NotificationEnqueueService,
     private readonly realtime?: RealtimeEventService,
     private readonly autoResponseExecution?: AutoResponseExecutionService,
+    private readonly greetingExecution?: GreetingExecutionService,
   ) {}
 
   async accept(payload: LineWebhookBody, resolvedOaId: string) {
@@ -166,6 +168,23 @@ export class LineWebhookService {
       }
     } catch (err: unknown) {
       this.logger.warn(`Failed to process friend attribution for follow event: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    if (this.greetingExecution) {
+      try {
+        const isUnblocked = Boolean((event as any).follow?.isUnblocked);
+        await this.greetingExecution.handleFollowEvent({
+          lineOfficialAccountId: resolvedOaId,
+          lineUserId: event.source.userId,
+          replyToken: event.replyToken,
+          webhookEventId: event.webhookEventId,
+          isUnblocked,
+        });
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Failed to process greeting execution for follow event: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 

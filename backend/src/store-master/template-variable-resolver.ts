@@ -50,6 +50,11 @@ export type StoreVariableContext = {
   tiktokUsername?: string | null;
   tiktokProfileUrl?: string | null;
   googleMapsUrl?: string | null;
+  user?: { displayName?: string | null; name?: string | null } | null;
+  account?: { name?: string | null } | null;
+  lineOfficialAccountName?: string | null;
+  userDisplayName?: string | null;
+  userName?: string | null;
   [key: string]: unknown;
 };
 
@@ -77,7 +82,7 @@ export function extractTemplateVariables(template: string): string[] {
 }
 
 /**
- * Resolves a variable expression like "store.googleMapsUrl" or "store.name" against the store context.
+ * Resolves a variable expression like "store.googleMapsUrl", "user.displayName", or "account.name" against context.
  */
 export function getStoreVariableValue(
   variable: string,
@@ -85,6 +90,48 @@ export function getStoreVariableValue(
 ): string | null {
   if (!store) return null;
   const normalized = variable.trim();
+
+  if (
+    normalized === "user.displayName" ||
+    normalized === "user.name" ||
+    normalized === "customer.displayName"
+  ) {
+    if (
+      store.user &&
+      typeof store.user === "object" &&
+      typeof store.user.displayName === "string"
+    ) {
+      return store.user.displayName.trim() || null;
+    }
+    if (typeof store.userDisplayName === "string") {
+      return store.userDisplayName.trim() || null;
+    }
+    if (typeof store.userName === "string") {
+      return store.userName.trim() || null;
+    }
+    return null;
+  }
+
+  if (
+    normalized === "account.name" ||
+    normalized === "lineOfficialAccount.name" ||
+    normalized === "oa.name"
+  ) {
+    if (
+      store.account &&
+      typeof store.account === "object" &&
+      typeof store.account.name === "string"
+    ) {
+      return store.account.name.trim() || null;
+    }
+    if (typeof store.lineOfficialAccountName === "string") {
+      return store.lineOfficialAccountName.trim() || null;
+    }
+    if (typeof store.accountName === "string") {
+      return store.accountName.trim() || null;
+    }
+    return store.storeName?.trim() || store.name?.trim() || null;
+  }
 
   // Support both "store.xxx" and "xxx"
   const prop = normalized.startsWith("store.") ? normalized.slice(6) : normalized;
@@ -124,6 +171,7 @@ export function getStoreVariableValue(
 
 /**
  * Validates whether all required template variables can be resolved with valid values.
+ * Context variables (like user.displayName) do not block store readiness.
  * Specifically for googleMapsUrl:
  * - URL exists & is valid => READY
  * - URL missing or invalid => BLOCKED / Missing Google Maps URL
@@ -141,8 +189,18 @@ export function validateTemplateVariables(
   const reasons: string[] = [];
 
   for (const v of variables) {
+    const normalized = v.trim();
+    if (
+      normalized === "user.displayName" ||
+      normalized === "user.name" ||
+      normalized === "customer.displayName"
+    ) {
+      // Runtime context variable: evaluated during event execution, does not block store readiness
+      continue;
+    }
+
     const value = getStoreVariableValue(v, store);
-    const prop = v.startsWith("store.") ? v.slice(6) : v;
+    const prop = normalized.startsWith("store.") ? normalized.slice(6) : normalized;
 
     if (prop === "googleMapsUrl") {
       if (!value || !isValidGoogleMapsUrl(value)) {
@@ -170,7 +228,7 @@ export function validateTemplateVariables(
 }
 
 /**
- * Replaces all {{store.xxx}} template variables in the template string.
+ * Replaces all {{xxx}} template variables in the template string.
  */
 export function resolveTemplateVariables(
   template: string,
