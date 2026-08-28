@@ -46,11 +46,15 @@ jobs:
           from pathlib import Path
           path = Path('frontend/test/greeting-messages.test.mts')
           text = path.read_text()
+          fs_import = 'import { readFileSync } from "node:fs";'
+          if fs_import not in text:
+              anchor = 'import test from "node:test";'
+              if anchor not in text:
+                  raise SystemExit('Could not find test import anchor')
+              text = text.replace(anchor, anchor + '\n' + fs_import, 1)
           marker = 'greeting page owns vertical scrolling inside full workspace'
-          if marker in text:
-              print('Regression assertion already present')
-              raise SystemExit(0)
-          text += '''\n\ntest("greeting page owns vertical scrolling inside full workspace", () => {\n  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");\n  assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);\n});\n'''
+          if marker not in text:
+              text += '''\n\ntest("greeting page owns vertical scrolling inside full workspace", () => {\n  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");\n  assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);\n});\n'''
           path.write_text(text)
           PY
 
