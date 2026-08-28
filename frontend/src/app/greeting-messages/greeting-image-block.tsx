@@ -115,143 +115,145 @@ export function GreetingImageBlock({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
-
   const hasImage = Boolean(block.mediaObjectKey && (block.imageUrl || block.previewUrl));
 
   return (
-    <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-card)] p-4 shadow-sm transition-colors">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-            {index + 1}
+    <div className="rounded-lg border border-[var(--app-border)] bg-white overflow-hidden shadow-xs">
+      {/* Top Toolbar matching LINE OA Manager */}
+      <div className="flex items-center justify-between px-3 py-2 bg-[#f4f5f7] border-b border-[var(--app-border)] text-xs text-[var(--app-text-secondary)]">
+        <div className="flex items-center gap-1.5 font-medium">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-white text-[var(--app-text-primary)] border border-gray-200 shadow-2xs font-semibold">
+            🖼️
           </span>
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+          <span className="text-[var(--app-text-primary)] font-medium">
             {t.imageBlockTitle(index + 1)}
           </span>
         </div>
 
+        {/* Right Reorder & Delete Controls */}
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={disabled || index === 0}
             onClick={onMoveUp}
+            disabled={disabled || index === 0}
             title={t.moveUpButton}
             aria-label={t.moveUpButton}
-            className="rounded p-1 text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] disabled:opacity-30"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed text-xs transition"
           >
-            ↑
+            ▲
           </button>
           <button
             type="button"
-            disabled={disabled || index === totalBlocks - 1}
             onClick={onMoveDown}
+            disabled={disabled || index === totalBlocks - 1}
             title={t.moveDownButton}
             aria-label={t.moveDownButton}
-            className="rounded p-1 text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] disabled:opacity-30"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed text-xs transition"
           >
-            ↓
+            ▼
           </button>
           <button
             type="button"
-            disabled={disabled || totalBlocks <= 1}
             onClick={onDelete}
+            disabled={disabled || totalBlocks <= 1}
             title={t.deleteBlockButton}
             aria-label={t.deleteBlockButton}
-            className="rounded p-1 text-[var(--app-danger)] hover:bg-[var(--app-danger-soft)] disabled:opacity-30"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-gray-500 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed text-xs transition font-bold"
           >
             ✕
           </button>
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png"
-        className="hidden"
-        onChange={handleFileSelected}
-        disabled={disabled || uploading}
-      />
+      {/* Editor Content Area */}
+      <div className="p-4 bg-white">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          className="hidden"
+          onChange={handleFileSelected}
+          disabled={disabled || uploading}
+        />
 
-      {hasImage ? (
-        <div className="space-y-2">
-          <div className="relative overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)]">
-            <img
-              src={block.imageUrl || block.previewUrl}
-              alt={block.fileName || "Greeting Image"}
-              className="max-h-56 w-full object-contain"
-            />
-            {uploading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs font-semibold text-white backdrop-blur-xs">
-                {t.uploading}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-[var(--app-text-tertiary)]">
-            <span>
-              {block.width && block.height && block.fileSize
-                ? t.imageDimensions(block.width, block.height, Math.round(block.fileSize / 1024))
-                : block.fileName || "Uploaded Image"}
-            </span>
-            <button
-              type="button"
-              disabled={disabled || uploading}
-              onClick={() => fileInputRef.current?.click()}
-              className="font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
-            >
-              {t.changeImageButton}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onClick={() => {
-            if (!disabled && !uploading) fileInputRef.current?.click();
-          }}
-          className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-[var(--app-border)] p-6 text-center transition-colors ${
-            disabled || uploading
-              ? "cursor-not-allowed opacity-60"
-              : "cursor-pointer hover:border-emerald-500/50 hover:bg-[var(--app-surface-hover)]"
-          }`}
-        >
-          {uploading ? (
-            <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {t.uploading}
+        {hasImage ? (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <div className="relative w-28 h-28 shrink-0 rounded bg-gray-200 overflow-hidden border border-gray-300">
+              <img
+                src={block.imageUrl || block.previewUrl || ""}
+                alt="Greeting block"
+                className="w-full h-full object-cover"
+              />
             </div>
-          ) : (
-            <>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mb-2 h-8 w-8 text-[var(--app-text-tertiary)]"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-              <div className="text-xs font-medium text-[var(--app-text-secondary)]">
-                {t.uploadImageButton}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-[var(--app-text-primary)] truncate">
+                {block.fileName || "greeting-image.jpg"}
+              </p>
+              {block.width && block.height && (
+                <p className="text-xs text-[var(--app-text-tertiary)] mt-0.5 font-tabular">
+                  {t.imageDimensions(
+                    block.width,
+                    block.height,
+                    block.fileSize ? Math.round(block.fileSize / 1024) : 0,
+                  )}
+                </p>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={disabled || uploading}
+                  className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 shadow-2xs transition"
+                >
+                  {uploading ? t.uploading : t.changeImageButton}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...block,
+                      mediaObjectKey: "",
+                      previewObjectKey: undefined,
+                      imageUrl: undefined,
+                      previewUrl: undefined,
+                      fileName: undefined,
+                    })
+                  }
+                  disabled={disabled || uploading}
+                  className="px-3 py-1.5 text-xs font-medium rounded border border-transparent text-red-600 hover:bg-red-50 transition"
+                >
+                  {t.deleteBlockButton}
+                </button>
               </div>
-              <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                {t.dropImageHint}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+            </div>
+          </div>
+        ) : (
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => {
+              if (!disabled && !uploading) fileInputRef.current?.click();
+            }}
+            className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 hover:border-[#06c755] rounded-lg bg-gray-50 hover:bg-white transition cursor-pointer text-center group"
+          >
+            <div className="w-12 h-12 rounded-full bg-gray-100 group-hover:bg-emerald-50 flex items-center justify-center text-gray-500 group-hover:text-[#06c755] transition mb-2">
+              📷
+            </div>
+            <p className="text-xs font-medium text-gray-700 group-hover:text-[#06c755] transition">
+              {uploading ? t.uploading : t.uploadImageButton}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {t.dropImageHint}
+            </p>
+          </div>
+        )}
 
-      {error && <div className="mt-2 text-xs font-medium text-[var(--app-danger)]">{error}</div>}
+        {error && (
+          <p className="mt-2 text-xs text-red-600 font-medium">
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

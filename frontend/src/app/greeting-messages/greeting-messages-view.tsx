@@ -27,50 +27,54 @@ export function GreetingMessagesView({
 
   const [templates, setTemplates] = useState<GreetingTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Editor State
-  const [editingTemplate, setEditingTemplate] = useState<GreetingTemplate | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [formName, setFormName] = useState("");
+  // Active Selected / Editing Template State
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [formName, setFormName] = useState("ข้อความต้อนรับมาตรฐาน");
   const [formDescription, setFormDescription] = useState("");
   const [formSendPolicy, setFormSendPolicy] = useState<GreetingSendPolicy>("FIRST_TIME_ONLY");
   const [formMessages, setFormMessages] = useState<GreetingMessageBlock[]>([
     {
       id: "text-init",
       type: "TEXT",
-      textTemplate: "สวัสดีคุณ {{user.displayName}} ยินดีต้อนรับสู่ {{store.storeName}} ครับ/ค่ะ",
+      textTemplate:
+        "สวัสดี คุณ {{user.displayName}}\nนี่คือบัญชีทางการของ {{account.name}}\nขอบคุณที่เป็นเพื่อนกับเรา 🐰\n\nเราจะส่งข่าวสารล่าสุดผ่านบัญชีทางการนี้เป็นระยะ 💌\nเตรียมรับได้เลย! 🎁✨",
     },
   ]);
   const [saving, setSaving] = useState(false);
   const [showActiveEditModal, setShowActiveEditModal] = useState(false);
+  const [showTemplateManagerModal, setShowTemplateManagerModal] = useState(false);
 
   // Store Assignment State
-  const [assigningTemplate, setAssigningTemplate] = useState<GreetingTemplate | null>(null);
+  const [showStoreSection, setShowStoreSection] = useState(false);
   const [readinessData, setReadinessData] = useState<GreetingReadinessResponse | null>(null);
   const [selectedStoreOaIds, setSelectedStoreOaIds] = useState<string[]>([]);
   const [savingAssignments, setSavingAssignments] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
 
-  // Preview State
-  const [previewingTemplate, setPreviewingTemplate] = useState<GreetingTemplate | null>(null);
-  const [previewResult, setPreviewResult] = useState<GreetingPreviewResult | null>(null);
+  // Live Mobile Preview State
   const [previewStoreId, setPreviewStoreId] = useState<string>("");
-  const [previewCustomerName, setPreviewCustomerName] = useState<string>("คุณสมชาย");
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewCustomerName, setPreviewCustomerName] = useState<string>("Sunn");
+  const [previewTab, setPreviewTab] = useState<"chat" | "list">("chat");
+
+  const currentTemplate = useMemo(() => {
+    if (isCreatingNew) return null;
+    return templates.find((tmp) => tmp.id === selectedTemplateId) || templates[0] || null;
+  }, [templates, selectedTemplateId, isCreatingNew]);
 
   const fetchTemplates = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.listGreetingTemplates({
-        status: statusFilter === "ALL" ? undefined : statusFilter,
-        search: search.trim() || undefined,
-      });
+      const res = await api.listGreetingTemplates({});
       setTemplates(res);
+      if (res.length > 0 && !selectedTemplateId && !isCreatingNew) {
+        setSelectedTemplateId(res[0].id);
+        loadTemplateIntoForm(res[0]);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load greeting templates");
     } finally {
@@ -80,26 +84,11 @@ export function GreetingMessagesView({
 
   useEffect(() => {
     fetchTemplates();
-  }, [statusFilter, search]);
+  }, []);
 
-  const handleOpenCreate = () => {
-    setEditingTemplate(null);
-    setIsCreating(true);
-    setFormName("");
-    setFormDescription("");
-    setFormSendPolicy("FIRST_TIME_ONLY");
-    setFormMessages([
-      {
-        id: `text-${Date.now()}`,
-        type: "TEXT",
-        textTemplate: "สวัสดีคุณ {{user.displayName}} ยินดีต้อนรับสู่ {{store.storeName}} ครับ/ค่ะ",
-      },
-    ]);
-  };
-
-  const handleOpenEdit = (template: GreetingTemplate) => {
-    setEditingTemplate(template);
-    setIsCreating(false);
+  const loadTemplateIntoForm = (template: GreetingTemplate) => {
+    setIsCreatingNew(false);
+    setSelectedTemplateId(template.id);
     setFormName(template.name);
     setFormDescription(template.description || "");
     setFormSendPolicy(template.sendPolicy || "FIRST_TIME_ONLY");
@@ -110,121 +99,137 @@ export function GreetingMessagesView({
             {
               id: `text-${Date.now()}`,
               type: "TEXT",
-              textTemplate: "สวัสดีคุณ {{user.displayName}} ยินดีต้อนรับสู่ {{store.storeName}}",
+              textTemplate:
+                "สวัสดี คุณ {{user.displayName}}\nนี่คือบัญชีทางการของ {{account.name}}\nขอบคุณที่เป็นเพื่อนกับเรา",
             },
           ],
     );
   };
 
+  const handleStartNew = () => {
+    setIsCreatingNew(true);
+    setSelectedTemplateId(null);
+    setFormName("ข้อความต้อนรับใหม่");
+    setFormDescription("");
+    setFormSendPolicy("FIRST_TIME_ONLY");
+    setFormMessages([
+      {
+        id: `text-${Date.now()}`,
+        type: "TEXT",
+        textTemplate:
+          "สวัสดี คุณ {{user.displayName}}\nนี่คือบัญชีทางการของ {{account.name}}\nขอบคุณที่เป็นเพื่อนกับเรา 🐰",
+      },
+    ]);
+  };
+
+  // Fetch store readiness whenever current template or messages change
+  const fetchReadiness = async (templateId?: string) => {
+    const targetId = templateId || currentTemplate?.id;
+    if (!targetId) return;
+
+    try {
+      const res = await api.getGreetingReadiness(targetId);
+      setReadinessData(res);
+      // Pre-select stores that are currently assigned to this template
+      const assigned = res.stores
+        .filter((s) => s.currentTemplateId === targetId)
+        .map((s) => s.lineOfficialAccountId);
+      setSelectedStoreOaIds(assigned);
+
+      // Default sample store for preview
+      if (!previewStoreId && res.stores.length > 0) {
+        setPreviewStoreId(res.stores[0].lineOfficialAccountId);
+      }
+    } catch {
+      // Ignore readiness errors silently in background
+    }
+  };
+
+  useEffect(() => {
+    if (currentTemplate?.id) {
+      fetchReadiness(currentTemplate.id);
+    }
+  }, [currentTemplate?.id]);
+
   const handleSaveClick = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
-      setError("กรุณากรอกชื่อเทมเพลต");
+      setError(t.fieldNamePlaceholder);
       return;
     }
 
-    // If editing an ACTIVE template with assigned stores -> trigger warning modal
-    if (editingTemplate && editingTemplate.status === "ACTIVE" && editingTemplate.assignedStoreCount > 0) {
+    if (formMessages.length === 0) {
+      setError(t.emptyList);
+      return;
+    }
+
+    // Check if active and assigned to stores
+    if (
+      currentTemplate &&
+      currentTemplate.status === "ACTIVE" &&
+      currentTemplate.assignedStoreCount > 0
+    ) {
       setShowActiveEditModal(true);
       return;
     }
 
-    performSave();
+    executeSave();
   };
 
-  const performSave = async () => {
+  const executeSave = async () => {
     setShowActiveEditModal(false);
     setSaving(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
-      if (isCreating) {
-        await api.createGreetingTemplate({
+      if (isCreatingNew || !currentTemplate) {
+        const created = await api.createGreetingTemplate({
           name: formName.trim(),
-          description: formDescription.trim() || null,
+          description: formDescription.trim() || undefined,
           sendPolicy: formSendPolicy,
           messages: formMessages,
         });
-        setSuccessMessage("สร้างเทมเพลตข้อความต้อนรับสำเร็จ");
-      } else if (editingTemplate) {
-        await api.updateGreetingTemplate(editingTemplate.id, {
+        setSuccessMessage("บันทึกข้อความต้อนรับสำเร็จ");
+        await fetchTemplates();
+        loadTemplateIntoForm(created);
+      } else {
+        const updated = await api.updateGreetingTemplate(currentTemplate.id, {
           name: formName.trim(),
-          description: formDescription.trim() || null,
+          description: formDescription.trim() || undefined,
           sendPolicy: formSendPolicy,
           messages: formMessages,
         });
-        setSuccessMessage("บันทึกการแก้ไขเทมเพลตสำเร็จ");
+        setSuccessMessage("บันทึกการเปลี่ยนแปลงสำเร็จ");
+        await fetchTemplates();
+        loadTemplateIntoForm(updated);
       }
-
-      setIsCreating(false);
-      setEditingTemplate(null);
-      await fetchTemplates();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save template");
+      setError(err instanceof Error ? err.message : "Failed to save greeting template");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleActivate = async (id: string) => {
+  const handleSaveStoreAssignments = async () => {
+    if (!currentTemplate) return;
+    setSavingAssignments(true);
     setError(null);
     try {
-      await api.activateGreetingTemplate(id);
-      setSuccessMessage("เปิดใช้งานเทมเพลตเรียบร้อยแล้ว");
+      const res = await api.assignGreetingStores(currentTemplate.id, {
+        lineOfficialAccountIds: selectedStoreOaIds,
+      });
+      setSuccessMessage(t.saveAssignmentsSuccess(res.assignedCount));
+      await fetchReadiness(currentTemplate.id);
       await fetchTemplates();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to activate template");
+      setError(err instanceof Error ? err.message : "Failed to save store assignments");
+    } finally {
+      setSavingAssignments(false);
     }
   };
 
-  const handleDeactivate = async (id: string) => {
-    setError(null);
-    try {
-      await api.deactivateGreetingTemplate(id);
-      setSuccessMessage("ปิดใช้งานเทมเพลตชั่วคราวเรียบร้อยแล้ว");
-      await fetchTemplates();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to deactivate template");
-    }
-  };
-
-  const handleArchive = async (id: string) => {
-    if (!window.confirm(t.archiveConfirm)) return;
-    setError(null);
-    try {
-      await api.archiveGreetingTemplate(id);
-      setSuccessMessage("จัดเก็บเทมเพลตเรียบร้อยแล้ว");
-      await fetchTemplates();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to archive template");
-    }
-  };
-
-  // Store Readiness & Assignment
-  const handleOpenAssignStores = async (template: GreetingTemplate) => {
-    setAssigningTemplate(template);
-    setReadinessData(null);
-    setError(null);
-
-    try {
-      const res = await api.getGreetingReadiness(template.id);
-      setReadinessData(res);
-      const currentlyAssigned = res.stores
-        .filter((s) => s.isAssigned)
-        .map((s) => s.lineOfficialAccountId);
-      setSelectedStoreOaIds(currentlyAssigned);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load store readiness");
-    }
-  };
-
-  const handleToggleStore = (oaId: string) => {
-    setSelectedStoreOaIds((prev) =>
-      prev.includes(oaId) ? prev.filter((id) => id !== oaId) : [...prev, oaId],
-    );
-  };
-
-  const handleSelectAllReady = () => {
+  const handleSelectAllReadyStores = () => {
     if (!readinessData) return;
     const readyIds = readinessData.stores
       .filter((s) => s.readinessStatus === "READY")
@@ -232,802 +237,588 @@ export function GreetingMessagesView({
     setSelectedStoreOaIds(readyIds);
   };
 
-  const handleClearSelection = () => {
-    setSelectedStoreOaIds([]);
+  const handleToggleStoreSelect = (oaId: string) => {
+    setSelectedStoreOaIds((prev) =>
+      prev.includes(oaId) ? prev.filter((id) => id !== oaId) : [...prev, oaId],
+    );
   };
 
-  const handleSaveAssignments = async () => {
-    if (!assigningTemplate) return;
-    setSavingAssignments(true);
-    setError(null);
-
-    try {
-      const res = await api.assignGreetingStores(assigningTemplate.id, {
-        lineOfficialAccountIds: selectedStoreOaIds,
-      });
-      setSuccessMessage(t.saveAssignmentsSuccess(res.assignedCount));
-      setAssigningTemplate(null);
-      await fetchTemplates();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to assign stores");
-    } finally {
-      setSavingAssignments(false);
+  // Selected sample store metadata for live mobile preview
+  const currentPreviewStore = useMemo(() => {
+    if (!readinessData || !previewStoreId) {
+      return {
+        storeName: "OPPO Central Bangna",
+        lineBasicId: "@900ytjrs",
+        googleMapsUrl: "https://maps.google.com/?q=OPPO+Central+Bangna",
+        accountName: "OPPO Central Bangna",
+      };
     }
-  };
+    const match = readinessData.stores.find(
+      (s) => s.lineOfficialAccountId === previewStoreId,
+    );
+    if (!match) {
+      return {
+        storeName: "OPPO Central Bangna",
+        lineBasicId: "@900ytjrs",
+        googleMapsUrl: "https://maps.google.com/?q=OPPO+Central+Bangna",
+        accountName: "OPPO Central Bangna",
+      };
+    }
+    return {
+      storeName: match.storeName || "OPPO Store",
+      lineBasicId: match.storeCode || "@oppo_store",
+      googleMapsUrl: match.googleMapsUrl || "https://maps.google.com",
+      accountName: match.lineOfficialAccountName || match.storeName || "OPPO Store",
+    };
+  }, [readinessData, previewStoreId]);
 
-  // Preview Logic
-  const handleOpenPreview = async (template: GreetingTemplate) => {
-    setPreviewingTemplate(template);
-    setPreviewResult(null);
-    setPreviewLoading(true);
-    setError(null);
+  // Helper to render text bubbles with LINE-like green variable pills
+  const renderPreviewMessageText = (rawText: string) => {
+    if (!rawText) return null;
 
-    try {
-      const res = await api.previewGreeting(template.id, {
-        sampleCustomerName: previewCustomerName,
-      });
-      setPreviewResult(res);
-      if (res.store.lineOfficialAccountId) {
-        setPreviewStoreId(res.store.lineOfficialAccountId);
+    // Split text by template variables {{...}}
+    const parts = rawText.split(/(\{\{[^}]+\}\})/g);
+    return parts.map((part, i) => {
+      if (part === "{{user.displayName}}") {
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#06c755] text-white text-[11px] font-medium align-middle"
+          >
+            {previewCustomerName || t.userDisplayName}
+          </span>
+        );
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to preview template");
-    } finally {
-      setPreviewLoading(false);
-    }
+      if (part === "{{account.name}}") {
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#06c755] text-white text-[11px] font-medium align-middle"
+          >
+            {currentPreviewStore.accountName}
+          </span>
+        );
+      }
+      if (part === "{{store.storeName}}") {
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#e8f9ee] text-[#06c755] border border-[#06c755]/30 text-[11px] font-medium align-middle"
+          >
+            {currentPreviewStore.storeName}
+          </span>
+        );
+      }
+      if (part === "{{store.googleMapsUrl}}") {
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-medium align-middle"
+          >
+            {currentPreviewStore.googleMapsUrl}
+          </span>
+        );
+      }
+      if (part.startsWith("{{") && part.endsWith("}}")) {
+        const cleanName = part.slice(2, -2).trim();
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-300 text-[11px] font-mono align-middle"
+          >
+            {cleanName}
+          </span>
+        );
+      }
+      return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+    });
   };
 
-  const handleRefreshPreview = async (storeId?: string, customerName?: string) => {
-    if (!previewingTemplate) return;
-    setPreviewLoading(true);
-    try {
-      const res = await api.previewGreeting(previewingTemplate.id, {
-        lineOfficialAccountId: storeId || previewStoreId || undefined,
-        sampleCustomerName: customerName || previewCustomerName,
-      });
-      setPreviewResult(res);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to preview template");
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const filteredStoresForAssignment = useMemo(() => {
+  const filteredStores = useMemo(() => {
     if (!readinessData) return [];
     if (!storeSearch.trim()) return readinessData.stores;
-    const q = storeSearch.trim().toLowerCase();
+    const q = storeSearch.toLowerCase();
     return readinessData.stores.filter(
       (s) =>
         s.storeName.toLowerCase().includes(q) ||
-        (s.storeCode && s.storeCode.toLowerCase().includes(q)) ||
-        (s.province && s.province.toLowerCase().includes(q)),
+        s.lineOfficialAccountName.toLowerCase().includes(q) ||
+        (s.storeCode && s.storeCode.toLowerCase().includes(q)),
     );
   }, [readinessData, storeSearch]);
 
-  const isFormOpen = isCreating || Boolean(editingTemplate);
+  const assignedCount = readinessData?.assignedStores || 0;
+  const readyCount = readinessData?.readyStores || 0;
+  const blockedCount = readinessData?.blockedStores || 0;
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--app-text-primary)] sm:text-2xl">
-            {t.title}
-          </h1>
-          <p className="mt-1 text-xs text-[var(--app-text-tertiary)] sm:text-sm">
-            {t.subtitle}
-          </p>
-        </div>
-
-        {!isFormOpen && (
-          <button
-            type="button"
-            onClick={handleOpenCreate}
-            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 active:scale-98"
-          >
-            <span>+</span>
-            <span>{t.createTemplateButton}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Permanent Native OA Manager Duplication Warning Banner */}
-      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-800 dark:text-amber-200">
-        <span className="text-base leading-none">⚠️</span>
-        <div className="flex-1 leading-relaxed">{t.duplicationWarning}</div>
-      </div>
-
-      {/* Alerts */}
-      {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-medium text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
-      {successMessage && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-          {successMessage}
-        </div>
-      )}
-
-      {/* MAIN VIEW: FORM vs LIST */}
-      {isFormOpen ? (
-        /* Template Editor Form */
-        <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between border-b border-[var(--app-border-subtle)] pb-4">
-            <h2 className="text-lg font-bold text-[var(--app-text-primary)]">
-              {isCreating ? t.editorCreateTitle : t.editorEditTitle}
-            </h2>
+    <div className="min-h-screen bg-[#ffffff] text-[var(--app-text-primary)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Global Feedback Notifications */}
+        {error && (
+          <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between shadow-2xs">
+            <span>{error}</span>
             <button
               type="button"
-              onClick={() => {
-                setIsCreating(false);
-                setEditingTemplate(null);
-              }}
-              className="rounded-lg border border-[var(--app-border)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-800 font-bold ml-4"
             >
-              {t.cancelButton}
+              ✕
             </button>
           </div>
+        )}
 
-          <form onSubmit={handleSaveClick} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[var(--app-text-primary)]">
-                  {t.fieldName} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder={t.fieldNamePlaceholder}
-                  className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[var(--app-text-primary)]">
-                  {t.fieldDescription}
-                </label>
-                <input
-                  type="text"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder={t.fieldDescriptionPlaceholder}
-                  className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Send Policy Selector */}
-            <div>
-              <label className="mb-2 block text-xs font-semibold text-[var(--app-text-primary)]">
-                {t.fieldSendPolicy}
-              </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label
-                  className={`flex cursor-pointer flex-col rounded-xl border p-3.5 transition-colors ${
-                    formSendPolicy === "FIRST_TIME_ONLY"
-                      ? "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/20"
-                      : "border-[var(--app-border)] bg-[var(--app-surface-subtle)] hover:bg-[var(--app-surface-hover)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="sendPolicy"
-                      value="FIRST_TIME_ONLY"
-                      checked={formSendPolicy === "FIRST_TIME_ONLY"}
-                      onChange={() => setFormSendPolicy("FIRST_TIME_ONLY")}
-                      className="text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span className="text-xs font-bold text-[var(--app-text-primary)]">
-                      {t.sendPolicyFirstTime}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--app-text-tertiary)] pl-5">
-                    {t.sendPolicyFirstTimeDesc}
-                  </p>
-                </label>
-
-                <label
-                  className={`flex cursor-pointer flex-col rounded-xl border p-3.5 transition-colors ${
-                    formSendPolicy === "ADD_AND_UNBLOCK"
-                      ? "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/20"
-                      : "border-[var(--app-border)] bg-[var(--app-surface-subtle)] hover:bg-[var(--app-surface-hover)]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="sendPolicy"
-                      value="ADD_AND_UNBLOCK"
-                      checked={formSendPolicy === "ADD_AND_UNBLOCK"}
-                      onChange={() => setFormSendPolicy("ADD_AND_UNBLOCK")}
-                      className="text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span className="text-xs font-bold text-[var(--app-text-primary)]">
-                      {t.sendPolicyAddAndUnblock}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--app-text-tertiary)] pl-5">
-                    {t.sendPolicyAddAndUnblockDesc}
-                  </p>
-                </label>
-              </div>
-            </div>
-
-            {/* Message Sequence Builder */}
-            <GreetingMessageBuilder
-              messages={formMessages}
-              disabled={saving}
-              t={t}
-              onChange={setFormMessages}
-            />
-
-            {/* Form Actions */}
-            <div className="flex items-center justify-end gap-3 border-t border-[var(--app-border-subtle)] pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCreating(false);
-                  setEditingTemplate(null);
-                }}
-                className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-              >
-                {t.cancelButton}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {saving ? "กำลังบันทึก..." : t.saveTemplateButton}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        /* Template List View */
-        <div className="space-y-4">
-          {/* Filters & Search */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { id: "ALL", label: t.filterAll },
-                { id: "ACTIVE", label: t.filterActive },
-                { id: "DRAFT", label: t.filterDraft },
-                { id: "INACTIVE", label: t.filterInactive },
-              ].map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setStatusFilter(f.id)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                    statusFilter === f.id
-                      ? "bg-emerald-600 text-white"
-                      : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t.searchPlaceholder}
-              className="w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus:border-emerald-500 focus:outline-none"
-            />
+        {successMessage && (
+          <div className="p-3.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-2xs">
+            <span>{successMessage}</span>
+            <button
+              type="button"
+              onClick={() => setSuccessMessage(null)}
+              className="text-emerald-600 hover:text-emerald-900 font-bold ml-4"
+            >
+              ✕
+            </button>
           </div>
+        )}
 
-          {/* Cards Grid */}
-          {loading ? (
-            <div className="p-12 text-center text-xs text-[var(--app-text-tertiary)]">
-              กำลังโหลดข้อมูล...
+        {/* 1. Header Section matching LINE OA Manager */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-gray-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900">
+                {t.headerTitle}
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 bg-gray-100 rounded border border-gray-200 cursor-default">
+                ⓘ Tips
+              </span>
             </div>
-          ) : templates.length === 0 ? (
-            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-12 text-center">
-              <div className="text-2xl">👋</div>
-              <h3 className="mt-2 text-sm font-semibold text-[var(--app-text-primary)]">
-                {t.emptyList}
-              </h3>
-              <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">
-                {t.emptyListDesc}
-              </p>
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
-              >
-                {t.createTemplateButton}
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {templates.map((template) => {
-                const messageCount = template.messages?.length || 0;
-                const statusColor =
-                  template.status === "ACTIVE"
-                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                    : template.status === "DRAFT"
-                      ? "bg-slate-500/10 text-slate-600 border-slate-500/20"
-                      : "bg-amber-500/10 text-amber-600 border-amber-500/20";
-
-                return (
-                  <div
-                    key={template.id}
-                    className="flex flex-col justify-between rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs transition-shadow hover:shadow-md"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-[var(--app-text-primary)] text-sm">
-                              {template.name}
-                            </h3>
-                            <span className="rounded-md bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--app-text-tertiary)]">
-                              {t.versionLabel(template.version)}
-                            </span>
-                          </div>
-                          {template.description && (
-                            <p className="mt-1 line-clamp-2 text-xs text-[var(--app-text-tertiary)]">
-                              {template.description}
-                            </p>
-                          )}
-                        </div>
-
-                        <span
-                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusColor}`}
-                        >
-                          {template.status === "ACTIVE"
-                            ? t.statusActive
-                            : template.status === "DRAFT"
-                              ? t.statusDraft
-                              : t.statusInactive}
-                        </span>
-                      </div>
-
-                      {/* Badges Info */}
-                      <div className="mt-4 flex flex-wrap items-center gap-2">
-                        <span className="rounded-lg bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-600 dark:text-blue-400">
-                          {template.sendPolicy === "FIRST_TIME_ONLY"
-                            ? t.sendPolicyFirstTime
-                            : t.sendPolicyAddAndUnblock}
-                        </span>
-                        <span className="rounded-lg bg-[var(--app-surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--app-text-secondary)]">
-                          💬 {messageCount} บล็อก
-                        </span>
-                        <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                          🏪 {t.assignedStoresLabel(template.assignedStoreCount)}
-                        </span>
-                      </div>
-
-                      {/* Variables Used */}
-                      {template.usedVariables.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1">
-                          {template.usedVariables.map((v) => (
-                            <span
-                              key={v}
-                              className="rounded bg-[var(--app-surface-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--app-text-tertiary)]"
-                            >
-                              {v}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Card Action Buttons */}
-                    <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--app-border-subtle)] pt-3 text-xs font-semibold">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPreview(template)}
-                          className="rounded-lg border border-[var(--app-border)] px-2.5 py-1 text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-                        >
-                          {t.previewButton}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAssignStores(template)}
-                          className="rounded-lg border border-[var(--app-border)] px-2.5 py-1 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-                        >
-                          {t.assignStoresButton}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(template)}
-                          className="rounded-lg border border-[var(--app-border)] px-2.5 py-1 text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-                        >
-                          {t.editButton}
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {template.status === "ACTIVE" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDeactivate(template.id)}
-                            className="rounded-lg px-2.5 py-1 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                          >
-                            {t.deactivateButton}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleActivate(template.id)}
-                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-white hover:bg-emerald-700"
-                          >
-                            {t.activateButton}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleArchive(template.id)}
-                          className="rounded-lg p-1 text-[var(--app-danger)] hover:bg-[var(--app-danger-soft)]"
-                          title={t.archiveButton}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ACTIVE EDIT WARNING MODAL */}
-      {showActiveEditModal && editingTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-xl">
-            <h3 className="text-base font-bold text-amber-600 dark:text-amber-400">
-              {t.activeEditWarningTitle}
-            </h3>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--app-text-secondary)]">
-              {t.activeEditWarningMessage(editingTemplate.assignedStoreCount)}
+            <p className="mt-1 text-xs text-gray-600">
+              {t.headerSubtitle}
             </p>
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowActiveEditModal(false)}
-                className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
+            <p className="mt-0.5 text-xs text-gray-400">
+              {t.headerHelp}
+            </p>
+          </div>
+
+          {/* Header Action Buttons */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Template Selector / Manage Switcher */}
+            {templates.length > 0 && (
+              <div className="relative inline-block">
+                <select
+                  value={isCreatingNew ? "new" : currentTemplate?.id || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "new") {
+                      handleStartNew();
+                    } else {
+                      const match = templates.find((tmp) => tmp.id === val);
+                      if (match) loadTemplateIntoForm(match);
+                    }
+                  }}
+                  className="px-3 py-2 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#06c755] cursor-pointer shadow-2xs"
+                >
+                  {templates.map((tmp) => (
+                    <option key={tmp.id} value={tmp.id}>
+                      {tmp.name} ({tmp.status})
+                    </option>
+                  ))}
+                  <option value="new">+ {t.createTemplateButton}</option>
+                </select>
+              </div>
+            )}
+
+            {/* Primary Save Changes Button matching LINE Green */}
+            <button
+              type="button"
+              onClick={handleSaveClick}
+              disabled={saving}
+              className="inline-flex items-center justify-center px-6 py-2 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] active:bg-[#049b42] text-white shadow-xs transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {saving ? t.uploading : t.saveChanges}
+            </button>
+          </div>
+        </div>
+
+        {/* 2. Compact Native OA Manager Duplication Notice */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-md bg-amber-50/80 border border-amber-200/80 text-xs text-amber-800">
+          <div className="flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{t.oaManagerWarning}</span>
+          </div>
+          <a
+            href="https://manager.line.biz/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-900 font-medium hover:underline shrink-0 ml-3"
+          >
+            {t.openLineOaManager}
+          </a>
+        </div>
+
+        {/* 3. Sending Restrictions Section matching LINE OA Manager */}
+        <div className="pt-2 pb-6 border-b border-gray-200 space-y-3">
+          <h2 className="text-base font-bold text-gray-900">
+            {t.sendingRestrictions}
+          </h2>
+
+          <div className="flex items-start gap-2.5">
+            <input
+              id="send-policy-checkbox"
+              type="checkbox"
+              checked={formSendPolicy === "FIRST_TIME_ONLY"}
+              onChange={(e) =>
+                setFormSendPolicy(e.target.checked ? "FIRST_TIME_ONLY" : "ADD_AND_UNBLOCK")
+              }
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#06c755] focus:ring-[#06c755] cursor-pointer"
+            />
+            <div>
+              <label
+                htmlFor="send-policy-checkbox"
+                className="text-xs font-semibold text-gray-900 cursor-pointer"
               >
-                {t.activeEditWarningCancel}
-              </button>
-              <button
-                type="button"
-                onClick={performSave}
-                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700"
-              >
-                {t.activeEditWarningConfirm}
-              </button>
+                {t.onlySendFirstTime}
+              </label>
+              <p className="mt-0.5 text-xs text-gray-500">
+                {t.onlySendFirstTimeHelp}
+              </p>
             </div>
           </div>
         </div>
-      )}
 
-      {/* STORE ASSIGNMENT MODAL */}
-      {assigningTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--app-border-subtle)] p-5">
-              <div>
-                <h3 className="text-base font-bold text-[var(--app-text-primary)]">
-                  {t.storeAssignmentTitle}: {assigningTemplate.name}
-                </h3>
-                <p className="text-xs text-[var(--app-text-tertiary)]">
-                  {t.storeAssignmentDesc}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAssigningTemplate(null)}
-                className="rounded-lg p-1.5 text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)]"
-              >
-                ✕
-              </button>
-            </div>
+        {/* 4. Message Content & Preview Section matching 68% / 32% Layout */}
+        <div className="pt-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">
+              {t.messageContent}
+            </h2>
 
-            {/* Sub-bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllReady}
-                  className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-semibold text-emerald-600 shadow-xs hover:bg-[var(--app-surface-hover)] dark:text-emerald-400"
-                >
-                  {t.selectAllReady}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearSelection}
-                  className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--app-text-secondary)] shadow-xs hover:bg-[var(--app-surface-hover)]"
-                >
-                  {t.clearSelection}
-                </button>
-                {readinessData && (
-                  <span className="text-xs text-[var(--app-text-tertiary)] ml-2">
-                    {t.readyStoresSummary(
-                      readinessData.readyStores,
-                      readinessData.totalStores,
-                      selectedStoreOaIds.length,
-                    )}
-                  </span>
-                )}
-              </div>
-
+            {/* Template Name Input field for clear multi-store identification */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium">{t.fieldName}:</span>
               <input
-                type="search"
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                placeholder="ค้นหาชื่อสาขา / รหัสสาขา / จังหวัด..."
-                className="w-56 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] focus:border-emerald-500 focus:outline-none"
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder={t.fieldNamePlaceholder}
+                className="px-2.5 py-1 text-xs border border-gray-300 rounded focus:border-[#06c755] focus:outline-none w-56 text-gray-800"
               />
             </div>
+          </div>
 
-            {/* Table Area */}
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {!readinessData ? (
-                <div className="p-8 text-center text-xs text-[var(--app-text-tertiary)]">
-                  กำลังประเมินความพร้อมของสาขา...
+          {/* 2-Column Grid: Left Editor (68%) / Right Sticky Preview (32%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column: Message Sequence Editor */}
+            <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+              <GreetingMessageBuilder
+                messages={formMessages}
+                disabled={saving}
+                t={t}
+                onChange={setFormMessages}
+              />
+
+              {/* Bottom Secondary Save Button matching LINE OA Manager */}
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveClick}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center px-8 py-2.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] active:bg-[#049b42] text-white shadow-xs transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {saving ? t.uploading : t.saveChanges}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column: Sticky Live Mobile Preview matching LINE OA screen */}
+            <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-6 space-y-3">
+              <div className="w-full max-w-[340px] mx-auto rounded-xl border border-gray-300 bg-[#2c323b] overflow-hidden shadow-md">
+                {/* Dark Preview Header Bar */}
+                <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#20242b] text-white text-xs font-medium">
+                  <div className="flex items-center gap-1.5">
+                    <span>▾</span>
+                    <span>{t.previewTitle}</span>
+                    <span className="text-gray-400 text-[11px]">ⓘ</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <span className="text-[11px] font-mono">📱</span>
+                  </div>
                 </div>
-              ) : filteredStoresForAssignment.length === 0 ? (
-                <div className="p-8 text-center text-xs text-[var(--app-text-tertiary)]">
-                  ไม่พบสาขาที่ตรงกับการค้นหา
+
+                {/* Tabs: Chat screen | Chat list */}
+                <div className="flex border-b border-gray-200 bg-white text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewTab("chat")}
+                    className={`flex-1 py-2 text-center transition ${
+                      previewTab === "chat"
+                        ? "text-gray-900 border-b-2 border-gray-900 font-bold"
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    {t.chatScreen}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewTab("list")}
+                    className={`flex-1 py-2 text-center transition ${
+                      previewTab === "list"
+                        ? "text-[#06c755] border-b-2 border-[#06c755] font-bold"
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    {t.chatList}
+                  </button>
                 </div>
-              ) : (
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--app-border)] text-[11px] font-semibold text-[var(--app-text-tertiary)] uppercase tracking-wider">
-                      <th className="p-2.5 w-12 text-center">{t.colSelect}</th>
+
+                {/* Simulated LINE Mobile Chat Screen Wallpaper */}
+                <div className="min-h-[460px] max-h-[520px] overflow-y-auto p-3.5 bg-[#749ac9] space-y-3">
+                  {/* Account Name Header Bubble */}
+                  <div className="flex items-start gap-2.5">
+                    {/* Avatar */}
+                    <div className="w-8 h-8 rounded-full bg-[#111111] text-white flex items-center justify-center font-bold text-[10px] shrink-0 shadow-xs border border-white/20">
+                      oppo
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      {/* Account Display Name */}
+                      <p className="text-[11px] text-white/90 font-medium drop-shadow-xs">
+                        {currentPreviewStore.accountName}
+                      </p>
+
+                      {/* Stacked Message Bubbles */}
+                      {formMessages.map((block, idx) => {
+                        if (block.type === "IMAGE") {
+                          const imgUrl = block.imageUrl || block.previewUrl;
+                          return (
+                            <div
+                              key={block.id || idx}
+                              className="relative inline-block max-w-[220px] rounded-2xl overflow-hidden shadow-xs border border-black/10 bg-white"
+                            >
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Preview image"
+                                  className="w-full h-auto max-h-[160px] object-cover"
+                                />
+                              ) : (
+                                <div className="p-4 bg-gray-100 text-center text-xs text-gray-400 font-medium">
+                                  🖼️ [ {t.image} ]
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        const text = (block.textTemplate || "").trim();
+                        return (
+                          <div
+                            key={block.id || idx}
+                            className="relative max-w-[230px] rounded-2xl bg-white p-3 text-xs text-gray-900 shadow-xs leading-relaxed break-words"
+                            style={{
+                              borderTopLeftRadius: "4px",
+                            }}
+                          >
+                            {text ? (
+                              renderPreviewMessageText(text)
+                            ) : (
+                              <span className="text-gray-400 italic">
+                                ({t.textBlockPlaceholder.slice(0, 20)}...)
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview Interactive Controls */}
+                <div className="p-3 bg-gray-50 border-t border-gray-200 space-y-2 text-xs">
+                  {readinessData && readinessData.stores.length > 0 && (
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                        {t.previewStoreSelector}
+                      </label>
+                      <select
+                        value={previewStoreId}
+                        onChange={(e) => setPreviewStoreId(e.target.value)}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-800"
+                      >
+                        {readinessData.stores.map((s) => (
+                          <option key={s.lineOfficialAccountId} value={s.lineOfficialAccountId}>
+                            {s.storeName} ({s.readinessStatus})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      {t.previewCustomerNameLabel}
+                    </label>
+                    <input
+                      type="text"
+                      value={previewCustomerName}
+                      onChange={(e) => setPreviewCustomerName(e.target.value)}
+                      placeholder={t.previewCustomerNamePlaceholder}
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-800"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Store Assignments Section positioned cleanly below editor */}
+        <div className="pt-8 pb-12 border-t border-gray-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {t.storeAssignmentsSection}
+              </h2>
+              <p className="mt-0.5 text-xs text-gray-600">
+                {t.storesSummary(assignedCount, readyCount, blockedCount)}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAllReadyStores}
+                className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 shadow-2xs transition"
+              >
+                {t.applyToAllReady}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowStoreSection(!showStoreSection)}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-2xs transition"
+              >
+                {showStoreSection ? t.closeButton : t.manageStores} ({selectedStoreOaIds.length})
+              </button>
+            </div>
+          </div>
+
+          {/* Expandable Store Assignment Table */}
+          {showStoreSection && (
+            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-xs space-y-3 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <input
+                  type="text"
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  placeholder="ค้นหาชื่อสาขาหรือ LINE ID..."
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-md w-full sm:w-64 text-gray-800 focus:outline-none focus:border-[#06c755]"
+                />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStoreOaIds([])}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    {t.clearSelection}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveStoreAssignments}
+                    disabled={savingAssignments}
+                    className="px-4 py-1.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-2xs disabled:opacity-50 transition"
+                  >
+                    {savingAssignments ? t.uploading : "บันทึกการผูกสาขา"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-md">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-semibold sticky top-0">
+                    <tr>
+                      <th className="p-2.5 w-10 text-center">{t.colSelect}</th>
                       <th className="p-2.5">{t.colStoreName}</th>
                       <th className="p-2.5">{t.colBasicId}</th>
-                      <th className="p-2.5">{t.colGoogleMaps}</th>
                       <th className="p-2.5">{t.colReadiness}</th>
                       <th className="p-2.5">{t.colCurrentTemplate}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--app-border-subtle)]">
-                    {filteredStoresForAssignment.map((store) => {
-                      const isSelected = selectedStoreOaIds.includes(
-                        store.lineOfficialAccountId,
-                      );
-                      const isReady = store.readinessStatus === "READY";
-
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredStores.map((st) => {
+                      const isSelected = selectedStoreOaIds.includes(st.lineOfficialAccountId);
+                      const isReady = st.readinessStatus === "READY";
                       return (
                         <tr
-                          key={store.lineOfficialAccountId}
-                          onClick={() => handleToggleStore(store.lineOfficialAccountId)}
-                          className={`cursor-pointer transition-colors ${
-                            isSelected
-                              ? "bg-emerald-500/5"
-                              : "hover:bg-[var(--app-surface-hover)]"
+                          key={st.lineOfficialAccountId}
+                          onClick={() => handleToggleStoreSelect(st.lineOfficialAccountId)}
+                          className={`hover:bg-gray-50 cursor-pointer transition ${
+                            isSelected ? "bg-emerald-50/40" : ""
                           }`}
                         >
-                          <td className="p-2.5 text-center">
+                          <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => handleToggleStore(store.lineOfficialAccountId)}
-                              className="rounded text-emerald-600 focus:ring-emerald-500"
+                              onChange={() => handleToggleStoreSelect(st.lineOfficialAccountId)}
+                              className="h-4 w-4 rounded border-gray-300 text-[#06c755] focus:ring-[#06c755] cursor-pointer"
                             />
                           </td>
-                          <td className="p-2.5 font-semibold text-[var(--app-text-primary)]">
-                            <div>{store.storeName}</div>
-                            {store.storeCode && (
-                              <div className="text-[10px] font-mono text-[var(--app-text-tertiary)]">
-                                {store.storeCode} ({store.province || "N/A"})
-                              </div>
-                            )}
+                          <td className="p-2.5 font-medium text-gray-900">
+                            {st.storeName}
                           </td>
-                          <td className="p-2.5 font-mono text-[var(--app-text-secondary)]">
-                            {store.lineOfficialAccountName}
+                          <td className="p-2.5 text-gray-500 font-mono">
+                            {st.storeCode || "-"}
                           </td>
                           <td className="p-2.5">
-                            {store.googleMapsUrl ? (
-                              <span className="text-emerald-600 dark:text-emerald-400">✓ มี URL</span>
-                            ) : (
-                              <span className="text-[var(--app-text-tertiary)]">- ไม่มี -</span>
-                            )}
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                                isReady
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {isReady ? t.statusReady : t.statusBlocked}
+                            </span>
                           </td>
-                          <td className="p-2.5">
-                            {isReady ? (
-                              <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                {t.statusReady}
-                              </span>
-                            ) : (
-                              <span
-                                className="inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400"
-                                title={store.reason || undefined}
-                              >
-                                {t.statusBlocked}: {store.missingVariables.join(", ")}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-2.5 text-[11px] text-[var(--app-text-secondary)]">
-                            {store.currentTemplateId === assigningTemplate.id ? (
-                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                {t.assignedToThis}
-                              </span>
-                            ) : store.currentTemplateName ? (
-                              <span className="text-[var(--app-text-tertiary)]">
-                                {t.assignedToOther(store.currentTemplateName)}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--app-text-tertiary)]">
-                                {t.notAssigned}
-                              </span>
-                            )}
+                          <td className="p-2.5 text-gray-500">
+                            {st.currentTemplateName || "-"}
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between border-t border-[var(--app-border-subtle)] p-4 bg-[var(--app-surface)]">
-              <span className="text-xs font-medium text-[var(--app-text-secondary)]">
-                เลือกทั้งหมด: {selectedStoreOaIds.length} สาขา
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAssigningTemplate(null)}
-                  className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-                >
-                  {t.cancelButton}
-                </button>
-                <button
-                  type="button"
-                  disabled={savingAssignments}
-                  onClick={handleSaveAssignments}
-                  className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {savingAssignments ? "กำลังบันทึก..." : t.saveAndAssignButton}
-                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* LIVE MOBILE PREVIEW MODAL */}
-      {previewingTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-[var(--app-border-subtle)] p-4 bg-[var(--app-surface-subtle)]">
-              <div>
-                <h3 className="text-sm font-bold text-[var(--app-text-primary)]">
-                  {t.previewTitle}
-                </h3>
-                <p className="text-[11px] text-[var(--app-text-tertiary)]">
-                  {previewingTemplate.name} ({t.versionLabel(previewingTemplate.version)})
-                </p>
-              </div>
+      {/* Active Edit Confirmation Warning Modal */}
+      {showActiveEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-gray-900">
+              {t.activeEditWarningTitle}
+            </h3>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              {t.activeEditWarningMessage(currentTemplate?.assignedStoreCount || 0)}
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
               <button
                 type="button"
-                onClick={() => setPreviewingTemplate(null)}
-                className="rounded-lg p-1.5 text-[var(--app-text-tertiary)] hover:bg-[var(--app-surface-hover)]"
+                onClick={() => setShowActiveEditModal(false)}
+                className="px-4 py-2 text-xs font-medium rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
               >
-                ✕
+                {t.activeEditWarningCancel}
               </button>
-            </div>
-
-            {/* Simulation Controls */}
-            <div className="border-b border-[var(--app-border-subtle)] p-3 space-y-2 bg-[var(--app-surface)]">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-semibold uppercase text-[var(--app-text-tertiary)]">
-                    {t.previewCustomerNameLabel}
-                  </label>
-                  <input
-                    type="text"
-                    value={previewCustomerName}
-                    onChange={(e) => {
-                      setPreviewCustomerName(e.target.value);
-                      handleRefreshPreview(undefined, e.target.value);
-                    }}
-                    placeholder={t.previewCustomerNamePlaceholder}
-                    className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-primary)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-semibold uppercase text-[var(--app-text-tertiary)]">
-                    {t.previewStoreSelector}
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={previewResult?.store.storeName || "OPPO Brand Shop"}
-                    className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-secondary)] opacity-80"
-                  />
-                </div>
-              </div>
-
-              <div className="text-[10px] text-[var(--app-text-tertiary)] flex items-center justify-between">
-                <span>{t.previewNoticeZeroPush}</span>
-                {previewResult?.ready ? (
-                  <span className="text-emerald-600 font-semibold dark:text-emerald-400">
-                    ✓ {t.previewReadyBadge}
-                  </span>
-                ) : (
-                  <span className="text-red-600 font-semibold dark:text-red-400">
-                    ⚠️ {t.previewBlockedBadge}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Simulated Phone Screen */}
-            <div className="flex-1 overflow-y-auto bg-[#8499B1] p-4 min-h-[360px]">
-              {/* Simulated LINE Header */}
-              <div className="mx-auto mb-3 flex max-w-xs items-center justify-center rounded-full bg-black/20 px-3 py-1 text-[11px] font-medium text-white backdrop-blur-xs">
-                {t.previewSimulateFollow}
-              </div>
-
-              {previewLoading ? (
-                <div className="p-8 text-center text-xs text-white">
-                  กำลังสร้างข้อความตัวอย่าง...
-                </div>
-              ) : previewResult ? (
-                <div className="mx-auto max-w-xs space-y-3">
-                  {previewResult.messages?.map((msg, i) => {
-                    if (msg.type === "TEXT") {
-                      return (
-                        <div key={msg.id || i} className="flex items-start gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent)] text-xs font-bold text-white shadow-xs">
-                            O
-                          </div>
-                          <div className="max-w-[80%] rounded-2xl rounded-tl-xs bg-white p-3 text-xs text-gray-900 shadow-md whitespace-pre-wrap leading-relaxed">
-                            {msg.resolvedText}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    if (msg.type === "IMAGE") {
-                      return (
-                        <div key={msg.id || i} className="flex items-start gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent)] text-xs font-bold text-white shadow-xs">
-                            O
-                          </div>
-                          <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-tl-xs bg-white shadow-md">
-                            <img
-                              src={msg.imageUrl || msg.previewUrl}
-                              alt="Greeting Preview"
-                              className="max-h-48 w-full object-contain"
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return null;
-                  })}
-                </div>
-              ) : null}
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-[var(--app-border-subtle)] p-3 bg-[var(--app-surface)] text-right">
               <button
                 type="button"
-                onClick={() => setPreviewingTemplate(null)}
-                className="rounded-xl border border-[var(--app-border)] px-4 py-1.5 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
+                onClick={executeSave}
+                className="px-4 py-2 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-xs"
               >
-                {t.closeButton}
+                {t.activeEditWarningConfirm}
               </button>
             </div>
           </div>
