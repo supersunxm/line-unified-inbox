@@ -36,7 +36,7 @@ export type BmCustomerTagKind =
 export type BmCustomerTag = {
   kind: BmCustomerTagKind;
   label: string;
-  rawStatus?: "INTERESTED" | "PURCHASED" | null;
+  rawStatus?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
   rawInterestLevel?: "HOT" | "WARM" | "COLD" | null;
 };
 
@@ -86,7 +86,7 @@ export function getBmCustomerSalesTags(
           color?: string | null;
           customProductName?: string | null;
           quantity?: number;
-          status?: "INTERESTED" | "PURCHASED";
+          status?: "ONLINE" | "INTERESTED" | "PURCHASED";
         }> | null;
       })
     | null,
@@ -94,8 +94,8 @@ export function getBmCustomerSalesTags(
   if (!sales) return [];
   const tags: BmCustomerTag[] = [];
 
-  // 1. INTERESTED or PURCHASED
-  if (sales.status === "INTERESTED" || sales.status === "PURCHASED") {
+  // 1. ONLINE, INTERESTED, or PURCHASED
+  if (sales.status === "ONLINE" || sales.status === "INTERESTED" || sales.status === "PURCHASED") {
     tags.push({
       kind: "salesStatus",
       label: sales.status,

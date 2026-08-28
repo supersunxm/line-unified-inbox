@@ -1423,3 +1423,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Sender attribution is rendered only for outbound messages. Inbound customer and system/unattributed messages return no staff author, so the client never guesses from the current operator, device, or last responder.
 - Successful authenticated text/image sends publish a realtime `message.created` event containing the same safe sender projection. Android and Web merge it by message ID; existing access filtering continues to enforce store/HQ/PC scope and Main OA isolation.
 - Web desktop/mobile and Android use the same sender semantics and compact secondary label. No new sender table, permission, token, or session state was introduced.
+
+# Online customer sales status boundary (2026-08-28)
+
+- Reuse `Conversation.customerSalesStatus` as the sole persisted source of truth and add `ONLINE` as an additive Prisma enum value/migration. This keeps Android, Web, and APIs on one value without rewriting historical statuses.
+- Treat Online as a distinct inquiry category, not as Interested or Purchased. Selecting it clears purchase-only fields (interest level, purchase channels, payment method, installment flag) while preserving linked inquiry products; no inbound message is auto-classified.
+- Expose Online in Web conversation tags and purchase-audience analytics as its own filter/category. Existing authorization/store scope, Main OA isolation, inbox `bmReplyStatus`, and response/session behavior are deliberately unchanged.

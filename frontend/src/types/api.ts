@@ -3,7 +3,7 @@ export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 
 export type ApiCustomerSalesInformation = {
-  status: "INTERESTED" | "PURCHASED" | null;
+  status: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -13,7 +13,7 @@ export type ApiCustomerSalesInformation = {
     variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
     customProductName: string | null;
     quantity: number;
-    status: "INTERESTED" | "PURCHASED";
+    status: "ONLINE" | "INTERESTED" | "PURCHASED";
   }>;
   recordedBy: string | null;
   recordedAt: string | null;

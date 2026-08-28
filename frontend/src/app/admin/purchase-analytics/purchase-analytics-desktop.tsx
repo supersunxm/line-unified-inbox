@@ -30,7 +30,7 @@ import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
-type AudienceStatus = "PURCHASED" | "INTERESTED" | "NOT_SPECIFIED";
+type AudienceStatus = "PURCHASED" | "INTERESTED" | "ONLINE" | "NOT_SPECIFIED";
 type PurchaseAudienceItem = {
   customerId: string;
   customerName: string;
@@ -125,6 +125,7 @@ function csvCell(value: string | number | null | undefined) {
 function audienceStatus(item: PurchaseAudienceItem): AudienceStatus {
   if (item.customerStatus === "PURCHASED") return "PURCHASED";
   if (item.customerStatus === "INTERESTED") return "INTERESTED";
+  if (item.customerStatus === "ONLINE") return "ONLINE";
   return "NOT_SPECIFIED";
 }
 
@@ -171,7 +172,7 @@ export default function PurchaseAnalyticsPage() {
   const [audienceError, setAudienceError] = useState<string | null>(null);
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [onlyMessageable, setOnlyMessageable] = useState(true);
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"]));
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "ONLINE", "NOT_SPECIFIED"]));
   const [draftCreating, setDraftCreating] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [createdDraft, setCreatedDraft] = useState<PurchaseBroadcastDraftResult | null>(null);
@@ -628,7 +629,7 @@ export default function PurchaseAnalyticsPage() {
                 <fieldset className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] p-3.5 bg-[var(--app-surface-subtle)]">
                   <legend className="text-xs font-semibold text-[var(--app-text-primary)] px-1">Customer Status</legend>
                   <div className="mt-1.5 flex flex-wrap gap-4">
-                    {(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => (
+                    {(["PURCHASED", "INTERESTED", "ONLINE", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => (
                       <label key={status} className="flex items-center gap-2 text-xs text-[var(--app-text-primary)] cursor-pointer">
                         <input
                           type="checkbox"
@@ -636,7 +637,7 @@ export default function PurchaseAnalyticsPage() {
                           onChange={() => toggleStatus(status)}
                           className="h-3.5 w-3.5 rounded accent-[var(--app-accent)]"
                         />
-                        <span>{status === "NOT_SPECIFIED" ? "Not specified" : status.charAt(0) + status.slice(1).toLowerCase()}</span>
+                        <span>{status === "NOT_SPECIFIED" ? "Not specified" : status === "ONLINE" ? "Online" : status.charAt(0) + status.slice(1).toLowerCase()}</span>
                       </label>
                     ))}
                   </div>

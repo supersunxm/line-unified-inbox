@@ -97,6 +97,22 @@ void test("legacy purchase provenance still falls back to purchased before moder
   assert.equal(sales.paymentMethod, "INSTALLMENT");
 });
 
+void test("Online sales status is preserved without purchase-only fields", () => {
+  const sales = buildCustomerSalesInformation({
+    customerSalesStatus: "ONLINE",
+    interestLevel: "HOT",
+    sourceChannels: ["STORE"],
+    isInstallment: true,
+    paymentMethod: "INSTALLMENT",
+    salesRecordedAt: new Date("2026-08-28T04:30:00.000Z"),
+  });
+
+  assert.equal(sales.status, "ONLINE");
+  assert.equal(sales.interestLevel, null);
+  assert.deepEqual(sales.purchaseChannel, []);
+  assert.equal(sales.paymentMethod, null);
+});
+
 void test("operational state stays separate from purchase and insight data", () => {
   assert.deepEqual(buildOperationalState({ replyStatus: "NOT_REPLIED", priority: "URGENT", unread: 2 }), {
     replyStatus: "NOT_REPLIED",

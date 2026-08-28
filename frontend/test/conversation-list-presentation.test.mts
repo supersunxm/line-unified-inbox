@@ -66,6 +66,19 @@ test("getBmCustomerSalesTags generates INTERESTED and interestLevel tags with ap
   assert.match(getBmTagChipClass(tags[1]), /bg-rose-100.*text-rose-800/);
 });
 
+test("getBmCustomerSalesTags renders the ONLINE customer status", () => {
+  const tags = getBmCustomerSalesTags({
+    status: "ONLINE",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  });
+  assert.deepEqual(tags.map(({ kind, label }) => ({ kind, label })), [
+    { kind: "salesStatus", label: "ONLINE" },
+  ]);
+});
+
 test("getBmCustomerSalesTags generates PURCHASED with model, variant, store channel, and payment method", () => {
   const sales: ApiCustomerSalesInformation = {
     status: "PURCHASED",

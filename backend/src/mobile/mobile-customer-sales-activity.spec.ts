@@ -153,3 +153,40 @@ void test("customer sales info can be cleared back to an unclassified empty stat
   assert.equal(salesDeleteCount, 1);
   assert.equal(manualDeleteCount, 1);
 });
+
+void test("customer sales info persists Online and clears purchase-only fields", async () => {
+  let conversationUpdate: Record<string, unknown> | undefined;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-online",
+        customerSalesStatus: "PURCHASED",
+        salesRecordedAt: new Date("2026-08-19T02:00:00.000Z"),
+        interestLevel: "HOT",
+        paymentMethod: "INSTALLMENT",
+        sourceChannels: ["STORE"],
+        isInstallment: true,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async (args: { data: Record<string, unknown> }) => {
+        conversationUpdate = args.data;
+        return {};
+      },
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conversation-online" });
+
+  await service.updateCustomerSalesInfo(user, "conversation-online", { status: "ONLINE" });
+
+  assert.equal(conversationUpdate?.customerSalesStatus, "ONLINE");
+  assert.equal(conversationUpdate?.interestLevel, null);
+  assert.deepEqual(conversationUpdate?.sourceChannels, []);
+  assert.equal(conversationUpdate?.paymentMethod, null);
+  assert.equal(conversationUpdate?.isInstallment, false);
+});

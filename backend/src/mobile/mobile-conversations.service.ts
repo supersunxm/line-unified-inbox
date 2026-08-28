@@ -442,16 +442,24 @@ export class MobileConversationsService {
 
       if (dto.status !== undefined) {
         conversationUpdate.customerSalesStatus = dto.status;
+        if (dto.status === CustomerSalesStatus.ONLINE) {
+          // Online is an inquiry state, not a confirmed purchase. Clear
+          // purchase-only fields even when older clients omit them.
+          conversationUpdate.interestLevel = null;
+          conversationUpdate.sourceChannels = [];
+          conversationUpdate.paymentMethod = null;
+          conversationUpdate.isInstallment = false;
+        }
       }
       if (dto.interestLevel !== undefined) {
-        conversationUpdate.interestLevel = dto.status === "PURCHASED" ? null : dto.interestLevel;
+        conversationUpdate.interestLevel = dto.status === "PURCHASED" || dto.status === "ONLINE" ? null : dto.interestLevel;
       }
       if (dto.purchaseChannel !== undefined) {
-        conversationUpdate.sourceChannels = dto.purchaseChannel;
+        conversationUpdate.sourceChannels = dto.status === "ONLINE" ? [] : dto.purchaseChannel;
       }
       if (dto.paymentMethod !== undefined) {
-        conversationUpdate.paymentMethod = dto.paymentMethod;
-        conversationUpdate.isInstallment = dto.paymentMethod === "INSTALLMENT";
+        conversationUpdate.paymentMethod = dto.status === "ONLINE" ? null : dto.paymentMethod;
+        conversationUpdate.isInstallment = dto.status === "ONLINE" ? false : dto.paymentMethod === "INSTALLMENT";
       }
 
       conversationUpdate.salesRecordedAt = recordedAt;
@@ -562,8 +570,8 @@ export class MobileConversationsService {
       }
 
       const nextPurchase = purchaseSnapshot({
-        sourceChannels: dto.purchaseChannel ?? conversation.sourceChannels ?? [],
-        isInstallment: dto.paymentMethod === "INSTALLMENT" || (conversation.isInstallment ?? false),
+        sourceChannels: dto.status === CustomerSalesStatus.ONLINE ? [] : dto.purchaseChannel ?? conversation.sourceChannels ?? [],
+        isInstallment: dto.status === CustomerSalesStatus.ONLINE ? false : dto.paymentMethod === "INSTALLMENT" || (conversation.isInstallment ?? false),
         products: dto.products ? dto.products.map((p) => ({ productModelId: p.productModelId, productVariantId: p.productVariantId ?? null })) : (conversation.products ?? []),
       });
 

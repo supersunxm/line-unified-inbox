@@ -101,6 +101,9 @@ function audienceStatus(value: string | null): PurchaseAudienceStatus {
   if (value === PurchaseAudienceStatus.INTERESTED) {
     return PurchaseAudienceStatus.INTERESTED;
   }
+  if (value === PurchaseAudienceStatus.ONLINE) {
+    return PurchaseAudienceStatus.ONLINE;
+  }
   return PurchaseAudienceStatus.NOT_SPECIFIED;
 }
 
@@ -108,6 +111,7 @@ function isPurchaseAudienceStatus(value: unknown): value is PurchaseAudienceStat
   return (
     value === PurchaseAudienceStatus.PURCHASED ||
     value === PurchaseAudienceStatus.INTERESTED ||
+    value === PurchaseAudienceStatus.ONLINE ||
     value === PurchaseAudienceStatus.NOT_SPECIFIED
   );
 }

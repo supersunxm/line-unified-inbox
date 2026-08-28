@@ -54,7 +54,7 @@ export type ConversationContractSalesProduct = {
 };
 
 export type CustomerSalesInformationContract = {
-  status: "INTERESTED" | "PURCHASED" | null;
+  status: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -69,7 +69,7 @@ export type CustomerSalesInformationContract = {
     rom: string | null;
     color: string | null;
     quantity: number;
-    status: "INTERESTED" | "PURCHASED";
+    status: "ONLINE" | "INTERESTED" | "PURCHASED";
   }>;
   recordedBy: string | null;
   recordedAt: string | null;
@@ -144,13 +144,17 @@ export function buildCustomerSalesInformation(input: {
     input.isInstallment === true ||
     (input.sourceChannels?.length ?? 0) > 0;
   const status =
-    (input.customerSalesStatus as "INTERESTED" | "PURCHASED" | null | undefined) ??
+    (input.customerSalesStatus as "ONLINE" | "INTERESTED" | "PURCHASED" | null | undefined) ??
     (!hasModernSalesRecord && hasLegacyPurchaseSignal ? "PURCHASED" : null);
 
-  const interestLevel = (input.interestLevel as "HOT" | "WARM" | "COLD") || null;
+  const interestLevel = status === "ONLINE"
+    ? null
+    : (input.interestLevel as "HOT" | "WARM" | "COLD") || null;
   const purchaseChannel = status === "PURCHASED" ? [...(input.sourceChannels ?? [])] : [];
-  const paymentMethod = (input.paymentMethod as "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER") ||
-    (status === "PURCHASED" && input.isInstallment ? "INSTALLMENT" : null);
+  const paymentMethod = status === "ONLINE"
+    ? null
+    : (input.paymentMethod as "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER") ||
+      (status === "PURCHASED" && input.isInstallment ? "INSTALLMENT" : null);
 
   const rawRecordedAt = input.salesRecordedAt ?? input.purchaseRecordedAt;
   const recordedAt = rawRecordedAt
@@ -198,7 +202,7 @@ export function buildCustomerSalesInformation(input: {
           rom: sp.rom ?? pVariant?.rom ?? null,
           color: sp.color ?? pVariant?.color ?? null,
           quantity: sp.quantity ?? 1,
-          status: (sp.status as "INTERESTED" | "PURCHASED") || status || "INTERESTED",
+          status: (sp.status as "ONLINE" | "INTERESTED" | "PURCHASED") || status || "INTERESTED",
         };
       });
   } else if (input.products) {

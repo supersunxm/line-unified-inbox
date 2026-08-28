@@ -353,6 +353,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customerSalesInformation => 'Customer Sales Info';
 
   @override
+  String get statusOnline => 'Online';
+
+  @override
   String get statusInterested => 'Interested';
 
   @override

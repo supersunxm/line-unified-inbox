@@ -4,6 +4,7 @@
   "customer": "客户",
   "sent": "已发送",
   "customerStatus": "客户状态",
+  "statusOnline": "线上咨询",
   "unableToLoadProducts": "无法加载产品",
   "unableToLoadConfigurations": "无法加载配置",
   "unableToSaveTags": "无法保存会话标签",
