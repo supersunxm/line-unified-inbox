@@ -4,12 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type {
   GreetingMessageBlock,
-  GreetingPreviewResult,
   GreetingReadinessResponse,
   GreetingSendPolicy,
-  GreetingStoreReadinessItem,
   GreetingTemplate,
-  GreetingTemplateStatus,
 } from "@/types/api";
 import { getGreetingDict, type GreetingDict } from "./greeting-i18n";
 import { GreetingMessageBuilder } from "./greeting-message-builder";
@@ -19,18 +16,157 @@ type GreetingMessagesViewProps = {
   userRole?: "ADMIN" | "VIEWER";
 };
 
+type ReadinessFilter = "ALL" | "READY" | "BLOCKED";
+
+const STORE_PAGE_SIZE = 25;
+
 export function GreetingMessagesView({
   language = "th",
   userRole = "ADMIN",
 }: GreetingMessagesViewProps) {
   const t: GreetingDict = useMemo(() => getGreetingDict(language), [language]);
+  void userRole;
+
+  const ui = useMemo(() => {
+    if (language === "en") {
+      return {
+        template: "Template",
+        createNew: "+ Create new",
+        storeUsage: "Store usage",
+        assigned: "Assigned",
+        ready: "Ready",
+        blocked: "Incomplete",
+        selected: "Selected",
+        manageStores: "Manage stores",
+        hideStores: "Hide stores",
+        selectAllReady: "Select all ready stores",
+        selectFilteredReady: "Select filtered ready stores",
+        clearSelection: "Clear selection",
+        searchStores: "Search store code, store name, or LINE OA",
+        allProvinces: "All provinces",
+        allStatuses: "All statuses",
+        readyOnly: "Ready",
+        blockedOnly: "Incomplete",
+        resultCount: (count: number) => `${count} stores found`,
+        saveAssignments: (count: number) => `Save usage for ${count} stores`,
+        savingAssignments: "Saving...",
+        storeCode: "Store ID",
+        storeName: "Store name",
+        lineOa: "LINE OA",
+        province: "Province",
+        readiness: "Readiness",
+        currentGreeting: "Current greeting",
+        noGreeting: "—",
+        pageSummary: (from: number, to: number, total: number) =>
+          `Showing ${from}–${to} of ${total} stores`,
+        page: (current: number, total: number) => `Page ${current} / ${total}`,
+        previous: "Previous",
+        next: "Next",
+        saveBulkConfirm: (count: number) =>
+          `Use this greeting configuration for ${count} stores? This changes assignments only and does not send any LINE message immediately.`,
+        selectedFiltered: (count: number) => `Selected ${count} ready stores from current filters`,
+        currentTemplate: "Current template",
+        activate: "Activate",
+        deactivate: "Deactivate",
+        archive: "Archive",
+        selectPage: "Select ready stores on this page",
+      };
+    }
+
+    if (language === "zh") {
+      return {
+        template: "模板",
+        createNew: "+ 新建",
+        storeUsage: "门店使用范围",
+        assigned: "正在使用",
+        ready: "可使用",
+        blocked: "资料不完整",
+        selected: "已选择",
+        manageStores: "管理门店",
+        hideStores: "隐藏门店",
+        selectAllReady: "选择所有可用门店",
+        selectFilteredReady: "选择筛选结果中的可用门店",
+        clearSelection: "清除选择",
+        searchStores: "搜索门店编号、门店名称或 LINE OA",
+        allProvinces: "全部省份",
+        allStatuses: "全部状态",
+        readyOnly: "可使用",
+        blockedOnly: "资料不完整",
+        resultCount: (count: number) => `找到 ${count} 家门店`,
+        saveAssignments: (count: number) => `保存 ${count} 家门店的使用设置`,
+        savingAssignments: "保存中...",
+        storeCode: "门店编号",
+        storeName: "门店名称",
+        lineOa: "LINE OA",
+        province: "省份",
+        readiness: "可用状态",
+        currentGreeting: "当前欢迎消息",
+        noGreeting: "—",
+        pageSummary: (from: number, to: number, total: number) =>
+          `显示 ${from}–${to} / 共 ${total} 家门店`,
+        page: (current: number, total: number) => `第 ${current} / ${total} 页`,
+        previous: "上一页",
+        next: "下一页",
+        saveBulkConfirm: (count: number) =>
+          `确定将此欢迎消息设置应用到 ${count} 家门店吗？此操作只修改门店关联，不会立即发送 LINE 消息。`,
+        selectedFiltered: (count: number) => `已从当前筛选结果选择 ${count} 家可用门店`,
+        currentTemplate: "当前模板",
+        activate: "启用",
+        deactivate: "停用",
+        archive: "归档",
+        selectPage: "选择本页可用门店",
+      };
+    }
+
+    return {
+      template: "เทมเพลต",
+      createNew: "+ สร้างใหม่",
+      storeUsage: "การใช้งานกับสาขา",
+      assigned: "ใช้งานอยู่",
+      ready: "พร้อมใช้งาน",
+      blocked: "ข้อมูลไม่ครบ",
+      selected: "เลือกแล้ว",
+      manageStores: "จัดการสาขา",
+      hideStores: "ซ่อนรายชื่อร้าน",
+      selectAllReady: "เลือกทุกสาขาที่พร้อม",
+      selectFilteredReady: "เลือกผลลัพธ์ที่พร้อม",
+      clearSelection: "ล้างการเลือก",
+      searchStores: "ค้นหารหัสร้าน ชื่อร้าน หรือ LINE OA",
+      allProvinces: "ทุกจังหวัด",
+      allStatuses: "ทุกสถานะ",
+      readyOnly: "พร้อมใช้งาน",
+      blockedOnly: "ข้อมูลไม่ครบ",
+      resultCount: (count: number) => `พบ ${count} ร้าน`,
+      saveAssignments: (count: number) => `บันทึกการใช้งาน ${count} ร้าน`,
+      savingAssignments: "กำลังบันทึก...",
+      storeCode: "รหัสร้าน",
+      storeName: "ชื่อร้าน",
+      lineOa: "LINE OA",
+      province: "จังหวัด",
+      readiness: "ความพร้อม",
+      currentGreeting: "ข้อความต้อนรับปัจจุบัน",
+      noGreeting: "—",
+      pageSummary: (from: number, to: number, total: number) =>
+        `แสดง ${from}–${to} จาก ${total} ร้าน`,
+      page: (current: number, total: number) => `หน้า ${current} / ${total}`,
+      previous: "ก่อนหน้า",
+      next: "ถัดไป",
+      saveBulkConfirm: (count: number) =>
+        `ใช้ข้อความต้อนรับนี้กับ ${count} ร้าน? การตั้งค่านี้จะเปลี่ยนเฉพาะการผูกสาขา และจะไม่ส่งข้อความ LINE ทันที`,
+      selectedFiltered: (count: number) => `เลือก ${count} ร้านที่พร้อมจากผลการค้นหาปัจจุบัน`,
+      currentTemplate: "เทมเพลตปัจจุบัน",
+      activate: "เปิดใช้งาน",
+      deactivate: "ปิดใช้งาน",
+      archive: "จัดเก็บ",
+      selectPage: "เลือกสาขาที่พร้อมในหน้านี้",
+    };
+  }, [language]);
 
   const [templates, setTemplates] = useState<GreetingTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Active Selected / Editing Template State
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [formName, setFormName] = useState("ข้อความต้อนรับมาตรฐาน");
@@ -46,45 +182,24 @@ export function GreetingMessagesView({
   ]);
   const [saving, setSaving] = useState(false);
   const [showActiveEditModal, setShowActiveEditModal] = useState(false);
-  const [showTemplateManagerModal, setShowTemplateManagerModal] = useState(false);
 
-  // Store Assignment State
   const [showStoreSection, setShowStoreSection] = useState(false);
   const [readinessData, setReadinessData] = useState<GreetingReadinessResponse | null>(null);
   const [selectedStoreOaIds, setSelectedStoreOaIds] = useState<string[]>([]);
   const [savingAssignments, setSavingAssignments] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
+  const [storeReadinessFilter, setStoreReadinessFilter] = useState<ReadinessFilter>("ALL");
+  const [storeProvinceFilter, setStoreProvinceFilter] = useState("ALL");
+  const [storePage, setStorePage] = useState(1);
 
-  // Live Mobile Preview State
-  const [previewStoreId, setPreviewStoreId] = useState<string>("");
-  const [previewCustomerName, setPreviewCustomerName] = useState<string>("Sunn");
+  const [previewStoreId, setPreviewStoreId] = useState("");
+  const [previewCustomerName, setPreviewCustomerName] = useState("Sunn");
   const [previewTab, setPreviewTab] = useState<"chat" | "list">("chat");
 
   const currentTemplate = useMemo(() => {
     if (isCreatingNew) return null;
-    return templates.find((tmp) => tmp.id === selectedTemplateId) || templates[0] || null;
+    return templates.find((template) => template.id === selectedTemplateId) || templates[0] || null;
   }, [templates, selectedTemplateId, isCreatingNew]);
-
-  const fetchTemplates = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.listGreetingTemplates({});
-      setTemplates(res);
-      if (res.length > 0 && !selectedTemplateId && !isCreatingNew) {
-        setSelectedTemplateId(res[0].id);
-        loadTemplateIntoForm(res[0]);
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load greeting templates");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
 
   const loadTemplateIntoForm = (template: GreetingTemplate) => {
     setIsCreatingNew(false);
@@ -106,6 +221,56 @@ export function GreetingMessagesView({
     );
   };
 
+  const fetchTemplates = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.listGreetingTemplates({});
+      setTemplates(response);
+      if (response.length > 0 && !selectedTemplateId && !isCreatingNew) {
+        loadTemplateIntoForm(response[0]);
+      }
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Failed to load greeting templates");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchTemplates();
+  }, []);
+
+  const fetchReadiness = async (templateId?: string) => {
+    const targetId = templateId || currentTemplate?.id;
+    if (!targetId) {
+      setReadinessData(null);
+      setSelectedStoreOaIds([]);
+      return;
+    }
+
+    try {
+      const response = await api.getGreetingReadiness(targetId);
+      setReadinessData(response);
+      setSelectedStoreOaIds(
+        response.stores
+          .filter((store) => store.currentTemplateId === targetId)
+          .map((store) => store.lineOfficialAccountId),
+      );
+      if (!previewStoreId && response.stores.length > 0) {
+        setPreviewStoreId(response.stores[0].lineOfficialAccountId);
+      }
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Failed to load store readiness");
+    }
+  };
+
+  useEffect(() => {
+    if (currentTemplate?.id) {
+      void fetchReadiness(currentTemplate.id);
+    }
+  }, [currentTemplate?.id]);
+
   const handleStartNew = () => {
     setIsCreatingNew(true);
     setSelectedTemplateId(null);
@@ -120,60 +285,8 @@ export function GreetingMessagesView({
           "สวัสดี คุณ {{user.displayName}}\nนี่คือบัญชีทางการของ {{account.name}}\nขอบคุณที่เป็นเพื่อนกับเรา 🐰",
       },
     ]);
-  };
-
-  // Fetch store readiness whenever current template or messages change
-  const fetchReadiness = async (templateId?: string) => {
-    const targetId = templateId || currentTemplate?.id;
-    if (!targetId) return;
-
-    try {
-      const res = await api.getGreetingReadiness(targetId);
-      setReadinessData(res);
-      // Pre-select stores that are currently assigned to this template
-      const assigned = res.stores
-        .filter((s) => s.currentTemplateId === targetId)
-        .map((s) => s.lineOfficialAccountId);
-      setSelectedStoreOaIds(assigned);
-
-      // Default sample store for preview
-      if (!previewStoreId && res.stores.length > 0) {
-        setPreviewStoreId(res.stores[0].lineOfficialAccountId);
-      }
-    } catch {
-      // Ignore readiness errors silently in background
-    }
-  };
-
-  useEffect(() => {
-    if (currentTemplate?.id) {
-      fetchReadiness(currentTemplate.id);
-    }
-  }, [currentTemplate?.id]);
-
-  const handleSaveClick = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      setError(t.fieldNamePlaceholder);
-      return;
-    }
-
-    if (formMessages.length === 0) {
-      setError(t.emptyList);
-      return;
-    }
-
-    // Check if active and assigned to stores
-    if (
-      currentTemplate &&
-      currentTemplate.status === "ACTIVE" &&
-      currentTemplate.assignedStoreCount > 0
-    ) {
-      setShowActiveEditModal(true);
-      return;
-    }
-
-    executeSave();
+    setReadinessData(null);
+    setSelectedStoreOaIds([]);
   };
 
   const executeSave = async () => {
@@ -190,7 +303,7 @@ export function GreetingMessagesView({
           sendPolicy: formSendPolicy,
           messages: formMessages,
         });
-        setSuccessMessage("บันทึกข้อความต้อนรับสำเร็จ");
+        setSuccessMessage(t.saveChanges);
         await fetchTemplates();
         loadTemplateIntoForm(created);
       } else {
@@ -200,589 +313,618 @@ export function GreetingMessagesView({
           sendPolicy: formSendPolicy,
           messages: formMessages,
         });
-        setSuccessMessage("บันทึกการเปลี่ยนแปลงสำเร็จ");
+        setSuccessMessage(t.saveChanges);
         await fetchTemplates();
         loadTemplateIntoForm(updated);
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save greeting template");
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Failed to save greeting template");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveStoreAssignments = async () => {
+  const handleSaveClick = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!formName.trim()) {
+      setError(t.fieldNamePlaceholder);
+      return;
+    }
+    if (formMessages.length === 0) {
+      setError(t.emptyList);
+      return;
+    }
+    if (currentTemplate?.status === "ACTIVE" && currentTemplate.assignedStoreCount > 0) {
+      setShowActiveEditModal(true);
+      return;
+    }
+    void executeSave();
+  };
+
+  const handleTemplateStatus = async (action: "activate" | "deactivate" | "archive") => {
     if (!currentTemplate) return;
-    setSavingAssignments(true);
+    if (action === "archive" && !window.confirm(t.archiveConfirm)) return;
+
     setError(null);
     try {
-      const res = await api.assignGreetingStores(currentTemplate.id, {
-        lineOfficialAccountIds: selectedStoreOaIds,
-      });
-      setSuccessMessage(t.saveAssignmentsSuccess(res.assignedCount));
-      await fetchReadiness(currentTemplate.id);
+      const updated =
+        action === "activate"
+          ? await api.activateGreetingTemplate(currentTemplate.id)
+          : action === "deactivate"
+            ? await api.deactivateGreetingTemplate(currentTemplate.id)
+            : await api.archiveGreetingTemplate(currentTemplate.id);
       await fetchTemplates();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save store assignments");
-    } finally {
-      setSavingAssignments(false);
+      loadTemplateIntoForm(updated);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : `Failed to ${action} template`);
     }
   };
 
   const handleSelectAllReadyStores = () => {
     if (!readinessData) return;
-    const readyIds = readinessData.stores
-      .filter((s) => s.readinessStatus === "READY")
-      .map((s) => s.lineOfficialAccountId);
-    setSelectedStoreOaIds(readyIds);
-  };
-
-  const handleToggleStoreSelect = (oaId: string) => {
-    setSelectedStoreOaIds((prev) =>
-      prev.includes(oaId) ? prev.filter((id) => id !== oaId) : [...prev, oaId],
+    setSelectedStoreOaIds(
+      readinessData.stores
+        .filter((store) => store.readinessStatus === "READY")
+        .map((store) => store.lineOfficialAccountId),
     );
   };
 
-  // Selected sample store metadata for live mobile preview
+  const handleToggleStoreSelect = (lineOfficialAccountId: string) => {
+    const store = readinessData?.stores.find(
+      (item) => item.lineOfficialAccountId === lineOfficialAccountId,
+    );
+    if (!store) return;
+
+    setSelectedStoreOaIds((previous) => {
+      const selected = previous.includes(lineOfficialAccountId);
+      if (!selected && store.readinessStatus !== "READY") return previous;
+      return selected
+        ? previous.filter((id) => id !== lineOfficialAccountId)
+        : [...previous, lineOfficialAccountId];
+    });
+  };
+
+  const storeProvinces = useMemo(() => {
+    if (!readinessData) return [];
+    return Array.from(
+      new Set(
+        readinessData.stores
+          .map((store) => store.province?.trim())
+          .filter((province): province is string => Boolean(province)),
+      ),
+    ).sort((a, b) => a.localeCompare(b, language === "th" ? "th" : undefined));
+  }, [readinessData, language]);
+
+  const filteredStores = useMemo(() => {
+    if (!readinessData) return [];
+    const query = storeSearch.trim().toLowerCase();
+
+    return readinessData.stores.filter((store) => {
+      const matchesSearch =
+        !query ||
+        store.storeName.toLowerCase().includes(query) ||
+        store.lineOfficialAccountName.toLowerCase().includes(query) ||
+        Boolean(store.storeCode?.toLowerCase().includes(query)) ||
+        Boolean(store.province?.toLowerCase().includes(query));
+      const matchesReadiness =
+        storeReadinessFilter === "ALL" || store.readinessStatus === storeReadinessFilter;
+      const matchesProvince =
+        storeProvinceFilter === "ALL" || store.province === storeProvinceFilter;
+      return matchesSearch && matchesReadiness && matchesProvince;
+    });
+  }, [readinessData, storeSearch, storeReadinessFilter, storeProvinceFilter]);
+
+  const totalStorePages = Math.max(1, Math.ceil(filteredStores.length / STORE_PAGE_SIZE));
+  const paginatedStores = useMemo(() => {
+    const start = (storePage - 1) * STORE_PAGE_SIZE;
+    return filteredStores.slice(start, start + STORE_PAGE_SIZE);
+  }, [filteredStores, storePage]);
+
+  useEffect(() => {
+    setStorePage(1);
+  }, [storeSearch, storeReadinessFilter, storeProvinceFilter]);
+
+  useEffect(() => {
+    if (storePage > totalStorePages) setStorePage(totalStorePages);
+  }, [storePage, totalStorePages]);
+
+  const handleSelectFilteredReadyStores = () => {
+    const ids = filteredStores
+      .filter((store) => store.readinessStatus === "READY")
+      .map((store) => store.lineOfficialAccountId);
+    setSelectedStoreOaIds((previous) => Array.from(new Set([...previous, ...ids])));
+    setSuccessMessage(ui.selectedFiltered(ids.length));
+  };
+
+  const currentPageReadyIds = paginatedStores
+    .filter((store) => store.readinessStatus === "READY")
+    .map((store) => store.lineOfficialAccountId);
+  const allCurrentPageReadySelected =
+    currentPageReadyIds.length > 0 && currentPageReadyIds.every((id) => selectedStoreOaIds.includes(id));
+
+  const handleToggleCurrentPageReady = () => {
+    setSelectedStoreOaIds((previous) => {
+      if (allCurrentPageReadySelected) {
+        const pageIds = new Set(currentPageReadyIds);
+        return previous.filter((id) => !pageIds.has(id));
+      }
+      return Array.from(new Set([...previous, ...currentPageReadyIds]));
+    });
+  };
+
+  const handleSaveStoreAssignments = async () => {
+    if (!currentTemplate) return;
+    if (!window.confirm(ui.saveBulkConfirm(selectedStoreOaIds.length))) return;
+
+    setSavingAssignments(true);
+    setError(null);
+    try {
+      const response = await api.assignGreetingStores(currentTemplate.id, {
+        lineOfficialAccountIds: selectedStoreOaIds,
+      });
+      setSuccessMessage(t.saveAssignmentsSuccess(response.assignedCount));
+      await fetchReadiness(currentTemplate.id);
+      await fetchTemplates();
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Failed to save store assignments");
+    } finally {
+      setSavingAssignments(false);
+    }
+  };
+
   const currentPreviewStore = useMemo(() => {
-    if (!readinessData || !previewStoreId) {
-      return {
-        storeName: "OPPO Central Bangna",
-        lineBasicId: "@900ytjrs",
-        googleMapsUrl: "https://maps.google.com/?q=OPPO+Central+Bangna",
-        accountName: "OPPO Central Bangna",
-      };
-    }
-    const match = readinessData.stores.find(
-      (s) => s.lineOfficialAccountId === previewStoreId,
-    );
-    if (!match) {
-      return {
-        storeName: "OPPO Central Bangna",
-        lineBasicId: "@900ytjrs",
-        googleMapsUrl: "https://maps.google.com/?q=OPPO+Central+Bangna",
-        accountName: "OPPO Central Bangna",
-      };
-    }
+    const fallback = {
+      storeName: "OPPO Central Bangna",
+      googleMapsUrl: "https://maps.google.com",
+      accountName: "OPPO Central Bangna",
+    };
+    if (!readinessData || !previewStoreId) return fallback;
+    const match = readinessData.stores.find((store) => store.lineOfficialAccountId === previewStoreId);
+    if (!match) return fallback;
     return {
       storeName: match.storeName || "OPPO Store",
-      lineBasicId: match.storeCode || "@oppo_store",
       googleMapsUrl: match.googleMapsUrl || "https://maps.google.com",
       accountName: match.lineOfficialAccountName || match.storeName || "OPPO Store",
     };
   }, [readinessData, previewStoreId]);
 
-  // Helper to render text bubbles with LINE-like green variable pills
   const renderPreviewMessageText = (rawText: string) => {
-    if (!rawText) return null;
-
-    // Split text by template variables {{...}}
     const parts = rawText.split(/(\{\{[^}]+\}\})/g);
-    return parts.map((part, i) => {
-      if (part === "{{user.displayName}}") {
+    return parts.map((part, index) => {
+      let value: string | null = null;
+      if (part === "{{user.displayName}}") value = previewCustomerName || t.userDisplayName;
+      if (part === "{{account.name}}") value = currentPreviewStore.accountName;
+      if (part === "{{store.storeName}}") value = currentPreviewStore.storeName;
+      if (part === "{{store.googleMapsUrl}}") value = currentPreviewStore.googleMapsUrl;
+
+      if (value !== null) {
         return (
           <span
-            key={i}
-            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#06c755] text-white text-[11px] font-medium align-middle"
+            key={`${part}-${index}`}
+            className="mx-0.5 inline-flex items-center rounded-full bg-[#06c755] px-1.5 py-0.5 text-[11px] font-medium text-white align-middle"
           >
-            {previewCustomerName || t.userDisplayName}
+            {value}
           </span>
         );
       }
-      if (part === "{{account.name}}") {
-        return (
-          <span
-            key={i}
-            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#06c755] text-white text-[11px] font-medium align-middle"
-          >
-            {currentPreviewStore.accountName}
-          </span>
-        );
-      }
-      if (part === "{{store.storeName}}") {
-        return (
-          <span
-            key={i}
-            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-[#e8f9ee] text-[#06c755] border border-[#06c755]/30 text-[11px] font-medium align-middle"
-          >
-            {currentPreviewStore.storeName}
-          </span>
-        );
-      }
-      if (part === "{{store.googleMapsUrl}}") {
-        return (
-          <span
-            key={i}
-            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-medium align-middle"
-          >
-            {currentPreviewStore.googleMapsUrl}
-          </span>
-        );
-      }
+
       if (part.startsWith("{{") && part.endsWith("}}")) {
-        const cleanName = part.slice(2, -2).trim();
         return (
           <span
-            key={i}
-            className="inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-300 text-[11px] font-mono align-middle"
+            key={`${part}-${index}`}
+            className="mx-0.5 inline-flex items-center rounded-full border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-700 align-middle"
           >
-            {cleanName}
+            {part.slice(2, -2)}
           </span>
         );
       }
-      return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+      return (
+        <span key={`${index}-${part.slice(0, 8)}`} className="whitespace-pre-wrap">
+          {part}
+        </span>
+      );
     });
   };
-
-  const filteredStores = useMemo(() => {
-    if (!readinessData) return [];
-    if (!storeSearch.trim()) return readinessData.stores;
-    const q = storeSearch.toLowerCase();
-    return readinessData.stores.filter(
-      (s) =>
-        s.storeName.toLowerCase().includes(q) ||
-        s.lineOfficialAccountName.toLowerCase().includes(q) ||
-        (s.storeCode && s.storeCode.toLowerCase().includes(q)),
-    );
-  }, [readinessData, storeSearch]);
 
   const assignedCount = readinessData?.assignedStores || 0;
   const readyCount = readinessData?.readyStores || 0;
   const blockedCount = readinessData?.blockedStores || 0;
+  const pageFrom = filteredStores.length === 0 ? 0 : (storePage - 1) * STORE_PAGE_SIZE + 1;
+  const pageTo = Math.min(storePage * STORE_PAGE_SIZE, filteredStores.length);
 
   return (
-    <div className="min-h-screen bg-[#ffffff] text-[var(--app-text-primary)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Global Feedback Notifications */}
+    <div className="min-h-screen bg-white text-gray-900">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         {error && (
-          <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between shadow-2xs">
+          <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
             <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-800 font-bold ml-4"
-            >
-              ✕
-            </button>
+            <button type="button" onClick={() => setError(null)} className="font-bold">✕</button>
           </div>
         )}
-
         {successMessage && (
-          <div className="p-3.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-2xs">
+          <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
             <span>{successMessage}</span>
-            <button
-              type="button"
-              onClick={() => setSuccessMessage(null)}
-              className="text-emerald-600 hover:text-emerald-900 font-bold ml-4"
-            >
-              ✕
-            </button>
+            <button type="button" onClick={() => setSuccessMessage(null)} className="font-bold">✕</button>
           </div>
         )}
 
-        {/* 1. Header Section matching LINE OA Manager */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-gray-200">
+        <div className="flex flex-col gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900">
-                {t.headerTitle}
-              </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 bg-gray-100 rounded border border-gray-200 cursor-default">
-                ⓘ Tips
-              </span>
+              <h1 className="text-xl font-bold">{t.headerTitle}</h1>
+              <span className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">ⓘ Tips</span>
             </div>
-            <p className="mt-1 text-xs text-gray-600">
-              {t.headerSubtitle}
-            </p>
-            <p className="mt-0.5 text-xs text-gray-400">
-              {t.headerHelp}
-            </p>
+            <p className="mt-1 text-xs text-gray-600">{t.headerSubtitle}</p>
+            <p className="mt-1 text-xs text-gray-400">{t.headerHelp}</p>
           </div>
-
-          {/* Header Action Buttons */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* Template Selector / Manage Switcher */}
-            {templates.length > 0 && (
-              <div className="relative inline-block">
-                <select
-                  value={isCreatingNew ? "new" : currentTemplate?.id || ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "new") {
-                      handleStartNew();
-                    } else {
-                      const match = templates.find((tmp) => tmp.id === val);
-                      if (match) loadTemplateIntoForm(match);
-                    }
-                  }}
-                  className="px-3 py-2 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#06c755] cursor-pointer shadow-2xs"
-                >
-                  {templates.map((tmp) => (
-                    <option key={tmp.id} value={tmp.id}>
-                      {tmp.name} ({tmp.status})
-                    </option>
-                  ))}
-                  <option value="new">+ {t.createTemplateButton}</option>
-                </select>
-              </div>
-            )}
-
-            {/* Primary Save Changes Button matching LINE Green */}
-            <button
-              type="button"
-              onClick={handleSaveClick}
-              disabled={saving}
-              className="inline-flex items-center justify-center px-6 py-2 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] active:bg-[#049b42] text-white shadow-xs transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {saving ? t.uploading : t.saveChanges}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSaveClick}
+            disabled={saving}
+            className="rounded bg-[#06c755] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"
+          >
+            {saving ? t.uploading : t.saveChanges}
+          </button>
         </div>
 
-        {/* 2. Compact Native OA Manager Duplication Notice */}
-        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-md bg-amber-50/80 border border-amber-200/80 text-xs text-amber-800">
-          <div className="flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{t.oaManagerWarning}</span>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-600">{ui.template}:</span>
+            <select
+              value={isCreatingNew ? "__new__" : currentTemplate?.id || ""}
+              onChange={(event) => {
+                if (event.target.value === "__new__") {
+                  handleStartNew();
+                  return;
+                }
+                const next = templates.find((template) => template.id === event.target.value);
+                if (next) loadTemplateIntoForm(next);
+              }}
+              disabled={loading}
+              className="min-w-56 rounded border border-gray-300 bg-white px-3 py-2 text-xs"
+            >
+              {isCreatingNew && <option value="__new__">{formName}</option>}
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} · {template.status}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleStartNew}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-medium hover:bg-gray-50"
+            >
+              {ui.createNew}
+            </button>
+            {currentTemplate && !isCreatingNew && (
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-700">
+                {ui.currentTemplate}: {currentTemplate.status} · v{currentTemplate.version}
+              </span>
+            )}
           </div>
+
+          {currentTemplate && !isCreatingNew && (
+            <div className="flex flex-wrap gap-2">
+              {currentTemplate.status !== "ACTIVE" ? (
+                <button
+                  type="button"
+                  onClick={() => void handleTemplateStatus("activate")}
+                  className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
+                >
+                  {ui.activate}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleTemplateStatus("deactivate")}
+                  className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                >
+                  {ui.deactivate}
+                </button>
+              )}
+              {currentTemplate.status !== "ARCHIVED" && (
+                <button
+                  type="button"
+                  onClick={() => void handleTemplateStatus("archive")}
+                  className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-500"
+                >
+                  {ui.archive}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          <span>⚠ {t.oaManagerWarning}</span>
           <a
             href="https://manager.line.biz/"
             target="_blank"
-            rel="noopener noreferrer"
-            className="text-amber-900 font-medium hover:underline shrink-0 ml-3"
+            rel="noreferrer"
+            className="ml-4 shrink-0 font-semibold hover:underline"
           >
             {t.openLineOaManager}
           </a>
         </div>
 
-        {/* 3. Sending Restrictions Section matching LINE OA Manager */}
-        <div className="pt-2 pb-6 border-b border-gray-200 space-y-3">
-          <h2 className="text-base font-bold text-gray-900">
-            {t.sendingRestrictions}
-          </h2>
-
-          <div className="flex items-start gap-2.5">
-            <input
-              id="send-policy-checkbox"
-              type="checkbox"
-              checked={formSendPolicy === "FIRST_TIME_ONLY"}
-              onChange={(e) =>
-                setFormSendPolicy(e.target.checked ? "FIRST_TIME_ONLY" : "ADD_AND_UNBLOCK")
-              }
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#06c755] focus:ring-[#06c755] cursor-pointer"
-            />
-            <div>
-              <label
-                htmlFor="send-policy-checkbox"
-                className="text-xs font-semibold text-gray-900 cursor-pointer"
-              >
-                {t.onlySendFirstTime}
-              </label>
-              <p className="mt-0.5 text-xs text-gray-500">
-                {t.onlySendFirstTimeHelp}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* 4. Message Content & Preview Section matching 68% / 32% Layout */}
-        <div className="pt-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">
-              {t.messageContent}
-            </h2>
-
-            {/* Template Name Input field for clear multi-store identification */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 font-medium">{t.fieldName}:</span>
+        <form onSubmit={handleSaveClick} className="space-y-6">
+          <section className="border-b border-gray-200 pb-6">
+            <h2 className="text-base font-bold">{t.sendingRestrictions}</h2>
+            <label className="mt-4 flex cursor-pointer items-start gap-3">
               <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder={t.fieldNamePlaceholder}
-                className="px-2.5 py-1 text-xs border border-gray-300 rounded focus:border-[#06c755] focus:outline-none w-56 text-gray-800"
+                type="checkbox"
+                checked={formSendPolicy === "FIRST_TIME_ONLY"}
+                onChange={(event) =>
+                  setFormSendPolicy(event.target.checked ? "FIRST_TIME_ONLY" : "ADD_AND_UNBLOCK")
+                }
+                className="mt-0.5 h-4 w-4 accent-[#06c755]"
               />
-            </div>
-          </div>
+              <span>
+                <span className="block text-xs font-semibold">{t.onlySendFirstTime}</span>
+                <span className="mt-1 block text-xs text-gray-500">{t.onlySendFirstTimeHelp}</span>
+              </span>
+            </label>
+          </section>
 
-          {/* 2-Column Grid: Left Editor (68%) / Right Sticky Preview (32%) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: Message Sequence Editor */}
-            <div className="lg:col-span-7 xl:col-span-8 space-y-6">
-              <GreetingMessageBuilder
-                messages={formMessages}
-                disabled={saving}
-                t={t}
-                onChange={setFormMessages}
-              />
-
-              {/* Bottom Secondary Save Button matching LINE OA Manager */}
-              <div className="pt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveClick}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center px-8 py-2.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] active:bg-[#049b42] text-white shadow-xs transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {saving ? t.uploading : t.saveChanges}
-                </button>
-              </div>
+          <section className="space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <h2 className="text-base font-bold">{t.messageContent}</h2>
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{t.fieldName}</span>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={(event) => setFormName(event.target.value)}
+                  className="w-64 rounded border border-gray-300 px-3 py-2 text-xs text-gray-900"
+                />
+              </label>
             </div>
 
-            {/* Right Column: Sticky Live Mobile Preview matching LINE OA screen */}
-            <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-6 space-y-3">
-              <div className="w-full max-w-[340px] mx-auto rounded-xl border border-gray-300 bg-[#2c323b] overflow-hidden shadow-md">
-                {/* Dark Preview Header Bar */}
-                <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#20242b] text-white text-xs font-medium">
-                  <div className="flex items-center gap-1.5">
-                    <span>▾</span>
-                    <span>{t.previewTitle}</span>
-                    <span className="text-gray-400 text-[11px]">ⓘ</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <span className="text-[11px] font-mono">📱</span>
-                  </div>
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_330px]">
+              <div className="space-y-4">
+                <GreetingMessageBuilder messages={formMessages} t={t} onChange={setFormMessages} />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded bg-[#06c755] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"
+                  >
+                    {saving ? t.uploading : t.saveChanges}
+                  </button>
                 </div>
+              </div>
 
-                {/* Tabs: Chat screen | Chat list */}
-                <div className="flex border-b border-gray-200 bg-white text-xs font-medium">
+              <aside className="h-fit overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm lg:sticky lg:top-20">
+                <div className="flex items-center justify-between bg-[#20252d] px-3 py-2 text-xs font-semibold text-white">
+                  <span>⌄ {t.preview} ⓘ</span>
+                  <span>↻</span>
+                </div>
+                <div className="flex border-b border-gray-200 bg-white text-xs">
                   <button
                     type="button"
                     onClick={() => setPreviewTab("chat")}
-                    className={`flex-1 py-2 text-center transition ${
-                      previewTab === "chat"
-                        ? "text-gray-900 border-b-2 border-gray-900 font-bold"
-                        : "text-gray-400 hover:text-gray-600"
-                    }`}
+                    className={`flex-1 py-2 ${previewTab === "chat" ? "border-b-2 border-[#06c755] font-semibold" : "text-gray-500"}`}
                   >
                     {t.chatScreen}
                   </button>
                   <button
                     type="button"
                     onClick={() => setPreviewTab("list")}
-                    className={`flex-1 py-2 text-center transition ${
-                      previewTab === "list"
-                        ? "text-[#06c755] border-b-2 border-[#06c755] font-bold"
-                        : "text-gray-400 hover:text-gray-600"
-                    }`}
+                    className={`flex-1 py-2 ${previewTab === "list" ? "border-b-2 border-[#06c755] font-semibold" : "text-gray-500"}`}
                   >
                     {t.chatList}
                   </button>
                 </div>
-
-                {/* Simulated LINE Mobile Chat Screen Wallpaper */}
-                <div className="min-h-[460px] max-h-[520px] overflow-y-auto p-3.5 bg-[#749ac9] space-y-3">
-                  {/* Account Name Header Bubble */}
+                <div className="min-h-[440px] max-h-[540px] space-y-3 overflow-y-auto bg-[#749ac9] p-3.5">
                   <div className="flex items-start gap-2.5">
-                    {/* Avatar */}
-                    <div className="w-8 h-8 rounded-full bg-[#111111] text-white flex items-center justify-center font-bold text-[10px] shrink-0 shadow-xs border border-white/20">
-                      oppo
-                    </div>
-
-                    <div className="flex-1 space-y-2">
-                      {/* Account Display Name */}
-                      <p className="text-[11px] text-white/90 font-medium drop-shadow-xs">
-                        {currentPreviewStore.accountName}
-                      </p>
-
-                      {/* Stacked Message Bubbles */}
-                      {formMessages.map((block, idx) => {
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black text-[9px] font-bold text-white">oppo</div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-[11px] font-medium text-white/90">{currentPreviewStore.accountName}</p>
+                      {formMessages.map((block, index) => {
                         if (block.type === "IMAGE") {
-                          const imgUrl = block.imageUrl || block.previewUrl;
+                          const source = block.imageUrl || block.previewUrl;
                           return (
-                            <div
-                              key={block.id || idx}
-                              className="relative inline-block max-w-[220px] rounded-2xl overflow-hidden shadow-xs border border-black/10 bg-white"
-                            >
-                              {imgUrl ? (
-                                <img
-                                  src={imgUrl}
-                                  alt="Preview image"
-                                  className="w-full h-auto max-h-[160px] object-cover"
-                                />
+                            <div key={block.id || index} className="max-w-[220px] overflow-hidden rounded-2xl bg-white shadow-sm">
+                              {source ? (
+                                <img src={source} alt="Greeting preview" className="max-h-[190px] w-full object-cover" />
                               ) : (
-                                <div className="p-4 bg-gray-100 text-center text-xs text-gray-400 font-medium">
-                                  🖼️ [ {t.image} ]
-                                </div>
+                                <div className="p-6 text-center text-xs text-gray-400">🖼 {t.image}</div>
                               )}
                             </div>
                           );
                         }
-
-                        const text = (block.textTemplate || "").trim();
                         return (
                           <div
-                            key={block.id || idx}
-                            className="relative max-w-[230px] rounded-2xl bg-white p-3 text-xs text-gray-900 shadow-xs leading-relaxed break-words"
-                            style={{
-                              borderTopLeftRadius: "4px",
-                            }}
+                            key={block.id || index}
+                            className="max-w-[235px] rounded-2xl rounded-tl bg-white p-3 text-xs leading-relaxed text-gray-900 shadow-sm"
                           >
-                            {text ? (
-                              renderPreviewMessageText(text)
-                            ) : (
-                              <span className="text-gray-400 italic">
-                                ({t.textBlockPlaceholder.slice(0, 20)}...)
-                              </span>
-                            )}
+                            {block.textTemplate?.trim()
+                              ? renderPreviewMessageText(block.textTemplate)
+                              : <span className="text-gray-400">{t.textBlockPlaceholder}</span>}
                           </div>
                         );
                       })}
                     </div>
                   </div>
                 </div>
-
-                {/* Preview Interactive Controls */}
-                <div className="p-3 bg-gray-50 border-t border-gray-200 space-y-2 text-xs">
+                <div className="space-y-2 border-t border-gray-200 bg-gray-50 p-3 text-xs">
                   {readinessData && readinessData.stores.length > 0 && (
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                        {t.previewStoreSelector}
-                      </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-gray-600">{t.sampleStore}</span>
                       <select
                         value={previewStoreId}
-                        onChange={(e) => setPreviewStoreId(e.target.value)}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-800"
+                        onChange={(event) => setPreviewStoreId(event.target.value)}
+                        className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs"
                       >
-                        {readinessData.stores.map((s) => (
-                          <option key={s.lineOfficialAccountId} value={s.lineOfficialAccountId}>
-                            {s.storeName} ({s.readinessStatus})
+                        {readinessData.stores.map((store) => (
+                          <option key={store.lineOfficialAccountId} value={store.lineOfficialAccountId}>
+                            {store.storeName}
                           </option>
                         ))}
                       </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {t.previewCustomerNameLabel}
                     </label>
+                  )}
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-medium text-gray-600">{t.sampleUser}</span>
                     <input
                       type="text"
                       value={previewCustomerName}
-                      onChange={(e) => setPreviewCustomerName(e.target.value)}
-                      placeholder={t.previewCustomerNamePlaceholder}
-                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-800"
+                      onChange={(event) => setPreviewCustomerName(event.target.value)}
+                      className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs"
                     />
-                  </div>
+                  </label>
                 </div>
+              </aside>
+            </div>
+          </section>
+        </form>
+
+        <section className="space-y-4 border-t border-gray-200 pb-12 pt-8">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <h2 className="text-base font-bold">{ui.storeUsage}</h2>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{ui.assigned} {assignedCount}</span>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{ui.ready} {readyCount}</span>
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{ui.blocked} {blockedCount}</span>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{ui.selected} {selectedStoreOaIds.length}</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* 5. Store Assignments Section positioned cleanly below editor */}
-        <div className="pt-8 pb-12 border-t border-gray-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">
-                {t.storeAssignmentsSection}
-              </h2>
-              <p className="mt-0.5 text-xs text-gray-600">
-                {t.storesSummary(assignedCount, readyCount, blockedCount)}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={handleSelectAllReadyStores}
-                className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 shadow-2xs transition"
+                disabled={!currentTemplate || readyCount === 0}
+                className="rounded border border-[#06c755] bg-white px-3.5 py-2 text-xs font-semibold text-[#06c755] hover:bg-emerald-50 disabled:opacity-40"
               >
-                {t.applyToAllReady}
+                {ui.selectAllReady}
               </button>
               <button
                 type="button"
-                onClick={() => setShowStoreSection(!showStoreSection)}
-                className="px-3.5 py-1.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-2xs transition"
+                onClick={() => setShowStoreSection((value) => !value)}
+                disabled={!currentTemplate}
+                className="rounded bg-[#06c755] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-40"
               >
-                {showStoreSection ? t.closeButton : t.manageStores} ({selectedStoreOaIds.length})
+                {showStoreSection ? ui.hideStores : ui.manageStores}
               </button>
             </div>
           </div>
 
-          {/* Expandable Store Assignment Table */}
-          {showStoreSection && (
-            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-xs space-y-3 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <input
-                  type="text"
-                  value={storeSearch}
-                  onChange={(e) => setStoreSearch(e.target.value)}
-                  placeholder="ค้นหาชื่อสาขาหรือ LINE ID..."
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-md w-full sm:w-64 text-gray-800 focus:outline-none focus:border-[#06c755]"
-                />
+          {!currentTemplate && (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
+              {t.storeAssignmentDesc}
+            </div>
+          )}
 
-                <div className="flex items-center gap-2">
+          {showStoreSection && currentTemplate && readinessData && (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="grid gap-3 border-b border-gray-200 p-4 lg:grid-cols-[minmax(260px,1fr)_200px_170px_auto] lg:items-center">
+                <input
+                  type="search"
+                  value={storeSearch}
+                  onChange={(event) => setStoreSearch(event.target.value)}
+                  placeholder={ui.searchStores}
+                  className="h-9 rounded border border-gray-300 px-3 text-xs outline-none focus:border-[#06c755]"
+                />
+                <select
+                  value={storeProvinceFilter}
+                  onChange={(event) => setStoreProvinceFilter(event.target.value)}
+                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"
+                >
+                  <option value="ALL">{ui.allProvinces}</option>
+                  {storeProvinces.map((province) => (
+                    <option key={province} value={province}>{province}</option>
+                  ))}
+                </select>
+                <select
+                  value={storeReadinessFilter}
+                  onChange={(event) => setStoreReadinessFilter(event.target.value as ReadinessFilter)}
+                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"
+                >
+                  <option value="ALL">{ui.allStatuses}</option>
+                  <option value="READY">{ui.readyOnly}</option>
+                  <option value="BLOCKED">{ui.blockedOnly}</option>
+                </select>
+                <div className="text-right text-xs text-gray-500">{ui.resultCount(filteredStores.length)}</div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectFilteredReadyStores}
+                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    {ui.selectFilteredReady}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSelectedStoreOaIds([])}
-                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
                   >
-                    {t.clearSelection}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveStoreAssignments}
-                    disabled={savingAssignments}
-                    className="px-4 py-1.5 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-2xs disabled:opacity-50 transition"
-                  >
-                    {savingAssignments ? t.uploading : "บันทึกการผูกสาขา"}
+                    {ui.clearSelection}
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveStoreAssignments()}
+                  disabled={savingAssignments}
+                  className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"
+                >
+                  {savingAssignments ? ui.savingAssignments : ui.saveAssignments(selectedStoreOaIds.length)}
+                </button>
               </div>
 
-              {/* Table */}
-              <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-md">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-semibold sticky top-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
                     <tr>
-                      <th className="p-2.5 w-10 text-center">{t.colSelect}</th>
-                      <th className="p-2.5">{t.colStoreName}</th>
-                      <th className="p-2.5">{t.colBasicId}</th>
-                      <th className="p-2.5">{t.colReadiness}</th>
-                      <th className="p-2.5">{t.colCurrentTemplate}</th>
+                      <th className="w-12 px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={allCurrentPageReadySelected}
+                          onChange={handleToggleCurrentPageReady}
+                          aria-label={ui.selectPage}
+                          className="h-4 w-4 accent-[#06c755]"
+                        />
+                      </th>
+                      <th className="px-4 py-3">{ui.storeCode}</th>
+                      <th className="px-4 py-3">{ui.storeName}</th>
+                      <th className="px-4 py-3">{ui.lineOa}</th>
+                      <th className="px-4 py-3">{ui.province}</th>
+                      <th className="px-4 py-3">{ui.readiness}</th>
+                      <th className="px-4 py-3">{ui.currentGreeting}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredStores.map((st) => {
-                      const isSelected = selectedStoreOaIds.includes(st.lineOfficialAccountId);
-                      const isReady = st.readinessStatus === "READY";
+                  <tbody className="divide-y divide-gray-100">
+                    {paginatedStores.map((store) => {
+                      const selected = selectedStoreOaIds.includes(store.lineOfficialAccountId);
+                      const ready = store.readinessStatus === "READY";
+                      const disabled = !ready && !selected;
                       return (
-                        <tr
-                          key={st.lineOfficialAccountId}
-                          onClick={() => handleToggleStoreSelect(st.lineOfficialAccountId)}
-                          className={`hover:bg-gray-50 cursor-pointer transition ${
-                            isSelected ? "bg-emerald-50/40" : ""
-                          }`}
-                        >
-                          <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <tr key={store.lineOfficialAccountId} className={selected ? "bg-emerald-50/50" : "hover:bg-gray-50"}>
+                          <td className="px-4 py-3 text-center">
                             <input
                               type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleToggleStoreSelect(st.lineOfficialAccountId)}
-                              className="h-4 w-4 rounded border-gray-300 text-[#06c755] focus:ring-[#06c755] cursor-pointer"
+                              checked={selected}
+                              disabled={disabled}
+                              onChange={() => handleToggleStoreSelect(store.lineOfficialAccountId)}
+                              className="h-4 w-4 accent-[#06c755] disabled:opacity-30"
                             />
                           </td>
-                          <td className="p-2.5 font-medium text-gray-900">
-                            {st.storeName}
-                          </td>
-                          <td className="p-2.5 text-gray-500 font-mono">
-                            {st.storeCode || "-"}
-                          </td>
-                          <td className="p-2.5">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                                isReady
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {isReady ? t.statusReady : t.statusBlocked}
+                          <td className="px-4 py-3 font-mono text-gray-500">{store.storeCode || "—"}</td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{store.storeName}</td>
+                          <td className="px-4 py-3 text-gray-600">{store.lineOfficialAccountName || "—"}</td>
+                          <td className="px-4 py-3 text-gray-600">{store.province || "—"}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {ready ? ui.ready : ui.blocked}
                             </span>
                           </td>
-                          <td className="p-2.5 text-gray-500">
-                            {st.currentTemplateName || "-"}
+                          <td className="px-4 py-3 text-gray-600">
+                            {store.currentTemplateName || ui.noGreeting}
                           </td>
                         </tr>
                       );
@@ -790,33 +932,57 @@ export function GreetingMessagesView({
                   </tbody>
                 </table>
               </div>
+
+              {paginatedStores.length === 0 && (
+                <div className="p-10 text-center text-xs text-gray-500">{ui.resultCount(0)}</div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-gray-500">{ui.pageSummary(pageFrom, pageTo, filteredStores.length)}</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={storePage <= 1}
+                    onClick={() => setStorePage((page) => Math.max(1, page - 1))}
+                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
+                  >
+                    {ui.previous}
+                  </button>
+                  <span className="min-w-24 text-center text-xs text-gray-600">{ui.page(storePage, totalStorePages)}</span>
+                  <button
+                    type="button"
+                    disabled={storePage >= totalStorePages}
+                    onClick={() => setStorePage((page) => Math.min(totalStorePages, page + 1))}
+                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
+                  >
+                    {ui.next}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* Active Edit Confirmation Warning Modal */}
-      {showActiveEditModal && (
+      {showActiveEditModal && currentTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-gray-900">
-              {t.activeEditWarningTitle}
-            </h3>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              {t.activeEditWarningMessage(currentTemplate?.assignedStoreCount || 0)}
+          <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-bold">{t.activeEditWarningTitle}</h3>
+            <p className="text-xs leading-relaxed text-gray-600">
+              {t.activeEditWarningMessage(currentTemplate.assignedStoreCount)}
             </p>
-            <div className="flex items-center justify-end gap-2.5 pt-2">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowActiveEditModal(false)}
-                className="px-4 py-2 text-xs font-medium rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                className="rounded border border-gray-300 px-4 py-2 text-xs font-medium"
               >
                 {t.activeEditWarningCancel}
               </button>
               <button
                 type="button"
-                onClick={executeSave}
-                className="px-4 py-2 text-xs font-semibold rounded bg-[#06c755] hover:bg-[#05b34c] text-white shadow-xs"
+                onClick={() => void executeSave()}
+                className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white"
               >
                 {t.activeEditWarningConfirm}
               </button>
