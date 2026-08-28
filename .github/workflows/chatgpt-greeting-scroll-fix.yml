@@ -1,0 +1,82 @@
+name: ChatGPT Greeting Scroll Fix
+
+on:
+  push:
+    branches:
+      - fix/greeting-scroll-container
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/greeting-scroll-container
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply greeting scroll fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/app/greeting-messages/greeting-messages-view.tsx')
+          text = path.read_text()
+          old = '<div className="min-h-screen bg-white text-gray-900">'
+          new = '<div className="h-full min-h-0 overflow-y-auto bg-white text-gray-900">'
+          if new in text:
+              print('Scroll fix already applied')
+          elif old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text)
+          else:
+              raise SystemExit('Greeting root container anchor not found')
+          PY
+
+      - name: Add scroll regression assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/test/greeting-messages.test.mts')
+          text = path.read_text()
+          marker = 'greeting page owns vertical scrolling inside full workspace'
+          if marker in text:
+              print('Regression assertion already present')
+              raise SystemExit(0)
+          text += '''\n\ntest("greeting page owns vertical scrolling inside full workspace", () => {\n  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");\n  assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);\n});\n'''
+          path.write_text(text)
+          PY
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit source fix
+        run: |
+          if git diff --quiet -- frontend/src/app/greeting-messages/greeting-messages-view.tsx frontend/test/greeting-messages.test.mts; then
+            echo "No source change to commit"
+            exit 0
+          fi
+          git config user.name "chatgpt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/app/greeting-messages/greeting-messages-view.tsx frontend/test/greeting-messages.test.mts
+          git commit -m "fix(greeting): restore vertical page scrolling"
+          git push origin HEAD:fix/greeting-scroll-container
