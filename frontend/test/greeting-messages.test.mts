@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import type { PrimarySection } from "../src/app/primary-navigation.ts";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
@@ -153,4 +154,10 @@ test("Frontend variable resolver handles user.displayName and account.name witho
     resolved,
     "สวัสดี คุณสมชาย ยินดีต้อนรับสู่ OPPO Central Bangna (OPPO Store Bangna)",
   );
+});
+
+
+test("greeting page owns vertical scrolling inside full workspace", () => {
+  const source = readFileSync(new URL("../src/app/greeting-messages/greeting-messages-view.tsx", import.meta.url), "utf8");
+  assert.match(source, /h-full min-h-0 overflow-y-auto bg-white text-gray-900/);
 });
