@@ -1,6 +1,30 @@
 # AI progress
 
-## Current task: Rich Menu "No Rich Menu / Clear Default" Management (2026-08-27)
+## Current task: Greeting Message Manager Phase 1 (2026-08-28) [COMPLETED]
+
+- **Architecture & Technical Scope**:
+  - Independent subsystem for multi-store Greeting Message management (Phase 1).
+  - Database schema: `GreetingTemplate`, `GreetingStoreAssignment`, `GreetingExecution` with non-destructive migration `20260828100000_add_greeting_message_manager`.
+  - Webhook integration on LINE `follow` event with zero push fallback, idempotency via `webhookEventId`, and single-request `replyMessages` execution.
+  - Send policy evaluation: `FIRST_TIME_ONLY` (skips unblock events and users who already received a greeting for the same OA) vs `ADD_AND_UNBLOCK` (replies on both new adds and unblocks).
+  - Template variable resolver supporting runtime context variables `{{user.displayName}}`, `{{account.name}}`, and store variables (`{{store.storeName}}`, `{{store.googleMapsUrl}}`, `{{store.province}}`, `{{store.region}}`, etc.) without blocking store configuration readiness.
+  - Media public URL namespace `line-media/greeting/` in `PUBLIC_MEDIA_PREFIXES`, Sharp preview generation (<= 1MB), magic byte validation, and upload endpoint.
+  - Controller endpoints guarded by `Roles(UserRole.ADMIN)`.
+  - Frontend UI at `/greeting-messages`: message sequence builder (1–5 blocks), store readiness table with single checkbox selection, live mobile preview, active edit warning modal, permanent native OA Manager duplication warning banner, and multilingual support (`th`, `en`, `zh`).
+- **Verification & Test Results**:
+  - 1,410 / 1,410 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 455 / 455 frontend unit tests passing (`npm test` in `frontend/`).
+  - NestJS/Prisma production build succeeded cleanly (`npm run build` in `backend/`).
+  - Next.js Turbopack production build succeeded cleanly across 29 routes (`npm run build` in `frontend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+- **Safety Directives Followed**:
+  - No Greeting Template assigned automatically.
+  - No real LINE Greeting sent during deployment.
+  - No existing follower received an unintended message.
+  - Push fallback disallowed.
+  - Migration is fully non-destructive.
+
+## Previous task: Rich Menu "No Rich Menu / Clear Default" Management (2026-08-27)
 
 - **Architecture & Technical Scope**:
   - **Messaging API Default Clear (`DELETE /v2/bot/user/all/richmenu`)**:

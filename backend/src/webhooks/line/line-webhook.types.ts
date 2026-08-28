@@ -29,7 +29,8 @@ type LineEventBase = {
 
 export type LineWebhookEvent =
   | (LineEventBase & { type: "message"; message: LineMessage })
-  | (LineEventBase & { type: "follow" | "unfollow" })
+  | (LineEventBase & { type: "follow"; follow?: { isUnblocked?: boolean } })
+  | (LineEventBase & { type: "unfollow" })
   | (LineEventBase & { type: "postback"; postback: LinePostback })
   | LineEventBase;
 

@@ -1,3 +1,19 @@
+# Greeting Message Manager Phase 1 Architecture (2026-08-28)
+
+- **Dedicated Greeting Execution Subsystem**: Greeting messages for store LINE Official Accounts are managed independently from Auto-responses and Rich Menus via dedicated schema models (`GreetingTemplate`, `GreetingStoreAssignment`, `GreetingExecution`) and service layer (`GreetingMessageService`, `GreetingExecutionService`).
+- **Atomic Single-Request Webhook Reply & Zero Push Fallback**: On LINE `follow` events (`event.type === 'follow'`), greeting messages are dispatched exclusively via `LineMessagingService.replyMessages` using the event's `replyToken`. Push messaging fallback is strictly prohibited. Up to 5 message blocks (`TEXT` and `IMAGE`) are sent in a single atomic LINE API request.
+- **Strict Send Policy Enforcement (`FIRST_TIME_ONLY` vs `ADD_AND_UNBLOCK`)**:
+  - `FIRST_TIME_ONLY`: Evaluates `event.follow.isUnblocked`. If true (unblock event) or if the user has a prior successful greeting execution for the same OA, execution is skipped with audit log `SKIPPED`.
+  - `ADD_AND_UNBLOCK`: Sends greeting on both new friend adds and unblocks.
+- **Context vs Store Variable Readiness Separation**:
+  - Store readiness evaluation checks only store-scoped variables (e.g. `{{store.googleMapsUrl}}`, `{{store.storeName}}`).
+  - Runtime context variables (`{{user.displayName}}`, `{{account.name}}`) are resolved dynamically at webhook execution time and do NOT block store configuration readiness.
+  - Customer display name lookup via `LineProfileService` is performed only if `{{user.displayName}}` is present in the template, using safe fallback `"ลูกค้าคนสำคัญ"` if profile lookup fails.
+- **Idempotency & Duplicate Webhook Protection**: Execution checks `webhookEventId` against previously successful executions before making LINE API calls, guaranteeing exactly-once greeting delivery on webhook retries.
+- **Permanent Native OA Manager Duplication Banner & Active Edit Guard**:
+  - A permanent warning banner reminds administrators to disable native Greeting Messages in LINE Official Account Manager to prevent duplicate customer greetings.
+  - An interactive warning modal requires explicit confirmation before saving modifications to active templates with assigned stores.
+
 # Rich Menu "No Rich Menu / Clear Default" Management Architecture (2026-08-27)
 
 - **Default Unlinking Invariance (`DELETE /v2/bot/user/all/richmenu`)**: Clearing a default rich menu executes `DELETE /v2/bot/user/all/richmenu` on LINE Messaging API. The underlying Rich Menu resource (`DELETE /v2/bot/richmenu/{richMenuId}`) is strictly preserved, keeping historical publish attempt tracking and rollback capabilities intact.
