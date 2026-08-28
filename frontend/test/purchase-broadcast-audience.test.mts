@@ -26,6 +26,11 @@ test("Broadcast Audience creation reuses selected statuses and requires messagea
   assert.match(pageCode, /selectedStatuses\.size === 0/);
 });
 
+test("Purchase Intelligence keeps Online as its own customer-status category", () => {
+  assert.match(pageCode, /"ONLINE"/);
+  assert.match(pageCode, /status === "ONLINE"/);
+});
+
 test("draft success explicitly states that no message was sent", () => {
   assert.match(pageCode, /Status: DRAFT\. No message has been sent\./);
   assert.match(pageCode, /does not create store deliveries/);

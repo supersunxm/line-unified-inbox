@@ -19,7 +19,7 @@ import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
 type MobileTab = "overview" | "products" | "stores" | "audience";
-type AudienceStatus = "PURCHASED" | "INTERESTED" | "NOT_SPECIFIED";
+type AudienceStatus = "PURCHASED" | "INTERESTED" | "ONLINE" | "NOT_SPECIFIED";
 type PurchaseAudienceItem = {
   customerId: string;
   customerName: string;
@@ -83,6 +83,7 @@ function csvCell(value: string | number | null | undefined) {
 function audienceStatus(item: PurchaseAudienceItem): AudienceStatus {
   if (item.customerStatus === "PURCHASED") return "PURCHASED";
   if (item.customerStatus === "INTERESTED") return "INTERESTED";
+  if (item.customerStatus === "ONLINE") return "ONLINE";
   return "NOT_SPECIFIED";
 }
 
@@ -132,7 +133,7 @@ export function MobilePurchaseAnalyticsApp() {
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [audienceError, setAudienceError] = useState<string | null>(null);
   const [onlyMessageable, setOnlyMessageable] = useState(true);
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"]));
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<AudienceStatus>>(new Set(["PURCHASED", "INTERESTED", "ONLINE", "NOT_SPECIFIED"]));
   const [audienceLimit, setAudienceLimit] = useState(30);
   const [draftCreating, setDraftCreating] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -416,7 +417,7 @@ function Audience({ user, audience, loading, error, onlyMessageable, selectedSta
     </MobileMetricGrid>
 
     <MobileCard className="space-y-3">
-      <div><p className="text-[11px] font-bold">Customer Status</p><div className="mt-2 grid grid-cols-3 gap-1.5">{(["PURCHASED", "INTERESTED", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => <button key={status} type="button" onClick={() => onToggleStatus(status)} className={`min-h-10 rounded-xl border px-2 text-[10px] font-bold ${selectedStatuses.has(status) ? "border-[var(--app-accent)] bg-[var(--app-accent)]/5 text-[var(--app-accent)]" : "border-[var(--app-border)] text-[var(--app-text-secondary)]"}`}>{status === "NOT_SPECIFIED" ? "ไม่ระบุ" : status === "PURCHASED" ? "ซื้อแล้ว" : "สนใจ"}</button>)}</div></div>
+      <div><p className="text-[11px] font-bold">Customer Status</p><div className="mt-2 grid grid-cols-2 gap-1.5">{(["PURCHASED", "INTERESTED", "ONLINE", "NOT_SPECIFIED"] as AudienceStatus[]).map((status) => <button key={status} type="button" onClick={() => onToggleStatus(status)} className={`min-h-10 rounded-xl border px-2 text-[10px] font-bold ${selectedStatuses.has(status) ? "border-[var(--app-accent)] bg-[var(--app-accent)]/5 text-[var(--app-accent)]" : "border-[var(--app-border)] text-[var(--app-text-secondary)]"}`}>{status === "NOT_SPECIFIED" ? "ไม่ระบุ" : status === "PURCHASED" ? "ซื้อแล้ว" : status === "ONLINE" ? "Online" : "สนใจ"}</button>)}</div></div>
       <button type="button" onClick={() => onMessageable(!onlyMessageable)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left ${onlyMessageable ? "border-emerald-500/30 bg-emerald-500/5" : "border-[var(--app-border)]"}`}><span><span className="block text-xs font-bold">เฉพาะลูกค้าที่ส่งข้อความได้</span><span className="mt-0.5 block text-[10px] text-[var(--app-text-tertiary)]">ต้องมี LINE User ID และ OA พร้อมใช้งาน</span></span><span className={`flex h-6 w-10 items-center rounded-full p-0.5 ${onlyMessageable ? "justify-end bg-emerald-500" : "justify-start bg-[var(--app-border)]"}`}><span className="h-5 w-5 rounded-full bg-white" /></span></button>
     </MobileCard>
 
@@ -425,7 +426,7 @@ function Audience({ user, audience, loading, error, onlyMessageable, selectedSta
     {user.role === "ADMIN" && <MobileSection title="Broadcast Audience" description="สร้าง DRAFT recipient snapshot เท่านั้น — ยังไม่ส่งข้อความ"><MobileCard className="space-y-3"><p className="text-xs leading-5 text-[var(--app-text-secondary)]">ระบบจะบันทึก recipient snapshot แบบ idempotent เพื่อไปใช้ต่อใน Mass Message โดยยังไม่สร้าง delivery และไม่ส่งอะไรไป LINE</p>{draftError && <p className="rounded-xl bg-rose-500/10 p-3 text-[10px] text-rose-600">{draftError}</p>}{createdDraft ? <div className="rounded-xl bg-emerald-500/10 p-3"><p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">สร้าง Draft แล้ว</p><div className="mt-2 grid grid-cols-3 gap-2"><MiniStat label="Recipients" value={createdDraft.recipientCount} /><MiniStat label="Stores" value={createdDraft.storeCount} /><MiniStat label="LINE OA" value={createdDraft.lineOaCount} /></div></div> : <button type="button" disabled={draftCreating || !onlyMessageable || selectedStatuses.size === 0 || filtered.length === 0} onClick={onCreateDraft} className="min-h-12 w-full rounded-xl bg-[var(--app-accent)] px-3 text-sm font-bold text-white disabled:opacity-35">{draftCreating ? "กำลังสร้าง Draft..." : `สร้าง Broadcast Draft (${filtered.length})`}</button>}</MobileCard></MobileSection>}
 
     <MobileSection title="รายชื่อลูกค้า" description={`${filtered.length} คนตามตัวกรอง`}>
-      {filtered.length === 0 ? <MobileEmptyState title="ไม่พบลูกค้า" description="ลองเปลี่ยน status หรือปิด Only messageable" /> : <div className="space-y-2.5">{filtered.slice(0, limit).map((item) => <MobileListCard key={item.customerId} title={item.customerName || "ไม่ระบุชื่อ"} subtitle={`${item.storeName} · ${item.lineOaName}`} trailing={<span className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.canMessage ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>{item.canMessage ? "ส่งได้" : "Excluded"}</span>}><div className="space-y-2"><div className="flex flex-wrap gap-1">{item.products.slice(0, 4).map((product, index) => <span key={`${item.customerId}-${product.modelId}-${index}`} className="rounded-lg bg-[var(--app-surface-subtle)] px-2 py-1 text-[9px] font-semibold">{productLabel(product)}</span>)}</div><div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-[var(--app-text-tertiary)]"><span>{audienceStatus(item) === "PURCHASED" ? "ซื้อแล้ว" : audienceStatus(item) === "INTERESTED" ? "สนใจ" : "ไม่ระบุสถานะ"}</span><span>{item.purchaseChannels.join(", ") || "ไม่ระบุช่องทาง"}</span><span>{new Date(item.lastPurchaseAt).toLocaleDateString("th-TH")}</span></div>{item.excludeReason && <p className="text-[9px] text-amber-600">{item.excludeReason}</p>}</div></MobileListCard>)}</div>}
+      {filtered.length === 0 ? <MobileEmptyState title="ไม่พบลูกค้า" description="ลองเปลี่ยน status หรือปิด Only messageable" /> : <div className="space-y-2.5">{filtered.slice(0, limit).map((item) => <MobileListCard key={item.customerId} title={item.customerName || "ไม่ระบุชื่อ"} subtitle={`${item.storeName} · ${item.lineOaName}`} trailing={<span className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.canMessage ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>{item.canMessage ? "ส่งได้" : "Excluded"}</span>}><div className="space-y-2"><div className="flex flex-wrap gap-1">{item.products.slice(0, 4).map((product, index) => <span key={`${item.customerId}-${product.modelId}-${index}`} className="rounded-lg bg-[var(--app-surface-subtle)] px-2 py-1 text-[9px] font-semibold">{productLabel(product)}</span>)}</div><div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-[var(--app-text-tertiary)]"><span>{audienceStatus(item) === "PURCHASED" ? "ซื้อแล้ว" : audienceStatus(item) === "INTERESTED" ? "สนใจ" : audienceStatus(item) === "ONLINE" ? "Online" : "ไม่ระบุสถานะ"}</span><span>{item.purchaseChannels.join(", ") || "ไม่ระบุช่องทาง"}</span><span>{new Date(item.lastPurchaseAt).toLocaleDateString("th-TH")}</span></div>{item.excludeReason && <p className="text-[9px] text-amber-600">{item.excludeReason}</p>}</div></MobileListCard>)}</div>}
       {limit < filtered.length && <button type="button" onClick={onMore} className="min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold">แสดงเพิ่มอีก {Math.min(30, filtered.length - limit)} คน</button>}
     </MobileSection>
   </div>;

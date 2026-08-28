@@ -41,6 +41,7 @@ enum ProductRelationship {
 }
 
 enum CustomerSalesStatus {
+  ONLINE
   INTERESTED
   PURCHASED
 }

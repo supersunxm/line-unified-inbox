@@ -349,6 +349,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get customerSalesInformation => 'ข้อมูลการขาย';
 
   @override
+  String get statusOnline => 'Online';
+
+  @override
   String get statusInterested => 'สนใจสินค้า';
 
   @override

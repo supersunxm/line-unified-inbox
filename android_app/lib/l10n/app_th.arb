@@ -109,6 +109,7 @@
   "purchaseInformation": "ข้อมูลการซื้อ",
   "customerSalesInformation": "ข้อมูลการขาย",
   "customerStatus": "สถานะลูกค้า",
+  "statusOnline": "Online",
   "statusInterested": "สนใจสินค้า",
   "statusPurchased": "ซื้อแล้ว",
   "interestLevel": "ระดับความสนใจ",

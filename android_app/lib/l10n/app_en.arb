@@ -109,6 +109,7 @@
   "purchaseInformation": "Purchase Information",
   "customerSalesInformation": "Customer Sales Info",
   "customerStatus": "Customer Status",
+  "statusOnline": "Online",
   "statusInterested": "Interested",
   "statusPurchased": "Purchased",
   "interestLevel": "Interest Level",

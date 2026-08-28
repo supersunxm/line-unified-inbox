@@ -98,7 +98,9 @@ class ConversationTagsBar extends StatelessWidget {
                 child: Icon(
                   sales?.isPurchased == true
                       ? Icons.shopping_bag_outlined
-                      : Icons.flag_outlined,
+                      : sales?.isOnline == true
+                          ? Icons.language_outlined
+                          : Icons.flag_outlined,
                   size: 18,
                   color:
                       sales?.isPurchased == true ? Colors.green : Colors.blue,
@@ -133,7 +135,9 @@ class ConversationTagsBar extends StatelessWidget {
                               child: Text(
                                 sales.isPurchased
                                     ? '🛍️ ${appLocalizations(context).statusPurchased}'
-                                    : '🎯 ${appLocalizations(context).statusInterested}',
+                                    : sales.isOnline
+                                        ? '🌐 ${appLocalizations(context).statusOnline}'
+                                        : '🎯 ${appLocalizations(context).statusInterested}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -762,6 +766,25 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   status: 'INTERESTED',
                 ))
             .toList();
+      } else if (status == 'ONLINE') {
+        _interestLevel = null;
+        _sourceChannels.clear();
+        _paymentMethod = null;
+        _selectedProducts = _selectedProducts
+            .map((product) => CustomerSalesProductItem(
+                  id: product.id,
+                  productModelId: product.productModelId,
+                  productVariantId: product.productVariantId,
+                  modelName: product.modelName,
+                  seriesName: product.seriesName,
+                  category: product.category,
+                  ram: product.ram,
+                  rom: product.rom,
+                  color: product.color,
+                  quantity: product.quantity,
+                  status: 'ONLINE',
+                ))
+            .toList();
       } else {
         _interestLevel = null;
         _selectedProducts = _selectedProducts
@@ -813,7 +836,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
               ? l10n.noCustomerSalesInfo
               : _status == 'PURCHASED'
                   ? '🛍️ ${l10n.statusPurchased}'
-                  : '🎯 ${l10n.statusInterested}',
+                  : _status == 'ONLINE'
+                      ? '🌐 ${l10n.statusOnline}'
+                      : '🎯 ${l10n.statusInterested}',
         ),
         actions: [
           TextButton(
@@ -978,6 +1003,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     width: double.infinity,
                     child: SegmentedButton<String>(
                       segments: [
+                        ButtonSegment(
+                          value: 'ONLINE',
+                          label: Text(l10n.statusOnline),
+                          icon: const Icon(Icons.language_outlined),
+                        ),
                         ButtonSegment(
                           value: 'INTERESTED',
                           label: Text(l10n.statusInterested),

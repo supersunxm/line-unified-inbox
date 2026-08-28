@@ -64,9 +64,13 @@ class _FakeTagRepository extends ConversationRepository {
     currentSales = CustomerSalesInformation(
       status: status is String ? status : 'INTERESTED',
       interestLevel: interestLevel is String ? interestLevel : null,
-      purchaseChannel: purchaseChannel is List ? purchaseChannel.whereType<String>().toList() : [],
+      purchaseChannel: purchaseChannel is List
+          ? purchaseChannel.whereType<String>().toList()
+          : [],
       paymentMethod: paymentMethod is String ? paymentMethod : null,
-      products: products is List ? products.whereType<CustomerSalesProductItem>().toList() : [],
+      products: products is List
+          ? products.whereType<CustomerSalesProductItem>().toList()
+          : [],
     );
     return ConversationDetail(
       id: id,
@@ -79,7 +83,8 @@ class _FakeTagRepository extends ConversationRepository {
 }
 
 void main() {
-  testWidgets('CRM sales sheet supports INTERESTED lead with multi-product and interest level',
+  testWidgets(
+      'CRM sales sheet supports INTERESTED lead with multi-product and interest level',
       (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
@@ -101,6 +106,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Customer Sales Info'), findsOneWidget);
+    expect(find.text('Online'), findsOneWidget);
     expect(find.text('Interested'), findsOneWidget);
     expect(find.text('Purchased'), findsOneWidget);
 
@@ -117,10 +123,12 @@ void main() {
     expect(find.text('Selected'), findsOneWidget);
     expect(find.text('Change Product'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(ChoiceChip, '✓ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '✓ 16GB RAM · 512GB ROM · Graphite'),
+        findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -143,11 +151,68 @@ void main() {
     expect(repository.currentSales?.status, 'INTERESTED');
     expect(repository.currentSales?.interestLevel, 'WARM');
     expect(repository.currentSales?.products.length, 1);
-    expect(repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
+    expect(
+        repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
     expect(repository.currentSales?.products[0].ram, '16');
   });
 
-  testWidgets('CRM sales sheet supports PURCHASED customer with channels and payment method',
+  testWidgets('CRM sales sheet persists Online and supports switching status',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+
+    Future<void> openSheet() async {
+      // Reset the root navigator after the previous save closes its route.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ConversationTagsSheet(
+            conversationId: 'conversation-online',
+            repository: repository,
+            initialTags: const ConversationTags(),
+            initialSalesInfo: repository.currentSales,
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> selectAndSave(String status) async {
+      final confirmation = status == 'Purchased' &&
+              repository.currentSales?.status == 'INTERESTED'
+          ? 'Confirm Purchase'
+          : 'Confirm Save';
+      await tester.tap(find.text(status));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(confirmation).last);
+      await tester.pumpAndSettle();
+    }
+
+    await openSheet();
+    await selectAndSave('Online');
+    expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.interestLevel, isNull);
+    expect(repository.currentSales?.purchaseChannel, isEmpty);
+    expect(repository.currentSales?.paymentMethod, isNull);
+
+    await openSheet();
+    await selectAndSave('Interested');
+    expect(repository.currentSales?.status, 'INTERESTED');
+
+    await openSheet();
+    await selectAndSave('Purchased');
+    expect(repository.currentSales?.status, 'PURCHASED');
+  });
+
+  testWidgets(
+      'CRM sales sheet supports PURCHASED customer with channels and payment method',
       (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
@@ -179,7 +244,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -245,7 +311,9 @@ void main() {
     expect(find.text('2'), findsOneWidget);
   });
 
-  testWidgets('Interested lead converts to Purchased with preserved products and confirmation', (tester) async {
+  testWidgets(
+      'Interested lead converts to Purchased with preserved products and confirmation',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -308,11 +376,14 @@ void main() {
     expect(repository.currentSales?.purchaseChannel, ['STORE']);
     expect(repository.currentSales?.paymentMethod, 'CASH');
     expect(repository.currentSales?.products.length, 1);
-    expect(repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
+    expect(
+        repository.currentSales?.products[0].modelName, 'OPPO Reno16 Pro 5G');
     expect(repository.currentSales?.products[0].status, 'PURCHASED');
   });
 
-  testWidgets('Product & Variant Selection UX: draft selection flow with Confirm Selection', (tester) async {
+  testWidgets(
+      'Product & Variant Selection UX: draft selection flow with Confirm Selection',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -343,9 +414,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
+    expect(
+        find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
 
-    final confirmBtnBeforeVariant = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    final confirmBtnBeforeVariant = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Confirm Selection'));
     expect(confirmBtnBeforeVariant.onPressed, isNull);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Change Product'));
@@ -359,16 +432,22 @@ void main() {
 
     expect(find.text('Selected'), findsOneWidget);
 
-    expect(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
-    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'),
+        findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'),
+        findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(ChoiceChip, '✓ 12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
-    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '✓ 12GB RAM · 256GB ROM · Graphite'),
+        findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'),
+        findsOneWidget);
 
-    final confirmBtnAfterVariant = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    final confirmBtnAfterVariant = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Confirm Selection'));
     expect(confirmBtnAfterVariant.onPressed, isNotNull);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
@@ -376,10 +455,13 @@ void main() {
 
     expect(find.text('12GB RAM · 256GB ROM · Graphite'), findsOneWidget);
     expect(repository.saveCallCount, 1);
-    expect(repository.currentSales?.products.single.productVariantId, 'variant-1');
+    expect(
+        repository.currentSales?.products.single.productVariantId, 'variant-1');
   });
 
-  testWidgets('Draft selection flow: unconfirmed draft product is NOT added to CRM list', (tester) async {
+  testWidgets(
+      'Draft selection flow: unconfirmed draft product is NOT added to CRM list',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -404,7 +486,8 @@ void main() {
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.close).last);
@@ -415,7 +498,9 @@ void main() {
     expect(repository.saveCallCount, 0);
   });
 
-  testWidgets('Multiple products POS/CRM flow: adding multiple items sequentially', (tester) async {
+  testWidgets(
+      'Multiple products POS/CRM flow: adding multiple items sequentially',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -442,7 +527,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -456,7 +542,8 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -473,7 +560,9 @@ void main() {
     expect(repository.currentSales?.products.length, 2);
   });
 
-  testWidgets('Regression: Open picker with existing products -> new picker must start empty', (tester) async {
+  testWidgets(
+      'Regression: Open picker with existing products -> new picker must start empty',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -530,9 +619,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
+    expect(
+        find.widgetWithText(OutlinedButton, 'Change Product'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -543,7 +634,9 @@ void main() {
     expect(repository.currentSales?.products.length, 2);
   });
 
-  testWidgets('Regression: Full confirmation flow with existing product + save to backend', (tester) async {
+  testWidgets(
+      'Regression: Full confirmation flow with existing product + save to backend',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -592,10 +685,12 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(FilledButton, 'Confirm Selection'), findsOneWidget);
+    expect(
+        find.widgetWithText(FilledButton, 'Confirm Selection'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -613,11 +708,14 @@ void main() {
     expect(repository.currentSales?.status, 'PURCHASED');
     expect(repository.currentSales?.products.length, 2);
     expect(repository.currentSales?.products[0].modelName, 'OPPO Find X9 Pro');
-    expect(repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
+    expect(
+        repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
     expect(repository.currentSales?.products[1].ram, '12');
   });
 
-  testWidgets('Product Card UX: long product name renders with ellipsis and maxLines 1', (tester) async {
+  testWidgets(
+      'Product Card UX: long product name renders with ellipsis and maxLines 1',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -632,7 +730,8 @@ void main() {
         CustomerSalesProductItem(
           id: 'p-long-1',
           productModelId: 'm-long',
-          modelName: 'OPPO Find X9 Pro 5G Smartphone Limited Edition Midnight Black Premium Edition',
+          modelName:
+              'OPPO Find X9 Pro 5G Smartphone Limited Edition Midnight Black Premium Edition',
           seriesName: 'Find Series',
           category: 'SMARTPHONE',
           ram: '16',
@@ -667,7 +766,9 @@ void main() {
     expect(find.text('16GB RAM · 512GB ROM · Midnight Black'), findsOneWidget);
   });
 
-  testWidgets('Scenario 1: Confirm selection persists immediately before closing the sheet', (tester) async {
+  testWidgets(
+      'Scenario 1: Confirm selection persists immediately before closing the sheet',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -691,7 +792,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
@@ -702,7 +804,8 @@ void main() {
     expect(repository.saveCallCount, 1);
     expect(repository.currentSales, isNotNull);
     expect(repository.currentSales?.products.single.productModelId, 'model-1');
-    expect(repository.currentSales?.products.single.productVariantId, 'variant-1');
+    expect(
+        repository.currentSales?.products.single.productVariantId, 'variant-1');
 
     await tester.tap(find.byIcon(Icons.close).first);
     await tester.pumpAndSettle();
@@ -711,7 +814,9 @@ void main() {
     expect(repository.currentSales?.products.length, 1);
   });
 
-  testWidgets('Scenario 2: User selects product -> Confirm Selection -> Save -> backend receives full product schema', (tester) async {
+  testWidgets(
+      'Scenario 2: User selects product -> Confirm Selection -> Save -> backend receives full product schema',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -738,7 +843,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
@@ -764,7 +870,9 @@ void main() {
     expect(savedProduct.status, 'PURCHASED');
   });
 
-  testWidgets('Scenario 3: Existing product + add new product -> UI shows both before save -> Backend contains both after save', (tester) async {
+  testWidgets(
+      'Scenario 3: Existing product + add new product -> UI shows both before save -> Backend contains both after save',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -809,7 +917,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
+    await tester.tap(
+        find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
     await tester.pumpAndSettle();
@@ -827,10 +936,13 @@ void main() {
 
     expect(repository.currentSales?.products.length, 2);
     expect(repository.currentSales?.products[0].modelName, 'OPPO Find X9 Pro');
-    expect(repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
+    expect(
+        repository.currentSales?.products[1].modelName, 'OPPO Reno16 Pro 5G');
   });
 
-  testWidgets('Scenario 4: User opens Add Product and cancels -> No changes to selectedProducts', (tester) async {
+  testWidgets(
+      'Scenario 4: User opens Add Product and cancels -> No changes to selectedProducts',
+      (tester) async {
     tester.view.physicalSize = const Size(1080, 2200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

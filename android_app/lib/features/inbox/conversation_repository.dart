@@ -92,6 +92,7 @@ class CustomerSalesInformation {
   final DateTime? recordedAt;
 
   bool get isEmpty => status == null && products.isEmpty;
+  bool get isOnline => status == 'ONLINE';
   bool get isInterested => status == 'INTERESTED';
   bool get isPurchased => status == 'PURCHASED';
 

@@ -35,7 +35,7 @@ const baseInput: CreatePurchaseBroadcastDraftDto = {
 
 const audience = {
   filters: { from: null, to: null, storeId: null },
-  summary: { customers: 3, messageableCustomers: 2, excludedCustomers: 1 },
+  summary: { customers: 4, messageableCustomers: 3, excludedCustomers: 1 },
   messageabilityDefinition: "LINE_USER_ID_AND_ACTIVE_READY_OA",
   audience: [
     {
@@ -107,6 +107,29 @@ const audience = {
       canMessage: false,
       excludeReason: "MISSING_LINE_USER_ID",
     },
+    {
+      customerId: "customer-4",
+      customerName: "Online Inquiry",
+      lineUserId: "U4",
+      preferredLanguage: "th",
+      conversationId: "conversation-4",
+      lineOaId: "oa-2",
+      lineOaName: "OA Two",
+      lineOaBasicId: "@two",
+      storeId: "store-2",
+      storeName: "Store Two",
+      storeCode: "S2",
+      customerStatus: "ONLINE",
+      purchaseChannels: [],
+      paymentMethods: [],
+      products: [],
+      recordedById: "bm-2",
+      recordedByName: "BM Two",
+      lastPurchaseAt: "2026-08-15T00:00:00.000Z",
+      lastMessageAt: "2026-08-15T01:00:00.000Z",
+      canMessage: true,
+      excludeReason: null,
+    },
   ],
 };
 
@@ -175,6 +198,20 @@ test("status selection excludes other messageable customer states", async () => 
   assert.equal(result.recipientCount, 1);
   assert.match(JSON.stringify(fake.createdData()?.messagePayload), /customer-2/);
   assert.doesNotMatch(JSON.stringify(fake.createdData()?.messagePayload), /customer-1/);
+});
+
+test("ONLINE status is a distinct broadcast audience category", async () => {
+  const fake = makeService();
+  const result = await fake.service.createDraft(
+    {
+      ...baseInput,
+      statuses: [PurchaseAudienceStatus.ONLINE],
+    },
+    admin,
+  );
+  assert.equal(result.recipientCount, 1);
+  assert.match(JSON.stringify(fake.createdData()?.messagePayload), /customer-4/);
+  assert.doesNotMatch(JSON.stringify(fake.createdData()?.messagePayload), /customer-2/);
 });
 
 test("draft creation fails closed when messageable-only is disabled", async () => {

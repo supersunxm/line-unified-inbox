@@ -347,6 +347,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get customerSalesInformation => '客户销售信息';
 
   @override
+  String get statusOnline => '线上咨询';
+
+  @override
   String get statusInterested => '有意向';
 
   @override
@@ -1258,6 +1261,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get customerSalesInformation => '客户销售信息';
+
+  @override
+  String get statusOnline => '线上咨询';
 
   @override
   String get statusInterested => '有意向';

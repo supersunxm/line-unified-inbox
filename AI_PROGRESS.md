@@ -2654,3 +2654,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Audited `GET /mobile/summary/monthly`: response-performance already uses `calculateResponseCycles` + `responseMetrics`, while the reply cards incorrectly used an all-accessible-conversation `bmReplyStatus` snapshot. Removed that snapshot read and derive legacy `operational.needReply`/`completed` from the selected month's response cycles.
 - Added backend regressions for different July/August cycle counts, historical stability when current status changes, and the invariant `needReply + completed = response.cyclesStarted`. Existing tests continue to cover null-sender outbound exclusion, accessible-store/QA scoping, Bangkok month boundaries, and multiple cycles.
 - Targeted/full backend tests pass (1388/1388), changed-file ESLint and backend build pass, Flutter analyze/full tests pass (167/167), Android `assembleDebug` passes, and Prisma schema validation passes. Next action: review/commit, push, open PR, and monitor CI without merging.
+
+# Current task: Online customer sales status (2026-08-28)
+
+- Started `feat/customer-status-online` from clean latest `origin/main` at `67d22d7a362e5b0d901c2f0a3a17f19149a52702`.
+- Audited the canonical `Conversation.customerSalesStatus` Prisma enum and existing Android PATCH/Web conversation contracts. Added the additive `ONLINE` enum value and migration; no frontend-only state or automatic classification was introduced.
+- Android now offers balanced `Online | Interested | Purchased` segments with localized labels and persists the selection through the existing save flow. Online clears purchase-only fields while retaining associated inquiry products; existing unset/Interested/Purchased values remain compatible.
+- Web conversation status tags and purchase-audience filters expose Online as a distinct category. Store/HQ/PC authorization, Main OA isolation, inbox reply status, and existing historical values remain unchanged.
+- Prisma validate/generate, backend build and full tests, Flutter analyze/full tests, Android assembleDebug, frontend tests/build, and scoped lint checks pass. Frontend lint still reports two pre-existing hook errors and three warnings in the existing mobile/desktop analytics files; no new errors were introduced.
+- Next action: review the scoped diff, commit, push the feature branch, open the PR, and monitor CI without merging.

@@ -15,6 +15,7 @@ import { PurchaseAnalyticsQueryDto } from "./purchase-analytics.dto";
 export enum PurchaseAudienceStatus {
   PURCHASED = "PURCHASED",
   INTERESTED = "INTERESTED",
+  ONLINE = "ONLINE",
   NOT_SPECIFIED = "NOT_SPECIFIED",
 }
 

@@ -109,6 +109,7 @@
   "purchaseInformation": "购买信息",
   "customerSalesInformation": "客户销售信息",
   "customerStatus": "客户状态",
+  "statusOnline": "线上咨询",
   "statusInterested": "有意向",
   "statusPurchased": "已购买",
   "interestLevel": "意向程度",

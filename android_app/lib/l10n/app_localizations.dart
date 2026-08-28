@@ -749,6 +749,12 @@ abstract class AppLocalizations {
   /// **'Customer Sales Info'**
   String get customerSalesInformation;
 
+  /// No description provided for @statusOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get statusOnline;
+
   /// No description provided for @statusInterested.
   ///
   /// In en, this message translates to:
