@@ -1,6 +1,8 @@
 import {
   AutoResponseContentType,
-  AutoResponseExecutionStatus,
+  AutoResponseExecutionOutcome,
+  AutoResponseIntent,
+  AutoResponsePilotMode,
   AutoResponseStatus,
   AutoResponseTriggerType,
 } from "@prisma/client";
@@ -31,11 +33,20 @@ export type AutoResponseContentJson = {
   messages: AutoResponseMessageBlock[];
 };
 
+export type AutoResponseTextTriggerConfig = {
+  matcherVersion: number;
+  reviewedAliases?: string[];
+};
+
 export type CreateAutoResponseDto = {
   name: string;
   description?: string | null;
   textTemplate?: string;
   messages?: AutoResponseMessageBlock[];
+  triggerType?: AutoResponseTriggerType;
+  intent?: AutoResponseIntent | null;
+  scopeStoreId?: string | null;
+  triggerConfig?: AutoResponseTextTriggerConfig | null;
 };
 
 export type UpdateAutoResponseDto = {
@@ -44,6 +55,10 @@ export type UpdateAutoResponseDto = {
   textTemplate?: string;
   messages?: AutoResponseMessageBlock[];
   status?: AutoResponseStatus;
+  triggerType?: AutoResponseTriggerType;
+  intent?: AutoResponseIntent | null;
+  scopeStoreId?: string | null;
+  triggerConfig?: AutoResponseTextTriggerConfig | null;
 };
 
 export type AutoResponsePreviewDto = {
@@ -68,6 +83,10 @@ export type AutoResponseRuleResponseDto = {
   description: string | null;
   status: AutoResponseStatus;
   triggerType: AutoResponseTriggerType;
+  intent: AutoResponseIntent | null;
+  scopeStoreId: string | null;
+  scopeStoreExternalId: string | null;
+  triggerConfig: AutoResponseTextTriggerConfig | null;
   contentType: AutoResponseContentType;
   textTemplate: string;
   contentJson: AutoResponseContentJson | null;
@@ -137,5 +156,30 @@ export type AutoResponseUsageResponseDto = {
     templateName: string;
     templateStatus: string;
     areaCount: number;
+  }>;
+};
+
+export type AutoResponsePilotSummaryDto = {
+  mode: AutoResponsePilotMode;
+  storeExternalId: string;
+  matcherVersion: number;
+  counts: {
+    totalEligibleInboundTexts: number;
+    storeLocationMatches: number;
+    financeInfoMatches: number;
+    excluded: number;
+    ambiguous: number;
+    noMatch: number;
+    wouldSend: number;
+    sent: number;
+    failed: number;
+    duplicate: number;
+  };
+  recent: Array<{
+    intent: AutoResponseIntent | null;
+    outcome: AutoResponseExecutionOutcome | null;
+    mode: AutoResponsePilotMode | null;
+    reason: string | null;
+    createdAt: Date;
   }>;
 };

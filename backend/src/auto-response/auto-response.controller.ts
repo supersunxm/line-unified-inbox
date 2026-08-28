@@ -73,6 +73,11 @@ export class AutoResponseController {
     return this.service.uploadMedia(file, req.user!);
   }
 
+  @Get("pilot/summary")
+  async getPilotSummary() {
+    return this.service.getPilotSummary();
+  }
+
   @Get(":id")
   async getRule(@Param("id") id: string) {
     return this.service.getRule(id);

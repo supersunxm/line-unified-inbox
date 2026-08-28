@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { AutoResponseContentType, AutoResponseStatus, UserRole } from "@prisma/client";
+import { AutoResponseContentType, AutoResponseIntent, AutoResponseStatus, AutoResponseTriggerType, UserRole } from "@prisma/client";
 import { AutoResponseService } from "./auto-response.service";
 import { AuthUser } from "../auth/auth.guard";
 
@@ -326,5 +326,70 @@ describe("AutoResponseService", () => {
 
     assert.equal(preview.ready, false);
     assert.match(preview.reason || "", /Google Maps/);
+  });
+
+  it("creates an inbound-text rule only for the Robinson pilot store", async () => {
+    let createdData: any;
+    const rule = {
+      id: "rule-pilot",
+      name: "Robinson location",
+      description: null,
+      status: AutoResponseStatus.DRAFT,
+      triggerType: AutoResponseTriggerType.INBOUND_TEXT,
+      intent: AutoResponseIntent.STORE_LOCATION,
+      scopeStoreId: "store-28375",
+      triggerConfig: { matcherVersion: 1 },
+      textTemplate: "Location reply",
+      contentJson: { version: 1, messages: [{ id: "text-1", type: "TEXT", textTemplate: "Location reply" }] },
+      version: 1,
+      createdByUserId: "admin-1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastActivatedAt: null,
+      archivedAt: null,
+      scopeStore: { id: "store-28375", code: "28375", archivedAt: null, isActive: true, storeMaster: { externalStoreId: "28375" } },
+    };
+    const mockPrisma = {
+      store: {
+        findUnique: async () => ({ id: "store-28375", code: "28375", archivedAt: null, isActive: true, storeMaster: { externalStoreId: "28375" } }),
+      },
+      autoResponseRule: {
+        create: async ({ data }: any) => { createdData = data; return rule; },
+        findUnique: async () => rule,
+      },
+      richMenuTemplate: { findMany: async () => [] },
+    } as any;
+    const service = new AutoResponseService(mockPrisma);
+    const result = await service.createRule({
+      name: "Robinson location",
+      textTemplate: "Location reply",
+      triggerType: AutoResponseTriggerType.INBOUND_TEXT,
+      intent: AutoResponseIntent.STORE_LOCATION,
+      scopeStoreId: "store-28375",
+    }, testAdmin);
+    assert.equal(createdData.triggerType, AutoResponseTriggerType.INBOUND_TEXT);
+    assert.equal(createdData.intent, AutoResponseIntent.STORE_LOCATION);
+    assert.equal(createdData.scopeStoreId, "store-28375");
+    assert.equal(result.scopeStoreExternalId, "28375");
+  });
+
+  it("rejects inbound-text pilot rules outside store 28375", async () => {
+    const mockPrisma = {
+      store: {
+        findUnique: async () => ({ id: "store-other", code: "999", archivedAt: null, isActive: true, storeMaster: { externalStoreId: "999" } }),
+      },
+      autoResponseRule: { create: async () => { throw new Error("must not create"); } },
+    } as any;
+    const service = new AutoResponseService(mockPrisma);
+    await assert.rejects(
+      () => service.createRule({
+        name: "Other store",
+        textTemplate: "No",
+        triggerType: AutoResponseTriggerType.INBOUND_TEXT,
+        intent: AutoResponseIntent.FINANCE_INFO,
+        scopeStoreId: "store-other",
+      }, testAdmin),
+      BadRequestException,
+    );
   });
 });

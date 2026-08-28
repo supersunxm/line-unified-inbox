@@ -289,6 +289,22 @@ export class LineWebhookService {
         this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED", mimeType: media?.mimeType ?? null, fileSize: media?.fileSize ?? null, url: media?.processingStatus === "READY" ? `/messages/${stored.messageId}/media` : null } } });
       }
     }
+    if (message.type === "text" && "text" in message && this.autoResponseExecution) {
+      try {
+        await this.autoResponseExecution.handleWebhookInboundText({
+          text: message.text,
+          messageId: stored.messageId,
+          conversationId: conversation.id,
+          lineOfficialAccountId: oa.id,
+          replyToken: event.replyToken,
+          webhookEventId: event.webhookEventId ?? this.eventId(event),
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Inbound text auto-response evaluation failed without blocking webhook: ${error instanceof Error ? error.message : "unknown error"}`,
+        );
+      }
+    }
     if (message.type === "text") {
       try { await this.classification.analyze(conversation.id); }
       catch { this.logger.error(`Automatic classification failed for conversation ${conversation.id}`); }

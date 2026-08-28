@@ -8,7 +8,10 @@ import {
 } from "@nestjs/common";
 import {
   AutoResponseContentType,
+  AutoResponseExecutionOutcome,
+  AutoResponseIntent,
   AutoResponseStatus,
+  AutoResponseTriggerType,
   Prisma,
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -34,6 +37,8 @@ import {
   CreateAutoResponseDto,
   ResolvedAutoResponseBlock,
   UpdateAutoResponseDto,
+  AutoResponsePilotSummaryDto,
+  AutoResponseTextTriggerConfig,
 } from "./auto-response.types";
 import {
   AUTO_RESPONSE_POSTBACK_PREFIX,
@@ -42,6 +47,11 @@ import {
   normalizeAutoResponseMessages,
   validateAutoResponseMessages,
 } from "./auto-response.utils";
+import {
+  getAutoResponsePilotMode,
+  PILOT_MATCHER_VERSION,
+  PILOT_STORE_EXTERNAL_ID,
+} from "./auto-response-pilot.config";
 
 @Injectable()
 export class AutoResponseService {
@@ -52,6 +62,35 @@ export class AutoResponseService {
     @Optional() private readonly auditLog?: AuditLogService,
     @Optional() private readonly media?: MediaStorageService,
   ) {}
+
+  private async validateInboundTextRuleConfig(
+    scopeStoreId: string | null | undefined,
+    intent: AutoResponseIntent | null | undefined,
+  ) {
+    if (!scopeStoreId || !intent) {
+      throw new BadRequestException(
+        "Inbound text auto-response rules require a pilot store and intent",
+      );
+    }
+
+    const store = await this.prisma.store.findUnique({
+      where: { id: scopeStoreId },
+      include: { storeMaster: true },
+    });
+    const storeCode = store?.code?.trim() || null;
+    const externalStoreId = store?.storeMaster?.externalStoreId?.trim() || null;
+    if (
+      !store ||
+      !store.isActive ||
+      store.archivedAt ||
+      storeCode !== PILOT_STORE_EXTERNAL_ID ||
+      externalStoreId !== PILOT_STORE_EXTERNAL_ID
+    ) {
+      throw new BadRequestException(
+        `Inbound text pilot rules are restricted to store ${PILOT_STORE_EXTERNAL_ID}`,
+      );
+    }
+  }
 
   /**
    * Helper to scan all RichMenu templates and find usages for one or all rules.
@@ -318,6 +357,7 @@ export class AutoResponseService {
     const rules = await this.prisma.autoResponseRule.findMany({
       where,
       orderBy: [{ updatedAt: "desc" }],
+      include: { scopeStore: { include: { storeMaster: true } } },
     });
 
     const usageMap = await this.findRichMenuUsages();
@@ -337,6 +377,11 @@ export class AutoResponseService {
         description: r.description,
         status: r.status,
         triggerType: r.triggerType,
+        intent: r.intent ?? null,
+        scopeStoreId: r.scopeStoreId ?? null,
+        scopeStoreExternalId:
+          r.scopeStore?.storeMaster?.externalStoreId ?? r.scopeStore?.code ?? null,
+        triggerConfig: (r.triggerConfig as AutoResponseTextTriggerConfig | null) ?? null,
         contentType: this.determineContentType(messages),
         textTemplate,
         contentJson: (r.contentJson as any) || { version: 1, messages },
@@ -356,6 +401,7 @@ export class AutoResponseService {
   async getRule(id: string): Promise<AutoResponseRuleResponseDto> {
     const rule = await this.prisma.autoResponseRule.findUnique({
       where: { id },
+      include: { scopeStore: { include: { storeMaster: true } } },
     });
 
     if (!rule) {
@@ -377,6 +423,11 @@ export class AutoResponseService {
       description: rule.description,
       status: rule.status,
       triggerType: rule.triggerType,
+      intent: rule.intent ?? null,
+      scopeStoreId: rule.scopeStoreId ?? null,
+      scopeStoreExternalId:
+        rule.scopeStore?.storeMaster?.externalStoreId ?? rule.scopeStore?.code ?? null,
+      triggerConfig: (rule.triggerConfig as AutoResponseTextTriggerConfig | null) ?? null,
       contentType: this.determineContentType(messages),
       textTemplate,
       contentJson: (rule.contentJson as any) || { version: 1, messages },
@@ -433,11 +484,24 @@ export class AutoResponseService {
     const firstTextBlock = messages.find((m) => m.type === "TEXT") as any;
     const textTemplate = firstTextBlock?.textTemplate || null;
     const contentType = this.determineContentType(messages);
+    const triggerType = dto.triggerType ?? AutoResponseTriggerType.POSTBACK;
+    const intent = dto.intent ?? null;
+    const scopeStoreId = dto.scopeStoreId ?? null;
+    if (triggerType === AutoResponseTriggerType.INBOUND_TEXT) {
+      await this.validateInboundTextRuleConfig(scopeStoreId, intent);
+    }
 
     const rule = await this.prisma.autoResponseRule.create({
       data: {
         name,
         description: dto.description?.trim() || null,
+        triggerType,
+        intent,
+        scopeStoreId,
+        triggerConfig:
+          triggerType === AutoResponseTriggerType.INBOUND_TEXT
+            ? dto.triggerConfig ?? { matcherVersion: PILOT_MATCHER_VERSION }
+            : undefined,
         contentType,
         textTemplate,
         contentJson: { version: 1, messages },
@@ -480,6 +544,24 @@ export class AutoResponseService {
     }
 
     const updates: Prisma.AutoResponseRuleUpdateInput = {};
+
+    const nextTriggerType = dto.triggerType ?? existing.triggerType;
+    const nextIntent = dto.intent !== undefined ? dto.intent : existing.intent;
+    const nextScopeStoreId = dto.scopeStoreId !== undefined ? dto.scopeStoreId : existing.scopeStoreId;
+    if (nextTriggerType === AutoResponseTriggerType.INBOUND_TEXT) {
+      await this.validateInboundTextRuleConfig(nextScopeStoreId, nextIntent);
+    }
+
+    if (dto.triggerType !== undefined) updates.triggerType = dto.triggerType;
+    if (dto.intent !== undefined) updates.intent = dto.intent;
+    if (dto.scopeStoreId !== undefined) {
+      updates.scopeStore = dto.scopeStoreId === null
+        ? { disconnect: true }
+        : { connect: { id: dto.scopeStoreId } };
+    }
+    if (dto.triggerConfig !== undefined) {
+      updates.triggerConfig = dto.triggerConfig === null ? Prisma.JsonNull : dto.triggerConfig;
+    }
 
     if (dto.name !== undefined) {
       const name = dto.name?.trim();
@@ -592,6 +674,10 @@ export class AutoResponseService {
       throw new BadRequestException(validation.errors.join("; "));
     }
 
+    if (existing.triggerType === AutoResponseTriggerType.INBOUND_TEXT) {
+      await this.validateInboundTextRuleConfig(existing.scopeStoreId, existing.intent);
+    }
+
     const updated = await this.prisma.autoResponseRule.update({
       where: { id },
       data: {
@@ -700,6 +786,103 @@ export class AutoResponseService {
       ruleName: rule.name,
       usageCount: linked.length,
       linkedRichMenus: linked,
+    };
+  }
+
+  async getPilotSummary(): Promise<AutoResponsePilotSummaryDto> {
+    const scope = {
+      direction: "INBOUND" as const,
+      messageType: "TEXT" as const,
+      conversation: {
+        isQa: false,
+        store: { code: PILOT_STORE_EXTERNAL_ID, storeMaster: { externalStoreId: PILOT_STORE_EXTERNAL_ID } },
+        lineOfficialAccount: {
+          accountType: "STORE" as const,
+          store: { code: PILOT_STORE_EXTERNAL_ID, storeMaster: { externalStoreId: PILOT_STORE_EXTERNAL_ID } },
+        },
+      },
+    };
+    const executionScope = {
+      sourceMessageId: { not: null },
+      lineOfficialAccount: {
+        accountType: "STORE" as const,
+        store: { code: PILOT_STORE_EXTERNAL_ID, storeMaster: { externalStoreId: PILOT_STORE_EXTERNAL_ID } },
+      },
+    };
+    const countOutcome = (outcome: AutoResponseExecutionOutcome) =>
+      this.prisma.autoResponseExecution.count({
+        where: { ...executionScope, outcome },
+      });
+    const [
+      totalEligibleInboundTexts,
+      storeLocationMatches,
+      financeInfoMatches,
+      excluded,
+      ambiguous,
+      noMatch,
+      sent,
+      failed,
+      duplicate,
+      recent,
+    ] = await Promise.all([
+      this.prisma.message.count({ where: scope }),
+      this.prisma.autoResponseExecution.count({
+        where: {
+          ...executionScope,
+          intent: AutoResponseIntent.STORE_LOCATION,
+          outcome: { in: [AutoResponseExecutionOutcome.MATCHED_SHADOW, AutoResponseExecutionOutcome.SENT] },
+        },
+      }),
+      this.prisma.autoResponseExecution.count({
+        where: {
+          ...executionScope,
+          intent: AutoResponseIntent.FINANCE_INFO,
+          outcome: { in: [AutoResponseExecutionOutcome.MATCHED_SHADOW, AutoResponseExecutionOutcome.SENT] },
+        },
+      }),
+      countOutcome(AutoResponseExecutionOutcome.EXCLUDED),
+      countOutcome(AutoResponseExecutionOutcome.AMBIGUOUS),
+      countOutcome(AutoResponseExecutionOutcome.NO_MATCH),
+      countOutcome(AutoResponseExecutionOutcome.SENT),
+      countOutcome(AutoResponseExecutionOutcome.FAILED),
+      countOutcome(AutoResponseExecutionOutcome.DUPLICATE),
+      this.prisma.autoResponseExecution.findMany({
+        where: executionScope,
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { intent: true, outcome: true, mode: true, reason: true, createdAt: true },
+      }),
+    ]);
+
+    const wouldSend = await this.prisma.autoResponseExecution.count({
+      where: {
+        ...executionScope,
+        outcome: {
+          in: [
+            AutoResponseExecutionOutcome.MATCHED_SHADOW,
+            AutoResponseExecutionOutcome.SENT,
+          ],
+        },
+      },
+    });
+
+    return {
+      mode: getAutoResponsePilotMode(),
+      storeExternalId: PILOT_STORE_EXTERNAL_ID,
+      matcherVersion: PILOT_MATCHER_VERSION,
+      counts: {
+        totalEligibleInboundTexts,
+        storeLocationMatches,
+        financeInfoMatches,
+        excluded,
+        ambiguous,
+        noMatch,
+        wouldSend,
+        sent,
+        failed,
+        duplicate,
+      },
+      recent,
     };
   }
 
