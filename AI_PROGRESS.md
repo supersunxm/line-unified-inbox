@@ -1,6 +1,40 @@
 # AI progress
 
-## Current task: Greeting Message Manager UI Polish & LINE OA Alignment (2026-08-28) [COMPLETED]
+## Current task: Greeting Message Manager Preview & Activation UX Polish (2026-08-28) [COMPLETED]
+
+- **UX Scope & Behavior**:
+  - **Deterministic Preview Following Store Selection**:
+    - Live mobile chat preview resolves context variables based on the most recently checked store in the target table (`lastSelectedStoreOaId`).
+    - Deselecting a store falls back smoothly to the previous selected store or default sample store.
+    - Added `[ ดูตัวอย่างสำหรับ: ... ▼ ]` with `✓ อิงจากร้านที่เลือก` indicator above the preview. Manual preview dropdown selection only modifies preview without mutating assignment checkboxes.
+  - **Clear Lifecycle Status & Badges**:
+    - Visible status badge in header:
+      - `ACTIVE`: `● ใช้งานอยู่ · {count} ร้าน · v{version}`
+      - `DRAFT`: `○ แบบร่าง · ยังไม่เปิดใช้งาน · v{version}`
+      - `INACTIVE`: `○ ปิดใช้งาน · {count} ร้าน · v{version}`
+      - `ARCHIVED`: `เก็บถาวร · v{version}`
+    - Dedicated lifecycle action buttons: `[ เปิดใช้งานเทมเพลต ]` / `[ ปิดใช้งานเทมเพลต ]` / `[ จัดเก็บ ]`.
+  - **Button Copy Clarification**:
+    - Save button: `บันทึกเทมเพลต` / `Save template` / `保存模板`.
+    - Assignment button: `นำไปใช้กับ {N} ร้าน` / `Apply to {N} stores` / `应用到 {N} 家门店`.
+    - Activation button: `เปิดใช้งานเทมเพลต` / `ปิดใช้งานเทมเพลต`.
+  - **Dirty State Tracking**:
+    - Real-time comparison between form state and current saved template.
+    - Displays `● มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก` badge near the Save button. Clears immediately upon successful save.
+  - **Store Status Column ("สถานะข้อความต้อนรับ")**:
+    - Replaced ambiguous template column with informative operational status per store:
+      - Active template: `● ใช้งานอยู่` + `{name} · v{version}`
+      - Draft template: `○ ผูกเทมเพลตแล้ว แต่ยังเป็นแบบร่าง` + `{name} · v{version}`
+      - Inactive template: `○ ปิดใช้งาน` + `{name} · v{version}`
+      - Unassigned: `—` + `ไม่มีข้อความต้อนรับจากระบบนี้`
+  - **Active Template Edit Warning Modal**:
+    - Confirms: `"การแก้ไขเทมเพลตนี้จะมีผลกับ {X} สาขาที่ใช้งานอยู่ทันที สำหรับ Follow event ใหม่หลังจากบันทึก"`.
+- **Verification & Test Results**:
+  - 462 / 462 frontend unit tests passing (`npm test` in `frontend/`).
+  - Next.js Turbopack production build succeeded cleanly across 29 routes (`npm run build` in `frontend/`).
+  - `git diff --check` clean with zero whitespace or line-ending errors.
+
+## Previous task: Greeting Message Manager UI Polish & LINE OA Alignment (2026-08-28) [COMPLETED]
 
 - **UI Scope & Alignment**:
   - Redesigned `/greeting-messages` content workspace to visually and structurally match native LINE Official Account Manager.

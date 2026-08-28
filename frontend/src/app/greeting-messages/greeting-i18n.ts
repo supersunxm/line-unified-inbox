@@ -27,6 +27,7 @@ export type GreetingDict = {
   headerSubtitle: string;
   headerHelp: string;
   saveChanges: string;
+  saveTemplate: string;
   insights: string;
   templatesButton: string;
   sendingRestrictions: string;
@@ -48,12 +49,28 @@ export type GreetingDict = {
   chatList: string;
   sampleStore: string;
   sampleUser: string;
+  previewFor: string;
+  basedOnSelectedStore: string;
+  testPreviewButton: string;
+  unsavedChanges: string;
   storeAssignmentsSection: string;
   storesSummary: (active: number, ready: number, blocked: number) => string;
   manageStores: string;
   applyToAllReady: string;
+  applyToStores: (count: number) => string;
   openLineOaManager: string;
   oaManagerWarning: string;
+
+  // Status Badges & Lifecycle Actions
+  statusActiveBadge: (count: number, version: number) => string;
+  statusDraftBadge: (version: number) => string;
+  statusInactiveBadge: (count: number, version: number) => string;
+  statusArchivedBadge: (version: number) => string;
+  activateTemplate: string;
+  deactivateTemplate: string;
+  colGreetingStatus: string;
+  noGreetingAssigned: string;
+  assignedDraftNotice: string;
 
   // Editor
   editorCreateTitle: string;
@@ -173,7 +190,8 @@ const th: GreetingDict = {
   headerTitle: "ข้อความต้อนรับ",
   headerSubtitle: "สร้างข้อความที่ส่งอัตโนมัติเมื่อลูกค้าเพิ่ม LINE OA เป็นเพื่อน",
   headerHelp: "หากไม่ต้องการส่งข้อความต้อนรับ คุณสามารถปิดการใช้งานได้ที่ การตั้งค่า > การตั้งค่าการตอบกลับ",
-  saveChanges: "บันทึกการเปลี่ยนแปลง",
+  saveChanges: "บันทึกเทมเพลต",
+  saveTemplate: "บันทึกเทมเพลต",
   insights: "ข้อมูลเชิงลึก",
   templatesButton: "เทมเพลต",
   sendingRestrictions: "ข้อจำกัดการส่ง",
@@ -195,12 +213,28 @@ const th: GreetingDict = {
   chatList: "Chat list",
   sampleStore: "ร้านตัวอย่าง:",
   sampleUser: "ชื่อผู้ใช้ตัวอย่าง:",
+  previewFor: "ดูตัวอย่างสำหรับ:",
+  basedOnSelectedStore: "อิงจากร้านที่เลือก",
+  testPreviewButton: "ทดสอบตัวอย่าง",
+  unsavedChanges: "มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก",
   storeAssignmentsSection: "การใช้งานกับสาขา",
   storesSummary: (active, ready, blocked) => `ใช้งานอยู่ ${active} ร้าน • พร้อมใช้งาน ${ready} ร้าน • ข้อมูลไม่ครบ ${blocked} ร้าน`,
   manageStores: "เลือกสาขา",
   applyToAllReady: "ใช้กับทุกสาขาที่พร้อม",
+  applyToStores: (count) => `นำไปใช้กับ ${count} ร้าน`,
   openLineOaManager: "เปิด LINE Official Account Manager ↗",
   oaManagerWarning: "หากบัญชีนี้เปิด Greeting message ใน LINE Official Account Manager อยู่ ลูกค้าอาจได้รับข้อความต้อนรับซ้ำ",
+
+  // Status Badges & Lifecycle Actions
+  statusActiveBadge: (count, v) => `ใช้งานอยู่ · ${count} ร้าน · v${v}`,
+  statusDraftBadge: (v) => `แบบร่าง · ยังไม่เปิดใช้งาน · v${v}`,
+  statusInactiveBadge: (count, v) => `ปิดใช้งาน · ${count} ร้าน · v${v}`,
+  statusArchivedBadge: (v) => `เก็บถาวร · v${v}`,
+  activateTemplate: "เปิดใช้งานเทมเพลต",
+  deactivateTemplate: "ปิดใช้งานเทมเพลต",
+  colGreetingStatus: "สถานะข้อความต้อนรับ",
+  noGreetingAssigned: "ไม่มีข้อความต้อนรับจากระบบนี้",
+  assignedDraftNotice: "ผูกเทมเพลตแล้ว แต่ยังเป็นแบบร่าง",
 
   editorCreateTitle: "สร้างข้อความต้อนรับใหม่",
   editorEditTitle: "แก้ไขข้อความต้อนรับ",
@@ -242,10 +276,11 @@ const th: GreetingDict = {
   imageDimensions: (w, h, kb) => `${w} × ${h} px (${kb} KB)`,
 
   activeEditWarningTitle: "คำเตือน: กำลังแก้ไขข้อความที่เปิดใช้งานอยู่",
-  activeEditWarningMessage: (count) => `เทมเพลตนี้กำลังเปิดใช้งานและถูกผูกอยู่กับ ${count} สาขา การบันทึกจะมีผลกับการทักทายลูกค้าใหม่ทันที ยืนยันการบันทึกหรือไม่?`,
+  activeEditWarningMessage: (count) =>
+    `การแก้ไขเทมเพลตนี้จะมีผลกับ ${count} สาขาที่ใช้งานอยู่ทันที สำหรับ Follow event ใหม่หลังจากบันทึก`,
   activeEditWarningConfirm: "ยืนยันและบันทึกทันที",
   activeEditWarningCancel: "ยกเลิก",
-  saveTemplateButton: "บันทึกการเปลี่ยนแปลง",
+  saveTemplateButton: "บันทึกเทมเพลต",
   saveAndAssignButton: "บันทึกและจัดการสาขา",
   activateButton: "เปิดใช้งาน (Activate)",
   deactivateButton: "ปิดใช้งานชั่วคราว (Deactivate)",
@@ -315,7 +350,8 @@ const en: GreetingDict = {
   headerTitle: "Greeting message",
   headerSubtitle: "This message will be sent automatically to users when they add you as a friend.",
   headerHelp: "If you don't want to send a greeting message, you can disable it under Settings > 'Response settings.'",
-  saveChanges: "Save changes",
+  saveChanges: "Save template",
+  saveTemplate: "Save template",
   insights: "Insights",
   templatesButton: "Templates",
   sendingRestrictions: "Sending restrictions",
@@ -337,12 +373,28 @@ const en: GreetingDict = {
   chatList: "Chat list",
   sampleStore: "Sample store:",
   sampleUser: "Sample user:",
+  previewFor: "Preview for:",
+  basedOnSelectedStore: "Based on selected store",
+  testPreviewButton: "Test preview",
+  unsavedChanges: "Unsaved changes",
   storeAssignmentsSection: "Store Assignments",
   storesSummary: (active, ready, blocked) => `${active} assigned • ${ready} ready • ${blocked} not ready`,
   manageStores: "Select stores",
   applyToAllReady: "Apply to all ready stores",
+  applyToStores: (count) => `Apply to ${count} ${count === 1 ? "store" : "stores"}`,
   openLineOaManager: "Open LINE Official Account Manager ↗",
   oaManagerWarning: "If Greeting message is enabled in LINE Official Account Manager, customers might receive duplicate greetings.",
+
+  // Status Badges & Lifecycle Actions
+  statusActiveBadge: (count, v) => `Active · ${count} stores · v${v}`,
+  statusDraftBadge: (v) => `Draft · Not activated · v${v}`,
+  statusInactiveBadge: (count, v) => `Inactive · ${count} stores · v${v}`,
+  statusArchivedBadge: (v) => `Archived · v${v}`,
+  activateTemplate: "Activate template",
+  deactivateTemplate: "Deactivate template",
+  colGreetingStatus: "Greeting message status",
+  noGreetingAssigned: "No greeting message from this system",
+  assignedDraftNotice: "Assigned, but template is in draft",
 
   editorCreateTitle: "Create Greeting Message",
   editorEditTitle: "Edit Greeting Message",
@@ -384,10 +436,11 @@ const en: GreetingDict = {
   imageDimensions: (w, h, kb) => `${w} × ${h} px (${kb} KB)`,
 
   activeEditWarningTitle: "Warning: Editing Active Template",
-  activeEditWarningMessage: (count) => `This template is active and currently assigned to ${count} stores. Saving will immediately affect new customer greetings. Confirm?`,
+  activeEditWarningMessage: (count) =>
+    `Saving this active template will immediately affect ${count} assigned stores for new follow events.`,
   activeEditWarningConfirm: "Confirm and Save",
   activeEditWarningCancel: "Cancel",
-  saveTemplateButton: "Save changes",
+  saveTemplateButton: "Save template",
   saveAndAssignButton: "Save and Manage Stores",
   activateButton: "Activate",
   deactivateButton: "Deactivate",
@@ -457,7 +510,8 @@ const zh: GreetingDict = {
   headerTitle: "问候消息",
   headerSubtitle: "当用户添加您为好友时自动发送此消息。",
   headerHelp: "如果您不想发送问候消息，可以在 设置 > 回复设置 中禁用它。",
-  saveChanges: "保存更改",
+  saveChanges: "保存模板",
+  saveTemplate: "保存模板",
   insights: "数据洞察",
   templatesButton: "模板",
   sendingRestrictions: "发送限制",
@@ -479,12 +533,28 @@ const zh: GreetingDict = {
   chatList: "Chat list",
   sampleStore: "示例门店:",
   sampleUser: "示例用户:",
+  previewFor: "预览针对:",
+  basedOnSelectedStore: "基于已选门店",
+  testPreviewButton: "测试预览",
+  unsavedChanges: "有未保存的更改",
   storeAssignmentsSection: "门店关联应用",
   storesSummary: (active, ready, blocked) => `已关联 ${active} 家 • 准备就绪 ${ready} 家 • 未就绪 ${blocked} 家`,
   manageStores: "选择门店",
   applyToAllReady: "应用于所有就绪门店",
+  applyToStores: (count) => `应用到 ${count} 家门店`,
   openLineOaManager: "打开 LINE 官方账号管理器 ↗",
   oaManagerWarning: "如果在此账号的 LINE 官方账号管理器中启用了问候消息，客户可能会收到重复的问候消息。",
+
+  // Status Badges & Lifecycle Actions
+  statusActiveBadge: (count, v) => `已启用 · ${count} 家门店 · v${v}`,
+  statusDraftBadge: (v) => `草稿 · 未启用 · v${v}`,
+  statusInactiveBadge: (count, v) => `已停用 · ${count} 家门店 · v${v}`,
+  statusArchivedBadge: (v) => `已归档 · v${v}`,
+  activateTemplate: "启用模板",
+  deactivateTemplate: "停用模板",
+  colGreetingStatus: "问候消息状态",
+  noGreetingAssigned: "此系统暂无问候消息",
+  assignedDraftNotice: "已关联，但模板仍为草稿",
 
   editorCreateTitle: "创建问候消息",
   editorEditTitle: "编辑问候消息",
@@ -526,10 +596,11 @@ const zh: GreetingDict = {
   imageDimensions: (w, h, kb) => `${w} × ${h} px (${kb} KB)`,
 
   activeEditWarningTitle: "警告：正在编辑已启用的模板",
-  activeEditWarningMessage: (count) => `此模板已启用并关联了 ${count} 家门店。保存将立即影响新客户问候。确认保存？`,
+  activeEditWarningMessage: (count) =>
+    `修改此已启用的模板将在保存后立即对关联的 ${count} 家门店的新关注事件生效。`,
   activeEditWarningConfirm: "确认并保存",
   activeEditWarningCancel: "取消",
-  saveTemplateButton: "保存更改",
+  saveTemplateButton: "保存模板",
   saveAndAssignButton: "保存并管理门店",
   activateButton: "启用",
   deactivateButton: "停用",
