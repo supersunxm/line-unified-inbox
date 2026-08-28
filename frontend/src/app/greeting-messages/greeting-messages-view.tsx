@@ -32,7 +32,7 @@ export function GreetingMessagesView({
       return {
         template: "Template",
         createNew: "+ Create new",
-        storeUsage: "Store usage",
+        storeUsage: "Target stores",
         assigned: "Assigned",
         ready: "Ready",
         blocked: "Incomplete",
@@ -77,7 +77,7 @@ export function GreetingMessagesView({
       return {
         template: "模板",
         createNew: "+ 新建",
-        storeUsage: "门店使用范围",
+        storeUsage: "目标门店",
         assigned: "正在使用",
         ready: "可使用",
         blocked: "资料不完整",
@@ -121,7 +121,7 @@ export function GreetingMessagesView({
     return {
       template: "เทมเพลต",
       createNew: "+ สร้างใหม่",
-      storeUsage: "การใช้งานกับสาขา",
+      storeUsage: "ร้านเป้าหมาย",
       assigned: "ใช้งานอยู่",
       ready: "พร้อมใช้งาน",
       blocked: "ข้อมูลไม่ครบ",
@@ -183,7 +183,6 @@ export function GreetingMessagesView({
   const [saving, setSaving] = useState(false);
   const [showActiveEditModal, setShowActiveEditModal] = useState(false);
 
-  const [showStoreSection, setShowStoreSection] = useState(false);
   const [readinessData, setReadinessData] = useState<GreetingReadinessResponse | null>(null);
   const [selectedStoreOaIds, setSelectedStoreOaIds] = useState<string[]>([]);
   const [savingAssignments, setSavingAssignments] = useState(false);
@@ -367,15 +366,6 @@ export function GreetingMessagesView({
         .filter((store) => store.readinessStatus === "READY")
         .map((store) => store.lineOfficialAccountId),
     );
-  };
-
-  const handleOpenStoreTargeting = () => {
-    setShowStoreSection(true);
-    window.setTimeout(() => {
-      document
-        .getElementById("greeting-store-targeting")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
   };
 
   const handleToggleStoreSelect = (lineOfficialAccountId: string) => {
@@ -646,57 +636,214 @@ export function GreetingMessagesView({
         </div>
 
         <section
-          data-testid="greeting-store-quick-targeting"
-          className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4"
+          id="greeting-store-targeting"
+          data-testid="greeting-store-targeting"
+          className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-gray-900">🏬 {ui.storeUsage}</h2>
-                {currentTemplate && (
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 ring-1 ring-emerald-200">
-                    {currentTemplate.name}
-                  </span>
-                )}
-              </div>
+              <h2 className="text-base font-bold">{ui.storeUsage}</h2>
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">
-                  {ui.assigned} {assignedCount}
-                </span>
-                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 ring-1 ring-gray-200">
-                  {ui.ready} {readyCount}
-                </span>
-                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
-                  {ui.blocked} {blockedCount}
-                </span>
-                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-200">
-                  {ui.selected} {selectedStoreOaIds.length}
-                </span>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{ui.assigned} {assignedCount}</span>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{ui.ready} {readyCount}</span>
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{ui.blocked} {blockedCount}</span>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{ui.selected} {selectedStoreOaIds.length}</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  handleSelectAllReadyStores();
-                  handleOpenStoreTargeting();
-                }}
-                disabled={!currentTemplate || readyCount === 0}
-                className="rounded border border-[#06c755] bg-white px-3.5 py-2 text-xs font-semibold text-[#06c755] hover:bg-emerald-50 disabled:opacity-40"
-              >
-                {ui.selectAllReady}
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenStoreTargeting}
-                disabled={!currentTemplate}
-                className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-40"
-              >
-                {ui.manageStores}
-              </button>
-            </div>
+            {currentTemplate && readinessData && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-gray-500">{ui.selected} <strong className="text-gray-900">{selectedStoreOaIds.length}</strong></span>
+                <span className="text-gray-300">|</span>
+                <button
+                  type="button"
+                  onClick={handleSelectAllReadyStores}
+                  disabled={readyCount === 0}
+                  className="font-semibold text-[#059669] hover:underline disabled:opacity-40"
+                >
+                  {ui.selectAllReady}
+                </button>
+                <span className="text-gray-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStoreOaIds([])}
+                  className="font-medium text-gray-600 hover:underline"
+                >
+                  {ui.clearSelection}
+                </button>
+              </div>
+            )}
           </div>
+
+          {!currentTemplate && (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
+              {t.storeAssignmentDesc}
+            </div>
+          )}
+
+          {currentTemplate && readinessData && (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="grid gap-3 border-b border-gray-200 p-4 lg:grid-cols-[minmax(260px,1fr)_200px_170px_auto] lg:items-center">
+                <input
+                  type="search"
+                  value={storeSearch}
+                  onChange={(event) => setStoreSearch(event.target.value)}
+                  placeholder={ui.searchStores}
+                  className="h-9 rounded border border-gray-300 px-3 text-xs outline-none focus:border-[#06c755]"
+                />
+                <select
+                  value={storeProvinceFilter}
+                  onChange={(event) => setStoreProvinceFilter(event.target.value)}
+                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"
+                >
+                  <option value="ALL">{ui.allProvinces}</option>
+                  {storeProvinces.map((province) => (
+                    <option key={province} value={province}>{province}</option>
+                  ))}
+                </select>
+                <div className="inline-flex h-9 overflow-hidden rounded border border-gray-300 bg-white">
+                  {([
+                    ["ALL", ui.allStatuses],
+                    ["READY", ui.readyOnly],
+                    ["BLOCKED", ui.blockedOnly],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setStoreReadinessFilter(value)}
+                      className={`px-3 text-xs font-medium ${
+                        storeReadinessFilter === value
+                          ? "bg-gray-100 text-gray-900"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-right text-xs text-gray-500">{ui.resultCount(filteredStores.length)}</div>
+              </div>
+
+              <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <span className="font-medium text-gray-700">{ui.selected} {selectedStoreOaIds.length}</span>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    onClick={handleSelectFilteredReadyStores}
+                    className="font-semibold text-[#059669] hover:underline"
+                  >
+                    {ui.selectFilteredReady}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllReadyStores}
+                    className="font-semibold text-[#059669] hover:underline"
+                  >
+                    {ui.selectAllReady}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStoreOaIds([])}
+                    className="font-medium text-gray-600 hover:underline"
+                  >
+                    {ui.clearSelection}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveStoreAssignments()}
+                  disabled={savingAssignments}
+                  className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"
+                >
+                  {savingAssignments ? ui.savingAssignments : ui.saveAssignments(selectedStoreOaIds.length)}
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] border-collapse text-left text-xs">
+                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="w-12 px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={allCurrentPageReadySelected}
+                          onChange={handleToggleCurrentPageReady}
+                          aria-label={ui.selectPage}
+                          className="h-4 w-4 accent-[#06c755]"
+                        />
+                      </th>
+                      <th className="px-4 py-3">{ui.storeCode}</th>
+                      <th className="px-4 py-3">{ui.storeName}</th>
+                      <th className="px-4 py-3">{ui.lineOa}</th>
+                      <th className="px-4 py-3">{ui.province}</th>
+                      <th className="px-4 py-3">{ui.readiness}</th>
+                      <th className="px-4 py-3">{ui.currentGreeting}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {paginatedStores.map((store) => {
+                      const selected = selectedStoreOaIds.includes(store.lineOfficialAccountId);
+                      const ready = store.readinessStatus === "READY";
+                      const disabled = !ready && !selected;
+                      return (
+                        <tr key={store.lineOfficialAccountId} className={selected ? "bg-emerald-50/50" : "hover:bg-gray-50"}>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              disabled={disabled}
+                              onChange={() => handleToggleStoreSelect(store.lineOfficialAccountId)}
+                              className="h-4 w-4 accent-[#06c755] disabled:opacity-30"
+                            />
+                          </td>
+                          <td className="px-4 py-3 font-mono text-gray-500">{store.storeCode || "—"}</td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{store.storeName}</td>
+                          <td className="px-4 py-3 text-gray-600">{store.lineOfficialAccountName || "—"}</td>
+                          <td className="px-4 py-3 text-gray-600">{store.province || "—"}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                              {ready ? ui.ready : ui.blocked}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {store.currentTemplateName || ui.noGreeting}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {paginatedStores.length === 0 && (
+                <div className="p-10 text-center text-xs text-gray-500">{ui.resultCount(0)}</div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-gray-500">{ui.pageSummary(pageFrom, pageTo, filteredStores.length)}</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={storePage <= 1}
+                    onClick={() => setStorePage((page) => Math.max(1, page - 1))}
+                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
+                  >
+                    {ui.previous}
+                  </button>
+                  <span className="min-w-24 text-center text-xs text-gray-600">{ui.page(storePage, totalStorePages)}</span>
+                  <button
+                    type="button"
+                    disabled={storePage >= totalStorePages}
+                    onClick={() => setStorePage((page) => Math.min(totalStorePages, page + 1))}
+                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
+                  >
+                    {ui.next}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
@@ -843,191 +990,7 @@ export function GreetingMessagesView({
           </section>
         </form>
 
-        <section
-          id="greeting-store-targeting"
-          className="scroll-mt-24 space-y-4 border-t border-gray-200 pb-12 pt-8"
-        >
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <h2 className="text-base font-bold">{ui.storeUsage}</h2>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{ui.assigned} {assignedCount}</span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{ui.ready} {readyCount}</span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{ui.blocked} {blockedCount}</span>
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{ui.selected} {selectedStoreOaIds.length}</span>
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleSelectAllReadyStores}
-                disabled={!currentTemplate || readyCount === 0}
-                className="rounded border border-[#06c755] bg-white px-3.5 py-2 text-xs font-semibold text-[#06c755] hover:bg-emerald-50 disabled:opacity-40"
-              >
-                {ui.selectAllReady}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowStoreSection((value) => !value)}
-                disabled={!currentTemplate}
-                className="rounded bg-[#06c755] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-40"
-              >
-                {showStoreSection ? ui.hideStores : ui.manageStores}
-              </button>
-            </div>
-          </div>
-
-          {!currentTemplate && (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
-              {t.storeAssignmentDesc}
-            </div>
-          )}
-
-          {showStoreSection && currentTemplate && readinessData && (
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-              <div className="grid gap-3 border-b border-gray-200 p-4 lg:grid-cols-[minmax(260px,1fr)_200px_170px_auto] lg:items-center">
-                <input
-                  type="search"
-                  value={storeSearch}
-                  onChange={(event) => setStoreSearch(event.target.value)}
-                  placeholder={ui.searchStores}
-                  className="h-9 rounded border border-gray-300 px-3 text-xs outline-none focus:border-[#06c755]"
-                />
-                <select
-                  value={storeProvinceFilter}
-                  onChange={(event) => setStoreProvinceFilter(event.target.value)}
-                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"
-                >
-                  <option value="ALL">{ui.allProvinces}</option>
-                  {storeProvinces.map((province) => (
-                    <option key={province} value={province}>{province}</option>
-                  ))}
-                </select>
-                <select
-                  value={storeReadinessFilter}
-                  onChange={(event) => setStoreReadinessFilter(event.target.value as ReadinessFilter)}
-                  className="h-9 rounded border border-gray-300 bg-white px-3 text-xs"
-                >
-                  <option value="ALL">{ui.allStatuses}</option>
-                  <option value="READY">{ui.readyOnly}</option>
-                  <option value="BLOCKED">{ui.blockedOnly}</option>
-                </select>
-                <div className="text-right text-xs text-gray-500">{ui.resultCount(filteredStores.length)}</div>
-              </div>
-
-              <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSelectFilteredReadyStores}
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                  >
-                    {ui.selectFilteredReady}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStoreOaIds([])}
-                    className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
-                  >
-                    {ui.clearSelection}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveStoreAssignments()}
-                  disabled={savingAssignments}
-                  className="rounded bg-[#06c755] px-4 py-2 text-xs font-semibold text-white hover:bg-[#05b34c] disabled:opacity-50"
-                >
-                  {savingAssignments ? ui.savingAssignments : ui.saveAssignments(selectedStoreOaIds.length)}
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] border-collapse text-left text-xs">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="w-12 px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={allCurrentPageReadySelected}
-                          onChange={handleToggleCurrentPageReady}
-                          aria-label={ui.selectPage}
-                          className="h-4 w-4 accent-[#06c755]"
-                        />
-                      </th>
-                      <th className="px-4 py-3">{ui.storeCode}</th>
-                      <th className="px-4 py-3">{ui.storeName}</th>
-                      <th className="px-4 py-3">{ui.lineOa}</th>
-                      <th className="px-4 py-3">{ui.province}</th>
-                      <th className="px-4 py-3">{ui.readiness}</th>
-                      <th className="px-4 py-3">{ui.currentGreeting}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {paginatedStores.map((store) => {
-                      const selected = selectedStoreOaIds.includes(store.lineOfficialAccountId);
-                      const ready = store.readinessStatus === "READY";
-                      const disabled = !ready && !selected;
-                      return (
-                        <tr key={store.lineOfficialAccountId} className={selected ? "bg-emerald-50/50" : "hover:bg-gray-50"}>
-                          <td className="px-4 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              disabled={disabled}
-                              onChange={() => handleToggleStoreSelect(store.lineOfficialAccountId)}
-                              className="h-4 w-4 accent-[#06c755] disabled:opacity-30"
-                            />
-                          </td>
-                          <td className="px-4 py-3 font-mono text-gray-500">{store.storeCode || "—"}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">{store.storeName}</td>
-                          <td className="px-4 py-3 text-gray-600">{store.lineOfficialAccountName || "—"}</td>
-                          <td className="px-4 py-3 text-gray-600">{store.province || "—"}</td>
-                          <td className="px-4 py-3">
-                            <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                              {ready ? ui.ready : ui.blocked}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {store.currentTemplateName || ui.noGreeting}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {paginatedStores.length === 0 && (
-                <div className="p-10 text-center text-xs text-gray-500">{ui.resultCount(0)}</div>
-              )}
-
-              <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-gray-500">{ui.pageSummary(pageFrom, pageTo, filteredStores.length)}</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={storePage <= 1}
-                    onClick={() => setStorePage((page) => Math.max(1, page - 1))}
-                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
-                  >
-                    {ui.previous}
-                  </button>
-                  <span className="min-w-24 text-center text-xs text-gray-600">{ui.page(storePage, totalStorePages)}</span>
-                  <button
-                    type="button"
-                    disabled={storePage >= totalStorePages}
-                    onClick={() => setStorePage((page) => Math.min(totalStorePages, page + 1))}
-                    className="rounded border border-gray-300 px-3 py-1.5 text-xs disabled:opacity-30"
-                  >
-                    {ui.next}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
       </div>
 
       {showActiveEditModal && currentTemplate && (
