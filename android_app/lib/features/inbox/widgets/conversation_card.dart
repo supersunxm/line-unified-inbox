@@ -25,9 +25,22 @@ class ConversationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          child: hqLayout
-              ? _buildHqLayout(context)
-              : _buildStoreLayout(context),
+          child: Stack(
+            children: [
+              hqLayout ? _buildHqLayout(context) : _buildStoreLayout(context),
+              if (conversation.unreadCount > 0)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: ExcludeSemantics(
+                    child: Opacity(
+                      opacity: 0,
+                      child: UnreadBadge(count: conversation.unreadCount),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
