@@ -149,6 +149,8 @@ export function MobileChatsApp() {
   const [summary, setSummary] = useState({ notReplied: 0, notifiedBm: 0, replied: 0 });
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [statusActionError, setStatusActionError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ApiConversation | null>(null);
   const [messages, setMessages] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
   const [chatLoading, setChatLoading] = useState(false);
@@ -193,6 +195,7 @@ export function MobileChatsApp() {
     try {
       const result = await api.bmReplyStatusSummary();
       setSummary(result.overview);
+      window.dispatchEvent(new Event("bm-reply-status-summary-refresh"));
     } catch { /* list remains usable without summary */ }
   }, []);
 
@@ -380,6 +383,28 @@ export function MobileChatsApp() {
     }
   }, [refreshSummary, selected, user]);
 
+  const markConversationReplied = useCallback(async (conversation: ApiConversation) => {
+    if (!user || user.role === "VIEWER" || conversation.bmReplyStatus === "REPLIED" || statusUpdatingId) return;
+    const previous = conversation.bmReplyStatus;
+    setStatusUpdatingId(conversation.id);
+    setStatusActionError(null);
+    setConversations((current) => current.map((item) => item.id === conversation.id ? { ...item, bmReplyStatus: "REPLIED" } : item));
+    setSelected((current) => current?.id === conversation.id ? { ...current, bmReplyStatus: "REPLIED" } : current);
+    try {
+      const response = await api.updateBmReplyStatus(conversation.id, "REPLIED");
+      setConversations((current) => current.map((item) => item.id === conversation.id ? response.conversation : item));
+      setSelected((current) => current?.id === conversation.id ? response.conversation : current);
+      await refreshSummary();
+      if (status === "NOT_REPLIED" || status === "NOTIFIED_BM") await loadList();
+    } catch (error) {
+      setConversations((current) => current.map((item) => item.id === conversation.id ? { ...item, bmReplyStatus: previous } : item));
+      setSelected((current) => current?.id === conversation.id ? { ...current, bmReplyStatus: previous } : current);
+      setStatusActionError(error instanceof Error ? error.message : "อัปเดตสถานะเป็นตอบแล้วไม่สำเร็จ");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  }, [loadList, refreshSummary, status, statusUpdatingId, user]);
+
   const openManager = useCallback(async () => {
     if (!selected) return;
     const result = await openLineOaManager({
@@ -448,6 +473,11 @@ export function MobileChatsApp() {
           </header>
 
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--app-surface)]">
+            {statusActionError && (
+              <div className="border-b border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-950/50 dark:bg-red-950/30 dark:text-red-200">
+                {statusActionError}
+              </div>
+            )}
             {listLoading && conversations.length === 0 ? (
               <div className="space-y-0 divide-y divide-[var(--app-border-subtle)]">
                 {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-24 animate-pulse bg-[var(--app-surface-subtle)]/40" />)}
@@ -459,26 +489,39 @@ export function MobileChatsApp() {
             ) : (
               <div className="divide-y divide-[var(--app-border-subtle)]">
                 {conversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => void loadConversation(conversation.id, conversation, true)}
-                    className="flex w-full items-start gap-3 px-3 py-3 text-left active:bg-[var(--app-surface-hover)]"
-                  >
-                    <Avatar conversation={conversation} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-[15px] font-bold">{conversation.customer.displayName}</p>
-                        <span className="shrink-0 text-[11px] text-[var(--app-text-tertiary)]">{formatRelativeTime(conversation.latestMessageAt, "th")}</span>
+                  <div key={conversation.id} className="flex w-full items-stretch gap-2 px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void loadConversation(conversation.id, conversation, true)}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left active:opacity-70"
+                    >
+                      <Avatar conversation={conversation} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-[15px] font-bold">{conversation.customer.displayName}</p>
+                          <span className="shrink-0 text-[11px] text-[var(--app-text-tertiary)]">{formatRelativeTime(conversation.latestMessageAt, "th")}</span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--app-text-secondary)]">{previewText(conversation)}</p>
+                        <div className="mt-2 flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
+                          {conversation.priority === "HIGH" || conversation.priority === "CRITICAL" ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">สำคัญ</span> : null}
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(conversation.bmReplyStatus)}`}>{statusLabels[conversation.bmReplyStatus]}</span>
+                        </div>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--app-text-secondary)]">{previewText(conversation)}</p>
-                      <div className="mt-2 flex min-w-0 items-center gap-1.5">
-                        <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
-                        {conversation.priority === "HIGH" || conversation.priority === "CRITICAL" ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">สำคัญ</span> : null}
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(conversation.bmReplyStatus)}`}>{statusLabels[conversation.bmReplyStatus]}</span>
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    {conversation.bmReplyStatus !== "REPLIED" && user.role !== "VIEWER" ? (
+                      <button
+                        data-mobile-mark-replied
+                        type="button"
+                        onClick={() => void markConversationReplied(conversation)}
+                        disabled={statusUpdatingId !== null}
+                        aria-label={`ทำเครื่องหมาย ${conversation.customer.displayName} ว่าตอบแล้ว`}
+                        className="mt-auto shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 active:bg-emerald-100 disabled:opacity-50 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                      >
+                        {statusUpdatingId === conversation.id ? "..." : "✓ ตอบแล้ว"}
+                      </button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}

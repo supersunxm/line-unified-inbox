@@ -77,14 +77,19 @@ function MobileChatFiltersBridge() {
 
   useEffect(() => {
     let active = true;
-    void api
-      .bmReplyStatusSummary()
-      .then((value) => {
-        if (active) setSummary(value);
-      })
-      .catch(() => undefined);
+    const refresh = () => {
+      void api
+        .bmReplyStatusSummary()
+        .then((value) => {
+          if (active) setSummary(value);
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener("bm-reply-status-summary-refresh", refresh);
     return () => {
       active = false;
+      window.removeEventListener("bm-reply-status-summary-refresh", refresh);
     };
   }, []);
 
