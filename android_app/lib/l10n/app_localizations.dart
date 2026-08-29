@@ -302,7 +302,7 @@ abstract class AppLocalizations {
   /// No description provided for @sentASticker.
   ///
   /// In en, this message translates to:
-  /// **'Sent a sticker'**
+  /// **'Sent a LINE sticker'**
   String get sentASticker;
 
   /// No description provided for @sentAFile.

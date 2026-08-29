@@ -59,6 +59,59 @@ void test("profile fetch rejection cannot block inbound customer text storage", 
   assert.equal(profileAttempted, true);
 });
 
+void test("sticker webhook preserves LINE presentation metadata in Message.rawPayload", async () => {
+  let storedData: Record<string, unknown> | undefined;
+  const transactionClient = {
+    conversation: { create: () => Promise.resolve({ id: "conversation-sticker", storeId: "store-1", followUpStatus: "FOLLOW_UP" }) },
+    message: { create: ({ data }: { data: Record<string, unknown> }) => { storedData = data; return Promise.resolve({ id: "stored-sticker" }); } },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-1", storeId: "store-1", store: { id: "store-1" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "customer-1", displayName: "LINE Customer" }) },
+    conversation: { findFirst: () => Promise.resolve(null) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+  const service = new LineWebhookService(
+    prisma,
+    { enabled: true } as LineWebhookConfig,
+    {} as CredentialEncryptionService,
+    {} as ClassificationService,
+    { refresh: () => Promise.resolve({}) } as unknown as LineProfileService,
+    {} as LineImageService,
+  );
+
+  await service.accept({
+    events: [{
+      type: "message",
+      webhookEventId: "event-sticker",
+      timestamp: Date.now(),
+      source: { type: "user", userId: "line-user-1" },
+      message: {
+        type: "sticker",
+        id: "line-sticker-1",
+        packageId: "11537",
+        stickerId: "52002738",
+        stickerResourceType: "ANIMATION",
+        keywords: ["ขอบคุณ", "thanks"],
+        text: "ขอบคุณครับ",
+      },
+    }],
+  }, "oa-1");
+
+  assert.equal(storedData?.messageType, "STICKER");
+  assert.equal(storedData?.originalText, "ส่งสติกเกอร์ LINE");
+  assert.deepEqual(storedData?.rawPayload, {
+    type: "sticker",
+    packageId: "11537",
+    stickerId: "52002738",
+    stickerResourceType: "ANIMATION",
+    keywords: ["ขอบคุณ", "thanks"],
+    text: "ขอบคุณครับ",
+  });
+});
+
 void test("image webhook creates pending media and invokes image processing without failing acknowledgement", async () => {
   let mediaData: { messageId: string; providerMessageId: string; mediaType: string } | undefined;
   let processed: string[] | undefined;

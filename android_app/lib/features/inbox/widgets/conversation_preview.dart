@@ -59,6 +59,8 @@ String localizedConversationPreview(BuildContext context, String? preview) {
     displayPreview = localizations.sentAnImage;
   } else if (displayPreview == 'Sent a video') {
     displayPreview = localizations.sentAVideo;
+  } else if (displayPreview == 'Sent a LINE sticker') {
+    displayPreview = localizations.sentASticker;
   }
   if (outbound) displayPreview = '${localizations.you}: $displayPreview';
   return displayPreview;

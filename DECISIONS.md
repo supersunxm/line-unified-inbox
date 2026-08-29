@@ -1443,3 +1443,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Image saving uses a narrow `click.lineoppo.chat/media_save` bridge. Android 10+ writes to MediaStore with `IS_PENDING` under the app's Pictures folder; Android 9 and below use the existing legacy permission only when required. No broad modern storage permission or new package is introduced.
 - Text links are rendered by a small testable widget and launched only with `LaunchMode.externalApplication`; malformed or unavailable links show a recoverable localized message. Existing non-link text remains ordinary message content.
 - Customer sales summaries and avatars are additive response fields. Existing Web contracts, operational reply-status behavior, Main OA isolation, authentication/session behavior, product master data, and the Auto Reply pilot remain unchanged.
+
+# LINE sticker presentation boundary (2026-08-29)
+
+- Reuse `Message.rawPayload` for the official inbound LINE sticker subset (`packageId`, `stickerId`, `stickerResourceType`, optional `keywords`, optional message-sticker `text`). This is additive JSON persistence and requires no schema migration; no IDs are mapped to meanings or used to construct an image URL.
+- Client APIs expose only `{ text, keywords }` as presentation metadata and omit the raw payload and sticker IDs. Explicit sticker `text` wins, then the first non-empty normalized keyword; missing metadata renders only the localized LINE sticker label.
+- Sticker display is selected by persisted `messageType === STICKER`, so old rows containing the former generic placeholder remain readable without data rewriting. The same safe contract is carried in realtime events so Web and Android do not require a reload.
+- Auto Reply evaluation remains text-only, outbound LINE sending is untouched, and image/video/file paths remain separate. The Android version advances from released `1.1.5+25` to the next build `1.1.6+26` without publishing release metadata or an APK in this feature PR.

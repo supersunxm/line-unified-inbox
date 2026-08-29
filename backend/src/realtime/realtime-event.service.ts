@@ -13,6 +13,7 @@ export type RealtimeEvent = {
     text: string;
     sentAt: string;
     sender?: { userId: string | null; displayName: string } | null;
+    sticker?: { text: string | null; keywords: string[] } | null;
     media: null | { processingStatus: string; mimeType?: string | null; fileSize?: number | null; url?: string | null };
   };
   conversation?: {

@@ -492,9 +492,11 @@ String? conversationMessagePreview({
       ? 'Sent an image'
       : normalizedType == 'VIDEO'
           ? 'Sent a video'
-          : normalizedText?.isNotEmpty == true
-              ? normalizedText!
-              : null;
+          : normalizedType == 'STICKER'
+              ? 'Sent a LINE sticker'
+              : normalizedText?.isNotEmpty == true
+                  ? normalizedText!
+                  : null;
   if (content == null) return null;
   return direction?.toUpperCase() == 'OUTBOUND' ? 'You: $content' : content;
 }
@@ -507,6 +509,7 @@ class ChatMessage {
       required this.messageType,
       required this.sentAt,
       this.sender,
+      this.sticker,
       this.media,
       this.idempotencyKey});
   final String id;
@@ -515,6 +518,7 @@ class ChatMessage {
   final String messageType;
   final DateTime sentAt;
   final MessageSender? sender;
+  final StickerPresentation? sticker;
   final ChatMedia? media;
   final String? idempotencyKey;
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -524,6 +528,8 @@ class ChatMessage {
       messageType: json['messageType'] as String,
       sentAt: DateTime.parse(json['sentAt'] as String),
       sender: MessageSender.fromJson(json['sender'] as Map<String, dynamic>?),
+      sticker: StickerPresentation.fromJson(
+          json['sticker'] as Map<String, dynamic>?),
       media: ChatMedia.fromJson(json['media'] as Map<String, dynamic>?),
       idempotencyKey: json['idempotencyKey'] is String
           ? json['idempotencyKey'] as String
@@ -531,6 +537,35 @@ class ChatMessage {
                   (json['externalMessageId'] as String).startsWith('outbound:')
               ? (json['externalMessageId'] as String).substring(9)
               : null);
+}
+
+class StickerPresentation {
+  const StickerPresentation({this.text, this.keywords = const []});
+
+  final String? text;
+  final List<String> keywords;
+
+  String? get firstUsefulText {
+    final normalizedText = text?.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalizedText?.isNotEmpty == true) return normalizedText;
+    for (final keyword in keywords) {
+      final normalized = keyword.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (normalized.isNotEmpty) return normalized;
+    }
+    return null;
+  }
+
+  static StickerPresentation? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return StickerPresentation(
+      text: json['text'] is String ? json['text'] as String : null,
+      keywords: json['keywords'] is List
+          ? (json['keywords'] as List)
+              .whereType<String>()
+              .toList(growable: false)
+          : const [],
+    );
+  }
 }
 
 class MessageSender {

@@ -92,6 +92,7 @@ export type ApiConversation = {
     sentAt: string;
     fileName: string | null;
     sender: { userId: string | null; displayName: string } | null;
+    sticker?: { text: string | null; keywords: string[] } | null;
     media: { processingStatus: "PENDING" | "READY" | "FAILED" | "SKIPPED"; mimeType: string | null; fileSize: number | null; url: string | null } | null;
     latitude: number | null;
     longitude: number | null;

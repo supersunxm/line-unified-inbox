@@ -112,7 +112,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sentAVideo => '发送视频';
 
   @override
-  String get sentASticker => '发送了贴纸';
+  String get sentASticker => '发送了 LINE 贴纸';
 
   @override
   String get sentAFile => '发送了文件';
@@ -1040,7 +1040,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get sentAVideo => '发送视频';
 
   @override
-  String get sentASticker => '发送了贴纸';
+  String get sentASticker => '发送了 LINE 贴纸';
 
   @override
   String get sentAFile => '发送了文件';

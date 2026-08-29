@@ -112,7 +112,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get sentAVideo => 'ส่งวิดีโอ';
 
   @override
-  String get sentASticker => 'ส่งสติกเกอร์';
+  String get sentASticker => 'ส่งสติกเกอร์ LINE';
 
   @override
   String get sentAFile => 'ส่งไฟล์';

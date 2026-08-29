@@ -247,7 +247,7 @@ void main() {
         localizations: AppLocalizationsZhCn(),
         messageType: 'STICKER',
       ),
-      '发送了贴纸',
+      '发送了 LINE 贴纸',
     );
   });
 
