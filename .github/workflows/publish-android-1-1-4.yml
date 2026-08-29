@@ -1,0 +1,168 @@
+name: Publish Android 1.1.4
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-android-1-1-4.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Download verified production artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9710386471/zip" \
+            -o /tmp/android-1.1.4.zip
+          rm -rf /tmp/android-1.1.4
+          mkdir -p /tmp/android-1.1.4
+          unzip -q /tmp/android-1.1.4.zip -d /tmp/android-1.1.4
+          APK="/tmp/android-1.1.4/oppo-line-oa-chat-v1.1.4-production.apk"
+          test -f "$APK"
+          echo "83e5b99636e285743432e3dd54687ba985bc8675f17ec364b0362da05e04e2af  $APK" | sha256sum -c -
+          test "$(stat -c%s "$APK")" = "59786382"
+
+      - name: Publish APK and release metadata
+        run: |
+          set -euo pipefail
+          APK="/tmp/android-1.1.4/oppo-line-oa-chat-v1.1.4-production.apk"
+          cp "$APK" frontend/public/downloads/oppo-line-oa-chat-v1.1.4-production.apk
+          mkdir -p backend/prisma/migrations/20260829131000_release_android_1_1_4
+          cat > backend/prisma/migrations/20260829131000_release_android_1_1_4/migration.sql <<'SQL'
+          INSERT INTO "AppRelease" (
+            "id",
+            "platform",
+            "version",
+            "buildNumber",
+            "minimumSupportedVersion",
+            "minimumSupportedBuildNumber",
+            "forceUpdate",
+            "apkUrl",
+            "apkSize",
+            "sha256",
+            "releaseNotes",
+            "isActive",
+            "downloadCount",
+            "createdAt",
+            "updatedAt"
+          ) VALUES (
+            'app-release-android-1-1-4-24',
+            'ANDROID',
+            '1.1.4',
+            24,
+            '1.0.3',
+            4,
+            false,
+            'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.1.4-production.apk?sha=83e5b99636e285743432e3dd54687ba985bc8675f17ec364b0362da05e04e2af',
+            '59.8 MB',
+            '83e5b99636e285743432e3dd54687ba985bc8675f17ec364b0362da05e04e2af',
+            ARRAY[
+              'แสดงข้อมูลการขายและสินค้าที่ติดแท็กไว้บนหน้ารวมแชท',
+              'แสดงรูปโปรไฟล์ลูกค้าในหน้ารวมแชทและหน้าแชท',
+              'ปรับตัวเลือกสินค้าให้ชื่อรุ่นยาวอ่านได้ง่ายขึ้น',
+              'ย้ายปุ่มข้อมูลการขายไปด้านขวาเพื่อกดสะดวกขึ้น',
+              'เปิดลิงก์จากข้อความด้วยเบราว์เซอร์เริ่มต้นของมือถือ',
+              'รองรับการบันทึกรูปภาพจากแชทลงเครื่อง'
+            ]::TEXT[],
+            true,
+            0,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+          ON CONFLICT ("platform", "buildNumber") DO UPDATE SET
+            "version" = EXCLUDED."version",
+            "minimumSupportedVersion" = EXCLUDED."minimumSupportedVersion",
+            "minimumSupportedBuildNumber" = EXCLUDED."minimumSupportedBuildNumber",
+            "forceUpdate" = EXCLUDED."forceUpdate",
+            "apkUrl" = EXCLUDED."apkUrl",
+            "apkSize" = EXCLUDED."apkSize",
+            "sha256" = EXCLUDED."sha256",
+            "releaseNotes" = EXCLUDED."releaseNotes",
+            "isActive" = true,
+            "updatedAt" = CURRENT_TIMESTAMP;
+
+          UPDATE "AppRelease"
+          SET "isActive" = false,
+              "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "platform" = 'ANDROID'
+            AND "buildNumber" < 24;
+          SQL
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          releases = Path('frontend/src/app/download/releases.ts')
+          text = releases.read_text()
+          marker = 'export const androidReleases: AndroidRelease[] = [\n'
+          entry = '''  {
+            version: "1.1.4",
+            build: 24,
+            releasedAt: "2026-08-29",
+            releasedAtDisplay: "29 สิงหาคม 2026",
+            size: "59.8 MB",
+            fileName: "oppo-line-oa-chat-v1.1.4-production.apk",
+            sha256: "83e5b99636e285743432e3dd54687ba985bc8675f17ec364b0362da05e04e2af",
+            notes: [
+              "แสดงข้อมูลการขายและสินค้าที่ติดแท็กไว้บนหน้ารวมแชท",
+              "แสดงรูปโปรไฟล์ลูกค้าในหน้ารวมแชทและหน้าแชท",
+              "ปรับตัวเลือกสินค้าให้ชื่อรุ่นยาวอ่านได้ง่ายขึ้น",
+              "ย้ายปุ่มข้อมูลการขายไปด้านขวาเพื่อกดสะดวกขึ้น",
+              "เปิดลิงก์จากข้อความด้วยเบราว์เซอร์เริ่มต้นของมือถือ",
+              "รองรับการบันทึกรูปภาพจากแชทลงเครื่อง",
+            ],
+          },
+          '''
+          if 'version: "1.1.4"' not in text:
+              if marker not in text:
+                  raise SystemExit('android release array marker not found')
+              text = text.replace(marker, marker + entry, 1)
+              releases.write_text(text)
+
+          test_file = Path('frontend/test/android-download-release.test.mts')
+          test_text = test_file.read_text()
+          old = '../../backend/prisma/migrations/20260828131500_release_android_1_1_3/migration.sql'
+          new = '../../backend/prisma/migrations/20260829131000_release_android_1_1_4/migration.sql'
+          if new not in test_text:
+              if old not in test_text:
+                  raise SystemExit('release migration test marker not found')
+              test_file.write_text(test_text.replace(old, new, 1))
+          PY
+
+      - name: Verify release payload
+        run: |
+          set -euo pipefail
+          sha256sum frontend/public/downloads/oppo-line-oa-chat-v1.1.4-production.apk
+          test "$(sha256sum frontend/public/downloads/oppo-line-oa-chat-v1.1.4-production.apk | cut -d' ' -f1)" = "83e5b99636e285743432e3dd54687ba985bc8675f17ec364b0362da05e04e2af"
+          git diff --check
+
+      - name: Commit release to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            frontend/public/downloads/oppo-line-oa-chat-v1.1.4-production.apk \
+            frontend/src/app/download/releases.ts \
+            frontend/test/android-download-release.test.mts \
+            backend/prisma/migrations/20260829131000_release_android_1_1_4/migration.sql
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(android): release 1.1.4+24"
+          git push origin HEAD:main
