@@ -276,6 +276,18 @@ class AppLocalizationsTh extends AppLocalizations {
   String get openImage => 'เปิดรูปภาพ';
 
   @override
+  String get unableToOpenLink => 'ไม่สามารถเปิดลิงก์ได้';
+
+  @override
+  String get saveImage => 'บันทึกรูปภาพ';
+
+  @override
+  String get imageSaved => 'บันทึกรูปแล้ว';
+
+  @override
+  String get imageSaveFailed => 'ไม่สามารถบันทึกรูปภาพได้';
+
+  @override
   String get imageProcessing => 'กำลังประมวลผลรูปภาพ…';
 
   @override

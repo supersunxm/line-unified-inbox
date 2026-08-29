@@ -12,6 +12,7 @@ class ConversationHeader extends StatelessWidget
   const ConversationHeader({
     super.key,
     required this.customerName,
+    this.customerPictureUrl,
     this.storeName,
     this.storeCode,
     this.bmReplyStatus,
@@ -22,6 +23,7 @@ class ConversationHeader extends StatelessWidget
   });
 
   final String customerName;
+  final String? customerPictureUrl;
   final String? storeName;
   final String? storeCode;
   final String? bmReplyStatus;
@@ -95,7 +97,10 @@ class ConversationHeader extends StatelessWidget
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
-                    UserAvatar(displayName: customerName, radius: 16),
+                    UserAvatar(
+                        displayName: customerName,
+                        imageUrl: customerPictureUrl,
+                        radius: 16),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
@@ -130,7 +135,10 @@ class ConversationHeader extends StatelessWidget
             )
           : Row(
               children: [
-                UserAvatar(displayName: customerName, radius: 22),
+                UserAvatar(
+                    displayName: customerName,
+                    imageUrl: customerPictureUrl,
+                    radius: 22),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(

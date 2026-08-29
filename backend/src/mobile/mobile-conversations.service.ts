@@ -9,6 +9,7 @@ import { MobileConversationQueryDto, MobileMessageQueryDto, MobileProductQueryDt
 import { EMPTY_OPERATIONAL_PRIORITY, PriorityService } from "../priority/priority.service";
 import type { OperationalPriority } from "../priority/priority.types";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
+import { RealtimeEventService } from "../realtime/realtime-event.service";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -26,7 +27,7 @@ function purchaseSnapshot(input: {
 
 @Injectable()
 export class MobileConversationsService {
-  constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService, private readonly priority: PriorityService = undefined as unknown as PriorityService) {}
+  constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService, private readonly priority: PriorityService = undefined as unknown as PriorityService, private readonly realtime?: RealtimeEventService) {}
 
   private assertCanReply(user: AuthUser) {
     const canReply = user.authorization?.capabilities.reply ?? user.permissions?.canReply;
@@ -68,8 +69,17 @@ export class MobileConversationsService {
           latestMessageAt: true,
           bmReplyStatus: true,
           followUpStatus: true,
-          customer: { select: { id: true, displayName: true } },
+          customer: { select: { id: true, displayName: true, pictureUrl: true } },
           store: { select: { id: true, name: true, code: true } },
+          customerSalesStatus: true,
+          interestLevel: true,
+          salesProducts: {
+            select: {
+              customProductName: true,
+              quantity: true,
+              productModel: { select: { name: true } },
+            },
+          },
           messages: { orderBy: [{ sentAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true } },
           _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
         },
@@ -86,6 +96,14 @@ export class MobileConversationsService {
           id: item.id,
           customer: item.customer,
           store: item.store,
+          customerSalesSummary: {
+            status: item.customerSalesStatus,
+            interestLevel: item.interestLevel,
+            products: (item.salesProducts ?? []).map((product) => ({
+              modelName: product.customProductName?.trim() || product.productModel?.name || "Product",
+              quantity: product.quantity,
+            })),
+          },
           latestMessageAt: item.latestMessageAt,
           bmReplyStatus: item.bmReplyStatus,
           followUpStatus: item.followUpStatus,
@@ -128,7 +146,7 @@ export class MobileConversationsService {
         purchaseRecordedBy: { select: { id: true, displayName: true } },
         salesRecordedAt: true,
         salesRecordedBy: { select: { id: true, displayName: true } },
-        customer: { select: { id: true, displayName: true } },
+        customer: { select: { id: true, displayName: true, pictureUrl: true } },
         store: { select: { id: true, name: true, code: true } },
         salesProducts: {
           select: {
@@ -607,7 +625,24 @@ export class MobileConversationsService {
       });
     });
 
-    return this.get(user, conversationId);
+    const detail = await this.get(user, conversationId);
+    const storeId = detail.store?.id ?? null;
+    if (this.realtime && storeId) {
+      this.realtime.publish({
+        type: "conversation.updated",
+        version: 1,
+        conversationId: detail.id,
+        storeId,
+        conversation: {
+          id: detail.id,
+          latestMessageAt: detail.latestMessageAt.toISOString(),
+          bmReplyStatus: detail.bmReplyStatus ?? "NOT_REPLIED",
+          customerPictureUrl: detail.customer?.pictureUrl ?? null,
+          customerSalesSummary: compactSalesSummary(detail.customerSalesInformation),
+        },
+      });
+    }
+    return detail;
   }
 
   async updatePurchaseInformation(user: AuthUser, conversationId: string, dto: UpdateMobilePurchaseInformationDto) {
@@ -640,3 +675,22 @@ export class MobileConversationsService {
 
 function encodeCursor(sentAt: Date, id: string) { return Buffer.from(JSON.stringify({ sentAt: sentAt.toISOString(), id }), "utf8").toString("base64url"); }
 function decodeCursor(value: string): { sentAt: Date; id: string } | null { try { const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { sentAt?: string; id?: string }; if (!parsed.sentAt || !parsed.id) return null; const sentAt = new Date(parsed.sentAt); return Number.isNaN(sentAt.getTime()) ? null : { sentAt, id: parsed.id }; } catch { return null; } }
+
+function compactSalesSummary(information: {
+  status?: string | null;
+  interestLevel?: string | null;
+  products?: readonly { model?: { name?: string | null } | null; customProductName?: string | null; quantity?: number | null }[] | null;
+} | null | undefined) {
+  if (!information) return null;
+  const products = (information.products ?? [])
+    .map((product) => ({
+      modelName: product.customProductName?.trim() || product.model?.name?.trim() || "Product",
+      quantity: product.quantity ?? 1,
+    }));
+  if (!information.status && products.length === 0) return null;
+  return {
+    status: information.status ?? null,
+    interestLevel: information.interestLevel ?? null,
+    products,
+  };
+}

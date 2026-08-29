@@ -2704,3 +2704,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added additive Prisma support for scoped inbound-text rules, explicit `OFF`/`SHADOW`/`LIVE` pilot modes, deterministic intent/outcome audit records, and a unique source-message claim for webhook deduplication. No rules are seeded or enabled; the default mode remains `OFF`.
 - Added strict dual store identity and STORE OA gates, reviewed high-confidence Thai aliases/exclusions for `STORE_LOCATION` and `FINANCE_INFO`, text-only template sending through the canonical LINE reply service, and a read-only pilot summary endpoint/UI with localized scope/mode warnings. POSTBACK execution, BM reply status, authorization, and Main OA isolation remain unchanged.
 - Focused backend and frontend tests/builds have been run during implementation; final full suites, diff review, commit, push, PR creation, and green-CI monitoring remain.
+
+# Current task: Mobile inbox and chat UX improvements (2026-08-29)
+
+- Continued the existing `feat/mobile-chat-ux-improvements` branch without touching the Auto Reply/auto-response pilot files or configuration.
+- Extended the bounded mobile conversation list contract with customer picture URLs and compact persisted sales summaries, then added Android card chips/product counts, realtime/reload reconciliation, profile avatars, compact product selection, right-aligned empty sales action, linkified browser links, and a native MediaStore image-save bridge for inbound and outbound images.
+- Flutter analyze and full Flutter tests pass; backend full tests (1437/1437) and build pass; Android direct `assembleDebug --no-daemon` passes after the Flutter wrapper hit a local plugin-cache resolution issue on its first invocation. Final requested version metadata is `1.1.4+24` and the production workflow verifies that version/output name.
+- No Web behavior, schema migration, Main OA behavior, auth/session semantics, or Auto Reply behavior was changed. Next action: review the scoped diff, commit, push, open the single PR, and monitor CI without merging.

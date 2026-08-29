@@ -220,6 +220,7 @@ class ConversationDetail {
       {required this.id,
       required this.customerName,
       required this.storeName,
+      this.customerPictureUrl,
       this.storeCode,
       required this.messages,
       this.nextCursor,
@@ -233,6 +234,7 @@ class ConversationDetail {
   final String id;
   final String customerName;
   final String storeName;
+  final String? customerPictureUrl;
   final String? storeCode;
   final List<ChatMessage> messages;
   final String? nextCursor;
@@ -257,6 +259,7 @@ class ConversationDetail {
           id: id,
           customerName: customerName,
           storeName: storeName,
+          customerPictureUrl: customerPictureUrl,
           storeCode: storeCode,
           messages: messages ?? this.messages,
           nextCursor: identical(nextCursor, _detailUnset)
@@ -294,6 +297,7 @@ class ConversationDetail {
                 ? customer!['displayName'] as String
                 : 'Customer',
         storeName: (store?['name'] as String?)?.trim() ?? '',
+        customerPictureUrl: customer?['pictureUrl'] as String?,
         storeCode: store?['code'] as String?,
         messages: ((json['messages'] as List<dynamic>?) ?? [])
             .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))

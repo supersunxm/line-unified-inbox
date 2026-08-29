@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
+import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import 'conversation_preview.dart';
@@ -97,6 +98,7 @@ class ConversationCard extends StatelessWidget {
                   fontSize: 12.5,
                 ),
           ),
+          _SalesSummary(summary: conversation.customerSalesSummary),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -122,6 +124,7 @@ class ConversationCard extends StatelessWidget {
         children: [
           UserAvatar(
             displayName: conversation.customerName,
+            imageUrl: conversation.customerPictureUrl,
             radius: 19,
           ),
           const SizedBox(width: 10),
@@ -147,6 +150,7 @@ class ConversationCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 StoreBadge(name: conversation.storeName, compact: true),
+                _SalesSummary(summary: conversation.customerSalesSummary),
                 const SizedBox(height: 2),
                 ConversationPreview(
                     preview: conversation.preview, sentAt: conversation.sentAt),
@@ -165,4 +169,65 @@ class ConversationCard extends StatelessWidget {
           ),
         ],
       );
+}
+
+class _SalesSummary extends StatelessWidget {
+  const _SalesSummary({required this.summary});
+
+  final CustomerSalesSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (summary == null || summary!.isEmpty) return const SizedBox.shrink();
+    final status = switch (summary!.status) {
+      'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
+      'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
+      'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
+      _ => null,
+    };
+    final first = summary!.products.isEmpty ? null : summary!.products.first;
+    final productLabel = first == null
+        ? null
+        : '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (status != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer.withAlpha(150),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                status,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10.5,
+                    ),
+              ),
+            ),
+          if (productLabel != null)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(
+                productLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

@@ -1436,3 +1436,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Match only normalized inbound LINE `TEXT` messages from the canonical active STORE OA whose `Store.code` and `StoreMaster.externalStoreId` both equal `28375`. Require a current LINE reply token before evaluating or sending, and require exactly one active scoped text rule for a sendable intent.
 - Use reviewed deterministic aliases only. Ambiguous location/finance text, amount/term/product-specific finance questions, bare low-confidence finance words, and non-text messages are excluded or left unmatched. There is no fuzzy or AI matching and no generated factual answer text.
 - Record one execution per persisted inbound source message with matcher version, intent, mode, safe outcome, rule/conversation/OA/source references, and no message PII. Pilot replies use the existing canonical LINE service and never persist a fake outbound message or mutate `Conversation.bmReplyStatus`.
+
+# Mobile inbox and chat UX boundary (2026-08-29)
+
+- The mobile inbox reads sales chips/products and customer avatars from the existing conversation/customer records in one bounded list query; it does not issue per-row detail requests. Detail reconciliation is limited to the existing open-chat/realtime flows.
+- Image saving uses a narrow `click.lineoppo.chat/media_save` bridge. Android 10+ writes to MediaStore with `IS_PENDING` under the app's Pictures folder; Android 9 and below use the existing legacy permission only when required. No broad modern storage permission or new package is introduced.
+- Text links are rendered by a small testable widget and launched only with `LaunchMode.externalApplication`; malformed or unavailable links show a recoverable localized message. Existing non-link text remains ordinary message content.
+- Customer sales summaries and avatars are additive response fields. Existing Web contracts, operational reply-status behavior, Main OA isolation, authentication/session behavior, product master data, and the Auto Reply pilot remain unchanged.

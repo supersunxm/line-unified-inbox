@@ -2,14 +2,22 @@ package click.lineoppo.chat
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.Manifest
+import android.content.ContentValues
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
+import android.provider.MediaStore
 import android.media.AudioAttributes
+import android.media.MediaScannerConnection
 import android.media.RingtoneManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.plugin.common.MethodChannel
@@ -19,7 +27,13 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     private val installerChannel = "click.lineoppo.chat/apk_installer"
     private val notificationSettingsChannel = "click.lineoppo.chat/notification_settings"
+    private val mediaSaveChannel = "click.lineoppo.chat/media_save"
     private val apkMimeType = "application/vnd.android.package-archive"
+    private val legacyWriteRequestCode = 4101
+    private var pendingImageBytes: ByteArray? = null
+    private var pendingImageName: String? = null
+    private var pendingImageMimeType: String? = null
+    private var pendingImageResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,6 +78,144 @@ class MainActivity : FlutterActivity() {
                 }
                 openNotificationSettings(result)
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, mediaSaveChannel)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "saveImage") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val bytes = call.argument<ByteArray>("bytes")
+                if (bytes == null || bytes.isEmpty()) {
+                    result.error("EMPTY_IMAGE", "Image data is empty", null)
+                    return@setMethodCallHandler
+                }
+                if (pendingImageResult != null) {
+                    result.error("SAVE_IN_PROGRESS", "Another image is being saved", null)
+                    return@setMethodCallHandler
+                }
+                val mimeType = call.argument<String>("mimeType")?.trim()?.lowercase()
+                    ?.takeIf { it.startsWith("image/") && !it.contains('*') } ?: "image/jpeg"
+                val fileName = call.argument<String>("fileName")
+                saveImage(bytes, fileName, mimeType, result)
+            }
+    }
+
+    private fun saveImage(
+        bytes: ByteArray,
+        requestedName: String?,
+        mimeType: String,
+        result: MethodChannel.Result,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingImageBytes = bytes
+            pendingImageName = requestedName
+            pendingImageMimeType = mimeType
+            pendingImageResult = result
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                legacyWriteRequestCode,
+            )
+            return
+        }
+        try {
+            val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                saveImageWithMediaStore(bytes, requestedName, mimeType)
+            } else {
+                saveImageLegacy(bytes, requestedName, mimeType)
+            }
+            if (saved) result.success(true) else result.error("SAVE_FAILED", "Image could not be saved", null)
+        } catch (_: Exception) {
+            result.error("SAVE_FAILED", "Image could not be saved", null)
+        }
+    }
+
+    private fun saveImageWithMediaStore(
+        bytes: ByteArray,
+        requestedName: String?,
+        mimeType: String,
+    ): Boolean {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, safeImageName(requestedName, mimeType))
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/OPPO LINE OA Chat")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val resolver = contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Unable to create image destination")
+        try {
+            resolver.openOutputStream(uri)?.use { output -> output.write(bytes) }
+                ?: throw IllegalStateException("Unable to open image destination")
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return true
+        } catch (error: Exception) {
+            resolver.delete(uri, null, null)
+            throw error
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun saveImageLegacy(
+        bytes: ByteArray,
+        requestedName: String?,
+        mimeType: String,
+    ): Boolean {
+        val directory = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            "OPPO LINE OA Chat",
+        )
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IllegalStateException("Unable to create image directory")
+        }
+        val file = File(directory, safeImageName(requestedName, mimeType))
+        file.outputStream().use { it.write(bytes) }
+        MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), arrayOf(mimeType), null)
+        return true
+    }
+
+    private fun safeImageName(requestedName: String?, mimeType: String): String {
+        val extension = when (mimeType) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
+            else -> "jpg"
+        }
+        val base = requestedName
+            ?.substringAfterLast('/')
+            ?.substringBeforeLast('.', "")
+            ?.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            ?.trim('_')
+            ?.take(60)
+            ?.ifEmpty { null }
+            ?: "oppo-line-image"
+        return "$base-${System.currentTimeMillis()}.$extension"
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != legacyWriteRequestCode) return
+        val result = pendingImageResult ?: return
+        val bytes = pendingImageBytes
+        val name = pendingImageName
+        val mimeType = pendingImageMimeType ?: "image/jpeg"
+        pendingImageResult = null
+        pendingImageBytes = null
+        pendingImageName = null
+        pendingImageMimeType = null
+        if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED || bytes == null) {
+            result.error("PERMISSION_DENIED", "Storage permission is required to save images", null)
+            return
+        }
+        saveImage(bytes, name, mimeType, result)
     }
 
     private fun openNotificationSettings(result: MethodChannel.Result) {

@@ -104,12 +104,16 @@ class CurrentUser {
 }
 
 class ConversationSummary {
+  static const _summaryUnset = Object();
+
   ConversationSummary(
       {required this.id,
       required this.customerName,
       required this.storeName,
       required this.unreadCount,
       required this.bmReplyStatus,
+      this.customerPictureUrl,
+      this.customerSalesSummary,
       this.preview,
       this.sentAt,
       this.priority = const ConversationPriority.none()});
@@ -118,6 +122,8 @@ class ConversationSummary {
   final String storeName;
   final int unreadCount;
   final String bmReplyStatus;
+  final String? customerPictureUrl;
+  final CustomerSalesSummary? customerSalesSummary;
   final String? preview;
   final DateTime? sentAt;
   final ConversationPriority priority;
@@ -128,6 +134,8 @@ class ConversationSummary {
     String? storeName,
     int? unreadCount,
     String? bmReplyStatus,
+    Object? customerPictureUrl = _summaryUnset,
+    Object? customerSalesSummary = _summaryUnset,
     String? preview,
     DateTime? sentAt,
     ConversationPriority? priority,
@@ -138,6 +146,12 @@ class ConversationSummary {
           storeName: storeName ?? this.storeName,
           unreadCount: unreadCount ?? this.unreadCount,
           bmReplyStatus: bmReplyStatus ?? this.bmReplyStatus,
+          customerPictureUrl: identical(customerPictureUrl, _summaryUnset)
+              ? this.customerPictureUrl
+              : customerPictureUrl as String?,
+          customerSalesSummary: identical(customerSalesSummary, _summaryUnset)
+              ? this.customerSalesSummary
+              : customerSalesSummary as CustomerSalesSummary?,
           preview: preview ?? this.preview,
           sentAt: sentAt ?? this.sentAt,
           priority: priority ?? this.priority);
@@ -151,6 +165,10 @@ class ConversationSummary {
         storeName: (json['store'] as Map<String, dynamic>)['name'] as String,
         unreadCount: json['unreadCount'] as int? ?? 0,
         bmReplyStatus: json['bmReplyStatus'] as String,
+        customerPictureUrl:
+            (json['customer'] as Map<String, dynamic>)['pictureUrl'] as String?,
+        customerSalesSummary: CustomerSalesSummary.fromJson(
+            json['customerSalesSummary'] as Map<String, dynamic>?),
         preview: message == null
             ? null
             : conversationMessagePreview(
@@ -162,6 +180,102 @@ class ConversationSummary {
             ? null
             : DateTime.parse(message!['sentAt'] as String),
         priority: ConversationPriority.fromJson(json['priority']));
+  }
+}
+
+class CustomerSalesSummaryProduct {
+  const CustomerSalesSummaryProduct(
+      {required this.modelName, this.quantity = 1});
+
+  final String modelName;
+  final int quantity;
+
+  factory CustomerSalesSummaryProduct.fromJson(Map<String, dynamic> json) =>
+      CustomerSalesSummaryProduct(
+        modelName: (json['modelName'] as String?)?.trim().isNotEmpty == true
+            ? (json['modelName'] as String).trim()
+            : 'Product',
+        quantity: json['quantity'] is num
+            ? (json['quantity'] as num).toInt().clamp(1, 999).toInt()
+            : 1,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is CustomerSalesSummaryProduct &&
+      other.modelName == modelName &&
+      other.quantity == quantity;
+
+  @override
+  int get hashCode => Object.hash(modelName, quantity);
+}
+
+class CustomerSalesSummary {
+  const CustomerSalesSummary(
+      {this.status, this.interestLevel, this.products = const []});
+
+  final String? status;
+  final String? interestLevel;
+  final List<CustomerSalesSummaryProduct> products;
+
+  bool get isEmpty =>
+      (status == null || status!.trim().isEmpty) && products.isEmpty;
+
+  bool get isOnline => status == 'ONLINE';
+  bool get isInterested => status == 'INTERESTED';
+  bool get isPurchased => status == 'PURCHASED';
+
+  static CustomerSalesSummary? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final rawProducts = json['products'];
+    final products = rawProducts is List
+        ? rawProducts
+            .whereType<Map>()
+            .map((item) => CustomerSalesSummaryProduct.fromJson(
+                Map<String, dynamic>.from(item)))
+            .toList(growable: false)
+        : const <CustomerSalesSummaryProduct>[];
+    final status = json['status'] as String?;
+    final interestLevel = json['interestLevel'] as String?;
+    final summary = CustomerSalesSummary(
+      status: status,
+      interestLevel: interestLevel,
+      products: products,
+    );
+    return summary.isEmpty ? null : summary;
+  }
+
+  static CustomerSalesSummary? fromData({
+    required String? status,
+    String? interestLevel,
+    Iterable<CustomerSalesSummaryProduct> products = const [],
+  }) {
+    final summary = CustomerSalesSummary(
+      status: status,
+      interestLevel: interestLevel,
+      products: products.toList(growable: false),
+    );
+    return summary.isEmpty ? null : summary;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CustomerSalesSummary &&
+      other.status == status &&
+      other.interestLevel == interestLevel &&
+      _listEquals(other.products, products);
+
+  @override
+  int get hashCode =>
+      Object.hash(status, interestLevel, Object.hashAll(products));
+
+  static bool _listEquals(List<CustomerSalesSummaryProduct> left,
+      List<CustomerSalesSummaryProduct> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 }
 
