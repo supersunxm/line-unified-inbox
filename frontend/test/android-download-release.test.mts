@@ -27,7 +27,7 @@ void test("latest release always has a publish date and checksum", () => {
 });
 
 void test("web download and in-app update metadata are locked to the same release", () => {
-  const migration = readFileSync(new URL("../../backend/prisma/migrations/20260828131500_release_android_1_1_3/migration.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../backend/prisma/migrations/20260829131000_release_android_1_1_4/migration.sql", import.meta.url), "utf8");
   assert.match(migration, new RegExp(`'${latestAndroidRelease.version.replaceAll(".", "\\.")}'`));
   assert.match(migration, new RegExp(`\\b${latestAndroidRelease.build}\\b`));
   assert.ok(migration.includes(latestAndroidRelease.fileName));
