@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/localization/localization.dart';
 
 final _messageUrlPattern = RegExp(
-  r'(?:(?:https?://)|(?:www\.))[^\s<]+',
+  r'(?:(?:https?://)|(?:www\.))[^\s<]+|(?:[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?\.)+[a-z]{2,}(?:/[^\s<]*)?',
   caseSensitive: false,
 );
 
@@ -53,8 +53,11 @@ class _MessageLinkTextState extends State<MessageLinkText> {
   }
 
   Future<void> _open(String rawUrl) async {
-    final url = rawUrl.startsWith('www.') ? 'https://$rawUrl' : rawUrl;
-    final uri = Uri.tryParse(url);
+    final normalized = rawUrl.toLowerCase().startsWith('http://') ||
+            rawUrl.toLowerCase().startsWith('https://')
+        ? rawUrl
+        : 'https://$rawUrl';
+    final uri = Uri.tryParse(normalized);
     final launched = uri != null &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         await launchUrl(uri, mode: LaunchMode.externalApplication);
