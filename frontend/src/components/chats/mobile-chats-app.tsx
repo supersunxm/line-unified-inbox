@@ -217,7 +217,15 @@ export function MobileChatsApp() {
   useEffect(() => {
     if (!user || !selected?.id) return;
     return subscribeToRealtimeEvents((event) => {
-      if (event.conversationId !== selected.id || !event.message) return;
+      if (event.conversationId !== selected.id) return;
+      if (event.type === "conversation.updated") {
+        if (!event.conversation || !Object.prototype.hasOwnProperty.call(event.conversation, "owner")) return;
+        const owner = event.conversation.owner ?? null;
+        setConversations((current) => current.map((conversation) => conversation.id === selected.id ? { ...conversation, owner } : conversation));
+        setSelected((current) => current && current.id === selected.id ? { ...current, owner } : current);
+        return;
+      }
+      if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
         setMessages((current) => current.items.some((item) => item.id === incoming.id)

@@ -305,6 +305,7 @@ model User {
   massMessageCampaigns          MassMessageCampaign[]        @relation("CreatedMassMessageCampaigns")
   purchaseRecordedConversations Conversation[]               @relation("ConversationPurchaseRecorder")
   salesRecordedConversations    Conversation[]               @relation("ConversationSalesRecorder")
+  ownedConversations             Conversation[]               @relation("ConversationOwner")
   createdActivityHistory        ActivityHistory[]            @relation("ActivityHistoryCreator")
 
   @@index([status])
@@ -813,6 +814,7 @@ model Conversation {
   isQa                  Boolean                     @default(false)
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
+  ownerUserId           String?
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   customer              Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -826,6 +828,7 @@ model Conversation {
   activityHistory       ActivityHistory[]
   purchaseRecordedBy    User?                       @relation("ConversationPurchaseRecorder", fields: [purchaseRecordedById], references: [id], onDelete: SetNull)
   salesRecordedBy       User?                       @relation("ConversationSalesRecorder", fields: [salesRecordedById], references: [id], onDelete: SetNull)
+  owner                 User?                       @relation("ConversationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   pushNotifications     PushNotification[]
   autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
 
@@ -844,6 +847,7 @@ model Conversation {
   @@index([lineOfficialAccountId, bmReplyStatus, latestMessageAt(sort: Desc)])
   @@index([lineOfficialAccountId, customerId])
   @@index([customerId, latestMessageAt(sort: Desc)])
+  @@index([ownerUserId])
 }
 
 model Message {

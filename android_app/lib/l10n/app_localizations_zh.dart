@@ -192,6 +192,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get customerConversations => '客户会话';
 
   @override
+  String get repliedConversations => '已回复会话';
+
+  @override
+  String get waitingConversations => '待回复会话';
+
+  @override
   String get responsePerformance => '回复表现';
 
   @override
@@ -255,6 +261,60 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get conversationContext => '会话信息';
+
+  @override
+  String get conversationOwner => '负责人';
+
+  @override
+  String get unassignedOwner => '未分配';
+
+  @override
+  String get selectOwner => '选择负责人';
+
+  @override
+  String get clearOwner => '清除负责人';
+
+  @override
+  String get ownerLoadFailed => '无法加载可选负责人';
+
+  @override
+  String get ownerUpdateFailed => '无法更新会话负责人';
+
+  @override
+  String get teamHandling => '团队会话处理';
+
+  @override
+  String get humanReplies => '人工回复';
+
+  @override
+  String get outboundMessages => '发送消息';
+
+  @override
+  String get conversationsReplied => '已回复会话';
+
+  @override
+  String get workloadShare => '工作量占比';
+
+  @override
+  String get automatedReplies => '自动回复';
+
+  @override
+  String get ownership => '会话负责人';
+
+  @override
+  String get conversationsWithOwner => '已分配';
+
+  @override
+  String get conversationsWithoutOwner => '未分配';
+
+  @override
+  String get ownerCoverage => '负责人覆盖率';
+
+  @override
+  String get currentSnapshotLabel => '当前负责人快照';
+
+  @override
+  String get noHumanReplies => '本月暂无人工回复记录';
 
   @override
   String get readOnlyConversation => '只读 · 无回复权限';
@@ -1120,6 +1180,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get customerConversations => '客户会话';
 
   @override
+  String get repliedConversations => '已回复会话';
+
+  @override
+  String get waitingConversations => '待回复会话';
+
+  @override
   String get responsePerformance => '回复表现';
 
   @override
@@ -1183,6 +1249,60 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get conversationContext => '会话信息';
+
+  @override
+  String get conversationOwner => '负责人';
+
+  @override
+  String get unassignedOwner => '未分配';
+
+  @override
+  String get selectOwner => '选择负责人';
+
+  @override
+  String get clearOwner => '清除负责人';
+
+  @override
+  String get ownerLoadFailed => '无法加载可选负责人';
+
+  @override
+  String get ownerUpdateFailed => '无法更新会话负责人';
+
+  @override
+  String get teamHandling => '团队会话处理';
+
+  @override
+  String get humanReplies => '人工回复';
+
+  @override
+  String get outboundMessages => '发送消息';
+
+  @override
+  String get conversationsReplied => '已回复会话';
+
+  @override
+  String get workloadShare => '工作量占比';
+
+  @override
+  String get automatedReplies => '自动回复';
+
+  @override
+  String get ownership => '会话负责人';
+
+  @override
+  String get conversationsWithOwner => '已分配';
+
+  @override
+  String get conversationsWithoutOwner => '未分配';
+
+  @override
+  String get ownerCoverage => '负责人覆盖率';
+
+  @override
+  String get currentSnapshotLabel => '当前负责人快照';
+
+  @override
+  String get noHumanReplies => '本月暂无人工回复记录';
 
   @override
   String get readOnlyConversation => '只读 · 无回复权限';

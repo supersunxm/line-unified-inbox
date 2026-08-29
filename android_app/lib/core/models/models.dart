@@ -103,6 +103,31 @@ class CurrentUser {
   }
 }
 
+class ConversationOwner {
+  const ConversationOwner({required this.id, required this.displayName});
+
+  final String id;
+  final String displayName;
+
+  factory ConversationOwner.fromJson(Map<String, dynamic> json) {
+    final rawName = json['displayName'] as String?;
+    return ConversationOwner(
+      id: json['id'] as String? ?? '',
+      displayName:
+          rawName?.trim().isNotEmpty == true ? rawName!.trim() : 'Staff',
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ConversationOwner &&
+      other.id == id &&
+      other.displayName == displayName;
+
+  @override
+  int get hashCode => Object.hash(id, displayName);
+}
+
 class ConversationSummary {
   static const _summaryUnset = Object();
 
@@ -116,6 +141,7 @@ class ConversationSummary {
       this.customerSalesSummary,
       this.preview,
       this.sentAt,
+      this.owner,
       this.priority = const ConversationPriority.none()});
   final String id;
   final String customerName;
@@ -126,6 +152,7 @@ class ConversationSummary {
   final CustomerSalesSummary? customerSalesSummary;
   final String? preview;
   final DateTime? sentAt;
+  final ConversationOwner? owner;
   final ConversationPriority priority;
 
   ConversationSummary copyWith({
@@ -138,6 +165,7 @@ class ConversationSummary {
     Object? customerSalesSummary = _summaryUnset,
     String? preview,
     DateTime? sentAt,
+    Object? owner = _summaryUnset,
     ConversationPriority? priority,
   }) =>
       ConversationSummary(
@@ -154,6 +182,9 @@ class ConversationSummary {
               : customerSalesSummary as CustomerSalesSummary?,
           preview: preview ?? this.preview,
           sentAt: sentAt ?? this.sentAt,
+          owner: identical(owner, _summaryUnset)
+              ? this.owner
+              : owner as ConversationOwner?,
           priority: priority ?? this.priority);
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -179,6 +210,10 @@ class ConversationSummary {
         sentAt: message?['sentAt'] == null
             ? null
             : DateTime.parse(message!['sentAt'] as String),
+        owner: json['owner'] is Map
+            ? ConversationOwner.fromJson(
+                Map<String, dynamic>.from(json['owner'] as Map))
+            : null,
         priority: ConversationPriority.fromJson(json['priority']));
   }
 }
@@ -618,6 +653,9 @@ class MonthlySummary {
     required this.comparison,
     required this.tags,
     required this.dataQuality,
+    this.overview = const SummaryOverview(),
+    this.team = const SummaryTeam(),
+    this.ownership = const SummaryOwnership(),
   });
 
   final SummaryPeriod period;
@@ -627,22 +665,159 @@ class MonthlySummary {
   final SummaryComparison comparison;
   final SummaryTagAnalytics tags;
   final SummaryDataQuality dataQuality;
+  final SummaryOverview overview;
+  final SummaryTeam team;
+  final SummaryOwnership ownership;
 
-  factory MonthlySummary.fromJson(Map<String, dynamic> json) => MonthlySummary(
-        period: SummaryPeriod.fromJson(
-            json['period'] as Map<String, dynamic>? ?? {}),
-        volume: SummaryVolume.fromJson(
-            json['volume'] as Map<String, dynamic>? ?? {}),
-        response: SummaryResponse.fromJson(
-            json['response'] as Map<String, dynamic>? ?? {}),
-        operational: SummaryOperational.fromJson(
-            json['operational'] as Map<String, dynamic>? ?? {}),
-        comparison: SummaryComparison.fromJson(
-            json['comparison'] as Map<String, dynamic>? ?? {}),
-        tags: SummaryTagAnalytics.fromJson(
-            json['tags'] as Map<String, dynamic>? ?? {}),
-        dataQuality: SummaryDataQuality.fromJson(
-            json['dataQuality'] as Map<String, dynamic>? ?? {}),
+  factory MonthlySummary.fromJson(Map<String, dynamic> json) {
+    final volume =
+        SummaryVolume.fromJson(json['volume'] as Map<String, dynamic>? ?? {});
+    final rawOverview = json['overview'];
+    final overview = rawOverview is Map<String, dynamic>
+        ? SummaryOverview.fromJson(rawOverview)
+        : SummaryOverview(
+            incomingMessages: volume.incomingMessages,
+            incomingConversations: volume.incomingConversations);
+    return MonthlySummary(
+      period:
+          SummaryPeriod.fromJson(json['period'] as Map<String, dynamic>? ?? {}),
+      volume: volume,
+      response: SummaryResponse.fromJson(
+          json['response'] as Map<String, dynamic>? ?? {}),
+      operational: SummaryOperational.fromJson(
+          json['operational'] as Map<String, dynamic>? ?? {}),
+      comparison: SummaryComparison.fromJson(
+          json['comparison'] as Map<String, dynamic>? ?? {}),
+      tags: SummaryTagAnalytics.fromJson(
+          json['tags'] as Map<String, dynamic>? ?? {}),
+      dataQuality: SummaryDataQuality.fromJson(
+          json['dataQuality'] as Map<String, dynamic>? ?? {}),
+      overview: overview,
+      team: SummaryTeam.fromJson(json['team'] as Map<String, dynamic>? ?? {}),
+      ownership: SummaryOwnership.fromJson(
+          json['ownership'] as Map<String, dynamic>? ?? {}),
+    );
+  }
+}
+
+class SummaryOverview {
+  const SummaryOverview({
+    this.incomingMessages = 0,
+    this.incomingConversations = 0,
+    this.repliedConversations = 0,
+    this.waitingConversations = 0,
+  });
+
+  final int incomingMessages;
+  final int incomingConversations;
+  final int repliedConversations;
+  final int waitingConversations;
+
+  factory SummaryOverview.fromJson(Map<String, dynamic> json) =>
+      SummaryOverview(
+        incomingMessages: _intValue(json['incomingMessages']),
+        incomingConversations: _intValue(json['incomingConversations']),
+        repliedConversations: _intValue(json['repliedConversations']),
+        waitingConversations: _intValue(json['waitingConversations']),
+      );
+}
+
+class SummaryTeamMember {
+  const SummaryTeamMember({
+    required this.userId,
+    required this.displayName,
+    this.conversationsReplied = 0,
+    this.outboundMessages = 0,
+    this.workloadShare = 0,
+  });
+
+  final String userId;
+  final String displayName;
+  final int conversationsReplied;
+  final int outboundMessages;
+  final double workloadShare;
+
+  factory SummaryTeamMember.fromJson(Map<String, dynamic> json) =>
+      SummaryTeamMember(
+        userId: json['userId'] as String? ?? '',
+        displayName: json['displayName'] as String? ?? 'Staff',
+        conversationsReplied: _intValue(json['conversationsReplied']),
+        outboundMessages: _intValue(json['outboundMessages']),
+        workloadShare: _doubleValue(json['workloadShare']) ?? 0,
+      );
+}
+
+class SummaryTeam {
+  const SummaryTeam({
+    this.humanReplies = const [],
+    this.botConversationsReplied = 0,
+    this.botOutboundMessages = 0,
+  });
+
+  final List<SummaryTeamMember> humanReplies;
+  final int botConversationsReplied;
+  final int botOutboundMessages;
+
+  factory SummaryTeam.fromJson(Map<String, dynamic> json) {
+    final bot = json['bot'] is Map
+        ? Map<String, dynamic>.from(json['bot'] as Map)
+        : const <String, dynamic>{};
+    return SummaryTeam(
+      humanReplies: (json['humanReplies'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((item) =>
+              SummaryTeamMember.fromJson(Map<String, dynamic>.from(item)))
+          .toList(growable: false),
+      botConversationsReplied: _intValue(bot['conversationsReplied']),
+      botOutboundMessages: _intValue(bot['outboundMessages']),
+    );
+  }
+}
+
+class SummaryOwnerCoverage {
+  const SummaryOwnerCoverage(
+      {required this.userId,
+      required this.displayName,
+      this.conversations = 0});
+
+  final String userId;
+  final String displayName;
+  final int conversations;
+
+  factory SummaryOwnerCoverage.fromJson(Map<String, dynamic> json) =>
+      SummaryOwnerCoverage(
+        userId: json['userId'] as String? ?? '',
+        displayName: json['displayName'] as String? ?? 'Staff',
+        conversations: _intValue(json['conversations']),
+      );
+}
+
+class SummaryOwnership {
+  const SummaryOwnership({
+    this.mode = 'CURRENT_SNAPSHOT',
+    this.withOwner = 0,
+    this.withoutOwner = 0,
+    this.coverageRate = 0,
+    this.byOwner = const [],
+  });
+
+  final String mode;
+  final int withOwner;
+  final int withoutOwner;
+  final double coverageRate;
+  final List<SummaryOwnerCoverage> byOwner;
+
+  factory SummaryOwnership.fromJson(Map<String, dynamic> json) =>
+      SummaryOwnership(
+        mode: json['mode'] as String? ?? 'CURRENT_SNAPSHOT',
+        withOwner: _intValue(json['withOwner']),
+        withoutOwner: _intValue(json['withoutOwner']),
+        coverageRate: _doubleValue(json['coverageRate']) ?? 0,
+        byOwner: (json['byOwner'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map((item) =>
+                SummaryOwnerCoverage.fromJson(Map<String, dynamic>.from(item)))
+            .toList(growable: false),
       );
 }
 

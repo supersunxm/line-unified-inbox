@@ -74,6 +74,7 @@ export type ApiConversation = {
   priority: ApiPriority;
   followUpStatus: ApiFollowUpStatus;
   bmReplyStatus: ApiBmReplyStatus;
+  owner: { id: string; displayName: string } | null;
   productRelationship: string | null;
   purchaseIntent: string | null;
   resolvedLineOaManagerUrl: string | null;

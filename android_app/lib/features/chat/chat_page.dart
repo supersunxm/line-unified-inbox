@@ -33,6 +33,12 @@ class PendingImage {
   ReplyState state = ReplyState.sending;
 }
 
+class _ClearOwnerSelection {
+  const _ClearOwnerSelection();
+}
+
+const _clearOwnerSelection = _ClearOwnerSelection();
+
 Future<ConversationDetail?> resolveConversationTagsDetailAfterDismiss(
     ConversationDetail? sheetResult,
     Future<ConversationDetail> Function() reload) async {
@@ -213,9 +219,94 @@ class _ChatPageState extends State<ChatPage> {
   void _handleRealtimeEvent(Map<String, dynamic> event) {
     if (!mounted || event['conversationId'] != widget.conversationId) return;
     if (event['type'] == 'message.created') {
+      _patchRealtimeOwner(event['conversation']);
       _appendRealtimeMessage(event['message']);
+    } else if (event['type'] == 'conversation.updated') {
+      _patchRealtimeOwner(event['conversation']);
     } else if (event['type'] == 'message.media.updated') {
       _updateRealtimeMedia(event['message'], event['messageId']);
+    }
+  }
+
+  void _patchRealtimeOwner(Object? rawConversation) {
+    final detail = _detail;
+    if (detail == null || rawConversation is! Map) return;
+    final conversation = Map<String, dynamic>.from(rawConversation);
+    if (!conversation.containsKey('owner')) return;
+    final rawOwner = conversation['owner'];
+    final owner = rawOwner is Map
+        ? ConversationOwner.fromJson(Map<String, dynamic>.from(rawOwner))
+        : null;
+    if (detail.owner == owner) return;
+    setState(() => _detail = detail.copyWith(owner: owner));
+  }
+
+  Future<void> _showOwnerSelector() async {
+    final detail = _detail;
+    if (detail == null || !widget.canReply || !mounted) return;
+    final selection = await showModalBottomSheet<Object?>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final l10n = appLocalizations(sheetContext);
+        return SafeArea(
+          child: FutureBuilder<List<ConversationOwner>>(
+            future: widget.repository.eligibleOwners(detail.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(l10n.ownerLoadFailed),
+                );
+              }
+              final owners = snapshot.data ?? const <ConversationOwner>[];
+              return ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.only(bottom: 12),
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.person_off_outlined),
+                    title: Text(l10n.clearOwner),
+                    selected: detail.owner == null,
+                    onTap: () =>
+                        Navigator.of(sheetContext).pop(_clearOwnerSelection),
+                  ),
+                  const Divider(height: 1),
+                  for (final owner in owners)
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: Text(owner.displayName),
+                      selected: detail.owner?.id == owner.id,
+                      onTap: () => Navigator.of(sheetContext).pop(owner),
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (!mounted || selection == null) return;
+    final userId = selection is ConversationOwner ? selection.id : null;
+    if (selection is ConversationOwner && detail.owner?.id == userId) return;
+    if (selection is _ClearOwnerSelection && detail.owner == null) return;
+    try {
+      final updated = await widget.repository.updateOwner(detail.id, userId);
+      if (!mounted) return;
+      setState(() => _detail = _detail?.copyWith(owner: updated.owner));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = appLocalizations(context).ownerUpdateFailed);
+      }
     }
   }
 
@@ -704,6 +795,8 @@ class _ChatPageState extends State<ChatPage> {
                     exactStatus: true,
                     onBack: () => Navigator.of(context).maybePop(),
                     onProfile: _showCustomerProfile,
+                    owner: detail.owner,
+                    onOwnerTap: widget.canReply ? _showOwnerSelector : null,
                     onAction:
                         widget.canReply ? _showConversationActions : null),
                 body: Column(children: [

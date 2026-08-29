@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
-import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma, UserStatus } from "@prisma/client";
 import { BulkMarkRepliedByFilterDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
@@ -15,6 +15,7 @@ import { AuditLogService } from "./auth/audit-log.service";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
 import { RealtimeEventService } from "./realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "./messages/sticker-message";
+import { serializeConversationOwner } from "./conversation-owner";
 
 const conversationBaseInclude = {
   customer: true,
@@ -22,6 +23,7 @@ const conversationBaseInclude = {
   lineOfficialAccount: true,
   purchaseRecordedBy: { select: { id: true, displayName: true } },
   salesRecordedBy: { select: { id: true, displayName: true } },
+  owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
   salesProducts: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },
@@ -93,7 +95,7 @@ export class ConversationsService {
   ) { }
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
-    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
     void _purchaseRecordedById;
     void _purchaseRecordedAt;
     void _salesRecordedById;
@@ -108,6 +110,7 @@ export class ConversationsService {
       lineOfficialAccount,
       store: { ...store, lineManagerUrl: resolvedLineOaManagerUrl, lineManagerUrlStatus: resolvedLineOaManagerUrl ? "VALID" : storeMaster?.lineManagerUrl && !isValidManagerUrl(storeMaster.lineManagerUrl) ? "INVALID" : "MISSING" },
       customer: { ...item.customer, lineUserId: value ? `${value.slice(0, 4)}••••${value.slice(-4)}` : null },
+      owner: serializeConversationOwner(rawOwner, item.storeId),
       messages: item.messages.map((message) => this.safeMessage(message)),
       customerSalesInformation: buildCustomerSalesInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
       purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
@@ -128,7 +131,7 @@ export class ConversationsService {
     return { ...safe, sender, sticker, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
-  private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null) {
+  private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string; owner?: { id: string; displayName: string } | null }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null, owner?: { id: string; displayName: string } | null) {
     if (!this.realtime) return;
     this.realtime.publish({
       type: "message.created",
@@ -146,7 +149,7 @@ export class ConversationsService {
           ? { processingStatus: media.processingStatus, mimeType: media.mimeType ?? null, fileSize: media.fileSize ?? null, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null }
           : null,
       },
-      conversation: { id: conversation.id, latestMessageAt: message.sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
+      conversation: { id: conversation.id, latestMessageAt: message.sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus, owner: owner ?? conversation.owner ?? null },
     });
   }
 
@@ -233,6 +236,43 @@ export class ConversationsService {
       this.prisma.activityHistory.create({ data: { conversationId: id, actionType, previousStatus: current.followUpStatus, newStatus: status } }),
     ]);
     return { changed: true, conversation: await this.get(id) };
+  }
+
+  async updateOwner(id: string, userId: string | null, actor: AuthUser) {
+    const canReply = actor.authorization?.capabilities.reply ?? actor.permissions?.canReply;
+    if (actor.role !== "ADMIN" && canReply === false) throw new ForbiddenException("Owner assignment is forbidden");
+    if (!this.storeAccess) throw new ForbiddenException("Owner assignment is unavailable");
+    const storeId = await this.storeAccess.assertConversationAccess(actor, id);
+    if (userId) {
+      const eligible = await this.prisma.user.findFirst({
+        where: {
+          id: userId,
+          isActive: true,
+          status: UserStatus.ACTIVE,
+          memberships: { some: { storeId, status: "ACTIVE", store: { isActive: true, archivedAt: null } } },
+        },
+        select: { id: true },
+      });
+      if (!eligible) throw new ForbiddenException("Owner must be an active member of this store");
+    }
+    const current = await this.prisma.conversation.findUnique({ where: { id }, select: { ownerUserId: true } });
+    if (!current) throw new NotFoundException("Conversation not found");
+    if (current.ownerUserId === userId) return this.get(id);
+    await this.prisma.conversation.update({ where: { id }, data: { ownerUserId: userId } });
+    const result = await this.get(id);
+    this.realtime?.publish({
+      type: "conversation.updated",
+      version: 1,
+      conversationId: result.id,
+      storeId,
+      conversation: {
+        id: result.id,
+        latestMessageAt: result.latestMessageAt.toISOString(),
+        bmReplyStatus: result.bmReplyStatus,
+        owner: result.owner,
+      },
+    });
+    return result;
   }
 
   async updateBmReplyStatus(id: string, status: BmReplyStatus) {
@@ -623,7 +663,7 @@ export class ConversationsService {
 
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
-      include: { customer: true, lineOfficialAccount: true, store: true },
+      include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } } },
     });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
     if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
@@ -702,6 +742,7 @@ export class ConversationsService {
     }
 
     const sentAt = new Date();
+    let ownerAssigned = false;
     try {
       const message = await this.prisma.$transaction(async (tx) => {
         const created = await tx.message.create({
@@ -727,6 +768,13 @@ export class ConversationsService {
           where: { id: conversation.id },
           data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
         });
+        if (typeof tx.conversation.updateMany === "function") {
+          const ownerUpdate = await tx.conversation.updateMany({
+            where: { id: conversation.id, ownerUserId: null },
+            data: { ownerUserId: operator.id },
+          });
+          ownerAssigned = ownerUpdate.count === 1;
+        }
         await tx.activityHistory.create({
           data: {
             conversationId: conversation.id,
@@ -741,7 +789,10 @@ export class ConversationsService {
         });
         return created;
       });
-      this.publishOutboundMessage(conversation, message);
+      const owner = ownerAssigned
+        ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
+        : serializeConversationOwner(conversation.owner, conversation.storeId);
+      this.publishOutboundMessage(conversation, message, null, owner);
       return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -765,7 +816,7 @@ export class ConversationsService {
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
     if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
     if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
-    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true } });
+    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } } } });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
     if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
     if (!conversation.lineOfficialAccount?.isActive || conversation.lineOfficialAccount.archivedAt || !conversation.lineOfficialAccount.encryptedChannelAccessToken) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
@@ -851,13 +902,21 @@ export class ConversationsService {
       }
 
       const sentAt = new Date();
+      let ownerAssigned = false;
       const created = await this.prisma.$transaction(async (tx) => {
         const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", deliveryMethod, providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
         await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: stored.mimeType, objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
         await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
+        if (typeof tx.conversation.updateMany === "function") {
+          const ownerUpdate = await tx.conversation.updateMany({ where: { id: conversation.id, ownerUserId: null }, data: { ownerUserId: operator.id } });
+          ownerAssigned = ownerUpdate.count === 1;
+        }
         return message;
       });
-      this.publishOutboundMessage(conversation, created, { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size });
+      const owner = ownerAssigned
+        ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
+        : serializeConversationOwner(conversation.owner, conversation.storeId);
+      this.publishOutboundMessage(conversation, created, { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size }, owner);
       return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }

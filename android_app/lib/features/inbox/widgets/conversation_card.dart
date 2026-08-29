@@ -98,6 +98,7 @@ class ConversationCard extends StatelessWidget {
                   fontSize: 12.5,
                 ),
           ),
+          _OwnerSummary(owner: conversation.owner),
           _SalesSummary(summary: conversation.customerSalesSummary),
           const SizedBox(height: 6),
           Row(
@@ -150,6 +151,7 @@ class ConversationCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 StoreBadge(name: conversation.storeName, compact: true),
+                _OwnerSummary(owner: conversation.owner),
                 _SalesSummary(summary: conversation.customerSalesSummary),
                 const SizedBox(height: 2),
                 ConversationPreview(
@@ -169,6 +171,37 @@ class ConversationCard extends StatelessWidget {
           ),
         ],
       );
+}
+
+class _OwnerSummary extends StatelessWidget {
+  const _OwnerSummary({required this.owner});
+
+  final ConversationOwner? owner;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          const Icon(Icons.person_outline,
+              size: 13, color: AppColors.textSecondary),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              '${appLocalizations(context).conversationOwner}: ${owner?.displayName ?? appLocalizations(context).unassignedOwner}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SalesSummary extends StatelessWidget {

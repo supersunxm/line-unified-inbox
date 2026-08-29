@@ -230,7 +230,8 @@ class ConversationDetail {
       this.customerSalesInformation,
       this.purchaseInformation,
       this.aiInsight,
-      this.operationalState});
+      this.operationalState,
+      this.owner});
   final String id;
   final String customerName;
   final String storeName;
@@ -245,6 +246,7 @@ class ConversationDetail {
   final PurchaseInformation? purchaseInformation;
   final AiInsight? aiInsight;
   final OperationalState? operationalState;
+  final ConversationOwner? owner;
   ConversationDetail copyWith(
           {List<ChatMessage>? messages,
           Object? nextCursor = _detailUnset,
@@ -254,7 +256,8 @@ class ConversationDetail {
           Object? customerSalesInformation = _detailUnset,
           Object? purchaseInformation = _detailUnset,
           Object? aiInsight = _detailUnset,
-          Object? operationalState = _detailUnset}) =>
+          Object? operationalState = _detailUnset,
+          Object? owner = _detailUnset}) =>
       ConversationDetail(
           id: id,
           customerName: customerName,
@@ -286,7 +289,10 @@ class ConversationDetail {
               : aiInsight as AiInsight?,
           operationalState: identical(operationalState, _detailUnset)
               ? this.operationalState
-              : operationalState as OperationalState?);
+              : operationalState as OperationalState?,
+          owner: identical(owner, _detailUnset)
+              ? this.owner
+              : owner as ConversationOwner?);
   factory ConversationDetail.fromJson(Map<String, dynamic> json) {
     final customer = json['customer'] as Map<String, dynamic>?;
     final store = json['store'] as Map<String, dynamic>?;
@@ -315,7 +321,11 @@ class ConversationDetail {
         aiInsight:
             AiInsight.fromJson(json['aiInsight'] as Map<String, dynamic>?),
         operationalState: OperationalState.fromJson(
-            json['operationalState'] as Map<String, dynamic>?));
+            json['operationalState'] as Map<String, dynamic>?),
+        owner: json['owner'] is Map
+            ? ConversationOwner.fromJson(
+                Map<String, dynamic>.from(json['owner'] as Map))
+            : null);
   }
 }
 
@@ -391,6 +401,22 @@ class ConversationRepository {
           Map<String, dynamic>.from(conversation));
     }
     return detail(id);
+  }
+
+  Future<List<ConversationOwner>> eligibleOwners(String id) async {
+    final result = await _api.get('/mobile/conversations/$id/owners');
+    return (result['items'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) =>
+            ConversationOwner.fromJson(Map<String, dynamic>.from(item)))
+        .where((owner) => owner.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<ConversationDetail> updateOwner(String id, String? userId) async {
+    final result = await _api.patch('/mobile/conversations/$id/owner',
+        body: <String, dynamic>{'userId': userId});
+    return ConversationDetail.fromJson(result);
   }
 
   Future<List<ProductSelectorItem>> fetchProducts(

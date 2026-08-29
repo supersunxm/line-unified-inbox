@@ -26,6 +26,7 @@ export type RealtimeEvent = {
       interestLevel: string | null;
       products: Array<{ modelName: string; quantity: number }>;
     } | null;
+    owner?: { id: string; displayName: string } | null;
   };
 };
 

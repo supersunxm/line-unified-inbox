@@ -104,44 +104,52 @@ class _SummaryPageState extends State<SummaryPage> {
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: AppSpacing.screen,
-        children: [
-          Text(appLocalizations(context).monthlyActivity,
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.md),
-          _MetricGrid(summary: summary),
-          const SizedBox(height: AppSpacing.xl),
-          _ResponseCard(
-              response: summary.response, comparison: summary.comparison),
-          const SizedBox(height: AppSpacing.lg),
-          _ComparisonCard(comparison: summary.comparison),
-          const SizedBox(height: AppSpacing.lg),
-          _TagAnalyticsCard(tags: summary.tags),
-          const SizedBox(height: AppSpacing.lg),
-          Text(appLocalizations(context).dataQuality,
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            summary.dataQuality.qaExcluded
-                ? appLocalizations(context).qaExcluded
-                : appLocalizations(context).analyticsQualityUnknown,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
-          ),
-          if (summary.dataQuality.tagAnalyticsMode != null) ...[
-            const SizedBox(height: AppSpacing.xs),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(appLocalizations(context).monthlyActivity,
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.md),
+            _MetricGrid(summary: summary),
+            const SizedBox(height: AppSpacing.xl),
+            _TeamHandlingCard(team: summary.team),
+            const SizedBox(height: AppSpacing.lg),
+            _OwnershipCard(ownership: summary.ownership),
+            const SizedBox(height: AppSpacing.lg),
+            _ResponseCard(
+                response: summary.response, comparison: summary.comparison),
+            const SizedBox(height: AppSpacing.lg),
+            _ComparisonCard(comparison: summary.comparison),
+            const SizedBox(height: AppSpacing.lg),
+            _TagAnalyticsCard(tags: summary.tags),
+            const SizedBox(height: AppSpacing.lg),
+            Text(appLocalizations(context).dataQuality,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
             Text(
-              '${appLocalizations(context).customerTagCoverage}: ${summary.dataQuality.tagAnalyticsMode == 'CURRENT_TAG_SNAPSHOT' ? appLocalizations(context).currentTagSnapshot : summary.dataQuality.tagAnalyticsMode}',
+              summary.dataQuality.qaExcluded
+                  ? appLocalizations(context).qaExcluded
+                  : appLocalizations(context).analyticsQualityUnknown,
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
                   ?.copyWith(color: AppColors.textSecondary),
             ),
+            if (summary.dataQuality.tagAnalyticsMode != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${appLocalizations(context).customerTagCoverage}: ${summary.dataQuality.tagAnalyticsMode == 'CURRENT_TAG_SNAPSHOT' ? appLocalizations(context).currentTagSnapshot : summary.dataQuality.tagAnalyticsMode}',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -186,32 +194,47 @@ class _MetricGrid extends StatelessWidget {
   final MonthlySummary summary;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: _MetricCard(
-                label: appLocalizations(context).incomingMessages,
-                value: _formatCount(context, summary.volume.incomingMessages),
-                icon: Icons.markunread_outlined),
-          ),
+  Widget build(BuildContext context) {
+    final overview = summary.overview;
+    final cards = [
+      _MetricCard(
+          label: appLocalizations(context).incomingMessages,
+          value: _formatCount(context, overview.incomingMessages),
+          icon: Icons.markunread_outlined),
+      _MetricCard(
+          label: appLocalizations(context).customerConversations,
+          value: _formatCount(context, overview.incomingConversations),
+          icon: Icons.forum_outlined),
+      _MetricCard(
+          label: appLocalizations(context).repliedConversations,
+          value: _formatCount(context, overview.repliedConversations),
+          icon: Icons.reply_outlined),
+      _MetricCard(
+          label: appLocalizations(context).waitingConversations,
+          value: _formatCount(context, overview.waitingConversations),
+          icon: Icons.schedule_outlined),
+    ];
+    return Column(
+      children: [
+        Row(children: [
+          Expanded(child: cards[0]),
           const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: _MetricCard(
-                label: appLocalizations(context).customerConversations,
-                value: _formatCount(
-                    context, summary.volume.incomingConversations),
-                icon: Icons.forum_outlined),
-          ),
-        ],
-      );
+          Expanded(child: cards[1]),
+        ]),
+        const SizedBox(height: AppSpacing.md),
+        Row(children: [
+          Expanded(child: cards[2]),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: cards[3]),
+        ]),
+      ],
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
   const _MetricCard(
-      {required this.label,
-      required this.value,
-      required this.icon});
+      {required this.label, required this.value, required this.icon});
   final String label;
   final String value;
   final IconData icon;
@@ -234,6 +257,119 @@ class _MetricCard extends StatelessWidget {
           ]),
         ),
       );
+}
+
+class _TeamHandlingCard extends StatelessWidget {
+  const _TeamHandlingCard({required this.team});
+
+  final SummaryTeam team;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = appLocalizations(context);
+    return Card(
+      child: Padding(
+        padding: AppSpacing.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.teamHandling,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Text(l10n.humanReplies,
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xs),
+            if (team.humanReplies.isEmpty)
+              Text(l10n.noHumanReplies,
+                  style: Theme.of(context).textTheme.bodySmall)
+            else
+              for (final member in team.humanReplies)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(member.displayName,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      Text(
+                          '${_formatCount(context, member.conversationsReplied)} ${l10n.conversationsReplied.toLowerCase()}'),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(_formatPercent(context, member.workloadShare),
+                          style: Theme.of(context).textTheme.labelMedium),
+                    ],
+                  ),
+                ),
+            if (team.humanReplies.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${l10n.outboundMessages}: ${_formatCount(context, team.humanReplies.fold<int>(0, (sum, member) => sum + member.outboundMessages))}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (team.botOutboundMessages > 0) ...[
+              const Divider(height: AppSpacing.lg),
+              Text(
+                '${l10n.automatedReplies}: ${_formatCount(context, team.botOutboundMessages)} ${l10n.outboundMessages.toLowerCase()}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnershipCard extends StatelessWidget {
+  const _OwnershipCard({required this.ownership});
+
+  final SummaryOwnership ownership;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = appLocalizations(context);
+    final total = ownership.withOwner + ownership.withoutOwner;
+    return Card(
+      child: Padding(
+        padding: AppSpacing.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                    child: Text(l10n.ownership,
+                        style: Theme.of(context).textTheme.titleMedium)),
+                Text(_formatPercent(context, ownership.coverageRate),
+                    style: Theme.of(context).textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(l10n.currentSnapshotLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    )),
+            const SizedBox(height: AppSpacing.sm),
+            LinearProgressIndicator(
+                value: total == 0 ? 0 : ownership.withOwner / total),
+            const SizedBox(height: AppSpacing.sm),
+            _InsightRow(
+                label: l10n.conversationsWithOwner, value: ownership.withOwner),
+            _InsightRow(
+                label: l10n.conversationsWithoutOwner,
+                value: ownership.withoutOwner),
+            if (ownership.byOwner.isNotEmpty) ...[
+              const Divider(height: AppSpacing.lg),
+              for (final owner in ownership.byOwner)
+                _InsightRow(
+                    label: owner.displayName, value: owner.conversations),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ResponseCard extends StatelessWidget {

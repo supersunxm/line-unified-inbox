@@ -195,6 +195,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customerConversations => 'Customer Conversations';
 
   @override
+  String get repliedConversations => 'Replied conversations';
+
+  @override
+  String get waitingConversations => 'Waiting conversations';
+
+  @override
   String get responsePerformance => 'Response performance';
 
   @override
@@ -260,6 +266,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get conversationContext => 'Conversation context';
+
+  @override
+  String get conversationOwner => 'Owner';
+
+  @override
+  String get unassignedOwner => 'Unassigned';
+
+  @override
+  String get selectOwner => 'Select owner';
+
+  @override
+  String get clearOwner => 'Clear owner';
+
+  @override
+  String get ownerLoadFailed => 'Unable to load eligible owners';
+
+  @override
+  String get ownerUpdateFailed => 'Unable to update conversation owner';
+
+  @override
+  String get teamHandling => 'Team conversation handling';
+
+  @override
+  String get humanReplies => 'Human replies';
+
+  @override
+  String get outboundMessages => 'Outbound messages';
+
+  @override
+  String get conversationsReplied => 'Conversations replied';
+
+  @override
+  String get workloadShare => 'Workload share';
+
+  @override
+  String get automatedReplies => 'Automated replies';
+
+  @override
+  String get ownership => 'Conversation ownership';
+
+  @override
+  String get conversationsWithOwner => 'With owner';
+
+  @override
+  String get conversationsWithoutOwner => 'Without owner';
+
+  @override
+  String get ownerCoverage => 'Owner coverage';
+
+  @override
+  String get currentSnapshotLabel => 'Current ownership snapshot';
+
+  @override
+  String get noHumanReplies => 'No human replies recorded this month';
 
   @override
   String get readOnlyConversation => 'Read-only · Reply permission is disabled';

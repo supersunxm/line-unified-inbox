@@ -190,6 +190,7 @@ class _InboxPageState extends State<InboxPage> {
         conversation is Map && conversation.containsKey('customerSalesSummary');
     final hasPicture =
         conversation is Map && conversation.containsKey('customerPictureUrl');
+    final hasOwner = conversation is Map && conversation.containsKey('owner');
     final updated = current.copyWith(
         preview: conversationMessagePreview(
             text: message['text'] is String ? message['text'] as String : null,
@@ -209,6 +210,12 @@ class _InboxPageState extends State<InboxPage> {
             ? CustomerSalesSummary.fromJson(
                 conversation['customerSalesSummary'] as Map<String, dynamic>?)
             : current.customerSalesSummary,
+        owner: hasOwner
+            ? conversation['owner'] is Map
+                ? ConversationOwner.fromJson(
+                    Map<String, dynamic>.from(conversation['owner'] as Map))
+                : null
+            : current.owner,
         priority: bmReplyStatus == 'REPLIED'
             ? const ConversationPriority.none()
             : current.priority);
@@ -230,6 +237,7 @@ class _InboxPageState extends State<InboxPage> {
     final latest = conversation['latestMessageAt'];
     final hasSalesSummary = conversation.containsKey('customerSalesSummary');
     final hasPicture = conversation.containsKey('customerPictureUrl');
+    final hasOwner = conversation.containsKey('owner');
     final updated = current.copyWith(
         sentAt: latest is String ? DateTime.tryParse(latest) : null,
         bmReplyStatus: conversation['bmReplyStatus'] is String
@@ -242,6 +250,12 @@ class _InboxPageState extends State<InboxPage> {
             ? CustomerSalesSummary.fromJson(
                 conversation['customerSalesSummary'] as Map<String, dynamic>?)
             : current.customerSalesSummary,
+        owner: hasOwner
+            ? conversation['owner'] is Map
+                ? ConversationOwner.fromJson(
+                    Map<String, dynamic>.from(conversation['owner'] as Map))
+                : null
+            : current.owner,
         priority: conversation['bmReplyStatus'] == 'REPLIED'
             ? const ConversationPriority.none()
             : current.priority);
@@ -255,6 +269,7 @@ class _InboxPageState extends State<InboxPage> {
       left.storeName == right.storeName &&
       left.customerPictureUrl == right.customerPictureUrl &&
       left.customerSalesSummary == right.customerSalesSummary &&
+      left.owner == right.owner &&
       left.unreadCount == right.unreadCount &&
       left.bmReplyStatus == right.bmReplyStatus &&
       left.preview == right.preview &&
@@ -286,6 +301,7 @@ class _InboxPageState extends State<InboxPage> {
           customerPictureUrl: detail.customerPictureUrl,
           customerSalesSummary: _salesSummaryFromDetail(detail),
           bmReplyStatus: detail.bmReplyStatus,
+          owner: detail.owner,
           preview: latestMessage == null
               ? current.preview
               : conversationMessagePreview(
@@ -378,6 +394,7 @@ class _InboxPageState extends State<InboxPage> {
               customerPictureUrl: detail.customerPictureUrl,
               customerSalesSummary: _salesSummaryFromDetail(detail),
               bmReplyStatus: detail.bmReplyStatus,
+              owner: detail.owner,
               preview: latestMessage == null
                   ? current.preview
                   : conversationMessagePreview(

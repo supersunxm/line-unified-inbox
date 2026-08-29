@@ -4,10 +4,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/localization/localization.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../../core/models/models.dart';
 
 class ConversationHeader extends StatelessWidget
     implements PreferredSizeWidget {
-  static const double _height = 128;
+  static const double _height = 152;
 
   const ConversationHeader({
     super.key,
@@ -16,10 +17,12 @@ class ConversationHeader extends StatelessWidget
     this.storeName,
     this.storeCode,
     this.bmReplyStatus,
+    this.owner,
     this.exactStatus = false,
     this.onBack,
     this.onProfile,
     this.onAction,
+    this.onOwnerTap,
   });
 
   final String customerName;
@@ -27,10 +30,12 @@ class ConversationHeader extends StatelessWidget
   final String? storeName;
   final String? storeCode;
   final String? bmReplyStatus;
+  final ConversationOwner? owner;
   final bool exactStatus;
   final VoidCallback? onBack;
   final VoidCallback? onProfile;
   final VoidCallback? onAction;
+  final VoidCallback? onOwnerTap;
 
   @override
   Size get preferredSize => const Size.fromHeight(_height);
@@ -131,6 +136,10 @@ class ConversationHeader extends StatelessWidget
                     ),
                   ],
                 ),
+                if (owner != null || onOwnerTap != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _OwnerRow(owner: owner, onTap: onOwnerTap),
+                ],
               ],
             )
           : Row(
@@ -158,6 +167,10 @@ class ConversationHeader extends StatelessWidget
                       const SizedBox(height: AppSpacing.xs),
                       if (hasStatus)
                         StatusBadge(status: bmReplyStatus!, compact: true),
+                      if (owner != null || onOwnerTap != null) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        _OwnerRow(owner: owner, onTap: onOwnerTap),
+                      ],
                     ],
                   ),
                 ),
@@ -178,5 +191,53 @@ class ConversationHeader extends StatelessWidget
           ),
       ],
     );
+  }
+}
+
+class _OwnerRow extends StatelessWidget {
+  const _OwnerRow({required this.owner, required this.onTap});
+
+  final ConversationOwner? owner;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = appLocalizations(context);
+    final label = owner?.displayName ?? l10n.unassignedOwner;
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.person_outline,
+            size: 14,
+            color: owner == null ? AppColors.textSecondary : AppColors.primary),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            '${l10n.conversationOwner}: $label',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+        if (onTap != null) ...[
+          const SizedBox(width: 3),
+          const Icon(Icons.edit_outlined,
+              size: 12, color: AppColors.textSecondary),
+        ],
+      ],
+    );
+    return onTap == null
+        ? child
+        : InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+              child: child,
+            ),
+          );
   }
 }

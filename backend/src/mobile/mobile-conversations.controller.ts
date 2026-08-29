@@ -3,7 +3,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { AuthRequest } from "../auth/auth.guard";
 import { SendConversationMessageDto } from "../dto";
 import { PrismaService } from "../prisma.service";
-import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateCustomerSalesInformationDto, UpdateMobileBmReplyStatusDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
+import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateCustomerSalesInformationDto, UpdateMobileBmReplyStatusDto, UpdateMobileConversationOwnerDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
 import { MobileConversationsService } from "./mobile-conversations.service";
 
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
@@ -63,6 +63,12 @@ export class MobileConversationsController {
 
   @Patch(":id/bm-reply-status")
   updateBmReplyStatus(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: UpdateMobileBmReplyStatusDto) { return this.conversations.updateBmReplyStatus(request.user!, id, dto.status); }
+
+  @Get(":id/owners")
+  owners(@Req() request: AuthRequest, @Param("id") id: string) { return this.conversations.eligibleOwners(request.user!, id); }
+
+  @Patch(":id/owner")
+  updateOwner(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: UpdateMobileConversationOwnerDto) { return this.conversations.updateOwner(request.user!, id, dto.userId ?? null); }
 
   @Patch(":id/tags")
   updateTags(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: UpdateMobileConversationTagsDto) { return this.conversations.updateTags(request.user!, id, dto); }

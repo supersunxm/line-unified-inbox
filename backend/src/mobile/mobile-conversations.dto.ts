@@ -20,6 +20,12 @@ export class UpdateMobileBmReplyStatusDto {
   status!: BmReplyStatus;
 }
 
+export class UpdateMobileConversationOwnerDto {
+  @IsOptional()
+  @IsUUID("4")
+  userId?: string | null;
+}
+
 export class MobileProductQueryDto {
   @IsOptional() @IsString() @MaxLength(100) search?: string;
   @IsOptional() @IsEnum(ProductGroup) category?: ProductGroup;
