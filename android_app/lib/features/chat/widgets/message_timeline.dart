@@ -11,6 +11,8 @@ import 'image_bubble.dart';
 import 'message_bubble.dart';
 import 'video_bubble.dart';
 
+typedef OpenImageCallback = void Function(Uint8List bytes, String? mimeType);
+
 class PendingTimelineMessage {
   const PendingTimelineMessage({
     required this.key,
@@ -53,7 +55,7 @@ class MessageTimeline extends StatelessWidget {
   final Map<String, Uint8List> mediaBytes;
   final VoidCallback? onLoadOlder;
   final ValueChanged<String>? onRetryMessage;
-  final ValueChanged<Uint8List>? onOpenImage;
+  final OpenImageCallback? onOpenImage;
   final void Function(ChatMedia media, String messageId)? onLoadMedia;
   final Future<Uint8List> Function(ChatMedia media, String messageId)?
       onLoadVideo;
@@ -141,7 +143,7 @@ class MessageTimeline extends StatelessWidget {
               bytes: bytes,
               onOpen: bytes == null || onOpenImage == null
                   ? null
-                  : () => onOpenImage!(bytes),
+                  : () => onOpenImage!(bytes, media?.mimeType),
             )
           : video
               ? VideoBubble(

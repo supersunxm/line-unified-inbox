@@ -605,6 +605,30 @@ abstract class AppLocalizations {
   /// **'Open image'**
   String get openImage;
 
+  /// No description provided for @unableToOpenLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open link'**
+  String get unableToOpenLink;
+
+  /// No description provided for @saveImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Save image'**
+  String get saveImage;
+
+  /// No description provided for @imageSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Image saved'**
+  String get imageSaved;
+
+  /// No description provided for @imageSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to save image'**
+  String get imageSaveFailed;
+
   /// No description provided for @imageProcessing.
   ///
   /// In en, this message translates to:

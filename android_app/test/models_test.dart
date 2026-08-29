@@ -21,6 +21,32 @@ void main() {
     expect(item.preview, 'Hello');
   });
 
+  test('conversation summary maps customer picture and compact sales summary',
+      () {
+    final item = ConversationSummary.fromJson({
+      'id': 'conversation-sales',
+      'customer': {
+        'displayName': 'Customer',
+        'pictureUrl': 'https://cdn.example/customer.jpg',
+      },
+      'store': {'name': 'Store'},
+      'unreadCount': 0,
+      'bmReplyStatus': 'NOT_REPLIED',
+      'customerSalesSummary': {
+        'status': 'PURCHASED',
+        'interestLevel': null,
+        'products': [
+          {'modelName': 'OPPO Reno16', 'quantity': 2},
+          {'modelName': 'OPPO Watch X', 'quantity': 1},
+        ],
+      },
+    });
+    expect(item.customerPictureUrl, 'https://cdn.example/customer.jpg');
+    expect(item.customerSalesSummary?.isPurchased, isTrue);
+    expect(item.customerSalesSummary?.products.first.modelName, 'OPPO Reno16');
+    expect(item.customerSalesSummary?.products.first.quantity, 2);
+  });
+
   test('conversation summary prefixes outbound text preview', () {
     final item = ConversationSummary.fromJson({
       'id': 'conversation-1',
@@ -106,6 +132,19 @@ void main() {
     expect(detail.messages.single.media?.ready, isTrue);
     expect(detail.messages.single.media?.url, '/messages/message-1/media');
     expect(detail.messages.single.sender?.displayName, 'Sunn');
+  });
+
+  test('conversation detail maps customer picture URL', () {
+    final detail = ConversationDetail.fromJson({
+      'id': 'conversation-picture',
+      'customer': {
+        'displayName': 'Customer',
+        'pictureUrl': 'https://cdn.example/customer.jpg',
+      },
+      'store': {'name': 'Store'},
+      'messages': [],
+    });
+    expect(detail.customerPictureUrl, 'https://cdn.example/customer.jpg');
   });
 
   test('missing or malformed media is safe and text remains available', () {

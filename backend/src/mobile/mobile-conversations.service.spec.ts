@@ -22,6 +22,50 @@ void test("mobile list is restricted to the authenticated user's accessible stor
   assert.equal(result.items[0]?.unreadCount, 2);
 });
 
+void test("mobile list returns customer picture and compact sales summary without detail requests", async () => {
+  const prisma = {
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-sales",
+        latestMessageAt: new Date(),
+        bmReplyStatus: "NOT_REPLIED",
+        followUpStatus: "FOLLOW_UP",
+        customerSalesStatus: "INTERESTED",
+        interestLevel: "HOT",
+        customer: { id: "customer-1", displayName: "Customer", pictureUrl: "https://cdn.example/customer.jpg" },
+        store: { id: "store-1", name: "Store", code: "S1" },
+        salesProducts: [
+          { customProductName: null, quantity: 1, productModel: { name: "OPPO Reno16" } },
+          { customProductName: "OPPO Watch X", quantity: 2, productModel: { name: "Watch" } },
+        ],
+        messages: [],
+        _count: { pushNotifications: 0 },
+      }],
+      count: async () => 1,
+    },
+    $transaction: async <T>(operations: Promise<T>[]) => Promise.all(operations),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { accessibleStoreIds: async () => ["store-1"] } as never,
+    {} as never,
+  );
+  const result = await service.list(user, { page: 1, pageSize: 30 });
+  assert.deepEqual(result.items[0]?.customer, {
+    id: "customer-1",
+    displayName: "Customer",
+    pictureUrl: "https://cdn.example/customer.jpg",
+  });
+  assert.deepEqual(result.items[0]?.customerSalesSummary, {
+    status: "INTERESTED",
+    interestLevel: "HOT",
+    products: [
+      { modelName: "OPPO Reno16", quantity: 1 },
+      { modelName: "OPPO Watch X", quantity: 2 },
+    ],
+  });
+});
+
 void test("mobile list gives all-store users the same store/status/search scope used by web chats", async () => {
   let where: any;
   const prisma = {
@@ -97,6 +141,26 @@ void test("mobile detail permits the assigned store and rejects a different stor
   const denied = { assertConversationAccess: async () => { throw new ForbiddenException("Store access is forbidden"); } };
   const deniedService = new MobileConversationsService(prisma as never, denied as never, {} as never);
   await assert.rejects(() => deniedService.get(user, "conversation-2"), ForbiddenException);
+});
+
+void test("mobile detail returns customer picture URL in the canonical customer payload", async () => {
+  const conversation = {
+    id: "conversation-picture",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "NOT_REPLIED",
+    followUpStatus: "FOLLOW_UP",
+    customer: { id: "customer-1", displayName: "Customer", pictureUrl: "https://cdn.example/customer.jpg" },
+    store: { id: "store-1", name: "Store", code: "S1" },
+    messages: [],
+    _count: { pushNotifications: 0 },
+  };
+  const service = new MobileConversationsService(
+    { conversation: { findUnique: async () => conversation } } as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+  );
+  const result = await service.get(user, conversation.id);
+  assert.equal(result.customer.pictureUrl, "https://cdn.example/customer.jpg");
 });
 
 void test("mobile detail returns a ready video through the authenticated media proxy contract", async () => {

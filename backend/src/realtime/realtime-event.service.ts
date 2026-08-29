@@ -15,7 +15,17 @@ export type RealtimeEvent = {
     sender?: { userId: string | null; displayName: string } | null;
     media: null | { processingStatus: string; mimeType?: string | null; fileSize?: number | null; url?: string | null };
   };
-  conversation?: { id: string; latestMessageAt: string; bmReplyStatus: string };
+  conversation?: {
+    id: string;
+    latestMessageAt: string;
+    bmReplyStatus: string;
+    customerPictureUrl?: string | null;
+    customerSalesSummary?: {
+      status: string | null;
+      interestLevel: string | null;
+      products: Array<{ modelName: string; quantity: number }>;
+    } | null;
+  };
 };
 
 @Injectable()

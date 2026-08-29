@@ -113,10 +113,11 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     expect(repository.variantCalls, ['model-1']);
 
@@ -242,7 +243,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
@@ -406,11 +407,12 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
     expect(find.text('Selected'), findsNothing);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
@@ -424,10 +426,11 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Change Product'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
-    await tester.tap(find.textContaining('○ OPPO Reno16 Pro 5G'));
+    await tester.tap(find.textContaining('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
@@ -484,7 +487,7 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
@@ -525,7 +528,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
@@ -539,8 +542,9 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
@@ -609,13 +613,14 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('○ OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Select'), findsOneWidget);
+    expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
     expect(find.text('Selected'), findsNothing);
     expect(find.text('Change Product'), findsNothing);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Selected'), findsOneWidget);
@@ -682,7 +687,7 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -790,7 +795,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
@@ -841,7 +846,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 16GB RAM · 512GB ROM · Graphite'));
@@ -915,7 +920,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
     await tester.tap(
         find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'));
@@ -988,7 +993,7 @@ void main() {
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Select'));
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.close).last);
@@ -999,5 +1004,35 @@ void main() {
     expect(find.text('OPPO Reno16 Pro 5G'), findsNothing);
     expect(find.text('Draft Selection'), findsNothing);
     expect(repository.saveCallCount, 0);
+  });
+
+  testWidgets(
+      'Product picker keeps long names readable with a compact affordance',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-1',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+
+    final title = tester.widget<Text>(find.text('OPPO Reno16 Pro 5G').last);
+    expect(title.maxLines, 2);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.text('Select'), findsNothing);
   });
 }

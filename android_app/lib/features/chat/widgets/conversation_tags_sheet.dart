@@ -63,7 +63,7 @@ class ConversationTagsBar extends StatelessWidget {
 
     if (!hasSalesData && current.isEmpty && !isLegacy) {
       return Align(
-        alignment: Alignment.centerLeft,
+        alignment: Alignment.centerRight,
         child: TextButton.icon(
           onPressed: onPressed,
           icon: const Icon(Icons.sell_outlined, size: 18),
@@ -1325,8 +1325,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           leading: Text(_getCategoryIcon(
                               product.category, product.productName)),
                           title: Text(
-                            '○ ${product.productName}',
-                            maxLines: 1,
+                            product.productName,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
@@ -1334,12 +1334,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                                 .where((value) => value.isNotEmpty)
                                 .join(' · '),
                           ),
-                          trailing: OutlinedButton(
-                            onPressed: _saving
-                                ? null
-                                : () => _selectDraftProduct(product),
-                            child: Text(l10n.select),
-                          ),
+                          trailing: const Icon(Icons.chevron_right, size: 20),
                           onTap: _saving
                               ? null
                               : () => _selectDraftProduct(product),

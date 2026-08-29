@@ -23,7 +23,10 @@ class CustomerProfileSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                UserAvatar(displayName: detail.customerName, radius: 30),
+                UserAvatar(
+                    displayName: detail.customerName,
+                    imageUrl: detail.customerPictureUrl,
+                    radius: 30),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -52,8 +55,8 @@ class CustomerProfileSheet extends StatelessWidget {
                     ? appLocalizations(context).storeUnavailable
                     : detail.storeName),
                 subtitle: detail.storeCode?.trim().isNotEmpty == true
-                    ? Text(appLocalizations(context)
-                        .storeCode(detail.storeCode!))
+                    ? Text(
+                        appLocalizations(context).storeCode(detail.storeCode!))
                     : null,
               ),
             ),

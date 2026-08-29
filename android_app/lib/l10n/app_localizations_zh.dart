@@ -275,6 +275,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get openImage => '打开图片';
 
   @override
+  String get unableToOpenLink => '无法打开链接';
+
+  @override
+  String get saveImage => '保存图片';
+
+  @override
+  String get imageSaved => '图片已保存';
+
+  @override
+  String get imageSaveFailed => '无法保存图片';
+
+  @override
   String get imageProcessing => '正在处理图片…';
 
   @override
@@ -1189,6 +1201,18 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get openImage => '打开图片';
+
+  @override
+  String get unableToOpenLink => '无法打开链接';
+
+  @override
+  String get saveImage => '保存图片';
+
+  @override
+  String get imageSaved => '图片已保存';
+
+  @override
+  String get imageSaveFailed => '无法保存图片';
 
   @override
   String get imageProcessing => '正在处理图片…';

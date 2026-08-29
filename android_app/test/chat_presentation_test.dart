@@ -70,6 +70,13 @@ void main() {
       ),
     ));
     expect(find.text('Customer Sales Info'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Align && widget.alignment == Alignment.centerRight,
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

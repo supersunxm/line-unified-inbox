@@ -280,6 +280,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openImage => 'Open image';
 
   @override
+  String get unableToOpenLink => 'Unable to open link';
+
+  @override
+  String get saveImage => 'Save image';
+
+  @override
+  String get imageSaved => 'Image saved';
+
+  @override
+  String get imageSaveFailed => 'Unable to save image';
+
+  @override
   String get imageProcessing => 'Image processing…';
 
   @override

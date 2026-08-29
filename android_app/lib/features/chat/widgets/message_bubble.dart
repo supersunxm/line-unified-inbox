@@ -4,6 +4,7 @@ import '../../../core/models/models.dart';
 import '../../../core/localization/localization.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import 'message_link_text.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -88,7 +89,7 @@ class MessageBubble extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                       color: AppColors.textPrimary,
                     ),
-                child: content ?? Text(text),
+                child: content ?? MessageLinkText(text: text),
               ),
               const SizedBox(height: AppSpacing.xs),
               Row(

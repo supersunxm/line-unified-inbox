@@ -7,6 +7,7 @@ import '../../core/localization/localization.dart';
 import '../../core/models/models.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/logging/safe_logger.dart';
+import '../../core/services/media_save_service.dart';
 import '../../core/widgets/status_badge.dart';
 import '../inbox/conversation_repository.dart';
 import 'widgets/conversation_header.dart';
@@ -696,6 +697,7 @@ class _ChatPageState extends State<ChatPage> {
             return Scaffold(
                 appBar: ConversationHeader(
                     customerName: detail.customerName,
+                    customerPictureUrl: detail.customerPictureUrl,
                     storeName: detail.storeName,
                     storeCode: detail.storeCode,
                     bmReplyStatus: detail.bmReplyStatus,
@@ -734,9 +736,10 @@ class _ChatPageState extends State<ChatPage> {
                           mediaBytes: _mediaBytes,
                           onLoadOlder: _loadOlder,
                           onRetryMessage: _retryPending,
-                          onOpenImage: (bytes) => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => _ImageViewer(bytes: bytes))),
+                          onOpenImage: (bytes, mimeType) =>
+                              Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) => _ImageViewer(
+                                      bytes: bytes, mimeType: mimeType))),
                           onLoadMedia: _loadImageMedia,
                           onLoadVideo: (media, id) async {
                             final bytes = await _loadMedia(media, id);
@@ -788,17 +791,84 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-class _ImageViewer extends StatelessWidget {
-  const _ImageViewer({required this.bytes});
+class _ImageViewer extends StatefulWidget {
+  const _ImageViewer({required this.bytes, this.mimeType});
   final Uint8List bytes;
+  final String? mimeType;
+
+  @override
+  State<_ImageViewer> createState() => _ImageViewerState();
+}
+
+class _ImageViewerState extends State<_ImageViewer> {
+  bool _saving = false;
+
+  Future<void> _saveImage() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final mimeType = _normalizedMimeType(widget.mimeType);
+    try {
+      await const MediaSaveService().saveImage(
+        widget.bytes,
+        fileName: _fileName(mimeType),
+        mimeType: mimeType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLocalizations(context).imageSaved)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appLocalizations(context).imageSaveFailed)),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  static String _normalizedMimeType(String? mimeType) =>
+      switch (mimeType?.toLowerCase()) {
+        'image/png' => 'image/png',
+        'image/webp' => 'image/webp',
+        'image/gif' => 'image/gif',
+        _ => 'image/jpeg',
+      };
+
+  static String _fileName(String? mimeType) {
+    final extension = switch (mimeType?.toLowerCase()) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      'image/gif' => 'gif',
+      _ => 'jpg',
+    };
+    return 'oppo-line-image-${DateTime.now().millisecondsSinceEpoch}.$extension';
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
       backgroundColor: Colors.black,
-      appBar:
-          AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _saving ? null : _saveImage,
+            tooltip: appLocalizations(context).saveImage,
+            icon: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.download_outlined),
+          ),
+        ],
+      ),
       body: Center(
           child: InteractiveViewer(
-              child: Image.memory(bytes, fit: BoxFit.contain))));
+              child: Image.memory(widget.bytes, fit: BoxFit.contain))));
 }
 
 class _ImagePreviewPage extends StatelessWidget {
