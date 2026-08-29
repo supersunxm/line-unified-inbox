@@ -14,6 +14,7 @@ import { StoreAccessService } from "./auth/store-access.service";
 import { AuditLogService } from "./auth/audit-log.service";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "./conversation-data-contract";
 import { RealtimeEventService } from "./realtime/realtime-event.service";
+import { stickerPresentationFromRawPayload } from "./messages/sticker-message";
 
 const conversationBaseInclude = {
   customer: true,
@@ -115,13 +116,16 @@ export class ConversationsService {
     };
   }
 
-  private safeMessage<T extends { id: string; direction: MessageDirection; senderUserId?: string | null; senderDisplayName?: string | null; sender?: { id: string; displayName: string | null } | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
-    const { media, sender: senderUser, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
+  private safeMessage<T extends { id: string; direction: MessageDirection; messageType?: MessageType; rawPayload?: unknown; senderUserId?: string | null; senderDisplayName?: string | null; sender?: { id: string; displayName: string | null } | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
+    const { media, rawPayload, sender: senderUser, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
     void _encToken;
     void _tokenRecv;
     void _tokenUsed;
     const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser });
-    return { ...safe, sender, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
+    const sticker = safe.messageType === MessageType.STICKER
+      ? stickerPresentationFromRawPayload(rawPayload)
+      : null;
+    return { ...safe, sender, sticker, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
   private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null) {

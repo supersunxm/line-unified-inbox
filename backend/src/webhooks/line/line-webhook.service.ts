@@ -11,6 +11,7 @@ import { LineImageService } from "../../media/line-image.service";
 import { getFriendAttributionHashSecret, hashLineUserId } from "../../friend-source-links/friend-attribution.config";
 import { NotificationEnqueueService } from "../../notifications/notification-enqueue.service";
 import { RealtimeEventService } from "../../realtime/realtime-event.service";
+import { stickerPresentationFromRawPayload } from "../../messages/sticker-message";
 
 import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";
 import { GreetingExecutionService } from "../../greeting-message/greeting-execution.service";
@@ -83,7 +84,7 @@ export class LineWebhookService {
       if (event.type === "follow") await this.processFollow(event, resolvedOaId);
       else if (event.type === "unfollow") { /* Historical data is intentionally retained. */ }
       else if (event.type === "message" && "message" in event) await this.processMessage(destination, event, event.message, resolvedOaId);
-      else if (event.type === "postback" && "postback" in event) await this.processPostback(event as any, resolvedOaId);
+      else if (event.type === "postback" && "postback" in event) await this.processPostback(event, resolvedOaId);
       else {
         await this.finish(externalId, "IGNORED");
         this.logger.warn(`Unsupported LINE event ignored: ${externalId} (${event.type})`); return true;
@@ -172,7 +173,7 @@ export class LineWebhookService {
 
     if (this.greetingExecution) {
       try {
-        const isUnblocked = Boolean((event as any).follow?.isUnblocked);
+        const isUnblocked = "follow" in event && Boolean(event.follow?.isUnblocked);
         await this.greetingExecution.handleFollowEvent({
           lineOfficialAccountId: resolvedOaId,
           lineUserId: event.source.userId,
@@ -200,7 +201,16 @@ export class LineWebhookService {
     const sentAt = new Date(event.timestamp);
     const customer = await this.prisma.customer.upsert({ where: { lineUserId: event.source.userId }, update: {}, create: { lineUserId: event.source.userId, displayName: "LINE Customer" } });
     const existing = await this.prisma.conversation.findFirst({ where: { customerId: customer.id, storeId: oa.storeId, lineOfficialAccountId: oa.id }, orderBy: { latestMessageAt: "desc" } });
-    const rawPayload = { type: message.type } as Prisma.InputJsonObject;
+    const rawPayload: Prisma.InputJsonObject = message.type === "sticker"
+      ? {
+          type: message.type,
+          ...("packageId" in message && typeof message.packageId === "string" ? { packageId: message.packageId } : {}),
+          ...("stickerId" in message && typeof message.stickerId === "string" ? { stickerId: message.stickerId } : {}),
+          ...("stickerResourceType" in message && typeof message.stickerResourceType === "string" ? { stickerResourceType: message.stickerResourceType } : {}),
+          ...("keywords" in message && Array.isArray(message.keywords) ? { keywords: message.keywords.filter((keyword): keyword is string => typeof keyword === "string") } : {}),
+          ...("text" in message && typeof message.text === "string" ? { text: message.text } : {}),
+        }
+      : { type: message.type };
     const fileName = message.type === "file" && "fileName" in message ? message.fileName : undefined;
     const latitude = message.type === "location" && "latitude" in message ? message.latitude : undefined;
     const longitude = message.type === "location" && "longitude" in message ? message.longitude : undefined;
@@ -274,12 +284,13 @@ export class LineWebhookService {
       return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType };
     });
     const conversation = stored.conversation;
+    const sticker = stickerPresentationFromRawPayload(rawPayload);
     this.realtime?.publish({
       type: "message.created",
       version: 1,
       conversationId: conversation.id,
       storeId: conversation.storeId,
-      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: stored.mediaId ? { processingStatus: "PENDING", mimeType: null, fileSize: null, url: null } : null },
+      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), sticker, media: stored.mediaId ? { processingStatus: "PENDING", mimeType: null, fileSize: null, url: null } : null },
       conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
     });
     if ((message.type === "image" || message.type === "video") && stored.mediaId) {

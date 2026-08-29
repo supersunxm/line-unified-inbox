@@ -112,7 +112,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sentAVideo => 'Sent a video';
 
   @override
-  String get sentASticker => 'Sent a sticker';
+  String get sentASticker => 'Sent a LINE sticker';
 
   @override
   String get sentAFile => 'Sent a file';

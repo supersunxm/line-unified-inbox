@@ -101,6 +101,44 @@ void main() {
     expect(item.preview, 'Sent a video');
   });
 
+  test('sticker message parses text and keywords and uses a clear preview', () {
+    final message = ChatMessage.fromJson({
+      'id': 'message-sticker',
+      'direction': 'INBOUND',
+      'messageType': 'STICKER',
+      'text': 'ส่งสติกเกอร์ LINE',
+      'sticker': {
+        'text': '  ขอบคุณครับ  ',
+        'keywords': ['thanks', 'smile'],
+      },
+      'sentAt': '2026-08-11T00:00:00.000Z',
+    });
+    final summary = conversationMessagePreview(
+      text: 'legacy value',
+      direction: 'INBOUND',
+      messageType: 'STICKER',
+    );
+
+    expect(message.sticker?.firstUsefulText, 'ขอบคุณครับ');
+    expect(message.sticker?.keywords, ['thanks', 'smile']);
+    expect(summary, 'Sent a LINE sticker');
+  });
+
+  test('text image and video previews remain unchanged', () {
+    expect(
+        conversationMessagePreview(
+            text: 'Hello', direction: 'INBOUND', messageType: 'TEXT'),
+        'Hello');
+    expect(
+        conversationMessagePreview(
+            text: 'ignored', direction: 'INBOUND', messageType: 'IMAGE'),
+        'Sent an image');
+    expect(
+        conversationMessagePreview(
+            text: 'ignored', direction: 'INBOUND', messageType: 'VIDEO'),
+        'Sent a video');
+  });
+
   test('conversation detail maps customer, store, timestamps, and ready media',
       () {
     final detail = ConversationDetail.fromJson({

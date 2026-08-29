@@ -9,7 +9,7 @@ const cases: Array<[LineMessage, string]> = [
   [{ id: "4", type: "audio" }, "[Audio]"],
   [{ id: "5", type: "file", fileName: "manual.pdf" }, "[File: manual.pdf]"],
   [{ id: "6", type: "location", title: "Store" }, "[Location: Store]"],
-  [{ id: "7", type: "sticker" }, "[Sticker]"],
+  [{ id: "7", type: "sticker" }, "ส่งสติกเกอร์ LINE"],
   [{ id: "8", type: "future-type" }, "[Unsupported message]"],
 ];
 for (const [message, expected] of cases) void test(`stores ${message.type} placeholder`, () => assert.equal(messagePlaceholder(message), expected));

@@ -179,6 +179,44 @@ void test("mobile detail returns a ready video through the authenticated media p
   assert.deepEqual(result.messages[0]?.media, { processingStatus: "READY", mimeType: "video/mp4", fileSize: 4096, url: "/messages/message-video/media" });
 });
 
+void test("mobile detail exposes presentation-safe sticker text and keywords", async () => {
+  const conversation = {
+    id: "conversation-sticker",
+    latestMessageAt: new Date(),
+    bmReplyStatus: "NOT_REPLIED",
+    followUpStatus: "FOLLOW_UP",
+    customer: { id: "customer-sticker", displayName: "Customer" },
+    store: { id: "store-sticker", name: "Store", code: "S1" },
+    messages: [{
+      id: "message-sticker",
+      direction: "INBOUND",
+      messageType: "STICKER",
+      originalText: "ส่งสติกเกอร์ LINE",
+      rawPayload: {
+        type: "sticker",
+        packageId: "11537",
+        stickerId: "52002738",
+        keywords: ["ขอบคุณ", "thanks"],
+      },
+      sentAt: new Date(),
+      senderUserId: null,
+      senderDisplayName: null,
+      media: null,
+    }],
+    _count: { pushNotifications: 0 },
+  };
+  const service = new MobileConversationsService(
+    { conversation: { findUnique: async () => conversation } } as never,
+    { assertConversationAccess: async () => "store-sticker" } as never,
+    {} as never,
+  );
+
+  const result = await service.get(user, "conversation-sticker");
+  assert.deepEqual(result.messages[0]?.sticker, { text: null, keywords: ["ขอบคุณ", "thanks"] });
+  assert.equal(JSON.stringify(result).includes("packageId"), false);
+  assert.equal(JSON.stringify(result).includes("stickerId"), false);
+});
+
 void test("mobile detail returns canonical sender attribution for outbound history", async () => {
   const conversation = {
     id: "conversation-sender",

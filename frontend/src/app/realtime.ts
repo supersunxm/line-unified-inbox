@@ -10,6 +10,7 @@ export type RealtimeMessageEvent = {
     text: string;
     sentAt: string;
     sender?: { userId: string | null; displayName: string } | null;
+    sticker?: { text: string | null; keywords: string[] } | null;
     media: { processingStatus: "PENDING" | "READY" | "FAILED" | "SKIPPED"; mimeType?: string | null; fileSize?: number | null; url?: string | null } | null;
   };
 };
@@ -28,6 +29,7 @@ export function mapRealtimeMessage(message: NonNullable<RealtimeMessageEvent["me
     sentAt: message.sentAt,
     fileName: null,
     sender: message.sender ?? null,
+    sticker: message.sticker ?? null,
     media: message.media
       ? {
           processingStatus: message.media.processingStatus,

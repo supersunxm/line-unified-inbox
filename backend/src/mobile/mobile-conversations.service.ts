@@ -10,6 +10,7 @@ import { EMPTY_OPERATIONAL_PRIORITY, PriorityService } from "../priority/priorit
 import type { OperationalPriority } from "../priority/priority.types";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
 import { RealtimeEventService } from "../realtime/realtime-event.service";
+import { stickerPresentationFromRawPayload } from "../messages/sticker-message";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -80,7 +81,7 @@ export class MobileConversationsService {
               productModel: { select: { name: true } },
             },
           },
-          messages: { orderBy: [{ sentAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true } },
+          messages: { orderBy: [{ sentAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true } },
           _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
         },
       }),
@@ -114,7 +115,7 @@ export class MobileConversationsService {
             priority: priorityById.get(item.id)?.level,
             unread: item._count.pushNotifications,
           }),
-          lastMessage: message ? { id: message.id, direction: message.direction, messageType: message.messageType, preview: previewText(message.originalText), sentAt: message.sentAt } : null,
+          lastMessage: message ? { id: message.id, direction: message.direction, messageType: message.messageType, preview: previewText(message.originalText), sticker: message.messageType === "STICKER" ? stickerPresentationFromRawPayload(message.rawPayload) : null, sentAt: message.sentAt } : null,
         };
       }),
       total,
@@ -185,7 +186,7 @@ export class MobileConversationsService {
           where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
           take: query.limit + 1,
-          select: { id: true, direction: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
+          select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
         _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
@@ -259,6 +260,7 @@ export class MobileConversationsService {
         direction: message.direction,
         messageType: message.messageType,
         text: message.originalText,
+        sticker: message.messageType === "STICKER" ? stickerPresentationFromRawPayload(message.rawPayload) : null,
         sentAt: message.sentAt,
         sender: resolveMessageSender(message),
         media: message.media ? { processingStatus: message.media.processingStatus, mimeType: message.media.mimeType, fileSize: message.media.fileSize, url: message.media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null,

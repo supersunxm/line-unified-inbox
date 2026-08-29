@@ -8,14 +8,22 @@ export type LineSource = {
 type LineMessageBase = { id: string; type: string };
 export type LineMessage =
   | (LineMessageBase & { type: "text"; text: string })
-  | (LineMessageBase & { type: "image" | "video" | "audio" | "sticker" })
+  | (LineMessageBase & { type: "image" | "video" | "audio" })
+  | (LineMessageBase & {
+      type: "sticker";
+      packageId?: string;
+      stickerId?: string;
+      stickerResourceType?: string;
+      keywords?: string[];
+      text?: string;
+    })
   | (LineMessageBase & { type: "file"; fileName?: string })
   | (LineMessageBase & { type: "location"; title?: string; address?: string; latitude?: number; longitude?: number })
   | LineMessageBase;
 
 export type LinePostback = {
   data: string;
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
 };
 
 type LineEventBase = {
@@ -54,7 +62,7 @@ export function messagePlaceholder(message: LineMessage): string {
       const details = "title" in message ? message.title || message.address : undefined;
       return `[Location${details ? `: ${details}` : ""}]`;
     }
-    case "sticker": return "[Sticker]";
+    case "sticker": return "ส่งสติกเกอร์ LINE";
     default: return "[Unsupported message]";
   }
 }

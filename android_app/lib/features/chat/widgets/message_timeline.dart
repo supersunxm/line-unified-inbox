@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import 'image_bubble.dart';
 import 'message_bubble.dart';
+import 'sticker_bubble.dart';
 import 'video_bubble.dart';
 
 typedef OpenImageCallback = void Function(Uint8List bytes, String? mimeType);
@@ -127,6 +128,7 @@ class MessageTimeline extends StatelessWidget {
     final media = message.media;
     final image = message.messageType == 'IMAGE';
     final video = message.messageType == 'VIDEO';
+    final sticker = message.messageType == 'STICKER';
     if (image && media != null && media.ready) {
       onLoadMedia?.call(media, message.id);
     }
@@ -137,23 +139,25 @@ class MessageTimeline extends StatelessWidget {
       timestamp: message.sentAt.toLocal(),
       message: message,
       footer: outbound ? appLocalizations(context).sent : null,
-      content: image
-          ? ImageBubble(
-              media: media,
-              bytes: bytes,
-              onOpen: bytes == null || onOpenImage == null
-                  ? null
-                  : () => onOpenImage!(bytes, media?.mimeType),
-            )
-          : video
-              ? VideoBubble(
-                  messageId: message.id,
+      content: sticker
+          ? StickerBubble(sticker: message.sticker)
+          : image
+              ? ImageBubble(
                   media: media,
-                  onLoad: media == null || onLoadVideo == null
+                  bytes: bytes,
+                  onOpen: bytes == null || onOpenImage == null
                       ? null
-                      : () => onLoadVideo!(media, message.id),
+                      : () => onOpenImage!(bytes, media?.mimeType),
                 )
-              : null,
+              : video
+                  ? VideoBubble(
+                      messageId: message.id,
+                      media: media,
+                      onLoad: media == null || onLoadVideo == null
+                          ? null
+                          : () => onLoadVideo!(media, message.id),
+                    )
+                  : null,
     );
   }
 

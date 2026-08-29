@@ -14,6 +14,7 @@ import { getMessageSenderName } from "@/app/message-sender";
 import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
 import { formatRelativeTime } from "@/app/relative-time";
 import { openLineOaManager } from "@/app/line-oa-manager";
+import { lineStickerLabel, MessageSticker } from "@/app/message-sticker";
 
 type AuthUser = {
   id: string;
@@ -42,6 +43,7 @@ function previewText(conversation: ApiConversation) {
   const message = conversation.messages[0];
   if (!message) return "ยังไม่มีข้อความ";
   if (message.messageType === "IMAGE") return "📷 รูปภาพ";
+  if (message.messageType === "STICKER") return lineStickerLabel("th");
   if (message.messageType !== "TEXT") return `ข้อความ ${message.messageType.toLowerCase()}`;
   return message.translatedThai || message.originalText || "ข้อความ";
 }
@@ -260,7 +262,11 @@ export function MobileChatsApp() {
     return () => window.clearTimeout(timer);
   }, [loadList, search, user]);
 
-  useEffect(() => { if (user) void refreshSummary(); }, [refreshSummary, user]);
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setTimeout(() => void refreshSummary(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshSummary, user]);
 
   const updateUrlConversation = useCallback((id: string | null, mode: "push" | "replace" = "replace") => {
     const url = new URL(window.location.href);
@@ -300,14 +306,17 @@ export function MobileChatsApp() {
 
   useEffect(() => {
     if (!user || routingReady) return;
-    const id = new URLSearchParams(window.location.search).get("conversationId");
-    if (!id) {
-      setView("list");
-      setRoutingReady(true);
-      return;
-    }
-    openedFromList.current = false;
-    void loadConversation(id, undefined, false).finally(() => setRoutingReady(true));
+    const timer = window.setTimeout(() => {
+      const id = new URLSearchParams(window.location.search).get("conversationId");
+      if (!id) {
+        setView("list");
+        setRoutingReady(true);
+        return;
+      }
+      openedFromList.current = false;
+      void loadConversation(id, undefined, false).finally(() => setRoutingReady(true));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadConversation, routingReady, user]);
 
   useEffect(() => {
@@ -580,6 +589,8 @@ export function MobileChatsApp() {
                             {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${inbound ? "text-[var(--app-text-secondary)]" : "text-white/80"}`}>{senderName}</p>}
                             {message.messageType === "IMAGE" ? (
                               <MessageImage messageId={message.id} media={message.media} alt="รูปภาพจากลูกค้า" unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ" errorLabel="โหลดรูปภาพไม่สำเร็จ" retryLabel="ลองอีกครั้ง" />
+                            ) : message.messageType === "STICKER" ? (
+                              <MessageSticker sticker={message.sticker} />
                             ) : (
                               <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">{content || "—"}</p>
                             )}
