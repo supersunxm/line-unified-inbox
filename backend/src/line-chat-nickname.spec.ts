@@ -10,7 +10,7 @@ void test("cash purchase uses model, สด, and recorded month/year", () => {
   assert.equal(buildLineChatNickname({
     status: "PURCHASED",
     paymentMethod: "CASH",
-    recordedAt: new Date(2026, 7, 30, 12, 0, 0),
+    recordedAt: "2026-08-30T12:00:00+07:00",
     products: [{ model: { name: "OPPO Find X9" } }],
   }), "OPPO Find X9 สด 08/26");
 });
@@ -24,11 +24,20 @@ void test("installment purchase uses custom product name when present", () => {
   }), "Reno14 Pro ผ่อน 09/26");
 });
 
+void test("month/year follows Bangkok time at a UTC month boundary", () => {
+  assert.equal(buildLineChatNickname({
+    status: "PURCHASED",
+    paymentMethod: "CASH",
+    recordedAt: "2026-08-31T17:30:00.000Z",
+    products: [{ model: { name: "Find X9" } }],
+  }), "Find X9 สด 09/26");
+});
+
 void test("interested status does not change nickname", () => {
   assert.equal(buildLineChatNickname({ status: "INTERESTED" }), null);
 });
 
 void test("purchase nickname is not emitted when required data is incomplete", () => {
-  assert.equal(buildLineChatNickname({ status: "PURCHASED", paymentMethod: "CASH", recordedAt: new Date(2026, 7, 30) }), null);
-  assert.equal(buildLineChatNickname({ status: "PURCHASED", paymentMethod: "OTHER", recordedAt: new Date(2026, 7, 30), products: [{ model: { name: "Find X9" } }] }), null);
+  assert.equal(buildLineChatNickname({ status: "PURCHASED", paymentMethod: "CASH", recordedAt: "2026-08-30T12:00:00+07:00" }), null);
+  assert.equal(buildLineChatNickname({ status: "PURCHASED", paymentMethod: "OTHER", recordedAt: "2026-08-30T12:00:00+07:00", products: [{ model: { name: "Find X9" } }] }), null);
 });
