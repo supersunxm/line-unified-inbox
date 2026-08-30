@@ -4,6 +4,7 @@ import '../../../core/localization/localization.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../inbox/conversation_repository.dart';
+import 'product_picker_classification.dart';
 
 String _getCategoryIcon(String? category, [String? modelName]) {
   final cat = (category ?? '').toUpperCase();
@@ -368,6 +369,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   ProductSelectorItem? _draftProduct;
   ProductVariantSelectorItem? _draftVariant;
   int _draftQuantity = 1;
+  String _productSearchQuery = '';
+  ProductPickerCategory _productCategory = ProductPickerCategory.all;
+  ProductPickerSeries _productSeries = ProductPickerSeries.all;
 
   bool _loadingProducts = false;
   bool _loadingVariants = false;
@@ -379,6 +383,62 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   int _searchGeneration = 0;
   int _variantGeneration = 0;
   ConversationDetail? _lastSavedDetail;
+
+  List<ProductSelectorItem> get _filteredProducts {
+    final query = _productSearchQuery.trim().toLowerCase();
+    return _catalogProducts.where((product) {
+      if (_productCategory != ProductPickerCategory.all &&
+          classifyProductCategory(product) != _productCategory) {
+        return false;
+      }
+      if (_productCategory == ProductPickerCategory.smartphone &&
+          _productSeries != ProductPickerSeries.all &&
+          classifySmartphoneSeries(product) != _productSeries) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      final searchable = [
+        product.productName,
+        product.seriesName,
+        product.category,
+      ].join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList(growable: false);
+  }
+
+  List<ProductPickerCategory> get _availableCategories {
+    final available = <ProductPickerCategory>{
+      ProductPickerCategory.all,
+      ..._catalogProducts.map(classifyProductCategory),
+    };
+    return [
+      ProductPickerCategory.all,
+      ...ProductPickerCategory.values.where(
+        (category) =>
+            category != ProductPickerCategory.all &&
+            available.contains(category),
+      ),
+    ];
+  }
+
+  List<ProductPickerSeries> get _availableSeries {
+    final available = <ProductPickerSeries>{
+      ProductPickerSeries.all,
+      ..._catalogProducts
+          .where((product) =>
+              classifyProductCategory(product) ==
+              ProductPickerCategory.smartphone)
+          .map(classifySmartphoneSeries),
+    };
+    return [
+      ProductPickerSeries.all,
+      ...const [
+        ProductPickerSeries.find,
+        ProductPickerSeries.reno,
+        ProductPickerSeries.aSeries,
+      ].where(available.contains),
+    ];
+  }
 
   @override
   void initState() {
@@ -531,14 +591,17 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     if (mounted) Navigator.of(context).pop(_lastSavedDetail);
   }
 
-  Future<void> _loadProducts([String? query]) async {
+  Future<void> _loadProducts() async {
     final generation = ++_searchGeneration;
     setState(() {
       _loadingProducts = true;
       _error = null;
     });
     try {
-      final products = await widget.repository.fetchProducts(search: query);
+      // The catalog is small and bounded by the existing mobile products
+      // contract. Load it once, then keep search/category/series filtering
+      // instant and consistent on-device.
+      final products = await widget.repository.fetchProducts();
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _catalogProducts = products;
@@ -590,6 +653,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       _catalogVariants = const [];
       _variantError = null;
       _searchController.clear();
+      _productSearchQuery = '';
+      _productCategory = ProductPickerCategory.all;
+      _productSeries = ProductPickerSeries.all;
     });
     _loadProducts();
   }
@@ -603,7 +669,25 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       _catalogVariants = const [];
       _variantError = null;
       _searchController.clear();
+      _productSearchQuery = '';
+      _productCategory = ProductPickerCategory.all;
+      _productSeries = ProductPickerSeries.all;
     });
+  }
+
+  void _setProductSearchQuery(String value) {
+    setState(() => _productSearchQuery = value);
+  }
+
+  void _setProductCategory(ProductPickerCategory category) {
+    setState(() {
+      _productCategory = category;
+      _productSeries = ProductPickerSeries.all;
+    });
+  }
+
+  void _setProductSeries(ProductPickerSeries series) {
+    setState(() => _productSeries = series);
   }
 
   void _selectDraftProduct(ProductSelectorItem product) {
@@ -1294,7 +1378,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
               if (_draftProduct == null) ...[
                 TextField(
                   controller: _searchController,
-                  onChanged: _loadProducts,
+                  onChanged: _setProductSearchQuery,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: l10n.searchProduct,
@@ -1303,41 +1387,112 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
+                _buildCategoryChips(
+                  context,
+                  categories: _availableCategories,
+                  selected: _productCategory,
+                  label: (category) => _categoryLabel(category, l10n),
+                  onSelected: _setProductCategory,
+                ),
+                if (_productCategory == ProductPickerCategory.smartphone &&
+                    _availableSeries.length > 1) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _buildCategoryChips(
+                    context,
+                    categories: _availableSeries,
+                    selected: _productSeries,
+                    label: (series) => _seriesLabel(series, l10n),
+                    onSelected: _setProductSeries,
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.sm),
                 if (_loadingProducts)
                   const Center(
                       child: Padding(
                     padding: EdgeInsets.all(16),
                     child: CircularProgressIndicator(),
                   ))
-                else if (_catalogProducts.isEmpty)
+                else if (_filteredProducts.isEmpty)
                   Center(child: Text(l10n.noMatchingProducts))
                 else
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 220),
+                    constraints: const BoxConstraints(maxHeight: 340),
                     child: ListView.separated(
                       shrinkWrap: true,
-                      itemCount: _catalogProducts.length,
+                      itemCount: _filteredProducts.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        final product = _catalogProducts[index];
-                        return ListTile(
-                          dense: true,
-                          leading: Text(_getCategoryIcon(
-                              product.category, product.productName)),
-                          title: Text(
-                            product.productName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                        final product = _filteredProducts[index];
+                        final selected = _draftProduct?.id == product.id;
+                        final descriptor = [
+                          if (product.seriesName.isNotEmpty) product.seriesName,
+                          if (product.category.isNotEmpty) product.category,
+                        ].join(' · ');
+                        return Material(
+                          color: selected
+                              ? Colors.green.withAlpha(24)
+                              : Colors.transparent,
+                          child: InkWell(
+                            onTap: _saving
+                                ? null
+                                : () => _selectDraftProduct(product),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.xs,
+                                vertical: AppSpacing.xs,
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 38,
+                                    child: Center(
+                                      child: Text(
+                                        _getCategoryIcon(product.category,
+                                            product.productName),
+                                        style: const TextStyle(fontSize: 21),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          product.productName,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        if (descriptor.isNotEmpty)
+                                          Text(
+                                            descriptor,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Icon(
+                                    selected
+                                        ? Icons.check_circle
+                                        : Icons.radio_button_unchecked,
+                                    color: selected
+                                        ? Colors.green.shade700
+                                        : Theme.of(context).hintColor,
+                                    semanticLabel:
+                                        selected ? l10n.selected : null,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          subtitle: Text(
-                            [product.seriesName, product.category]
-                                .where((value) => value.isNotEmpty)
-                                .join(' · '),
-                          ),
-                          trailing: const Icon(Icons.chevron_right, size: 20),
-                          onTap: _saving
-                              ? null
-                              : () => _selectDraftProduct(product),
                         );
                       },
                     ),
@@ -1345,6 +1500,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
               ] else ...[
                 Row(
                   children: [
+                    Icon(Icons.check_circle,
+                        color: Colors.green.shade700, size: 22),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1440,4 +1598,62 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       ),
     );
   }
+
+  Widget _buildCategoryChips<T>(
+    BuildContext context, {
+    required List<T> categories,
+    required T selected,
+    required String Function(T) label,
+    required ValueChanged<T> onSelected,
+  }) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final category in categories) ...[
+            ChoiceChip(
+              label: Text(label(category), softWrap: false),
+              selected: selected == category,
+              showCheckmark: false,
+              side: BorderSide(
+                color: selected == category
+                    ? Colors.green.shade700
+                    : Theme.of(context).dividerColor,
+              ),
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              selectedColor: Colors.green.withAlpha(32),
+              labelStyle: TextStyle(
+                color: selected == category
+                    ? Colors.green.shade800
+                    : Theme.of(context).colorScheme.onSurface,
+                fontWeight:
+                    selected == category ? FontWeight.w600 : FontWeight.normal,
+              ),
+              onSelected: _saving ? null : (_) => onSelected(category),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _categoryLabel(
+          ProductPickerCategory category, AppLocalizations l10n) =>
+      switch (category) {
+        ProductPickerCategory.all => l10n.all,
+        ProductPickerCategory.smartphone => 'Smartphone',
+        ProductPickerCategory.tablet => 'Tablet',
+        ProductPickerCategory.watch => 'Watch',
+        ProductPickerCategory.audio => 'Audio',
+        ProductPickerCategory.iot => 'IoT',
+      };
+
+  String _seriesLabel(ProductPickerSeries series, AppLocalizations l10n) =>
+      switch (series) {
+        ProductPickerSeries.all => l10n.all,
+        ProductPickerSeries.find => 'Find',
+        ProductPickerSeries.reno => 'Reno',
+        ProductPickerSeries.aSeries => 'A Series',
+      };
 }

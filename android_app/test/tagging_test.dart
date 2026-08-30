@@ -114,7 +114,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
     await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
@@ -408,7 +408,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
     expect(find.text('Selected'), findsNothing);
 
@@ -427,7 +427,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
     await tester.tap(find.textContaining('OPPO Reno16 Pro 5G').last);
@@ -542,7 +542,7 @@ void main() {
 
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
     await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
     await tester.pumpAndSettle();
@@ -614,7 +614,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('OPPO Reno16 Pro 5G'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Select'), findsNothing);
 
     expect(find.text('Selected'), findsNothing);
@@ -1032,7 +1032,7 @@ void main() {
 
     final title = tester.widget<Text>(find.text('OPPO Reno16 Pro 5G').last);
     expect(title.maxLines, 2);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.text('Select'), findsNothing);
   });
 }
