@@ -103,7 +103,7 @@ jobs:
       - name: Upload unsigned production candidate and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: lineoppo-chat-v1.0.17-unsigned-candidate
+          name: lineoppo-chat-v1.1.8-unsigned-candidate
           path: |
             android_app/build/app/outputs/flutter-apk/app-release.apk
             android_app/build/android-build-tools/

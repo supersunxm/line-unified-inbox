@@ -78,4 +78,33 @@ void main() {
     expect(user.canReply, isTrue);
     expect(user.canAccessAllStores, isTrue);
   });
+
+  test('conversation store context follows canonical accessible stores', () {
+    StoreMembership membership(String id) => StoreMembership(
+          id: 'membership-$id',
+          storeId: id,
+          role: 'STAFF',
+          store: Store(id: id, name: 'Store $id'),
+        );
+
+    final single = makeUser(memberships: [membership('store-1')]);
+    expect(single.hasSingleStorePresentationScope, isTrue);
+    expect(single.shouldShowConversationStoreContext, isFalse);
+
+    final multi =
+        makeUser(memberships: [membership('store-1'), membership('store-2')]);
+    expect(multi.hasSingleStorePresentationScope, isFalse);
+    expect(multi.shouldShowConversationStoreContext, isTrue);
+
+    final hq = makeUser(permissions: {
+      'workspaces': {'hq': true},
+      'scope': {'allStores': true},
+    });
+    expect(hq.hasSingleStorePresentationScope, isFalse);
+    expect(hq.shouldShowConversationStoreContext, isTrue);
+
+    final unresolved = makeUser();
+    expect(unresolved.hasSingleStorePresentationScope, isFalse);
+    expect(unresolved.shouldShowConversationStoreContext, isTrue);
+  });
 }
