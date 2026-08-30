@@ -7,6 +7,7 @@ export class MobileConversationQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize = 30;
   @IsOptional() @IsUUID("4") storeId?: string;
   @IsOptional() @IsEnum(BmReplyStatus) bmReplyStatus?: BmReplyStatus;
+  @IsOptional() @IsIn(["NEED_REPLY"]) replyStatusGroup?: "NEED_REPLY";
   @IsOptional() @IsString() @MaxLength(100) search?: string;
 }
 

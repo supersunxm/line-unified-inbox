@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/localization/localization.dart';
 
-enum InboxFilter { all, notReplied, notifiedBm, replied, unread, priority }
+enum InboxFilter { all, notReplied, replied }
 
 class InboxFilterBar extends StatelessWidget {
   const InboxFilterBar({
@@ -21,17 +21,11 @@ class InboxFilterBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         child: Row(
-          children: (hqMode
-                  ? const [
-                      InboxFilter.all,
-                      InboxFilter.notReplied,
-                      InboxFilter.notifiedBm,
-                      InboxFilter.replied,
-                      InboxFilter.unread,
-                    ]
-                  : InboxFilter.values
-                      .where((filter) => filter != InboxFilter.unread)
-                      .toList())
+          children: const [
+            InboxFilter.all,
+            InboxFilter.notReplied,
+            InboxFilter.replied,
+          ]
               .map((filter) {
             final isSelected = filter == selected;
             return Padding(
@@ -75,23 +69,13 @@ class InboxFilterBar extends StatelessWidget {
 
   String _label(BuildContext context, InboxFilter filter) => switch (filter) {
         InboxFilter.all => appLocalizations(context).all,
-        InboxFilter.notReplied => hqMode
-            ? appLocalizations(context).notReplied
-            : appLocalizations(context).needReply,
-        InboxFilter.notifiedBm => appLocalizations(context).notifiedBm,
-        InboxFilter.replied => hqMode
-            ? appLocalizations(context).replied
-            : appLocalizations(context).completed,
-        InboxFilter.unread => appLocalizations(context).unread,
-        InboxFilter.priority => appLocalizations(context).priority,
+        InboxFilter.notReplied => appLocalizations(context).needReply,
+        InboxFilter.replied => appLocalizations(context).completed,
       };
 
   IconData _icon(InboxFilter filter) => switch (filter) {
         InboxFilter.all => Icons.inbox_outlined,
         InboxFilter.notReplied => Icons.reply_outlined,
-        InboxFilter.notifiedBm => Icons.notifications_active_outlined,
         InboxFilter.replied => Icons.check_circle_outline,
-        InboxFilter.unread => Icons.mark_email_unread_outlined,
-        InboxFilter.priority => Icons.priority_high,
       };
 }

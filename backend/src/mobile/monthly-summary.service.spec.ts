@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
+import { OWNER_TRACKING_STARTED_AT, OWNER_TRACKING_STARTED_AT_ISO, isOwnerTrackingInbound } from "../owner-tracking";
 
 const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, senderUserId: null });
 const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", senderUserId });
@@ -264,4 +265,44 @@ void test("tag quality thresholds are centralized", () => {
   assert.equal(tagQuality(0.2), "PARTIAL");
   assert.equal(tagQuality(0.5), "MODERATE");
   assert.equal(tagQuality(0.8), "STRONG");
+});
+
+void test("owner tracking cutoff uses Bangkok midnight in UTC", () => {
+  assert.equal(OWNER_TRACKING_STARTED_AT_ISO, "2026-08-29T17:00:00.000Z");
+  assert.equal(isOwnerTrackingInbound({ direction: "INBOUND", createdAt: new Date("2026-08-29T16:59:59.999Z") }), false);
+  assert.equal(isOwnerTrackingInbound({ direction: "INBOUND", createdAt: OWNER_TRACKING_STARTED_AT }), true);
+  assert.equal(isOwnerTrackingInbound({ direction: "OUTBOUND", createdAt: new Date("2026-08-30T00:00:00.000Z") }), false);
+});
+
+void test("ownership summary excludes legacy conversations from the current snapshot denominator", async () => {
+  const captured: unknown[] = [];
+  const prisma = {
+    message: { findMany: async () => [] },
+    conversation: {
+      findMany: async () => [],
+      count: async ({ where }: { where: { messages?: unknown } }) => {
+        captured.push(where);
+        return where.messages ? 3 : 10;
+      },
+      groupBy: async ({ where }: { where: unknown }) => {
+        captured.push(where);
+        return [{ ownerUserId: "owner-1", _count: { _all: 2 } }];
+      },
+    },
+    user: { findMany: async () => [{ id: "owner-1", displayName: "Owner One" }] },
+  };
+  const service = new MonthlySummaryService(prisma as never, { accessibleStoreIds: async () => ["store-1"] } as never);
+  const result = await service.get({ id: "user-1", role: "VIEWER", isActive: true, email: "staff@example.com", displayName: "Staff" }, "2026-08");
+
+  assert.deepEqual(result.ownership, {
+    mode: "CURRENT_SNAPSHOT",
+    trackingStartedAt: OWNER_TRACKING_STARTED_AT_ISO,
+    trackedConversations: 3,
+    legacyExcluded: 7,
+    withOwner: 2,
+    withoutOwner: 1,
+    coverageRate: 2 / 3,
+    byOwner: [{ userId: "owner-1", displayName: "Owner One", conversations: 2 }],
+  });
+  assert.ok(JSON.stringify(captured).includes('"createdAt":{"gte":"2026-08-29T17:00:00.000Z"}'));
 });

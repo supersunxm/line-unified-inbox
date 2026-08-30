@@ -15,6 +15,7 @@ import { stickerPresentationFromRawPayload } from "../../messages/sticker-messag
 
 import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";
 import { GreetingExecutionService } from "../../greeting-message/greeting-execution.service";
+import { OWNER_TRACKING_STARTED_AT } from "../../owner-tracking";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -281,7 +282,7 @@ export class LineWebhookService {
           },
         });
       }
-      return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType };
+      return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType, ownerTracked: storedMessage.createdAt >= OWNER_TRACKING_STARTED_AT };
     });
     const conversation = stored.conversation;
     const sticker = stickerPresentationFromRawPayload(rawPayload);
@@ -291,7 +292,7 @@ export class LineWebhookService {
       conversationId: conversation.id,
       storeId: conversation.storeId,
       message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), sticker, media: stored.mediaId ? { processingStatus: "PENDING", mimeType: null, fileSize: null, url: null } : null },
-      conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus },
+      conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus, ownerTracked: stored.ownerTracked },
     });
     if ((message.type === "image" || message.type === "video") && stored.mediaId) {
       await this.images.process(stored.mediaId, oa.id, message.id, sentAt, stored.mediaType ?? MessageType.UNSUPPORTED);

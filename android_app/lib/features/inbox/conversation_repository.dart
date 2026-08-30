@@ -231,7 +231,8 @@ class ConversationDetail {
       this.purchaseInformation,
       this.aiInsight,
       this.operationalState,
-      this.owner});
+      this.owner,
+      this.ownerTracked = true});
   final String id;
   final String customerName;
   final String storeName;
@@ -247,6 +248,7 @@ class ConversationDetail {
   final AiInsight? aiInsight;
   final OperationalState? operationalState;
   final ConversationOwner? owner;
+  final bool ownerTracked;
   ConversationDetail copyWith(
           {List<ChatMessage>? messages,
           Object? nextCursor = _detailUnset,
@@ -257,7 +259,8 @@ class ConversationDetail {
           Object? purchaseInformation = _detailUnset,
           Object? aiInsight = _detailUnset,
           Object? operationalState = _detailUnset,
-          Object? owner = _detailUnset}) =>
+          Object? owner = _detailUnset,
+          bool? ownerTracked}) =>
       ConversationDetail(
           id: id,
           customerName: customerName,
@@ -292,7 +295,8 @@ class ConversationDetail {
               : operationalState as OperationalState?,
           owner: identical(owner, _detailUnset)
               ? this.owner
-              : owner as ConversationOwner?);
+              : owner as ConversationOwner?,
+          ownerTracked: ownerTracked ?? this.ownerTracked);
   factory ConversationDetail.fromJson(Map<String, dynamic> json) {
     final customer = json['customer'] as Map<String, dynamic>?;
     final store = json['store'] as Map<String, dynamic>?;
@@ -325,7 +329,8 @@ class ConversationDetail {
         owner: json['owner'] is Map
             ? ConversationOwner.fromJson(
                 Map<String, dynamic>.from(json['owner'] as Map))
-            : null);
+            : null,
+        ownerTracked: json['ownerTracked'] as bool? ?? true);
   }
 }
 
@@ -345,6 +350,7 @@ class ConversationRepository {
     int page = 1,
     String? storeId,
     String? bmReplyStatus,
+    String? replyStatusGroup,
     String? search,
   }) async {
     final result = await _api.get('/mobile/conversations', query: {
@@ -353,6 +359,8 @@ class ConversationRepository {
       if (storeId?.trim().isNotEmpty == true) 'storeId': storeId!.trim(),
       if (bmReplyStatus?.trim().isNotEmpty == true)
         'bmReplyStatus': bmReplyStatus!.trim(),
+      if (replyStatusGroup?.trim().isNotEmpty == true)
+        'replyStatusGroup': replyStatusGroup!.trim(),
       if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
     });
     return InboxPageResult(

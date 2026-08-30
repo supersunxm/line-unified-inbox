@@ -7,6 +7,7 @@ import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 import 'package:line_oa_chat_hub/features/inbox/inbox_page.dart';
 import 'package:line_oa_chat_hub/features/inbox/widgets/conversation_card.dart';
 import 'package:line_oa_chat_hub/features/inbox/widgets/inbox_filter_bar.dart';
+import 'package:line_oa_chat_hub/core/widgets/status_badge.dart';
 import 'package:line_oa_chat_hub/l10n/app_localizations.dart';
 
 class _HqInboxRepository extends ConversationRepository {
@@ -14,6 +15,7 @@ class _HqInboxRepository extends ConversationRepository {
 
   String? lastStoreId;
   String? lastStatus;
+  String? lastReplyStatusGroup;
   String? lastSearch;
   int unreadTotalValue = 128;
   int unreadCountCalls = 0;
@@ -68,17 +70,20 @@ class _HqInboxRepository extends ConversationRepository {
     int page = 1,
     String? storeId,
     String? bmReplyStatus,
+    String? replyStatusGroup,
     String? search,
   }) async {
     lastStoreId = storeId;
     lastStatus = bmReplyStatus;
+    lastReplyStatusGroup = replyStatusGroup;
     lastSearch = search;
     final filtered = _items.where((item) {
       final matchesStore = storeId == null ||
           (storeId == 'central-store' && item.id == 'central') ||
           (storeId == 'siam-store' && item.id == 'siam');
-      final matchesStatus =
-          bmReplyStatus == null || item.bmReplyStatus == bmReplyStatus;
+      final matchesStatus = replyStatusGroup == 'NEED_REPLY'
+          ? isNeedReplyStatus(item.bmReplyStatus)
+          : bmReplyStatus == null || item.bmReplyStatus == bmReplyStatus;
       return matchesStore && matchesStatus;
     }).toList();
     return InboxPageResult(items: filtered, page: page, total: filtered.length);
@@ -123,7 +128,7 @@ void main() {
         contains('Chutisorn : สวัสดีค่ะ ขอสอบถามรุ่น Reno13'));
   });
 
-  testWidgets('HQ status filters expose all three conversation states',
+  testWidgets('mobile status filters expose only all, need reply, and replied',
       (tester) async {
     await tester.pumpWidget(localized(
       InboxFilterBar(
@@ -133,13 +138,13 @@ void main() {
       ),
     ));
 
-    expect(find.text('Not Replied'), findsOneWidget);
-    expect(find.text('Notified BM'), findsOneWidget);
-    expect(find.text('Replied'), findsOneWidget);
-    expect(find.text('Unread'), findsOneWidget);
+    expect(find.text('Need Reply'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Notified BM'), findsNothing);
+    expect(find.text('Unread'), findsNothing);
   });
 
-  testWidgets('HQ header shows the backend unread total and unread filter',
+  testWidgets('HQ header keeps the backend unread total without an unread filter',
       (tester) async {
     final repository = _HqInboxRepository();
     await tester.pumpWidget(localized(
@@ -160,11 +165,12 @@ void main() {
     expect(find.text('128 Unread'), findsOneWidget);
     expect(repository.unreadCountCalls, greaterThanOrEqualTo(1));
 
-    await tester.tap(find.widgetWithText(FilterChip, 'Unread'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Need Reply'));
     await tester.pumpAndSettle();
     expect(find.text('OPPO CentralWorld'), findsOneWidget);
     expect(find.text('OPPO Siam Paragon'), findsNothing);
     expect(repository.lastStatus, isNull);
+    expect(repository.lastReplyStatusGroup, 'NEED_REPLY');
 
     repository.unreadTotalValue = 7;
     await tester.tap(find.byWidgetPredicate(
@@ -205,9 +211,10 @@ void main() {
     expect(find.text('OPPO CentralWorld'), findsNothing);
     expect(find.text('OPPO Siam Paragon'), findsNWidgets(2));
 
-    await tester.tap(find.text('Notified BM'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Need Reply'));
     await tester.pumpAndSettle();
-    expect(repository.lastStatus, 'NOTIFIED_BM');
+    expect(repository.lastStatus, isNull);
+    expect(repository.lastReplyStatusGroup, 'NEED_REPLY');
   });
 
   testWidgets('HQ preserves store/status/search filters after opening a chat',
@@ -231,7 +238,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('OPPO Siam Paragon').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilterChip, 'Replied'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Completed'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Kittiya');
     await tester.pump(const Duration(milliseconds: 350));

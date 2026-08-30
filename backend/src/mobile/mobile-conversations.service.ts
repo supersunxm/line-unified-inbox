@@ -12,6 +12,7 @@ import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, b
 import { RealtimeEventService } from "../realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "../messages/sticker-message";
 import { serializeConversationOwner } from "../conversation-owner";
+import { ownerTrackingInboundFilter } from "../owner-tracking";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -49,7 +50,11 @@ export class MobileConversationsService {
         : accessibleStoreIds === null
             ? {}
             : { storeId: { in: accessibleStoreIds } }),
-      ...(query.bmReplyStatus ? { bmReplyStatus: query.bmReplyStatus } : {}),
+      ...(query.replyStatusGroup === "NEED_REPLY"
+        ? { bmReplyStatus: { in: [BmReplyStatus.NOT_REPLIED, BmReplyStatus.NOTIFIED_BM] } }
+        : query.bmReplyStatus
+            ? { bmReplyStatus: query.bmReplyStatus }
+            : {}),
       ...(search
         ? {
             OR: [
@@ -84,7 +89,7 @@ export class MobileConversationsService {
             },
           },
           messages: { orderBy: [{ sentAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true } },
-          _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
+          _count: { select: { messages: { where: ownerTrackingInboundFilter() }, pushNotifications: { where: { userId: user.id, readAt: null } } } },
         },
       }),
       this.prisma.conversation.count({ where }),
@@ -100,6 +105,7 @@ export class MobileConversationsService {
           customer: item.customer,
           store: item.store,
           owner: serializeConversationOwner(item.owner, item.store?.id),
+          ownerTracked: (item._count?.messages ?? 0) > 0,
           customerSalesSummary: {
             status: item.customerSalesStatus,
             interestLevel: item.interestLevel,
@@ -192,7 +198,7 @@ export class MobileConversationsService {
           take: query.limit + 1,
           select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
-        _count: { select: { pushNotifications: { where: { userId: user.id, readAt: null } } } },
+        _count: { select: { messages: { where: ownerTrackingInboundFilter() }, pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
     });
     if (!conversation) throw new NotFoundException("Conversation not found");
@@ -213,6 +219,7 @@ export class MobileConversationsService {
       customer: conversation.customer,
       store: conversation.store,
       owner: serializeConversationOwner(conversation.owner, conversation.store?.id),
+      ownerTracked: (conversation._count?.messages ?? 0) > 0,
       latestMessageAt: conversation.latestMessageAt,
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
@@ -669,6 +676,7 @@ export class MobileConversationsService {
           bmReplyStatus: detail.bmReplyStatus ?? "NOT_REPLIED",
           customerPictureUrl: detail.customer?.pictureUrl ?? null,
           customerSalesSummary: compactSalesSummary(detail.customerSalesInformation),
+          ownerTracked: detail.ownerTracked,
         },
       });
     }
