@@ -19,6 +19,7 @@ class ConversationHeader extends StatelessWidget
     this.showStoreContext = true,
     this.bmReplyStatus,
     this.owner,
+    this.ownerTracked = true,
     this.exactStatus = false,
     this.onBack,
     this.onProfile,
@@ -33,6 +34,7 @@ class ConversationHeader extends StatelessWidget
   final bool showStoreContext;
   final String? bmReplyStatus;
   final ConversationOwner? owner;
+  final bool ownerTracked;
   final bool exactStatus;
   final VoidCallback? onBack;
   final VoidCallback? onProfile;
@@ -142,7 +144,10 @@ class ConversationHeader extends StatelessWidget
                 ),
                 if (owner != null || onOwnerTap != null) ...[
                   const SizedBox(height: AppSpacing.xs),
-                  _OwnerRow(owner: owner, onTap: onOwnerTap),
+                  _OwnerRow(
+                      owner: owner,
+                      ownerTracked: ownerTracked,
+                      onTap: onOwnerTap),
                 ],
               ],
             )
@@ -173,7 +178,10 @@ class ConversationHeader extends StatelessWidget
                         StatusBadge(status: bmReplyStatus!, compact: true),
                       if (owner != null || onOwnerTap != null) ...[
                         const SizedBox(height: AppSpacing.xs),
-                        _OwnerRow(owner: owner, onTap: onOwnerTap),
+                        _OwnerRow(
+                            owner: owner,
+                            ownerTracked: ownerTracked,
+                            onTap: onOwnerTap),
                       ],
                     ],
                   ),
@@ -199,14 +207,35 @@ class ConversationHeader extends StatelessWidget
 }
 
 class _OwnerRow extends StatelessWidget {
-  const _OwnerRow({required this.owner, required this.onTap});
+  const _OwnerRow(
+      {required this.owner,
+      required this.onTap,
+      this.ownerTracked = true});
 
   final ConversationOwner? owner;
   final VoidCallback? onTap;
+  final bool ownerTracked;
 
   @override
   Widget build(BuildContext context) {
     final l10n = appLocalizations(context);
+    if (owner == null && !ownerTracked) {
+      final edit = Tooltip(
+        message: l10n.conversationOwner,
+        child: const Icon(Icons.edit_outlined,
+            size: 14, color: AppColors.textSecondary),
+      );
+      return onTap == null
+          ? edit
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                child: edit,
+              ),
+            );
+    }
     final label = owner?.displayName ?? l10n.unassignedOwner;
     final child = Row(
       mainAxisSize: MainAxisSize.min,

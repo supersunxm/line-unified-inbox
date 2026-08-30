@@ -3,6 +3,7 @@ import { MessageDirection, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
+import { OWNER_TRACKING_STARTED_AT_ISO, ownerTrackingInboundFilter } from "../owner-tracking";
 
 export const REPORTING_TIMEZONE = "Asia/Bangkok";
 export const RESPONSE_SAMPLE_THRESHOLD = 10;
@@ -34,6 +35,9 @@ export type TeamAnalytics = {
 
 export type OwnershipAnalytics = {
   mode: "CURRENT_SNAPSHOT";
+  trackingStartedAt: string;
+  trackedConversations: number;
+  legacyExcluded: number;
   withOwner: number;
   withoutOwner: number;
   coverageRate: number;
@@ -300,13 +304,18 @@ export class MonthlySummaryService {
   private async ownershipSnapshot(conversationScope: Prisma.ConversationWhereInput): Promise<OwnershipAnalytics> {
     const conversation = this.prisma.conversation;
     if (typeof conversation.count !== "function" || typeof conversation.groupBy !== "function" || typeof this.prisma.user?.findMany !== "function") {
-      return { mode: "CURRENT_SNAPSHOT", withOwner: 0, withoutOwner: 0, coverageRate: 0, byOwner: [] };
+      return { mode: "CURRENT_SNAPSHOT", trackingStartedAt: OWNER_TRACKING_STARTED_AT_ISO, trackedConversations: 0, legacyExcluded: 0, withOwner: 0, withoutOwner: 0, coverageRate: 0, byOwner: [] };
     }
-    const [total, grouped] = await Promise.all([
+    const trackedScope: Prisma.ConversationWhereInput = {
+      ...conversationScope,
+      messages: { some: ownerTrackingInboundFilter() },
+    };
+    const [total, trackedTotal, grouped] = await Promise.all([
       conversation.count({ where: conversationScope }),
+      conversation.count({ where: trackedScope }),
       conversation.groupBy({
         by: ["ownerUserId"],
-        where: { ...conversationScope, ownerUserId: { not: null }, owner: activeOwnerFilter },
+        where: { ...trackedScope, ownerUserId: { not: null }, owner: activeOwnerFilter },
         _count: { _all: true },
       }),
     ]);
@@ -318,8 +327,11 @@ export class MonthlySummaryService {
     return {
       mode: "CURRENT_SNAPSHOT",
       withOwner,
-      withoutOwner: Math.max(0, total - withOwner),
-      coverageRate: total === 0 ? 0 : withOwner / total,
+      trackingStartedAt: OWNER_TRACKING_STARTED_AT_ISO,
+      trackedConversations: trackedTotal,
+      legacyExcluded: Math.max(0, total - trackedTotal),
+      withoutOwner: Math.max(0, trackedTotal - withOwner),
+      coverageRate: trackedTotal === 0 ? 0 : withOwner / trackedTotal,
       byOwner: ownerCounts
         .map((row) => ({ userId: row.ownerUserId, displayName: names.get(row.ownerUserId) ?? "Staff", conversations: row._count._all }))
         .sort((left, right) => right.conversations - left.conversations || left.displayName.localeCompare(right.displayName) || left.userId.localeCompare(right.userId)),

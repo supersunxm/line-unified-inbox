@@ -7,10 +7,12 @@ class ConversationPreview extends StatelessWidget {
     super.key,
     this.preview,
     this.sentAt,
+    this.showTimestamp = true,
   });
 
   final String? preview;
   final DateTime? sentAt;
+  final bool showTimestamp;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,7 @@ class ConversationPreview extends StatelessWidget {
                 ),
           ),
         ),
-        if (sentAt != null) ...[
+        if (showTimestamp && sentAt != null) ...[
           const SizedBox(width: 8),
           Text(
             formatConversationTimestamp(sentAt!.toLocal()),

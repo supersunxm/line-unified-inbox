@@ -5,7 +5,6 @@ import '../../core/localization/localization.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/widgets/app_widgets.dart';
 import 'conversation_repository.dart';
-import 'priority.dart';
 import 'widgets/conversation_card.dart';
 import 'widgets/conversation_overview_card.dart';
 import 'widgets/inbox_filter_bar.dart';
@@ -80,20 +79,11 @@ class _InboxPageState extends State<InboxPage> {
           (item.preview?.toLowerCase().contains(query) ?? false);
       final matchesFilter = switch (_selectedFilter) {
         InboxFilter.all => true,
-        InboxFilter.priority =>
-          item.priority.isActionable && !isCompletedStatus(item.bmReplyStatus),
-        InboxFilter.notReplied => widget.isHq
-            ? item.bmReplyStatus == 'NOT_REPLIED'
-            : isNeedReplyStatus(item.bmReplyStatus),
-        InboxFilter.notifiedBm => item.bmReplyStatus == 'NOTIFIED_BM',
+        InboxFilter.notReplied => isNeedReplyStatus(item.bmReplyStatus),
         InboxFilter.replied => isCompletedStatus(item.bmReplyStatus),
-        InboxFilter.unread => item.unreadCount > 0,
       };
       return matchesQuery && matchesFilter;
     }).toList(growable: false);
-    if (_selectedFilter == InboxFilter.priority) {
-      items.sort(comparePrioritySummaries);
-    }
     return items;
   }
 
@@ -127,11 +117,13 @@ class _InboxPageState extends State<InboxPage> {
   }
 
   String? get _statusQuery => switch (_selectedFilter) {
-        InboxFilter.notReplied => widget.isHq ? 'NOT_REPLIED' : null,
-        InboxFilter.notifiedBm => 'NOTIFIED_BM',
+        InboxFilter.notReplied => null,
         InboxFilter.replied => 'REPLIED',
-        InboxFilter.all || InboxFilter.unread || InboxFilter.priority => null,
+        InboxFilter.all => null,
       };
+
+  String? get _replyStatusGroup =>
+      _selectedFilter == InboxFilter.notReplied ? 'NEED_REPLY' : null;
 
   void _selectFilter(InboxFilter filter) {
     if (_selectedFilter == filter) return;
@@ -193,6 +185,8 @@ class _InboxPageState extends State<InboxPage> {
     final hasPicture =
         conversation is Map && conversation.containsKey('customerPictureUrl');
     final hasOwner = conversation is Map && conversation.containsKey('owner');
+    final hasOwnerTracked =
+        conversation is Map && conversation.containsKey('ownerTracked');
     final updated = current.copyWith(
         preview: conversationMessagePreview(
             text: message['text'] is String ? message['text'] as String : null,
@@ -218,6 +212,9 @@ class _InboxPageState extends State<InboxPage> {
                     Map<String, dynamic>.from(conversation['owner'] as Map))
                 : null
             : current.owner,
+        ownerTracked: hasOwnerTracked && conversation['ownerTracked'] is bool
+            ? conversation['ownerTracked'] as bool
+            : current.ownerTracked,
         priority: bmReplyStatus == 'REPLIED'
             ? const ConversationPriority.none()
             : current.priority);
@@ -240,6 +237,7 @@ class _InboxPageState extends State<InboxPage> {
     final hasSalesSummary = conversation.containsKey('customerSalesSummary');
     final hasPicture = conversation.containsKey('customerPictureUrl');
     final hasOwner = conversation.containsKey('owner');
+    final hasOwnerTracked = conversation.containsKey('ownerTracked');
     final updated = current.copyWith(
         sentAt: latest is String ? DateTime.tryParse(latest) : null,
         bmReplyStatus: conversation['bmReplyStatus'] is String
@@ -258,6 +256,9 @@ class _InboxPageState extends State<InboxPage> {
                     Map<String, dynamic>.from(conversation['owner'] as Map))
                 : null
             : current.owner,
+        ownerTracked: hasOwnerTracked && conversation['ownerTracked'] is bool
+            ? conversation['ownerTracked'] as bool
+            : current.ownerTracked,
         priority: conversation['bmReplyStatus'] == 'REPLIED'
             ? const ConversationPriority.none()
             : current.priority);
@@ -272,6 +273,7 @@ class _InboxPageState extends State<InboxPage> {
       left.customerPictureUrl == right.customerPictureUrl &&
       left.customerSalesSummary == right.customerSalesSummary &&
       left.owner == right.owner &&
+      left.ownerTracked == right.ownerTracked &&
       left.unreadCount == right.unreadCount &&
       left.bmReplyStatus == right.bmReplyStatus &&
       left.preview == right.preview &&
@@ -304,6 +306,7 @@ class _InboxPageState extends State<InboxPage> {
           customerSalesSummary: _salesSummaryFromDetail(detail),
           bmReplyStatus: detail.bmReplyStatus,
           owner: detail.owner,
+          ownerTracked: detail.ownerTracked,
           preview: latestMessage == null
               ? current.preview
               : conversationMessagePreview(
@@ -337,6 +340,7 @@ class _InboxPageState extends State<InboxPage> {
         page: reset ? 1 : ((_items.length ~/ 30) + 1),
         storeId: _selectedStoreId,
         bmReplyStatus: _statusQuery,
+        replyStatusGroup: _replyStatusGroup,
         search: _searchQuery,
       );
       if (!mounted) return;
@@ -397,6 +401,7 @@ class _InboxPageState extends State<InboxPage> {
               customerSalesSummary: _salesSummaryFromDetail(detail),
               bmReplyStatus: detail.bmReplyStatus,
               owner: detail.owner,
+              ownerTracked: detail.ownerTracked,
               preview: latestMessage == null
                   ? current.preview
                   : conversationMessagePreview(

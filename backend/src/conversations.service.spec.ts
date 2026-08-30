@@ -134,7 +134,10 @@ void test("first successful human reply assigns owner once and later staff repli
     message: { findUnique: async () => null },
     conversation: { findUnique: async () => ({ ...baseConversation, owner: call > 0 ? owner : null }) },
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
-      message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `message-${call}`, ...data }) },
+      message: {
+        create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `message-${call}`, ...data }),
+        count: async () => 1,
+      },
       conversation: {
         update: async () => ({}),
         updateMany: async () => ({ count: call++ === 0 ? 1 : 0 }),
@@ -158,6 +161,40 @@ void test("first successful human reply assigns owner once and later staff repli
     { id: "bm-a", displayName: "BM A" },
     { id: "bm-a", displayName: "BM A" },
   ]);
+});
+
+void test("legacy conversation does not become owned from a successful reply alone", async () => {
+  let ownerUpdateCalls = 0;
+  const conversation = {
+    id: "conversation-legacy-owner", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
+    customer: { lineUserId: "Ucustomer" }, store: { id: "store", name: "Store" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" }, owner: null,
+    _count: { messages: 0 },
+  };
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => conversation },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      message: {
+        create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "legacy-message", ...data }),
+        count: async () => 0,
+      },
+      conversation: {
+        update: async () => ({}),
+        updateMany: async () => { ownerUpdateCalls++; return { count: 1 }; },
+      },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+  const service = new ConversationsService(
+    prisma,
+    noopOperations,
+    { decrypt: () => "token" } as CredentialEncryptionService,
+    { pushText: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-message", duplicateAccepted: false }) } as unknown as LineMessagingService,
+  );
+
+  await service.sendMessage("conversation-legacy-owner", { text: "reply", idempotencyKey: "123e4567-e89b-42d3-a456-426614174012" }, { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
+  assert.equal(ownerUpdateCalls, 0);
 });
 
 void test("sendImage validates content, persists media, sender, and REPLIED status", async () => {

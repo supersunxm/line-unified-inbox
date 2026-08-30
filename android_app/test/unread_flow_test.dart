@@ -48,6 +48,7 @@ class FakeConversationRepository extends ConversationRepository {
       {int page = 1,
       String? storeId,
       String? bmReplyStatus,
+      String? replyStatusGroup,
       String? search}) async {
     inboxCalls += 1;
     final items = customItems ?? [summary];

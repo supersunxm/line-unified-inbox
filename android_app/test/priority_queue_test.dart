@@ -19,6 +19,7 @@ class _PriorityRepository extends ConversationRepository {
           {int page = 1,
           String? storeId,
           String? bmReplyStatus,
+          String? replyStatusGroup,
           String? search}) async =>
       InboxPageResult(items: items, page: page, total: items.length);
 }
@@ -100,7 +101,7 @@ void main() {
         sorted.map((item) => item.id), ['urgent', 'normal-old', 'normal-new']);
   });
 
-  testWidgets('Priority tab shows actionable conversations in priority order',
+  testWidgets('Need Reply filter shows waiting conversations and excludes completed',
       (tester) async {
     final repository = _PriorityRepository([
       _summary(
@@ -136,22 +137,18 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilterChip, 'Priority'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Need Reply'));
     await tester.pump();
 
     expect(find.text('Urgent customer'), findsOneWidget);
     expect(find.text('Normal customer'), findsOneWidget);
     expect(find.text('Completed customer'), findsNothing);
-    expect(
-      tester.getTopLeft(find.text('Urgent customer')).dy,
-      lessThan(tester.getTopLeft(find.text('Normal customer')).dy),
-    );
     expect(find.text('Urgent'), findsNothing);
     expect(find.text('Normal'), findsNothing);
     expect(find.text('Waiting 1d 1h'), findsNothing);
   });
 
-  testWidgets('priority queue labels localize while card badges stay hidden',
+  testWidgets('priority queue labels are no longer exposed in Inbox filters',
       (tester) async {
     final repository = _PriorityRepository([
       _summary(
@@ -169,7 +166,7 @@ void main() {
       locale: const Locale('th'),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('คิวเร่งด่วน'), findsOneWidget);
+    expect(find.text('คิวเร่งด่วน'), findsNothing);
     expect(find.text('เร่งด่วน'), findsNothing);
     expect(find.text('ปกติ'), findsNothing);
     expect(find.text('รอการตอบกลับ 18h'), findsNothing);
@@ -179,7 +176,7 @@ void main() {
       locale: const Locale('zh', 'CN'),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('优先处理'), findsOneWidget);
+    expect(find.text('优先处理'), findsNothing);
     expect(find.text('紧急'), findsNothing);
     expect(find.text('等待回复 18h'), findsNothing);
   });

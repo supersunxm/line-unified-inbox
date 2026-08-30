@@ -142,6 +142,7 @@ class ConversationSummary {
       this.preview,
       this.sentAt,
       this.owner,
+      this.ownerTracked = true,
       this.priority = const ConversationPriority.none()});
   final String id;
   final String customerName;
@@ -153,6 +154,10 @@ class ConversationSummary {
   final String? preview;
   final DateTime? sentAt;
   final ConversationOwner? owner;
+  /// Legacy API responses omit this field; keeping the compatibility default
+  /// preserves the existing unassigned presentation until the backend sends
+  /// the explicit tracking state.
+  final bool ownerTracked;
   final ConversationPriority priority;
 
   ConversationSummary copyWith({
@@ -166,6 +171,7 @@ class ConversationSummary {
     String? preview,
     DateTime? sentAt,
     Object? owner = _summaryUnset,
+    bool? ownerTracked,
     ConversationPriority? priority,
   }) =>
       ConversationSummary(
@@ -185,6 +191,7 @@ class ConversationSummary {
           owner: identical(owner, _summaryUnset)
               ? this.owner
               : owner as ConversationOwner?,
+          ownerTracked: ownerTracked ?? this.ownerTracked,
           priority: priority ?? this.priority);
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -214,6 +221,7 @@ class ConversationSummary {
             ? ConversationOwner.fromJson(
                 Map<String, dynamic>.from(json['owner'] as Map))
             : null,
+        ownerTracked: json['ownerTracked'] as bool? ?? true,
         priority: ConversationPriority.fromJson(json['priority']));
   }
 }
@@ -795,6 +803,9 @@ class SummaryOwnerCoverage {
 class SummaryOwnership {
   const SummaryOwnership({
     this.mode = 'CURRENT_SNAPSHOT',
+    this.trackingStartedAt,
+    this.trackedConversations = 0,
+    this.legacyExcluded = 0,
     this.withOwner = 0,
     this.withoutOwner = 0,
     this.coverageRate = 0,
@@ -802,6 +813,9 @@ class SummaryOwnership {
   });
 
   final String mode;
+  final String? trackingStartedAt;
+  final int trackedConversations;
+  final int legacyExcluded;
   final int withOwner;
   final int withoutOwner;
   final double coverageRate;
@@ -810,6 +824,9 @@ class SummaryOwnership {
   factory SummaryOwnership.fromJson(Map<String, dynamic> json) =>
       SummaryOwnership(
         mode: json['mode'] as String? ?? 'CURRENT_SNAPSHOT',
+        trackingStartedAt: json['trackingStartedAt'] as String?,
+        trackedConversations: _intValue(json['trackedConversations']),
+        legacyExcluded: _intValue(json['legacyExcluded']),
         withOwner: _intValue(json['withOwner']),
         withoutOwner: _intValue(json['withoutOwner']),
         coverageRate: _doubleValue(json['coverageRate']) ?? 0,

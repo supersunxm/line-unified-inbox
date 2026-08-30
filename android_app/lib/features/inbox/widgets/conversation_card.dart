@@ -27,7 +27,7 @@ class ConversationCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
           child: Stack(
             children: [
               hqLayout ? _buildHqLayout(context) : _buildStoreLayout(context),
@@ -100,7 +100,9 @@ class ConversationCard extends StatelessWidget {
                   fontSize: 12.5,
                 ),
           ),
-          _OwnerSummary(owner: conversation.owner),
+          _OwnerSummary(
+              owner: conversation.owner,
+              ownerTracked: conversation.ownerTracked),
           _SalesSummary(summary: conversation.customerSalesSummary),
           const SizedBox(height: 6),
           Row(
@@ -149,17 +151,37 @@ class ConversationCard extends StatelessWidget {
                             ),
                       ),
                     ),
+                    if (conversation.sentAt != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        formatConversationTimestamp(
+                            conversation.sentAt!.toLocal()),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 2),
-                if (showStoreContext)
-                  StoreBadge(name: conversation.storeName, compact: true),
-                _OwnerSummary(owner: conversation.owner),
-                _SalesSummary(summary: conversation.customerSalesSummary),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 1,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (showStoreContext)
+                      StoreBadge(name: conversation.storeName, compact: true),
+                    _OwnerSummary(
+                        owner: conversation.owner,
+                        ownerTracked: conversation.ownerTracked),
+                    _SalesSummary(summary: conversation.customerSalesSummary),
+                  ],
+                ),
+                const SizedBox(height: 1),
                 ConversationPreview(
-                    preview: conversation.preview, sentAt: conversation.sentAt),
-                const SizedBox(height: 3),
+                    preview: conversation.preview, showTimestamp: false),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     StatusBadge(
@@ -177,12 +199,14 @@ class ConversationCard extends StatelessWidget {
 }
 
 class _OwnerSummary extends StatelessWidget {
-  const _OwnerSummary({required this.owner});
+  const _OwnerSummary({required this.owner, this.ownerTracked = true});
 
   final ConversationOwner? owner;
+  final bool ownerTracked;
 
   @override
   Widget build(BuildContext context) {
+    if (owner == null && !ownerTracked) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(

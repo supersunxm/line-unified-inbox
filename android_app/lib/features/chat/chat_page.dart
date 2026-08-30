@@ -239,8 +239,14 @@ class _ChatPageState extends State<ChatPage> {
     final owner = rawOwner is Map
         ? ConversationOwner.fromJson(Map<String, dynamic>.from(rawOwner))
         : null;
-    if (detail.owner == owner) return;
-    setState(() => _detail = detail.copyWith(owner: owner));
+    final ownerTracked = conversation['ownerTracked'] is bool
+        ? conversation['ownerTracked'] as bool
+        : detail.ownerTracked;
+    if (detail.owner == owner && detail.ownerTracked == ownerTracked) return;
+    setState(() => _detail = detail.copyWith(
+          owner: owner,
+          ownerTracked: ownerTracked,
+        ));
   }
 
   Future<void> _showOwnerSelector() async {
@@ -799,6 +805,7 @@ class _ChatPageState extends State<ChatPage> {
                     onBack: () => Navigator.of(context).maybePop(),
                     onProfile: _showCustomerProfile,
                     owner: detail.owner,
+                    ownerTracked: detail.ownerTracked,
                     onOwnerTap: widget.canReply ? _showOwnerSelector : null,
                     onAction:
                         widget.canReply ? _showConversationActions : null),

@@ -15,10 +15,12 @@ class ConversationOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final needReply = conversations
+        .where((item) => isNeedReplyStatus(item.bmReplyStatus))
+        .length;
     final completed = conversations
         .where((item) => isCompletedStatus(item.bmReplyStatus))
         .length;
-    final needReply = conversations.length - completed;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),

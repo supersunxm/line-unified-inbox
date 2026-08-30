@@ -131,6 +131,32 @@ void test("mobile all-store list does not add a membership store restriction", a
   });
 });
 
+void test("mobile need-reply group includes both operational waiting statuses", async () => {
+  let where: any;
+  const prisma = {
+    conversation: {
+      findMany: async (input: { where: unknown }) => {
+        where = input.where;
+        return [];
+      },
+      count: async () => 0,
+    },
+    $transaction: async <T>(operations: Promise<T>[]) => Promise.all(operations),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { accessibleStoreIds: async () => ["store-1"] } as never,
+    {} as never,
+  );
+
+  await service.list(user, { page: 1, pageSize: 30, replyStatusGroup: "NEED_REPLY" });
+  assert.deepEqual(where, {
+    store: { isActive: true, archivedAt: null },
+    storeId: { in: ["store-1"] },
+    bmReplyStatus: { in: ["NOT_REPLIED", "NOTIFIED_BM"] },
+  });
+});
+
 void test("mobile detail permits the assigned store and rejects a different store", async () => {
   const conversation = { id: "conversation-1", latestMessageAt: new Date(), bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", customer: { id: "customer-1", displayName: "Customer" }, store: { id: "store-1", name: "Store", code: "S1" }, messages: [], _count: { pushNotifications: 0 } };
   const prisma = { conversation: { findUnique: async () => conversation } };

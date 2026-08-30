@@ -1463,3 +1463,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Derive presentation density from `CurrentUser.stores`, the canonical active membership-derived store set returned by `/auth/me`; do not infer it from the selected inbox filter. Exactly one store hides only redundant store labels for store-only users.
 - HQ, ADMIN, all-store, multi-store, zero-store, or unresolved scope keeps store context visible to preserve disambiguation. Store fields remain in every API contract and selected-store behavior is unchanged.
 - The presentation flag is passed to Inbox cards and Chat headers. Owner/customer/avatar/status/actions remain visible, and no backend, authorization, Main OA, or data model change is introduced.
+
+# Mobile Inbox filter and owner-tracking boundary (2026-08-30)
+
+- Keep Inbox's persisted `BmReplyStatus` enum unchanged. The mobile `Need Reply` filter is a presentation/API grouping of `NOT_REPLIED` and `NOTIFIED_BM`; `Completed` remains `REPLIED`, and all existing workflow transitions and other surfaces retain their current status semantics.
+- Ownership tracking begins at Bangkok midnight on 2026-08-30, represented centrally as `2026-08-29T17:00:00.000Z`. A conversation is tracked only when it has an inbound customer message at or after that instant; owner assignment and current ownership analytics use that same predicate. Legacy rows are excluded rather than rewritten.
+- Legacy null-owner presentation is intentionally quiet (no unassigned warning), while tracked null-owner conversations retain the existing unassigned/edit affordance. This is presentation-only and does not remove owner data or access checks.
+- The Android Inbox card is compressed by reducing padding/gaps and moving timestamp to the customer row while preserving required identity, ownership, sales, preview, status, and navigation affordances. The currently released Android `1.1.8+28` remains unchanged; no version bump, signed APK, or release catalog change is part of this feature.
