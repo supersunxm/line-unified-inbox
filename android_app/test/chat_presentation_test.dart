@@ -57,6 +57,30 @@ void main() {
     expect(find.byTooltip('Back'), findsOneWidget);
   });
 
+  testWidgets('single-store conversation header hides store context',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        appBar: ConversationHeader(
+          customerName: 'Chutisorn',
+          storeName: 'OPPO CentralWorld',
+          storeCode: 'CW-01',
+          showStoreContext: false,
+          bmReplyStatus: 'REPLIED',
+          owner: const ConversationOwner(id: 'owner-1', displayName: 'Kittiya'),
+        ),
+      ),
+    ));
+
+    expect(find.text('OPPO CentralWorld'), findsNothing);
+    expect(find.text('Store code · CW-01'), findsNothing);
+    expect(find.text('Chutisorn'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Owner: Kittiya'), findsOneWidget);
+  });
+
   testWidgets('conversation tags bar shows add state and compact selected tags',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

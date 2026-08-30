@@ -11,12 +11,12 @@ extension CurrentUserAuthorization on CurrentUser {
           ? permissions['capabilities'] as Map<String, dynamic>
           : <String, dynamic>{};
 
-  Map<String, dynamic> get _scope => permissions['scope'] is Map<String, dynamic>
-      ? permissions['scope'] as Map<String, dynamic>
-      : <String, dynamic>{};
+  Map<String, dynamic> get _scope =>
+      permissions['scope'] is Map<String, dynamic>
+          ? permissions['scope'] as Map<String, dynamic>
+          : <String, dynamic>{};
 
-  bool get canAccessHqWorkspace =>
-      _workspaces['hq'] == true || role == 'ADMIN';
+  bool get canAccessHqWorkspace => _workspaces['hq'] == true || role == 'ADMIN';
 
   bool get canAccessStoreWorkspace =>
       _workspaces['store'] == true || memberships.isNotEmpty;
@@ -39,10 +39,25 @@ extension CurrentUserAuthorization on CurrentUser {
       permissions['canAccessAllStores'] == true ||
       role == 'ADMIN';
 
+  /// Store context is useful for disambiguation whenever the account can see
+  /// multiple stores or is operating from an HQ/global workspace. A store-only
+  /// account with exactly one canonical accessible store does not need the
+  /// repeated store label on every conversation card/header.
+  bool get hasSingleStorePresentationScope {
+    if (canAccessAllStores || canAccessHqWorkspace) return false;
+    final accessibleStoreIds = stores.map((store) => store.id).toSet();
+    return accessibleStoreIds.length == 1;
+  }
+
+  bool get shouldShowConversationStoreContext =>
+      !hasSingleStorePresentationScope;
+
   List<String> get authorizedStoreIds {
     final raw = _scope['storeIds'];
     if (raw is List) return raw.whereType<String>().toList(growable: false);
-    return memberships.map((membership) => membership.storeId).toList(growable: false);
+    return memberships
+        .map((membership) => membership.storeId)
+        .toList(growable: false);
   }
 
   String get workspaceSummary {

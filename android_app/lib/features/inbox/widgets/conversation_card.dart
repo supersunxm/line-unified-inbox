@@ -11,11 +11,13 @@ class ConversationCard extends StatelessWidget {
     required this.conversation,
     required this.onTap,
     this.hqLayout = false,
+    this.showStoreContext = true,
   });
 
   final ConversationSummary conversation;
   final VoidCallback onTap;
   final bool hqLayout;
+  final bool showStoreContext;
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +152,8 @@ class ConversationCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 2),
-                StoreBadge(name: conversation.storeName, compact: true),
+                if (showStoreContext)
+                  StoreBadge(name: conversation.storeName, compact: true),
                 _OwnerSummary(owner: conversation.owner),
                 _SalesSummary(summary: conversation.customerSalesSummary),
                 const SizedBox(height: 2),

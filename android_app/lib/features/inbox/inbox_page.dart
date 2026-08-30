@@ -20,12 +20,14 @@ class InboxPage extends StatefulWidget {
       required this.onProfile,
       this.isHq = false,
       this.showStoreFilter = false,
+      this.showStoreContext = true,
       this.events});
   final ConversationRepository repository;
   final Future<void> Function(String id) onOpen;
   final VoidCallback onProfile;
   final bool isHq;
   final bool showStoreFilter;
+  final bool showStoreContext;
   final Stream<Map<String, dynamic>>? events;
   @override
   State<InboxPage> createState() => _InboxPageState();
@@ -548,6 +550,7 @@ class _InboxPageState extends State<InboxPage> {
             conversation: item,
             onTap: () => _open(item),
             hqLayout: widget.isHq,
+            showStoreContext: widget.showStoreContext,
           );
         },
       ),

@@ -67,4 +67,38 @@ void main() {
     expect(find.textContaining('Interested'), findsNothing);
     expect(find.textContaining('Purchased'), findsNothing);
   });
+
+  testWidgets(
+      'single-store conversation card hides store context but keeps owner',
+      (tester) async {
+    await tester.pumpWidget(_app(ConversationCard(
+      conversation: ConversationSummary(
+        id: 'conversation-1',
+        customerName: 'Customer',
+        storeName: 'OPPO CentralWorld',
+        unreadCount: 0,
+        bmReplyStatus: 'NOT_REPLIED',
+        preview: 'Hello',
+        owner: const ConversationOwner(id: 'owner-1', displayName: 'Kittiya'),
+      ),
+      showStoreContext: false,
+      onTap: () {},
+    )));
+
+    expect(find.text('OPPO CentralWorld'), findsNothing);
+    expect(find.text('Customer'), findsOneWidget);
+    expect(find.text('Owner: Kittiya'), findsOneWidget);
+    expect(find.text('Need Reply'), findsOneWidget);
+  });
+
+  testWidgets('multi-store conversation card keeps store context',
+      (tester) async {
+    await tester.pumpWidget(_app(ConversationCard(
+      conversation: _summary(),
+      showStoreContext: true,
+      onTap: () {},
+    )));
+
+    expect(find.text('OPPO CentralWorld'), findsOneWidget);
+  });
 }

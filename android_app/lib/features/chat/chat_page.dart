@@ -56,11 +56,13 @@ class ChatPage extends StatefulWidget {
       required this.conversationId,
       required this.repository,
       this.canReply = true,
+      this.showStoreContext = true,
       this.events,
       this.onConversationOpened});
   final String conversationId;
   final ConversationRepository repository;
   final bool canReply;
+  final bool showStoreContext;
   final Stream<Map<String, dynamic>>? events;
   final Future<void> Function(String conversationId)? onConversationOpened;
   @override
@@ -791,6 +793,7 @@ class _ChatPageState extends State<ChatPage> {
                     customerPictureUrl: detail.customerPictureUrl,
                     storeName: detail.storeName,
                     storeCode: detail.storeCode,
+                    showStoreContext: widget.showStoreContext,
                     bmReplyStatus: detail.bmReplyStatus,
                     exactStatus: true,
                     onBack: () => Navigator.of(context).maybePop(),

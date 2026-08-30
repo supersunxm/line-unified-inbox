@@ -1457,3 +1457,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Mobile ownership updates reuse existing conversation access/reply capability checks. APIs project only owner ID/display name, eligible-user selectors are store scoped, and `conversation.updated` carries owner changes for open clients. Web receives the same safe contract and realtime patch.
 - Monthly overview uses current canonical `Conversation.bmReplyStatus` semantics for conversations with inbound activity in the selected Bangkok month. Team metrics use successful outbound `Message.senderUserId`, count distinct conversations per human, count outbound rows separately, and keep the `Auto Reply Bot` marker outside the human workload denominator. Ownership analytics are a `CURRENT_SNAPSHOT` over accessible active conversations and are labeled as such; historical ownership is not inferred.
 - The additive migration is safe for existing rows and does not alter Inbox operational status, response-cycle calculations, Auto Reply behavior, Main OA isolation, or auth/session semantics. Android advances only after stable checks from the currently released `1.1.6+26` to `1.1.7+27`; no production APK or release metadata is published here.
+
+# Single-store mobile context boundary (2026-08-30)
+
+- Derive presentation density from `CurrentUser.stores`, the canonical active membership-derived store set returned by `/auth/me`; do not infer it from the selected inbox filter. Exactly one store hides only redundant store labels for store-only users.
+- HQ, ADMIN, all-store, multi-store, zero-store, or unresolved scope keeps store context visible to preserve disambiguation. Store fields remain in every API contract and selected-store behavior is unchanged.
+- The presentation flag is passed to Inbox cards and Chat headers. Owner/customer/avatar/status/actions remain visible, and no backend, authorization, Main OA, or data model change is introduced.

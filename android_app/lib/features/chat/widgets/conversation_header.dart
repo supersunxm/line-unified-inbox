@@ -16,6 +16,7 @@ class ConversationHeader extends StatelessWidget
     this.customerPictureUrl,
     this.storeName,
     this.storeCode,
+    this.showStoreContext = true,
     this.bmReplyStatus,
     this.owner,
     this.exactStatus = false,
@@ -29,6 +30,7 @@ class ConversationHeader extends StatelessWidget
   final String? customerPictureUrl;
   final String? storeName;
   final String? storeCode;
+  final bool showStoreContext;
   final String? bmReplyStatus;
   final ConversationOwner? owner;
   final bool exactStatus;
@@ -43,7 +45,9 @@ class ConversationHeader extends StatelessWidget
   @override
   Widget build(BuildContext context) {
     final hasStatus = bmReplyStatus?.trim().isNotEmpty ?? false;
-    final hasStore = storeName?.trim().isNotEmpty ?? false;
+    final visibleStoreName = showStoreContext ? storeName : null;
+    final visibleStoreCode = showStoreContext ? storeCode : null;
+    final hasStore = visibleStoreName?.trim().isNotEmpty ?? false;
     return AppBar(
       toolbarHeight: _height,
       backgroundColor: AppColors.surface,
@@ -71,7 +75,7 @@ class ConversationHeader extends StatelessWidget
                     const SizedBox(width: AppSpacing.xs),
                     Flexible(
                       child: Text(
-                        storeName!,
+                        visibleStoreName!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -90,9 +94,9 @@ class ConversationHeader extends StatelessWidget
                     ),
                   ],
                 ),
-                if (storeCode?.trim().isNotEmpty ?? false)
+                if (visibleStoreCode?.trim().isNotEmpty ?? false)
                   Text(
-                    appLocalizations(context).storeCode(storeCode!),
+                    appLocalizations(context).storeCode(visibleStoreCode!),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
