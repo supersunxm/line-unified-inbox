@@ -432,6 +432,7 @@ class ConversationRepository {
     final result = await _api.get('/mobile/products', query: {
       if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
       if (category?.trim().isNotEmpty == true) 'category': category!.trim(),
+      'limit': '50',
     });
     return (result['items'] as List<dynamic>? ?? [])
         .map((item) =>
