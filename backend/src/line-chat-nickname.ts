@@ -8,6 +8,12 @@ export type LineChatNicknameInput = {
   }[] | null;
 };
 
+const BANGKOK_MONTH_YEAR = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Bangkok",
+  month: "2-digit",
+  year: "2-digit",
+});
+
 /**
  * Builds the nickname that should be mirrored to LINE Official Account chat.
  *
@@ -17,7 +23,8 @@ export type LineChatNicknameInput = {
  * - Other states do not change the LINE nickname.
  *
  * The purchase date is the persisted sales record timestamp, not the client
- * clock. A purchase nickname is only emitted when all required data exists.
+ * clock. Month/year is rendered in the Thailand business timezone so Railway
+ * or another UTC runtime cannot shift saves around a month boundary.
  */
 export function buildLineChatNickname(input: LineChatNicknameInput): string | null {
   if (input.status === "ONLINE") return "Online";
@@ -38,7 +45,10 @@ export function buildLineChatNickname(input: LineChatNicknameInput): string | nu
   const recordedAt = input.recordedAt instanceof Date ? input.recordedAt : new Date(input.recordedAt);
   if (Number.isNaN(recordedAt.getTime())) return null;
 
-  const month = String(recordedAt.getMonth() + 1).padStart(2, "0");
-  const year = String(recordedAt.getFullYear()).slice(-2);
+  const parts = BANGKOK_MONTH_YEAR.formatToParts(recordedAt);
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+  if (!month || !year) return null;
+
   return `${modelName} ${paymentLabel} ${month}/${year}`;
 }
