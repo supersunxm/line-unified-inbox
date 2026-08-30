@@ -121,6 +121,45 @@ void test("sendMessage does not persist or mark REPLIED when LINE rejects the pu
   assert.equal(transactionCalled, false);
 });
 
+void test("first successful human reply assigns owner once and later staff replies do not steal it", async () => {
+  const events: Array<{ conversation?: { owner?: unknown } }> = [];
+  const owner = { id: "bm-a", displayName: "BM A", isActive: true, status: "ACTIVE", memberships: [{ storeId: "store" }] };
+  const baseConversation = {
+    id: "conversation-owner", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
+    customer: { lineUserId: "Ucustomer" }, store: { id: "store", name: "Store" },
+    lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" }, owner: null as typeof owner | null,
+  };
+  let call = 0;
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => ({ ...baseConversation, owner: call > 0 ? owner : null }) },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `message-${call}`, ...data }) },
+      conversation: {
+        update: async () => ({}),
+        updateMany: async () => ({ count: call++ === 0 ? 1 : 0 }),
+      },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+  const service = new ConversationsService(
+    prisma,
+    noopOperations,
+    { decrypt: () => "token" } as CredentialEncryptionService,
+    { pushText: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-message", duplicateAccepted: false }) } as unknown as LineMessagingService,
+    undefined,
+    undefined,
+    undefined,
+    { publish: (event: { conversation?: { owner?: unknown } }) => events.push(event) } as never,
+  );
+  await service.sendMessage("conversation-owner", { text: "first", idempotencyKey: "123e4567-e89b-42d3-a456-426614174010" }, { id: "bm-a", email: "a@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
+  await service.sendMessage("conversation-owner", { text: "second", idempotencyKey: "123e4567-e89b-42d3-a456-426614174011" }, { id: "bm-b", email: "b@example.com", displayName: "BM B", role: UserRole.VIEWER, isActive: true });
+  assert.deepEqual(events.map((event) => event.conversation?.owner), [
+    { id: "bm-a", displayName: "BM A" },
+    { id: "bm-a", displayName: "BM A" },
+  ]);
+});
+
 void test("sendImage validates content, persists media, sender, and REPLIED status", async () => {
   let mediaData: Record<string, unknown> | undefined;
   const conversation = { id: "conversation-image", storeId: "store", customer: { lineUserId: "Ucustomer" }, lineOfficialAccount: { isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" } };

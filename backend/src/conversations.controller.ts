@@ -58,6 +58,9 @@ export class ConversationsController {
     const targetStatus = dto.status ?? dto.bmReplyStatus ?? "NOT_REPLIED";
     return this.service.updateBmReplyStatus(id, targetStatus);
   }
+  @Patch(":id/owner") async owner(@Param("id") id: string, @Body() body: { userId?: string | null }, @Req() req: AuthRequest) {
+    return this.service.updateOwner(id, body.userId ?? null, req.user!);
+  }
   @Patch(":id/priority") async priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
   @Get(":id/messages") async messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30", @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.messages(id, Number(page), Number(pageSize)); }
   @Post(":id/messages") async sendMessage(@Param("id") id: string, @Body() dto: SendConversationMessageDto, @Req() req: AuthRequest) {

@@ -1,8 +1,9 @@
 import type { ApiConversation } from "@/types/api";
 
 export type RealtimeMessageEvent = {
-  type: "message.created" | "message.media.updated";
+  type: "conversation.updated" | "message.created" | "message.media.updated";
   conversationId: string;
+  conversation?: { owner?: { id: string; displayName: string } | null };
   message?: {
     id: string;
     direction: "INBOUND" | "OUTBOUND" | "SYSTEM";
@@ -49,16 +50,18 @@ export function subscribeToRealtimeEvents(onEvent: (event: RealtimeMessageEvent)
   const handle = (event: Event) => {
     try {
       const payload = JSON.parse((event as MessageEvent).data) as RealtimeMessageEvent;
-      if (payload?.conversationId && payload?.message && (payload.type === "message.created" || payload.type === "message.media.updated")) onEvent(payload);
+      if (payload?.conversationId && (payload.type === "conversation.updated" || (payload.message && (payload.type === "message.created" || payload.type === "message.media.updated")))) onEvent(payload);
     } catch {
       // A malformed event is recovered by the existing polling/reload path.
     }
   };
   source.addEventListener("message.created", handle);
   source.addEventListener("message.media.updated", handle);
+  source.addEventListener("conversation.updated", handle);
   return () => {
     source.removeEventListener("message.created", handle);
     source.removeEventListener("message.media.updated", handle);
+    source.removeEventListener("conversation.updated", handle);
     source.close();
   };
 }

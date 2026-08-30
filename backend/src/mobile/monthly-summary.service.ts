@@ -15,6 +15,29 @@ export type AnalyticsMessage = {
   messageType: string;
   sentAt: Date;
   senderUserId: string | null;
+  senderDisplayName?: string | null;
+  bmReplyStatus?: string | null;
+};
+
+export type TeamReplyMetric = {
+  userId: string;
+  displayName: string;
+  conversationsReplied: number;
+  outboundMessages: number;
+  workloadShare: number;
+};
+
+export type TeamAnalytics = {
+  humanReplies: TeamReplyMetric[];
+  bot: { conversationsReplied: number; outboundMessages: number };
+};
+
+export type OwnershipAnalytics = {
+  mode: "CURRENT_SNAPSHOT";
+  withOwner: number;
+  withoutOwner: number;
+  coverageRate: number;
+  byOwner: Array<{ userId: string; displayName: string; conversations: number }>;
 };
 
 export type ResponseCycle = {
@@ -133,6 +156,73 @@ export function monthlyVolume(messages: AnalyticsMessage[], start: Date, end: Da
   };
 }
 
+/**
+ * Operational status counts for conversations that received inbound activity
+ * in the selected month. The status values remain the canonical live
+ * Conversation.bmReplyStatus semantics; they are not response-cycle metrics.
+ */
+export function monthlyOverview(messages: AnalyticsMessage[], start: Date, end: Date) {
+  const inbound = messages.filter((message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, start, end));
+  const statuses = new Map<string, string>();
+  for (const message of inbound) {
+    if (!statuses.has(message.conversationId)) statuses.set(message.conversationId, message.bmReplyStatus ?? "NOT_REPLIED");
+  }
+  let repliedConversations = 0;
+  let waitingConversations = 0;
+  for (const status of statuses.values()) {
+    if (status === "REPLIED") repliedConversations++;
+    else if (status === "NOT_REPLIED" || status === "NOTIFIED_BM") waitingConversations++;
+  }
+  return {
+    incomingMessages: inbound.length,
+    incomingConversations: statuses.size,
+    repliedConversations,
+    waitingConversations,
+  };
+}
+
+const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
+
+function isBotReply(message: AnalyticsMessage) {
+  return message.direction === MessageDirection.OUTBOUND && message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME;
+}
+
+export function teamAnalytics(messages: AnalyticsMessage[], start: Date, end: Date): TeamAnalytics {
+  const human = new Map<string, { displayName: string; conversations: Set<string>; outboundMessages: number }>();
+  const botConversations = new Set<string>();
+  let botMessages = 0;
+  for (const message of messages) {
+    if (message.direction !== MessageDirection.OUTBOUND || !intervalContains(message.sentAt, start, end)) continue;
+    if (isBotReply(message)) {
+      botConversations.add(message.conversationId);
+      botMessages++;
+      continue;
+    }
+    if (!message.senderUserId) continue;
+    const displayName = message.senderDisplayName?.trim() || "Staff";
+    const current = human.get(message.senderUserId) ?? { displayName, conversations: new Set<string>(), outboundMessages: 0 };
+    current.conversations.add(message.conversationId);
+    current.outboundMessages++;
+    if (displayName !== "Staff" || current.displayName === "Staff") current.displayName = displayName;
+    human.set(message.senderUserId, current);
+  }
+  const denominator = [...human.values()].reduce((sum, value) => sum + value.conversations.size, 0);
+  const humanReplies = [...human.entries()]
+    .map(([userId, value]) => ({ userId, displayName: value.displayName, conversationsReplied: value.conversations.size, outboundMessages: value.outboundMessages, workloadShare: denominator === 0 ? 0 : value.conversations.size / denominator }))
+    .sort((left, right) => right.conversationsReplied - left.conversationsReplied || right.outboundMessages - left.outboundMessages || left.displayName.localeCompare(right.displayName) || left.userId.localeCompare(right.userId));
+  return { humanReplies, bot: { conversationsReplied: botConversations.size, outboundMessages: botMessages } };
+}
+
+const activeOwnerFilter = {
+  isActive: true,
+  status: "ACTIVE" as const,
+  OR: [
+    { role: "ADMIN" as const },
+    { canAccessAllStores: true },
+    { memberships: { some: { status: "ACTIVE" as const, store: { isActive: true, archivedAt: null } } } },
+  ],
+};
+
 function comparisonChange(current: number, previous: number): number | null {
   if (previous === 0) return null;
   return (current - previous) / previous;
@@ -207,6 +297,35 @@ export function tagAnalytics(conversations: TagAnalyticsConversation[]) {
 export class MonthlySummaryService {
   constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService) {}
 
+  private async ownershipSnapshot(conversationScope: Prisma.ConversationWhereInput): Promise<OwnershipAnalytics> {
+    const conversation = this.prisma.conversation;
+    if (typeof conversation.count !== "function" || typeof conversation.groupBy !== "function" || typeof this.prisma.user?.findMany !== "function") {
+      return { mode: "CURRENT_SNAPSHOT", withOwner: 0, withoutOwner: 0, coverageRate: 0, byOwner: [] };
+    }
+    const [total, grouped] = await Promise.all([
+      conversation.count({ where: conversationScope }),
+      conversation.groupBy({
+        by: ["ownerUserId"],
+        where: { ...conversationScope, ownerUserId: { not: null }, owner: activeOwnerFilter },
+        _count: { _all: true },
+      }),
+    ]);
+    const ownerCounts = grouped.filter((row): row is typeof row & { ownerUserId: string } => Boolean(row.ownerUserId));
+    const ownerIds = ownerCounts.map((row) => row.ownerUserId);
+    const users = ownerIds.length === 0 ? [] : await this.prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } });
+    const names = new Map(users.map((user) => [user.id, user.displayName?.trim() || "Staff"]));
+    const withOwner = ownerCounts.reduce((sum, row) => sum + row._count._all, 0);
+    return {
+      mode: "CURRENT_SNAPSHOT",
+      withOwner,
+      withoutOwner: Math.max(0, total - withOwner),
+      coverageRate: total === 0 ? 0 : withOwner / total,
+      byOwner: ownerCounts
+        .map((row) => ({ userId: row.ownerUserId, displayName: names.get(row.ownerUserId) ?? "Staff", conversations: row._count._all }))
+        .sort((left, right) => right.conversations - left.conversations || left.displayName.localeCompare(right.displayName) || left.userId.localeCompare(right.userId)),
+    };
+  }
+
   async get(user: AuthUser, requestedMonth?: string) {
     const asOf = new Date();
     const currentMonth = bangkokMonthKey(asOf);
@@ -228,12 +347,18 @@ export class MonthlySummaryService {
     const messages = await this.prisma.message.findMany({
       where: { conversation: conversationScope, sentAt: { lte: asOf } },
       orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-      select: { id: true, conversationId: true, direction: true, messageType: true, sentAt: true, senderUserId: true },
+      select: { id: true, conversationId: true, direction: true, messageType: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { displayName: true } }, conversation: { select: { bmReplyStatus: true } } },
     });
-    const analyticsMessages = messages as AnalyticsMessage[];
+    const analyticsMessages = messages.map((message) => ({
+      ...message,
+      senderDisplayName: message.sender?.displayName ?? message.senderDisplayName,
+      bmReplyStatus: message.conversation?.bmReplyStatus ?? null,
+    })) as AnalyticsMessage[];
     const cycles = calculateResponseCycles(analyticsMessages);
     const periodVolume = monthlyVolume(analyticsMessages, bounds.start, periodEnd);
     const periodResponse = responseMetrics(cycles, bounds.start, periodEnd);
+    const overview = monthlyOverview(analyticsMessages, bounds.start, periodEnd);
+    const team = teamAnalytics(analyticsMessages, bounds.start, periodEnd);
     const previousVolume = monthlyVolume(analyticsMessages, previous.start, comparisonEnd);
     const previousResponse = responseMetrics(cycles, previous.start, comparisonEnd);
     const eligibleConversationIds = [...new Set(analyticsMessages
@@ -258,12 +383,18 @@ export class MonthlySummaryService {
       isInstallment: row.isInstallment,
       products: row.products,
     })));
+    const ownership = await this.ownershipSnapshot(conversationScope);
     const earliestInbound = analyticsMessages.filter((message) => message.direction === MessageDirection.INBOUND).map((message) => message.sentAt).sort((a, b) => a.getTime() - b.getTime())[0];
     const comparisonAvailable = Boolean(earliestInbound && earliestInbound <= previous.start && previousVolume.incomingMessages > 0);
     const ambiguousOutboundExcluded = analyticsMessages.filter((message) => message.direction === MessageDirection.OUTBOUND && !message.senderUserId && intervalContains(message.sentAt, bounds.start, periodEnd)).length;
+    const periodOutbounds = analyticsMessages.filter((message) => message.direction === MessageDirection.OUTBOUND && intervalContains(message.sentAt, bounds.start, periodEnd));
+    const attributedOutbounds = periodOutbounds.filter((message) => Boolean(message.senderUserId) || isBotReply(message)).length;
     return {
       period: { month, timezone: REPORTING_TIMEZONE, isCurrentMonth, throughDate: localDate(periodEnd.getTime() === bounds.end.getTime() ? new Date(periodEnd.getTime() - 1) : periodEnd), asOf: asOf.toISOString(), comparisonBasis: isCurrentMonth ? "same_day_range" : "full_month" },
       volume: periodVolume,
+      overview,
+      team,
+      ownership,
       response: periodResponse,
       // Keep the legacy operational field for mobile API compatibility, but derive
       // these monthly cards from the same response cycles used by responseMetrics.
@@ -298,6 +429,9 @@ export class MonthlySummaryService {
         qaExcluded: true,
         ambiguousOutboundExcluded,
         responseMetricsAvailable: periodResponse.available,
+        replyAttributionCoverageRate: periodOutbounds.length === 0 ? 1 : attributedOutbounds / periodOutbounds.length,
+        unattributedOutboundMessages: periodOutbounds.length - attributedOutbounds,
+        ownershipAnalyticsMode: ownership.mode,
         tagAnalyticsMode: tags.mode,
         tagCoverage: tags.coverage,
       },

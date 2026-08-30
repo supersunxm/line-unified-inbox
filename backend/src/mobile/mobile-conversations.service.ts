@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { BmReplyStatus, CustomerSalesStatus, PaymentMethodType, Prisma } from "@prisma/client";
+import { BmReplyStatus, CustomerSalesStatus, PaymentMethodType, Prisma, UserStatus } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { ConversationsService, resolveMessageSender } from "../conversations.service";
@@ -11,6 +11,7 @@ import type { OperationalPriority } from "../priority/priority.types";
 import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, buildPurchaseInformation } from "../conversation-data-contract";
 import { RealtimeEventService } from "../realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "../messages/sticker-message";
+import { serializeConversationOwner } from "../conversation-owner";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -72,6 +73,7 @@ export class MobileConversationsService {
           followUpStatus: true,
           customer: { select: { id: true, displayName: true, pictureUrl: true } },
           store: { select: { id: true, name: true, code: true } },
+          owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
           customerSalesStatus: true,
           interestLevel: true,
           salesProducts: {
@@ -97,6 +99,7 @@ export class MobileConversationsService {
           id: item.id,
           customer: item.customer,
           store: item.store,
+          owner: serializeConversationOwner(item.owner, item.store?.id),
           customerSalesSummary: {
             status: item.customerSalesStatus,
             interestLevel: item.interestLevel,
@@ -149,6 +152,7 @@ export class MobileConversationsService {
         salesRecordedBy: { select: { id: true, displayName: true } },
         customer: { select: { id: true, displayName: true, pictureUrl: true } },
         store: { select: { id: true, name: true, code: true } },
+        owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
         salesProducts: {
           select: {
             id: true,
@@ -208,6 +212,7 @@ export class MobileConversationsService {
       id: conversation.id,
       customer: conversation.customer,
       store: conversation.store,
+      owner: serializeConversationOwner(conversation.owner, conversation.store?.id),
       latestMessageAt: conversation.latestMessageAt,
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
@@ -281,6 +286,29 @@ export class MobileConversationsService {
     this.assertCanReply(user);
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.updateBmReplyStatus(conversationId, status);
+  }
+
+  async eligibleOwners(user: AuthUser, conversationId: string) {
+    const storeId = await this.storeAccess.assertConversationAccess(user, conversationId);
+    const users = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        status: UserStatus.ACTIVE,
+        canAccessMobile: true,
+        OR: [
+          { role: "ADMIN" },
+          { canAccessAllStores: true },
+          { memberships: { some: { storeId, status: "ACTIVE", store: { isActive: true, archivedAt: null } } } },
+        ],
+      },
+      orderBy: [{ displayName: "asc" }, { id: "asc" }],
+      select: { id: true, displayName: true },
+    });
+    return { items: users.map((candidate) => ({ id: candidate.id, displayName: candidate.displayName.trim() || "Staff" })) };
+  }
+
+  async updateOwner(user: AuthUser, conversationId: string, userId: string | null) {
+    return this.conversations.updateOwner(conversationId, userId, user);
   }
 
   async products(query: MobileProductQueryDto) {

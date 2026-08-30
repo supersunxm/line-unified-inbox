@@ -72,6 +72,33 @@ class FakeSummaryRepository extends SummaryRepository {
           'sampleSize': available ? 10 : 3,
           'available': available
         },
+        'overview': {
+          'incomingMessages': empty ? 0 : 12,
+          'incomingConversations': empty ? 0 : 4,
+          'repliedConversations': 3,
+          'waitingConversations': 1,
+        },
+        'team': {
+          'humanReplies': [
+            {
+              'userId': 'u1',
+              'displayName': 'Kittiya',
+              'conversationsReplied': 4,
+              'outboundMessages': 8,
+              'workloadShare': 1,
+            }
+          ],
+          'bot': {'conversationsReplied': 1, 'outboundMessages': 2},
+        },
+        'ownership': {
+          'mode': 'CURRENT_SNAPSHOT',
+          'withOwner': 3,
+          'withoutOwner': 1,
+          'coverageRate': 0.75,
+          'byOwner': [
+            {'userId': 'u1', 'displayName': 'Kittiya', 'conversations': 3}
+          ],
+        },
         'operational': {'needReply': 3, 'completed': 7},
         'comparison': {
           'available': available,
@@ -141,6 +168,17 @@ void main() {
     expect(find.text('Customer Conversations'), findsOneWidget);
     expect(find.text('Need Reply'), findsNothing);
     expect(find.text('Completed'), findsNothing);
+  });
+
+  testWidgets('summary renders team handling and ownership coverage',
+      (tester) async {
+    await tester.pumpWidget(app(FakeSummaryRepository()));
+    await tester.pumpAndSettle();
+    expect(find.text('Team conversation handling'), findsOneWidget);
+    expect(find.text('Kittiya'), findsAtLeastNWidgets(1));
+    expect(find.text('Conversation ownership'), findsOneWidget);
+    expect(find.text('Current ownership snapshot'), findsOneWidget);
+    expect(find.text('Automated replies: 2 outbound messages'), findsOneWidget);
   });
 
   testWidgets('summary shows loading state while request is pending',

@@ -23,7 +23,10 @@ test("sender helper never attributes inbound or unattributed messages", () => {
 
 test("realtime message contract carries sender and maps it without a reload", () => {
   assert.match(realtime, /sender\?: \{ userId: string \| null; displayName: string \}/);
+  assert.match(realtime, /type: "conversation\.updated"/);
   assert.match(realtime, /mapRealtimeMessage/);
   assert.match(page, /subscribeToRealtimeEvents/);
   assert.match(mobile, /subscribeToRealtimeEvents/);
+  assert.match(page, /event\.type === "conversation\.updated"/);
+  assert.match(mobile, /event\.type === "conversation\.updated"/);
 });

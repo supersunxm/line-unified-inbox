@@ -1,10 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, type AnalyticsMessage } from "./monthly-summary.service";
+import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
 
 const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, senderUserId: null });
 const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", senderUserId });
 const system = (id: string, conversationId: string, sentAt: string): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "SYSTEM", messageType: "TEXT", senderUserId: null });
+
+void test("monthly overview uses current operational status for selected inbound conversations", () => {
+  const start = new Date("2026-08-01T00:00:00Z");
+  const end = new Date("2026-09-01T00:00:00Z");
+  const result = monthlyOverview([
+    { ...inbound("1", "answered", "2026-08-02T00:00:00Z"), bmReplyStatus: "REPLIED" },
+    { ...inbound("2", "waiting", "2026-08-03T00:00:00Z"), bmReplyStatus: "NOT_REPLIED" },
+    { ...inbound("3", "outside", "2026-07-31T23:00:00Z"), bmReplyStatus: "REPLIED" },
+  ], start, end);
+  assert.deepEqual(result, { incomingMessages: 2, incomingConversations: 2, repliedConversations: 1, waitingConversations: 1 });
+});
+
+void test("team analytics counts distinct human conversations and keeps bot separate", () => {
+  const start = new Date("2026-08-01T00:00:00Z");
+  const end = new Date("2026-09-01T00:00:00Z");
+  const result = teamAnalytics([
+    { ...outbound("1", "c1", "2026-08-02T00:00:00Z", "bm-1"), senderDisplayName: "Kittiya" },
+    { ...outbound("2", "c1", "2026-08-02T01:00:00Z", "bm-1"), senderDisplayName: "Kittiya" },
+    { ...outbound("3", "c2", "2026-08-02T02:00:00Z", "bm-1"), senderDisplayName: "Kittiya" },
+    { ...outbound("4", "c3", "2026-08-02T03:00:00Z", "bm-2"), senderDisplayName: "Somchai" },
+    { ...outbound("5", "c4", "2026-08-02T04:00:00Z", null), senderDisplayName: "Legacy" },
+    { ...outbound("6", "c5", "2026-08-02T05:00:00Z", null), senderDisplayName: "Auto Reply Bot" },
+  ], start, end);
+  assert.deepEqual(result.humanReplies.map(({ userId, displayName, conversationsReplied, outboundMessages }) => ({ userId, displayName, conversationsReplied, outboundMessages })), [
+    { userId: "bm-1", displayName: "Kittiya", conversationsReplied: 2, outboundMessages: 3 },
+    { userId: "bm-2", displayName: "Somchai", conversationsReplied: 1, outboundMessages: 1 },
+  ]);
+  assert.equal(result.humanReplies[0]?.workloadShare, 2 / 3);
+  assert.deepEqual(result.bot, { conversationsReplied: 1, outboundMessages: 1 });
+});
 
 void test("QA conversations can be excluded before cycle calculation", () => {
   const messages = [inbound("qa", "qa-conversation", "2026-08-05T00:00:00.000Z"), inbound("real", "real-conversation", "2026-08-05T01:00:00.000Z")];

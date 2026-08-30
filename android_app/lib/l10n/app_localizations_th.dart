@@ -192,6 +192,12 @@ class AppLocalizationsTh extends AppLocalizations {
   String get customerConversations => 'บทสนทนาลูกค้า';
 
   @override
+  String get repliedConversations => 'บทสนทนาที่ตอบแล้ว';
+
+  @override
+  String get waitingConversations => 'บทสนทนาที่รอตอบ';
+
+  @override
   String get responsePerformance => 'ประสิทธิภาพการตอบ';
 
   @override
@@ -256,6 +262,60 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get conversationContext => 'ข้อมูลบทสนทนา';
+
+  @override
+  String get conversationOwner => 'ผู้ดูแล';
+
+  @override
+  String get unassignedOwner => 'ยังไม่มีผู้ดูแล';
+
+  @override
+  String get selectOwner => 'เลือกผู้ดูแล';
+
+  @override
+  String get clearOwner => 'ล้างผู้ดูแล';
+
+  @override
+  String get ownerLoadFailed => 'โหลดรายชื่อผู้ดูแลไม่ได้';
+
+  @override
+  String get ownerUpdateFailed => 'อัปเดตผู้ดูแลบทสนทนาไม่ได้';
+
+  @override
+  String get teamHandling => 'การดูแลบทสนทนาโดยทีม';
+
+  @override
+  String get humanReplies => 'การตอบโดยทีมงาน';
+
+  @override
+  String get outboundMessages => 'ข้อความขาออก';
+
+  @override
+  String get conversationsReplied => 'บทสนทนาที่ตอบแล้ว';
+
+  @override
+  String get workloadShare => 'สัดส่วนงาน';
+
+  @override
+  String get automatedReplies => 'การตอบอัตโนมัติ';
+
+  @override
+  String get ownership => 'การมอบหมายบทสนทนา';
+
+  @override
+  String get conversationsWithOwner => 'มีผู้ดูแล';
+
+  @override
+  String get conversationsWithoutOwner => 'ยังไม่มีผู้ดูแล';
+
+  @override
+  String get ownerCoverage => 'ความครอบคลุมผู้ดูแล';
+
+  @override
+  String get currentSnapshotLabel => 'ภาพรวมผู้ดูแลปัจจุบัน';
+
+  @override
+  String get noHumanReplies => 'เดือนนี้ยังไม่มีการตอบโดยทีมงาน';
 
   @override
   String get readOnlyConversation => 'ดูได้อย่างเดียว · ไม่มีสิทธิ์ตอบกลับ';

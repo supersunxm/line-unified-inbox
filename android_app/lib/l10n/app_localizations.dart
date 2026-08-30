@@ -455,6 +455,18 @@ abstract class AppLocalizations {
   /// **'Customer Conversations'**
   String get customerConversations;
 
+  /// No description provided for @repliedConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Replied conversations'**
+  String get repliedConversations;
+
+  /// No description provided for @waitingConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting conversations'**
+  String get waitingConversations;
+
   /// No description provided for @responsePerformance.
   ///
   /// In en, this message translates to:
@@ -568,6 +580,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conversation context'**
   String get conversationContext;
+
+  /// No description provided for @conversationOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get conversationOwner;
+
+  /// No description provided for @unassignedOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get unassignedOwner;
+
+  /// No description provided for @selectOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Select owner'**
+  String get selectOwner;
+
+  /// No description provided for @clearOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear owner'**
+  String get clearOwner;
+
+  /// No description provided for @ownerLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load eligible owners'**
+  String get ownerLoadFailed;
+
+  /// No description provided for @ownerUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to update conversation owner'**
+  String get ownerUpdateFailed;
+
+  /// No description provided for @teamHandling.
+  ///
+  /// In en, this message translates to:
+  /// **'Team conversation handling'**
+  String get teamHandling;
+
+  /// No description provided for @humanReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'Human replies'**
+  String get humanReplies;
+
+  /// No description provided for @outboundMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Outbound messages'**
+  String get outboundMessages;
+
+  /// No description provided for @conversationsReplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations replied'**
+  String get conversationsReplied;
+
+  /// No description provided for @workloadShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Workload share'**
+  String get workloadShare;
+
+  /// No description provided for @automatedReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'Automated replies'**
+  String get automatedReplies;
+
+  /// No description provided for @ownership.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation ownership'**
+  String get ownership;
+
+  /// No description provided for @conversationsWithOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'With owner'**
+  String get conversationsWithOwner;
+
+  /// No description provided for @conversationsWithoutOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Without owner'**
+  String get conversationsWithoutOwner;
+
+  /// No description provided for @ownerCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner coverage'**
+  String get ownerCoverage;
+
+  /// No description provided for @currentSnapshotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current ownership snapshot'**
+  String get currentSnapshotLabel;
+
+  /// No description provided for @noHumanReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'No human replies recorded this month'**
+  String get noHumanReplies;
 
   /// No description provided for @readOnlyConversation.
   ///

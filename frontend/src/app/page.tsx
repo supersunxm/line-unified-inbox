@@ -142,6 +142,7 @@ type Conversation = {
   purchaseIntent: string;
   lineOaId: string;
   lineOaName: string;
+  owner: { id: string; displayName: string } | null;
   customerSalesInformation?: ApiCustomerSalesInformation;
 };
 
@@ -1346,6 +1347,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
     purchaseIntent: item.purchaseIntent ?? "Unknown",
     lineOaId: item.lineOfficialAccount.id,
     lineOaName: item.lineOfficialAccount.name,
+    owner: item.owner ?? null,
     customerSalesInformation: item.customerSalesInformation,
   };
 }
@@ -2166,7 +2168,18 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   useEffect(() => {
     if (!authUser || !selectedConversationId) return;
     return subscribeToRealtimeEvents((event) => {
-      if (event.conversationId !== selectedConversationId || !event.message) return;
+      if (event.conversationId !== selectedConversationId) return;
+      if (event.type === "conversation.updated") {
+        if (!event.conversation || !Object.prototype.hasOwnProperty.call(event.conversation, "owner")) return;
+        setConversations((current) => current.map((conversation) => conversation.id === selectedConversationId
+          ? { ...conversation, owner: event.conversation?.owner ?? null }
+          : conversation));
+        setSelectedApiConversation((current) => current && current.id === selectedConversationId
+          ? { ...current, owner: event.conversation?.owner ?? null }
+          : current);
+        return;
+      }
+      if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
         setChatHistory((current) => current.items.some((item) => item.id === incoming.id)
@@ -4396,6 +4409,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             </div>
                           </div>
 
+                          {conversation.owner && <p data-conversation-owner className="mt-0.5 truncate text-[10px] font-medium text-[var(--app-text-tertiary)]">👤 {conversation.owner.displayName}</p>}
+
                           <p data-conversation-message-preview className="conversation-message-preview mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--app-text-secondary)] break-words">
                             {conversation.translations[language]}
                           </p>
@@ -4476,6 +4491,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             <span className="shrink-0 text-xs font-medium text-[var(--app-text-secondary)]">{selectedConversation.store}</span>
                             {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
                           </div>
+                          {selectedApiConversation?.owner && <p data-chat-detail-owner className="mt-0.5 truncate text-[11px] font-medium text-[var(--app-text-tertiary)]">👤 {selectedApiConversation.owner.displayName}</p>}
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
                             {getBmCustomerSalesTags(selectedApiConversation?.customerSalesInformation ?? selectedConversation.customerSalesInformation).map((tag, index) => (
                               <span
