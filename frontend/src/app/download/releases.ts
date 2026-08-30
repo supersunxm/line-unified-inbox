@@ -11,6 +11,20 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.8",
+  build: 28,
+  releasedAt: "2026-08-30",
+  releasedAtDisplay: "30 สิงหาคม 2026",
+  size: "59.9 MB",
+  fileName: "oppo-line-oa-chat-v1.1.8-production.apk",
+  sha256: "1978d21471d5a514c44af4bbb5da04c26a7deb86411fc4f50bfca5ffcfaaa059",
+  notes: [
+    "ซ่อนชื่อร้านที่ซ้ำซ้อนใน Inbox สำหรับผู้ใช้ที่ดูแลเพียงร้านเดียว",
+    "ซ่อนชื่อและรหัสร้านในหน้าแชทสำหรับผู้ใช้ร้านเดียว เพื่อเพิ่มพื้นที่สนทนา",
+    "ผู้ใช้หลายร้าน, HQ และ Admin ยังคงเห็นข้อมูลร้านเพื่อแยกบริบทได้ชัดเจน",
+  ],
+},
+  {
   version: "1.1.7",
   build: 27,
   releasedAt: "2026-08-30",
