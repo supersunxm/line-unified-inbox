@@ -14,6 +14,10 @@ const BANGKOK_MONTH_YEAR = new Intl.DateTimeFormat("en-GB", {
   year: "2-digit",
 });
 
+function conciseModelName(value: string): string {
+  return value.trim().replace(/^OPPO\s+/i, "");
+}
+
 /**
  * Builds the nickname that should be mirrored to LINE Official Account chat.
  *
@@ -31,8 +35,9 @@ export function buildLineChatNickname(input: LineChatNicknameInput): string | nu
   if (input.status !== "PURCHASED") return null;
 
   const firstProduct = input.products?.[0];
-  const modelName = firstProduct?.customProductName?.trim() || firstProduct?.model?.name?.trim();
-  if (!modelName) return null;
+  const rawModelName = firstProduct?.customProductName?.trim() || firstProduct?.model?.name?.trim();
+  if (!rawModelName) return null;
+  const modelName = conciseModelName(rawModelName);
 
   const paymentLabel = input.paymentMethod === "CASH"
     ? "สด"
