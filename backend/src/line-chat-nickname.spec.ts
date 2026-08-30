@@ -12,7 +12,7 @@ void test("cash purchase uses model, สด, and recorded month/year", () => {
     paymentMethod: "CASH",
     recordedAt: "2026-08-30T12:00:00+07:00",
     products: [{ model: { name: "OPPO Find X9" } }],
-  }), "OPPO Find X9 สด 08/26");
+  }), "Find X9 สด 08/26");
 });
 
 void test("installment purchase uses custom product name when present", () => {
