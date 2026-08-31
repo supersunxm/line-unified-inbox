@@ -11,6 +11,20 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.11",
+  build: 31,
+  releasedAt: "2026-08-31",
+  releasedAtDisplay: "31 สิงหาคม 2026",
+  size: "60.0 MB",
+  fileName: "oppo-line-oa-chat-v1.1.11-production.apk",
+  sha256: "698ff099e26079d87d8e496b4c0928cb01c6a2f8f9b849302beb4282ed9eb5c2",
+  notes: [
+    "เพิ่มการส่งวิดีโอจากแอปไปยังลูกค้าผ่าน LINE OA",
+    "รองรับเลือกวิดีโอ MP4 จากแกลเลอรีหรือถ่ายจากกล้อง พร้อมหน้าพรีวิวก่อนส่ง",
+    "ปรับการอัปโหลดวิดีโอให้ส่ง Content-Type video/mp4 และคงสถานะการตอบ ผู้ดูแล และ realtime เดิม",
+  ],
+},
+  {
   version: "1.1.10",
   build: 30,
   releasedAt: "2026-08-30",
