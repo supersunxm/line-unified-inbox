@@ -72,6 +72,7 @@ class ChatComposer extends StatelessWidget {
     switch (action) {
       case _AttachmentAction.image:
         onAttach?.call();
+        return;
       case _AttachmentAction.video:
         if (onAttachVideo != null) {
           onAttachVideo!.call();
@@ -80,6 +81,7 @@ class ChatComposer extends StatelessWidget {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(l10n.comingSoon)));
+        return;
     }
   }
 
