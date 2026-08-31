@@ -1,5 +1,13 @@
 # AI progress
 
+## Current task: Authenticated request-context discovery transport fix (2026-08-31) [COMPLETED]
+
+- Production reported a generic browser `Failed to fetch` during the Store 28375 dry-run; no production access was performed by Codex for this fix.
+- Refactored `discoverChats` from page navigation plus in-page `fetch` to the persistent Playwright `BrowserContext.request.get` API. This is a GET-only read and shares the persistent profile session without surfacing cookies, credentials, XSRF values, or storage state.
+- Safe errors now distinguish transport failure, HTTP status (401/403/404/5xx), non-JSON responses, and fail-closed unsupported shapes. Pagination remains explicitly unverified and apply remains blocked unless enumeration is `COMPLETE`.
+- Verification: 49 / 49 focused discovery/session/mapping tests pass; 1,568 / 1,568 full backend tests pass; changed-file ESLint passes; backend build passes; `git diff --check` passes.
+- Production was not queried or mutated; no apply run, merge, or deployment was performed.
+
 ## Current task: Store 28375 Historical LINE OA Manager Chat ID Discovery (2026-08-31) [COMPLETED]
 
 - Added a pilot-only operator CLI `npm run line-chat:mapping:discover -- --store 28375 [--dry-run | --apply]`; dry-run is the default and the npm script does not require `.env`.
