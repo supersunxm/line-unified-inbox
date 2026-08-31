@@ -93,6 +93,14 @@ class ChatComposer extends StatelessWidget {
     };
   }
 
+  String _attachmentLabel(BuildContext context) {
+    return switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'เพิ่มไฟล์แนบ',
+      'zh' => '添加附件',
+      _ => 'Add attachment',
+    };
+  }
+
   Widget _composerRow(BuildContext context) => Container(
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
         decoration: BoxDecoration(
@@ -113,7 +121,7 @@ class ChatComposer extends StatelessWidget {
               width: 44,
               height: 44,
               child: IconButton.filledTonal(
-                tooltip: appLocalizations(context).moreActions,
+                tooltip: _attachmentLabel(context),
                 onPressed: enabled &&
                         !isAttaching &&
                         (onAttach != null || onAttachVideo != null)
