@@ -1,3 +1,9 @@
+# Authenticated Request-Context Discovery Transport (2026-08-31)
+
+- Discovery now uses the persistent Playwright `BrowserContext.request.get` API for the observed `GET /api/v1/bots/{botId}/chats` endpoint. This request context shares the persistent browser profile's cookies/session storage without requiring page navigation or an individual chat URL.
+- The discovery path performs no POST/PUT/PATCH/DELETE calls, does not inspect or log cookies, authorization, XSRF, or storage state, and maps request transport, HTTP status, non-JSON, and unsupported-shape failures to distinct sanitized errors.
+- The response contract and pagination mechanics remain unverified against production; the existing fail-closed parser and `UNVERIFIED` enumeration status are unchanged, so apply remains blocked until completeness is explicitly established.
+
 # Store 28375 Chat ID Discovery Safety Boundary (2026-08-31)
 
 - **Observed read endpoint**: The existing authenticated `LineChatSessionService` browser/network flow observes `GET /api/v1/bots/{botId}/chats`. Discovery reuses this persistent context and does not invent keyword query parameters or a detached API client. The production response contract is not claimed to be verified yet.
@@ -6,7 +12,7 @@
 - **Pilot-only scope**: Store identifier `28375` is checked before Prisma access; exactly one Store, active Store OA, active session, and no cross-OA conversations are required.
 - **Confidence safety**: Display name is only a weak signal. A write requires one unique multi-signal candidate; duplicate names, candidate reuse, equal candidates, existing ownership, and conflicts become non-writable classifications.
 - **Write isolation**: Apply runs a transaction that updates only nullable `Conversation.lineChatUserId` rows for Store 28375, and only after all preconditions—including `COMPLETE` enumeration and zero conflicts—pass. It does not enqueue nickname jobs, update nicknames, or touch `Customer.lineUserId`; existing mappings are preserved.
-- **Network guarantee**: Discovery navigates only to the chat.line.biz root to establish the authenticated origin, blocks non-GET requests in its temporary browser context, and performs one explicit authenticated GET to the observed `/api/v1/bots/{botId}/chats` endpoint. It never calls nickname PUT/PATCH/POST APIs or opens an individual chat URL.
+- **Network guarantee**: Discovery uses one explicit authenticated `BrowserContext.request.get` to the observed `/api/v1/bots/{botId}/chats` endpoint. No page navigation or individual chat URL is required, and the discovery path cannot issue nickname PUT/PATCH/POST/DELETE calls. Cookies, authorization, XSRF, and storage state are handled by Playwright but never inspected, logged, or returned.
 
 # Store 28375 Historical Nickname Backfill Safety Boundary (2026-08-31)
 

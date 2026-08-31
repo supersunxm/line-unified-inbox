@@ -3,7 +3,7 @@ import test from "node:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { BrowserContext, Page } from "playwright";
+import type { APIResponse, BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
 
@@ -81,35 +81,102 @@ test("entries without usable IDs and invalid IDs are skipped safely", () => {
   assert.deepEqual(result.chats.map((chat) => chat.chatUserId), ["Ud1234567890abcdef"]);
 });
 
-test("session discovery observes the authenticated GET chat-list response and closes the context", async () => {
-  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-discovery-"));
+function mockResponse(status: number, body: unknown, jsonError?: Error): APIResponse {
+  return {
+    status: () => status,
+    json: async () => {
+      if (jsonError) throw jsonError;
+      return body;
+    },
+  } as unknown as APIResponse;
+}
+
+function mockRequestContext(response: APIResponse | Error) {
+  const calls: Array<{ url: string; options: Record<string, unknown> }> = [];
   let closed = false;
-  let evaluatedUrl = "";
-  const page: Partial<Page> = {
-    goto: async () => {
-      return null;
-    },
-    evaluate: async (_fn: unknown, targetUrl: unknown) => {
-      evaluatedUrl = String(targetUrl);
-      return { status: 200, body: { chats: [{ userId: "Ud1234567890abcdef", displayName: "Somchai" }] } };
-    },
-    waitForTimeout: async () => {},
-  };
   const context = {
-    pages: () => [page as Page],
-    newPage: async () => page as Page,
+    request: {
+      get: async (url: string, options: Record<string, unknown>) => {
+        calls.push({ url, options });
+        if (response instanceof Error) throw response;
+        return response;
+      },
+      post: async () => { throw new Error("POST must not be called"); },
+      put: async () => { throw new Error("PUT must not be called"); },
+      patch: async () => { throw new Error("PATCH must not be called"); },
+      delete: async () => { throw new Error("DELETE must not be called"); },
+    },
+    pages: () => { throw new Error("page navigation must not be used for discovery"); },
+    newPage: async () => { throw new Error("individual chat pages must not be opened"); },
     close: async () => { closed = true; },
   } as unknown as BrowserContext;
-  const launcher: ContextLauncher = async () => context;
+  return { context, calls, wasClosed: () => closed };
+}
+
+async function discoverWithResponse(response: APIResponse | Error) {
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-discovery-"));
+  const mock = mockRequestContext(response);
+  const launcher: ContextLauncher = async () => mock.context;
   try {
     const service = new LineChatSessionService(launcher);
     const result = await service.discoverChats({ botId: "Ubot", profilePath, customLauncher: launcher });
-    assert.equal(result.endpoint, "https://chat.line.biz/api/v1/bots/Ubot/chats");
-    assert.equal(evaluatedUrl, result.endpoint);
-    assert.equal(result.chats[0]?.chatUserId, "Ud1234567890abcdef");
-    assert.equal(result.enumerationStatus, "UNVERIFIED");
-    assert.equal(closed, true);
+    return { result, mock };
   } finally {
     fs.rmSync(profilePath, { recursive: true, force: true });
   }
+}
+
+test("session discovery uses the authenticated BrowserContext request GET", async () => {
+  const { result, mock } = await discoverWithResponse(mockResponse(200, {
+    chats: [{ userId: "Ud1234567890abcdef", displayName: "Somchai" }],
+  }));
+  assert.equal(result.endpoint, "https://chat.line.biz/api/v1/bots/Ubot/chats");
+  assert.equal(mock.calls.length, 1);
+  assert.equal(mock.calls[0]?.url, result.endpoint);
+  assert.deepEqual(mock.calls[0]?.options, {
+    headers: { Accept: "application/json, text/plain, */*" },
+    timeout: 15000,
+  });
+  assert.equal(result.chats[0]?.chatUserId, "Ud1234567890abcdef");
+  assert.equal(result.enumerationStatus, "UNVERIFIED");
+  assert.equal(mock.wasClosed(), true);
+});
+
+test("session discovery performs no page navigation, individual chat opening, or non-GET request", async () => {
+  const { mock } = await discoverWithResponse(mockResponse(200, { chats: [] }));
+  assert.equal(mock.calls.length, 1);
+  assert.equal(mock.wasClosed(), true);
+});
+
+test("session discovery reports safe HTTP status failures", async (t) => {
+  for (const status of [401, 403, 404, 500]) {
+    await t.test(`HTTP ${status}`, async () => {
+      await assert.rejects(
+        () => discoverWithResponse(mockResponse(status, { secret: "must-not-surface" })),
+        new RegExp(`LINE OA Manager chat-list returned HTTP ${status}`),
+      );
+    });
+  }
+});
+
+test("session discovery distinguishes transport and non-JSON failures without surfacing secrets", async () => {
+  await assert.rejects(
+    () => discoverWithResponse(new Error("cookie=secret authorization=secret")),
+    (error: unknown) => error instanceof Error
+      && error.message === "LINE OA Manager chat-list transport failed"
+      && !/cookie|authorization|secret/i.test(error.message),
+  );
+  await assert.rejects(
+    () => discoverWithResponse(mockResponse(200, "not-json", new Error("raw response secret"))),
+    (error: unknown) => error instanceof Error
+      && error.message === "LINE OA Manager chat-list response was not JSON"
+      && !/secret/i.test(error.message),
+  );
+});
+
+test("session discovery preserves fail-closed errors for unsupported JSON shapes", async () => {
+  await assert.rejects(
+    () => discoverWithResponse(mockResponse(200, { unknown: [] })),
+    /did not contain a supported chat array/,
+  );
 });

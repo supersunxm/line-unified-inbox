@@ -138,8 +138,9 @@ export class LineChatSessionService {
 
   /**
    * Reads chats through the authenticated persistent browser profile. This
-   * intentionally performs one browser-context GET to the observed endpoint,
-   * with non-GET chat.line.biz requests blocked for this discovery context.
+   * intentionally performs one BrowserContext request-context GET to the
+   * observed endpoint. Playwright shares the persistent context's cookies and
+   * session storage with `context.request`; no page navigation is required.
    */
   public async discoverChats(input: {
     botId: string;
@@ -163,49 +164,34 @@ export class LineChatSessionService {
     const endpoint = this.buildChatListUrl(botId);
 
     try {
-      const page = context.pages()[0] || (await context.newPage());
-      const routeableContext = context as BrowserContext & {
-        route?: BrowserContext["route"];
-        unroute?: BrowserContext["unroute"];
-      };
-      if (routeableContext.route) {
-        await routeableContext.route("https://chat.line.biz/**", async (route) => {
-          if (route.request().method() === "GET") await route.continue();
-          else await route.abort();
+      const requestContext = context.request;
+      if (!requestContext || typeof requestContext.get !== "function") {
+        throw new Error("LINE OA Manager chat-list transport failed");
+      }
+
+      let response;
+      try {
+        response = await requestContext.get(endpoint, {
+          headers: { Accept: "application/json, text/plain, */*" },
+          timeout: 15000,
         });
+      } catch {
+        throw new Error("LINE OA Manager chat-list transport failed");
       }
 
-      await page.goto("https://chat.line.biz/", {
-        waitUntil: "domcontentloaded",
-        timeout: 15000,
-      }).catch(() => {});
-
-      const fetchResult = await page.evaluate(async (targetUrl) => {
-        try {
-          const response = await fetch(targetUrl, {
-            method: "GET",
-            headers: { Accept: "application/json, text/plain, */*" },
-            credentials: "include",
-          });
-          let body: unknown = null;
-          try { body = await response.json(); } catch { /* non-JSON response */ }
-          return { status: response.status, body };
-        } catch (error: unknown) {
-          return { status: 0, body: null, error: error instanceof Error ? error.message : String(error) };
-        }
-      }, endpoint);
-      if (fetchResult.status < 200 || fetchResult.status >= 300) {
-        throw new Error(
-          fetchResult.status > 0
-            ? `LINE OA Manager chat-list request returned HTTP ${fetchResult.status}.`
-            : `LINE OA Manager chat-list GET failed: ${fetchResult.error || "network error"}.`,
-        );
+      const status = response.status();
+      if (status < 200 || status >= 300) {
+        throw new Error(`LINE OA Manager chat-list returned HTTP ${status}`);
       }
-      if (fetchResult.body === null) throw new Error("LINE OA Manager chat-list response was empty or not JSON.");
-      return parseLineChatListResponse(fetchResult.body, { botId, endpoint });
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error("LINE OA Manager chat-list response was not JSON");
+      }
+      return parseLineChatListResponse(body, { botId, endpoint });
     } finally {
-      const routeableContext = context as BrowserContext & { unroute?: BrowserContext["unroute"] };
-      if (routeableContext.unroute) await routeableContext.unroute("https://chat.line.biz/**").catch(() => {});
       await context.close();
     }
   }
