@@ -1,3 +1,4 @@
+# Temporary branch-only fixer; remove after it commits the analyzer-safe source change.
 name: Fix PR 102 analyzer
 
 on:
