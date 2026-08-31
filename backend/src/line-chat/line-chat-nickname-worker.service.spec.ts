@@ -342,6 +342,64 @@ void test("worker marks FAILED when max attempts are exhausted", async () => {
   await worker.processSingleJob("job-exhausted");
 
   assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.FAILED);
+  assert.deepEqual(updatedJobData?.attemptCount, { increment: 1 });
+});
+
+void test("worker records a failed attempt without auto-retrying a missing profile directory", async () => {
+  let updatedJobData: Record<string, unknown> | undefined;
+  let updateNicknameCalls = 0;
+
+  const prisma = {
+    lineChatNicknameSyncJob: {
+      findUnique: async () => ({
+        id: "job-missing-profile",
+        conversationId: "conv-101",
+        lineOfficialAccountId: "oa-101",
+        lineChatUserId: "Uchat_user_1",
+        lineUserId: "Umessaging_api_user_1",
+        nickname: "Online",
+        status: LineChatNicknameSyncJobStatus.PROCESSING,
+        attemptCount: 0,
+        maxAttempts: 3,
+        createdAt: new Date("2026-08-31T10:00:00Z"),
+      }),
+      findFirst: async () => null,
+      update: async (args: { data: Record<string, unknown> }) => {
+        updatedJobData = args.data;
+        return {};
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-101",
+        chatBotId: "Ubot_profile_b",
+        lineChatSession: {
+          id: "session-1",
+          sessionKey: "profile-b-linux",
+          status: LineChatSessionStatus.ACTIVE,
+        },
+      }),
+    },
+  };
+
+  const sessionService = {
+    resolveProfilePath: () => "/data/line-chat-profiles/profile-b-linux",
+    updateNickname: async () => {
+      updateNicknameCalls++;
+      return {
+        success: false,
+        error: 'Profile directory does not exist at "/data/line-chat-profiles/profile-b-linux"',
+      };
+    },
+  } as unknown as LineChatSessionService;
+
+  const worker = new LineChatNicknameWorkerService(prisma as never, sessionService);
+  await worker.processSingleJob("job-missing-profile");
+
+  assert.equal(updateNicknameCalls, 1);
+  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.FAILED);
+  assert.deepEqual(updatedJobData?.attemptCount, { increment: 1 });
+  assert.equal(updatedJobData?.scheduledAt, undefined, "profile configuration failures must not auto-retry");
 });
 
 void test("worker routes multiple sessions dynamically (Profile B) without hardcoding", async () => {
@@ -404,7 +462,7 @@ void test("worker routes multiple sessions dynamically (Profile B) without hardc
 
 void test("LineChatNicknameWorkerModule initializes cleanly without MobileAuthService or full app dependencies", async () => {
   const { Test } = await import("@nestjs/testing");
-  const { LineChatNicknameWorkerModule } = await import("./line-chat.module");
+  const { LineChatNicknameWorkerModule } = await import("./line-chat-nickname-worker.module");
   const { PrismaService } = await import("../prisma.service");
 
   const moduleRef = await Test.createTestingModule({

@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { hostname } from "node:os";
+import { resolve } from "node:path";
 
 const WORKER_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -12,7 +13,13 @@ const STUCK_JOB_TIMEOUT_MS = 5 * 60_000; // 5 minutes max stuck duration
 @Injectable()
 export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LineChatNicknameWorkerService.name);
-  private readonly workerId = `${process.env.RAILWAY_REPLICA_ID || hostname()}-${process.pid}`;
+  private readonly railwayServiceName = process.env.RAILWAY_SERVICE_NAME?.trim() || null;
+  private readonly railwayReplicaId = process.env.RAILWAY_REPLICA_ID?.trim() || null;
+  private readonly workerId = `${this.railwayServiceName || "local"}:${this.railwayReplicaId || hostname()}:${process.pid}`;
+  private readonly profileRoot = resolve(
+    process.env.LINE_CHAT_PROFILE_ROOT?.trim() ||
+      (process.env.NODE_ENV === "production" ? "/data/line-chat-profiles" : "./local-data")
+  );
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
@@ -22,10 +29,24 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
   ) {}
 
   onModuleInit() {
-    if (process.env.NODE_ENV !== "test" && process.env.DISABLE_NICKNAME_WORKER !== "true") {
-      this.timer = setInterval(() => void this.processQueueCycle(), WORKER_POLL_INTERVAL_MS);
-      void this.processQueueCycle();
+    if (process.env.NODE_ENV === "test") {
+      return;
     }
+
+    if (process.env.DISABLE_NICKNAME_WORKER === "true") {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_nickname_worker_disabled",
+        ...this.workerIdentity(),
+      }));
+      return;
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_nickname_worker_started",
+      ...this.workerIdentity(),
+    }));
+    this.timer = setInterval(() => void this.processQueueCycle(), WORKER_POLL_INTERVAL_MS);
+    void this.processQueueCycle();
   }
 
   onModuleDestroy() {
@@ -33,6 +54,15 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  private workerIdentity() {
+    return {
+      railwayServiceName: this.railwayServiceName,
+      railwayReplicaId: this.railwayReplicaId,
+      workerId: this.workerId,
+      profileRoot: this.profileRoot,
+    };
   }
 
   /**
@@ -150,6 +180,14 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
         if (claimResult.count === 0) {
           continue; // Claimed by another worker
         }
+
+        this.logger.log(
+          JSON.stringify({
+            event: "line_chat_nickname_job_claimed",
+            jobId: job.id,
+            ...this.workerIdentity(),
+          })
+        );
 
         await this.processSingleJob(job.id);
         processedCount++;
@@ -470,6 +508,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       where: { id: job.id },
       data: {
         status: LineChatNicknameSyncJobStatus.FAILED,
+        attemptCount: { increment: 1 },
         processedAt: new Date(),
         lastError: result.error || "Execution failed",
         lockedUntil: null,
@@ -488,4 +527,3 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     );
   }
 }
-

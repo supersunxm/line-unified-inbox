@@ -1,6 +1,27 @@
 # AI progress
 
-## Current task: LINE OA Chat Nickname Sync: Decouple Messaging API User ID from LINE OA Manager Chat User ID (2026-08-31) [COMPLETED]
+## Current task: Dedicated LINE OA Nickname Worker Ownership (2026-08-31) [COMPLETED]
+
+- **Root cause**:
+  - `AppModule` imported `LineChatModule`, and `LineChatModule` registered `LineChatNicknameWorkerService` as a provider.
+  - Every process that bootstrapped `AppModule` could therefore run the nickname poller when `DISABLE_NICKNAME_WORKER` was absent or false. This included the main backend and the rich-menu standalone worker, which also bootstraps `AppModule`.
+- **Architectural ownership fix**:
+  - Removed `LineChatNicknameWorkerService` from the normal `LineChatModule` providers and exports.
+  - Moved `LineChatNicknameWorkerModule` to `line-chat-nickname-worker.module.ts`; only the dedicated nickname-worker entrypoint imports it.
+  - Kept `DISABLE_NICKNAME_WORKER` only as an emergency kill switch, not as the ownership boundary.
+  - Added structured worker startup and successful-claim events containing `railwayServiceName`, `railwayReplicaId`, correlatable `workerId`, and `profileRoot` only.
+- **Failure semantics**:
+  - A failed outbound execution now increments `attemptCount`, including a missing browser profile.
+  - Missing-profile failures remain terminal `FAILED` and are not automatically retried, avoiding an unsafe configuration-failure loop.
+- **Regression verification**:
+  - 57 / 57 targeted LINE chat tests pass.
+  - 1,515 / 1,515 full backend tests pass.
+  - Backend build passes.
+  - ESLint passes on every touched/new TypeScript file. Repository-wide lint remains blocked by pre-existing errors in unrelated files.
+  - Existing backend and frontend health endpoints return HTTP 200; database health is true.
+  - `git diff --check` passes.
+
+## Previous task: LINE OA Chat Nickname Sync: Decouple Messaging API User ID from LINE OA Manager Chat User ID (2026-08-31) [COMPLETED]
 
 - **Root Cause & Domain Decoupling**:
   - `Customer.lineUserId` stores the provider-scoped Messaging API user ID (e.g. `U124d80f7c70ed8f48cfc93c707853ab4`), whereas the LINE OA Manager (`chat.line.biz`) web portal uses internal chatroom identifiers (e.g. `Ud8d5af30ddca3ed4237e157d5d73c2f1`).

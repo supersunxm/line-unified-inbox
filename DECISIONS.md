@@ -1,3 +1,16 @@
+# Dedicated LINE OA Nickname Worker Ownership Boundary (2026-08-31)
+
+- **Module topology is the primary safety boundary**:
+  - `LineChatModule` provides only normal request/queue/operations capabilities and never registers `LineChatNicknameWorkerService`.
+  - `LineChatNicknameWorkerModule` lives in a dedicated source file and is imported only by `line-chat-nickname-worker.ts`.
+  - Normal backend, rich-menu worker, follower/cron, and future `AppModule` consumers cannot poll or claim nickname jobs through Nest dependency injection, regardless of `DISABLE_NICKNAME_WORKER` configuration.
+- **Environment flag remains secondary**:
+  - `DISABLE_NICKNAME_WORKER=true` remains an emergency pause control inside the dedicated worker process, but missing or false values cannot grant ownership to normal application processes.
+- **Observable, non-secret identity**:
+  - Startup and claim logs include Railway service name, replica ID, a `service:replica:pid` worker ID, and resolved profile root. Browser cookies, storage, XSRF material, and credentials remain excluded.
+- **Infrastructure failure accounting**:
+  - A missing profile directory records one failed attempt and remains terminal `FAILED`; it is not automatically requeued because only an operator/deployment correction can make progress.
+
 # Decoupled LINE OA Manager Chat Identifier Architecture (2026-08-31)
 
 - **Decoupling Messaging API User ID (`Customer.lineUserId`) from LINE OA Manager Chat User ID (`Conversation.lineChatUserId`)**:
