@@ -224,7 +224,7 @@ void test("updateCustomerSalesInfo calls nicknameQueue.enqueueSalesSync after tr
     prisma as never,
     { assertConversationAccess: async () => "store-1" } as never,
     {} as never,
-    undefined as never,
+    undefined,
     undefined,
     mockNicknameQueue as never,
   );
@@ -267,7 +267,7 @@ void test("updateCustomerSalesInfo succeeds even if nicknameQueue throws an unex
     prisma as never,
     { assertConversationAccess: async () => "store-1" } as never,
     {} as never,
-    undefined as never,
+    undefined,
     undefined,
     mockFailingNicknameQueue as never,
   );
