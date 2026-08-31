@@ -25,6 +25,7 @@ import { createMediaPublicUrl } from "../media/media-public-url";
 import { ownerTrackingInboundFilter } from "../owner-tracking";
 import { PrismaService } from "../prisma.service";
 import { RealtimeEventService } from "../realtime/realtime-event.service";
+import { createVideoPreviewPng } from "./mobile-video-preview";
 
 export const MOBILE_VIDEO_MAX_BYTES = 30 * 1024 * 1024;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -107,9 +108,10 @@ export class MobileVideoService {
 
     const videoKey = `line-media/outbound/${conversation.id}/${idempotencyKey}.mp4`;
     const previewKey = `line-media/outbound/${conversation.id}/${idempotencyKey}-preview.png`;
+    const previewPng = await createVideoPreviewPng(file.buffer, VIDEO_PREVIEW_PNG);
     const [storedVideo] = await Promise.all([
       this.media.put(videoKey, file.buffer, "video/mp4"),
-      this.media.put(previewKey, VIDEO_PREVIEW_PNG, "image/png"),
+      this.media.put(previewKey, previewPng, "image/png"),
     ]);
     const originalContentUrl = createMediaPublicUrl(videoKey);
     const previewImageUrl = createMediaPublicUrl(previewKey);
