@@ -1,0 +1,30 @@
+# Dedicated lightweight container for standalone LINE Chat Nickname Worker
+FROM mcr.microsoft.com/playwright:v1.50.0-noble AS runner
+
+WORKDIR /app
+
+# Copy root workspace and backend package definitions
+COPY package*.json ./
+COPY backend/package*.json ./backend/
+
+# Install backend dependencies cleanly
+WORKDIR /app/backend
+RUN npm ci
+
+# Copy backend codebase and prisma schema
+COPY backend/ ./
+
+# Generate Prisma client and compile TypeScript
+RUN npx prisma generate
+RUN npm run build
+
+# Install Chromium browser binary in container
+RUN npx playwright install chromium
+
+# Runtime environment defaults
+ENV NODE_ENV=production
+ENV LINE_CHAT_PROFILE_ROOT=/data/line-chat-profiles
+ENV DISABLE_NICKNAME_WORKER=false
+
+# Start standalone worker without HTTP controllers or unused services
+CMD ["node", "dist/line-chat/line-chat-nickname-worker.js"]

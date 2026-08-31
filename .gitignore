@@ -23,3 +23,8 @@ tmp/
 backend/.media/
 *.hprof
 **/local.properties
+local-data
+local-data/
+backend/local-data/
+playwright-profiles/
+*.local-data/

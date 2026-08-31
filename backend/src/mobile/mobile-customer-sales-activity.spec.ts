@@ -190,3 +190,90 @@ void test("customer sales info persists Online and clears purchase-only fields",
   assert.equal(conversationUpdate?.paymentMethod, null);
   assert.equal(conversationUpdate?.isInstallment, false);
 });
+
+void test("updateCustomerSalesInfo calls nicknameQueue.enqueueSalesSync after transaction succeeds", async () => {
+  let enqueuedConversationId: string | undefined;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-queue-test",
+        customerSalesStatus: "ONLINE",
+        salesRecordedAt: new Date("2026-08-31T10:00:00.000Z"),
+        interestLevel: null,
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async () => ({}),
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const mockNicknameQueue = {
+    enqueueSalesSync: async (id: string) => {
+      enqueuedConversationId = id;
+      return { enqueued: true, jobId: "job-1", nickname: "Online" };
+    },
+  };
+
+  const service = new MobileConversationsService(
+    prisma as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+    undefined as never,
+    undefined,
+    mockNicknameQueue as never,
+  );
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conv-queue-test" });
+
+  const result = await service.updateCustomerSalesInfo(user, "conv-queue-test", { status: "ONLINE" });
+
+  assert.equal(result.id, "conv-queue-test");
+  assert.equal(enqueuedConversationId, "conv-queue-test");
+});
+
+void test("updateCustomerSalesInfo succeeds even if nicknameQueue throws an unexpected error", async () => {
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-queue-err-test",
+        customerSalesStatus: "ONLINE",
+        salesRecordedAt: new Date("2026-08-31T10:00:00.000Z"),
+        interestLevel: null,
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async () => ({}),
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const mockFailingNicknameQueue = {
+    enqueueSalesSync: async () => {
+      throw new Error("Redis or queue fatal error");
+    },
+  };
+
+  const service = new MobileConversationsService(
+    prisma as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+    undefined as never,
+    undefined,
+    mockFailingNicknameQueue as never,
+  );
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conv-queue-err-test" });
+
+  const result = await service.updateCustomerSalesInfo(user, "conv-queue-err-test", { status: "ONLINE" });
+
+  assert.equal(result.id, "conv-queue-err-test");
+});

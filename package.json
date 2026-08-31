@@ -12,6 +12,12 @@
     "deploy:check": "bash scripts/deploy-check.sh",
     "review": "bash scripts/review-diff.sh",
     "logs:backend": "bash scripts/follow-log.sh backend",
-    "logs:frontend": "bash scripts/follow-log.sh frontend"
+    "logs:frontend": "bash scripts/follow-log.sh frontend",
+    "line-chat:login": "npm --prefix backend run line-chat:login --",
+    "line-chat:nickname": "npm --prefix backend run line-chat:nickname --",
+    "line-chat:diagnose": "npm --prefix backend run line-chat:diagnose --",
+    "seed:line-chat-test": "npm --prefix backend run seed:line-chat-test",
+    "worker:line-chat-nickname": "npm --prefix backend run worker:line-chat-nickname",
+    "line-chat:mapping:import": "npm --prefix backend run line-chat:mapping:import --"
   }
 }

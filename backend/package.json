@@ -20,6 +20,9 @@
     "test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts",
     "worker:rich-menu-publish": "tsx src/rich-menu/rich-menu-worker.ts",
     "worker:rich-menu-publish:prod": "node dist/rich-menu/rich-menu-worker.js",
+    "worker:line-chat-nickname": "tsx src/line-chat/line-chat-nickname-worker.ts",
+    "worker:line-chat-nickname:prod": "node dist/line-chat/line-chat-nickname-worker.js",
+    "line-chat:mapping:import": "tsx --env-file=.env scripts/import-line-chat-mappings.ts",
     "store-master:import": "tsx --env-file=.env scripts/store-master.ts import",
     "store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate",
     "store-master:sync-connected-line-oa": "tsx --env-file=.env scripts/sync-connected-line-oa-store-master.ts",
@@ -43,6 +46,10 @@
     "product:reanalyze": "tsx --env-file=.env scripts/reanalyze-products.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
+    "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
+    "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",
+    "line-chat:diagnose": "tsx src/line-chat/line-chat-diagnose.cli.ts",
+    "seed:line-chat-test": "tsx --env-file=.env scripts/seed-line-chat-test.ts",
     "security:check": "sh scripts/security-check.sh",
     "db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'",
     "db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
@@ -58,6 +65,7 @@
     "class-validator": "^0.14.2",
     "firebase-admin": "^14.2.0",
     "image-size": "^2.0.2",
+    "playwright": "^1.50.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.35.3"

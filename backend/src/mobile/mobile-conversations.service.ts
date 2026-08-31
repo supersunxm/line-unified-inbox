@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { BmReplyStatus, CustomerSalesStatus, PaymentMethodType, Prisma, UserStatus } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
@@ -13,6 +13,7 @@ import { RealtimeEventService } from "../realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "../messages/sticker-message";
 import { serializeConversationOwner } from "../conversation-owner";
 import { ownerTrackingInboundFilter } from "../owner-tracking";
+import { LineChatNicknameQueueService } from "../line-chat/line-chat-nickname-queue.service";
 
 const previewText = (text: string, max = 160) => text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -30,7 +31,16 @@ function purchaseSnapshot(input: {
 
 @Injectable()
 export class MobileConversationsService {
-  constructor(private readonly prisma: PrismaService, private readonly storeAccess: StoreAccessService, private readonly conversations: ConversationsService, private readonly priority: PriorityService = undefined as unknown as PriorityService, private readonly realtime?: RealtimeEventService) {}
+  private readonly logger = new Logger(MobileConversationsService.name);
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StoreAccessService) private readonly storeAccess: StoreAccessService,
+    @Inject(ConversationsService) private readonly conversations: ConversationsService,
+    @Inject(PriorityService) private readonly priority: PriorityService = undefined as unknown as PriorityService,
+    @Optional() @Inject(RealtimeEventService) private readonly realtime?: RealtimeEventService,
+    @Inject(LineChatNicknameQueueService) private readonly nicknameQueue?: LineChatNicknameQueueService,
+  ) {}
 
   private assertCanReply(user: AuthUser) {
     const canReply = user.authorization?.capabilities.reply ?? user.permissions?.canReply;
@@ -661,6 +671,18 @@ export class MobileConversationsService {
         },
       });
     });
+
+    if (this.nicknameQueue) {
+      void this.nicknameQueue.enqueueSalesSync(conversationId).catch((error) => {
+        this.logger.error(
+          JSON.stringify({
+            event: "line_chat_nickname_enqueue_unexpected_error",
+            conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      });
+    }
 
     const detail = await this.get(user, conversationId);
     const storeId = detail.store?.id ?? null;

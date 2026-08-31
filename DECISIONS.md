@@ -1,3 +1,58 @@
+# LINE Official Account Chat Nickname Sync Production Architecture (2026-08-31)
+
+- **Scalable Multi-Session Routing (`profile-a`, `profile-b`, `profile-c`, ...)**:
+  - Supports scaling across 150+ LINE Official Accounts partitioned across multiple authenticated browser profiles.
+  - Decouples PostgreSQL metadata from host filesystem environments via `profileStorageKey` and `LINE_CHAT_PROFILE_ROOT`.
+- **Granular Session Health Tracking & Fault Isolation**:
+  - `LineChatSession` tracks `status` (`ACTIVE`, `AUTH_REQUIRED`, `DISABLED`), `lastAuthenticatedAt`, `lastSuccessfulRequestAt`, `lastAuthFailureAt`, and `consecutiveAuthFailures`.
+  - When a browser session encounters HTTP 401 unauthenticated, it automatically transitions to `AUTH_REQUIRED` and pauses subsequent jobs for that session without impacting other healthy sessions.
+- **Fail-Safe Per-OA Staged Rollout (`lineChatNicknameSyncEnabled`)**:
+  - `LineOfficialAccount.lineChatNicknameSyncEnabled` defaults to `false` in production migrations.
+  - Nickname sync can be phased in safely (1 pilot OA $\to$ 5 stores $\to$ Profile A $\to$ Profile B $\to$ full network) without impacting BM sales saves on un-enrolled stores.
+- **Worker Crash Recovery & Lease Management**:
+  - Jobs claimed by workers are leased with `workerId`, `claimedAt`, and `lockedUntil`.
+  - Worker cycles automatically identify and recover jobs orphaned in `PROCESSING` by crashed or timed-out worker instances.
+- **Rate-Limiting Safeguards**:
+  - Sequential execution per session with configurable inter-request delay (`LINE_CHAT_SYNC_DELAY_MS`) to protect private LINE OA Manager web endpoints from burst traffic.
+- **Bulk OA Mapping CLI (`npm run line-chat:mapping:import`)**:
+  - Provides dry-run validation, duplicate checking, and atomic transaction application for bulk onboarding without modifying webhook secrets or LINE Messaging API credentials.
+- **Admin Operations Visibility & Actions**:
+  - Admin endpoints (`/operations/line-chat-nickname/health`, `retry-failed`, `toggle`) provide non-secret health metrics and operational controls.
+
+# LINE Official Account Chat Nickname Sync Queue & BM Save Integration Architecture (2026-08-31)
+
+- **Strict BM Save Transaction Decoupling**: Nickname synchronization is completely asynchronous and isolated from the BM sales transaction (`MobileConversationsService.updateCustomerSalesInfo`). The database transaction for sales data commits first, returning HTTP 200 to the BM mobile client. Enqueueing and worker execution are non-blocking; failure in LINE API or background workers will never roll back or fail BM sales operations.
+- **Database-Backed Queue (`LineChatNicknameSyncJob`)**:
+  - State machine: `PENDING` $\to$ `PROCESSING` $\to$ `SUCCESS` / `FAILED` / `FAILED_AUTH` / `SUPERSEDED`.
+  - Atomic claim: `updateMany` atomically claims pending jobs to avoid duplicate execution across multiple worker instances.
+- **Dual-Layer Latest-Wins Strategy**:
+  - *Enqueue-time guard*: When a conversation's sales state is updated, any existing `PENDING` jobs for that conversation are immediately transitioned to `SUPERSEDED`. If the state transitions to a non-nickname state (e.g. `INTERESTED`), pending jobs are also superseded to avoid applying stale nickname updates.
+  - *Worker-time guard*: Prior to launching Chromium or dispatching requests, the worker checks if a newer job exists for the same `conversationId`. If so, the stale job is marked `SUPERSEDED` and skipped.
+- **Dynamic Multi-Session Routing (`LineChatSession`)**:
+  - `LineOfficialAccount` links to `LineChatSession` via `lineChatSessionId`, along with an explicit `chatBotId`.
+  - Routing supports scaling to 150+ OAs partitioned across multiple browser sessions (Profile A, Profile B, etc.) without code refactoring.
+  - Zero session binaries, credentials, or cookies are stored in PostgreSQL; browser profile folders remain on disk and strictly gitignored.
+- **Failure Classification & Bounded Backoff**:
+  - `200 OK`: `SUCCESS`, updates `LineChatSession.status = ACTIVE` and `lastAuthenticatedAt`.
+  - `401 Unauthorized / Session Expired`: `FAILED_AUTH`, marks `LineChatSession.status = AUTH_REQUIRED` to halt wasteful requests until the administrator re-authenticates.
+  - `Retryable (5xx, 429, Network timeout)`: `PENDING` with exponential backoff (`delay = 2^attempt * 15s`) up to `maxAttempts` (default 3).
+  - `Non-Retryable (Missing botId/lineUserId, 400, 404)`: `FAILED` with sanitized error message.
+
+# LINE Official Account Chat Nickname Sync POC Architecture (2026-08-31)
+
+- **Page-Context Execution Invariance (`page.evaluate` + `fetch`)**: Rather than using a detached Playwright `APIRequestContext` (`context.request.put`), nickname PUT requests are dispatched from within an authenticated browser page (`page.evaluate(() => fetch(...))`) positioned at `https://chat.line.biz/{botId}/chat/{lineUserId}`. This guarantees exact browser execution context: browser cookies, `Sec-Fetch-*` headers, `Origin: https://chat.line.biz`, and `Referer: https://chat.line.biz/{botId}/chat/{lineUserId}` match authentic customer chat interactions without UI scraping.
+- **Dynamic Multi-Source CSRF & Client Version Discovery**:
+  - `page.on("request")` intercepts live HTTP request headers (`x-xsrf-token`, `x-oa-chat-client-version`) generated by LINE's web application during page bootstrap.
+  - Fallback discovery inspects cookies (`XSRF-TOKEN`, `_csrf`), DOM meta tags (`meta[name="csrf-token"]`), `localStorage`, `sessionStorage`, and window state.
+- **Granular Status & Error Classification**:
+  - `200 OK`: Successful nickname update.
+  - `401 Unauthorized`: Mapped to `"LINE chat session is not authenticated or has expired (HTTP 401). Please re-run the login command."`
+  - `403 Forbidden`: Mapped to actionable forbidden message suggesting CSRF / permissions / diagnostic mode rather than falsely asserting session expiration.
+  - `404 Not Found`: Mapped to resource not found with explicit `botId` and `lineUserId` context.
+  - `5xx Server Error`: Mapped to temporary upstream server error.
+- **Diagnostic Inspection Mode**: `line-chat:diagnose` inspects active browser storage, cookies, meta tags, and captured network headers safely without printing raw secret values or tokens.
+- **Multi-Session Parameterization**: Core services and CLI tools accept `profilePath` and `botId` explicitly rather than relying on singleton state, ensuring future routing for multiple LINE Business accounts (e.g., Profile A for Account A, Profile B for Account B) can scale without architectural rewrite.
+
 # Greeting Message Manager Phase 1 Architecture (2026-08-28)
 
 - **Dedicated Greeting Execution Subsystem**: Greeting messages for store LINE Official Accounts are managed independently from Auto-responses and Rich Menus via dedicated schema models (`GreetingTemplate`, `GreetingStoreAssignment`, `GreetingExecution`) and service layer (`GreetingMessageService`, `GreetingExecutionService`).

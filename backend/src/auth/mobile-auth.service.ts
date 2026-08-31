@@ -25,7 +25,12 @@ type MobileLoginUser = {
 
 @Injectable()
 export class MobileAuthService {
-  constructor(private readonly prisma: PrismaService, private readonly otp: OtpChallengeService, private readonly auth: AuthService, @Inject(SMS_PROVIDER) private readonly sms: SmsProvider) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(OtpChallengeService) private readonly otp: OtpChallengeService,
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(SMS_PROVIDER) private readonly sms: SmsProvider
+  ) {}
 
   private isEligible(user: MobileLoginUser | null | undefined) {
     if (!user?.isActive || user.status !== UserStatus.ACTIVE) return false;

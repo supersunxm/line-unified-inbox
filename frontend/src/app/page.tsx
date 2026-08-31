@@ -59,6 +59,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
+import { CustomerSalesTagEditor } from "./customer-sales-tag-editor";
 import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
@@ -1313,16 +1314,16 @@ const uiToApiStatus: Record<FollowUpStatus, ApiFollowUpStatus> = {
 };
 
 function mapApiConversation(item: ApiConversation): Conversation {
-  const latestMessage = item.messages[0];
-  const product = item.products[0]?.productModel;
+  const latestMessage = item.messages?.[0];
+  const product = item.products?.[0]?.productModel;
   const messageLanguage =
     latestMessage?.originalLanguage === "zh" ? "zh" :
       latestMessage?.originalLanguage === "en" ? "en" : "th";
   return {
     id: item.id,
-    customer: item.customer.displayName,
-    store: item.store.name,
-    storeId: item.store.id,
+    customer: item.customer?.displayName ?? "",
+    store: item.store?.name ?? "",
+    storeId: item.store?.id ?? "",
     message: latestMessage?.originalText ?? "",
     messageLanguage,
     translations: latestMessage?.messageType === "IMAGE" ? { th: "📷 รูปภาพ", en: "📷 Image", zh: "📷 图片" } : latestMessage?.messageType === "STICKER" ? {
@@ -1336,8 +1337,8 @@ function mapApiConversation(item: ApiConversation): Conversation {
     },
     time: item.latestMessageAt,
     product: product?.name ?? "—",
-    series: product?.productSeries.name ?? "—",
-    topic: item.topics.map(({ topic }) => topic.name).join(" · "),
+    series: product?.productSeries?.name ?? "—",
+    topic: item.topics?.map(({ topic }) => topic?.name).filter(Boolean).join(" · ") ?? "—",
     priority:
       item.priority === "HIGH" || item.priority === "CRITICAL"
         ? "High"
@@ -1345,8 +1346,8 @@ function mapApiConversation(item: ApiConversation): Conversation {
     bmReplyStatus: item.bmReplyStatus,
     relationship: item.productRelationship ?? "Unknown",
     purchaseIntent: item.purchaseIntent ?? "Unknown",
-    lineOaId: item.lineOfficialAccount.id,
-    lineOaName: item.lineOfficialAccount.name,
+    lineOaId: item.lineOfficialAccount?.id ?? "",
+    lineOaName: item.lineOfficialAccount?.name ?? "",
     owner: item.owner ?? null,
     customerSalesInformation: item.customerSalesInformation,
   };
@@ -1356,8 +1357,8 @@ function mapApiConversationState(item: ApiConversation): ConversationState {
   return {
     status: apiToUiStatus[item.followUpStatus],
     bmReplyStatus: item.bmReplyStatus,
-    note: item.notes[0]?.content ?? "",
-    activityHistory: item.activityHistory.flatMap((activity): ActivityHistoryItem[] => {
+    note: item.notes?.[0]?.content ?? "",
+    activityHistory: (item.activityHistory ?? []).flatMap((activity): ActivityHistoryItem[] => {
       if (activity.actionType === "BM_REPLY_STATUS_CHANGED" && activity.newBmReplyStatus) {
         return [{
           id: activity.id,
@@ -4486,10 +4487,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight text-[var(--app-text-primary)]">
-                              {selectedApiConversation?.customer.displayName ?? selectedConversation.customer}
+                              {selectedApiConversation?.customer?.displayName ?? selectedConversation.customer}
                             </h2>
                             <span className="shrink-0 text-xs font-medium text-[var(--app-text-secondary)]">{selectedConversation.store}</span>
-                            {selectedApiConversation?.customer.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
+                            {selectedApiConversation?.customer?.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
                           </div>
                           {selectedApiConversation?.owner && <p data-chat-detail-owner className="mt-0.5 truncate text-[11px] font-medium text-[var(--app-text-tertiary)]">👤 {selectedApiConversation.owner.displayName}</p>}
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
@@ -4639,30 +4640,51 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                           <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto p-3.5 space-y-3">
                             <div data-chat-detail-lower className="chat-detail-lower grid gap-3">
+                              <CustomerSalesTagEditor
+                                conversationId={selectedConversation.id}
+                                salesInfo={selectedApiConversation?.customerSalesInformation ?? selectedConversation.customerSalesInformation}
+                                availableProductModels={availableProductModels}
+                                disabled={isMutating || authUser?.role === "VIEWER"}
+                                language={language}
+                                onSaved={(updated) => {
+                                  setSelectedApiConversation(updated);
+                                  setConversations((current) =>
+                                    current.map((c) =>
+                                      c.id === updated.id
+                                        ? {
+                                            ...c,
+                                            customerSalesInformation: updated.customerSalesInformation,
+                                          }
+                                        : c
+                                    )
+                                  );
+                                }}
+                              />
+
                               <section data-product-intent-card data-insights-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-insights">
                                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.aiInsight}</h3>
                                   <button data-chat-detail-secondary-action disabled={chatLoading} onClick={() => void reanalyzeConversation()} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)]">{text.reanalyzeConversation}</button>
                                 </div>
-                                {selectedApiConversation?.aiInsight?.mentionedProducts.length ? (
-                                  <div className="mb-3"><h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.mentionedProduct}</h4><p className="mt-0.5 text-xs font-medium text-[var(--app-text-primary)]">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model.seriesName ? `${model.seriesName} · ` : ""}${model.name}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
+                                {selectedApiConversation?.aiInsight?.mentionedProducts?.length ? (
+                                  <div className="mb-3"><h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.mentionedProduct}</h4><p className="mt-0.5 text-xs font-medium text-[var(--app-text-primary)]">{selectedApiConversation.aiInsight.mentionedProducts.map(({ model, confidence }) => `${model?.seriesName ? `${model.seriesName} · ` : ""}${model?.name ?? ""}${confidence == null ? "" : ` (${Math.round(confidence * 100)}%)`}`).join(", ")}</p></div>
                                 ) : (
                                   <p className="text-xs text-[var(--app-text-tertiary)]">{text.noInsightAvailable}</p>
                                 )}
                                 <dl className="grid grid-cols-1 gap-x-4 gap-y-3">
-                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification.productRelationship ?? selectedConversation.relationship}</span></dd></div>
-                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200 font-semibold">{selectedApiConversation?.aiInsight?.classification.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
+                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.customerRelationship}</dt><dd><span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-200">{selectedApiConversation?.aiInsight?.classification?.productRelationship ?? selectedConversation.relationship}</span></dd></div>
+                                  <div><dt className="text-xs text-[var(--app-text-tertiary)]">{text.purchaseIntent}</dt><dd><span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-200 font-semibold">{selectedApiConversation?.aiInsight?.classification?.purchaseIntent ?? selectedConversation.purchaseIntent}</span></dd></div>
                                 </dl>
                                 <div className="mt-3 border-t border-[var(--app-border-subtle)] pt-3">
                                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{text.conversationTopics}</h4>
                                   <div className="flex flex-wrap gap-1.5">
-                                    {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics.filter(({ source }) => source === "RULE") ?? [])
+                                    {(selectedApiConversation?.aiInsight?.topics ?? selectedApiConversation?.topics?.filter(({ source }) => source === "RULE") ?? [])
                                       .map((topic) => {
-                                        const topicId = "topic" in topic ? topic.topic.id : topic.id;
-                                        const topicName = "topic" in topic ? topic.topic.name : topic.name;
+                                        const topicId = "topic" in topic ? topic.topic?.id : topic.id;
+                                        const topicName = "topic" in topic ? topic.topic?.name : topic.name;
                                         return <span key={topicId} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">{topicName} <span className="text-[10px] opacity-70">{text.autoSource}</span></span>;
                                       })}
-                                    {!selectedApiConversation?.aiInsight?.topics.length && !selectedApiConversation?.topics.some(({ source }) => source === "RULE") && <span className="text-xs text-[var(--app-text-tertiary)]">{text.noTopicDetected}</span>}
+                                    {!selectedApiConversation?.aiInsight?.topics?.length && !selectedApiConversation?.topics?.some(({ source }) => source === "RULE") && <span className="text-xs text-[var(--app-text-tertiary)]">{text.noTopicDetected}</span>}
                                   </div>
                                 </div>
                               </section>
