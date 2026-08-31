@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import '../../core/localization/localization.dart';
 import '../../core/models/models.dart';
 import '../../core/network/api_exception.dart';
@@ -75,6 +77,7 @@ class _ChatPageState extends State<ChatPage> {
   final List<PendingReply> _pending = [];
   final List<PendingImage> _pendingImages = [];
   final Map<String, Uint8List> _mediaBytes = {};
+  bool _sendingVideo = false;
   final Set<String> _mediaLoading = {};
   Future<ConversationDetail>? _future;
   ConversationDetail? _detail;
@@ -667,6 +670,149 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+
+  Future<void> _pickVideo() async {
+    final l10n = appLocalizations(context);
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam_outlined,
+                    color: Color(0xFF0F8A5F)),
+                title: Text(_recordVideoLabel(context),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_library_outlined,
+                    color: Color(0xFF0F8A5F)),
+                title: Text(l10n.chooseFromGallery,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null || !mounted) return;
+    try {
+      final picked = await ImagePicker().pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 3),
+      );
+      if (picked == null || !mounted) return;
+      final length = await picked.length();
+      if (length <= 0) {
+        setState(() => _error = l10n.videoUnavailable);
+        return;
+      }
+      if (length > 30 * 1024 * 1024) {
+        setState(() => _error = _videoTooLargeLabel(context));
+        return;
+      }
+      final declaredMime = picked.mimeType?.toLowerCase().split(';').first;
+      if (declaredMime != null &&
+          declaredMime.isNotEmpty &&
+          declaredMime != 'video/mp4' &&
+          declaredMime != 'application/octet-stream') {
+        setState(() => _error = _mp4OnlyLabel(context));
+        return;
+      }
+      final confirmSend = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => _VideoPreviewPage(
+            path: picked.path,
+            filename: picked.name,
+          ),
+        ),
+      );
+      if (confirmSend != true || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+      await _sendVideo(bytes, picked.name, mimeType: picked.mimeType);
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = (error.code == 'camera_access_denied' ||
+                error.code.toLowerCase().contains('permission'))
+            ? l10n.cameraPermissionRequired
+            : (error.message ?? l10n.videoUnavailable);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = l10n.videoUnavailable);
+    }
+  }
+
+  Future<void> _sendVideo(Uint8List bytes, String filename,
+      {String? mimeType}) async {
+    if (_sendingVideo) return;
+    final idempotencyKey = _key();
+    setState(() {
+      _sendingVideo = true;
+      _error = null;
+    });
+    try {
+      final message = await widget.repository.sendVideo(
+        widget.conversationId,
+        bytes,
+        filename.toLowerCase().endsWith('.mp4') ? filename : '$filename.mp4',
+        idempotencyKey,
+        mimeType: mimeType,
+      );
+      if (mounted) _mergeSentMessage(message, idempotencyKey);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = appLocalizations(context).videoUnavailable);
+      }
+    } finally {
+      if (mounted) setState(() => _sendingVideo = false);
+    }
+  }
+
+  String _recordVideoLabel(BuildContext context) =>
+      switch (Localizations.localeOf(context).languageCode) {
+        'th' => 'ถ่ายวิดีโอ',
+        'zh' => '拍摄视频',
+        _ => 'Record video',
+      };
+
+  String _videoTooLargeLabel(BuildContext context) =>
+      switch (Localizations.localeOf(context).languageCode) {
+        'th' => 'วิดีโอต้องมีขนาดไม่เกิน 30 MB',
+        'zh' => '视频大小不得超过 30 MB',
+        _ => 'Video must be 30 MB or smaller',
+      };
+
+  String _mp4OnlyLabel(BuildContext context) =>
+      switch (Localizations.localeOf(context).languageCode) {
+        'th' => 'รองรับวิดีโอ MP4 เท่านั้น',
+        'zh' => '仅支持 MP4 视频',
+        _ => 'Only MP4 video is supported',
+      };
+
   Future<void> _sendImage(Uint8List bytes, String filename,
       {String? mimeType, PendingImage? existing}) async {
     final pending = existing ?? PendingImage(bytes, filename, _key());
@@ -874,6 +1020,8 @@ class _ChatPageState extends State<ChatPage> {
                       controller: _text,
                       enabled: widget.canReply,
                       onAttach: widget.canReply ? _pickImage : null,
+                      onAttachVideo: widget.canReply ? _pickVideo : null,
+                      isAttaching: _sendingVideo,
                       onSend: widget.canReply ? _send : null)
                 ]));
           }));
@@ -892,6 +1040,122 @@ class _ChatPageState extends State<ChatPage> {
       }
     }
   }
+}
+
+
+class _VideoPreviewPage extends StatefulWidget {
+  const _VideoPreviewPage({required this.path, required this.filename});
+
+  final String path;
+  final String filename;
+
+  @override
+  State<_VideoPreviewPage> createState() => _VideoPreviewPageState();
+}
+
+class _VideoPreviewPageState extends State<_VideoPreviewPage> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initialized;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(File(widget.path));
+    _initialized = _controller.initialize().then((_) {
+      _controller.setLooping(true);
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: Text(widget.filename,
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        body: FutureBuilder<void>(
+          future: _initialized,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Colors.white));
+            }
+            if (snapshot.hasError || !_controller.value.isInitialized) {
+              return Center(
+                child: Text(appLocalizations(context).videoUnavailable,
+                    style: const TextStyle(color: Colors.white)),
+              );
+            }
+            return Center(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    if (_controller.value.isPlaying) {
+                      _controller.pause();
+                    } else {
+                      _controller.play();
+                    }
+                  });
+                },
+                child: AspectRatio(
+                  aspectRatio: _controller.value.aspectRatio > 0
+                      ? _controller.value.aspectRatio
+                      : 16 / 9,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      VideoPlayer(_controller),
+                      if (!_controller.value.isPlaying)
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: Color(0x99000000),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded,
+                              color: Colors.white, size: 42),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(appLocalizations(context).cancel),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    icon: const Icon(Icons.send_rounded),
+                    label: Text(appLocalizations(context).send),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _ImageViewer extends StatefulWidget {

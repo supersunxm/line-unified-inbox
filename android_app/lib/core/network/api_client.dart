@@ -141,9 +141,11 @@ class ApiClient {
     }
   }
 
-  Future<http.Response> _sendAndRead(http.BaseRequest request) async {
-    final stream = await _http.send(request).timeout(_requestTimeout);
-    return http.Response.fromStream(stream).timeout(_requestTimeout);
+  Future<http.Response> _sendAndRead(http.BaseRequest request,
+      {Duration? timeout}) async {
+    final effectiveTimeout = timeout ?? _requestTimeout;
+    final stream = await _http.send(request).timeout(effectiveTimeout);
+    return http.Response.fromStream(stream).timeout(effectiveTimeout);
   }
 
   Future<Map<String, dynamic>> get(String path,
@@ -223,7 +225,8 @@ class ApiClient {
       required Uint8List bytes,
       required String idempotencyKey,
       bool authenticated = true,
-      bool retry = true}) async {
+      bool retry = true,
+      Duration? timeout}) async {
     if (!await _isOnline()) {
       throw ApiException(0, 'OFFLINE', 'No network connection');
     }
@@ -237,7 +240,7 @@ class ApiClient {
         filename: filename, contentType: _imageMediaType(mimeType, filename)));
     late http.Response response;
     try {
-      response = await _sendAndRead(request);
+      response = await _sendAndRead(request, timeout: timeout);
     } on TimeoutException {
       SafeLogger.networkFailure(code: 'NETWORK_TIMEOUT');
       throw ApiException(0, 'NETWORK_TIMEOUT', 'The service timed out');
@@ -275,7 +278,8 @@ class ApiClient {
               bytes: bytes,
               idempotencyKey: idempotencyKey,
               authenticated: authenticated,
-              retry: false);
+              retry: false,
+              timeout: timeout);
         }
       }
       throw error;
