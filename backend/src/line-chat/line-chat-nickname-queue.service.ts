@@ -8,6 +8,12 @@ export interface EnqueueNicknameSyncResult {
   jobId?: string;
   nickname?: string;
   reason?: string;
+  supersededCount?: number;
+  existingJobStatus?: LineChatNicknameSyncJobStatus;
+}
+
+export interface EnqueueNicknameSyncOptions {
+  skipIfMatchingJobExists?: boolean;
 }
 
 @Injectable()
@@ -20,7 +26,10 @@ export class LineChatNicknameQueueService {
    * Enqueues a nickname sync job for a conversation following a BM customer sales save.
    * Fails safe: Never throws or interrupts the main BM sales transaction.
    */
-  public async enqueueSalesSync(conversationId: string): Promise<EnqueueNicknameSyncResult> {
+  public async enqueueSalesSync(
+    conversationId: string,
+    options: EnqueueNicknameSyncOptions = {},
+  ): Promise<EnqueueNicknameSyncResult> {
     try {
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
@@ -45,12 +54,6 @@ export class LineChatNicknameQueueService {
                   status: true,
                 },
               },
-            },
-          },
-          customer: {
-            select: {
-              id: true,
-              lineUserId: true,
             },
           },
           salesProducts: {
@@ -142,8 +145,38 @@ export class LineChatNicknameQueueService {
         return { enqueued: false, reason: "NO_NICKNAME_NEEDED" };
       }
 
+      if (options.skipIfMatchingJobExists) {
+        const existingJob = await this.prisma.lineChatNicknameSyncJob.findFirst({
+          where: {
+            conversationId: conversation.id,
+            nickname,
+            status: { not: LineChatNicknameSyncJobStatus.SUPERSEDED },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, status: true },
+        });
+
+        if (existingJob) {
+          this.logger.log(
+            JSON.stringify({
+              event: "line_chat_nickname_job_skipped_matching_job_exists",
+              conversationId: conversation.id,
+              existingJobId: existingJob.id,
+              existingJobStatus: existingJob.status,
+              nickname,
+            })
+          );
+          return {
+            enqueued: false,
+            nickname,
+            reason: "MATCHING_JOB_EXISTS",
+            existingJobStatus: existingJob.status,
+          };
+        }
+      }
+
       // Latest-Wins: Supersede any existing pending jobs for this conversation
-      await this.prisma.lineChatNicknameSyncJob.updateMany({
+      const superseded = await this.prisma.lineChatNicknameSyncJob.updateMany({
         where: {
           conversationId: conversation.id,
           status: LineChatNicknameSyncJobStatus.PENDING,
@@ -177,7 +210,12 @@ export class LineChatNicknameQueueService {
         })
       );
 
-      return { enqueued: true, jobId: job.id, nickname };
+      return {
+        enqueued: true,
+        jobId: job.id,
+        nickname,
+        supersededCount: superseded.count,
+      };
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       this.logger.error(

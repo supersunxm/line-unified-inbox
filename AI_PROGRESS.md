@@ -1,6 +1,17 @@
 # AI progress
 
-## Current task: Dedicated LINE OA Nickname Worker Ownership (2026-08-31) [COMPLETED]
+## Current task: Store 28375 Historical LINE Chat Nickname Backfill (2026-08-31) [COMPLETED]
+
+- Added pilot-only CLI `npm run line-chat:nickname:backfill -- --store 28375 [--dry-run | --apply]`; dry-run is the default and the command relies on directly injected environment variables without requiring a `.env` file.
+- The planner reads all Store 28375 conversations, resolves exactly one active Store OA, fails on ambiguous store/OA topology or cross-OA conversations, and uses the canonical `buildLineChatNickname` formatter.
+- Dry-run performs read queries only, prints aggregate classification counts and a safe preview containing no Messaging API IDs, and never invokes the queue or LINE network path.
+- Apply mode calls `LineChatNicknameQueueService.enqueueSalesSync` with an opt-in matching-job guard. It never calls `LineChatSessionService` or `chat.line.biz` directly.
+- Matching non-superseded jobs are skipped, including failed/auth-failed jobs, preventing accidental duplicate execution or implicit retries. Different pending nicknames retain existing latest-wins supersession.
+- The queue no longer selects `Customer.lineUserId`; only `Conversation.lineChatUserId` is validated and copied into the existing job schema.
+- Verification: 75 / 75 targeted LINE chat tests pass; 1,527 / 1,527 backend tests pass; changed-file ESLint passes; backend build passes; `git diff --check` passes. The exact npm dry-run command also succeeds against the local Docker database with a directly injected local-only `DATABASE_URL`.
+- No production dry-run, apply, database mutation, direct LINE call, merge, or deployment was performed.
+
+## Previous task: Dedicated LINE OA Nickname Worker Ownership (2026-08-31) [COMPLETED]
 
 - **Root cause**:
   - `AppModule` imported `LineChatModule`, and `LineChatModule` registered `LineChatNicknameWorkerService` as a provider.

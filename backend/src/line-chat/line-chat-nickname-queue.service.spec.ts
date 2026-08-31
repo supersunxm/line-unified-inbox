@@ -23,7 +23,6 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
         customerSalesStatus: CustomerSalesStatus.ONLINE,
         paymentMethod: null,
         salesRecordedAt: new Date("2026-08-31T10:00:00.000Z"),
-        customer: { id: "cust-1", lineUserId: "Umsg_api_diff_123" },
         salesProducts: [],
       }),
     },
@@ -45,6 +44,7 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
   assert.equal(result.enqueued, true);
   assert.equal(result.nickname, "Online");
   assert.equal(result.jobId, "job-1");
+  assert.equal(result.supersededCount, 1);
   assert.equal(createdJobs.length, 1);
   assert.equal(createdJobs[0].nickname, "Online");
   assert.equal(createdJobs[0].lineChatUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
@@ -70,7 +70,6 @@ void test("enqueueSalesSync creates Cash purchase nickname job with Bangkok MM/Y
         customerSalesStatus: CustomerSalesStatus.PURCHASED,
         paymentMethod: PaymentMethodType.CASH,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-2", lineUserId: "Umsg_api_user_123" },
         salesProducts: [
           {
             customProductName: null,
@@ -117,7 +116,6 @@ void test("enqueueSalesSync creates Installment purchase nickname job with custo
         customerSalesStatus: CustomerSalesStatus.PURCHASED,
         paymentMethod: PaymentMethodType.INSTALLMENT,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-3", lineUserId: "Umsg_api_user_456" },
         salesProducts: [
           {
             customProductName: "Reno14 Pro",
@@ -165,7 +163,6 @@ void test("enqueueSalesSync creates no job for INTERESTED and supersedes pending
         customerSalesStatus: CustomerSalesStatus.INTERESTED,
         paymentMethod: null,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-4", lineUserId: "Uuser789" },
         salesProducts: [{ customProductName: "Find X9", productModel: { name: "Find X9" } }],
       }),
     },
@@ -209,7 +206,6 @@ void test("enqueueSalesSync skips safely when Conversation.lineChatUserId is mis
         customerSalesStatus: CustomerSalesStatus.ONLINE,
         paymentMethod: null,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-5", lineUserId: "Umsg_api_only_123" },
         salesProducts: [],
       }),
     },
@@ -248,7 +244,6 @@ void test("enqueueSalesSync creates no job for incomplete purchase or unsupporte
         customerSalesStatus: CustomerSalesStatus.PURCHASED,
         paymentMethod: PaymentMethodType.CREDIT_CARD, // unsupported for nickname
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-5", lineUserId: "Uuser999" },
         salesProducts: [{ customProductName: "Find X9", productModel: { name: "Find X9" } }],
       }),
     },

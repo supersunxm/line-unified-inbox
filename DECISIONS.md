@@ -1,3 +1,11 @@
+# Store 28375 Historical Nickname Backfill Safety Boundary (2026-08-31)
+
+- **Pilot-only scope**: The CLI hard-rejects every store identifier except `28375`, requires one unambiguous Store and active Store OA, and refuses partial processing when a Store conversation belongs to a different OA.
+- **Canonical planning**: Historical classifications call `buildLineChatNickname`; nickname construction, OPPO-prefix removal, Thai payment labels, and Bangkok month/year behavior are not duplicated.
+- **Read-only by default**: Absence of `--apply` means dry-run. Planning selects no `Customer.lineUserId`, performs no writes, constructs no browser/session client, and prints only conversation ID, display name, sales status, target nickname, and chat-ID presence. Railway supplies `DATABASE_URL` directly; the npm command does not require or load `.env`.
+- **Queue-only apply**: Apply re-reads each eligible conversation through `LineChatNicknameQueueService.enqueueSalesSync`, preserving rollout checks, latest-wins supersession, and dedicated-worker execution. The backfill never invokes `chat.line.biz` or `LineChatSessionService`.
+- **Bounded idempotency**: A matching non-superseded job causes a safe skip, including prior failure states; only a superseded match may be replaced. This avoids duplicate jobs and prevents the backfill from implicitly retrying failures.
+
 # Dedicated LINE OA Nickname Worker Ownership Boundary (2026-08-31)
 
 - **Module topology is the primary safety boundary**:
