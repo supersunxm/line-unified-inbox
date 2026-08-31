@@ -670,7 +670,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-
   Future<void> _pickVideo() async {
     final l10n = appLocalizations(context);
     final source = await showModalBottomSheet<ImageSource>(
@@ -722,6 +721,7 @@ class _ChatPageState extends State<ChatPage> {
       );
       if (picked == null || !mounted) return;
       final length = await picked.length();
+      if (!mounted) return;
       if (length <= 0) {
         setState(() => _error = l10n.videoUnavailable);
         return;
@@ -1041,7 +1041,6 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 }
-
 
 class _VideoPreviewPage extends StatefulWidget {
   const _VideoPreviewPage({required this.path, required this.filename});
