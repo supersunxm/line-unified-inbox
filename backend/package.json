@@ -49,6 +49,7 @@
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
     "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",
     "line-chat:diagnose": "tsx src/line-chat/line-chat-diagnose.cli.ts",
+    "line-chat:set-chat-user": "tsx --env-file=.env scripts/set-conversation-line-chat-user.ts",
     "seed:line-chat-test": "tsx --env-file=.env scripts/seed-line-chat-test.ts",
     "security:check": "sh scripts/security-check.sh",
     "db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'",

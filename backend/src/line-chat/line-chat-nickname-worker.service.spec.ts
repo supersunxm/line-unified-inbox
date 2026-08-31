@@ -4,9 +4,10 @@ import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.servi
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
 import { LineChatSessionService } from "./line-chat-session.service";
 
-void test("worker processes job successfully and marks SUCCESS", async () => {
+void test("worker processes job successfully and marks SUCCESS using only lineChatUserId", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
   let updatedSessionData: Record<string, unknown> | undefined;
+  let dispatchedLineUserId: string | undefined;
 
   const prisma = {
     lineChatNicknameSyncJob: {
@@ -14,7 +15,8 @@ void test("worker processes job successfully and marks SUCCESS", async () => {
         id: "job-101",
         conversationId: "conv-101",
         lineOfficialAccountId: "oa-101",
-        lineUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+        lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+        lineUserId: "U124d80f7c70ed8f48cfc93c707853ab4", // Messaging API ID - must NOT be dispatched
         nickname: "Find X9 สด 08/26",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
         attemptCount: 0,
@@ -50,8 +52,10 @@ void test("worker processes job successfully and marks SUCCESS", async () => {
   const sessionService = {
     resolveProfilePath: (session: any) => session?.profilePath || "./local-data/line-chat-profile-a",
     updateNickname: async (params: Record<string, unknown>) => {
+      dispatchedLineUserId = String(params.lineUserId);
       assert.equal(params.botId, "U092441d025f688e389d25779dd8debf4");
       assert.equal(params.lineUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
+      assert.notEqual(params.lineUserId, "U124d80f7c70ed8f48cfc93c707853ab4");
       assert.equal(params.nickname, "Find X9 สด 08/26");
       assert.equal(params.profilePath, "./local-data/line-chat-profile-a");
       return {
@@ -68,6 +72,7 @@ void test("worker processes job successfully and marks SUCCESS", async () => {
   const worker = new LineChatNicknameWorkerService(prisma as never, sessionService);
   await worker.processSingleJob("job-101");
 
+  assert.equal(dispatchedLineUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
   assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.SUCCESS);
   assert.equal(updatedJobData?.lastError, null);
   assert.equal(updatedSessionData?.status, LineChatSessionStatus.ACTIVE);
@@ -83,7 +88,8 @@ void test("worker supersedes stale job when newer job exists for same conversati
         id: "job-stale",
         conversationId: "conv-101",
         lineOfficialAccountId: "oa-101",
-        lineUserId: "Uuser1",
+        lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+        lineUserId: "Umsg_api_stale",
         nickname: "Online",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
         attemptCount: 0,
@@ -115,6 +121,60 @@ void test("worker supersedes stale job when newer job exists for same conversati
   assert.equal(updateNicknameCalled, false);
 });
 
+void test("worker skips and marks FAILED when lineChatUserId is missing/null without calling updateNickname", async () => {
+  let updatedJobData: Record<string, unknown> | undefined;
+  let updateNicknameCalled = false;
+
+  const prisma = {
+    lineChatNicknameSyncJob: {
+      findUnique: async () => ({
+        id: "job-missing-chat-id",
+        conversationId: "conv-101",
+        lineOfficialAccountId: "oa-101",
+        lineChatUserId: null, // missing LINE OA Manager chat user ID
+        lineUserId: "U124d80f7c70ed8f48cfc93c707853ab4", // Messaging API ID present - must NOT fallback
+        nickname: "Find X9 สด 08/26",
+        status: LineChatNicknameSyncJobStatus.PROCESSING,
+        attemptCount: 0,
+        maxAttempts: 3,
+        createdAt: new Date("2026-08-31T10:00:00Z"),
+      }),
+      findFirst: async () => null,
+      update: async (args: { data: Record<string, unknown> }) => {
+        updatedJobData = args.data;
+        return {};
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-101",
+        chatBotId: "U092441d025f688e389d25779dd8debf4",
+        lineChatSessionId: "session-1",
+        lineChatSession: {
+          id: "session-1",
+          sessionKey: "profile-a",
+          profilePath: "./local-data/line-chat-profile-a",
+        },
+      }),
+    },
+  };
+
+  const sessionService = {
+    resolveProfilePath: () => "./local-data/line-chat-profile-a",
+    updateNickname: async () => {
+      updateNicknameCalled = true;
+      return { success: true, status: 200 };
+    },
+  } as unknown as LineChatSessionService;
+
+  const worker = new LineChatNicknameWorkerService(prisma as never, sessionService);
+  await worker.processSingleJob("job-missing-chat-id");
+
+  assert.equal(updateNicknameCalled, false, "updateNickname must NOT be called when lineChatUserId is missing");
+  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.FAILED);
+  assert.match(String(updatedJobData?.lastError), /Missing LINE OA Manager chat user ID \(lineChatUserId\)/);
+});
+
 void test("worker transitions to FAILED_AUTH on session authentication failure", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
   let updatedSessionData: Record<string, unknown> | undefined;
@@ -125,6 +185,7 @@ void test("worker transitions to FAILED_AUTH on session authentication failure",
         id: "job-auth-fail",
         conversationId: "conv-101",
         lineOfficialAccountId: "oa-101",
+        lineChatUserId: "Uchat_user_1",
         lineUserId: "Uuser1",
         nickname: "Find X9 สด 08/26",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
@@ -184,6 +245,7 @@ void test("worker retries retryable network or 5xx failures with backoff", async
         id: "job-retry",
         conversationId: "conv-101",
         lineOfficialAccountId: "oa-101",
+        lineChatUserId: "Uchat_user_1",
         lineUserId: "Uuser1",
         nickname: "Find X9 สด 08/26",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
@@ -238,6 +300,7 @@ void test("worker marks FAILED when max attempts are exhausted", async () => {
         id: "job-exhausted",
         conversationId: "conv-101",
         lineOfficialAccountId: "oa-101",
+        lineChatUserId: "Uchat_user_1",
         lineUserId: "Uuser1",
         nickname: "Find X9 สด 08/26",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
@@ -284,6 +347,7 @@ void test("worker marks FAILED when max attempts are exhausted", async () => {
 void test("worker routes multiple sessions dynamically (Profile B) without hardcoding", async () => {
   let dispatchedProfilePath: string | undefined;
   let dispatchedBotId: string | undefined;
+  let dispatchedLineUserId: string | undefined;
 
   const prisma = {
     lineChatNicknameSyncJob: {
@@ -291,7 +355,8 @@ void test("worker routes multiple sessions dynamically (Profile B) without hardc
         id: "job-profile-b",
         conversationId: "conv-202",
         lineOfficialAccountId: "oa-202",
-        lineUserId: "Ucust202",
+        lineChatUserId: "Uchat_cust_202",
+        lineUserId: "Ucust202_msg_api",
         nickname: "Find X9 สด 08/26",
         status: LineChatNicknameSyncJobStatus.PROCESSING,
         attemptCount: 0,
@@ -324,6 +389,7 @@ void test("worker routes multiple sessions dynamically (Profile B) without hardc
     updateNickname: async (params: Record<string, unknown>) => {
       dispatchedProfilePath = String(params.profilePath);
       dispatchedBotId = String(params.botId);
+      dispatchedLineUserId = String(params.lineUserId);
       return { success: true, status: 200 };
     },
   } as unknown as LineChatSessionService;
@@ -333,6 +399,7 @@ void test("worker routes multiple sessions dynamically (Profile B) without hardc
 
   assert.equal(dispatchedProfilePath, "./local-data/line-chat-profile-b");
   assert.equal(dispatchedBotId, "Ubot_profile_b");
+  assert.equal(dispatchedLineUserId, "Uchat_cust_202");
 });
 
 void test("LineChatNicknameWorkerModule initializes cleanly without MobileAuthService or full app dependencies", async () => {

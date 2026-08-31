@@ -27,6 +27,7 @@ export class LineChatNicknameQueueService {
         select: {
           id: true,
           lineOfficialAccountId: true,
+          lineChatUserId: true,
           customerSalesStatus: true,
           paymentMethod: true,
           salesRecordedAt: true,
@@ -94,10 +95,16 @@ export class LineChatNicknameQueueService {
         return { enqueued: false, reason: "SESSION_DISABLED" };
       }
 
-      const lineUserId = conversation.customer?.lineUserId?.trim();
-      if (!lineUserId) {
-        this.logger.debug?.(`Skipping nickname sync for conversation ${conversationId}: No customer LINE User ID found`);
-        return { enqueued: false, reason: "MISSING_LINE_USER_ID" };
+      const lineChatUserId = conversation.lineChatUserId?.trim();
+      if (!lineChatUserId) {
+        this.logger.log(
+          JSON.stringify({
+            event: "line_chat_nickname_job_skipped",
+            conversationId: conversation.id,
+            reason: "missing_line_chat_user_id",
+          })
+        );
+        return { enqueued: false, reason: "MISSING_LINE_CHAT_USER_ID" };
       }
 
       const nickname = buildLineChatNickname({
@@ -152,7 +159,8 @@ export class LineChatNicknameQueueService {
         data: {
           conversationId: conversation.id,
           lineOfficialAccountId: conversation.lineOfficialAccountId,
-          lineUserId,
+          lineChatUserId,
+          lineUserId: lineChatUserId,
           nickname,
           status: LineChatNicknameSyncJobStatus.PENDING,
         },
@@ -164,7 +172,7 @@ export class LineChatNicknameQueueService {
           jobId: job.id,
           conversationId: conversation.id,
           lineOfficialAccountId: conversation.lineOfficialAccountId,
-          lineUserId,
+          lineChatUserId,
           nickname,
         })
       );
