@@ -11,6 +11,8 @@ import { ConversationsService } from "../conversations.service";
 import { PriorityService } from "../priority/priority.service";
 import { AuthService } from "../auth/auth.service";
 import { AuthGuard } from "../auth/auth.guard";
+import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
+import { AppModule } from "../app.module";
 
 test("Nest DI container correctly injects LineChatNicknameQueueService into MobileConversationsService", async () => {
   const mockPrisma = {
@@ -55,6 +57,44 @@ test("Nest DI container correctly injects LineChatNicknameQueueService into Mobi
   const injectedQueue = (mobileService as unknown as { nicknameQueue?: LineChatNicknameQueueService }).nicknameQueue;
   assert.ok(injectedQueue, "LineChatNicknameQueueService MUST be injected and defined on MobileConversationsService");
   assert.equal(injectedQueue, queueService, "Injected queue instance must match the DI container instance");
+  assert.throws(
+    () => moduleRef.get(LineChatNicknameWorkerService, { strict: false }),
+    /could not find LineChatNicknameWorkerService/i,
+    "The normal LineChatModule must not register the nickname polling worker",
+  );
+});
+
+test("normal application module cannot instantiate or call the nickname polling/claim path", async () => {
+  let queueReads = 0;
+  const moduleRef = await Test.createTestingModule({ imports: [LineChatModule] })
+    .overrideProvider(PrismaService)
+    .useValue({
+      lineChatNicknameSyncJob: {
+        findMany: async () => {
+          queueReads++;
+          return [];
+        },
+      },
+    })
+    .compile();
+
+  assert.equal(queueReads, 0, "Normal application compilation must never poll nickname jobs");
+  assert.throws(() => moduleRef.get(LineChatNicknameWorkerService, { strict: false }));
+  await moduleRef.close();
+});
+
+test("AppModule reaches LINE chat capabilities without importing the dedicated worker module", () => {
+  const imports = (Reflect.getMetadata("imports", AppModule) ?? []) as unknown[];
+  const providers = (Reflect.getMetadata("providers", AppModule) ?? []) as unknown[];
+
+  assert.ok(imports.includes(LineChatModule));
+  assert.equal(
+    imports.some((moduleType) =>
+      typeof moduleType === "function" && moduleType.name === "LineChatNicknameWorkerModule"
+    ),
+    false,
+  );
+  assert.equal(providers.includes(LineChatNicknameWorkerService), false);
 });
 
 test("MobileConversationsService.updateCustomerSalesInfo with status ONLINE creates persisted PENDING nickname sync job", async () => {

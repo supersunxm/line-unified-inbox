@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
-import { LineChatNicknameWorkerModule } from "./line-chat.module";
+import { LineChatNicknameWorkerModule } from "./line-chat-nickname-worker.module";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 
 async function bootstrap() {
@@ -11,7 +11,6 @@ async function bootstrap() {
   });
 
   app.get(LineChatNicknameWorkerService);
-  logger.log("LINE Chat Nickname background worker started successfully");
 
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`);
