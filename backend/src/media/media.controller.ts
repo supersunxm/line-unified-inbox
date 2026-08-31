@@ -7,14 +7,70 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "./media-storage";
 
-function resolveImageContentType(key: string, storedContentType?: string): string {
+function resolveMediaContentType(key: string, storedContentType?: string): string {
   if (storedContentType && storedContentType !== "application/octet-stream") {
     return storedContentType;
   }
   const lower = key.toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".mp4")) return "video/mp4";
   return storedContentType ?? "application/octet-stream";
+}
+
+type ByteRange = { start: number; end: number };
+
+function parseSingleByteRange(header: string | undefined, size: number): ByteRange | null | "invalid" {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || size <= 0) return "invalid";
+
+  const startText = match[1];
+  const endText = match[2];
+  if (!startText && !endText) return "invalid";
+
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return "invalid";
+    const start = Math.max(0, size - suffixLength);
+    return { start, end: size - 1 };
+  }
+
+  const start = Number(startText);
+  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return "invalid";
+
+  let end = endText ? Number(endText) : size - 1;
+  if (!Number.isSafeInteger(end) || end < start) return "invalid";
+  end = Math.min(end, size - 1);
+  return { start, end };
+}
+
+function sendPublicMedia(response: Response, body: Buffer, contentType: string, rangeHeader?: string) {
+  response.setHeader("Content-Type", contentType);
+  response.setHeader("Accept-Ranges", "bytes");
+  response.setHeader("Cache-Control", "private, max-age=300");
+  response.setHeader("Content-Disposition", "inline");
+
+  const range = parseSingleByteRange(rangeHeader, body.length);
+  if (range === "invalid") {
+    response.status(416);
+    response.setHeader("Content-Range", `bytes */${body.length}`);
+    response.setHeader("Content-Length", "0");
+    response.send(Buffer.alloc(0));
+    return;
+  }
+
+  if (range) {
+    const partial = body.subarray(range.start, range.end + 1);
+    response.status(206);
+    response.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${body.length}`);
+    response.setHeader("Content-Length", String(partial.length));
+    response.send(partial);
+    return;
+  }
+
+  response.setHeader("Content-Length", String(body.length));
+  response.send(body);
 }
 
 @Controller("messages")
@@ -59,13 +115,11 @@ export class MediaController {
 
     try {
       const stored = await this.storage.get(key);
-      const contentType = resolveImageContentType(key, stored.contentType);
-      response.setHeader("Content-Type", contentType);
-      response.setHeader("Content-Length", String(stored.body.length));
-      response.setHeader("Cache-Control", "private, max-age=300");
-      response.setHeader("Content-Disposition", "inline");
-      response.send(stored.body);
-    } catch {
+      const contentType = resolveMediaContentType(key, stored.contentType);
+      const rangeHeader = typeof request.headers?.range === "string" ? request.headers.range : undefined;
+      sendPublicMedia(response, stored.body, contentType, rangeHeader);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
       throw new NotFoundException("Media is unavailable");
     }
   }
