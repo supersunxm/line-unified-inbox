@@ -552,7 +552,7 @@ export function formatPilotMappingReport(plan: PilotMappingPlan, apply: boolean)
     `Bot   : ${plan.lineOfficialAccount.chatBotId}`,
     `Session: ${plan.lineOfficialAccount.sessionKey} (${plan.lineOfficialAccount.sessionStatus})`,
     `GET   : ${plan.endpoint}`,
-    "Contract: observed endpoint; parser fail-closed; sanitized known shape",
+    "Contract: candidate endpoint; parser fail-closed; sanitized known shape",
     `Shape : ${plan.responseShape} (fixture-supported, not production-verified)`,
     `Chat enumeration status : ${plan.enumerationStatus}`,
     "---------------------------------------------------------------",

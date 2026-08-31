@@ -76,10 +76,12 @@ function normalizeChat(raw: unknown): LineChatDiscoveredChat | null {
 }
 
 /**
- * Adapts the observed GET /api/v1/bots/{botId}/chats endpoint response into
- * the small, non-secret signal set used by the pilot matcher. The supported
- * envelopes/fields are validated only by sanitized fixtures; unknown records
- * and IDs outside the LINE OA Manager Ud... format are ignored fail-closed.
+ * Adapts normalized response shapes from the previously considered
+ * GET /api/v1/bots/{botId}/chats endpoint into the small, non-secret signal
+ * set used by the pilot matcher. The endpoint is not claimed to be the
+ * current production contract; supported envelopes/fields are validated only
+ * by sanitized fixtures. Unknown records and IDs outside the LINE OA Manager
+ * Ud... format are ignored fail-closed.
  */
 export function parseLineChatListResponse(
   body: unknown,

@@ -1,7 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import { chromium, type BrowserContext, type Page, type Response } from "playwright";
 import type {
   UpdateNicknameInput,
   UpdateNicknameResult,
@@ -12,6 +12,12 @@ import type {
   ObservedRequestSummary,
 } from "./line-chat.types";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
+import {
+  diagnosticResponseParseFailure,
+  isRelevantDiagnosticUrl,
+  sanitizeDiagnosticUrl,
+  summarizeDiagnosticJson,
+} from "./line-chat-diagnostic-metadata";
 
 export type ContextLauncher = (
   userDataDir: string,
@@ -128,9 +134,9 @@ export class LineChatSessionService {
   }
 
   /**
-   * Builds the read-only chat-list endpoint observed in the authenticated
-   * chat.line.biz page bootstrap flow. The response contract is not claimed
-   * to be production-verified by this method.
+   * Builds the legacy candidate endpoint used by mapping discovery. The
+   * current production chat-list contract is not assumed by this diagnostic
+   * surface; production observation reported no request to this path.
    */
   public buildChatListUrl(botId: string): string {
     return `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId.trim())}/chats`;
@@ -139,8 +145,11 @@ export class LineChatSessionService {
   /**
    * Reads chats through the authenticated persistent browser profile. This
    * intentionally performs one BrowserContext request-context GET to the
-   * observed endpoint. Playwright shares the persistent context's cookies and
-   * session storage with `context.request`; no page navigation is required.
+   * retained candidate endpoint. Playwright shares the persistent context's
+   * cookies and session storage with `context.request`; no page navigation is
+   * required for this mapping path. The path is not claimed to be the current
+   * production chat-list contract; use diagnostics to observe /chat. Non-GET
+   * chat.line.biz requests remain blocked for this discovery context.
    */
   public async discoverChats(input: {
     botId: string;
@@ -638,9 +647,15 @@ export class LineChatSessionService {
     botId?: string;
     lineUserId?: string;
     headless?: boolean;
+    surface?: "bot" | "chat-list";
     customLauncher?: ContextLauncher;
   }): Promise<DiagnosticsResult> {
     const resolvedProfile = path.resolve(options.profilePath);
+    const surface = options.surface ?? "bot";
+
+    if (surface === "chat-list" && !options.botId?.trim()) {
+      throw new Error("The chat-list diagnostic surface requires --bot <botId>.");
+    }
 
     if (!fs.existsSync(resolvedProfile)) {
       throw new Error(
@@ -655,8 +670,12 @@ export class LineChatSessionService {
     });
 
     const observedRequests: ObservedRequestSummary[] = [];
+    const observedResponses: DiagnosticsResult["observedResponses"] = [];
+    const responseSummaries: Promise<void>[] = [];
     let interceptedXsrfToken: string | undefined;
     let interceptedClientVersion: string | undefined;
+    let restApiRequestsObserved = 0;
+    let streamingSseObserved = false;
 
     try {
       const page = context.pages()[0] || (await context.newPage());
@@ -664,6 +683,9 @@ export class LineChatSessionService {
       page.on("request", (req) => {
         try {
           const reqUrl = req.url();
+          const relevance = isRelevantDiagnosticUrl(reqUrl);
+          if (!relevance.relevant) return;
+
           const headers = req.headers();
           const hasXsrf = Boolean(headers["x-xsrf-token"]);
           const hasVer = Boolean(headers["x-oa-chat-client-version"]);
@@ -675,29 +697,73 @@ export class LineChatSessionService {
             interceptedClientVersion = headers["x-oa-chat-client-version"];
           }
 
-          if (reqUrl.includes("/api/") || reqUrl.includes("chat.line.biz")) {
-            observedRequests.push({
-              method: req.method(),
-              url: reqUrl.replace(/\?.*/, ""),
-              hasXsrfHeader: hasXsrf,
-              hasClientVersionHeader: hasVer,
-              hasOriginHeader: Boolean(headers["origin"]),
-              hasRefererHeader: Boolean(headers["referer"]),
-              headerNames: Object.keys(headers),
-              timestamp: new Date().toISOString(),
-            });
-          }
+          const sanitized = sanitizeDiagnosticUrl(reqUrl);
+          observedRequests.push({
+            method: req.method(),
+            url: sanitized.url,
+            query: sanitized.query,
+            hasXsrfHeader: hasXsrf,
+            hasClientVersionHeader: hasVer,
+            hasOriginHeader: Boolean(headers["origin"]),
+            hasRefererHeader: Boolean(headers["referer"]),
+            headerNames: Object.keys(headers).sort(),
+            timestamp: new Date().toISOString(),
+          });
+          if (relevance.isRestApi) restApiRequestsObserved += 1;
+          if (relevance.isStreamingSse) streamingSseObserved = true;
         } catch {
           // Ignore request header access errors
         }
       });
 
-      const targetUrl =
-        options.botId && options.lineUserId
-          ? this.buildChatRefererUrl(options.botId, options.lineUserId)
-          : options.botId
-            ? `https://chat.line.biz/${encodeURIComponent(options.botId)}`
+      page.on("response", (response: Response) => {
+        const summaryPromise = (async () => {
+          try {
+            const responseUrl = response.url();
+            const relevance = isRelevantDiagnosticUrl(responseUrl);
+            if (!relevance.relevant) return;
+
+            const sanitized = sanitizeDiagnosticUrl(responseUrl);
+            const headers = response.headers();
+            const contentType = headers["content-type"] || "(absent)";
+            let schema;
+            if (/\b(?:application|text)\/[^;]*json\b|\+json\b/i.test(contentType)) {
+              try {
+                schema = summarizeDiagnosticJson(await response.json());
+              } catch {
+                schema = diagnosticResponseParseFailure("PARSE_FAILED");
+              }
+            } else {
+              schema = diagnosticResponseParseFailure("NOT_JSON");
+            }
+
+            observedResponses.push({
+              status: response.status(),
+              contentType,
+              url: sanitized.url,
+              query: sanitized.query,
+              schema,
+              timestamp: new Date().toISOString(),
+            });
+            if (relevance.isStreamingSse) streamingSseObserved = true;
+          } catch {
+            // Ignore response metadata access errors; no raw response is logged.
+          }
+        })();
+        responseSummaries.push(summaryPromise);
+      });
+
+      const botId = options.botId?.trim();
+      const targetUrl = surface === "chat-list"
+        ? `https://chat.line.biz/${encodeURIComponent(botId ?? "")}/chat`
+        : botId && options.lineUserId
+          ? this.buildChatRefererUrl(botId, options.lineUserId)
+          : botId
+            ? `https://chat.line.biz/${encodeURIComponent(botId)}`
             : "https://chat.line.biz/";
+      const safeTargetUrl = sanitizeDiagnosticUrl(targetUrl).url;
+      let navigationSucceeded = true;
+      let navigationError: string | undefined;
 
       try {
         await page.goto(targetUrl, {
@@ -705,10 +771,12 @@ export class LineChatSessionService {
           timeout: 15000,
         });
       } catch {
-        // Proceed even if timeout
+        navigationSucceeded = false;
+        navigationError = "navigation failed";
       }
 
       await page.waitForTimeout(1500).catch(() => {});
+      await Promise.allSettled(responseSummaries);
 
       const sessionValidation = await this.inspectSession(context, page, {
         xsrfToken: interceptedXsrfToken,
@@ -729,7 +797,10 @@ export class LineChatSessionService {
 
       return {
         profilePath: resolvedProfile,
-        targetUrl,
+        surface,
+        targetUrl: safeTargetUrl,
+        navigationSucceeded,
+        ...(navigationError ? { navigationError } : {}),
         authenticated: sessionValidation.authenticated,
         cookiesCount: sessionValidation.cookiesCount,
         cookieNames: sessionValidation.cookieNames,
@@ -740,6 +811,9 @@ export class LineChatSessionService {
         tokenSource: sessionValidation.tokenSource ?? "none",
         clientVersionFound: Boolean(sessionValidation.clientVersion),
         observedRequests,
+        observedResponses,
+        restApiRequestsObserved,
+        streamingSseObserved,
       };
     } finally {
       await context.close();

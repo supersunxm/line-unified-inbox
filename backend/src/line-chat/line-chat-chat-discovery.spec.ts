@@ -6,6 +6,7 @@ import * as path from "node:path";
 import type { APIResponse, BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
+import { sanitizeDiagnosticUrl, summarizeDiagnosticJson } from "./line-chat-diagnostic-metadata";
 
 test("chat-list adapter preserves only sanitized known fields for a supported shape", () => {
   const result = parseLineChatListResponse({ data: [{
@@ -179,4 +180,37 @@ test("session discovery preserves fail-closed errors for unsupported JSON shapes
     () => discoverWithResponse(mockResponse(200, { unknown: [] })),
     /did not contain a supported chat array/,
   );
+});
+
+test("diagnostic URL metadata keeps pagination scalars and redacts cursor/token values", () => {
+  const sanitized = sanitizeDiagnosticUrl(
+    "https://chat.line.biz/api/v1/bots/Ubot/chats?limit=20&offset=40&page=2&size=50&cursor=secret&authToken=secret&name=customer"
+  );
+  assert.equal(sanitized.url, "https://chat.line.biz/api/v1/bots/Ubot/chats");
+  assert.deepEqual(sanitized.query.parameterNames, ["limit", "offset", "page", "size", "cursor", "authToken", "name"]);
+  assert.deepEqual(sanitized.query.safeScalars, { limit: "20", offset: "40", page: "2", size: "50" });
+  assert.deepEqual(sanitized.query.redactedParameters, ["cursor=PRESENT_REDACTED", "authToken=PRESENT_REDACTED"]);
+  assert.doesNotMatch(JSON.stringify(sanitized), /secret|customer/);
+});
+
+test("diagnostic URL metadata redacts customer identifiers in individual-chat paths", () => {
+  const sanitized = sanitizeDiagnosticUrl("https://chat.line.biz/Ubot/chat/Ud-customer-id?token=secret");
+  assert.equal(sanitized.url, "https://chat.line.biz/Ubot/chat/<customer-id-redacted>");
+  assert.doesNotMatch(sanitized.url, /Ud-customer-id/);
+});
+
+test("diagnostic JSON schema summarizer emits structure only", () => {
+  const summary = summarizeDiagnosticJson({
+    items: [{ id: "Ud-customer-id", displayName: "Customer name", lastMessage: { text: "Private text" } }],
+    nextCursor: "secret-next-cursor",
+    total: 1,
+  });
+  assert.equal(summary.parseStatus, "JSON");
+  assert.equal(summary.topLevelType, "object");
+  assert.deepEqual(summary.topLevelKeyNames, ["items", "nextCursor", "total"]);
+  assert.deepEqual(summary.arrayLengths, [{ path: "$.items", length: 1 }]);
+  assert.ok(summary.nestedKeyNames.includes("displayName"));
+  assert.ok(summary.paginationKeyNames.includes("nextCursor"));
+  assert.ok(summary.candidateFieldNames.includes("id"));
+  assert.doesNotMatch(JSON.stringify(summary), /Ud-customer-id|Customer name|Private text|secret-next-cursor/);
 });

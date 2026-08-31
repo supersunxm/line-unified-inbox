@@ -60,11 +60,19 @@ export interface DiagnosticsCliArgs {
   botId?: string;
   lineUserId?: string;
   headless?: boolean;
+  surface: "bot" | "chat-list";
+}
+
+export interface DiagnosticQueryMetadata {
+  parameterNames: string[];
+  safeScalars: Record<string, string>;
+  redactedParameters: string[];
 }
 
 export interface ObservedRequestSummary {
   method: string;
   url: string;
+  query: DiagnosticQueryMetadata;
   hasXsrfHeader: boolean;
   hasClientVersionHeader: boolean;
   hasOriginHeader: boolean;
@@ -73,9 +81,36 @@ export interface ObservedRequestSummary {
   timestamp: string;
 }
 
+export interface DiagnosticArrayLength {
+  path: string;
+  length: number;
+}
+
+export interface DiagnosticResponseSchemaSummary {
+  parseStatus: "JSON" | "NOT_JSON" | "PARSE_FAILED";
+  topLevelType: "array" | "object" | "string" | "number" | "boolean" | "null" | "unknown";
+  topLevelKeyNames: string[];
+  nestedKeyNames: string[];
+  arrayLengths: DiagnosticArrayLength[];
+  paginationKeyNames: string[];
+  candidateFieldNames: string[];
+}
+
+export interface ObservedResponseSummary {
+  status: number;
+  contentType: string;
+  url: string;
+  query: DiagnosticQueryMetadata;
+  schema: DiagnosticResponseSchemaSummary;
+  timestamp: string;
+}
+
 export interface DiagnosticsResult {
   profilePath: string;
+  surface: "bot" | "chat-list";
   targetUrl: string;
+  navigationSucceeded: boolean;
+  navigationError?: string;
   authenticated: boolean;
   cookiesCount: number;
   cookieNames: string[];
@@ -86,6 +121,9 @@ export interface DiagnosticsResult {
   tokenSource: "cookie" | "meta" | "storage" | "network" | "window" | "none";
   clientVersionFound: boolean;
   observedRequests: ObservedRequestSummary[];
+  observedResponses: ObservedResponseSummary[];
+  restApiRequestsObserved: number;
+  streamingSseObserved: boolean;
 }
 
 export interface LineChatDiscoveredChat {
