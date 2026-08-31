@@ -48,6 +48,7 @@ test("Kill-Switch & Rollout Isolation: Enabling pilot OA does not enable others,
         return {
           id: convId,
           lineOfficialAccountId: oa.id,
+          lineChatUserId: "Uchat_user_pilot",
           customerSalesStatus: "ONLINE",
           paymentMethod: null,
           salesRecordedAt: new Date(),

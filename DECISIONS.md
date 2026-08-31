@@ -1,3 +1,11 @@
+# Decoupled LINE OA Manager Chat Identifier Architecture (2026-08-31)
+
+- **Decoupling Messaging API User ID (`Customer.lineUserId`) from LINE OA Manager Chat User ID (`Conversation.lineChatUserId`)**:
+  - *Root Cause Discovery*: In LINE's ecosystem, channel-scoped Messaging API webhooks deliver a provider-scoped `userId` (e.g. `U124d80f7c70ed8f48cfc93c707853ab4`), whereas the LINE Official Account Manager web portal (`chat.line.biz`) uses internal OA-scoped chatroom identifiers in its URLs and REST APIs (e.g. `https://chat.line.biz/{botId}/chat/{lineChatUserId}` where `lineChatUserId` is e.g. `Ud8d5af30ddca3ed4237e157d5d73c2f1`).
+  - *Domain Model Separation*: `Customer.lineUserId` is strictly preserved for Messaging API operations and is never overloaded or corrupted. The dedicated `Conversation.lineChatUserId` field represents the OA Manager chat user ID for that specific conversation.
+  - *Fail-Safe Queue Processing*: When `Conversation.lineChatUserId` is absent, BM sales saves complete successfully with zero error, the nickname queue safely logs a structured skip event (`MISSING_LINE_CHAT_USER_ID`), and no invalid HTTP requests are dispatched to `chat.line.biz`.
+  - *Additive Database Migration*: Added `Conversation.lineChatUserId` and `LineChatNicknameSyncJob.lineChatUserId` with indexes.
+
 # LINE Official Account Chat Nickname Sync Production Architecture (2026-08-31)
 
 - **Scalable Multi-Session Routing (`profile-a`, `profile-b`, `profile-c`, ...)**:

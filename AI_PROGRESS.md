@@ -1,6 +1,25 @@
 # AI progress
 
-## Current task: LINE OA Chat Nickname Sync: NestJS AuthModule DI Wiring Fix (2026-08-31) [COMPLETED]
+## Current task: LINE OA Chat Nickname Sync: Decouple Messaging API User ID from LINE OA Manager Chat User ID (2026-08-31) [COMPLETED]
+
+- **Root Cause & Domain Decoupling**:
+  - `Customer.lineUserId` stores the provider-scoped Messaging API user ID (e.g. `U124d80f7c70ed8f48cfc93c707853ab4`), whereas the LINE OA Manager (`chat.line.biz`) web portal uses internal chatroom identifiers (e.g. `Ud8d5af30ddca3ed4237e157d5d73c2f1`).
+  - Added additive `Conversation.lineChatUserId` and `LineChatNicknameSyncJob.lineChatUserId` columns with indexes via migration `20260831130000_add_conversation_line_chat_user_id`.
+  - `Customer.lineUserId` is strictly preserved and never modified or overloaded.
+- **Queue & Worker Architecture**:
+  - `LineChatNicknameQueueService` validates `Conversation.lineChatUserId`. If missing, the BM sales update succeeds normally, and the queue skips safely with structured logging (`MISSING_LINE_CHAT_USER_ID`) without throwing or enqueueing broken requests.
+  - `LineChatNicknameWorkerService` extracts `lineChatUserId` from the job and passes it to `LineChatSessionService.updateNickname`.
+- **Pilot Mapping & Backfill Tooling**:
+  - Created `backend/scripts/set-conversation-line-chat-user.ts` (`npm run line-chat:set-chat-user`) with `--conversation`, `--chat-user-id`, `--pilot`, and `--dry-run` modes.
+  - Prepared production pilot mapping for conversation `cb6dc791-ef0e-45f0-bb33-96c9b638c9a0` $\to$ `Ud8d5af30ddca3ed4237e157d5d73c2f1`.
+- **Verification Results**:
+  - 1,511 / 1,511 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 59 / 59 targeted line-chat specs passing (`npx tsx --test src/line-chat/*.spec.ts src/line-chat-nickname.spec.ts`).
+  - Backend compiles cleanly (`npm run build` in `backend/`).
+  - ESLint passes with 0 errors and 0 warnings across all touched files.
+  - `git diff --check` clean with zero whitespace issues.
+
+## Previous task: LINE OA Chat Nickname Sync: NestJS AuthModule DI Wiring Fix (2026-08-31) [COMPLETED]
 
 - **Root Cause**:
   - `LineChatOperationsController` is decorated with `@UseGuards(AuthGuard)` and `@Roles(UserRole.ADMIN)`.

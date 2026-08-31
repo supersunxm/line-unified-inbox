@@ -11,6 +11,7 @@ interface FixtureConfig {
   oaName: string;
   chatBotId: string;
   lineUserId: string;
+  lineChatUserId: string;
   customerDisplayName: string;
   storeCode: string;
   storeName: string;
@@ -29,6 +30,7 @@ const FIXTURES: FixtureConfig[] = [
     oaName: "OPPO BigC MAHACHAI 1",
     chatBotId: "U092441d025f688e389d25779dd8debf4",
     lineUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+    lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
     customerDisplayName: "Test Customer Mahachai",
     storeCode: "MHC-001",
     storeName: "OPPO BigC MAHACHAI 1",
@@ -44,7 +46,8 @@ const FIXTURES: FixtureConfig[] = [
     sessionDisplayName: "Local Test Profile B (OBS Robinson Chonburi)",
     oaName: "OPPO BS RBS Chonburi",
     chatBotId: "U729972869a565723cb7fcf7ea28bbc43",
-    lineUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+    lineUserId: "U124d80f7c70ed8f48cfc93c707853ab4",
+    lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
     customerDisplayName: "Test Customer Chonburi",
     storeCode: "28375",
     storeName: "OBS Robinson Chonburi By OPPO",
@@ -200,6 +203,7 @@ async function seedLineChatTestFixture() {
           customerId: customer.id,
           lineOfficialAccountId: oa.id,
           storeId: store.id,
+          lineChatUserId: fixture.lineChatUserId,
           latestMessageAt: new Date(),
           priority: Priority.NORMAL,
           followUpStatus: FollowUpStatus.FOLLOW_UP,
@@ -219,12 +223,13 @@ async function seedLineChatTestFixture() {
         },
       });
     } else {
-      // Ensure store association is accurate
+      // Ensure store association and lineChatUserId are accurate
       conversation = await prisma.conversation.update({
         where: { id: conversation.id },
         data: {
           storeId: store.id,
           lineOfficialAccountId: oa.id,
+          lineChatUserId: fixture.lineChatUserId,
         },
       });
     }
@@ -234,6 +239,7 @@ async function seedLineChatTestFixture() {
     console.log("  ✓ OA ID           :", oa.id, `(name: ${oa.name}, chatBotId: ${oa.chatBotId})`);
     console.log("  ✓ Nickname Sync   :", oa.lineChatNicknameSyncEnabled ? "ENABLED" : "DISABLED");
     console.log("  ✓ Customer ID     :", customer.id, `(lineUserId: ${customer.lineUserId})`);
+    console.log("  ✓ Line Chat ID    :", conversation.lineChatUserId);
     console.log("  ✓ Conversation ID :", conversation.id);
 
     results.push({

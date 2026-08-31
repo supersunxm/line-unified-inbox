@@ -313,13 +313,36 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
     const profilePath = this.sessionService.resolveProfilePath(session);
 
+    const targetChatUserId = job.lineChatUserId?.trim();
+    if (!targetChatUserId) {
+      const errorMsg = `Missing LINE OA Manager chat user ID (lineChatUserId) on job ${job.id}. Messaging API lineUserId cannot be used for chat.line.biz`;
+      this.logger.warn?.(
+        JSON.stringify({
+          event: "line_chat_nickname_job_skipped_missing_chat_user_id",
+          jobId: job.id,
+          conversationId: job.conversationId,
+          error: errorMsg,
+        })
+      );
+      await this.prisma.lineChatNicknameSyncJob.update({
+        where: { id: job.id },
+        data: {
+          status: LineChatNicknameSyncJobStatus.FAILED,
+          processedAt: new Date(),
+          lastError: errorMsg,
+          lockedUntil: null,
+        },
+      });
+      return;
+    }
+
     this.logger.log(
       JSON.stringify({
         event: "line_chat_nickname_job_processing",
         jobId: job.id,
         conversationId: job.conversationId,
         lineOfficialAccountId: job.lineOfficialAccountId,
-        lineUserId: job.lineUserId,
+        lineChatUserId: targetChatUserId,
         nickname: job.nickname,
         botId,
         sessionKey: session.sessionKey,
@@ -328,7 +351,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
     const result = await this.sessionService.updateNickname({
       botId,
-      lineUserId: job.lineUserId,
+      lineUserId: targetChatUserId,
       nickname: job.nickname,
       profilePath,
       headless: true,
@@ -361,7 +384,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
           jobId: job.id,
           conversationId: job.conversationId,
           lineOfficialAccountId: job.lineOfficialAccountId,
-          lineUserId: job.lineUserId,
+          lineChatUserId: targetChatUserId,
           nickname: job.nickname,
           status: result.status,
           tokenSource: result.tokenSource,

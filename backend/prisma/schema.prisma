@@ -822,6 +822,7 @@ model Conversation {
   productRelationship   ProductRelationship?
   purchaseIntent        PurchaseIntent?
   ownerUserId           String?
+  lineChatUserId        String?
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   customer              Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -845,6 +846,7 @@ model Conversation {
   @@index([priority])
   @@index([storeId])
   @@index([customerId])
+  @@index([lineChatUserId])
   @@index([customerSalesStatus])
   @@index([createdAt])
   @@index([storeId, createdAt])
@@ -1948,6 +1950,7 @@ model LineChatNicknameSyncJob {
   id                    String                        @id @default(uuid())
   conversationId        String
   lineOfficialAccountId String
+  lineChatUserId        String?
   lineUserId            String
   nickname              String
   status                LineChatNicknameSyncJobStatus @default(PENDING)
@@ -1969,5 +1972,6 @@ model LineChatNicknameSyncJob {
   @@index([status, lockedUntil])
   @@index([conversationId, status])
   @@index([lineOfficialAccountId, status])
+  @@index([lineChatUserId])
   @@index([createdAt])
 }

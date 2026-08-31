@@ -12,6 +12,7 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
       findUnique: async () => ({
         id: "conv-1",
         lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
         lineOfficialAccount: {
           id: "oa-1",
           chatBotId: "U092441d025f688e389d25779dd8debf4",
@@ -22,7 +23,7 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
         customerSalesStatus: CustomerSalesStatus.ONLINE,
         paymentMethod: null,
         salesRecordedAt: new Date("2026-08-31T10:00:00.000Z"),
-        customer: { id: "cust-1", lineUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1" },
+        customer: { id: "cust-1", lineUserId: "Umsg_api_diff_123" },
         salesProducts: [],
       }),
     },
@@ -46,7 +47,7 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
   assert.equal(result.jobId, "job-1");
   assert.equal(createdJobs.length, 1);
   assert.equal(createdJobs[0].nickname, "Online");
-  assert.equal(createdJobs[0].lineUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
+  assert.equal(createdJobs[0].lineChatUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
   assert.equal(createdJobs[0].status, LineChatNicknameSyncJobStatus.PENDING);
 });
 
@@ -58,6 +59,7 @@ void test("enqueueSalesSync creates Cash purchase nickname job with Bangkok MM/Y
       findUnique: async () => ({
         id: "conv-2",
         lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat_user_cash_2",
         lineOfficialAccount: {
           id: "oa-1",
           chatBotId: "U092441d025f688e389d25779dd8debf4",
@@ -68,7 +70,7 @@ void test("enqueueSalesSync creates Cash purchase nickname job with Bangkok MM/Y
         customerSalesStatus: CustomerSalesStatus.PURCHASED,
         paymentMethod: PaymentMethodType.CASH,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-2", lineUserId: "Uuser123" },
+        customer: { id: "cust-2", lineUserId: "Umsg_api_user_123" },
         salesProducts: [
           {
             customProductName: null,
@@ -93,6 +95,7 @@ void test("enqueueSalesSync creates Cash purchase nickname job with Bangkok MM/Y
   assert.equal(result.nickname, "Find X9 สด 08/26");
   assert.equal(createdJobs.length, 1);
   assert.equal(createdJobs[0].nickname, "Find X9 สด 08/26");
+  assert.equal(createdJobs[0].lineChatUserId, "Uchat_user_cash_2");
 });
 
 void test("enqueueSalesSync creates Installment purchase nickname job with custom model name", async () => {
@@ -103,6 +106,7 @@ void test("enqueueSalesSync creates Installment purchase nickname job with custo
       findUnique: async () => ({
         id: "conv-3",
         lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat_user_inst_3",
         lineOfficialAccount: {
           id: "oa-1",
           chatBotId: "U092441d025f688e389d25779dd8debf4",
@@ -113,7 +117,7 @@ void test("enqueueSalesSync creates Installment purchase nickname job with custo
         customerSalesStatus: CustomerSalesStatus.PURCHASED,
         paymentMethod: PaymentMethodType.INSTALLMENT,
         salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
-        customer: { id: "cust-3", lineUserId: "Uuser456" },
+        customer: { id: "cust-3", lineUserId: "Umsg_api_user_456" },
         salesProducts: [
           {
             customProductName: "Reno14 Pro",
@@ -138,6 +142,7 @@ void test("enqueueSalesSync creates Installment purchase nickname job with custo
   assert.equal(result.nickname, "Reno14 Pro ผ่อน 08/26");
   assert.equal(createdJobs.length, 1);
   assert.equal(createdJobs[0].nickname, "Reno14 Pro ผ่อน 08/26");
+  assert.equal(createdJobs[0].lineChatUserId, "Uchat_user_inst_3");
 });
 
 void test("enqueueSalesSync creates no job for INTERESTED and supersedes pending jobs", async () => {
@@ -149,6 +154,7 @@ void test("enqueueSalesSync creates no job for INTERESTED and supersedes pending
       findUnique: async () => ({
         id: "conv-4",
         lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat_user_4",
         lineOfficialAccount: {
           id: "oa-1",
           chatBotId: "U092441d025f688e389d25779dd8debf4",
@@ -184,6 +190,45 @@ void test("enqueueSalesSync creates no job for INTERESTED and supersedes pending
   assert.equal(supersededCalls.length, 1);
 });
 
+void test("enqueueSalesSync skips safely when Conversation.lineChatUserId is missing", async () => {
+  const createdJobs: Array<Record<string, unknown>> = [];
+
+  const prisma = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-missing-chat-id",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: null, // missing LINE OA Manager chat user ID
+        lineOfficialAccount: {
+          id: "oa-1",
+          chatBotId: "U092441d025f688e389d25779dd8debf4",
+          lineChatSessionId: "sess-1",
+          lineChatNicknameSyncEnabled: true,
+          lineChatSession: { id: "sess-1", sessionKey: "profile-a", status: "ACTIVE" },
+        },
+        customerSalesStatus: CustomerSalesStatus.ONLINE,
+        paymentMethod: null,
+        salesRecordedAt: new Date("2026-08-30T05:00:00.000Z"),
+        customer: { id: "cust-5", lineUserId: "Umsg_api_only_123" },
+        salesProducts: [],
+      }),
+    },
+    lineChatNicknameSyncJob: {
+      create: async (args: { data: Record<string, unknown> }) => {
+        createdJobs.push(args.data);
+        return { id: "job-5", ...args.data };
+      },
+    },
+  };
+
+  const service = new LineChatNicknameQueueService(prisma as never);
+  const result = await service.enqueueSalesSync("conv-missing-chat-id");
+
+  assert.equal(result.enqueued, false);
+  assert.equal(result.reason, "MISSING_LINE_CHAT_USER_ID");
+  assert.equal(createdJobs.length, 0);
+});
+
 void test("enqueueSalesSync creates no job for incomplete purchase or unsupported payment", async () => {
   const createdJobs: Array<Record<string, unknown>> = [];
 
@@ -192,6 +237,7 @@ void test("enqueueSalesSync creates no job for incomplete purchase or unsupporte
       findUnique: async () => ({
         id: "conv-5",
         lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat_user_5",
         lineOfficialAccount: {
           id: "oa-1",
           chatBotId: "U092441d025f688e389d25779dd8debf4",

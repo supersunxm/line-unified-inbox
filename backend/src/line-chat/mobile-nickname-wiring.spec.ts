@@ -77,10 +77,11 @@ test("MobileConversationsService.updateCustomerSalesInfo with status ONLINE crea
     salesRecordedAt: null,
     sourceChannels: ["STORE"],
     isInstallment: false,
+    lineChatUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
     customer: {
       id: "cust-1",
       displayName: "Test Customer",
-      lineUserId: "Ud8d5af30ddca3ed4237e157d5d73c2f1",
+      lineUserId: "Umsg_api_distinct_123",
     },
     store: { id: "store-1", name: "OPPO Store", code: "S01" },
     salesProducts: [],
@@ -175,6 +176,6 @@ test("MobileConversationsService.updateCustomerSalesInfo with status ONLINE crea
   const job = createdJobs[0].data;
   assert.equal(job.conversationId, conversationRecord.id);
   assert.equal(job.lineOfficialAccountId, "oa-test-1");
-  assert.equal(job.lineUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
+  assert.equal(job.lineChatUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
   assert.equal(job.nickname, "Online", "Nickname for ONLINE status must be 'Online'");
 });

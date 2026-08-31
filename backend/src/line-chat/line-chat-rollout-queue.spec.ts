@@ -49,6 +49,7 @@ test("LineChatNicknameQueueService: creates PENDING job when lineChatNicknameSyn
       findUnique: async () => ({
         id: "conv-2",
         lineOfficialAccountId: "oa-enabled",
+        lineChatUserId: "Uchat_user_enabled",
         customerSalesStatus: "ONLINE",
         paymentMethod: null,
         salesRecordedAt: new Date(),
