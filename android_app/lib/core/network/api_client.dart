@@ -237,7 +237,7 @@ class ApiClient {
     }
     request.fields['idempotencyKey'] = idempotencyKey;
     request.files.add(http.MultipartFile.fromBytes(field, bytes,
-        filename: filename, contentType: _imageMediaType(mimeType, filename)));
+        filename: filename, contentType: _multipartMediaType(mimeType, filename)));
     late http.Response response;
     try {
       response = await _sendAndRead(request, timeout: timeout);
@@ -287,9 +287,15 @@ class ApiClient {
     return decoded;
   }
 
-  MediaType? _imageMediaType(String? mimeType, String filename) {
+  MediaType? _multipartMediaType(String? mimeType, String filename) {
     final supplied = mimeType?.toLowerCase().split(';').first.trim();
-    const supported = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'};
+    const supported = {
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+    };
     final value = supplied != null && supported.contains(supplied)
         ? supplied
         : switch (filename.toLowerCase().split('.').last) {
@@ -297,6 +303,7 @@ class ApiClient {
             'png' => 'image/png',
             'gif' => 'image/gif',
             'webp' => 'image/webp',
+            'mp4' => 'video/mp4',
             _ => null,
           };
     if (value == null) return null;
