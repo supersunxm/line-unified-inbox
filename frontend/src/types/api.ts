@@ -19,6 +19,20 @@ export type ApiCustomerSalesInformation = {
   recordedAt: string | null;
 };
 
+export type UpdateCustomerSalesInfoInput = {
+  status?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  interestLevel?: "HOT" | "WARM" | "COLD" | null;
+  purchaseChannel?: Array<"ONLINE" | "STORE">;
+  paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
+  products?: Array<{
+    productModelId: string;
+    productVariantId?: string | null;
+    customProductName?: string | null;
+    quantity?: number;
+    status?: "ONLINE" | "INTERESTED" | "PURCHASED";
+  }>;
+};
+
 export type ApiPurchaseInformation = {
   recordState: "VERIFIED" | "LEGACY_MANUAL" | "NONE";
   purchaseChannel: string[];

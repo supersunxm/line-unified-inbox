@@ -643,10 +643,17 @@ model LineOfficialAccount {
   autoResponseExecutions      AutoResponseExecution[]
   greetingStoreAssignment     GreetingStoreAssignment?
   greetingExecutions          GreetingExecution[]
+  chatBotId                   String?
+  lineChatSessionId           String?
+  lineChatNicknameSyncEnabled Boolean                            @default(false)
+  lineChatSession             LineChatSession?                   @relation(fields: [lineChatSessionId], references: [id], onDelete: SetNull)
+  nicknameSyncJobs            LineChatNicknameSyncJob[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
   @@index([isActive, lastBackfillReconciledAt])
+  @@index([lineChatSessionId])
+  @@index([lineChatNicknameSyncEnabled])
 }
 
 model LineOaBackfillJob {
@@ -831,6 +838,7 @@ model Conversation {
   owner                 User?                       @relation("ConversationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   pushNotifications     PushNotification[]
   autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
+  nicknameSyncJobs      LineChatNicknameSyncJob[]
 
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -1898,5 +1906,68 @@ model GreetingExecution {
   @@index([lineOfficialAccountId, createdAt])
   @@index([lineOfficialAccountId, lineUserIdHash, status])
   @@index([webhookEventId])
+  @@index([createdAt])
+}
+
+enum LineChatNicknameSyncJobStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  FAILED_AUTH
+  SUPERSEDED
+}
+
+enum LineChatSessionStatus {
+  ACTIVE
+  INACTIVE
+  AUTH_REQUIRED
+  DISABLED
+}
+
+model LineChatSession {
+  id                      String                @id @default(uuid())
+  sessionKey              String                @unique
+  displayName             String
+  profilePath             String?
+  profileStorageKey       String?
+  status                  LineChatSessionStatus @default(ACTIVE)
+  lastAuthenticatedAt     DateTime?
+  lastSuccessfulRequestAt DateTime?
+  lastAuthFailureAt       DateTime?
+  consecutiveAuthFailures Int                   @default(0)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  lineOfficialAccounts LineOfficialAccount[]
+
+  @@index([status])
+}
+
+model LineChatNicknameSyncJob {
+  id                    String                        @id @default(uuid())
+  conversationId        String
+  lineOfficialAccountId String
+  lineUserId            String
+  nickname              String
+  status                LineChatNicknameSyncJobStatus @default(PENDING)
+  attemptCount          Int                           @default(0)
+  maxAttempts           Int                           @default(3)
+  lastError             String?
+  workerId              String?
+  claimedAt             DateTime?
+  lockedUntil           DateTime?
+  scheduledAt           DateTime                      @default(now())
+  processedAt           DateTime?
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
+
+  conversation        Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([status, lockedUntil])
+  @@index([conversationId, status])
+  @@index([lineOfficialAccountId, status])
   @@index([createdAt])
 }

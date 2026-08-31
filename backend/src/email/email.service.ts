@@ -10,7 +10,7 @@ export type EmailLanguage = "th" | "en" | "zh";
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  constructor(private readonly prisma: PrismaService, @Inject(EMAIL_PROVIDER) private readonly provider: EmailProvider) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(EMAIL_PROVIDER) private readonly provider: EmailProvider) {}
   mode() { return process.env.EMAIL_PROVIDER?.trim().toLowerCase() || "none"; }
   configured() { const mode = this.mode(); return mode === "console" ? process.env.NODE_ENV !== "production" : mode === "resend" && Boolean(process.env.RESEND_API_KEY?.trim() && emailFromAddress()); }
   async sendAdminOtp(to: string, otp: string, language: EmailLanguage) {

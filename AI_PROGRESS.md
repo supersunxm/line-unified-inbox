@@ -1,6 +1,133 @@
 # AI progress
 
-## Current task: Greeting Message Manager Preview & Activation UX Polish (2026-08-28) [COMPLETED]
+## Current task: LINE OA Chat Nickname Sync: NestJS AuthModule DI Wiring Fix (2026-08-31) [COMPLETED]
+
+- **Root Cause**:
+  - `LineChatOperationsController` is decorated with `@UseGuards(AuthGuard)` and `@Roles(UserRole.ADMIN)`.
+  - When `LineChatModule` was initialized, `AuthGuard` required `Reflector`, `AuthService`, and `StoreAccessService`.
+  - `LineChatModule` imported only `[PrismaModule]` without importing `AuthModule` (which exports `AuthService` and `StoreAccessService`).
+  - Furthermore, `AuthModule` imported `[EmailModule]` without explicitly importing `PrismaModule`, leading to nested provider injection resolution errors during standalone module compilation.
+- **Resolution**:
+  - Imported `AuthModule` in `LineChatModule.imports: [PrismaModule, AuthModule]`.
+  - Imported `PrismaModule` in `AuthModule.imports: [EmailModule, PrismaModule]`.
+  - Added explicit `@Inject` tokens on constructor parameters across `MobileAuthService` and `EmailService`.
+  - Maintained `LineChatNicknameWorkerModule` lightweight isolation importing only `[PrismaModule]`.
+- **Verification Results**:
+  - Backend compiles cleanly (`npm --prefix backend run build`).
+  - 1,510 / 1,510 backend tests passing (`npm --prefix backend test`).
+  - 58 / 58 targeted line-chat and security specs passing (`npx tsx --test src/line-chat/*.spec.ts src/line-chat-nickname.spec.ts`).
+  - Actual application bootstrap verified: reaches `[NestApplication] Nest application successfully started` with all routes mapped cleanly.
+  - Security matrix preserved: ADMIN allowed (200), VIEWER forbidden (403), Non-admin forbidden (403), unauthenticated unauthorized (401).
+
+## Previous task: LINE OA Chat Nickname Sync: Store 28375 / Profile B Local E2E Fixture (2026-08-31) [COMPLETED]
+
+- **Architecture & Local Fixture Setup**:
+  - **Extended Local Test Fixture (`npm run seed:line-chat-test`)**:
+    - Idempotently creates both Profile A (Mahachai) and Profile B (Store 28375 Chonburi) fixtures.
+    - Profile B Fixture details:
+      - Store ID: `de523e38-3cc4-49c9-88b9-539b6dad677d` (code: `28375`, name: `OBS Robinson Chonburi By OPPO`)
+      - OA ID: `b1b055bf-2210-40f3-b0aa-be9facb14a69` (name: `OPPO BS RBS Chonburi`, `chatBotId: U729972869a565723cb7fcf7ea28bbc43`)
+      - Session ID: `1509b0bf-3278-4bb1-90ac-dfbae0f1f349` (`sessionKey: profile-b`, `profileStorageKey: profile-b`, `status: ACTIVE`)
+      - Customer ID: `4da73b35-999d-43d1-aa39-09b9e850cbdd` (`lineUserId: Ud8d5af30ddca3ed4237e157d5d73c2f1`)
+      - Conversation ID: `b8ae98f8-ab1a-4b5c-98c0-f4d582ccada2`
+      - Rollout flag: `lineChatNicknameSyncEnabled = true` exclusively for the test fixtures.
+    - Zero production secrets or credentials copied; safe local-only random `webhookKey` placeholders.
+  - **Dynamic Multi-Session Routing Verified**:
+    - Automated tests in `line-chat-multi-session-worker.spec.ts` prove:
+      - Store 28375 OA $\to$ routes to `profile-b` / `U729972869a565723cb7fcf7ea28bbc43`
+      - Mahachai OA $\to$ routes to `profile-a` / `U092441d025f688e389d25779dd8debf4`
+  - **Verification Suite**:
+    - 1,510 / 1,510 backend unit & integration tests passing (`npm test` in `backend/`).
+    - 58 / 58 targeted line-chat and security specs passing.
+    - 476 / 476 frontend unit tests passing (`npm test` in `frontend/`).
+    - Backend build compiling cleanly.
+    - ESLint clean across all touched files (0 errors, 0 warnings).
+    - `git diff --check` clean with 0 whitespace errors.
+
+## Previous task: LINE OA Chat Nickname Sync: Production Rollout Architecture & Tooling (2026-08-31) [COMPLETED]
+
+- **Architecture & Production Capabilities**:
+  - **Scalable Multi-Session Routing (`profile-a`, `profile-b`, `profile-c`, ...)**:
+    - Partitioning for ~150 LINE Official Accounts across multiple LINE Business sessions without schema redesign.
+    - Decoupled DB from host environments using `profileStorageKey` and `LINE_CHAT_PROFILE_ROOT` (supports Railway persistent volume `/data/line-chat-profiles` and local `./local-data`).
+  - **Granular Session Health Tracking & Fault Isolation**:
+    - Enhanced `LineChatSession` model: `profileStorageKey`, `lastSuccessfulRequestAt`, `lastAuthFailureAt`, `consecutiveAuthFailures`, `status: ACTIVE | AUTH_REQUIRED | DISABLED`.
+    - Session failure circuit breaker: HTTP 401 transitions the session to `AUTH_REQUIRED` and pauses its jobs without blocking other sessions (Profile A continues when Profile B fails).
+  - **Safe Staged Rollout Toggle (`LineOfficialAccount.lineChatNicknameSyncEnabled`)**:
+    - Additive database column defaulting to `false`.
+    - Allows phased rollout (1 test store $\to$ 5 stores $\to$ Profile A $\to$ Profile B $\to$ full network) without impacting BM sales saves on un-enrolled stores.
+  - **Worker Crash Recovery & Lease Management**:
+    - Leased claims with `workerId`, `claimedAt`, and `lockedUntil` on `LineChatNicknameSyncJob`.
+    - Automatic stuck job recovery in worker loop restoring orphaned `PROCESSING` jobs back to `PENDING`.
+  - **Rate Limiting & Bounded Concurrency**:
+    - Sequential session execution with configurable inter-request delay (`LINE_CHAT_SYNC_DELAY_MS`) protecting private LINE OA Manager endpoints.
+  - **Bulk OA Mapping CLI Tool (`npm run line-chat:mapping:import`)**:
+    - CSV mapping tool with dry-run validation, duplicate checking, bot ID format validation, and atomic transaction execution.
+    - Zero modification of webhook secrets or Messaging API credentials.
+  - **Admin Operations Health Visibility & Controls**:
+    - Dedicated operations controller and service (`GET /operations/line-chat-nickname/health`, `POST retry-failed`, `PATCH toggle`).
+    - Exposes aggregate non-secret health metrics, queue depth, and rollout progress.
+  - **Comprehensive Production Deployment Runbook**:
+    - Created `backend/docs/line-chat-nickname-sync/DEPLOYMENT_RUNBOOK.md` with step-by-step Railway configuration, volume setup, Chromium dependencies, authentication options, and emergency kill-switches.
+- **Verification & Test Results**:
+  - 1,506 / 1,506 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 54 / 54 targeted line-chat and mobile sales activity tests passing.
+  - 476 / 476 frontend unit tests passing (`npm test` in `frontend/`).
+  - ESLint passing cleanly on all changed files (0 errors, 0 warnings).
+  - Backend build passing cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with zero whitespace errors.
+
+## Previous task: LINE OA Chat Nickname Sync: BM Sales Save Hook & Queue Integration (2026-08-31) [COMPLETED]
+
+- **Architecture & Technical Scope**:
+  - **BM Save Transaction Isolation & Fault Decoupling**:
+    - Nickname sync job creation hook is placed in `MobileConversationsService.updateCustomerSalesInfo` *after* `prisma.$transaction` commits.
+    - Zero LINE requests or Playwright invocations occur inside the main database transaction.
+    - If queue enqueuing or worker processing encounters an unexpected error, the BM save operation remains 100% successful and returns HTTP 200.
+  - **Database-Backed Asynchronous Queue (`LineChatNicknameSyncJob`)**:
+    - Created additive, non-destructive migration `20260831110000_add_line_chat_nickname_sync_queue`.
+    - Statuses: `PENDING`, `PROCESSING`, `SUCCESS`, `FAILED`, `FAILED_AUTH`, `SUPERSEDED`.
+    - Includes `attemptCount`, `maxAttempts` (default 3), `scheduledAt`, `processedAt`, `lastError`.
+  - **Safe Latest-Wins Strategy**:
+    - Enqueueing a new nickname job immediately transitions prior `PENDING` jobs for that conversation to `SUPERSEDED`.
+    - Enqueueing for a non-nickname state (e.g. `INTERESTED`) supersedes pending jobs to prevent stale executions.
+    - Worker applies a second guard before execution: if a newer job exists for the same conversation, the stale job is marked `SUPERSEDED` and skipped.
+  - **Multi-Session & OA Routing (`LineChatSession`)**:
+    - Created `LineChatSession` model (`sessionKey`, `displayName`, `profilePath`, `status`, `lastAuthenticatedAt`) and linked `LineOfficialAccount(lineChatSessionId, chatBotId)`.
+    - No cookies, credentials, or session binaries stored in PostgreSQL.
+    - Worker resolves `chatBotId` and `profilePath` dynamically (e.g. Profile A vs Profile B).
+  - **Background Worker (`LineChatNicknameWorkerService` & CLI)**:
+    - Atomically claims pending jobs with `status: PROCESSING`.
+    - Executes page-context fetch via `LineChatSessionService`.
+    - On 200: marks `SUCCESS`, updates `LineChatSession(lastAuthenticatedAt, status = ACTIVE)`.
+    - On 401 / unauthenticated: marks `FAILED_AUTH`, sets `LineChatSession(status = AUTH_REQUIRED)`.
+    - On retryable error (5xx, 429, network timeout): increments `attemptCount`, schedules exponential backoff.
+    - On permanent error / max attempts: marks `FAILED` with sanitized error.
+    - Added root & backend scripts `"worker:line-chat-nickname"`.
+  - **Dedicated Lightweight Worker Module (`LineChatNicknameWorkerModule`)**:
+    - Bootstraps `LineChatNicknameWorkerModule` importing only `[PrismaModule]`, with `reflect-metadata` and explicit `@Inject` tokens.
+    - Zero dependency on `MobileAuthService`, `SMS_PROVIDER`, controllers, media storage, or push notifications.
+  - **Local Test Fixture Seed Script (`npm run seed:line-chat-test`)**:
+    - Idempotently creates/upserts `LineChatSession` (profile-a), `Store` (OPPO BigC MAHACHAI 1), `LineOfficialAccount` (`chatBotId: U092441d025f688e389d25779dd8debf4`), `Customer` (`lineUserId: Ud8d5af30ddca3ed4237e157d5d73c2f1`), and `Conversation`.
+    - Uses safe local-only placeholder `webhookKey`. Zero production secrets, tokens, or webhooks touched.
+  - **Local Conversation Web UI Customer Sales Tag Control (`CustomerSalesTagEditor`)**:
+    - Added compact Customer Sales Tag section in the conversation details drawer (`frontend/src/app/customer-sales-tag-editor.tsx` and `frontend/src/app/page.tsx`).
+    - Supports `ONLINE`, `INTERESTED`, and `PURCHASED` (with `CASH` / `INSTALLMENT` and product model selector).
+    - Calls canonical endpoint `PATCH /mobile/conversations/:id/customer-sales-info` without frontend awareness of Playwright or LINE sessions.
+  - **NestJS DI Module Wiring & Robust Enqueue Resolution**:
+    - Marked `LineChatModule` as `@Global()` and added explicit `@Inject(LineChatNicknameQueueService)` to `MobileConversationsService`.
+    - Removed `@Optional()` so missing DI dependencies fail fast at startup instead of failing silently at runtime.
+    - Added integration tests in `backend/src/line-chat/mobile-nickname-wiring.spec.ts` verifying Nest DI resolution and DB sync job creation.
+- **Verification & Test Results**:
+  - 1,492 / 1,492 backend unit & integration tests passing (`npm test` in `backend/`).
+  - 45 / 45 targeted line-chat and mobile sales activity tests passing.
+  - 476 / 476 frontend unit tests passing (`npm test` in `frontend/`).
+  - ESLint passing cleanly on all changed and new files (0 errors, 0 warnings).
+  - Next.js frontend production build passing cleanly (`npm run build` in `frontend/`).
+  - Backend build passing cleanly (`npm run build` in `backend/`).
+  - `git diff --check` clean with zero whitespace errors.
+
+## Previous task: Greeting Message Manager Preview & Activation UX Polish (2026-08-28) [COMPLETED]
 
 - **UX Scope & Behavior**:
   - **Deterministic Preview Following Store Selection**:
