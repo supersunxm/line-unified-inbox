@@ -87,3 +87,19 @@ export interface DiagnosticsResult {
   clientVersionFound: boolean;
   observedRequests: ObservedRequestSummary[];
 }
+
+export interface LineChatDiscoveredChat {
+  chatUserId: string;
+  displayName: string | null;
+  lastMessageText: string | null;
+  lastMessageAt: string | null;
+  lastMessageDirection: string | null;
+}
+
+export interface LineChatDiscoveryResult {
+  botId: string;
+  endpoint: string;
+  responseShape: "array" | "chats" | "data" | "items";
+  enumerationStatus: "COMPLETE" | "PARTIAL" | "UNVERIFIED";
+  chats: LineChatDiscoveredChat[];
+}

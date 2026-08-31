@@ -1,5 +1,15 @@
 # AI progress
 
+## Current task: Store 28375 Historical LINE OA Manager Chat ID Discovery (2026-08-31) [COMPLETED]
+
+- Added a pilot-only operator CLI `npm run line-chat:mapping:discover -- --store 28375 [--dry-run | --apply]`; dry-run is the default and the npm script does not require `.env`.
+- The authenticated browser path uses the existing observed endpoint `GET https://chat.line.biz/api/v1/bots/{botId}/chats`; the production response contract is not claimed as verified. The response parser is fail-closed and currently validated against sanitized known shapes, normalizing only chat ID, display name, last-message text/time/direction, and rejecting unknown top-level payloads or non-`Ud...` IDs.
+- Added deterministic confidence matching: display name alone is never exact; only a unique multi-signal `EXACT_CONFIDENT` row can be applied. Duplicate candidates, reused IDs, existing mappings, competing candidates, and ambiguous Store/OA topology fail closed.
+- Pagination/next-page mechanics are not verified locally, so discovery reports `UNVERIFIED` and apply is blocked until a future production dry-run proves complete enumeration. Apply writes only `Conversation.lineChatUserId` inside a transaction after the complete-enumeration and zero-conflict gates pass. It never queues nickname jobs, changes nicknames, reads `Customer.lineUserId`, or starts from AppModule.
+- Added sanitized adapter, matcher, CLI safety, idempotency, invalid-ID, conflict, existing-mapping, and no-secret-output regression coverage.
+- Verification: 41 / 41 focused mapping/session tests pass; 1,555 / 1,555 full backend tests pass; changed-file ESLint passes; backend build passes; `git diff --check` passes.
+- Production was not queried or mutated; no apply run, merge, or deployment was performed.
+
 ## Current task: Store 28375 Historical LINE Chat Nickname Backfill (2026-08-31) [COMPLETED]
 
 - Added pilot-only CLI `npm run line-chat:nickname:backfill -- --store 28375 [--dry-run | --apply]`; dry-run is the default and the command relies on directly injected environment variables without requiring a `.env` file.

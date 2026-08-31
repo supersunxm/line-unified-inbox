@@ -49,6 +49,7 @@
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
     "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",
     "line-chat:diagnose": "tsx src/line-chat/line-chat-diagnose.cli.ts",
+    "line-chat:mapping:discover": "tsx scripts/discover-line-chat-mappings.ts",
     "line-chat:set-chat-user": "tsx --env-file=.env scripts/set-conversation-line-chat-user.ts",
     "line-chat:nickname:backfill": "tsx scripts/backfill-line-chat-nicknames.ts",
     "seed:line-chat-test": "tsx --env-file=.env scripts/seed-line-chat-test.ts",

@@ -8,8 +8,10 @@ import type {
   LineChatSessionOptions,
   LineChatSessionValidation,
   DiagnosticsResult,
+  LineChatDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
+import { parseLineChatListResponse } from "./line-chat-chat-discovery";
 
 export type ContextLauncher = (
   userDataDir: string,
@@ -123,6 +125,89 @@ export class LineChatSessionService {
     const trimmedBotId = botId.trim();
     const trimmedUserId = lineUserId.trim();
     return `https://chat.line.biz/${encodeURIComponent(trimmedBotId)}/chat/${encodeURIComponent(trimmedUserId)}`;
+  }
+
+  /**
+   * Builds the read-only chat-list endpoint observed in the authenticated
+   * chat.line.biz page bootstrap flow. The response contract is not claimed
+   * to be production-verified by this method.
+   */
+  public buildChatListUrl(botId: string): string {
+    return `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId.trim())}/chats`;
+  }
+
+  /**
+   * Reads chats through the authenticated persistent browser profile. This
+   * intentionally performs one browser-context GET to the observed endpoint,
+   * with non-GET chat.line.biz requests blocked for this discovery context.
+   */
+  public async discoverChats(input: {
+    botId: string;
+    profilePath: string;
+    headless?: boolean;
+    customLauncher?: ContextLauncher;
+  }): Promise<LineChatDiscoveryResult> {
+    const botId = input.botId.trim();
+    if (!botId) throw new Error("Missing LINE OA Manager bot ID.");
+
+    const resolvedProfile = path.resolve(input.profilePath);
+    if (!fs.existsSync(resolvedProfile)) {
+      throw new Error(`Profile directory does not exist at "${resolvedProfile}". Run npm run line-chat:login first.`);
+    }
+
+    const launcher = input.customLauncher ?? this.defaultLauncher;
+    const context = await launcher(resolvedProfile, {
+      profilePath: resolvedProfile,
+      headless: input.headless ?? true,
+    });
+    const endpoint = this.buildChatListUrl(botId);
+
+    try {
+      const page = context.pages()[0] || (await context.newPage());
+      const routeableContext = context as BrowserContext & {
+        route?: BrowserContext["route"];
+        unroute?: BrowserContext["unroute"];
+      };
+      if (routeableContext.route) {
+        await routeableContext.route("https://chat.line.biz/**", async (route) => {
+          if (route.request().method() === "GET") await route.continue();
+          else await route.abort();
+        });
+      }
+
+      await page.goto("https://chat.line.biz/", {
+        waitUntil: "domcontentloaded",
+        timeout: 15000,
+      }).catch(() => {});
+
+      const fetchResult = await page.evaluate(async (targetUrl) => {
+        try {
+          const response = await fetch(targetUrl, {
+            method: "GET",
+            headers: { Accept: "application/json, text/plain, */*" },
+            credentials: "include",
+          });
+          let body: unknown = null;
+          try { body = await response.json(); } catch { /* non-JSON response */ }
+          return { status: response.status, body };
+        } catch (error: unknown) {
+          return { status: 0, body: null, error: error instanceof Error ? error.message : String(error) };
+        }
+      }, endpoint);
+      if (fetchResult.status < 200 || fetchResult.status >= 300) {
+        throw new Error(
+          fetchResult.status > 0
+            ? `LINE OA Manager chat-list request returned HTTP ${fetchResult.status}.`
+            : `LINE OA Manager chat-list GET failed: ${fetchResult.error || "network error"}.`,
+        );
+      }
+      if (fetchResult.body === null) throw new Error("LINE OA Manager chat-list response was empty or not JSON.");
+      return parseLineChatListResponse(fetchResult.body, { botId, endpoint });
+    } finally {
+      const routeableContext = context as BrowserContext & { unroute?: BrowserContext["unroute"] };
+      if (routeableContext.unroute) await routeableContext.unroute("https://chat.line.biz/**").catch(() => {});
+      await context.close();
+    }
   }
 
   /**

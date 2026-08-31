@@ -1,3 +1,13 @@
+# Store 28375 Chat ID Discovery Safety Boundary (2026-08-31)
+
+- **Observed read endpoint**: The existing authenticated `LineChatSessionService` browser/network flow observes `GET /api/v1/bots/{botId}/chats`. Discovery reuses this persistent context and does not invent keyword query parameters or a detached API client. The production response contract is not claimed to be verified yet.
+- **Response adapter boundary**: The parser is fail-closed and currently validated against sanitized known shapes (`chats`, `data`, `items`, or a direct array) and fields needed for matching: `userId`/`chatUserId`/`id`, `displayName`/`name`, and last-message text/time/direction. This is not a claim that the production response contract is verified; no production response was accessed during this change. Unsupported top-level shapes fail the run, while invalid individual IDs are skipped. No cookies, XSRF values, storage state, or credentials are read into the result.
+- **Enumeration uncertainty**: Pagination fields and next-page mechanics are not known or verified locally. Discovery therefore reports `UNVERIFIED`; apply is blocked unless a future production dry-run establishes `COMPLETE` enumeration without parser uncertainty.
+- **Pilot-only scope**: Store identifier `28375` is checked before Prisma access; exactly one Store, active Store OA, active session, and no cross-OA conversations are required.
+- **Confidence safety**: Display name is only a weak signal. A write requires one unique multi-signal candidate; duplicate names, candidate reuse, equal candidates, existing ownership, and conflicts become non-writable classifications.
+- **Write isolation**: Apply runs a transaction that updates only nullable `Conversation.lineChatUserId` rows for Store 28375, and only after all preconditions—including `COMPLETE` enumeration and zero conflicts—pass. It does not enqueue nickname jobs, update nicknames, or touch `Customer.lineUserId`; existing mappings are preserved.
+- **Network guarantee**: Discovery navigates only to the chat.line.biz root to establish the authenticated origin, blocks non-GET requests in its temporary browser context, and performs one explicit authenticated GET to the observed `/api/v1/bots/{botId}/chats` endpoint. It never calls nickname PUT/PATCH/POST APIs or opens an individual chat URL.
+
 # Store 28375 Historical Nickname Backfill Safety Boundary (2026-08-31)
 
 - **Pilot-only scope**: The CLI hard-rejects every store identifier except `28375`, requires one unambiguous Store and active Store OA, and refuses partial processing when a Store conversation belongs to a different OA.
