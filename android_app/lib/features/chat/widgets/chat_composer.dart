@@ -9,6 +9,7 @@ class ChatComposer extends StatelessWidget {
     super.key,
     required this.controller,
     this.onAttach,
+    this.onAttachVideo,
     this.onSend,
     this.enabled = true,
     this.isAttaching = false,
@@ -17,6 +18,7 @@ class ChatComposer extends StatelessWidget {
 
   final TextEditingController controller;
   final VoidCallback? onAttach;
+  final VoidCallback? onAttachVideo;
   final VoidCallback? onSend;
   final bool enabled;
   final bool isAttaching;
@@ -36,6 +38,67 @@ class ChatComposer extends StatelessWidget {
         child: _composerRow(context),
       ),
     );
+  }
+
+  Future<void> _showAttachmentMenu(BuildContext context) async {
+    final l10n = appLocalizations(context);
+    final action = await showModalBottomSheet<_AttachmentAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: Text(l10n.attachImage),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_AttachmentAction.image),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: Text(_videoLabel(sheetContext)),
+              subtitle: onAttachVideo == null ? Text(l10n.comingSoon) : null,
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_AttachmentAction.video),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+        ),
+      ),
+    );
+
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case _AttachmentAction.image:
+        onAttach?.call();
+        return;
+      case _AttachmentAction.video:
+        if (onAttachVideo != null) {
+          onAttachVideo!.call();
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(l10n.comingSoon)));
+        return;
+    }
+  }
+
+  String _videoLabel(BuildContext context) {
+    return switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'วิดีโอ',
+      'zh' => '视频',
+      _ => 'Video',
+    };
+  }
+
+  String _attachmentLabel(BuildContext context) {
+    return switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'เพิ่มไฟล์แนบ',
+      'zh' => '添加附件',
+      _ => 'Add attachment',
+    };
   }
 
   Widget _composerRow(BuildContext context) => Container(
@@ -58,15 +121,19 @@ class ChatComposer extends StatelessWidget {
               width: 44,
               height: 44,
               child: IconButton.filledTonal(
-                tooltip: appLocalizations(context).attachImage,
-                onPressed: enabled && !isAttaching ? onAttach : null,
+                tooltip: _attachmentLabel(context),
+                onPressed: enabled &&
+                        !isAttaching &&
+                        (onAttach != null || onAttachVideo != null)
+                    ? () => _showAttachmentMenu(context)
+                    : null,
                 icon: isAttaching
                     ? const SizedBox(
                         width: 19,
                         height: 19,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.add_photo_alternate_outlined),
+                    : const Icon(Icons.add_rounded),
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
@@ -111,3 +178,5 @@ class ChatComposer extends StatelessWidget {
         ),
       );
 }
+
+enum _AttachmentAction { image, video }

@@ -38,6 +38,8 @@ import { OperationalMemoryModule } from "./ai/memory/operational-memory.module";
 import { LineMessagingService } from "./line-messaging/line-messaging.service";
 import { MobileConversationsController } from "./mobile/mobile-conversations.controller";
 import { MobileConversationsService } from "./mobile/mobile-conversations.service";
+import { MobileVideoController } from "./mobile/mobile-video.controller";
+import { MobileVideoService } from "./mobile/mobile-video.service";
 import { MobileNotificationsController } from "./mobile/mobile-notifications.controller";
 import { MobileNotificationsService } from "./mobile/mobile-notifications.service";
 import { MobileConfigController } from "./mobile/mobile-config.controller";
@@ -65,7 +67,7 @@ import { MainOaController } from "./main-oa.controller";
 
 @Module({
   imports: [PrismaModule, AuthModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, LineChatModule],
-  controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
-  providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
+  controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
+  providers: [ConversationsService, LineMessagingService, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
 export class AppModule {}

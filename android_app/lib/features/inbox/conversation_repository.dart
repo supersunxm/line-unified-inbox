@@ -544,18 +544,31 @@ class ConversationRepository {
           bytes: bytes,
           idempotencyKey: idempotencyKey);
 
+  Future<ChatMessage?> sendVideo(
+          String id, Uint8List bytes, String filename, String idempotencyKey,
+          {String? mimeType}) =>
+      _sendImage('/mobile/conversations/$id/videos',
+          field: 'video',
+          filename: filename,
+          mimeType: mimeType ?? 'video/mp4',
+          bytes: bytes,
+          idempotencyKey: idempotencyKey,
+          timeout: const Duration(minutes: 2));
+
   Future<ChatMessage?> _sendImage(String path,
       {required String field,
       required String filename,
       String? mimeType,
       required Uint8List bytes,
-      required String idempotencyKey}) async {
+      required String idempotencyKey,
+      Duration? timeout}) async {
     final result = await _api.postMultipart(path,
         field: field,
         filename: filename,
         mimeType: mimeType,
         bytes: bytes,
-        idempotencyKey: idempotencyKey);
+        idempotencyKey: idempotencyKey,
+        timeout: timeout);
     final rawMessage = result['message'];
     return rawMessage is Map
         ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))

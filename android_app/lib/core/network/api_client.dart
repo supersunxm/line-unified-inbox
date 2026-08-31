@@ -141,9 +141,11 @@ class ApiClient {
     }
   }
 
-  Future<http.Response> _sendAndRead(http.BaseRequest request) async {
-    final stream = await _http.send(request).timeout(_requestTimeout);
-    return http.Response.fromStream(stream).timeout(_requestTimeout);
+  Future<http.Response> _sendAndRead(http.BaseRequest request,
+      {Duration? timeout}) async {
+    final effectiveTimeout = timeout ?? _requestTimeout;
+    final stream = await _http.send(request).timeout(effectiveTimeout);
+    return http.Response.fromStream(stream).timeout(effectiveTimeout);
   }
 
   Future<Map<String, dynamic>> get(String path,
@@ -223,7 +225,8 @@ class ApiClient {
       required Uint8List bytes,
       required String idempotencyKey,
       bool authenticated = true,
-      bool retry = true}) async {
+      bool retry = true,
+      Duration? timeout}) async {
     if (!await _isOnline()) {
       throw ApiException(0, 'OFFLINE', 'No network connection');
     }
@@ -234,10 +237,10 @@ class ApiClient {
     }
     request.fields['idempotencyKey'] = idempotencyKey;
     request.files.add(http.MultipartFile.fromBytes(field, bytes,
-        filename: filename, contentType: _imageMediaType(mimeType, filename)));
+        filename: filename, contentType: _multipartMediaType(mimeType, filename)));
     late http.Response response;
     try {
-      response = await _sendAndRead(request);
+      response = await _sendAndRead(request, timeout: timeout);
     } on TimeoutException {
       SafeLogger.networkFailure(code: 'NETWORK_TIMEOUT');
       throw ApiException(0, 'NETWORK_TIMEOUT', 'The service timed out');
@@ -275,7 +278,8 @@ class ApiClient {
               bytes: bytes,
               idempotencyKey: idempotencyKey,
               authenticated: authenticated,
-              retry: false);
+              retry: false,
+              timeout: timeout);
         }
       }
       throw error;
@@ -283,9 +287,15 @@ class ApiClient {
     return decoded;
   }
 
-  MediaType? _imageMediaType(String? mimeType, String filename) {
+  MediaType? _multipartMediaType(String? mimeType, String filename) {
     final supplied = mimeType?.toLowerCase().split(';').first.trim();
-    const supported = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'};
+    const supported = {
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+    };
     final value = supplied != null && supported.contains(supplied)
         ? supplied
         : switch (filename.toLowerCase().split('.').last) {
@@ -293,6 +303,7 @@ class ApiClient {
             'png' => 'image/png',
             'gif' => 'image/gif',
             'webp' => 'image/webp',
+            'mp4' => 'video/mp4',
             _ => null,
           };
     if (value == null) return null;
