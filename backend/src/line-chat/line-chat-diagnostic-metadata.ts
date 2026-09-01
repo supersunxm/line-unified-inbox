@@ -12,6 +12,7 @@ const MAX_SAFE_SCALAR_LENGTH = 9;
 const MAX_KEYS_PER_OBJECT = 100;
 const MAX_ARRAY_ITEMS_TO_INSPECT = 20;
 const MAX_NESTED_DEPTH = 3;
+const SAFE_CHAT_TYPE_CATEGORY_PATTERN = /^[A-Z][A-Z0-9_]{0,31}$/;
 
 export interface SanitizedDiagnosticUrl {
   url: string;
@@ -294,6 +295,121 @@ function isPresentIdentifier(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function emptyChatIdPrefixCounts(): DiagnosticChatListContractSummary["chatIdStructure"]["prefixClass"] {
+  return { Ud: 0, U_other: 0, R: 0, C: 0, other: 0 };
+}
+
+function chatIdPrefixClass(value: unknown): keyof DiagnosticChatListContractSummary["chatIdStructure"]["prefixClass"] | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (isLineChatUserId(normalized)) return "Ud";
+  if (normalized[0] === "U") return "U_other";
+  if (normalized[0] === "R") return "R";
+  if (normalized[0] === "C") return "C";
+  return "other";
+}
+
+function summarizeChatIdStructure(values: unknown[]): DiagnosticChatListContractSummary["chatIdStructure"] {
+  const prefixClass = emptyChatIdPrefixCounts();
+  const lengthBuckets = {
+    lte16: 0,
+    from17To32: 0,
+    from33To40: 0,
+    gte41: 0,
+  };
+  let totalStrings = 0;
+
+  for (const value of values) {
+    const prefix = chatIdPrefixClass(value);
+    if (!prefix || typeof value !== "string") continue;
+    totalStrings += 1;
+    prefixClass[prefix] += 1;
+    const length = value.trim().length;
+    if (length <= 16) lengthBuckets.lte16 += 1;
+    else if (length <= 32) lengthBuckets.from17To32 += 1;
+    else if (length <= 40) lengthBuckets.from33To40 += 1;
+    else lengthBuckets.gte41 += 1;
+  }
+
+  return { totalStrings, prefixClass, lengthBuckets };
+}
+
+function safeChatTypeCategory(
+  value: unknown,
+  aliases: Map<string, string>,
+): { category: string; present: boolean } {
+  if (typeof value !== "string") {
+    return value === null || value === undefined
+      ? { category: "MISSING", present: false }
+      : { category: "NON_STRING", present: true };
+  }
+
+  const normalized = value.trim();
+  if (!normalized) return { category: "MISSING", present: false };
+  if (SAFE_CHAT_TYPE_CATEGORY_PATTERN.test(normalized)) {
+    return { category: normalized, present: true };
+  }
+
+  let alias = aliases.get(normalized);
+  if (!alias) {
+    let sequence = aliases.size;
+    let suffix = "";
+    do {
+      suffix = String.fromCharCode(65 + (sequence % 26)) + suffix;
+      sequence = Math.floor(sequence / 26) - 1;
+    } while (sequence >= 0);
+    alias = `TYPE_${suffix}`;
+    aliases.set(normalized, alias);
+  }
+  return { category: alias, present: true };
+}
+
+function summarizeChatTypeCorrelation(
+  list: unknown[],
+  chatIdValues: unknown[],
+): DiagnosticChatListContractSummary["chatTypeCorrelation"] {
+  const aliases = new Map<string, string>();
+  const matrix = new Map<string, DiagnosticChatListContractSummary["chatTypeCorrelation"]["matrix"][number]>();
+  const chatTypePresence = { present: 0, missing: 0 };
+  const friend = { trueCount: 0, falseCount: 0, otherOrMissing: 0 };
+  const profile = { present: 0, missing: 0 };
+
+  list.forEach((entry, index) => {
+    const record = entry !== null && typeof entry === "object" && !Array.isArray(entry)
+      ? entry as Record<string, unknown>
+      : undefined;
+    const chatType = safeChatTypeCategory(record?.chatType, aliases);
+    if (chatType.present) chatTypePresence.present += 1;
+    else chatTypePresence.missing += 1;
+
+    let row = matrix.get(chatType.category);
+    if (!row) {
+      row = { category: chatType.category, count: 0, idShape: emptyChatIdPrefixCounts() };
+      matrix.set(chatType.category, row);
+    }
+    row.count += 1;
+    const prefix = chatIdPrefixClass(chatIdValues[index]);
+    if (prefix) row.idShape[prefix] += 1;
+
+    if (record?.friend === true) friend.trueCount += 1;
+    else if (record?.friend === false) friend.falseCount += 1;
+    else friend.otherOrMissing += 1;
+
+    if (record && Object.prototype.hasOwnProperty.call(record, "profile") && record.profile !== null && record.profile !== undefined) {
+      profile.present += 1;
+    } else {
+      profile.missing += 1;
+    }
+  });
+
+  return {
+    matrix: [...matrix.values()],
+    chatTypePresence,
+    friend,
+    profile,
+  };
+}
+
 function classifyNextString(value: string): DiagnosticChatListContractSummary["pagination"]["nextStringClassification"] {
   const trimmed = value.trim();
   if (trimmed.length === 0) return "EMPTY";
@@ -377,7 +493,10 @@ function summarizeNext(value: unknown, present: boolean): DiagnosticChatListCont
  * Summarizes only the verified v2 chat-list identifier and pagination shape.
  * No identifier, pagination, customer, or message values are retained.
  */
-export function summarizeChatListContractJson(value: unknown): DiagnosticChatListContractSummary | undefined {
+export function summarizeChatListContractJson(
+  value: unknown,
+  knownChatId?: string,
+): DiagnosticChatListContractSummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   const body = value as Record<string, unknown>;
   if (!Array.isArray(body.list)) return undefined;
@@ -407,6 +526,18 @@ export function summarizeChatListContractJson(value: unknown): DiagnosticChatLis
     else presenceCounts.neither += 1;
   }
 
+  const normalizedKnownChatId = knownChatId?.trim();
+  const knownChatIdMatch = normalizedKnownChatId
+    ? {
+      chatId: chatIdValues.some((candidate) => typeof candidate === "string" && candidate.trim() === normalizedKnownChatId)
+        ? "FOUND" as const
+        : "NOT_FOUND" as const,
+      userId: userIdValues.some((candidate) => typeof candidate === "string" && candidate.trim() === normalizedKnownChatId)
+        ? "FOUND" as const
+        : "NOT_FOUND" as const,
+    }
+    : undefined;
+
   return {
     identifierShape: {
       listCount: list.length,
@@ -414,6 +545,9 @@ export function summarizeChatListContractJson(value: unknown): DiagnosticChatLis
       userId: summarizeIdentifierField(userIdValues),
       presenceCounts,
     },
+    chatIdStructure: summarizeChatIdStructure(chatIdValues),
+    chatTypeCorrelation: summarizeChatTypeCorrelation(list, chatIdValues),
     pagination: summarizeNext(body.next, Object.prototype.hasOwnProperty.call(body, "next")),
+    ...(knownChatIdMatch ? { knownChatIdMatch } : {}),
   };
 }

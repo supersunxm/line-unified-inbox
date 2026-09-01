@@ -277,3 +277,74 @@ test("chat-list contract classifies URL, empty, null, and object next metadata s
   assert.deepEqual(objectNext?.pagination.nextObjectKeys, ["cursor", "hasMore"]);
   assert.doesNotMatch(JSON.stringify(objectNext), /secret/);
 });
+
+test("chat-list contract classifies chatId prefixes and length buckets structurally", () => {
+  const identifiers = [
+    "Ud123456",
+    "U1234567890123456",
+    `R${"r".repeat(32)}`,
+    `C${"c".repeat(40)}`,
+    "x-other",
+  ];
+  const summary = summarizeChatListContractJson({
+    list: identifiers.map((chatId) => ({ chatId, chatType: "USER" })),
+    next: null,
+  });
+
+  assert.deepEqual(summary?.chatIdStructure, {
+    totalStrings: 5,
+    prefixClass: { Ud: 1, U_other: 1, R: 1, C: 1, other: 1 },
+    lengthBuckets: { lte16: 2, from17To32: 1, from33To40: 1, gte41: 1 },
+  });
+  for (const identifier of identifiers) {
+    assert.ok(!JSON.stringify(summary).includes(identifier));
+  }
+});
+
+test("chat-list contract correlates safe chatType categories with ID shapes only", () => {
+  const summary = summarizeChatListContractJson({
+    list: [
+      { chatId: "Ud123456", chatType: "USER", friend: true, profile: { name: "Private profile" } },
+      { chatId: "U1234567890", chatType: "USER", friend: false },
+      { chatId: "R1234567890", chatType: "Customer-derived category", friend: "unknown" },
+      { chatId: "C1234567890", chatType: "Another private category", profile: { id: "private-profile-id" } },
+      { chatId: "x-other", chatType: null },
+    ],
+    next: null,
+  });
+
+  assert.deepEqual(summary?.chatTypeCorrelation, {
+    matrix: [
+      { category: "USER", count: 2, idShape: { Ud: 1, U_other: 1, R: 0, C: 0, other: 0 } },
+      { category: "TYPE_A", count: 1, idShape: { Ud: 0, U_other: 0, R: 1, C: 0, other: 0 } },
+      { category: "TYPE_B", count: 1, idShape: { Ud: 0, U_other: 0, R: 0, C: 1, other: 0 } },
+      { category: "MISSING", count: 1, idShape: { Ud: 0, U_other: 0, R: 0, C: 0, other: 1 } },
+    ],
+    chatTypePresence: { present: 4, missing: 1 },
+    friend: { trueCount: 1, falseCount: 1, otherOrMissing: 3 },
+    profile: { present: 2, missing: 3 },
+  });
+  assert.doesNotMatch(
+    JSON.stringify(summary),
+    /Customer-derived category|Another private category|Private profile|private-profile-id|Ud123456|U1234567890|R1234567890|C1234567890|x-other/,
+  );
+});
+
+test("known chat ID matching returns flags only and never retains the supplied value", () => {
+  const knownChatId = "Ud-known-private-123456";
+  const found = summarizeChatListContractJson({
+    list: [
+      { chatId: knownChatId, userId: "Ud-other-private-123456" },
+    ],
+    next: null,
+  }, knownChatId);
+  assert.deepEqual(found?.knownChatIdMatch, { chatId: "FOUND", userId: "NOT_FOUND" });
+  assert.ok(!JSON.stringify(found).includes(knownChatId));
+
+  const notFound = summarizeChatListContractJson({
+    list: [{ chatId: "Ud-other-private-123456", userId: null }],
+    next: null,
+  }, knownChatId);
+  assert.deepEqual(notFound?.knownChatIdMatch, { chatId: "NOT_FOUND", userId: "NOT_FOUND" });
+  assert.ok(!JSON.stringify(notFound).includes(knownChatId));
+});

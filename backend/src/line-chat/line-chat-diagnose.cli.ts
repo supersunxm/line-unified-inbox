@@ -5,6 +5,7 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
   let profilePath = "";
   let botId: string | undefined;
   let lineUserId: string | undefined;
+  let knownChatId: string | undefined;
   let headless = false;
   let surface: DiagnosticsCliArgs["surface"] = "bot";
 
@@ -22,6 +23,10 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
       lineUserId = argv[++i];
     } else if (arg.startsWith("--user=")) {
       lineUserId = arg.slice("--user=".length);
+    } else if (arg === "--known-chat-id") {
+      knownChatId = argv[++i];
+    } else if (arg.startsWith("--known-chat-id=")) {
+      knownChatId = arg.slice("--known-chat-id=".length);
     } else if (arg === "--surface") {
       const value = argv[++i];
       if (value !== "bot" && value !== "chat-list") {
@@ -48,6 +53,7 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
     profilePath: profilePath.trim(),
     botId: botId?.trim(),
     lineUserId: lineUserId?.trim(),
+    knownChatId: knownChatId?.trim(),
     headless,
     surface,
   };
@@ -64,6 +70,7 @@ Options:
   --profile, -p <path>     Path to persistent Chromium profile directory (required)
   --bot, -b <botId>        LINE OA Bot ID (optional)
   --user, -u <userId>      LINE User ID (optional)
+  --known-chat-id <value>  Compare a known ID in memory; the value is never printed
   --surface <surface>      Diagnostic surface: bot (default) or chat-list
   --headless               Run Chromium headlessly (default: false / visible window)
   --no-headless            Run Chromium with visible browser window
@@ -107,6 +114,44 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
       lines.push(`   presence USER_ID_ONLY: ${shape.presenceCounts.userIdOnly}`);
       lines.push(`   presence NEITHER: ${shape.presenceCounts.neither}`);
 
+      if (result.chatIdStructure) {
+        const structure = result.chatIdStructure;
+        lines.push(" Chat ID Structure:");
+        lines.push(`   totalStrings: ${structure.totalStrings}`);
+        lines.push("   prefixClass:");
+        lines.push(`     Ud: ${structure.prefixClass.Ud}`);
+        lines.push(`     U_other: ${structure.prefixClass.U_other}`);
+        lines.push(`     R: ${structure.prefixClass.R}`);
+        lines.push(`     C: ${structure.prefixClass.C}`);
+        lines.push(`     other: ${structure.prefixClass.other}`);
+        lines.push("   lengthBuckets:");
+        lines.push(`     <=16: ${structure.lengthBuckets.lte16}`);
+        lines.push(`     17-32: ${structure.lengthBuckets.from17To32}`);
+        lines.push(`     33-40: ${structure.lengthBuckets.from33To40}`);
+        lines.push(`     41+: ${structure.lengthBuckets.gte41}`);
+      }
+
+      if (result.chatTypeCorrelation) {
+        const correlation = result.chatTypeCorrelation;
+        lines.push(" Chat Type / ID Shape:");
+        for (const row of correlation.matrix) {
+          lines.push(`   ${row.category}:`);
+          lines.push(`     count: ${row.count}`);
+          lines.push(`     Ud: ${row.idShape.Ud}`);
+          lines.push(`     U_other: ${row.idShape.U_other}`);
+          lines.push(`     R: ${row.idShape.R}`);
+          lines.push(`     C: ${row.idShape.C}`);
+          lines.push(`     other: ${row.idShape.other}`);
+        }
+        lines.push(`   chatType present: ${correlation.chatTypePresence.present}`);
+        lines.push(`   chatType missing: ${correlation.chatTypePresence.missing}`);
+        lines.push(`   friend true: ${correlation.friend.trueCount}`);
+        lines.push(`   friend false: ${correlation.friend.falseCount}`);
+        lines.push(`   friend other/missing: ${correlation.friend.otherOrMissing}`);
+        lines.push(`   profile present: ${correlation.profile.present}`);
+        lines.push(`   profile missing: ${correlation.profile.missing}`);
+      }
+
       const pagination = result.chatListPagination;
       lines.push(" Pagination:");
       lines.push(`   nextPresent: ${pagination.nextPresent}`);
@@ -120,9 +165,24 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
       lines.push(" Chat Identifier Shape: NOT AVAILABLE");
       lines.push(" Pagination: NOT AVAILABLE");
     }
+    if (result.knownChatIdMatch) {
+      lines.push(" Known Chat ID Match:");
+      lines.push(`   chatId: ${result.knownChatIdMatch.chatId}`);
+      lines.push(`   userId: ${result.knownChatIdMatch.userId}`);
+    }
+    lines.push(` Scroll Candidates Tried: ${result.scrollCandidatesAttempted}`);
     lines.push(` Second Page Request: ${result.secondPageRequestObserved ? "OBSERVED" : "NOT OBSERVED"}`);
     lines.push(` Second Page Query Names: ${result.secondPageQueryNames.length > 0 ? `[${result.secondPageQueryNames.join(", ")}]` : "[]"}`);
     lines.push(` New Query Names vs First Page: ${result.secondPageNewQueryNames.length > 0 ? `[${result.secondPageNewQueryNames.join(", ")}]` : "[]"}`);
+    if (result.secondPageQueryMetadata) {
+      lines.push(" Second Page Query Metadata:");
+      for (const [name, value] of Object.entries(result.secondPageQueryMetadata.safeScalars)) {
+        lines.push(`   ${name}=${value}`);
+      }
+      for (const redacted of result.secondPageQueryMetadata.redactedParameters) {
+        lines.push(`   ${redacted}`);
+      }
+    }
   }
   lines.push(` Session State  : ${result.sessionStatePresent ? "PRESENT" : "NONE"}`);
   lines.push(" API Auth Probe:");
@@ -235,6 +295,7 @@ export async function runDiagnosticsCli(
       profilePath: args.profilePath,
       botId: args.botId,
       lineUserId: args.lineUserId,
+      knownChatId: args.knownChatId,
       headless: args.headless,
       surface: args.surface,
     });

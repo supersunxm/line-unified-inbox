@@ -1,3 +1,11 @@
+## Chat ID shape and geometry-scroll diagnostics (2026-09-01)
+
+- Production evidence supplied by the operator shows `chatId` is the only populated identifier field on the first page, but 23 / 25 values do not match the current `Ud...` validator. This is insufficient evidence to change validity or mapping semantics, so diagnostics classify prefixes/lengths only and the validator remains untouched.
+- `chatType` correlation is aggregate-only. Short uppercase enum-like categories may be reported; all other non-empty string categories receive stable `TYPE_A`, `TYPE_B`, and subsequent aliases. Friend booleans and profile presence are counted without returning values.
+- `--known-chat-id` is optional, remains in memory, is never sent over the network, and produces only per-field `FOUND`/`NOT_FOUND` flags. It is excluded from URLs, logs, errors, and reports.
+- Page-2 probing may manipulate `scrollTop` on at most three visible, scrollable, geometry-ranked containers. Candidate selection reads only bounds, dimensions, overflow, and visibility; it performs no text extraction, click, customer navigation, or manufactured chat-list request.
+- Second-page query reporting exposes names and numeric `limit` only. Every other parameter is represented as `PRESENT_REDACTED`; mapping/discovery, nickname, DB, queue, and apply behavior remain unchanged.
+
 ## Chat pagination contract diagnostics (2026-09-01)
 
 - Based on supplied production evidence, the current chat-list request is verified as the natural `GET /api/v2/bots/{botId}/chats`, with an initial query-name set of `folderType`, `tagIds`, `autoTagIds`, `limit`, and `prioritizePinnedChat`, and a `{list, next}` response envelope. Codex does not access production as part of this change.

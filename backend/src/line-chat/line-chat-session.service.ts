@@ -9,6 +9,7 @@ import type {
   LineChatSessionValidation,
   DiagnosticsResult,
   DiagnosticApiAuthProbe,
+  DiagnosticQueryMetadata,
   LineChatDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
@@ -49,6 +50,80 @@ function isObservedChatListResponse(response: Response, botId: string): boolean 
   } catch {
     return false;
   }
+}
+
+const MAX_CHAT_LIST_SCROLL_CANDIDATES = 3;
+
+function sanitizeSecondPageQueryMetadata(query: DiagnosticQueryMetadata): DiagnosticQueryMetadata {
+  const safeScalars: Record<string, string> = {};
+  const redactedParameters: string[] = [];
+  for (const name of query.parameterNames) {
+    if (name.toLowerCase() === "limit" && query.safeScalars[name] !== undefined) {
+      safeScalars[name] = query.safeScalars[name];
+    } else {
+      redactedParameters.push(`${name}=PRESENT_REDACTED`);
+    }
+  }
+  return {
+    parameterNames: [...query.parameterNames],
+    safeScalars,
+    redactedParameters,
+  };
+}
+
+async function scrollChatListGeometryCandidate(page: Page, candidateRank: number): Promise<boolean> {
+  return page.evaluate((rank) => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element, domIndex) => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return {
+          element,
+          domIndex,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          overflowY: style.overflowY,
+          visible: style.display !== "none" && style.visibility !== "hidden" && Number.parseFloat(style.opacity) > 0,
+          scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight,
+        };
+      })
+      .filter((candidate) => (
+        candidate.scrollHeight > candidate.clientHeight + 1
+        && candidate.visible
+        && candidate.clientHeight > 0
+        && candidate.width > 0
+        && candidate.height > 0
+        && candidate.left < viewportWidth
+        && candidate.left + candidate.width > 0
+        && candidate.top < viewportHeight
+        && candidate.top + candidate.height > 0
+      ))
+      .sort((left, right) => {
+        const overflowRank = (value: string): number => /^(?:auto|scroll|overlay)$/.test(value) ? 0 : 1;
+        const leftRegionRank = (value: typeof left): number => value.left < viewportWidth * 0.6 ? 0 : 1;
+        const widthRank = (value: typeof left): number => value.width <= viewportWidth * 0.7 ? 0 : 1;
+        return (
+          leftRegionRank(left) - leftRegionRank(right)
+          || overflowRank(left.overflowY) - overflowRank(right.overflowY)
+          || widthRank(left) - widthRank(right)
+          || left.left - right.left
+          || right.height - left.height
+          || left.domIndex - right.domIndex
+        );
+      });
+
+    const candidate = candidates[rank];
+    if (!candidate) return false;
+    const maximumScrollTop = Math.max(0, candidate.scrollHeight - candidate.clientHeight);
+    candidate.element.scrollTop = maximumScrollTop;
+    candidate.element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return true;
+  }, candidateRank);
 }
 
 export interface LineChatCookie {
@@ -726,6 +801,7 @@ export class LineChatSessionService {
     profilePath: string;
     botId?: string;
     lineUserId?: string;
+    knownChatId?: string;
     headless?: boolean;
     surface?: "bot" | "chat-list";
     /** Test-only override; production diagnostics use the bounded default. */
@@ -758,12 +834,17 @@ export class LineChatSessionService {
     let responseSummaryTail: Promise<void> = Promise.resolve();
     let chatListResponseObserved = false;
     let chatListContractSummary: DiagnosticsResult["chatListIdentifierShape"];
+    let chatIdStructureSummary: DiagnosticsResult["chatIdStructure"];
+    let chatTypeCorrelationSummary: DiagnosticsResult["chatTypeCorrelation"];
     let chatListPaginationSummary: DiagnosticsResult["chatListPagination"];
+    let knownChatIdMatchSummary: DiagnosticsResult["knownChatIdMatch"];
     let chatListFirstRequestCaptured = false;
     let chatListFirstPageQueryNames: string[] = [];
     let chatListFirstResponseCompleted = false;
     let secondPageRequestObserved = false;
     let secondPageQueryNames: string[] = [];
+    let secondPageQueryMetadata: DiagnosticQueryMetadata | undefined;
+    let scrollCandidatesAttempted = 0;
     let resolveSecondPageRequest: () => void = () => {};
     let resolveChatListResponse: () => void = () => {};
     const chatListResponseWait = surface === "chat-list"
@@ -781,6 +862,7 @@ export class LineChatSessionService {
     let restApiRequestsObserved = 0;
     let streamingSseObserved = false;
     const botIdForDiagnostic = options.botId?.trim() ?? "";
+    const knownChatIdForDiagnostic = options.knownChatId?.trim();
 
     try {
       const page = context.pages()[0] || (await context.newPage());
@@ -825,6 +907,7 @@ export class LineChatSessionService {
             } else if (chatListFirstResponseCompleted && !secondPageRequestObserved) {
               secondPageRequestObserved = true;
               secondPageQueryNames = sanitized.query.parameterNames;
+              secondPageQueryMetadata = sanitizeSecondPageQueryMetadata(sanitized.query);
               resolveSecondPageRequest();
             }
           }
@@ -871,10 +954,13 @@ export class LineChatSessionService {
                 && isObservedChatListResponse(response, botIdForDiagnostic)
                 && responseWasJson
                 ? (() => {
-                  const contract = summarizeChatListContractJson(responseBody);
+                  const contract = summarizeChatListContractJson(responseBody, knownChatIdForDiagnostic);
                   if (contract) {
                     chatListContractSummary = contract.identifierShape;
+                    chatIdStructureSummary = contract.chatIdStructure;
+                    chatTypeCorrelationSummary = contract.chatTypeCorrelation;
                     chatListPaginationSummary = contract.pagination;
+                    knownChatIdMatchSummary = contract.knownChatIdMatch;
                   }
                   return contract ? { chatListContract: contract } : {};
                 })()
@@ -948,23 +1034,34 @@ export class LineChatSessionService {
         ]);
         if (timer) clearTimeout(timer);
 
-        // A real UI scroll is intentionally the only second-page trigger. If
-        // Playwright cannot provide a mouse for the current page, leave the
-        // second-page result as NOT OBSERVED rather than guessing a request.
-        if (chatListResponseObserved && page.mouse && typeof page.mouse.wheel === "function") {
-          try {
-            await page.mouse.wheel(0, 1400);
-            const secondPageTimeoutMs = options.chatListSecondPageTimeoutMs ?? 5000;
+        // Scroll at most three geometry-ranked containers. The page evaluation
+        // reads dimensions and overflow state only; it never reads content or
+        // clicks/navigates a customer item.
+        if (chatListResponseObserved) {
+          const totalSecondPageTimeoutMs = options.chatListSecondPageTimeoutMs ?? 6000;
+          const perCandidateTimeoutMs = Math.max(
+            1,
+            Math.floor(totalSecondPageTimeoutMs / MAX_CHAT_LIST_SCROLL_CANDIDATES),
+          );
+          for (let rank = 0; rank < MAX_CHAT_LIST_SCROLL_CANDIDATES; rank += 1) {
+            if (secondPageRequestObserved) break;
+            let candidateScrolled = false;
+            try {
+              candidateScrolled = await scrollChatListGeometryCandidate(page, rank);
+            } catch {
+              break;
+            }
+            if (!candidateScrolled) break;
+            scrollCandidatesAttempted += 1;
+
             let secondPageTimer: ReturnType<typeof setTimeout> | undefined;
             await Promise.race([
               secondPageRequestWait,
               new Promise<void>((resolve) => {
-                secondPageTimer = setTimeout(resolve, secondPageTimeoutMs);
+                secondPageTimer = setTimeout(resolve, perCandidateTimeoutMs);
               }),
             ]);
             if (secondPageTimer) clearTimeout(secondPageTimer);
-          } catch {
-            // A failed/non-interactive scroll is safely reported as NOT OBSERVED.
           }
         }
       }
@@ -1027,10 +1124,15 @@ export class LineChatSessionService {
         observedResponses,
         chatListResponseObserved,
         chatListIdentifierShape: chatListContractSummary,
+        chatIdStructure: chatIdStructureSummary,
+        chatTypeCorrelation: chatTypeCorrelationSummary,
         chatListPagination: chatListPaginationSummary,
+        knownChatIdMatch: knownChatIdMatchSummary,
         chatListFirstPageQueryNames,
+        scrollCandidatesAttempted,
         secondPageRequestObserved,
         secondPageQueryNames,
+        secondPageQueryMetadata,
         secondPageNewQueryNames: secondPageQueryNames.filter(
           (name) => !chatListFirstPageQueryNames.includes(name),
         ),

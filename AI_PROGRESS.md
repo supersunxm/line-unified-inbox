@@ -1,5 +1,14 @@
 # AI progress
 
+## Current task: Chat ID shape and scroll diagnostics (2026-09-01) [COMPLETED]
+
+- Supplied production results show all 25 first-page records populate `chatId`, none populate `userId`, only 2 match the existing `Ud...` validator, and `next` is an opaque string of 129+ characters. The validator and all mapping/discovery behavior remain unchanged pending stronger evidence.
+- Diagnostics now classify `chatId` prefixes and lengths as aggregate counts only, correlate those structural classes with safely exposed enum-like `chatType` categories or `TYPE_*` aliases, and report aggregate friend/profile presence without retaining values.
+- An optional `--known-chat-id` is compared in memory against response fields and returns only `FOUND`/`NOT_FOUND`; the supplied value is never emitted or used for a request.
+- The unsuccessful generic wheel is replaced with at most three geometry-ranked scroll-container attempts using visibility, bounds, overflow, and scroll dimensions only. No text/content is read, no customer is clicked, and any natural second-page GET is observed with query values redacted except numeric `limit`.
+- Verification: focused LINE Chat tests 54 / 54; full backend tests 1,595 / 1,595; changed-file ESLint, backend build, and `git diff --check` pass.
+- No production access, DB/mapping/apply operation, nickname mutation, queue call, merge, or deployment was performed.
+
 ## Current task: Chat pagination contract diagnostics (2026-09-01) [COMPLETED]
 
 - Supplied production evidence verifies the current natural chat-list request as `GET /api/v2/bots/{botId}/chats` with the observed initial query-name set and a `{list, next}` response envelope. The prior `/{botId}/chat` route remains disproven; this work does not access production.

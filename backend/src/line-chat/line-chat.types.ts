@@ -59,6 +59,7 @@ export interface DiagnosticsCliArgs {
   profilePath: string;
   botId?: string;
   lineUserId?: string;
+  knownChatId?: string;
   headless?: boolean;
   surface: "bot" | "chat-list";
 }
@@ -115,6 +116,53 @@ export interface DiagnosticChatIdentifierShape {
   };
 }
 
+export interface DiagnosticChatIdPrefixCounts {
+  Ud: number;
+  U_other: number;
+  R: number;
+  C: number;
+  other: number;
+}
+
+export interface DiagnosticChatIdStructure {
+  totalStrings: number;
+  prefixClass: DiagnosticChatIdPrefixCounts;
+  lengthBuckets: {
+    lte16: number;
+    from17To32: number;
+    from33To40: number;
+    gte41: number;
+  };
+}
+
+export interface DiagnosticChatTypeMatrixEntry {
+  category: string;
+  count: number;
+  idShape: DiagnosticChatIdPrefixCounts;
+}
+
+export interface DiagnosticChatTypeCorrelation {
+  matrix: DiagnosticChatTypeMatrixEntry[];
+  chatTypePresence: {
+    present: number;
+    missing: number;
+  };
+  friend: {
+    trueCount: number;
+    falseCount: number;
+    otherOrMissing: number;
+  };
+  profile: {
+    present: number;
+    missing: number;
+  };
+}
+
+export interface DiagnosticKnownChatIdMatch {
+  chatId: "FOUND" | "NOT_FOUND";
+  userId: "FOUND" | "NOT_FOUND";
+}
+
 export type DiagnosticNextType = "string" | "object" | "null" | "array" | "other";
 export type DiagnosticNextStringClassification = "URL" | "OPAQUE_TOKEN" | "EMPTY" | "NOT_APPLICABLE";
 export type DiagnosticNextLengthBucket = "0" | "1-32" | "33-128" | "129+" | "NOT_APPLICABLE";
@@ -129,7 +177,10 @@ export interface DiagnosticPaginationSummary {
 
 export interface DiagnosticChatListContractSummary {
   identifierShape: DiagnosticChatIdentifierShape;
+  chatIdStructure: DiagnosticChatIdStructure;
+  chatTypeCorrelation: DiagnosticChatTypeCorrelation;
   pagination: DiagnosticPaginationSummary;
+  knownChatIdMatch?: DiagnosticKnownChatIdMatch;
 }
 
 export interface ObservedResponseSummary {
@@ -186,11 +237,16 @@ export interface DiagnosticsResult {
   observedResponses: ObservedResponseSummary[];
   chatListResponseObserved: boolean;
   chatListIdentifierShape?: DiagnosticChatIdentifierShape;
+  chatIdStructure?: DiagnosticChatIdStructure;
+  chatTypeCorrelation?: DiagnosticChatTypeCorrelation;
   chatListPagination?: DiagnosticPaginationSummary;
+  knownChatIdMatch?: DiagnosticKnownChatIdMatch;
   chatListFirstPageQueryNames: string[];
+  scrollCandidatesAttempted: number;
   secondPageRequestObserved: boolean;
   secondPageQueryNames: string[];
   secondPageNewQueryNames: string[];
+  secondPageQueryMetadata?: DiagnosticQueryMetadata;
   restApiRequestsObserved: number;
   streamingSseObserved: boolean;
 }
