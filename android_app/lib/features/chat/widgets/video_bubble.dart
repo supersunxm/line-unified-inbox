@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../core/localization/localization.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/media_save_service.dart';
 import '../../../core/theme/app_colors.dart';
 
 class VideoBubble extends StatefulWidget {
@@ -114,6 +115,37 @@ class _VideoBubbleState extends State<VideoBubble> {
     }
   }
 
+  Future<void> _openFullscreen() async {
+    final controller = _controller;
+    final file = _file;
+    if (controller == null || file == null || !controller.value.isInitialized) {
+      return;
+    }
+    final wasPlaying = controller.value.isPlaying;
+    final initialPosition = controller.value.position;
+    await controller.pause();
+    if (!mounted) return;
+    final position = await Navigator.of(context).push<Duration>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _FullscreenVideoPage(
+          file: file,
+          messageId: widget.messageId,
+          mimeType: widget.media?.mimeType,
+          initialPosition: initialPosition,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (position != null) {
+      await controller.seekTo(position);
+    }
+    if (wasPlaying) {
+      await controller.play();
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = widget.media;
@@ -218,12 +250,18 @@ class _VideoBubbleState extends State<VideoBubble> {
             ),
           ),
         ),
+        Positioned.fill(
+          bottom: 44,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _openFullscreen,
+          ),
+        ),
         Align(
           alignment: Alignment.bottomCenter,
           child: ColoredBox(
             color: const Color(0x99000000),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
                   onPressed: _togglePlayback,
@@ -244,7 +282,12 @@ class _VideoBubbleState extends State<VideoBubble> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                IconButton(
+                  onPressed: _openFullscreen,
+                  tooltip: _fullscreenLabel(context),
+                  color: Colors.white,
+                  icon: const Icon(Icons.fullscreen_rounded),
+                ),
               ],
             ),
           ),
@@ -260,6 +303,258 @@ class _VideoBubbleState extends State<VideoBubble> {
         _ => 'mp4',
       };
 }
+
+class _FullscreenVideoPage extends StatefulWidget {
+  const _FullscreenVideoPage({
+    required this.file,
+    required this.messageId,
+    required this.mimeType,
+    required this.initialPosition,
+  });
+
+  final File file;
+  final String messageId;
+  final String? mimeType;
+  final Duration initialPosition;
+
+  @override
+  State<_FullscreenVideoPage> createState() => _FullscreenVideoPageState();
+}
+
+class _FullscreenVideoPageState extends State<_FullscreenVideoPage> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initialized;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(widget.file);
+    _initialized = _controller.initialize().then((_) async {
+      if (widget.initialPosition > Duration.zero) {
+        await _controller.seekTo(widget.initialPosition);
+      }
+      await _controller.play();
+      if (mounted) setState(() {});
+    });
+    _controller.addListener(_controllerChanged);
+  }
+
+  void _controllerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_controllerChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveVideo() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final bytes = await widget.file.readAsBytes();
+      await const MediaSaveService().saveVideo(
+        bytes,
+        fileName: _fileName(widget.messageId, widget.mimeType),
+        mimeType: _normalizedMimeType(widget.mimeType),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_videoSavedLabel(context))),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_videoSaveFailedLabel(context))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _close() async {
+    await _controller.pause();
+    if (!mounted) return;
+    Navigator.of(context).pop(_controller.value.position);
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_controller.value.isPlaying) {
+      await _controller.pause();
+    } else {
+      await _controller.play();
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.black,
+        body: FutureBuilder<void>(
+          future: _initialized,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            }
+            if (snapshot.hasError || !_controller.value.isInitialized) {
+              return Center(
+                child: Text(
+                  appLocalizations(context).videoUnavailable,
+                  style: const TextStyle(color: Colors.white),
+                ),
+              );
+            }
+            final value = _controller.value;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: value.aspectRatio > 0 ? value.aspectRatio : 16 / 9,
+                    child: VideoPlayer(_controller),
+                  ),
+                ),
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _togglePlayback,
+                  ),
+                ),
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            onPressed: _close,
+                            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                            color: Colors.white,
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: _saving ? null : _saveVideo,
+                            tooltip: appLocalizations(context).save,
+                            color: Colors.white,
+                            icon: _saving
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.download_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (!value.isPlaying)
+                  Center(
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: const BoxDecoration(
+                          color: Color(0x99000000),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  ),
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      color: const Color(0x99000000),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            onPressed: _togglePlayback,
+                            color: Colors.white,
+                            icon: Icon(
+                              value.isPlaying ? Icons.pause : Icons.play_arrow,
+                            ),
+                          ),
+                          Expanded(
+                            child: VideoProgressIndicator(
+                              _controller,
+                              allowScrubbing: true,
+                              colors: const VideoProgressColors(
+                                playedColor: Colors.white,
+                                bufferedColor: Colors.white54,
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+  static String _normalizedMimeType(String? mimeType) =>
+      switch (mimeType?.toLowerCase()) {
+        'video/quicktime' => 'video/quicktime',
+        'video/3gpp' => 'video/3gpp',
+        'video/webm' => 'video/webm',
+        _ => 'video/mp4',
+      };
+
+  static String _fileName(String messageId, String? mimeType) {
+    final safeId = messageId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final extension = switch (mimeType?.toLowerCase()) {
+      'video/quicktime' => 'mov',
+      'video/3gpp' => '3gp',
+      'video/webm' => 'webm',
+      _ => 'mp4',
+    };
+    return 'oppo-line-video-$safeId.$extension';
+  }
+}
+
+String _fullscreenLabel(BuildContext context) =>
+    switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'เต็มหน้าจอ',
+      'zh' => '全屏播放',
+      _ => 'Full screen',
+    };
+
+String _videoSavedLabel(BuildContext context) =>
+    switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'บันทึกวิดีโอลงเครื่องแล้ว',
+      'zh' => '视频已保存到设备',
+      _ => 'Video saved to device',
+    };
+
+String _videoSaveFailedLabel(BuildContext context) =>
+    switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'ไม่สามารถบันทึกวิดีโอได้',
+      'zh' => '无法保存视频',
+      _ => 'Unable to save video',
+    };
 
 class _VideoState extends StatelessWidget {
   const _VideoState({required this.icon, required this.label});
