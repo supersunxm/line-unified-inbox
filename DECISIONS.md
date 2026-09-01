@@ -1,3 +1,9 @@
+# Diagnostic API authentication boundary (2026-09-01)
+
+- Cookie presence is session-state evidence only, not proof of LINE API authentication. Diagnostics issue exactly one explicit read-only `GET /api/v1/me` through the persistent BrowserContext request context and classify `200` as `YES`, `401/403` as `NO`, and transport/other statuses as `UNKNOWN`.
+- Navigation diagnostics retain only sanitized final origin/path, safe generic title, status, redirect/workspace flags, and login/auth-destination detection. Query values, cookies, XSRF, OAuth state/code/token values, response bodies, and account/customer data are never emitted.
+- Existing page observation remains passive; no diagnostic code manufactures nickname, customer-chat, queue, or non-GET requests. Mapping and nickname semantics remain unchanged.
+
 # Chat-list contract diagnostic boundary (2026-08-31)
 
 - Production evidence showed no bootstrap request to the previously guessed `/api/v1/bots/{botId}/chats` path and a direct request returned 404. Mapping discovery is not changed by this work. The diagnostic therefore adds an explicit `chat-list` surface that navigates only to the observed workspace route `https://chat.line.biz/{botId}/chat`; the default `bot` surface retains its prior target behavior.

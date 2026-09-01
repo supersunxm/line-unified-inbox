@@ -1,5 +1,13 @@
 # AI progress
 
+## Current task: Diagnostic API authentication probe (2026-09-01) [COMPLETED]
+
+- Added a single explicit read-only `GET /api/v1/me` probe through the authenticated persistent BrowserContext request context with redirects disabled. Probe output contains only transport result, HTTP status, content type, JSON-ness, and top-level key names.
+- Diagnostics now distinguish persistent session state from confirmed API authentication and report sanitized final navigation URL/origin/path, safe document title, main-document status, workspace-path recognition, redirects, and login/auth destinations.
+- OAuth/code/state/token-like query values and all probe/body/account/customer values remain redacted or omitted. Mapping, nickname, queue, and production behavior are unchanged.
+- Focused service/CLI regression coverage for 401/200/transport failure, redirects, workspace recognition, safe output, and GET-only probing passes (27 / 27); full backend tests pass (1,583 / 1,583); changed-file ESLint, backend build, and `git diff --check` pass.
+- No production access, apply run, mapping or nickname mutation, queue call, merge, or deployment was performed.
+
 ## Current task: Chat-list network contract diagnostics (2026-08-31) [COMPLETED]
 
 - Production evidence reported that the previously guessed `/api/v1/bots/{botId}/chats` path returned 404 and was not observed during authenticated bootstrap. Mapping discovery is intentionally unchanged; this task adds a read-only diagnostic surface for observing the real `/chat` workspace contract.

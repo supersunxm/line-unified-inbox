@@ -20,6 +20,15 @@ function createMockPageContext(options: {
   domMetaTags?: string[];
   localStorageKeys?: string[];
   sessionStorageKeys?: string[];
+  finalPageUrl?: string;
+  documentTitle?: string;
+  navigationStatus?: number;
+  navigationError?: string;
+  apiProbeStatus?: number;
+  apiProbeContentType?: string;
+  apiProbeBody?: unknown;
+  apiProbeJsonError?: boolean;
+  apiProbeTransportError?: string;
   simulatedBackgroundRequests?: Array<{
     url: string;
     headers: Record<string, string>;
@@ -36,10 +45,13 @@ function createMockPageContext(options: {
   closed: () => boolean;
   evaluateCalls: MockEvaluateCall[];
   visitedUrls: string[];
+  requestCalls: Array<{ method: string; url: string }>;
 } {
   let isClosed = false;
   const evaluateCalls: MockEvaluateCall[] = [];
   const visitedUrls: string[] = [];
+  const requestCalls: Array<{ method: string; url: string }> = [];
+  let currentPageUrl = options.finalPageUrl ?? "https://chat.line.biz/";
 
   const requestListeners: Array<(req: { url: () => string; method: () => string; headers: () => Record<string, string> }) => void> = [];
   const responseListeners: Array<(response: Response) => void> = [];
@@ -57,6 +69,7 @@ function createMockPageContext(options: {
     },
     goto: async (url: string) => {
       visitedUrls.push(url);
+      currentPageUrl = options.finalPageUrl ?? url;
       if (options.simulatedBackgroundRequests) {
         for (const simReq of options.simulatedBackgroundRequests) {
           for (const listener of requestListeners) {
@@ -88,8 +101,13 @@ function createMockPageContext(options: {
           for (const listener of responseListeners) listener(response);
         }
       }
-      return null;
+      if (options.navigationError) throw new Error(options.navigationError);
+      return options.navigationStatus === undefined
+        ? null
+        : ({ status: () => options.navigationStatus } as unknown as Response);
     },
+    url: () => currentPageUrl,
+    title: async () => options.documentTitle ?? "LINE Official Account Manager",
     waitForTimeout: async () => {},
     evaluate: async (fn: unknown, args?: unknown) => {
       if (typeof fn === "function") {
@@ -138,6 +156,21 @@ function createMockPageContext(options: {
     cookies: async () => options.cookies ?? [],
     pages: () => [mockPage as Page],
     newPage: async () => mockPage as Page,
+    request: {
+      get: async (url: string) => {
+        requestCalls.push({ method: "GET", url });
+        if (options.apiProbeTransportError) throw new Error(options.apiProbeTransportError);
+        const status = options.apiProbeStatus ?? 200;
+        return {
+          status: () => status,
+          headers: () => ({ "content-type": options.apiProbeContentType ?? "application/json" }),
+          json: async () => {
+            if (options.apiProbeJsonError) throw new Error("invalid json");
+            return options.apiProbeBody ?? { ok: true };
+          },
+        };
+      },
+    },
     close: async () => {
       isClosed = true;
     },
@@ -148,6 +181,7 @@ function createMockPageContext(options: {
     closed: () => isClosed,
     evaluateCalls,
     visitedUrls,
+    requestCalls,
   };
 }
 
@@ -467,6 +501,17 @@ void test("runDiagnostics safely inspects cookies, storage, and background reque
     });
 
     assert.equal(diag.authenticated, true);
+    assert.equal(diag.sessionStatePresent, true);
+    assert.equal(diag.apiAuthenticated, "YES");
+    assert.deepEqual(diag.apiAuthProbe, {
+      endpoint: "/api/v1/me",
+      transport: "SUCCEEDED",
+      status: 200,
+      contentType: "application/json",
+      responseWasJson: true,
+      topLevelKeyNames: ["ok"],
+      authenticated: "YES",
+    });
     assert.deepEqual(mock.visitedUrls, ["https://chat.line.biz/Ubot123/chat/Uuser456"]);
     assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123/chat/<customer-id-redacted>");
     assert.equal(diag.surface, "bot");
@@ -480,6 +525,7 @@ void test("runDiagnostics safely inspects cookies, storage, and background reque
     assert.equal(diag.observedRequests.length, 1);
     assert.equal(diag.observedRequests[0].hasXsrfHeader, true);
     assert.equal(diag.observedRequests[0].hasClientVersionHeader, true);
+    assert.deepEqual(mock.requestCalls, [{ method: "GET", url: "https://chat.line.biz/api/v1/me" }]);
     assert.equal(mock.closed(), true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -546,8 +592,138 @@ void test("runDiagnostics chat-list surface targets only the bot chat workspace"
     assert.deepEqual(diag.observedResponses[0]?.schema.paginationKeyNames, ["nextCursor"]);
     assert.equal(diag.restApiRequestsObserved, 1);
     assert.equal(diag.streamingSseObserved, true);
+    assert.equal(diag.apiAuthenticated, "YES");
     assert.doesNotMatch(JSON.stringify(diag), /secret-xsrf|secret-cookie|secret-cursor|Customer name|Private text|Ud-customer-id/);
     assert.equal(mock.closed(), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics distinguishes cookie state from an API-authenticated 401", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      cookies: [{ name: "SES", value: "cookie-secret" }],
+      apiProbeStatus: 401,
+      apiProbeBody: { accountName: "private account" },
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123" });
+
+    assert.equal(diag.sessionStatePresent, true);
+    assert.equal(diag.apiAuthenticated, "NO");
+    assert.equal(diag.authenticated, false);
+    assert.equal(diag.apiAuthProbe.status, 401);
+    assert.deepEqual(mock.requestCalls, [{ method: "GET", url: "https://chat.line.biz/api/v1/me" }]);
+    assert.doesNotMatch(JSON.stringify(diag), /cookie-secret|private account/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics reports API authentication YES only for a successful /me probe", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      cookies: [{ name: "SES", value: "cookie-secret" }],
+      apiProbeStatus: 200,
+      apiProbeBody: { accountId: "account-secret", displayName: "private account" },
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123" });
+
+    assert.equal(diag.sessionStatePresent, true);
+    assert.equal(diag.apiAuthenticated, "YES");
+    assert.equal(diag.authenticated, true);
+    assert.deepEqual(diag.apiAuthProbe.topLevelKeyNames, ["accountId", "displayName"]);
+    assert.doesNotMatch(JSON.stringify(diag), /account-secret|private account/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics reports UNKNOWN when the API auth probe transport fails", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      cookies: [{ name: "SES", value: "cookie-secret" }],
+      apiProbeTransportError: "network unavailable",
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123" });
+
+    assert.equal(diag.sessionStatePresent, true);
+    assert.equal(diag.apiAuthenticated, "UNKNOWN");
+    assert.equal(diag.authenticated, false);
+    assert.equal(diag.apiAuthProbe.transport, "FAILED");
+    assert.equal(diag.apiAuthProbe.status, undefined);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics keeps redirected API probe responses UNKNOWN", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      apiProbeStatus: 302,
+      apiProbeBody: { location: "https://accounts.line.biz/login?code=secret" },
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123" });
+
+    assert.equal(diag.apiAuthProbe.status, 302);
+    assert.equal(diag.apiAuthenticated, "UNKNOWN");
+    assert.doesNotMatch(JSON.stringify(diag), /accounts\.line\.biz|secret/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics sanitizes redirects and recognizes an authentication destination", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      finalPageUrl: "https://accounts.line.biz/login?code=oauth-secret&state=state-secret",
+      documentTitle: "Sign in to LINE",
+      navigationStatus: 200,
+      apiProbeStatus: 401,
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123", surface: "chat-list" });
+
+    assert.equal(diag.navigationSucceeded, true);
+    assert.equal(diag.finalPageUrl, "https://accounts.line.biz/login");
+    assert.equal(diag.finalOrigin, "https://accounts.line.biz");
+    assert.equal(diag.finalPath, "/login");
+    assert.equal(diag.finalOriginIsChatLine, false);
+    assert.equal(diag.finalPathMatchesWorkspace, false);
+    assert.equal(diag.authDestinationDetected, true);
+    assert.equal(diag.redirected, true);
+    assert.equal(diag.documentTitle, "Sign in to LINE");
+    assert.equal(diag.mainDocumentStatus, 200);
+    assert.doesNotMatch(JSON.stringify(diag), /oauth-secret|state-secret/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics recognizes the requested chat-line workspace after navigation", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      finalPageUrl: "https://chat.line.biz/Ubot123/chat",
+      navigationStatus: 200,
+      apiProbeStatus: 200,
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123", surface: "chat-list" });
+
+    assert.equal(diag.finalOriginIsChatLine, true);
+    assert.equal(diag.finalPathMatchesWorkspace, true);
+    assert.equal(diag.authDestinationDetected, false);
+    assert.equal(diag.redirected, false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

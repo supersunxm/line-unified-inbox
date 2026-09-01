@@ -8,14 +8,19 @@ import type {
   LineChatSessionOptions,
   LineChatSessionValidation,
   DiagnosticsResult,
+  DiagnosticApiAuthProbe,
   LineChatDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
 import {
   diagnosticResponseParseFailure,
+  isChatLineOrigin,
+  isLoginLikeNavigationUrl,
+  isRequestedWorkspacePath,
   isRelevantDiagnosticUrl,
   sanitizeDiagnosticUrl,
+  sanitizeNavigationMetadata,
   summarizeDiagnosticJson,
 } from "./line-chat-diagnostic-metadata";
 
@@ -640,6 +645,58 @@ export class LineChatSessionService {
   }
 
   /**
+   * Performs the single explicit read-only API authentication probe used by
+   * diagnostics. The response body is inspected only for JSON-ness and
+   * top-level key names; values are never retained or logged.
+   */
+  public async probeApiAuthentication(context: BrowserContext): Promise<DiagnosticApiAuthProbe> {
+    const endpoint = "https://chat.line.biz/api/v1/me";
+    const safeProbe: DiagnosticApiAuthProbe = {
+      endpoint: "/api/v1/me",
+      transport: "FAILED",
+      responseWasJson: false,
+      topLevelKeyNames: [],
+      authenticated: "UNKNOWN",
+    };
+
+    try {
+      const requestContext = context.request;
+      if (!requestContext || typeof requestContext.get !== "function") return safeProbe;
+
+      const response = await requestContext.get(endpoint, {
+        headers: { Accept: "application/json, text/plain, */*" },
+        timeout: 15000,
+        maxRedirects: 0,
+      });
+      const status = response.status();
+      const contentType = response.headers()["content-type"] || "(absent)";
+      let responseWasJson = false;
+      let topLevelKeyNames: string[] = [];
+      try {
+        const body: unknown = await response.json();
+        responseWasJson = true;
+        if (body && typeof body === "object" && !Array.isArray(body)) {
+          topLevelKeyNames = Object.keys(body).slice(0, 100).sort();
+        }
+      } catch {
+        // A non-JSON or malformed body is represented by responseWasJson=false.
+      }
+
+      return {
+        endpoint: "/api/v1/me",
+        transport: "SUCCEEDED",
+        status,
+        contentType,
+        responseWasJson,
+        topLevelKeyNames,
+        authenticated: status === 200 ? "YES" : status === 401 || status === 403 ? "NO" : "UNKNOWN",
+      };
+    } catch {
+      return safeProbe;
+    }
+  }
+
+  /**
    * Runs diagnostic inspection on a persistent profile without logging secret values.
    */
   public async runDiagnostics(options: {
@@ -764,9 +821,10 @@ export class LineChatSessionService {
       const safeTargetUrl = sanitizeDiagnosticUrl(targetUrl).url;
       let navigationSucceeded = true;
       let navigationError: string | undefined;
+      let navigationResponse: Response | null = null;
 
       try {
-        await page.goto(targetUrl, {
+        navigationResponse = await page.goto(targetUrl, {
           waitUntil: "domcontentloaded",
           timeout: 15000,
         });
@@ -774,6 +832,24 @@ export class LineChatSessionService {
         navigationSucceeded = false;
         navigationError = "navigation failed";
       }
+
+      let finalRawUrl = targetUrl;
+      try {
+        const pageUrl = page.url();
+        if (pageUrl) finalRawUrl = pageUrl;
+      } catch {
+        // Fall back to the requested URL when the page URL is unavailable.
+      }
+
+      let rawDocumentTitle: string | null = null;
+      try {
+        rawDocumentTitle = await page.title();
+      } catch {
+        // Title is optional diagnostic metadata.
+      }
+
+      const navigationMetadata = sanitizeNavigationMetadata(finalRawUrl, rawDocumentTitle);
+      const apiAuthProbe = await this.probeApiAuthentication(context);
 
       await page.waitForTimeout(1500).catch(() => {});
       await Promise.allSettled(responseSummaries);
@@ -799,9 +875,21 @@ export class LineChatSessionService {
         profilePath: resolvedProfile,
         surface,
         targetUrl: safeTargetUrl,
+        finalPageUrl: navigationMetadata.url,
+        finalOrigin: navigationMetadata.origin,
+        finalPath: navigationMetadata.pathname,
+        documentTitle: navigationMetadata.documentTitle,
+        ...(navigationResponse ? { mainDocumentStatus: navigationResponse.status() } : {}),
+        finalOriginIsChatLine: isChatLineOrigin(finalRawUrl),
+        finalPathMatchesWorkspace: isRequestedWorkspacePath(finalRawUrl, targetUrl),
+        authDestinationDetected: isLoginLikeNavigationUrl(finalRawUrl),
+        redirected: navigationMetadata.url !== safeTargetUrl,
         navigationSucceeded,
         ...(navigationError ? { navigationError } : {}),
-        authenticated: sessionValidation.authenticated,
+        authenticated: apiAuthProbe.authenticated === "YES",
+        sessionStatePresent: sessionValidation.authenticated,
+        apiAuthenticated: apiAuthProbe.authenticated,
+        apiAuthProbe,
         cookiesCount: sessionValidation.cookiesCount,
         cookieNames: sessionValidation.cookieNames,
         localStorageKeys: sessionValidation.localStorageKeys,

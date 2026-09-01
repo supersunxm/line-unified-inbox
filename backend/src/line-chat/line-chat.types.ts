@@ -105,13 +105,38 @@ export interface ObservedResponseSummary {
   timestamp: string;
 }
 
+export interface DiagnosticApiAuthProbe {
+  endpoint: string;
+  transport: "SUCCEEDED" | "FAILED";
+  status?: number;
+  contentType?: string;
+  responseWasJson: boolean;
+  topLevelKeyNames: string[];
+  authenticated: "YES" | "NO" | "UNKNOWN";
+}
+
 export interface DiagnosticsResult {
   profilePath: string;
   surface: "bot" | "chat-list";
+  /** Requested navigation target, sanitized to origin/path only. */
   targetUrl: string;
+  /** Final page URL after navigation redirects, sanitized to origin/path only. */
+  finalPageUrl: string;
+  finalOrigin: string;
+  finalPath: string;
+  documentTitle: string | null;
+  mainDocumentStatus?: number;
+  finalOriginIsChatLine: boolean;
+  finalPathMatchesWorkspace: boolean;
+  authDestinationDetected: boolean;
+  redirected: boolean;
   navigationSucceeded: boolean;
   navigationError?: string;
+  /** Deprecated compatibility alias; true only when the API probe confirms auth. */
   authenticated: boolean;
+  sessionStatePresent: boolean;
+  apiAuthenticated: "YES" | "NO" | "UNKNOWN";
+  apiAuthProbe: DiagnosticApiAuthProbe;
   cookiesCount: number;
   cookieNames: string[];
   localStorageKeys: string[];
