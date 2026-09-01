@@ -516,9 +516,9 @@ void test("runDiagnostics safely inspects cookies, storage, and background reque
     assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123/chat/<customer-id-redacted>");
     assert.equal(diag.surface, "bot");
     assert.equal(diag.cookiesCount, 2);
-    assert.deepEqual(diag.cookieNames, ["SES", "_ga"]);
-    assert.deepEqual(diag.localStorageKeys, ["theme", "user_prefs"]);
-    assert.deepEqual(diag.sessionStorageKeys, ["tab_id"]);
+    assert.equal(diag.cookieStatePresent, true);
+    assert.equal(diag.localStoragePresent, true);
+    assert.equal(diag.sessionStoragePresent, true);
     assert.equal(diag.xsrfTokenFound, true);
     assert.equal(diag.tokenSource, "network");
     assert.equal(diag.clientVersionFound, true);

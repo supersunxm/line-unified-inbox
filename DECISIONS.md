@@ -2,6 +2,7 @@
 
 - Cookie presence is session-state evidence only, not proof of LINE API authentication. Diagnostics issue exactly one explicit read-only `GET /api/v1/me` through the persistent BrowserContext request context and classify `200` as `YES`, `401/403` as `NO`, and transport/other statuses as `UNKNOWN`.
 - Navigation diagnostics retain only sanitized final origin/path, safe generic title, status, redirect/workspace flags, and login/auth-destination detection. Query values, cookies, XSRF, OAuth state/code/token values, response bodies, and account/customer data are never emitted.
+- Cookie names and local/session storage key names are intentionally excluded from the diagnostic result and CLI; only cookie count and aggregate presence states are exposed.
 - Existing page observation remains passive; no diagnostic code manufactures nickname, customer-chat, queue, or non-GET requests. Mapping and nickname semantics remain unchanged.
 
 # Chat-list contract diagnostic boundary (2026-08-31)

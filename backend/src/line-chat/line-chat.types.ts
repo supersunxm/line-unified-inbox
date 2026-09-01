@@ -135,12 +135,12 @@ export interface DiagnosticsResult {
   /** Deprecated compatibility alias; true only when the API probe confirms auth. */
   authenticated: boolean;
   sessionStatePresent: boolean;
+  cookieStatePresent: boolean;
+  localStoragePresent: boolean;
+  sessionStoragePresent: boolean;
   apiAuthenticated: "YES" | "NO" | "UNKNOWN";
   apiAuthProbe: DiagnosticApiAuthProbe;
   cookiesCount: number;
-  cookieNames: string[];
-  localStorageKeys: string[];
-  sessionStorageKeys: string[];
   metaTags: string[];
   xsrfTokenFound: boolean;
   tokenSource: "cookie" | "meta" | "storage" | "network" | "window" | "none";

@@ -94,7 +94,7 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   lines.push(` Auth Destination: ${result.authDestinationDetected ? "YES" : "NO"}`);
   lines.push(` Navigation     : ${result.navigationSucceeded ? "SUCCEEDED" : "FAILED"}`);
   if (result.navigationError) lines.push(` Navigation Err : ${result.navigationError}`);
-  lines.push(` Session State  : ${result.sessionStatePresent ? "PRESENT" : "NOT PRESENT"}`);
+  lines.push(` Session State  : ${result.sessionStatePresent ? "PRESENT" : "NONE"}`);
   lines.push(" API Auth Probe:");
   lines.push(`   Endpoint     : ${result.apiAuthProbe.endpoint}`);
   lines.push(`   Transport    : ${result.apiAuthProbe.transport}`);
@@ -105,9 +105,9 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   lines.push(`   Authenticated: ${result.apiAuthenticated}`);
   lines.push(` Authenticated  : ${result.apiAuthenticated}`);
   lines.push(` Total Cookies  : ${result.cookiesCount}`);
-  lines.push(` Cookie Names   : ${result.cookieNames.length > 0 ? result.cookieNames.join(", ") : "(none)"}`);
-  lines.push(` LocalStorage   : ${result.localStorageKeys.length > 0 ? result.localStorageKeys.join(", ") : "(none)"}`);
-  lines.push(` SessionStorage : ${result.sessionStorageKeys.length > 0 ? result.sessionStorageKeys.join(", ") : "(none)"}`);
+  lines.push(` Cookie State   : ${result.cookieStatePresent ? "PRESENT" : "NONE"}`);
+  lines.push(` LocalStorage   : ${result.localStoragePresent ? "PRESENT" : "NONE"}`);
+  lines.push(` SessionStorage : ${result.sessionStoragePresent ? "PRESENT" : "NONE"}`);
   lines.push(` Meta Tags      : ${result.metaTags.length > 0 ? result.metaTags.join(", ") : "(none)"}`);
   lines.push("---------------------------------------------------------------");
   lines.push(` XSRF Token     : ${result.xsrfTokenFound ? "FOUND" : "NOT DETECTED"}`);

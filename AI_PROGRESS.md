@@ -4,6 +4,7 @@
 
 - Added a single explicit read-only `GET /api/v1/me` probe through the authenticated persistent BrowserContext request context with redirects disabled. Probe output contains only transport result, HTTP status, content type, JSON-ness, and top-level key names.
 - Diagnostics now distinguish persistent session state from confirmed API authentication and report sanitized final navigation URL/origin/path, safe document title, main-document status, workspace-path recognition, redirects, and login/auth destinations.
+- Diagnostic output exposes only aggregate cookie/storage metadata (`Total Cookies`, presence states); cookie names and browser-storage key names are not returned or printed.
 - OAuth/code/state/token-like query values and all probe/body/account/customer values remain redacted or omitted. Mapping, nickname, queue, and production behavior are unchanged.
 - Focused service/CLI regression coverage for 401/200/transport failure, redirects, workspace recognition, safe output, and GET-only probing passes (27 / 27); full backend tests pass (1,583 / 1,583); changed-file ESLint, backend build, and `git diff --check` pass.
 - No production access, apply run, mapping or nickname mutation, queue call, merge, or deployment was performed.

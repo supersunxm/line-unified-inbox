@@ -167,6 +167,9 @@ void test("formatDiagnosticsResult produces structured report without printing s
     navigationSucceeded: true,
     authenticated: true,
     sessionStatePresent: true,
+    cookieStatePresent: true,
+    localStoragePresent: true,
+    sessionStoragePresent: true,
     apiAuthenticated: "YES",
     apiAuthProbe: {
       endpoint: "/api/v1/me",
@@ -178,9 +181,6 @@ void test("formatDiagnosticsResult produces structured report without printing s
       authenticated: "YES",
     },
     cookiesCount: 3,
-    cookieNames: ["SES", "_ga", "XSRF-TOKEN"],
-    localStorageKeys: ["theme", "userSettings"],
-    sessionStorageKeys: ["activeChat"],
     metaTags: ["viewport", "csrf-token"],
     xsrfTokenFound: true,
     tokenSource: "network",
@@ -235,8 +235,11 @@ void test("formatDiagnosticsResult produces structured report without printing s
   assert.ok(report.includes("Status       : 200"));
   assert.ok(report.includes("Authenticated: YES"));
   assert.ok(report.includes("Authenticated  : YES"));
-  assert.ok(report.includes("Cookie Names   : SES, _ga, XSRF-TOKEN"));
-  assert.ok(report.includes("LocalStorage   : theme, userSettings"));
+  assert.ok(report.includes("Total Cookies  : 3"));
+  assert.ok(report.includes("Cookie State   : PRESENT"));
+  assert.ok(report.includes("LocalStorage   : PRESENT"));
+  assert.ok(report.includes("SessionStorage : PRESENT"));
+  assert.doesNotMatch(report, /SES|_ga|XSRF-TOKEN|theme|userSettings|activeChat|Cookie Names/);
   assert.ok(report.includes("XSRF Token     : FOUND"));
   assert.ok(report.includes("Token Source   : NETWORK"));
   assert.ok(report.includes("Client Version : FOUND"));
