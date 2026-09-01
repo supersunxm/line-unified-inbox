@@ -225,6 +225,59 @@ void test("enqueueSalesSync skips safely when Conversation.lineChatUserId is mis
   assert.equal(createdJobs.length, 0);
 });
 
+void test("unmapped pilot ONLINE and PURCHASED conversations enqueue nullable-ID jobs", async (t) => {
+  for (const sales of [
+    { status: CustomerSalesStatus.ONLINE, paymentMethod: null, products: [], expected: "Online" },
+    {
+      status: CustomerSalesStatus.PURCHASED,
+      paymentMethod: PaymentMethodType.INSTALLMENT,
+      products: [{ customProductName: null, productModel: { name: "OPPO Find X9" } }],
+      expected: "Find X9 ผ่อน 09/26",
+    },
+  ]) {
+    await t.test(sales.status, async () => {
+      let created: Record<string, unknown> | undefined;
+      const prisma = {
+        conversation: { findUnique: async () => ({
+          id: `pilot-${sales.status}`,
+          storeId: "pilot-store",
+          lineOfficialAccountId: "pilot-oa",
+          lineChatUserId: null,
+          store: { code: "28375", storeMaster: null },
+          lineOfficialAccount: {
+            id: "pilot-oa",
+            name: "OPPO BS RBS Chonburi",
+            storeId: "pilot-store",
+            accountType: "STORE",
+            isActive: true,
+            archivedAt: null,
+            chatBotId: "U729972869a565723cb7fcf7ea28bbc43",
+            lineChatSessionId: "pilot-session",
+            lineChatNicknameSyncEnabled: true,
+            lineChatSession: { id: "pilot-session", sessionKey: "profile-b", status: "ACTIVE" },
+          },
+          customerSalesStatus: sales.status,
+          paymentMethod: sales.paymentMethod,
+          salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
+          salesProducts: sales.products,
+        }) },
+        lineChatNicknameSyncJob: {
+          updateMany: async () => ({ count: 0 }),
+          create: async (args: { data: Record<string, unknown> }) => {
+            created = args.data;
+            return { id: "pilot-job", ...args.data };
+          },
+        },
+      };
+      const result = await new LineChatNicknameQueueService(prisma as never).enqueueSalesSync(`pilot-${sales.status}`);
+      assert.equal(result.enqueued, true);
+      assert.equal(result.nickname, sales.expected);
+      assert.equal(created?.lineChatUserId, null);
+      assert.equal(created?.lineUserId, null);
+    });
+  }
+});
+
 void test("enqueueSalesSync creates no job for incomplete purchase or unsupported payment", async () => {
   const createdJobs: Array<Record<string, unknown>> = [];
 

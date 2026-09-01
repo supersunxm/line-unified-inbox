@@ -12,6 +12,7 @@ import type {
   DiagnosticApiAuthProbe,
   DiagnosticQueryMetadata,
   LineChatDiscoveryResult,
+  LineChatRecentDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
 import { parseLineChatListPage } from "./line-chat-chat-discovery";
@@ -216,6 +217,52 @@ export class LineChatSessionService {
     headless?: boolean;
     customLauncher?: ContextLauncher;
   }): Promise<LineChatDiscoveryResult> {
+    return this.discoverChatPages(input, 200, 10_000, false);
+  }
+
+  /**
+   * Reads only the bounded, most-recent chat window used by the realtime
+   * nickname resolver. This deliberately does not claim full enumeration.
+   */
+  public async discoverRecentChats(input: {
+    botId: string;
+    profilePath: string;
+    headless?: boolean;
+    customLauncher?: ContextLauncher;
+    maxPages?: number;
+    maxChats?: number;
+  }): Promise<LineChatRecentDiscoveryResult> {
+    const maxPages = Math.min(5, Math.max(1, input.maxPages ?? 5));
+    const maxChats = Math.min(125, Math.max(1, input.maxChats ?? 125));
+    const result = await this.discoverChatPages(input, maxPages, maxChats, true);
+    const failure = result.pagesFetched === 0
+      || Boolean(result.enumerationError)
+      || result.invalidUserRecords > 0
+      || result.conflictingDuplicates > 0;
+    if (failure) {
+      const authFailure = /HTTP (401|403)/u.test(result.enumerationError ?? "");
+      return {
+        status: "FAILED",
+        chats: [],
+        pagesFetched: result.pagesFetched,
+        totalRawRecords: result.totalRawRecords,
+        failureReason: authFailure ? "SESSION_AUTH" : "TRANSPORT",
+      };
+    }
+    return {
+      status: "READY",
+      chats: result.chats,
+      pagesFetched: result.pagesFetched,
+      totalRawRecords: result.totalRawRecords,
+    };
+  }
+
+  private async discoverChatPages(input: {
+    botId: string;
+    profilePath: string;
+    headless?: boolean;
+    customLauncher?: ContextLauncher;
+  }, maxPages: number, maxChats: number, boundedWindow: boolean): Promise<LineChatDiscoveryResult> {
     const botId = input.botId.trim();
     if (!botId) throw new Error("Missing LINE OA Manager bot ID.");
 
@@ -301,7 +348,7 @@ export class LineChatSessionService {
       mergePage(firstPage);
       let next = firstPage.next;
       const seenNext = new Set<string>();
-      let enumerationError: string | undefined = byId.size > 10000
+      let enumerationError: string | undefined = byId.size > maxChats
         ? "Chat-list discovered-chat limit reached."
         : undefined;
       while (next !== null) {
@@ -310,12 +357,12 @@ export class LineChatSessionService {
           break;
         }
         seenNext.add(next);
-        if (pages.length >= 200) {
-          enumerationError = "Chat-list page limit reached.";
+        if (pages.length >= maxPages) {
+          if (!boundedWindow) enumerationError = "Chat-list page limit reached.";
           break;
         }
-        if (byId.size >= 10000) {
-          enumerationError = "Chat-list discovered-chat limit reached.";
+        if (byId.size >= maxChats) {
+          if (!boundedWindow) enumerationError = "Chat-list discovered-chat limit reached.";
           break;
         }
         const nextUrl = new URL(firstRequest.url);
@@ -348,7 +395,7 @@ export class LineChatSessionService {
         }
         pages.push(parsedPage);
         mergePage(parsedPage);
-        if (byId.size > 10000) {
+        if (byId.size > maxChats) {
           enumerationError = "Chat-list discovered-chat limit reached.";
           break;
         }

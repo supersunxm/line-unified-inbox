@@ -2,6 +2,12 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus } from "@prisma/client";
 import { buildLineChatNickname } from "../line-chat-nickname";
+import {
+  LINE_CHAT_PILOT_BOT_ID,
+  LINE_CHAT_PILOT_OA_NAME,
+  LINE_CHAT_PILOT_SESSION_KEY,
+  LINE_CHAT_PILOT_STORE_CODE,
+} from "./line-chat-pilot.constants";
 
 export interface EnqueueNicknameSyncResult {
   enqueued: boolean;
@@ -35,15 +41,26 @@ export class LineChatNicknameQueueService {
         where: { id: conversationId },
         select: {
           id: true,
+          storeId: true,
           lineOfficialAccountId: true,
           lineChatUserId: true,
           customerSalesStatus: true,
           paymentMethod: true,
           salesRecordedAt: true,
+          store: {
+            select: {
+              code: true,
+              storeMaster: { select: { externalStoreId: true } },
+            },
+          },
           lineOfficialAccount: {
             select: {
               id: true,
               name: true,
+              storeId: true,
+              accountType: true,
+              isActive: true,
+              archivedAt: true,
               chatBotId: true,
               lineChatSessionId: true,
               lineChatNicknameSyncEnabled: true,
@@ -93,21 +110,9 @@ export class LineChatNicknameQueueService {
 
       if (oa.lineChatSession?.status === "DISABLED") {
         this.logger.warn(
-          `Skipping nickname sync for conversation ${conversationId}: LineChatSession ${oa.lineChatSession.sessionKey} is DISABLED`
+          `Skipping nickname sync for conversation ${conversationId}: linked LineChatSession is DISABLED`
         );
         return { enqueued: false, reason: "SESSION_DISABLED" };
-      }
-
-      const lineChatUserId = conversation.lineChatUserId?.trim();
-      if (!lineChatUserId) {
-        this.logger.log(
-          JSON.stringify({
-            event: "line_chat_nickname_job_skipped",
-            conversationId: conversation.id,
-            reason: "missing_line_chat_user_id",
-          })
-        );
-        return { enqueued: false, reason: "MISSING_LINE_CHAT_USER_ID" };
       }
 
       const nickname = buildLineChatNickname({
@@ -143,6 +148,30 @@ export class LineChatNicknameQueueService {
           })
         );
         return { enqueued: false, reason: "NO_NICKNAME_NEEDED" };
+      }
+
+      const lineChatUserId = conversation.lineChatUserId?.trim() || null;
+      const storeCode = conversation.store?.code?.trim()
+        || conversation.store?.storeMaster?.externalStoreId?.trim()
+        || "";
+      const pilotResolverEligible = storeCode === LINE_CHAT_PILOT_STORE_CODE
+        && conversation.storeId !== null
+        && oa.storeId === conversation.storeId
+        && oa.accountType === "STORE"
+        && oa.isActive
+        && oa.archivedAt === null
+        && oa.name.trim() === LINE_CHAT_PILOT_OA_NAME
+        && chatBotId === LINE_CHAT_PILOT_BOT_ID
+        && oa.lineChatSession?.sessionKey.trim() === LINE_CHAT_PILOT_SESSION_KEY;
+      if (!lineChatUserId && !pilotResolverEligible) {
+        this.logger.log(
+          JSON.stringify({
+            event: "line_chat_nickname_job_skipped",
+            conversationId: conversation.id,
+            reason: "missing_line_chat_user_id",
+          })
+        );
+        return { enqueued: false, reason: "MISSING_LINE_CHAT_USER_ID" };
       }
 
       if (options.skipIfMatchingJobExists) {
@@ -205,7 +234,7 @@ export class LineChatNicknameQueueService {
           jobId: job.id,
           conversationId: conversation.id,
           lineOfficialAccountId: conversation.lineOfficialAccountId,
-          lineChatUserId,
+          chatMappingPresent: Boolean(lineChatUserId),
           nickname,
         })
       );

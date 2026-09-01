@@ -4,10 +4,12 @@ import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/cl
 import { LineChatSessionService } from "./line-chat-session.service";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
+import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 
 const WORKER_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const LEASE_DURATION_MS = 60_000; // 1 minute per job execution lease
+const RESOLUTION_LEASE_DURATION_MS = 3 * 60_000;
 const STUCK_JOB_TIMEOUT_MS = 5 * 60_000; // 5 minutes max stuck duration
 
 @Injectable()
@@ -25,7 +27,8 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService
+    @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
+    @Inject(LineChatRecentResolverService) private readonly recentResolver?: LineChatRecentResolverService,
   ) {}
 
   onModuleInit() {
@@ -63,6 +66,15 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       workerId: this.workerId,
       profileRoot: this.profileRoot,
     };
+  }
+
+  private safeExecutionError(status: number | undefined): string {
+    if (status === 401) return "LINE_NICKNAME_AUTH";
+    if (status === 403) return "LINE_NICKNAME_FORBIDDEN";
+    if (status === 404) return "LINE_NICKNAME_TARGET_NOT_FOUND";
+    if (status === 429) return "LINE_NICKNAME_RATE_LIMITED";
+    if (status !== undefined && status >= 500) return "LINE_NICKNAME_SERVER_ERROR";
+    return "LINE_NICKNAME_TRANSPORT_OR_EXECUTION";
   }
 
   /**
@@ -314,7 +326,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
     // Session health check circuit breaker
     if (session.status === LineChatSessionStatus.AUTH_REQUIRED) {
-      const errorMsg = `LineChatSession ${session.sessionKey} is in AUTH_REQUIRED status. Job paused.`;
+      const errorMsg = "LINE chat session is in AUTH_REQUIRED status. Job paused.";
       await this.prisma.lineChatNicknameSyncJob.update({
         where: { id: job.id },
         data: {
@@ -329,14 +341,13 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
         JSON.stringify({
           event: "line_chat_nickname_job_skipped_session_auth_required",
           jobId: job.id,
-          sessionKey: session.sessionKey,
         })
       );
       return;
     }
 
     if (session.status === LineChatSessionStatus.DISABLED) {
-      const errorMsg = `LineChatSession ${session.sessionKey} is DISABLED.`;
+      const errorMsg = "LINE chat session is DISABLED.";
       await this.prisma.lineChatNicknameSyncJob.update({
         where: { id: job.id },
         data: {
@@ -351,23 +362,102 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
     const profilePath = this.sessionService.resolveProfilePath(session);
 
-    const targetChatUserId = job.lineChatUserId?.trim();
+    let targetChatUserId = job.lineChatUserId?.trim();
     if (!targetChatUserId) {
-      const errorMsg = `Missing LINE OA Manager chat user ID (lineChatUserId) on job ${job.id}. Messaging API lineUserId cannot be used for chat.line.biz`;
-      this.logger.warn?.(
-        JSON.stringify({
-          event: "line_chat_nickname_job_skipped_missing_chat_user_id",
+      if (!this.recentResolver) {
+        const errorMsg = "Missing LINE OA Manager chat user ID (lineChatUserId); resolver is unavailable.";
+        await this.prisma.lineChatNicknameSyncJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatNicknameSyncJobStatus.FAILED,
+            processedAt: new Date(),
+            lastError: errorMsg,
+            lockedUntil: null,
+          },
+        });
+        return;
+      }
+      // A bounded five-page browser read can outlast the ordinary mutation
+      // lease on slow transport. Extend only this claimed job before resolving.
+      await this.prisma.lineChatNicknameSyncJob.update({
+        where: { id: job.id },
+        data: { lockedUntil: new Date(Date.now() + RESOLUTION_LEASE_DURATION_MS) },
+      });
+      const resolution = await this.recentResolver.resolve({
+        conversationId: job.conversationId,
+        lineOfficialAccountId: job.lineOfficialAccountId,
+        botId,
+        sessionKey: session.sessionKey,
+        profilePath,
+      });
+      if (resolution.status === "RESOLVED") {
+        targetChatUserId = resolution.lineChatUserId;
+        await this.prisma.lineChatNicknameSyncJob.update({
+          where: { id: job.id },
+          data: { lineChatUserId: targetChatUserId, lineUserId: targetChatUserId },
+        });
+      } else {
+        const maxAttempts = job.maxAttempts || DEFAULT_MAX_ATTEMPTS;
+        const nextAttempt = job.attemptCount + 1;
+        if (resolution.status === "RESOLVE_TRANSPORT" && nextAttempt < maxAttempts) {
+          const delaySeconds = Math.pow(2, job.attemptCount) * 15;
+          await this.prisma.lineChatNicknameSyncJob.update({
+            where: { id: job.id },
+            data: {
+              status: LineChatNicknameSyncJobStatus.PENDING,
+              attemptCount: { increment: 1 },
+              scheduledAt: new Date(Date.now() + delaySeconds * 1000),
+              lastError: resolution.status,
+              lockedUntil: null,
+            },
+          });
+        } else {
+          const authFailure = resolution.status === "RESOLVE_SESSION_AUTH";
+          await this.prisma.lineChatNicknameSyncJob.update({
+            where: { id: job.id },
+            data: {
+              status: authFailure ? LineChatNicknameSyncJobStatus.FAILED_AUTH : LineChatNicknameSyncJobStatus.FAILED,
+              attemptCount: { increment: 1 },
+              processedAt: new Date(),
+              lastError: resolution.status,
+              lockedUntil: null,
+            },
+          });
+          if (authFailure) {
+            await this.prisma.lineChatSession.update({
+              where: { id: session.id },
+              data: {
+                status: LineChatSessionStatus.AUTH_REQUIRED,
+                lastAuthFailureAt: new Date(),
+                consecutiveAuthFailures: { increment: 1 },
+              },
+            }).catch(() => {});
+          }
+        }
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_nickname_resolution_failed",
           jobId: job.id,
           conversationId: job.conversationId,
-          error: errorMsg,
-        })
-      );
+          reason: resolution.status,
+        }));
+        return;
+      }
+    }
+
+    // Resolution can take several seconds. Re-check latest-wins immediately
+    // before dispatch so an older save cannot overwrite a newer nickname.
+    const newerBeforeDispatch = await this.prisma.lineChatNicknameSyncJob.findFirst({
+      where: {
+        conversationId: job.conversationId,
+        createdAt: { gt: job.createdAt },
+      },
+    });
+    if (newerBeforeDispatch) {
       await this.prisma.lineChatNicknameSyncJob.update({
         where: { id: job.id },
         data: {
-          status: LineChatNicknameSyncJobStatus.FAILED,
+          status: LineChatNicknameSyncJobStatus.SUPERSEDED,
           processedAt: new Date(),
-          lastError: errorMsg,
           lockedUntil: null,
         },
       });
@@ -380,10 +470,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
         jobId: job.id,
         conversationId: job.conversationId,
         lineOfficialAccountId: job.lineOfficialAccountId,
-        lineChatUserId: targetChatUserId,
-        nickname: job.nickname,
-        botId,
-        sessionKey: session.sessionKey,
+        chatMappingPresent: true,
       })
     );
 
@@ -422,8 +509,6 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
           jobId: job.id,
           conversationId: job.conversationId,
           lineOfficialAccountId: job.lineOfficialAccountId,
-          lineChatUserId: targetChatUserId,
-          nickname: job.nickname,
           status: result.status,
           tokenSource: result.tokenSource,
         })
@@ -457,8 +542,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
           event: "line_chat_nickname_job_failed_auth",
           jobId: job.id,
           lineOfficialAccountId: job.lineOfficialAccountId,
-          sessionKey: session.sessionKey,
-          error: result.error,
+          errorCategory: this.safeExecutionError(result.status),
         })
       );
       return;
@@ -497,7 +581,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
           attemptCount: nextAttempt,
           maxAttempts,
           retryAfterSeconds: delaySeconds,
-          error: result.error,
+          errorCategory: this.safeExecutionError(result.status),
         })
       );
       return;
@@ -522,7 +606,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
         conversationId: job.conversationId,
         lineOfficialAccountId: job.lineOfficialAccountId,
         attemptCount: nextAttempt,
-        error: result.error,
+        errorCategory: this.safeExecutionError(result.status),
       })
     );
   }
