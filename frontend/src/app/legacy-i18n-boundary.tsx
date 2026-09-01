@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { LanguageControl, useAppLanguage, type AppLanguage } from "./language";
 
 export type LegacyI18nPhrase = Record<AppLanguage, string>;
-
 export type LegacyI18nTemplate = Record<AppLanguage, string>;
 
 function preserveWhitespace(original: string, translated: string) {
@@ -103,7 +102,20 @@ export function LegacyI18nBoundary({
       }
     });
     observer.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label"] });
-    return () => observer.disconnect();
+
+    const originalConfirm = window.confirm.bind(window);
+    const originalPrompt = window.prompt.bind(window);
+    const originalAlert = window.alert.bind(window);
+    window.confirm = (message?: string) => originalConfirm(translateValue(String(message ?? "")).trim());
+    window.prompt = (message?: string, defaultValue?: string) => originalPrompt(translateValue(String(message ?? "")).trim(), defaultValue);
+    window.alert = (message?: unknown) => originalAlert(translateValue(String(message ?? "")).trim());
+
+    return () => {
+      observer.disconnect();
+      window.confirm = originalConfirm;
+      window.prompt = originalPrompt;
+      window.alert = originalAlert;
+    };
   }, [language, phraseLookup, templates]);
 
   return (
