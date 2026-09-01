@@ -1,0 +1,38 @@
+name: Verify Android 1.1.12 Production
+
+on:
+  push:
+    branches:
+      - chore/publish-android-1.1.12
+    paths:
+      - .github/workflows/verify-android-1-1-12-production.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production release endpoint
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --fail --silent --show-error --location --retry 3 --retry-delay 2 https://line-unified-inbox-production-544f.up.railway.app/app/version/android)"
+          echo "$RESPONSE" | jq .
+          test "$(echo "$RESPONSE" | jq -r '.version')" = "1.1.12"
+          test "$(echo "$RESPONSE" | jq -r '.buildNumber')" = "32"
+          APK_URL="$(echo "$RESPONSE" | jq -r '.apkUrl')"
+          test -n "$APK_URL"
+          test "$APK_URL" != "null"
+          echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
+
+      - name: Verify public APK checksum
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="7efad55a1c22355565702bd4ac03c3b2d36de8db97fa92e63df9dff69e431586"
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 "$APK_URL" -o /tmp/oppo-line-oa-chat-v1.1.12-production.apk
+          ACTUAL_SHA="$(sha256sum /tmp/oppo-line-oa-chat-v1.1.12-production.apk | cut -d' ' -f1)"
+          BYTES="$(stat -c%s /tmp/oppo-line-oa-chat-v1.1.12-production.apk)"
+          echo "APK_SHA256=$ACTUAL_SHA"
+          echo "APK_BYTES=$BYTES"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
