@@ -120,6 +120,19 @@ export type OperationalStateContract = {
   unread: number | null;
 };
 
+/**
+ * Some imported catalog rows contain split single-character tokens such as
+ * "OPPO Reno 1 6 5 G". Preserve persisted catalog data, but repair this
+ * presentation-only artifact at the API boundary so clients render
+ * "OPPO Reno 16 5G". Normal product names are returned unchanged.
+ */
+export function normalizeProductDisplayName(name: string): string {
+  let value = name.replace(/\s+/g, " ").trim();
+  value = value.replace(/\b(\d)\s+(\d)\s+(\d)\s+G\b/gi, "$1$2 $3G");
+  value = value.replace(/\b(\d)\s+G\b/gi, "$1G");
+  return value;
+}
+
 export function buildCustomerSalesInformation(input: {
   customerSalesStatus?: string | null;
   interestLevel?: string | null;
@@ -178,7 +191,7 @@ export function buildCustomerSalesInformation(input: {
           productVariantId: sp.productVariantId || pVariant?.id || null,
           model: {
             id: pModel.id,
-            name: pModel.name,
+            name: normalizeProductDisplayName(pModel.name),
             seriesName: pModel.productSeries?.name ?? null,
             category: pModel.productSeries?.productGroup ?? null,
           },
@@ -197,7 +210,9 @@ export function buildCustomerSalesInformation(input: {
                   color: sp.color ?? null,
                 }
               : null,
-          customProductName: sp.customProductName ?? null,
+          customProductName: sp.customProductName
+            ? normalizeProductDisplayName(sp.customProductName)
+            : null,
           ram: sp.ram ?? pVariant?.ram ?? null,
           rom: sp.rom ?? pVariant?.rom ?? null,
           color: sp.color ?? pVariant?.color ?? null,
@@ -213,7 +228,7 @@ export function buildCustomerSalesInformation(input: {
       productVariantId: p.productVariant?.id ?? null,
       model: {
         id: p.productModel!.id,
-        name: p.productModel!.name,
+        name: normalizeProductDisplayName(p.productModel!.name),
         seriesName: p.productModel!.productSeries?.name ?? null,
         category: p.productModel!.productSeries?.productGroup ?? null,
       },
@@ -298,7 +313,7 @@ export function buildAiInsight(input: {
       .map((product) => ({
         model: {
           id: product.productModel!.id,
-          name: product.productModel!.name,
+          name: normalizeProductDisplayName(product.productModel!.name),
           seriesName: product.productModel!.productSeries?.name ?? null,
           category: product.productModel!.productSeries?.productGroup ?? null,
         },

@@ -5,6 +5,7 @@ import {
   buildCustomerSalesInformation,
   buildOperationalState,
   buildPurchaseInformation,
+  normalizeProductDisplayName,
 } from "./conversation-data-contract";
 
 const manualProduct = {
@@ -111,6 +112,31 @@ void test("Online sales status is preserved without purchase-only fields", () =>
   assert.equal(sales.interestLevel, null);
   assert.deepEqual(sales.purchaseChannel, []);
   assert.equal(sales.paymentMethod, null);
+});
+
+void test("spaced catalog model tokens are normalized only for display", () => {
+  assert.equal(normalizeProductDisplayName("OPPO Reno 1 6 5 G"), "OPPO Reno 16 5G");
+  assert.equal(normalizeProductDisplayName("OPPO Reno 16 5G"), "OPPO Reno 16 5G");
+
+  const sales = buildCustomerSalesInformation({
+    customerSalesStatus: "INTERESTED",
+    salesRecordedAt: new Date("2026-09-01T03:00:00.000Z"),
+    salesProducts: [{
+      id: "sales-product-1",
+      productModelId: "reno-16-5g",
+      productVariantId: null,
+      productModel: {
+        id: "reno-16-5g",
+        name: "OPPO Reno 1 6 5 G",
+        productSeries: { name: "Reno", productGroup: "SMARTPHONE" },
+      },
+      productVariant: null,
+      quantity: 1,
+      status: "INTERESTED",
+    }],
+  });
+
+  assert.equal(sales.products[0]?.model.name, "OPPO Reno 16 5G");
 });
 
 void test("operational state stays separate from purchase and insight data", () => {
