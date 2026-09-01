@@ -2,8 +2,45 @@
 
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { pickLanguageText, useAppLanguage } from "@/app/language";
 
 export type MobileNavKey = "dashboard" | "chats" | "followers" | "more";
+
+const mobileNavigationTranslations = {
+  th: {
+    dashboard: "แดชบอร์ด",
+    chats: "แชทร้านค้า",
+    followers: "ผู้ติดตาม",
+    more: "เพิ่มเติม",
+    coupons: "คูปอง",
+    stores: "จัดการร้านค้า",
+    purchaseAnalytics: "ข้อมูลการซื้อ",
+    massMessages: "ส่งข้อความ",
+    accounts: "บัญชี BM & PC",
+  },
+  en: {
+    dashboard: "Dashboard",
+    chats: "Store chats",
+    followers: "Followers",
+    more: "More",
+    coupons: "Coupons",
+    stores: "Store management",
+    purchaseAnalytics: "Purchase analytics",
+    massMessages: "Mass messages",
+    accounts: "BM & PC Accounts",
+  },
+  zh: {
+    dashboard: "仪表板",
+    chats: "门店聊天",
+    followers: "关注者",
+    more: "更多",
+    coupons: "优惠券",
+    stores: "门店管理",
+    purchaseAnalytics: "购买数据",
+    massMessages: "群发消息",
+    accounts: "BM 与 PC 账户",
+  },
+};
 
 export function MobilePageShell({ children, bottomNav }: { children: ReactNode; bottomNav?: ReactNode }) {
   return (
@@ -97,37 +134,41 @@ export function MobileEmptyState({ title, description }: { title: string; descri
 }
 
 export function MobileBottomNav({ current, onMore }: { current: MobileNavKey; onMore: () => void }) {
+  const { language } = useAppLanguage();
+  const t = pickLanguageText(language, mobileNavigationTranslations);
   const items: Array<{ key: Exclude<MobileNavKey, "more">; href: string; label: string; icon: string }> = [
-    { key: "dashboard", href: "/dashboard", label: "แดชบอร์ด", icon: "▦" },
-    { key: "chats", href: "/chats", label: "แชทร้านค้า", icon: "◫" },
-    { key: "followers", href: "/follower-insights", label: "ผู้ติดตาม", icon: "↗" },
+    { key: "dashboard", href: "/dashboard", label: t.dashboard, icon: "▦" },
+    { key: "chats", href: "/chats", label: t.chats, icon: "◫" },
+    { key: "followers", href: "/follower-insights", label: t.followers, icon: "↗" },
   ];
   return (
     <nav className="grid shrink-0 grid-cols-4 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-1 pt-1.5" style={{ paddingBottom: "max(0.45rem, env(safe-area-inset-bottom))" }}>
       {items.map((item) => <Link key={item.key} href={item.href} aria-current={current === item.key ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] ${current === item.key ? "font-semibold text-[var(--app-accent)]" : "font-medium text-[var(--app-text-secondary)]"}`}><span className="text-lg leading-none">{item.icon}</span><span>{item.label}</span></Link>)}
-      <button type="button" onClick={onMore} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] ${current === "more" ? "font-semibold text-[var(--app-accent)]" : "font-medium text-[var(--app-text-secondary)]"}`}><span className="text-xl leading-none">•••</span><span>เพิ่มเติม</span></button>
+      <button type="button" onClick={onMore} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] ${current === "more" ? "font-semibold text-[var(--app-accent)]" : "font-medium text-[var(--app-text-secondary)]"}`}><span className="text-xl leading-none">•••</span><span>{t.more}</span></button>
     </nav>
   );
 }
 
 export function MobileMoreSheet({ displayName, role, onClose }: { displayName: string; role: "ADMIN" | "VIEWER"; onClose: () => void }) {
+  const { language } = useAppLanguage();
+  const t = pickLanguageText(language, mobileNavigationTranslations);
   const links = [
     { href: "/dashboard/message-traffic", label: "Message Traffic" },
-    { href: "/coupons", label: "คูปอง" },
-    { href: "/stores", label: "จัดการร้านค้า" },
+    { href: "/coupons", label: t.coupons },
+    { href: "/stores", label: t.stores },
     { href: "/friend-source-links", label: "Friend Source Links" },
     { href: "/tiktok", label: "TikTok Monitor" },
     ...(role === "ADMIN" ? [
-      { href: "/admin/purchase-analytics", label: "ข้อมูลการซื้อ" },
-      { href: "/mass-messages", label: "ส่งข้อความ" },
-      { href: "/admin/registrations", label: "BM & PC Accounts" },
+      { href: "/admin/purchase-analytics", label: t.purchaseAnalytics },
+      { href: "/mass-messages", label: t.massMessages },
+      { href: "/admin/registrations", label: t.accounts },
     ] : []),
   ];
   return (
     <div className="absolute inset-0 z-50 flex items-end bg-black/35" onClick={onClose}>
       <div className="max-h-[78vh] w-full overflow-y-auto rounded-t-[1.6rem] border-t border-[var(--app-border)] bg-[var(--app-surface)] px-4 pt-3 shadow-2xl" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }} onClick={(event) => event.stopPropagation()}>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--app-border)]" />
-        <div className="mb-3 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold">เพิ่มเติม</p><p className="mt-0.5 truncate text-xs text-[var(--app-text-tertiary)]">{displayName}</p></div><button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg">×</button></div>
+        <div className="mb-3 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold">{t.more}</p><p className="mt-0.5 truncate text-xs text-[var(--app-text-tertiary)]">{displayName}</p></div><button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg">×</button></div>
         <div className="grid grid-cols-2 gap-2">{links.map((item) => <Link key={item.href} href={item.href} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-3 text-sm font-semibold">{item.label}</Link>)}</div>
       </div>
     </div>
