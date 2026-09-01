@@ -3022,5 +3022,5 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 
 - Production supplied evidence shows authenticated recent-chat discovery is working for the Store 28375 pilot, while a real unmapped conversation returned `RESOLVE_NO_MATCH`. Matching policy remains unchanged: normalized exact name plus the existing ±60-second timestamp tolerance, with a unique candidate required.
 - Added one aggregate-only resolver diagnostic event per candidate-analysis attempt. It reports recent/valid-timestamp/name/tolerance/combined counts, a safe closest-delta bucket, timestamp source, and missing-timestamp count; no customer names, chat IDs, timestamps, message contents, tokens, session state, or profile paths are emitted.
-- Focused resolver diagnostics tests pass 18/18. Full backend tests, changed-file ESLint, backend build, diff review, commit, push, and PR creation remain.
-- No production access, mapping apply, nickname update, queue mutation, migration, deployment, or historical mapping work was performed.
+- Focused resolver diagnostics tests pass 18/18; full backend tests pass 1,622/1,622; changed-file ESLint, backend build, and `git diff --check` pass. The four-file diff was reviewed, committed as `066bc5f`, pushed, and opened as PR #127.
+- No production access, mapping apply, nickname update, queue mutation, migration, deployment, or historical mapping work was performed. CI is running on the PR; merge and deployment remain intentionally untouched.
