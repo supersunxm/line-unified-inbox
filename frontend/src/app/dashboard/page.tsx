@@ -2,11 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
+import { pickLanguageText, useAppLanguage } from "../language";
 import { MobileDashboardApp } from "./mobile-dashboard-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
+const dashboardRouteTranslations = {
+  th: { opening: "กำลังเปิดแดชบอร์ด..." },
+  en: { opening: "Opening dashboard..." },
+  zh: { opening: "正在打开仪表板..." },
+};
+
 export default function DashboardPage() {
+  const { language } = useAppLanguage();
+  const t = pickLanguageText(language, dashboardRouteTranslations);
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -20,7 +29,7 @@ export default function DashboardPage() {
   if (mode === "loading") {
     return (
       <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
-        กำลังเปิดแดชบอร์ด...
+        {t.opening}
       </main>
     );
   }
