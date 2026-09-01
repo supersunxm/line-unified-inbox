@@ -4,6 +4,21 @@ import 'dart:typed_data';
 
 const _unset = Object();
 
+String normalizeProductDisplayName(String value) {
+  var result = value
+      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F]+'), ' ')
+      .trim();
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+(\d)\s+(\d)\s+G\b', caseSensitive: false),
+    (match) => '${match[1]}${match[2]} ${match[3]}G',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+G\b', caseSensitive: false),
+    (match) => '${match[1]}G',
+  );
+  return result;
+}
+
 class CustomerSalesProductItem {
   const CustomerSalesProductItem({
     required this.id,
@@ -48,8 +63,9 @@ class CustomerSalesProductItem {
           json['productModelId'] as String? ?? model['id'] as String? ?? '',
       productVariantId:
           json['productVariantId'] as String? ?? variant?['id'] as String?,
-      modelName:
-          model['name'] as String? ?? json['modelName'] as String? ?? 'Product',
+      modelName: normalizeProductDisplayName(
+        model['name'] as String? ?? json['modelName'] as String? ?? 'Product',
+      ),
       seriesName: model['seriesName'] as String?,
       category: model['category'] as String?,
       ram: json['ram'] as String? ?? variant?['ram'] as String?,
