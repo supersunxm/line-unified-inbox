@@ -127,7 +127,7 @@ void main() {
       expect(product.modelName, 'OPPO A6');
       expect(product.ram, '6');
       expect(product.rom, '128');
-      expect(product.variantLabel, '6 GB RAM · 128 GB ROM');
+      expect(product.variantLabel, '6GB RAM · 128GB ROM');
     });
 
     test('CustomerSalesProductItem removes optional GB text from capacity fields', () {
@@ -143,7 +143,7 @@ void main() {
       expect(product.modelName, 'OPPO A6');
       expect(product.ram, '6');
       expect(product.rom, '128');
-      expect(product.variantLabel, '6 GB RAM · 128 GB ROM');
+      expect(product.variantLabel, '6GB RAM · 128GB ROM');
     });
 
     test('CustomerSalesProductItem repairs split Find N and X suffixes', () {
