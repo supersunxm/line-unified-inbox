@@ -11,6 +11,18 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.13",
+  build: 33,
+  releasedAt: "2026-09-01",
+  releasedAtDisplay: "1 กันยายน 2026",
+  size: "60.1 MB",
+  fileName: "oppo-line-oa-chat-v1.1.13-production.apk",
+  sha256: "4bde35f366a3922000ecd6e8c1b09e73050fed519632472252cee8295c9032fd",
+  notes: [
+    "แก้การแสดงชื่อรุ่นสินค้าในแอปเมื่อข้อมูลมีตัวเลขหรือ 5G ถูกเว้นผิด เช่น OPPO Reno 1 6 5 G ให้แสดงเป็น OPPO Reno 16 5G",
+  ],
+},
+  {
   version: "1.1.12",
   build: 32,
   releasedAt: "2026-09-01",
