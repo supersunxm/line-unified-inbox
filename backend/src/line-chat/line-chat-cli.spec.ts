@@ -224,6 +224,10 @@ void test("formatDiagnosticsResult produces structured report without printing s
       timestamp: "2026-08-31T09:00:00.000Z",
     }],
     chatListResponseObserved: false,
+    chatListFirstPageQueryNames: [],
+    secondPageRequestObserved: false,
+    secondPageQueryNames: [],
+    secondPageNewQueryNames: [],
     restApiRequestsObserved: 1,
     streamingSseObserved: true,
   };
@@ -266,6 +270,39 @@ void test("formatDiagnosticsResult produces structured report without printing s
   });
   assert.ok(notObservedReport.includes("Chat List Response: NOT OBSERVED"));
   assert.doesNotMatch(notObservedReport, /SES|_ga|XSRF-TOKEN|theme|userSettings|activeChat/);
+
+  const contractReport = formatDiagnosticsResult({
+    ...fixture,
+    surface: "chat-list",
+    targetUrl: "https://chat.line.biz/Ubot",
+    finalPageUrl: "https://chat.line.biz/Ubot",
+    finalPath: "/Ubot",
+    chatListResponseObserved: true,
+    chatListIdentifierShape: {
+      listCount: 25,
+      chatId: { stringCount: 25, matchesUdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
+      userId: { stringCount: 25, matchesUdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
+      presenceCounts: { bothPresent: 25, chatIdOnly: 0, userIdOnly: 0, neither: 0 },
+    },
+    chatListPagination: {
+      nextPresent: "YES",
+      nextType: "object",
+      nextStringClassification: "NOT_APPLICABLE",
+      nextLengthBucket: "NOT_APPLICABLE",
+      nextObjectKeys: ["hasMore", "cursor"],
+    },
+    chatListFirstPageQueryNames: ["folderType", "limit"],
+    secondPageRequestObserved: true,
+    secondPageQueryNames: ["folderType", "limit", "cursor"],
+    secondPageNewQueryNames: ["cursor"],
+  });
+  assert.ok(contractReport.includes("listCount: 25"));
+  assert.ok(contractReport.includes("matchesUdPattern: 25"));
+  assert.ok(contractReport.includes("nextType: object"));
+  assert.ok(contractReport.includes("nextObjectKeys: [hasMore, cursor]"));
+  assert.ok(contractReport.includes("Second Page Request: OBSERVED"));
+  assert.ok(contractReport.includes("New Query Names vs First Page: [cursor]"));
+  assert.doesNotMatch(contractReport, /Ud123|Customer|secret|cursor-value/);
 });
 
 void test("runNicknameCli executes dry-run cleanly without errors", async () => {

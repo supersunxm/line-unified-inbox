@@ -1,8 +1,10 @@
 import type {
   DiagnosticArrayLength,
+  DiagnosticChatListContractSummary,
   DiagnosticQueryMetadata,
   DiagnosticResponseSchemaSummary,
 } from "./line-chat.types";
+import { isLineChatUserId } from "./line-chat-chat-discovery";
 
 const SAFE_PAGINATION_KEYS = new Set(["limit", "offset", "page", "size"]);
 const REDACTED_QUERY_KEY_PATTERN = /(cursor|token|auth|authorization|session|secret|key|xsrf|csrf)/i;
@@ -262,5 +264,156 @@ export function diagnosticResponseParseFailure(
     arrayLengths: [],
     paginationKeyNames: [],
     candidateFieldNames: [],
+  };
+}
+
+function emptyIdentifierSummary(): DiagnosticChatListContractSummary["identifierShape"]["chatId"] {
+  return {
+    stringCount: 0,
+    matchesUdPattern: 0,
+    otherStringCount: 0,
+    nullOrMissing: 0,
+  };
+}
+
+function summarizeIdentifierField(values: unknown[]): DiagnosticChatListContractSummary["identifierShape"]["chatId"] {
+  const summary = emptyIdentifierSummary();
+  for (const value of values) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      summary.nullOrMissing += 1;
+      continue;
+    }
+    summary.stringCount += 1;
+    if (isLineChatUserId(value)) summary.matchesUdPattern += 1;
+    else summary.otherStringCount += 1;
+  }
+  return summary;
+}
+
+function isPresentIdentifier(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function classifyNextString(value: string): DiagnosticChatListContractSummary["pagination"]["nextStringClassification"] {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return "EMPTY";
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return "URL";
+  } catch {
+    // Opaque pagination values are intentionally never retained.
+  }
+  return "OPAQUE_TOKEN";
+}
+
+function lengthBucket(value: string): DiagnosticChatListContractSummary["pagination"]["nextLengthBucket"] {
+  if (value.length === 0) return "0";
+  if (value.length <= 32) return "1-32";
+  if (value.length <= 128) return "33-128";
+  return "129+";
+}
+
+function summarizeNext(value: unknown, present: boolean): DiagnosticChatListContractSummary["pagination"] {
+  if (!present) {
+    return {
+      nextPresent: "NO",
+      nextType: "other",
+      nextStringClassification: "NOT_APPLICABLE",
+      nextLengthBucket: "NOT_APPLICABLE",
+      nextObjectKeys: [],
+    };
+  }
+
+  if (value === null) {
+    return {
+      nextPresent: "YES",
+      nextType: "null",
+      nextStringClassification: "NOT_APPLICABLE",
+      nextLengthBucket: "NOT_APPLICABLE",
+      nextObjectKeys: [],
+    };
+  }
+
+  if (typeof value === "string") {
+    return {
+      nextPresent: "YES",
+      nextType: "string",
+      nextStringClassification: classifyNextString(value),
+      nextLengthBucket: lengthBucket(value),
+      nextObjectKeys: [],
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      nextPresent: "YES",
+      nextType: "array",
+      nextStringClassification: "NOT_APPLICABLE",
+      nextLengthBucket: "NOT_APPLICABLE",
+      nextObjectKeys: [],
+    };
+  }
+
+  if (typeof value === "object") {
+    return {
+      nextPresent: "YES",
+      nextType: "object",
+      nextStringClassification: "NOT_APPLICABLE",
+      nextLengthBucket: "NOT_APPLICABLE",
+      nextObjectKeys: Object.keys(value).slice(0, MAX_KEYS_PER_OBJECT).sort(),
+    };
+  }
+
+  return {
+    nextPresent: "YES",
+    nextType: "other",
+    nextStringClassification: "NOT_APPLICABLE",
+    nextLengthBucket: "NOT_APPLICABLE",
+    nextObjectKeys: [],
+  };
+}
+
+/**
+ * Summarizes only the verified v2 chat-list identifier and pagination shape.
+ * No identifier, pagination, customer, or message values are retained.
+ */
+export function summarizeChatListContractJson(value: unknown): DiagnosticChatListContractSummary | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const body = value as Record<string, unknown>;
+  if (!Array.isArray(body.list)) return undefined;
+
+  const list = body.list as unknown[];
+  const chatIdValues = list.map((entry) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return undefined;
+    return (entry as Record<string, unknown>).chatId;
+  });
+  const userIdValues = list.map((entry) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return undefined;
+    return (entry as Record<string, unknown>).userId;
+  });
+
+  const presenceCounts = {
+    bothPresent: 0,
+    chatIdOnly: 0,
+    userIdOnly: 0,
+    neither: 0,
+  };
+  for (let index = 0; index < list.length; index += 1) {
+    const chatPresent = isPresentIdentifier(chatIdValues[index]);
+    const userPresent = isPresentIdentifier(userIdValues[index]);
+    if (chatPresent && userPresent) presenceCounts.bothPresent += 1;
+    else if (chatPresent) presenceCounts.chatIdOnly += 1;
+    else if (userPresent) presenceCounts.userIdOnly += 1;
+    else presenceCounts.neither += 1;
+  }
+
+  return {
+    identifierShape: {
+      listCount: list.length,
+      chatId: summarizeIdentifierField(chatIdValues),
+      userId: summarizeIdentifierField(userIdValues),
+      presenceCounts,
+    },
+    pagination: summarizeNext(body.next, Object.prototype.hasOwnProperty.call(body, "next")),
   };
 }

@@ -33,6 +33,10 @@ function createMockPageContext(options: {
     url: string;
     headers: Record<string, string>;
   }>;
+  simulatedScrollRequests?: Array<{
+    url: string;
+    headers?: Record<string, string>;
+  }>;
   simulatedResponses?: Array<{
     url: string;
     status?: number;
@@ -47,6 +51,7 @@ function createMockPageContext(options: {
   evaluateCalls: MockEvaluateCall[];
   visitedUrls: string[];
   requestCalls: Array<{ method: string; url: string }>;
+  scrollCount: () => number;
 } {
   let isClosed = false;
   const evaluateCalls: MockEvaluateCall[] = [];
@@ -56,6 +61,7 @@ function createMockPageContext(options: {
 
   const requestListeners: Array<(req: { url: () => string; method: () => string; headers: () => Record<string, string> }) => void> = [];
   const responseListeners: Array<(response: Response) => void> = [];
+  let scrollCount = 0;
 
   const mockPage: Partial<Page> = {
     isClosed: () => isClosed,
@@ -159,6 +165,23 @@ function createMockPageContext(options: {
     },
   };
 
+  if (options.simulatedScrollRequests) {
+    mockPage.mouse = {
+      wheel: async () => {
+        scrollCount += 1;
+        for (const simReq of options.simulatedScrollRequests ?? []) {
+          for (const listener of requestListeners) {
+            listener({
+              url: () => simReq.url,
+              method: () => "GET",
+              headers: () => simReq.headers ?? {},
+            });
+          }
+        }
+      },
+    } as unknown as Page["mouse"];
+  }
+
   const context = {
     cookies: async () => options.cookies ?? [],
     pages: () => [mockPage as Page],
@@ -189,6 +212,7 @@ function createMockPageContext(options: {
     evaluateCalls,
     visitedUrls,
     requestCalls,
+    scrollCount: () => scrollCount,
   };
 }
 
@@ -805,6 +829,58 @@ void test("runDiagnostics awaits a late matching chat-list response summary", as
     assert.deepEqual(diag.observedResponses[0]?.schema.arrayLengths, [{ path: "$.chats", length: 1 }]);
     assert.deepEqual(diag.observedResponses[0]?.schema.paginationKeyNames, ["nextCursor"]);
     assert.doesNotMatch(JSON.stringify(diag), /Ud-late-id|Late customer|Private text|secret-cursor/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics passively observes a natural second-page request after scrolling", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      apiProbeStatus: 200,
+      simulatedBackgroundRequests: [{
+        url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?folderType=ALL&limit=25",
+        headers: { "x-xsrf-token": "secret-xsrf" },
+      }],
+      simulatedResponses: [{
+        url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?folderType=ALL&limit=25",
+        status: 200,
+        body: {
+          list: [
+            { chatId: "Ud1234567890abcdef", userId: "Udabcdef1234567890", name: "Customer One" },
+            { chatId: "Udqwerty12345678", userId: "Udqwerty12345678" },
+          ],
+          next: "opaque-next-token",
+        },
+      }],
+      simulatedScrollRequests: [{
+        url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?folderType=ALL&limit=25&cursor=secret-cursor",
+        headers: { "x-xsrf-token": "secret-xsrf" },
+      }],
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      chatListResponseTimeoutMs: 100,
+      chatListSecondPageTimeoutMs: 100,
+    });
+
+    assert.equal(mock.scrollCount(), 1);
+    assert.equal(diag.chatListResponseObserved, true);
+    assert.deepEqual(diag.chatListFirstPageQueryNames, ["folderType", "limit"]);
+    assert.equal(diag.secondPageRequestObserved, true);
+    assert.deepEqual(diag.secondPageQueryNames, ["folderType", "limit", "cursor"]);
+    assert.deepEqual(diag.secondPageNewQueryNames, ["cursor"]);
+    assert.equal(diag.chatListIdentifierShape?.listCount, 2);
+    assert.equal(diag.chatListIdentifierShape?.chatId.matchesUdPattern, 2);
+    assert.equal(diag.chatListIdentifierShape?.userId.matchesUdPattern, 2);
+    assert.equal(diag.chatListPagination?.nextStringClassification, "OPAQUE_TOKEN");
+    assert.equal(diag.chatListPagination?.nextLengthBucket, "1-32");
+    assert.deepEqual(mock.requestCalls, [{ method: "GET", url: "https://chat.line.biz/api/v1/me" }]);
+    assert.doesNotMatch(JSON.stringify(diag), /Ud1234567890abcdef|Customer One|opaque-next-token|secret-cursor|secret-xsrf/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

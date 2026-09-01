@@ -1,5 +1,13 @@
 # AI progress
 
+## Current task: Chat pagination contract diagnostics (2026-09-01) [COMPLETED]
+
+- Supplied production evidence verifies the current natural chat-list request as `GET /api/v2/bots/{botId}/chats` with the observed initial query-name set and a `{list, next}` response envelope. The prior `/{botId}/chat` route remains disproven; this work does not access production.
+- Diagnostics now summarize aggregate `chatId`/`userId` string and authoritative `Ud...`-pattern counts using the existing validator, without selecting an authoritative field or emitting identifiers. `next` is classified only by safe type, string class, length bucket, and object key names; its semantics remain unresolved.
+- After the first matching response, diagnostics may issue only a natural UI mouse-wheel scroll and passively observe a second matching GET. It reports sanitized query-name differences and otherwise returns `NOT OBSERVED`; it never manufactures pagination requests.
+- Mapping/discovery, nickname, queue, DB, and apply behavior are unchanged. Focused LINE Chat tests: 50 / 50; full backend tests: 1,588 / 1,588; changed-file ESLint, backend build, and `git diff --check` pass.
+- No production access, pagination apply, mapping or nickname mutation, queue call, merge, or deployment was performed.
+
 ## Current task: Real chat-list response diagnostics (2026-09-01) [COMPLETED]
 
 - Production evidence disproved `https://chat.line.biz/{botId}/chat` as a workspace route: it lands on `/error`. The chat-list diagnostic now navigates only to the normal bot surface `https://chat.line.biz/{botId}`.
