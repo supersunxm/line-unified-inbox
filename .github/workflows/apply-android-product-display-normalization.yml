@@ -1,0 +1,107 @@
+name: Apply Android product display normalization hotfix
+
+on:
+  push:
+    branches:
+      - fix/android-product-display-normalization
+    paths:
+      - .github/workflows/apply-android-product-display-normalization.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/android-product-display-normalization
+
+      - name: Add client-side product display normalization
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          repo = Path('android_app/lib/features/inbox/conversation_repository.dart')
+          text = repo.read_text()
+
+          marker = "const _unset = Object();\n"
+          helper = r'''const _unset = Object();
+
+String normalizeProductDisplayName(String value) {
+  var result = value
+      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F]+'), ' ')
+      .trim();
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+(\d)\s+(\d)\s+G\b', caseSensitive: false),
+    (match) => '${match[1]}${match[2]} ${match[3]}G',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+G\b', caseSensitive: false),
+    (match) => '${match[1]}G',
+  );
+  return result;
+}
+'''
+          if marker not in text:
+              raise SystemExit('normalizer insertion marker not found')
+          text = text.replace(marker, helper, 1)
+
+          old = """      modelName:\n          model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n"""
+          new = """      modelName: normalizeProductDisplayName(\n        model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n      ),\n"""
+          if old not in text:
+              raise SystemExit('CustomerSalesProductItem modelName parser marker not found')
+          text = text.replace(old, new, 1)
+          repo.write_text(text)
+
+          test = Path('android_app/test/product_display_normalization_test.dart')
+          test.write_text(r'''import 'package:flutter_test/flutter_test.dart';
+import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
+
+void main() {
+  group('product display normalization', () {
+    test('repairs split OPPO Reno 16 5G catalog tokens', () {
+      final item = CustomerSalesProductItem.fromJson({
+        'id': 'sales-product-1',
+        'productModelId': 'reno-16-5g',
+        'model': {
+          'id': 'reno-16-5g',
+          'name': 'OPPO Reno 1 6 5 G',
+        },
+        'status': 'INTERESTED',
+      });
+
+      expect(item.modelName, 'OPPO Reno 16 5G');
+    });
+
+    test('repairs non-breaking-space variants', () {
+      expect(
+        normalizeProductDisplayName('OPPO Reno 1\u00A06\u202F5\u00A0G'),
+        'OPPO Reno 16 5G',
+      );
+    });
+
+    test('leaves normal product names unchanged', () {
+      expect(normalizeProductDisplayName('OPPO Find N6'), 'OPPO Find N6');
+      expect(normalizeProductDisplayName('OPPO Reno 16 5G'), 'OPPO Reno 16 5G');
+    });
+  });
+}
+''')
+          PY
+
+      - name: Remove one-time hotfix workflow
+        run: rm .github/workflows/apply-android-product-display-normalization.yml
+
+      - name: Verify diff
+        run: git diff --check
+
+      - name: Commit hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android_app/lib/features/inbox/conversation_repository.dart android_app/test/product_display_normalization_test.dart .github/workflows/apply-android-product-display-normalization.yml
+          git commit -m "fix(android): normalize product display names locally"
+          git push origin HEAD:fix/android-product-display-normalization
