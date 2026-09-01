@@ -59,12 +59,18 @@ function normalizeLatestEventTimestamp(value: Record<string, unknown>): string |
   return timestampValue(latestEvent.timestamp);
 }
 
+function normalizeCustomerName(value: Record<string, unknown>): string | null {
+  return stringValue(value.customer_name)
+    ?? stringValue(value.customerName)
+    ?? stringValue(value.name);
+}
+
 function normalizeUserChat(raw: unknown): LineChatDiscoveredChat | null {
   const value = objectValue(raw);
   if (!value || value.chatType !== "USER" || !isLineChatUserId(value.chatId)) return null;
   return {
     chatUserId: value.chatId.trim(),
-    displayName: stringValue(value.name),
+    displayName: normalizeCustomerName(value),
     // The verified v2 contract does not establish message text or direction semantics.
     lastMessageText: null,
     lastMessageAt: normalizeLatestEventTimestamp(value),
