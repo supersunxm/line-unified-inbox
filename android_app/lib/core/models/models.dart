@@ -1,3 +1,22 @@
+String normalizeProductDisplayName(String value) {
+  var result = value
+      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F\u200B\uFEFF]+'), ' ')
+      .trim();
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+(\d)\s+(\d)\s*G\b', caseSensitive: false),
+    (match) => '${match[1]}${match[2]} ${match[3]}G',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\b(\d)\s+G\b', caseSensitive: false),
+    (match) => '${match[1]}G',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\b(Reno|Find|OPPO)\s+(\d)\s+(\d)\b', caseSensitive: false),
+    (match) => '${match[1]} ${match[2]}${match[3]}',
+  );
+  return result;
+}
+
 class StoreMembership {
   StoreMembership(
       {required this.id,
@@ -236,7 +255,7 @@ class CustomerSalesSummaryProduct {
   factory CustomerSalesSummaryProduct.fromJson(Map<String, dynamic> json) =>
       CustomerSalesSummaryProduct(
         modelName: (json['modelName'] as String?)?.trim().isNotEmpty == true
-            ? (json['modelName'] as String).trim()
+            ? normalizeProductDisplayName((json['modelName'] as String).trim())
             : 'Product',
         quantity: json['quantity'] is num
             ? (json['quantity'] as num).toInt().clamp(1, 999).toInt()
@@ -412,7 +431,7 @@ class ConversationProductTag {
   factory ConversationProductTag.fromJson(Map<String, dynamic> json) =>
       ConversationProductTag(
         id: json['id'] as String,
-        productName: json['productName'] as String,
+        productName: normalizeProductDisplayName(json['productName'] as String),
         category: json['category'] as String,
         seriesName: json['seriesName'] as String,
       );
@@ -501,7 +520,7 @@ class ProductSelectorItem {
   factory ProductSelectorItem.fromJson(Map<String, dynamic> json) =>
       ProductSelectorItem(
         id: json['id'] as String,
-        productName: json['productName'] as String,
+        productName: normalizeProductDisplayName(json['productName'] as String),
         category: json['category'] as String,
         seriesName: json['seriesName'] as String,
       );
@@ -1103,7 +1122,7 @@ class SummaryProduct {
 
   factory SummaryProduct.fromJson(Map<String, dynamic> json) => SummaryProduct(
         productId: json['productId'] as String? ?? '',
-        productName: json['productName'] as String? ?? '',
+        productName: normalizeProductDisplayName(json['productName'] as String? ?? ''),
         count: _intValue(json['count']),
       );
 }
@@ -1122,7 +1141,7 @@ class SummaryVariant {
   final int count;
 
   factory SummaryVariant.fromJson(Map<String, dynamic> json) => SummaryVariant(
-        productName: json['productName'] as String? ?? '',
+        productName: normalizeProductDisplayName(json['productName'] as String? ?? ''),
         ram: json['ram'] as String?,
         rom: json['rom'] as String?,
         color: json['color'] as String?,
