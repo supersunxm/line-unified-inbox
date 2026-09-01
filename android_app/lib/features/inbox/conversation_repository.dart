@@ -54,8 +54,8 @@ class CustomerSalesProductItem {
 
   String get variantLabel {
     final parts = <String>[];
-    if (ram != null && ram!.isNotEmpty) parts.add('$ram GB RAM');
-    if (rom != null && rom!.isNotEmpty) parts.add('$rom GB ROM');
+    if (ram != null && ram!.isNotEmpty) parts.add('${ram}GB RAM');
+    if (rom != null && rom!.isNotEmpty) parts.add('${rom}GB ROM');
     if (color != null && color!.isNotEmpty) parts.add(color!);
     return parts.join(' · ');
   }
