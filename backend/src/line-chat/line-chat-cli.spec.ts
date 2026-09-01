@@ -4,6 +4,7 @@ import { parseLoginArgs } from "./line-chat-login.cli";
 import { parseNicknameArgs, formatNicknameResult, runNicknameCli } from "./line-chat-nickname.cli";
 import { parseDiagnosticsArgs, formatDiagnosticsResult } from "./line-chat-diagnose.cli";
 import { LineChatSessionService } from "./line-chat-session.service";
+import type { DiagnosticsResult } from "./line-chat.types";
 
 void test("parseLoginArgs correctly extracts CLI flags", () => {
   assert.deepEqual(
@@ -151,7 +152,7 @@ void test("parseDiagnosticsArgs correctly parses CLI flags", () => {
 });
 
 void test("formatDiagnosticsResult produces structured report without printing secret values", () => {
-  const report = formatDiagnosticsResult({
+  const fixture: DiagnosticsResult = {
     profilePath: "/local-data/profile-a",
     surface: "bot",
     targetUrl: "https://chat.line.biz/Ubot/chat/<customer-id-redacted>",
@@ -222,9 +223,11 @@ void test("formatDiagnosticsResult produces structured report without printing s
       },
       timestamp: "2026-08-31T09:00:00.000Z",
     }],
+    chatListResponseObserved: false,
     restApiRequestsObserved: 1,
     streamingSseObserved: true,
-  });
+  };
+  const report = formatDiagnosticsResult(fixture);
 
   assert.ok(report.includes("LINE Chat Session Diagnostic Report"));
   assert.ok(report.includes("Requested URL  : https://chat.line.biz/Ubot/chat/<customer-id-redacted>"));
@@ -251,6 +254,18 @@ void test("formatDiagnosticsResult produces structured report without printing s
   assert.ok(report.includes("items:20"));
   assert.ok(!report.includes("customer-name"));
   assert.doesNotMatch(report, /secret|Uuser/);
+
+  const notObservedReport = formatDiagnosticsResult({
+    ...fixture,
+    surface: "chat-list",
+    targetUrl: "https://chat.line.biz/Ubot",
+    finalPageUrl: "https://chat.line.biz/error",
+    finalPath: "/error",
+    finalPathMatchesWorkspace: false,
+    chatListResponseObserved: false,
+  });
+  assert.ok(notObservedReport.includes("Chat List Response: NOT OBSERVED"));
+  assert.doesNotMatch(notObservedReport, /SES|_ga|XSRF-TOKEN|theme|userSettings|activeChat/);
 });
 
 void test("runNicknameCli executes dry-run cleanly without errors", async () => {
