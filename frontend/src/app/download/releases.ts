@@ -11,6 +11,18 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.15",
+  build: 35,
+  releasedAt: "2026-09-01",
+  releasedAtDisplay: "1 กันยายน 2026",
+  size: "60.1 MB",
+  fileName: "oppo-line-oa-chat-v1.1.15-production.apk",
+  sha256: "8b2f6d5aef45af909e95fc9e15f116d5517b35c54e87f51837a3123a154f52b2",
+  notes: [
+    "ปรับการแสดงชื่อรุ่นและความจุสินค้าใน Android ให้แก้ช่องว่างผิดปกติแบบอัตโนมัติครอบคลุมทุกรุ่น เช่น OPPO A 6 เป็น OPPO A6 และ 1 2 8 เป็น 128GB โดยไม่เปลี่ยนข้อมูลต้นทาง",
+  ],
+},
+  {
   version: "1.1.14",
   build: 34,
   releasedAt: "2026-09-01",
