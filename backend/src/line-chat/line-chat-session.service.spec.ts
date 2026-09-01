@@ -40,6 +40,7 @@ function createMockPageContext(options: {
     headers?: Record<string, string>;
     body?: unknown;
   }>;
+  responseDelayMs?: number;
 }): {
   context: BrowserContext;
   closed: () => boolean;
@@ -81,7 +82,8 @@ function createMockPageContext(options: {
           }
         }
       }
-      if (options.simulatedResponses) {
+      const emitSimulatedResponses = () => {
+        if (!options.simulatedResponses) return;
         for (const simResponse of options.simulatedResponses) {
           const request = {
             url: () => simResponse.url,
@@ -100,6 +102,11 @@ function createMockPageContext(options: {
           } as unknown as Response;
           for (const listener of responseListeners) listener(response);
         }
+      }
+      if (options.responseDelayMs === undefined) {
+        emitSimulatedResponses();
+      } else {
+        setTimeout(emitSimulatedResponses, options.responseDelayMs);
       }
       if (options.navigationError) throw new Error(options.navigationError);
       return options.navigationStatus === undefined
@@ -540,12 +547,12 @@ void test("runDiagnostics chat-list surface targets only the bot chat workspace"
       cookies: [{ name: "SES", value: "secret" }],
       simulatedBackgroundRequests: [
         {
-          url: "https://chat.line.biz/api/v1/bots/Ubot123/chats?limit=20&cursor=secret-cursor",
+          url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?folderType=ALL&limit=25&cursor=secret-cursor",
           headers: {
             "x-xsrf-token": "secret-xsrf",
             "x-oa-chat-client-version": "1.0.0",
             origin: "https://chat.line.biz",
-            referer: "https://chat.line.biz/Ubot123/chat",
+            referer: "https://chat.line.biz/Ubot123",
             cookie: "secret-cookie",
           },
         },
@@ -556,7 +563,7 @@ void test("runDiagnostics chat-list surface targets only the bot chat workspace"
       ],
       simulatedResponses: [
         {
-          url: "https://chat.line.biz/api/v1/bots/Ubot123/chats?limit=20&cursor=secret-cursor",
+          url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?folderType=ALL&limit=25&cursor=secret-cursor",
           status: 200,
           body: {
             items: [
@@ -578,15 +585,16 @@ void test("runDiagnostics chat-list surface targets only the bot chat workspace"
     });
 
     assert.equal(diag.surface, "chat-list");
-    assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123/chat");
-    assert.deepEqual(mock.visitedUrls, ["https://chat.line.biz/Ubot123/chat"]);
+    assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123");
+    assert.deepEqual(mock.visitedUrls, ["https://chat.line.biz/Ubot123"]);
     assert.equal(diag.observedRequests.length, 2);
     assert.deepEqual(diag.observedRequests[0]?.query, {
-      parameterNames: ["limit", "cursor"],
-      safeScalars: { limit: "20" },
+      parameterNames: ["folderType", "limit", "cursor"],
+      safeScalars: { limit: "25" },
       redactedParameters: ["cursor=PRESENT_REDACTED"],
     });
     assert.equal(diag.observedResponses.length, 1);
+    assert.equal(diag.chatListResponseObserved, true);
     assert.equal(diag.observedResponses[0]?.schema.topLevelType, "object");
     assert.deepEqual(diag.observedResponses[0]?.schema.arrayLengths, [{ path: "$.items", length: 1 }]);
     assert.deepEqual(diag.observedResponses[0]?.schema.paginationKeyNames, ["nextCursor"]);
@@ -691,7 +699,12 @@ void test("runDiagnostics sanitizes redirects and recognizes an authentication d
       apiProbeStatus: 401,
     });
     const service = new LineChatSessionService(async () => mock.context);
-    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123", surface: "chat-list" });
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      chatListResponseTimeoutMs: 5,
+    });
 
     assert.equal(diag.navigationSucceeded, true);
     assert.equal(diag.finalPageUrl, "https://accounts.line.biz/login");
@@ -713,17 +726,85 @@ void test("runDiagnostics recognizes the requested chat-line workspace after nav
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
   try {
     const mock = createMockPageContext({
-      finalPageUrl: "https://chat.line.biz/Ubot123/chat",
+      finalPageUrl: "https://chat.line.biz/Ubot123",
       navigationStatus: 200,
       apiProbeStatus: 200,
     });
     const service = new LineChatSessionService(async () => mock.context);
-    const diag = await service.runDiagnostics({ profilePath: tempDir, botId: "Ubot123", surface: "chat-list" });
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      chatListResponseTimeoutMs: 5,
+    });
 
     assert.equal(diag.finalOriginIsChatLine, true);
     assert.equal(diag.finalPathMatchesWorkspace, true);
     assert.equal(diag.authDestinationDetected, false);
     assert.equal(diag.redirected, false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics ignores the guessed v1 chat-list path and reports NOT OBSERVED", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      apiProbeStatus: 200,
+      simulatedResponses: [{
+        url: "https://chat.line.biz/api/v1/bots/Ubot123/chats?limit=25",
+        status: 200,
+        body: { items: [{ id: "Ud-v1-id", displayName: "v1 customer" }] },
+      }],
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      chatListResponseTimeoutMs: 5,
+    });
+
+    assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123");
+    assert.equal(diag.chatListResponseObserved, false);
+    assert.equal(diag.observedResponses.length, 1);
+    assert.doesNotMatch(JSON.stringify(diag), /Ud-v1-id|v1 customer/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics awaits a late matching chat-list response summary", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const mock = createMockPageContext({
+      apiProbeStatus: 200,
+      responseDelayMs: 10,
+      simulatedResponses: [{
+        url: "https://chat.line.biz/api/v2/bots/Ubot123/chats?limit=25",
+        status: 200,
+        body: {
+          chats: [{ id: "Ud-late-id", displayName: "Late customer", message: "Private text" }],
+          nextCursor: "secret-cursor",
+        },
+      }],
+    });
+    const service = new LineChatSessionService(async () => mock.context);
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      chatListResponseTimeoutMs: 100,
+    });
+
+    assert.equal(diag.chatListResponseObserved, true);
+    assert.equal(diag.observedResponses.length, 1);
+    assert.equal(diag.observedResponses[0]?.status, 200);
+    assert.equal(diag.observedResponses[0]?.schema.topLevelType, "object");
+    assert.deepEqual(diag.observedResponses[0]?.schema.arrayLengths, [{ path: "$.chats", length: 1 }]);
+    assert.deepEqual(diag.observedResponses[0]?.schema.paginationKeyNames, ["nextCursor"]);
+    assert.doesNotMatch(JSON.stringify(diag), /Ud-late-id|Late customer|Private text|secret-cursor/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

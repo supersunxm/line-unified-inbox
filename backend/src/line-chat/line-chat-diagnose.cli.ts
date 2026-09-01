@@ -94,6 +94,9 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   lines.push(` Auth Destination: ${result.authDestinationDetected ? "YES" : "NO"}`);
   lines.push(` Navigation     : ${result.navigationSucceeded ? "SUCCEEDED" : "FAILED"}`);
   if (result.navigationError) lines.push(` Navigation Err : ${result.navigationError}`);
+  if (result.surface === "chat-list") {
+    lines.push(` Chat List Response: ${result.chatListResponseObserved ? "OBSERVED" : "NOT OBSERVED"}`);
+  }
   lines.push(` Session State  : ${result.sessionStatePresent ? "PRESENT" : "NONE"}`);
   lines.push(" API Auth Probe:");
   lines.push(`   Endpoint     : ${result.apiAuthProbe.endpoint}`);

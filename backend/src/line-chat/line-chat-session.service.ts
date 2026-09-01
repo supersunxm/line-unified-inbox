@@ -29,6 +29,21 @@ export type ContextLauncher = (
   options?: LineChatSessionOptions
 ) => Promise<BrowserContext>;
 
+function isObservedChatListResponse(response: Response, botId: string): boolean {
+  try {
+    const request = response.request();
+    const responseUrl = new URL(response.url());
+    const expectedPath = `/api/v2/bots/${encodeURIComponent(botId)}/chats`;
+    return (
+      request.method() === "GET"
+      && responseUrl.origin === "https://chat.line.biz"
+      && responseUrl.pathname === expectedPath
+    );
+  } catch {
+    return false;
+  }
+}
+
 export interface LineChatCookie {
   name: string;
   value: string;
@@ -153,8 +168,9 @@ export class LineChatSessionService {
    * retained candidate endpoint. Playwright shares the persistent context's
    * cookies and session storage with `context.request`; no page navigation is
    * required for this mapping path. The path is not claimed to be the current
-   * production chat-list contract; use diagnostics to observe /chat. Non-GET
-   * chat.line.biz requests remain blocked for this discovery context.
+   * production chat-list contract; use diagnostics to observe the natural
+   * /{botId} bot surface. Non-GET chat.line.biz requests remain blocked for
+   * this discovery context.
    */
   public async discoverChats(input: {
     botId: string;
@@ -705,6 +721,8 @@ export class LineChatSessionService {
     lineUserId?: string;
     headless?: boolean;
     surface?: "bot" | "chat-list";
+    /** Test-only override; production diagnostics use the bounded default. */
+    chatListResponseTimeoutMs?: number;
     customLauncher?: ContextLauncher;
   }): Promise<DiagnosticsResult> {
     const resolvedProfile = path.resolve(options.profilePath);
@@ -728,11 +746,19 @@ export class LineChatSessionService {
 
     const observedRequests: ObservedRequestSummary[] = [];
     const observedResponses: DiagnosticsResult["observedResponses"] = [];
-    const responseSummaries: Promise<void>[] = [];
+    let responseSummaryTail: Promise<void> = Promise.resolve();
+    let chatListResponseObserved = false;
+    let resolveChatListResponse: () => void = () => {};
+    const chatListResponseWait = surface === "chat-list"
+      ? new Promise<void>((resolve) => {
+        resolveChatListResponse = resolve;
+      })
+      : Promise.resolve();
     let interceptedXsrfToken: string | undefined;
     let interceptedClientVersion: string | undefined;
     let restApiRequestsObserved = 0;
     let streamingSseObserved = false;
+    const botIdForDiagnostic = options.botId?.trim() ?? "";
 
     try {
       const page = context.pages()[0] || (await context.newPage());
@@ -802,17 +828,21 @@ export class LineChatSessionService {
               schema,
               timestamp: new Date().toISOString(),
             });
+            if (surface === "chat-list" && isObservedChatListResponse(response, botIdForDiagnostic)) {
+              chatListResponseObserved = true;
+              resolveChatListResponse();
+            }
             if (relevance.isStreamingSse) streamingSseObserved = true;
           } catch {
             // Ignore response metadata access errors; no raw response is logged.
           }
         })();
-        responseSummaries.push(summaryPromise);
+        responseSummaryTail = responseSummaryTail.then(() => summaryPromise).catch(() => {});
       });
 
       const botId = options.botId?.trim();
       const targetUrl = surface === "chat-list"
-        ? `https://chat.line.biz/${encodeURIComponent(botId ?? "")}/chat`
+        ? `https://chat.line.biz/${encodeURIComponent(botId ?? "")}`
         : botId && options.lineUserId
           ? this.buildChatRefererUrl(botId, options.lineUserId)
           : botId
@@ -852,7 +882,27 @@ export class LineChatSessionService {
       const apiAuthProbe = await this.probeApiAuthentication(context);
 
       await page.waitForTimeout(1500).catch(() => {});
-      await Promise.allSettled(responseSummaries);
+      if (surface === "chat-list") {
+        const timeoutMs = options.chatListResponseTimeoutMs ?? 10000;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          chatListResponseWait,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, timeoutMs);
+          }),
+        ]);
+        if (timer) clearTimeout(timer);
+      }
+
+      // The response listener can append summaries while the bounded wait is
+      // in progress. Follow the tail until it stays stable so late JSON
+      // parsing is included in the returned report.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const tail = responseSummaryTail;
+        await tail;
+        await Promise.resolve();
+        if (tail === responseSummaryTail) break;
+      }
 
       const sessionValidation = await this.inspectSession(context, page, {
         xsrfToken: interceptedXsrfToken,
@@ -900,6 +950,7 @@ export class LineChatSessionService {
         clientVersionFound: Boolean(sessionValidation.clientVersion),
         observedRequests,
         observedResponses,
+        chatListResponseObserved,
         restApiRequestsObserved,
         streamingSseObserved,
       };

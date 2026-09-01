@@ -1,3 +1,9 @@
+# Real chat-list route and response boundary (2026-09-01)
+
+- The prior `/{botId}/chat` diagnostic route is disproven for the current LINE OA Manager version because it resolves to `/error`. The diagnostic chat-list surface therefore navigates the normal `/{botId}` bot surface and passively observes its network behavior.
+- Production-observed `GET /api/v2/bots/{botId}/chats` is the verified current chat-list endpoint. Diagnostics match only natural GET responses with the exact `chat.line.biz` origin and bot path; no guessed or manually generated chat-list request is issued.
+- Response envelope and pagination mechanics remain pending verification. A bounded response wait fails visibly as `NOT OBSERVED`, and all asynchronously appended response summaries are awaited before completion.
+
 # Diagnostic API authentication boundary (2026-09-01)
 
 - Cookie presence is session-state evidence only, not proof of LINE API authentication. Diagnostics issue exactly one explicit read-only `GET /api/v1/me` through the persistent BrowserContext request context and classify `200` as `YES`, `401/403` as `NO`, and transport/other statuses as `UNKNOWN`.

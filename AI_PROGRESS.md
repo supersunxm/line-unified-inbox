@@ -1,5 +1,14 @@
 # AI progress
 
+## Current task: Real chat-list response diagnostics (2026-09-01) [COMPLETED]
+
+- Production evidence disproved `https://chat.line.biz/{botId}/chat` as a workspace route: it lands on `/error`. The chat-list diagnostic now navigates only to the normal bot surface `https://chat.line.biz/{botId}`.
+- Production-observed `GET /api/v2/bots/{botId}/chats` is the current chat-list endpoint. Diagnostics wait for that natural GET response by method, origin, and exact bot path; they do not manufacture the request or guess query values.
+- Matching response metadata remains sanitized to status/content type/query names/safe scalars/schema summaries. Response envelope and pagination completeness remain pending verification.
+- A bounded wait reports `Chat List Response: NOT OBSERVED`; response-summary promises appended while waiting are drained before the report is returned. Mapping, discovery, nickname, queue, DB, and apply behavior are unchanged.
+- Verification: focused LINE Chat service/CLI tests 29 / 29; full backend tests 1,585 / 1,585; changed-file ESLint passes; backend build passes; `git diff --check` passes.
+- No production access, chat-list apply, mapping or nickname mutation, queue call, merge, or deployment was performed.
+
 ## Current task: Diagnostic API authentication probe (2026-09-01) [COMPLETED]
 
 - Added a single explicit read-only `GET /api/v1/me` probe through the authenticated persistent BrowserContext request context with redirects disabled. Probe output contains only transport result, HTTP status, content type, JSON-ness, and top-level key names.

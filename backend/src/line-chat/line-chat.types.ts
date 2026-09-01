@@ -147,6 +147,7 @@ export interface DiagnosticsResult {
   clientVersionFound: boolean;
   observedRequests: ObservedRequestSummary[];
   observedResponses: ObservedResponseSummary[];
+  chatListResponseObserved: boolean;
   restApiRequestsObserved: number;
   streamingSseObserved: boolean;
 }
