@@ -106,7 +106,7 @@ const input = {
   profilePath: "/safe/profile",
 };
 
-test("unique normalized exact name and timestamp within 60 seconds resolves with a guarded write", async () => {
+test("unique normalized exact customer name resolves with a guarded write", async () => {
   const value = fixture();
   const result = await value.service.resolve(input);
   assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
@@ -117,12 +117,7 @@ test("unique normalized exact name and timestamp within 60 seconds resolves with
   const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
   assert.equal(diagnostic.resolutionStatus, "RESOLVED");
   assert.equal(diagnostic.recentChatCount, 1);
-  assert.equal(diagnostic.validTimestampChatCount, 1);
   assert.equal(diagnostic.exactNameMatchCount, 1);
-  assert.equal(diagnostic.timestampWithinToleranceCount, 1);
-  assert.equal(diagnostic.combinedMatchCount, 1);
-  assert.equal(diagnostic.closestExactNameTimestampDeltaBucket, "16s-30s");
-  assert.equal(diagnostic.targetTimestampSource, "MESSAGE_SENT_AT");
   assert.deepEqual(value.selectedCustomerFields(), { displayName: true });
   assert.deepEqual(value.writes[0], {
     where: { id: "conversation-1", lineOfficialAccountId: "oa-1", lineChatUserId: null },
@@ -130,50 +125,54 @@ test("unique normalized exact name and timestamp within 60 seconds resolves with
   });
 });
 
-test("name-only and timestamp-only candidates fail closed", async (t) => {
-  await t.test("name only", async () => {
-    const value = fixture({ chats: [chat(CHAT_ID, "other customer", 0)] });
+test("message timestamps never determine pilot candidate selection", async (t) => {
+  await t.test("exact customer name resolves even when LINE activity is hours away", async () => {
+    const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 3 * 60 * 60 * 1000)] });
+    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
+    assert.equal(value.writes.length, 1);
+    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+    assert.equal(diagnostic.exactNameMatchCount, 1);
+    assert.equal(diagnostic.combinedMatchCount, 0);
+  });
+
+  await t.test("timestamp-only candidate with a different customer name never resolves", async () => {
+    const value = fixture({ chats: [chat(CHAT_ID, "different name", 0)] });
     assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
     assert.equal(value.writes.length, 0);
     const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
     assert.equal(diagnostic.exactNameMatchCount, 0);
-    assert.equal(diagnostic.combinedMatchCount, 0);
-  });
-  await t.test("timestamp only", async () => {
-    const value = fixture({ chats: [chat(CHAT_ID, "different name", 0)] });
-    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
-    assert.equal(value.writes.length, 0);
+    assert.equal(diagnostic.timestampWithinToleranceCount, 1);
   });
 });
 
-test("exact-name timing diagnostics use safe delta buckets and missing timestamp counts", async () => {
+test("exact customer name resolves even when LINE timestamp is missing or invalid", async (t) => {
+  for (const lastMessageAt of [null, "not-a-timestamp"] as const) {
+    await t.test(String(lastMessageAt), async () => {
+      const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 0, lastMessageAt)] });
+      assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
+      const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+      assert.equal(diagnostic.exactNameMatchCount, 1);
+      assert.equal(diagnostic.combinedMatchCount, 0);
+      assert.equal(diagnostic.exactNameWithMissingTimestampCount, 1);
+    });
+  }
+});
+
+test("multiple exact customer-name candidates are ambiguous regardless of timestamp", async () => {
   const value = fixture({
     chats: [
-      chat(CHAT_ID, "สมชาย Oppo", 180_000),
-      chat(CHAT_ID_2, "สมชาย Oppo", 0, null),
-      chat(`U${"c".repeat(32)}`, "สมชาย Oppo", 0, "not-a-timestamp"),
+      chat(CHAT_ID, "สมชาย Oppo", 0),
+      chat(CHAT_ID_2, "สมชาย Oppo", 3 * 60 * 60 * 1000),
     ],
   });
-  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
-  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.exactNameMatchCount, 3);
-  assert.equal(diagnostic.validTimestampChatCount, 1);
-  assert.equal(diagnostic.timestampWithinToleranceCount, 0);
-  assert.equal(diagnostic.combinedMatchCount, 0);
-  assert.equal(diagnostic.closestExactNameTimestampDeltaBucket, "2m-5m");
-  assert.equal(diagnostic.exactNameWithMissingTimestampCount, 2);
-});
-
-test("multiple qualifying candidates are ambiguous and never written", async () => {
-  const value = fixture({ chats: [chat(), chat(CHAT_ID_2)] });
   assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_AMBIGUOUS" });
   assert.equal(value.writes.length, 0);
   const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.combinedMatchCount, 2);
+  assert.equal(diagnostic.exactNameMatchCount, 2);
   assert.equal(diagnostic.resolutionStatus, "RESOLVE_AMBIGUOUS");
 });
 
-test("fallback conversation timestamp and exact 60-second tolerance are reported safely", async () => {
+test("timestamp diagnostics remain informational when fallback conversation timestamp is used", async () => {
   const value = fixture({
     conversation: conversation({ messages: [] }),
     chats: [chat(CHAT_ID, "สมชาย Oppo", 60_000)],
@@ -182,7 +181,6 @@ test("fallback conversation timestamp and exact 60-second tolerance are reported
   const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
   assert.equal(diagnostic.targetTimestampSource, "CONVERSATION_LATEST_MESSAGE_AT");
   assert.equal(diagnostic.closestExactNameTimestampDeltaBucket, "31s-60s");
-  assert.equal(diagnostic.combinedMatchCount, 1);
 });
 
 test("diagnostic payload contains no customer, identifier, timestamp, or secret values", async () => {
