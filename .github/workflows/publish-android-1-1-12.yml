@@ -1,0 +1,190 @@
+name: Publish Android 1.1.12
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-android-1-1-12.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android_app
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate localization
+        run: flutter gen-l10n
+
+      - name: Restore permanent signing material
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/lineoppo-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=../lineoppo-release.jks
+          EOF
+
+      - name: Build signed production APK
+        run: >-
+          flutter build apk --release
+          --dart-define=APP_ENV=production
+          --dart-define=API_BASE_URL=https://line-unified-inbox-production-544f.up.railway.app
+
+      - name: Verify package version and signer
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          AAPT="$(find "$SDK_ROOT/build-tools" -type f -name aapt -perm -111 | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -perm -111 | sort -V | tail -n 1)"
+          PACKAGE_ID="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          VERSION_CODE="$("$AAPT" dump badging "$APK" | sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p" | head -n 1)"
+          VERSION_NAME="$("$AAPT" dump badging "$APK" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p" | head -n 1)"
+          test "$PACKAGE_ID" = "click.lineoppo.chat"
+          test "$VERSION_NAME" = "1.1.12"
+          test "$VERSION_CODE" = "32"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
+          EXPECTED_CERT_SHA256="e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114"
+          ACTUAL_CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p; s/^V2 Signer: certificate SHA-256 digest: //p' /tmp/apk-signature.txt | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+
+      - name: Publish APK and release metadata
+        working-directory: .
+        run: |
+          set -euo pipefail
+          APK="android_app/build/app/outputs/flutter-apk/app-release.apk"
+          FILE="oppo-line-oa-chat-v1.1.12-production.apk"
+          SHA="$(sha256sum "$APK" | cut -d' ' -f1)"
+          BYTES="$(stat -c%s "$APK")"
+          SIZE_MB="$(python3 - <<PY
+          print(f'{int("$BYTES")/1000000:.1f} MB')
+          PY
+          )"
+          cp "$APK" "frontend/public/downloads/$FILE"
+
+          mkdir -p backend/prisma/migrations/20260901045500_release_android_1_1_12
+          cat > backend/prisma/migrations/20260901045500_release_android_1_1_12/migration.sql <<SQL
+          INSERT INTO "AppRelease" (
+            "id", "platform", "version", "buildNumber",
+            "minimumSupportedVersion", "minimumSupportedBuildNumber",
+            "forceUpdate", "apkUrl", "apkSize", "sha256",
+            "releaseNotes", "isActive", "downloadCount", "createdAt", "updatedAt"
+          ) VALUES (
+            'app-release-android-1-1-12-32', 'ANDROID', '1.1.12', 32,
+            '1.0.3', 4, false,
+            'https://lineoppo.click/downloads/$FILE?sha=$SHA',
+            '$SIZE_MB', '$SHA',
+            ARRAY[
+              'เพิ่มการเล่นวิดีโอแบบเต็มหน้าจอจากข้อความในแชท',
+              'เพิ่มการบันทึกวิดีโอลงเครื่องจากหน้าดูวิดีโอ',
+              'ปรับชื่อรุ่นสินค้าที่ถูกเว้นตัวอักษรผิด เช่น OPPO Reno 1 6 5 G ให้แสดงเป็น OPPO Reno 16 5G'
+            ]::TEXT[],
+            true, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          )
+          ON CONFLICT ("platform", "buildNumber") DO UPDATE SET
+            "version" = EXCLUDED."version",
+            "minimumSupportedVersion" = EXCLUDED."minimumSupportedVersion",
+            "minimumSupportedBuildNumber" = EXCLUDED."minimumSupportedBuildNumber",
+            "forceUpdate" = EXCLUDED."forceUpdate",
+            "apkUrl" = EXCLUDED."apkUrl",
+            "apkSize" = EXCLUDED."apkSize",
+            "sha256" = EXCLUDED."sha256",
+            "releaseNotes" = EXCLUDED."releaseNotes",
+            "isActive" = true,
+            "updatedAt" = CURRENT_TIMESTAMP;
+
+          UPDATE "AppRelease"
+          SET "isActive" = false, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "platform" = 'ANDROID' AND "buildNumber" < 32;
+          SQL
+
+          python3 <<PY
+          from pathlib import Path
+          releases = Path('frontend/src/app/download/releases.ts')
+          text = releases.read_text()
+          marker = 'export const androidReleases: AndroidRelease[] = [\n'
+          entry = f'''  {{
+            version: "1.1.12",
+            build: 32,
+            releasedAt: "2026-09-01",
+            releasedAtDisplay: "1 กันยายน 2026",
+            size: "$SIZE_MB",
+            fileName: "$FILE",
+            sha256: "$SHA",
+            notes: [
+              "เพิ่มการเล่นวิดีโอแบบเต็มหน้าจอจากข้อความในแชท",
+              "เพิ่มการบันทึกวิดีโอลงเครื่องจากหน้าดูวิดีโอ",
+              "ปรับชื่อรุ่นสินค้าที่ถูกเว้นตัวอักษรผิด เช่น OPPO Reno 1 6 5 G ให้แสดงเป็น OPPO Reno 16 5G",
+            ],
+          }},
+          '''
+          if 'version: "1.1.12"' not in text:
+              if marker not in text:
+                  raise SystemExit('android release array marker not found')
+              releases.write_text(text.replace(marker, marker + entry, 1))
+
+          test_file = Path('frontend/test/android-download-release.test.mts')
+          test_text = test_file.read_text()
+          old = '../../backend/prisma/migrations/20260831171500_release_android_1_1_11/migration.sql'
+          new = '../../backend/prisma/migrations/20260901045500_release_android_1_1_12/migration.sql'
+          if new not in test_text:
+              if old not in test_text:
+                  raise SystemExit('release migration test marker not found')
+              test_file.write_text(test_text.replace(old, new, 1))
+          PY
+
+          echo "APK_SHA256=$SHA" >> "$GITHUB_ENV"
+          echo "APK_SIZE=$SIZE_MB" >> "$GITHUB_ENV"
+
+      - name: Verify release payload
+        working-directory: .
+        run: |
+          set -euo pipefail
+          test "$(sha256sum frontend/public/downloads/oppo-line-oa-chat-v1.1.12-production.apk | cut -d' ' -f1)" = "$APK_SHA256"
+          git diff --check
+
+      - name: Commit release to main
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            frontend/public/downloads/oppo-line-oa-chat-v1.1.12-production.apk \
+            frontend/src/app/download/releases.ts \
+            frontend/test/android-download-release.test.mts \
+            backend/prisma/migrations/20260901045500_release_android_1_1_12/migration.sql
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(android): release 1.1.12+32"
+          git push origin HEAD:main
