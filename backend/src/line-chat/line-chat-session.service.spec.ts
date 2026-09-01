@@ -3,7 +3,7 @@ import test from "node:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { BrowserContext, Page } from "playwright";
+import type { BrowserContext, Page, Response } from "playwright";
 import { LineChatSessionService, type ContextLauncher, type LineChatCookie } from "./line-chat-session.service";
 
 interface MockEvaluateCall {
@@ -24,6 +24,13 @@ function createMockPageContext(options: {
     url: string;
     headers: Record<string, string>;
   }>;
+  simulatedResponses?: Array<{
+    url: string;
+    status?: number;
+    contentType?: string;
+    headers?: Record<string, string>;
+    body?: unknown;
+  }>;
 }): {
   context: BrowserContext;
   closed: () => boolean;
@@ -35,12 +42,16 @@ function createMockPageContext(options: {
   const visitedUrls: string[] = [];
 
   const requestListeners: Array<(req: { url: () => string; method: () => string; headers: () => Record<string, string> }) => void> = [];
+  const responseListeners: Array<(response: Response) => void> = [];
 
   const mockPage: Partial<Page> = {
     isClosed: () => isClosed,
     on: (event: string, listener: unknown) => {
       if (event === "request") {
         requestListeners.push(listener as (req: { url: () => string; method: () => string; headers: () => Record<string, string> }) => void);
+      }
+      if (event === "response") {
+        responseListeners.push(listener as (response: Response) => void);
       }
       return mockPage as Page;
     },
@@ -55,6 +66,26 @@ function createMockPageContext(options: {
               headers: () => simReq.headers,
             });
           }
+        }
+      }
+      if (options.simulatedResponses) {
+        for (const simResponse of options.simulatedResponses) {
+          const request = {
+            url: () => simResponse.url,
+            method: () => "GET",
+            headers: () => ({}),
+          };
+          const response = {
+            url: () => simResponse.url,
+            request: () => request,
+            status: () => simResponse.status ?? 200,
+            headers: () => ({
+              "content-type": simResponse.contentType ?? "application/json",
+              ...(simResponse.headers ?? {}),
+            }),
+            json: async () => simResponse.body ?? {},
+          } as unknown as Response;
+          for (const listener of responseListeners) listener(response);
         }
       }
       return null;
@@ -436,6 +467,9 @@ void test("runDiagnostics safely inspects cookies, storage, and background reque
     });
 
     assert.equal(diag.authenticated, true);
+    assert.deepEqual(mock.visitedUrls, ["https://chat.line.biz/Ubot123/chat/Uuser456"]);
+    assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123/chat/<customer-id-redacted>");
+    assert.equal(diag.surface, "bot");
     assert.equal(diag.cookiesCount, 2);
     assert.deepEqual(diag.cookieNames, ["SES", "_ga"]);
     assert.deepEqual(diag.localStorageKeys, ["theme", "user_prefs"]);
@@ -447,6 +481,88 @@ void test("runDiagnostics safely inspects cookies, storage, and background reque
     assert.equal(diag.observedRequests[0].hasXsrfHeader, true);
     assert.equal(diag.observedRequests[0].hasClientVersionHeader, true);
     assert.equal(mock.closed(), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics chat-list surface targets only the bot chat workspace", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+
+  try {
+    const mock = createMockPageContext({
+      cookies: [{ name: "SES", value: "secret" }],
+      simulatedBackgroundRequests: [
+        {
+          url: "https://chat.line.biz/api/v1/bots/Ubot123/chats?limit=20&cursor=secret-cursor",
+          headers: {
+            "x-xsrf-token": "secret-xsrf",
+            "x-oa-chat-client-version": "1.0.0",
+            origin: "https://chat.line.biz",
+            referer: "https://chat.line.biz/Ubot123/chat",
+            cookie: "secret-cookie",
+          },
+        },
+        {
+          url: "https://chat-streaming-api.line.biz/api/v2/sse?token=secret-stream",
+          headers: {},
+        },
+      ],
+      simulatedResponses: [
+        {
+          url: "https://chat.line.biz/api/v1/bots/Ubot123/chats?limit=20&cursor=secret-cursor",
+          status: 200,
+          body: {
+            items: [
+              { id: "Ud-customer-id", displayName: "Customer name", message: "Private text" },
+            ],
+            nextCursor: "secret-next-cursor",
+          },
+        },
+      ],
+    });
+    const customLauncher: ContextLauncher = async () => mock.context;
+    const service = new LineChatSessionService(customLauncher);
+
+    const diag = await service.runDiagnostics({
+      profilePath: tempDir,
+      botId: "Ubot123",
+      surface: "chat-list",
+      customLauncher,
+    });
+
+    assert.equal(diag.surface, "chat-list");
+    assert.equal(diag.targetUrl, "https://chat.line.biz/Ubot123/chat");
+    assert.deepEqual(mock.visitedUrls, ["https://chat.line.biz/Ubot123/chat"]);
+    assert.equal(diag.observedRequests.length, 2);
+    assert.deepEqual(diag.observedRequests[0]?.query, {
+      parameterNames: ["limit", "cursor"],
+      safeScalars: { limit: "20" },
+      redactedParameters: ["cursor=PRESENT_REDACTED"],
+    });
+    assert.equal(diag.observedResponses.length, 1);
+    assert.equal(diag.observedResponses[0]?.schema.topLevelType, "object");
+    assert.deepEqual(diag.observedResponses[0]?.schema.arrayLengths, [{ path: "$.items", length: 1 }]);
+    assert.deepEqual(diag.observedResponses[0]?.schema.paginationKeyNames, ["nextCursor"]);
+    assert.equal(diag.restApiRequestsObserved, 1);
+    assert.equal(diag.streamingSseObserved, true);
+    assert.doesNotMatch(JSON.stringify(diag), /secret-xsrf|secret-cookie|secret-cursor|Customer name|Private text|Ud-customer-id/);
+    assert.equal(mock.closed(), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+void test("runDiagnostics rejects the chat-list surface when no bot is supplied", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+  try {
+    const service = new LineChatSessionService(async () => {
+      throw new Error("launcher must not run");
+    });
+    await assert.rejects(
+      () => service.runDiagnostics({ profilePath: tempDir, surface: "chat-list" }),
+      /chat-list diagnostic surface requires --bot/,
+    );
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

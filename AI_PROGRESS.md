@@ -1,5 +1,15 @@
 # AI progress
 
+## Current task: Chat-list network contract diagnostics (2026-08-31) [COMPLETED]
+
+- Production evidence reported that the previously guessed `/api/v1/bots/{botId}/chats` path returned 404 and was not observed during authenticated bootstrap. Mapping discovery is intentionally unchanged; this task adds a read-only diagnostic surface for observing the real `/chat` workspace contract.
+- Added `--surface bot|chat-list` to `line-chat:diagnose`. The new surface navigates only to `https://chat.line.biz/{botId}/chat`, never appends a customer ID, and never selects an individual chat.
+- Request and response observers emit sanitized origin/pathname, query names, safe numeric pagination scalars, redacted cursor/token presence, header-presence flags, response status/content type, and JSON structure/key/length metadata only. Cookies, credentials, XSRF values, streaming tokens, customer values, message contents, and storage contents are not emitted.
+- The diagnostic observes normal browser bootstrap traffic (including whether REST requests and the known SSE endpoint appear) but manufactures no network calls. Pagination and the production response contract remain unverified until a future production dry-run.
+- Regression coverage includes both surfaces, path targeting, query/value redaction, response schema summaries, no customer-value output, and the existing session/nickname behavior.
+- Verification after rebase: 82 / 82 focused LINE chat diagnostic/session/mapping/queue/backfill tests pass; 1,577 / 1,577 full backend tests pass; changed-file ESLint passes; backend build passes; `git diff --check` passes.
+- No production access, mapping apply, nickname change, queue call, merge, or deployment was performed.
+
 ## Current task: Authenticated request-context discovery transport fix (2026-08-31) [COMPLETED]
 
 - Production reported a generic browser `Failed to fetch` during the Store 28375 dry-run; no production access was performed by Codex for this fix.

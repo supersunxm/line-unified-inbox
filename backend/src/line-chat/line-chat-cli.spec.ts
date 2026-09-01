@@ -125,6 +125,7 @@ void test("parseDiagnosticsArgs correctly parses CLI flags", () => {
     botId: "Ubot123",
     lineUserId: "Uuser456",
     headless: true,
+    surface: "bot",
   });
 
   const argsDefault = parseDiagnosticsArgs(["-p", "./local-data/p2"]);
@@ -133,13 +134,28 @@ void test("parseDiagnosticsArgs correctly parses CLI flags", () => {
     botId: undefined,
     lineUserId: undefined,
     headless: false,
+    surface: "bot",
   });
+
+  assert.deepEqual(
+    parseDiagnosticsArgs(["--profile", "./local-data/p3", "--bot", "Ubot789", "--surface", "chat-list"]),
+    {
+      profilePath: "./local-data/p3",
+      botId: "Ubot789",
+      lineUserId: undefined,
+      headless: false,
+      surface: "chat-list",
+    },
+  );
+  assert.throws(() => parseDiagnosticsArgs(["--surface", "unknown"]), /Invalid --surface/);
 });
 
 void test("formatDiagnosticsResult produces structured report without printing secret values", () => {
   const report = formatDiagnosticsResult({
     profilePath: "/local-data/profile-a",
-    targetUrl: "https://chat.line.biz/Ubot/chat/Uuser",
+    surface: "bot",
+    targetUrl: "https://chat.line.biz/Ubot/chat/<customer-id-redacted>",
+    navigationSucceeded: true,
     authenticated: true,
     cookiesCount: 3,
     cookieNames: ["SES", "_ga", "XSRF-TOKEN"],
@@ -153,6 +169,11 @@ void test("formatDiagnosticsResult produces structured report without printing s
       {
         method: "GET",
         url: "https://chat.line.biz/api/v1/bots/Ubot/chats",
+        query: {
+          parameterNames: ["limit", "cursor"],
+          safeScalars: { limit: "20" },
+          redactedParameters: ["cursor=PRESENT_REDACTED"],
+        },
         hasXsrfHeader: true,
         hasClientVersionHeader: true,
         hasOriginHeader: true,
@@ -161,6 +182,28 @@ void test("formatDiagnosticsResult produces structured report without printing s
         timestamp: "2026-08-31T09:00:00.000Z",
       },
     ],
+    observedResponses: [{
+      status: 200,
+      contentType: "application/json",
+      url: "https://chat.line.biz/api/v1/bots/Ubot/chats",
+      query: {
+        parameterNames: ["limit", "cursor"],
+        safeScalars: { limit: "20" },
+        redactedParameters: ["cursor=PRESENT_REDACTED"],
+      },
+      schema: {
+        parseStatus: "JSON",
+        topLevelType: "object",
+        topLevelKeyNames: ["items", "nextCursor"],
+        nestedKeyNames: ["displayName", "id"],
+        arrayLengths: [{ path: "$.items", length: 20 }],
+        paginationKeyNames: ["nextCursor"],
+        candidateFieldNames: ["displayName", "id"],
+      },
+      timestamp: "2026-08-31T09:00:00.000Z",
+    }],
+    restApiRequestsObserved: 1,
+    streamingSseObserved: true,
   });
 
   assert.ok(report.includes("LINE Chat Session Diagnostic Report"));
@@ -171,6 +214,13 @@ void test("formatDiagnosticsResult produces structured report without printing s
   assert.ok(report.includes("Token Source   : NETWORK"));
   assert.ok(report.includes("Client Version : FOUND"));
   assert.ok(report.includes("https://chat.line.biz/api/v1/bots/Ubot/chats"));
+  assert.ok(report.includes("limit=20"));
+  assert.ok(report.includes("cursor=PRESENT_REDACTED"));
+  assert.ok(!report.includes("Uuser"));
+  assert.ok(report.includes("Streaming SSE   : OBSERVED"));
+  assert.ok(report.includes("items:20"));
+  assert.ok(!report.includes("customer-name"));
+  assert.doesNotMatch(report, /secret|Uuser/);
 });
 
 void test("runNicknameCli executes dry-run cleanly without errors", async () => {

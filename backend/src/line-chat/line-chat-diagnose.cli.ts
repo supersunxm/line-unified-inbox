@@ -6,6 +6,7 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
   let botId: string | undefined;
   let lineUserId: string | undefined;
   let headless = false;
+  let surface: DiagnosticsCliArgs["surface"] = "bot";
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -21,6 +22,18 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
       lineUserId = argv[++i];
     } else if (arg.startsWith("--user=")) {
       lineUserId = arg.slice("--user=".length);
+    } else if (arg === "--surface") {
+      const value = argv[++i];
+      if (value !== "bot" && value !== "chat-list") {
+        throw new Error("Invalid --surface. Expected \"bot\" or \"chat-list\".");
+      }
+      surface = value;
+    } else if (arg.startsWith("--surface=")) {
+      const value = arg.slice("--surface=".length);
+      if (value !== "bot" && value !== "chat-list") {
+        throw new Error("Invalid --surface. Expected \"bot\" or \"chat-list\".");
+      }
+      surface = value;
     } else if (arg === "--headless") {
       headless = true;
     } else if (arg === "--no-headless") {
@@ -36,6 +49,7 @@ export function parseDiagnosticsArgs(argv: string[]): DiagnosticsCliArgs {
     botId: botId?.trim(),
     lineUserId: lineUserId?.trim(),
     headless,
+    surface,
   };
 }
 
@@ -50,12 +64,14 @@ Options:
   --profile, -p <path>     Path to persistent Chromium profile directory (required)
   --bot, -b <botId>        LINE OA Bot ID (optional)
   --user, -u <userId>      LINE User ID (optional)
+  --surface <surface>      Diagnostic surface: bot (default) or chat-list
   --headless               Run Chromium headlessly (default: false / visible window)
   --no-headless            Run Chromium with visible browser window
   --help, -h               Show this help message
 
 Example:
   npm run line-chat:diagnose -- --profile ./local-data/line-chat-profile-a --bot Uxxxxxxxxxxxxxxxx --user Uyyyyyyyyyyyyyyyy
+  npm run line-chat:diagnose -- --profile ./local-data/line-chat-profile-a --bot Uxxxxxxxxxxxxxxxx --surface chat-list --headless
 `);
 }
 
@@ -65,7 +81,10 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   lines.push(" LINE Chat Session Diagnostic Report");
   lines.push("===============================================================");
   lines.push(` Profile Path   : ${result.profilePath}`);
+  lines.push(` Surface        : ${result.surface}`);
   lines.push(` Target URL     : ${result.targetUrl}`);
+  lines.push(` Navigation     : ${result.navigationSucceeded ? "SUCCEEDED" : "FAILED"}`);
+  if (result.navigationError) lines.push(` Navigation Err : ${result.navigationError}`);
   lines.push(` Authenticated  : ${result.authenticated ? "YES" : "NO (No cookies/tokens found)"}`);
   lines.push(` Total Cookies  : ${result.cookiesCount}`);
   lines.push(` Cookie Names   : ${result.cookieNames.length > 0 ? result.cookieNames.join(", ") : "(none)"}`);
@@ -83,14 +102,58 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   } else {
     result.observedRequests.forEach((req, idx) => {
       lines.push(`   ${idx + 1}. [${req.method}] ${req.url}`);
+      formatQueryMetadata(lines, req.query, "      ");
       lines.push(`      - X-Xsrf-Token: ${req.hasXsrfHeader ? "PRESENT" : "ABSENT"}`);
       lines.push(`      - Client Version: ${req.hasClientVersionHeader ? "PRESENT" : "ABSENT"}`);
       lines.push(`      - Origin: ${req.hasOriginHeader ? "PRESENT" : "ABSENT"}`);
       lines.push(`      - Referer: ${req.hasRefererHeader ? "PRESENT" : "ABSENT"}`);
     });
   }
+  lines.push("---------------------------------------------------------------");
+  lines.push(` REST API Requests: ${result.restApiRequestsObserved}`);
+  lines.push(` Streaming SSE   : ${result.streamingSseObserved ? "OBSERVED" : "NOT OBSERVED"}`);
+  lines.push(" Observed API Responses:");
+  if (result.observedResponses.length === 0) {
+    lines.push("   (No relevant API responses captured during page load)");
+  } else {
+    result.observedResponses.forEach((response, idx) => {
+      lines.push(`   ${idx + 1}. status: ${response.status}`);
+      lines.push(`      content-type: ${response.contentType}`);
+      lines.push(`      path: ${response.url}`);
+      formatQueryMetadata(lines, response.query, "      ");
+      lines.push(`      schema: ${formatResponseSchema(response.schema)}`);
+    });
+  }
   lines.push("===============================================================");
   return lines.join("\n");
+}
+
+function formatQueryMetadata(
+  lines: string[],
+  query: { parameterNames: string[]; safeScalars: Record<string, string>; redactedParameters: string[] },
+  indent: string
+): void {
+  lines.push(`${indent}query parameter names: ${query.parameterNames.length > 0 ? query.parameterNames.join(", ") : "(none)"}`);
+  for (const [name, value] of Object.entries(query.safeScalars)) {
+    lines.push(`${indent}  ${name}=${value}`);
+  }
+  for (const redacted of query.redactedParameters) {
+    lines.push(`${indent}  ${redacted}`);
+  }
+}
+
+function formatResponseSchema(schema: DiagnosticsResult["observedResponses"][number]["schema"]): string {
+  if (schema.parseStatus === "NOT_JSON") return "not-json";
+  if (schema.parseStatus === "PARSE_FAILED") return "json-parse-failed";
+  const parts = [`top-level=${schema.topLevelType}`];
+  if (schema.topLevelKeyNames.length > 0) parts.push(`keys=[${schema.topLevelKeyNames.join(", ")}]`);
+  if (schema.nestedKeyNames.length > 0) parts.push(`nestedKeys=[${schema.nestedKeyNames.join(", ")}]`);
+  if (schema.arrayLengths.length > 0) {
+    parts.push(`arrays=[${schema.arrayLengths.map((item) => `${item.path}:${item.length}`).join(", ")}]`);
+  }
+  if (schema.paginationKeyNames.length > 0) parts.push(`paginationKeys=[${schema.paginationKeyNames.join(", ")}]`);
+  if (schema.candidateFieldNames.length > 0) parts.push(`candidateFields=[${schema.candidateFieldNames.join(", ")}]`);
+  return parts.join(" ");
 }
 
 export async function runDiagnosticsCli(
@@ -113,6 +176,7 @@ export async function runDiagnosticsCli(
       botId: args.botId,
       lineUserId: args.lineUserId,
       headless: args.headless,
+      surface: args.surface,
     });
 
     console.log(formatDiagnosticsResult(result));

@@ -1,3 +1,10 @@
+# Chat-list contract diagnostic boundary (2026-08-31)
+
+- Production evidence showed no bootstrap request to the previously guessed `/api/v1/bots/{botId}/chats` path and a direct request returned 404. Mapping discovery is not changed by this work. The diagnostic therefore adds an explicit `chat-list` surface that navigates only to the observed workspace route `https://chat.line.biz/{botId}/chat`; the default `bot` surface retains its prior target behavior.
+- Network observation is passive: the page may perform its normal bootstrap requests, but the diagnostic manufactures no calls and performs no writes. It records only relevant REST/SSE metadata, never opens an individual customer chat, and never logs cookies, credentials, XSRF values, streaming tokens, storage contents, customer values, message text, or cursor values.
+- Query metadata keeps names and numeric `limit`/`offset`/`page`/`size` scalars while reporting cursor/token-like values only as `PRESENT_REDACTED`. JSON response summaries retain top-level/nested key names, array lengths, pagination key names, and candidate field names; payload values are discarded.
+- Navigation failure is surfaced as a sanitized status in the report. Response shape and pagination completeness remain explicitly unverified until a future production dry-run; this diagnostic does not claim to solve either contract.
+
 # Authenticated Request-Context Discovery Transport (2026-08-31)
 
 - Discovery now uses the persistent Playwright `BrowserContext.request.get` API for the observed `GET /api/v1/bots/{botId}/chats` endpoint. This request context shares the persistent browser profile's cookies/session storage without requiring page navigation or an individual chat URL.
