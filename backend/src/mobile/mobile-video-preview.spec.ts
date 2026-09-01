@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import test from "node:test";
 import {
+  createVideoPlaceholderPng,
   createVideoPreviewPng,
   getMp4DisplayDimensions,
   getPreviewDimensions,
 } from "./mobile-video-preview";
-
-const requireFromHere = createRequire(__filename);
-const sharp = requireFromHere("sharp") as typeof import("sharp");
 
 function tkhd(width: number, height: number, quarterTurn = false): Buffer {
   const box = Buffer.alloc(92);
@@ -31,13 +28,27 @@ function tkhd(width: number, height: number, quarterTurn = false): Buffer {
   return box;
 }
 
-function mp4WithTkhd(width: number, height: number, quarterTurn = false): Buffer {
+function mp4WithTkhd(
+  width: number,
+  height: number,
+  quarterTurn = false,
+): Buffer {
   return Buffer.concat([
     Buffer.alloc(4),
     Buffer.from("ftypisom", "ascii"),
     Buffer.alloc(12),
     tkhd(width, height, quarterTurn),
   ]);
+}
+
+function pngDimensions(buffer: Buffer): { width: number; height: number } {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.ok(buffer.subarray(0, 8).equals(signature));
+  assert.equal(buffer.toString("ascii", 12, 16), "IHDR");
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
 }
 
 test("reads landscape MP4 display dimensions", () => {
@@ -65,24 +76,27 @@ test("preview dimensions preserve the source aspect ratio", () => {
   });
 });
 
-test("creates a 9:16 preview for a rotated portrait MP4", async () => {
-  const fallback = await sharp({
-    create: {
-      width: 320,
-      height: 180,
-      channels: 3,
-      background: { r: 20, g: 30, b: 25 },
-    },
-  })
-    .png()
-    .toBuffer();
+test("creates a valid PNG placeholder with requested dimensions", () => {
+  const preview = createVideoPlaceholderPng(180, 320);
+  assert.deepEqual(pngDimensions(preview), { width: 180, height: 320 });
+});
 
+test("creates a 9:16 preview for a rotated portrait MP4", async () => {
+  const fallback = createVideoPlaceholderPng(320, 180);
   const preview = await createVideoPreviewPng(
     mp4WithTkhd(1920, 1080, true),
     fallback,
   );
-  const metadata = await sharp(preview).metadata();
 
-  assert.equal(metadata.width, 180);
-  assert.equal(metadata.height, 320);
+  assert.deepEqual(pngDimensions(preview), { width: 180, height: 320 });
+});
+
+test("returns fallback when MP4 display dimensions cannot be read", async () => {
+  const fallback = createVideoPlaceholderPng(320, 180);
+  const preview = await createVideoPreviewPng(
+    Buffer.from("not-an-mp4", "utf8"),
+    fallback,
+  );
+
+  assert.strictEqual(preview, fallback);
 });
