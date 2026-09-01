@@ -214,12 +214,14 @@ export class LineChatRecentResolverService {
     const targetTimestampSource: ResolverTargetTimestampSource = targetMessage
       ? "MESSAGE_SENT_AT"
       : "CONVERSATION_LATEST_MESSAGE_AT";
-    const candidates = recent.chats.filter((chat) => {
-      if (!targetName || normalizeName(chat.displayName) !== targetName || !chat.lastMessageAt) return false;
-      const candidateTime = new Date(chat.lastMessageAt).getTime();
-      return Number.isFinite(candidateTime)
-        && Math.abs(candidateTime - targetTimestamp.getTime()) <= MATCH_TOLERANCE_MS;
-    });
+
+    // A tag save already identifies the target customer. For the pilot, resolve
+    // the OA Manager chat by a unique normalized customer-name match only.
+    // Message/event timestamps remain diagnostic context and never determine
+    // whether a candidate is selected.
+    const candidates = targetName
+      ? recent.chats.filter((chat) => normalizeName(chat.displayName) === targetName)
+      : [];
 
     if (candidates.length === 0) {
       this.emitDiagnostic(buildDiagnostic(
