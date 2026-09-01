@@ -32,4 +32,28 @@ class MediaSaveService {
       );
     }
   }
+
+  Future<void> saveVideo(
+    Uint8List bytes, {
+    String? fileName,
+    String? mimeType,
+  }) async {
+    if (bytes.isEmpty) {
+      throw PlatformException(
+        code: 'EMPTY_VIDEO',
+        message: 'Video data is empty',
+      );
+    }
+    final result = await _channel.invokeMethod<Object?>('saveVideo', {
+      'bytes': bytes,
+      'fileName': fileName,
+      'mimeType': mimeType,
+    });
+    if (result != true) {
+      throw PlatformException(
+        code: 'SAVE_FAILED',
+        message: 'Video could not be saved',
+      );
+    }
+  }
 }
