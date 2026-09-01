@@ -285,3 +285,11 @@ export interface LineChatDiscoveryResult {
   nextTerminationObserved: boolean;
   enumerationError?: string;
 }
+
+export interface LineChatRecentDiscoveryResult {
+  status: "READY" | "FAILED";
+  chats: LineChatDiscoveredChat[];
+  pagesFetched: number;
+  totalRawRecords: number;
+  failureReason?: "SESSION_AUTH" | "TRANSPORT";
+}

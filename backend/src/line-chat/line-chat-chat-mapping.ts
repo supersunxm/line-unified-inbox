@@ -5,11 +5,17 @@ import {
 } from "@prisma/client";
 import type { LineChatDiscoveredChat } from "./line-chat.types";
 import { isLineChatUserId } from "./line-chat-chat-discovery";
+import {
+  LINE_CHAT_PILOT_BOT_ID,
+  LINE_CHAT_PILOT_OA_NAME,
+  LINE_CHAT_PILOT_SESSION_KEY,
+  LINE_CHAT_PILOT_STORE_CODE,
+} from "./line-chat-pilot.constants";
 
-export const PILOT_MAPPING_STORE_CODE = "28375";
-export const PILOT_MAPPING_OA_NAME = "OPPO BS RBS Chonburi";
-export const PILOT_MAPPING_BOT_ID = "U729972869a565723cb7fcf7ea28bbc43";
-export const PILOT_MAPPING_SESSION_KEY = "profile-b";
+export const PILOT_MAPPING_STORE_CODE = LINE_CHAT_PILOT_STORE_CODE;
+export const PILOT_MAPPING_OA_NAME = LINE_CHAT_PILOT_OA_NAME;
+export const PILOT_MAPPING_BOT_ID = LINE_CHAT_PILOT_BOT_ID;
+export const PILOT_MAPPING_SESSION_KEY = LINE_CHAT_PILOT_SESSION_KEY;
 const RELEVANT_STATUSES = new Set<CustomerSalesStatus>([
   CustomerSalesStatus.ONLINE,
   CustomerSalesStatus.PURCHASED,

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma.module";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -12,7 +13,7 @@ import { LineChatSessionService } from "./line-chat-session.service";
  */
 @Module({
   imports: [PrismaModule],
-  providers: [LineChatSessionService, LineChatNicknameWorkerService],
+  providers: [LineChatSessionService, LineChatRecentResolverService, LineChatNicknameWorkerService],
   exports: [LineChatNicknameWorkerService],
 })
 export class LineChatNicknameWorkerModule {}

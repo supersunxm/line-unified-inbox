@@ -209,6 +209,26 @@ test("session discovery captures the natural v2 GET and enumerates subsequent pa
   assert.equal(mock.wasClosed(), true);
 });
 
+test("recent discovery stops at five pages without turning into historical enumeration", async () => {
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-recent-discovery-"));
+  const definitions = Array.from({ length: 6 }, (_, index) => validPage(
+    `U${index.toString(16).repeat(32)}`,
+    `opaque-next-${index}`,
+  ));
+  const mock = mockNaturalDiscoveryContext(definitions);
+  const launcher: ContextLauncher = async () => mock.context;
+  try {
+    const service = new LineChatSessionService(launcher);
+    const result = await service.discoverRecentChats({ botId: "Ubot", profilePath, customLauncher: launcher });
+    assert.equal(result.status, "READY");
+    assert.equal(result.pagesFetched, 5);
+    assert.equal(mock.calls.length, 4);
+    assert.equal(result.chats.length, 5);
+  } finally {
+    fs.rmSync(profilePath, { recursive: true, force: true });
+  }
+});
+
 test("discovery uses chatId only, ignores guessed v1 paths, and never opens a customer chat", async () => {
   const { result, mock } = await discoverWithPages([{ body: {
     list: [{ userId: VALID_USER_ID, chatType: "USER", name: "Wrong fallback" }],
