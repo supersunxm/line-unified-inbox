@@ -1,20 +1,80 @@
 String normalizeProductDisplayName(String value) {
-  var result = value
+  final normalized = value
       .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F\u200B\uFEFF]+'), ' ')
       .trim();
-  result = result.replaceAllMapped(
-    RegExp(r'\b(\d)\s+(\d)\s+(\d)\s*G\b', caseSensitive: false),
-    (match) => '${match[1]}${match[2]} ${match[3]}G',
-  );
-  result = result.replaceAllMapped(
-    RegExp(r'\b(\d)\s+G\b', caseSensitive: false),
-    (match) => '${match[1]}G',
-  );
-  result = result.replaceAllMapped(
-    RegExp(r'\b(Reno|Find|OPPO)\s+(\d)\s+(\d)\b', caseSensitive: false),
-    (match) => '${match[1]} ${match[2]}${match[3]}',
-  );
-  return result;
+  if (normalized.isEmpty) return normalized;
+
+  // Phase 1: repair digit sequences without knowing any OPPO family name.
+  // Examples:
+  //   "1 6"       -> "16"
+  //   "1 6 5 G"   -> "16 5G"
+  //   "5 G"       -> "5G"
+  // Correct tokens such as "16 5G" remain unchanged because only standalone
+  // single-digit runs are collapsed.
+  final tokens = normalized.split(' ');
+  final collapsed = <String>[];
+  var index = 0;
+  while (index < tokens.length) {
+    final token = tokens[index];
+    if (RegExp(r'^\d$').hasMatch(token)) {
+      final digits = <String>[];
+      while (index < tokens.length && RegExp(r'^\d$').hasMatch(tokens[index])) {
+        digits.add(tokens[index]);
+        index++;
+      }
+
+      final followedByG = index < tokens.length &&
+          tokens[index].toUpperCase() == 'G';
+      if (followedByG) {
+        // In a malformed model such as "A 5 5 G" or "Reno 1 6 5 G",
+        // the final digit belongs to the network generation. Everything before
+        // it belongs to the model number.
+        if (digits.length > 1) {
+          collapsed.add(digits.sublist(0, digits.length - 1).join());
+        }
+        collapsed.add('${digits.last}G');
+        index++; // consume G
+      } else {
+        collapsed.add(digits.join());
+      }
+      continue;
+    }
+
+    collapsed.add(token);
+    index++;
+  }
+
+  // Phase 2: join a standalone one-letter model designator with the following
+  // numeric token. This is intentionally family-agnostic: A 6, K 13, N 6,
+  // X 8, F 27, R 11, or future one-letter OPPO families all use the same rule.
+  final output = <String>[];
+  index = 0;
+  while (index < collapsed.length) {
+    final token = collapsed[index];
+    if (RegExp(r'^[A-Za-z]$').hasMatch(token) &&
+        index + 1 < collapsed.length &&
+        RegExp(r'^\d{1,4}$').hasMatch(collapsed[index + 1])) {
+      output.add('$token${collapsed[index + 1]}');
+      index += 2;
+      continue;
+    }
+    output.add(token);
+    index++;
+  }
+
+  return output.join(' ');
+}
+
+String? normalizeProductCapacity(String? value) {
+  if (value == null) return null;
+  final normalized = value
+      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F\u200B\uFEFF]+'), ' ')
+      .trim();
+  if (normalized.isEmpty) return null;
+  final compact = normalized.replaceAll(' ', '');
+  final match = RegExp(r'^(\d+)(?:GB)?$', caseSensitive: false)
+      .firstMatch(compact);
+  return match == null ? normalized : match[1];
 }
 
 class StoreMembership {
@@ -453,9 +513,9 @@ class ConversationProductVariant {
   factory ConversationProductVariant.fromJson(Map<String, dynamic> json) =>
       ConversationProductVariant(
         id: json['id'] as String,
-        ram: json['ram'] as String?,
-        rom: json['rom'] as String?,
-        color: json['color'] as String?,
+        ram: normalizeProductCapacity(json['ram'] as String?),
+        rom: normalizeProductCapacity(json['rom'] as String?),
+        color: (json['color'] as String?)?.trim(),
       );
 
   String get label => [
@@ -537,9 +597,9 @@ class ProductVariantSelectorItem extends ConversationProductVariant {
   factory ProductVariantSelectorItem.fromJson(Map<String, dynamic> json) =>
       ProductVariantSelectorItem(
         id: json['id'] as String,
-        ram: json['ram'] as String?,
-        rom: json['rom'] as String?,
-        color: json['color'] as String?,
+        ram: normalizeProductCapacity(json['ram'] as String?),
+        rom: normalizeProductCapacity(json['rom'] as String?),
+        color: (json['color'] as String?)?.trim(),
       );
 }
 
@@ -1142,9 +1202,9 @@ class SummaryVariant {
 
   factory SummaryVariant.fromJson(Map<String, dynamic> json) => SummaryVariant(
         productName: normalizeProductDisplayName(json['productName'] as String? ?? ''),
-        ram: json['ram'] as String?,
-        rom: json['rom'] as String?,
-        color: json['color'] as String?,
+        ram: normalizeProductCapacity(json['ram'] as String?),
+        rom: normalizeProductCapacity(json['rom'] as String?),
+        color: (json['color'] as String?)?.trim(),
         count: _intValue(json['count']),
       );
 }

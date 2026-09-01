@@ -53,9 +53,11 @@ class CustomerSalesProductItem {
       ),
       seriesName: model['seriesName'] as String?,
       category: model['category'] as String?,
-      ram: json['ram'] as String? ?? variant?['ram'] as String?,
-      rom: json['rom'] as String? ?? variant?['rom'] as String?,
-      color: json['color'] as String? ?? variant?['color'] as String?,
+      ram: normalizeProductCapacity(
+          json['ram'] as String? ?? variant?['ram'] as String?),
+      rom: normalizeProductCapacity(
+          json['rom'] as String? ?? variant?['rom'] as String?),
+      color: (json['color'] as String? ?? variant?['color'] as String?)?.trim(),
       quantity: json['quantity'] is num ? (json['quantity'] as num).toInt() : 1,
       status: json['status'] as String? ?? 'INTERESTED',
     );
