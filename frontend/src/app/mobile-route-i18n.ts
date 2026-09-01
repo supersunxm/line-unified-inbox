@@ -20,6 +20,7 @@ export const mobileChatsPhrases: LegacyI18nPhrase[] = [
   { th: "ตอบแล้ว", en: "Replied", zh: "已回复" },
   { th: "ยังไม่มีข้อความ", en: "No messages yet", zh: "暂无消息" },
   { th: "📷 รูปภาพ", en: "📷 Image", zh: "📷 图片" },
+  { th: "สติกเกอร์", en: "Sticker", zh: "贴图" },
   { th: "ข้อความ", en: "Message", zh: "消息" },
   { th: "รีเฟรช", en: "Refresh", zh: "刷新" },
   { th: "ค้นหาลูกค้า ร้านค้า หรือข้อความ", en: "Search customer, store, or message", zh: "搜索客户、门店或消息" },
@@ -106,6 +107,11 @@ export const mobileStoresPhrases: LegacyI18nPhrase[] = [
   { th: "ตรวจผลกระทบก่อนลบถาวร", en: "Review impact before permanent deletion", zh: "永久删除前检查影响" },
   { th: "ลบร้านถาวร", en: "Delete store permanently", zh: "永久删除门店" },
   { th: "ข้อมูลต่อไปนี้จะได้รับผลกระทบ การลบถาวรไม่สามารถย้อนกลับได้", en: "The following data will be affected. Permanent deletion cannot be undone.", zh: "以下数据将受到影响，永久删除无法撤销。" },
+  { th: "ยืนยันลบร้านนี้ถาวร? การกระทำนี้ไม่สามารถย้อนกลับได้", en: "Permanently delete this store? This action cannot be undone.", zh: "确认永久删除此门店？此操作无法撤销。" },
+  { th: "Archive ร้านไม่สำเร็จ", en: "Failed to archive store", zh: "门店归档失败" },
+  { th: "กรุณาพิมพ์ชื่อร้านให้ตรงทุกตัวอักษร", en: "Enter the exact store name to continue", zh: "请输入完全一致的门店名称以继续" },
+  { th: "ลบร้านไม่สำเร็จ", en: "Failed to delete store", zh: "删除门店失败" },
+  { th: "มีปัญหาในการเชื่อมต่อ กรุณาลองใหม่", en: "Connection problem. Please try again.", zh: "连接出现问题，请重试。" },
   { th: "ข้อความ", en: "Messages", zh: "消息" },
   { th: "Customer ที่คงอยู่:", en: "Customers retained:", zh: "保留客户：" },
   { th: "Customer ที่จะถูกลบ:", en: "Customers deleted:", zh: "将删除客户：" },
@@ -119,6 +125,8 @@ export const mobileStoresTemplates: LegacyI18nTemplate[] = [
   { th: "{{value}} LINE OA ต้องตรวจสอบ", en: "{{value}} LINE OA need review", zh: "{{value}} 个 LINE OA 需要检查" },
   { th: "{{value}} บัญชี", en: "{{value}} accounts", zh: "{{value}} 个账户" },
   { th: "{{value}} เชื่อมต่อ", en: "{{value}} connected", zh: "已连接 {{value}}" },
+  { th: "Archive ร้าน “{{value}}”?", en: "Archive store “{{value}}”?", zh: "归档门店“{{value}}”？" },
+  { th: "ยืนยันลบร้าน “{{value}}”\nพิมพ์ชื่อร้านให้ตรงทุกตัวอักษรเพื่อดำเนินการต่อ", en: "Confirm deleting store “{{value}}”\nEnter the exact store name to continue", zh: "确认删除门店“{{value}}”\n请输入完全一致的门店名称以继续" },
 ];
 
 export const mobileMassMessagesPhrases: LegacyI18nPhrase[] = [
