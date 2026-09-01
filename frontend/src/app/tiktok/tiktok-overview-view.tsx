@@ -3,25 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PageContainer, PageHeader, FilterBar } from "@/components/shell";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  EmptyState,
-  MetricCard,
-  SearchInput,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui";
+import { Badge, Button, Card, MetricCard, SearchInput } from "@/components/ui";
+import { LanguageControl, useAppLanguage } from "../language";
+import { getTikTokLocale, getTikTokOverviewText } from "./tiktok-overview-translations";
 import type {
   TikTokAccountListItem,
   TikTokAccountMetricsGrowthSummary,
@@ -36,151 +20,53 @@ interface TikTokOverviewViewProps {
   singleAccountData?: TikTokStoreData | null;
   historicalMetrics?: TikTokHistoricalMetricsData | null;
   bulkMetricsSummary?: TikTokBulkMetricsSummaryResponse | null;
-  data?: TikTokStoreData | null; // For backwards compatibility
+  data?: TikTokStoreData | null;
 }
 
 const DEMO_PREVIEW_GROWTH = {
-  today: {
-    followers: 18,
-    following: 1,
-    likes: 697,
-    videos: 0,
-  },
-  sevenDays: {
-    followers: 132,
-    following: 6,
-    likes: 1821,
-    videos: 4,
-  },
-  thirtyDays: {
-    followers: 562,
-    following: 14,
-    likes: 4213,
-    videos: 9,
-  },
+  today: { followers: 18, following: 1, likes: 697, videos: 0 },
+  sevenDays: { followers: 132, following: 6, likes: 1821, videos: 4 },
+  thirtyDays: { followers: 562, following: 14, likes: 4213, videos: 9 },
 };
 
-function formatDelta(delta: number | null | undefined): {
-  text: string;
-  className: string;
-} {
-  if (delta === null || delta === undefined) {
-    return {
-      text: "--",
-      className: "text-[var(--app-text-tertiary)] font-medium",
-    };
-  }
-
-  if (delta > 0) {
-    return {
-      text: `+${new Intl.NumberFormat("en-US").format(delta)}`,
-      className: "text-[var(--app-success)] font-semibold",
-    };
-  }
-
-  if (delta < 0) {
-    return {
-      text: new Intl.NumberFormat("en-US").format(delta),
-      className: "text-[var(--app-danger)] font-semibold",
-    };
-  }
-
-  return {
-    text: "0",
-    className: "text-[var(--app-text-secondary)] font-medium",
-  };
+function formatNumber(value: number | null | undefined, locale: string): string {
+  return new Intl.NumberFormat(locale).format(value ?? 0);
 }
 
-function getPeriodChipSuffix(period: TikTokGrowthPeriod): string {
-  switch (period) {
-    case "today":
-      return "Today";
-    case "sevenDays":
-      return "7D";
-    case "thirtyDays":
-      return "30D";
-  }
+function formatCompactNumber(value: number | null | undefined): string {
+  const amount = value ?? 0;
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(amount);
 }
 
-function formatGrowthChip(
-  value: number | null | undefined,
-  periodLabel: string
-): { text: string; className: string } {
-  if (value === null || value === undefined) {
-    return {
-      text: `--`,
-      className: "text-[var(--app-text-tertiary)] font-medium",
-    };
-  }
-
-  if (value > 0) {
-    return {
-      text: `+${new Intl.NumberFormat("en-US").format(value)} ▲ ${periodLabel}`,
-      className: "text-[var(--app-success)] font-semibold",
-    };
-  }
-
-  if (value < 0) {
-    return {
-      text: `${new Intl.NumberFormat("en-US").format(value)} ▼ ${periodLabel}`,
-      className: "text-[var(--app-danger)] font-semibold",
-    };
-  }
-
-  return {
-    text: `0 ${periodLabel}`,
-    className: "text-[var(--app-text-secondary)] font-medium",
-  };
-}
-
-function formatNumber(num: number | undefined | null): string {
-  if (num === undefined || num === null) return "0";
-  return new Intl.NumberFormat("en-US").format(num);
-}
-
-function formatCompactNumber(num: number | undefined | null): string {
-  if (num === undefined || num === null) return "0";
-  if (num >= 1_000_000) {
-    return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  }
-  if (num >= 1_000) {
-    return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
-  }
-  return num.toString();
-}
-
-function formatDate(dateString: string | undefined | null): string {
-  if (!dateString) return "—";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
+function formatDate(value: string | null | undefined, locale: string): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(locale, {
+    year: "numeric",
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function renderStatusBadge(status: string) {
-  if (status === "CONNECTED") {
-    return (
-      <Badge size="sm" variant="success">
-        Connected
-      </Badge>
-    );
+function deltaPresentation(value: number | null | undefined, locale: string) {
+  if (value === null || value === undefined) {
+    return { text: "--", className: "text-[var(--app-text-tertiary)] font-medium" };
   }
-  if (status === "EXPIRED") {
-    return (
-      <Badge size="sm" variant="warning">
-        Expired
-      </Badge>
-    );
-  }
-  return (
-    <Badge size="sm" variant="neutral">
-      {status}
-    </Badge>
-  );
+  const formatted = new Intl.NumberFormat(locale).format(value);
+  if (value > 0) return { text: `+${formatted}`, className: "text-[var(--app-success)] font-semibold" };
+  if (value < 0) return { text: formatted, className: "text-[var(--app-danger)] font-semibold" };
+  return { text: "0", className: "text-[var(--app-text-secondary)] font-medium" };
+}
+
+function growthPresentation(value: number | null | undefined, periodLabel: string, locale: string) {
+  const delta = deltaPresentation(value, locale);
+  if (value === null || value === undefined) return delta;
+  if (value > 0) return { ...delta, text: `${delta.text} ▲ ${periodLabel}` };
+  if (value < 0) return { ...delta, text: `${delta.text} ▼ ${periodLabel}` };
+  return { ...delta, text: `0 ${periodLabel}` };
 }
 
 export function TikTokOverviewView({
@@ -190,517 +76,177 @@ export function TikTokOverviewView({
   bulkMetricsSummary,
   data,
 }: TikTokOverviewViewProps) {
+  const { language } = useAppLanguage();
+  const t = getTikTokOverviewText(language);
+  const locale = getTikTokLocale(language);
   const effectiveData = singleAccountData || data || null;
   const totalAccounts = accounts.length;
-
   const [growthPeriod, setGrowthPeriod] = useState<TikTokGrowthPeriod>("sevenDays");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
-  const [selectedProvince, setSelectedProvince] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-  const [sortOption, setSortOption] = useState<string>("storeNameAsc");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("ALL");
+  const [selectedProvince, setSelectedProvince] = useState("ALL");
+  const [sortOption, setSortOption] = useState("storeNameAsc");
 
-  const metricsSummaryMap = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        today: TikTokAccountMetricsGrowthSummary;
-        sevenDays: TikTokAccountMetricsGrowthSummary;
-        thirtyDays: TikTokAccountMetricsGrowthSummary;
-      }
-    >();
-    if (bulkMetricsSummary?.accounts) {
-      for (const item of bulkMetricsSummary.accounts) {
-        map.set(item.accountId, item.growth);
-      }
-    }
+  const growthMap = useMemo(() => {
+    const map = new Map<string, { today: TikTokAccountMetricsGrowthSummary; sevenDays: TikTokAccountMetricsGrowthSummary; thirtyDays: TikTokAccountMetricsGrowthSummary }>();
+    for (const item of bulkMetricsSummary?.accounts ?? []) map.set(item.accountId, item.growth);
     return map;
   }, [bulkMetricsSummary]);
 
-  const getAccountGrowthValues = (
-    account: TikTokAccountListItem,
-    period: TikTokGrowthPeriod
-  ): TikTokAccountMetricsGrowthSummary => {
-    if (
-      account.connectionStatus === "DEMO PREVIEW" ||
-      account.id === "demo-preview-mega-bangna"
-    ) {
-      return DEMO_PREVIEW_GROWTH[period];
-    }
-    const growth = metricsSummaryMap.get(account.id);
-    if (growth && growth[period]) {
-      return growth[period];
-    }
-    return {
-      followers: null,
-      following: null,
-      likes: null,
-      videos: null,
-    };
+  const growthFor = (account: TikTokAccountListItem, period: TikTokGrowthPeriod): TikTokAccountMetricsGrowthSummary => {
+    if (account.connectionStatus === "DEMO PREVIEW" || account.id === "demo-preview-mega-bangna") return DEMO_PREVIEW_GROWTH[period];
+    return growthMap.get(account.id)?.[period] ?? { followers: null, following: null, likes: null, videos: null };
   };
 
-  const regionOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const acc of accounts) {
-      if (acc.storeMaster?.region) {
-        set.add(acc.storeMaster.region.trim());
-      }
-    }
-    return Array.from(set).sort();
-  }, [accounts]);
+  const regionOptions = useMemo(
+    () => [...new Set(accounts.map((account) => account.storeMaster?.region?.trim()).filter((value): value is string => Boolean(value)))].sort(),
+    [accounts],
+  );
+  const provinceOptions = useMemo(
+    () => [...new Set(accounts.map((account) => account.storeMaster?.province?.trim()).filter((value): value is string => Boolean(value)))].sort(),
+    [accounts],
+  );
 
-  const provinceOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const acc of accounts) {
-      if (acc.storeMaster?.province) {
-        set.add(acc.storeMaster.province.trim());
-      }
-    }
-    return Array.from(set).sort();
-  }, [accounts]);
-
-  const statusOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const acc of accounts) {
-      if (acc.connectionStatus) {
-        set.add(acc.connectionStatus.trim());
-      }
-    }
-    return Array.from(set).sort();
-  }, [accounts]);
-
-  const sortedAndFilteredAccounts = useMemo(() => {
+  const visibleAccounts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-
-    const filtered = accounts.filter((acc) => {
-      if (query) {
-        const storeName = acc.storeMaster?.storeName?.toLowerCase() || "";
-        const accountName = acc.storeMaster?.accountName?.toLowerCase() || "";
-        const displayName = acc.displayName?.toLowerCase() || "";
-        const username = acc.username?.toLowerCase() || "";
-        if (
-          !storeName.includes(query) &&
-          !accountName.includes(query) &&
-          !displayName.includes(query) &&
-          !username.includes(query)
-        ) {
-          return false;
-        }
-      }
-
-      if (selectedRegion !== "ALL") {
-        if ((acc.storeMaster?.region || "") !== selectedRegion) {
-          return false;
-        }
-      }
-
-      if (selectedProvince !== "ALL") {
-        if ((acc.storeMaster?.province || "") !== selectedProvince) {
-          return false;
-        }
-      }
-
-      if (selectedStatus !== "ALL") {
-        if (acc.connectionStatus !== selectedStatus) {
-          return false;
-        }
-      }
-
-      return true;
+    const filtered = accounts.filter((account) => {
+      if (selectedRegion !== "ALL" && account.storeMaster?.region !== selectedRegion) return false;
+      if (selectedProvince !== "ALL" && account.storeMaster?.province !== selectedProvince) return false;
+      if (!query) return true;
+      return [account.storeMaster?.storeName, account.storeMaster?.accountName, account.displayName, account.username]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query));
     });
-
-    const compareGrowth = (
-      aValue: number | null | undefined,
-      bValue: number | null | undefined,
-      isAscending: boolean
-    ) => {
-      const aHasVal = aValue !== null && aValue !== undefined;
-      const bHasVal = bValue !== null && bValue !== undefined;
-
-      if (!aHasVal && !bHasVal) return 0;
-      if (!aHasVal) return 1;
-      if (!bHasVal) return -1;
-
-      return isAscending ? (aValue as number) - (bValue as number) : (bValue as number) - (aValue as number);
-    };
 
     return [...filtered].sort((a, b) => {
       const nameA = a.storeMaster?.storeName || a.displayName || "";
       const nameB = b.storeMaster?.storeName || b.displayName || "";
-
-      switch (sortOption) {
-        case "storeNameAsc":
-          return nameA.localeCompare(nameB);
-        case "storeNameDesc":
-          return nameB.localeCompare(nameA);
-
-        case "followersDesc":
-          return (b.followerCount || 0) - (a.followerCount || 0);
-        case "followersAsc":
-          return (a.followerCount || 0) - (b.followerCount || 0);
-
-        case "followerGrowthDesc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).followers;
-          const gB = getAccountGrowthValues(b, growthPeriod).followers;
-          const diff = compareGrowth(gA, gB, false);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-        case "followerGrowthAsc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).followers;
-          const gB = getAccountGrowthValues(b, growthPeriod).followers;
-          const diff = compareGrowth(gA, gB, true);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-
-        case "likesDesc":
-          return (b.likesCount || 0) - (a.likesCount || 0);
-        case "likesAsc":
-          return (a.likesCount || 0) - (b.likesCount || 0);
-
-        case "likeGrowthDesc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).likes;
-          const gB = getAccountGrowthValues(b, growthPeriod).likes;
-          const diff = compareGrowth(gA, gB, false);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-        case "likeGrowthAsc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).likes;
-          const gB = getAccountGrowthValues(b, growthPeriod).likes;
-          const diff = compareGrowth(gA, gB, true);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-
-        case "videosDesc":
-          return (
-            (b.videoCountRecorded ?? b.videoCount ?? 0) -
-            (a.videoCountRecorded ?? a.videoCount ?? 0)
-          );
-        case "videosAsc":
-          return (
-            (a.videoCountRecorded ?? a.videoCount ?? 0) -
-            (b.videoCountRecorded ?? b.videoCount ?? 0)
-          );
-
-        case "videoGrowthDesc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).videos;
-          const gB = getAccountGrowthValues(b, growthPeriod).videos;
-          const diff = compareGrowth(gA, gB, false);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-        case "videoGrowthAsc": {
-          const gA = getAccountGrowthValues(a, growthPeriod).videos;
-          const gB = getAccountGrowthValues(b, growthPeriod).videos;
-          const diff = compareGrowth(gA, gB, true);
-          return diff !== 0 ? diff : nameA.localeCompare(nameB);
-        }
-
-        default:
-          return nameA.localeCompare(nameB);
-      }
+      if (sortOption === "followersDesc") return (b.followerCount || 0) - (a.followerCount || 0);
+      if (sortOption === "followerGrowthDesc") return (growthFor(b, growthPeriod).followers ?? Number.NEGATIVE_INFINITY) - (growthFor(a, growthPeriod).followers ?? Number.NEGATIVE_INFINITY);
+      if (sortOption === "likesDesc") return (b.likesCount || 0) - (a.likesCount || 0);
+      if (sortOption === "videosDesc") return (b.videoCountRecorded ?? b.videoCount ?? 0) - (a.videoCountRecorded ?? a.videoCount ?? 0);
+      return nameA.localeCompare(nameB);
     });
-  }, [
-    accounts,
-    searchQuery,
-    selectedRegion,
-    selectedProvince,
-    selectedStatus,
-    sortOption,
-    growthPeriod,
-    metricsSummaryMap,
-  ]);
+  }, [accounts, growthMap, growthPeriod, searchQuery, selectedProvince, selectedRegion, sortOption]);
 
-  const hasActiveFilter =
-    searchQuery.trim().length > 0 ||
-    selectedRegion !== "ALL" ||
-    selectedProvince !== "ALL" ||
-    selectedStatus !== "ALL";
+  const periodLabel = growthPeriod === "today" ? t.today : growthPeriod === "sevenDays" ? t.sevenDays : t.thirtyDays;
+  const hasActiveFilter = Boolean(searchQuery.trim() || selectedRegion !== "ALL" || selectedProvince !== "ALL");
+  const statusBadge = (status: string) => {
+    if (status === "CONNECTED") return <Badge size="sm" variant="success">{t.connected}</Badge>;
+    if (status === "EXPIRED") return <Badge size="sm" variant="warning">{t.expired}</Badge>;
+    return <Badge size="sm" variant="neutral">{status}</Badge>;
+  };
 
-  // 1. Empty State (0 accounts connected)
   if (totalAccounts === 0 && !effectiveData) {
     return (
       <PageContainer>
         <div className="mx-auto max-w-4xl space-y-6">
           <PageHeader
-            tag="OPPO Retail TikTok Monitor"
-            title="TikTok Store Accounts"
-            description="Authorized TikTok store account profile, metrics, and module overview."
-            actions={
-              <div className="flex items-center gap-2">
-                <Link href="/tiktok/dashboard">
-                  <Button variant="secondary" size="sm">Dashboard</Button>
-                </Link>
-                <Link href="/tiktok/connect">
-                  <Button variant="primary" size="sm">Connect TikTok</Button>
-                </Link>
-              </div>
-            }
+            tag={t.monitorTag}
+            title={t.storeAccountsTitle}
+            description={t.storeAccountsDescription}
+            actions={<div className="flex items-center gap-2"><LanguageControl /><Link href="/tiktok/dashboard"><Button variant="secondary" size="sm">{t.dashboard}</Button></Link><Link href="/tiktok/connect"><Button variant="primary" size="sm">{t.connectTikTok}</Button></Link></div>}
           />
-          <Card className="p-10 text-center space-y-4">
+          <Card className="space-y-4 p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[var(--app-radius-lg)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]">
-              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth="1.75" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth="1.75" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             </div>
-            <div className="space-y-1">
-              <h1 className="text-xl font-bold text-[var(--app-text-primary)]">
-                No TikTok Account Connected Yet
-              </h1>
-              <p className="mx-auto max-w-md text-xs text-[var(--app-text-secondary)] leading-relaxed">
-                Connect your authorized TikTok retail account to enable real-time audience metrics, engagement insights, and video performance monitoring.
-              </p>
-            </div>
-            <div className="pt-2 flex justify-center">
-              <Link href="/tiktok/connect">
-                <Button variant="primary" size="md">
-                  Connect TikTok Account
-                </Button>
-              </Link>
-            </div>
+            <div className="space-y-1"><h1 className="text-xl font-bold text-[var(--app-text-primary)]">{t.noAccountTitle}</h1><p className="mx-auto max-w-md text-xs leading-relaxed text-[var(--app-text-secondary)]">{t.noAccountDescription}</p></div>
+            <div className="flex justify-center pt-2"><Link href="/tiktok/connect"><Button variant="primary" size="md">{t.connectTikTokAccount}</Button></Link></div>
           </Card>
         </div>
       </PageContainer>
     );
   }
 
-  // 2. Multi-Account Grid State (2+ accounts exist)
   if (totalAccounts > 1) {
-    const periodSuffix = getPeriodChipSuffix(growthPeriod);
+    const totals = accounts.reduce((sum, account) => ({
+      followers: sum.followers + (account.followerCount || 0),
+      likes: sum.likes + (account.likesCount || 0),
+      videos: sum.videos + (account.videoCountRecorded ?? account.videoCount ?? 0),
+    }), { followers: 0, likes: 0, videos: 0 });
 
     return (
       <PageContainer>
         <div className="mx-auto max-w-7xl space-y-6">
           <PageHeader
-            tag="OPPO Retail TikTok Monitor · Store Accounts Overview"
-            title="Connected Store Accounts"
-            description="Overview and comparative performance of authorized TikTok retail store accounts."
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <Link href="/tiktok/dashboard">
-                  <Button variant="secondary" size="sm">
-                    Open Dashboard
-                  </Button>
-                </Link>
-                <Link href="/tiktok/connect">
-                  <Button variant="primary" size="sm">
-                    Connect TikTok Account
-                  </Button>
-                </Link>
-              </div>
-            }
+            tag={t.overviewTag}
+            title={t.connectedStoreAccounts}
+            description={t.connectedStoreDescription}
+            actions={<div className="flex flex-wrap items-center gap-2"><LanguageControl /><Link href="/tiktok/dashboard"><Button variant="secondary" size="sm">{t.openDashboard}</Button></Link><Link href="/tiktok/connect"><Button variant="primary" size="sm">{t.connectTikTokAccount}</Button></Link></div>}
           />
 
           <FilterBar>
-            <div className="flex flex-wrap items-center gap-3 w-full">
-              {/* Growth Period Switcher */}
-              <div className="flex items-center rounded-[var(--app-radius-sm)] border border-[var(--app-border)] p-0.5 bg-[var(--app-surface)]">
-                <button
-                  type="button"
-                  onClick={() => setGrowthPeriod("today")}
-                  className={`rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    growthPeriod === "today"
-                      ? "bg-[var(--app-accent)] text-white"
-                      : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
-                  }`}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGrowthPeriod("sevenDays")}
-                  className={`rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    growthPeriod === "sevenDays"
-                      ? "bg-[var(--app-accent)] text-white"
-                      : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
-                  }`}
-                >
-                  7 Days
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGrowthPeriod("thirtyDays")}
-                  className={`rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    growthPeriod === "thirtyDays"
-                      ? "bg-[var(--app-accent)] text-white"
-                      : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
-                  }`}
-                >
-                  30 Days
-                </button>
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <div className="flex items-center rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] p-0.5">
+                {(["today", "sevenDays", "thirtyDays"] as TikTokGrowthPeriod[]).map((period) => (
+                  <button key={period} type="button" onClick={() => setGrowthPeriod(period)} className={`rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1 text-xs font-semibold transition-colors ${growthPeriod === period ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"}`}>
+                    {period === "today" ? t.today : period === "sevenDays" ? t.sevenDays : t.thirtyDays}
+                  </button>
+                ))}
               </div>
-
-              <SearchInput
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search store name, username, or display name…"
-                className="h-8 min-w-[240px] flex-1"
-              />
-
-              {regionOptions.length > 0 && (
-                <select
-                  value={selectedRegion}
-                  onChange={(e) => setSelectedRegion(e.target.value)}
-                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                >
-                  <option value="ALL">All Regions</option>
-                  {regionOptions.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              )}
-
-              {provinceOptions.length > 0 && (
-                <select
-                  value={selectedProvince}
-                  onChange={(e) => setSelectedProvince(e.target.value)}
-                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                >
-                  <option value="ALL">All Provinces</option>
-                  {provinceOptions.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              )}
-
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value)}
-                className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-              >
-                <option value="storeNameAsc">Store Name (A-Z)</option>
-                <option value="followersDesc">Followers (High to Low)</option>
-                <option value="followerGrowthDesc">Follower Growth (Highest)</option>
-                <option value="likesDesc">Total Likes (High to Low)</option>
-                <option value="videosDesc">Videos (High to Low)</option>
+              <SearchInput value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t.searchPlaceholder} className="h-8 min-w-[240px] flex-1" />
+              {regionOptions.length > 0 && <select value={selectedRegion} onChange={(event) => setSelectedRegion(event.target.value)} className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="ALL">{t.allRegions}</option>{regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>}
+              {provinceOptions.length > 0 && <select value={selectedProvince} onChange={(event) => setSelectedProvince(event.target.value)} className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="ALL">{t.allProvinces}</option>{provinceOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>}
+              <select value={sortOption} onChange={(event) => setSortOption(event.target.value)} className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]">
+                <option value="storeNameAsc">{t.sortStoreName}</option><option value="followersDesc">{t.sortFollowers}</option><option value="followerGrowthDesc">{t.sortFollowerGrowth}</option><option value="likesDesc">{t.sortLikes}</option><option value="videosDesc">{t.sortVideos}</option>
               </select>
-
-              {hasActiveFilter && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedRegion("ALL");
-                    setSelectedProvince("ALL");
-                    setSelectedStatus("ALL");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              )}
+              {hasActiveFilter && <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setSelectedRegion("ALL"); setSelectedProvince("ALL"); }}>{t.clearFilters}</Button>}
             </div>
           </FilterBar>
 
-          {/* Aggregate KPI Overview */}
           <section className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-            <MetricCard
-              label="Connected Accounts"
-              value={totalAccounts}
-              tone="default"
-            />
-            <MetricCard
-              label="Total Followers"
-              value={formatNumber(
-                accounts.reduce((sum, a) => sum + (a.followerCount || 0), 0)
-              )}
-              tone="accent"
-            />
-            <MetricCard
-              label="Total Likes"
-              value={formatNumber(
-                accounts.reduce((sum, a) => sum + (a.likesCount || 0), 0)
-              )}
-              tone="default"
-            />
-            <MetricCard
-              label="Total Public Videos"
-              value={formatNumber(
-                accounts.reduce(
-                  (sum, a) => sum + (a.videoCountRecorded ?? a.videoCount ?? 0),
-                  0
-                )
-              )}
-              tone="info"
-            />
+            <MetricCard label={t.connectedAccounts} value={totalAccounts} tone="default" />
+            <MetricCard label={t.totalFollowers} value={formatNumber(totals.followers, locale)} tone="accent" />
+            <MetricCard label={t.totalLikes} value={formatNumber(totals.likes, locale)} tone="default" />
+            <MetricCard label={t.totalPublicVideos} value={formatNumber(totals.videos, locale)} tone="info" />
           </section>
 
-          {/* Multi-Store Account Cards Grid */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {sortedAndFilteredAccounts.map((account) => {
-              const growth = getAccountGrowthValues(account, growthPeriod);
-              const fGrowth = formatGrowthChip(growth.followers, periodSuffix);
-              const lGrowth = formatGrowthChip(growth.likes, periodSuffix);
-              const vGrowth = formatGrowthChip(growth.videos, periodSuffix);
-
-              return (
-                <Card key={account.id} className="p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      {account.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={account.avatarUrl}
-                          alt={account.displayName || "TikTok Store"}
-                          className="h-12 w-12 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--app-radius-lg)] bg-[var(--app-accent-soft)] text-[var(--app-accent)] font-bold text-lg">
-                          {(account.displayName || "T")[0].toUpperCase()}
+          {visibleAccounts.length === 0 ? (
+            <Card className="p-10 text-center"><h2 className="font-bold">{t.noStores}</h2><p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.noStoresDescription}</p></Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {visibleAccounts.map((account) => {
+                const growth = growthFor(account, growthPeriod);
+                const followerGrowth = growthPresentation(growth.followers, periodLabel, locale);
+                const likeGrowth = growthPresentation(growth.likes, periodLabel, locale);
+                const videoGrowth = growthPresentation(growth.videos, periodLabel, locale);
+                const name = account.storeMaster?.storeName || account.displayName || t.tiktokStoreAccount;
+                return (
+                  <Card key={account.id} className="space-y-4 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {account.avatarUrl ? <img src={account.avatarUrl} alt={account.displayName || t.tiktokStoreAccount} className="h-12 w-12 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] object-cover" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--app-radius-lg)] bg-[var(--app-accent-soft)] text-lg font-bold text-[var(--app-accent)]">{name[0]?.toUpperCase()}</div>}
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-bold text-[var(--app-text-primary)]">{name}</h3>{statusBadge(account.connectionStatus || "CONNECTED")}</div>
+                          {account.username && <p className="truncate font-mono text-xs text-[var(--app-accent)]">@{account.username}</p>}
+                          <p className="text-[11px] text-[var(--app-text-tertiary)]">{t.storeBinding}: {account.storeMaster ? `${account.storeMaster.storeName} (${account.storeMaster.province || "—"})` : t.storeNotLinked}</p>
                         </div>
-                      )}
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-bold text-sm text-[var(--app-text-primary)] truncate">
-                            {account.storeMaster?.storeName || account.displayName || "TikTok Account"}
-                          </h3>
-                          {renderStatusBadge(account.connectionStatus || "CONNECTED")}
-                        </div>
-                        {account.username && (
-                          <p className="text-xs font-mono text-[var(--app-accent)] truncate">
-                            @{account.username}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-[var(--app-text-tertiary)]">
-                          Store Binding: {account.storeMaster ? `${account.storeMaster.storeName} (${account.storeMaster.province || "—"})` : "Store not linked yet"}
-                        </p>
                       </div>
+                      <Link href={`/tiktok/dashboard/${account.id}`}><Button variant="secondary" size="sm">{t.openDashboard}</Button></Link>
                     </div>
-
-                    <Link href={`/tiktok/dashboard/${account.id}`}>
-                      <Button variant="secondary" size="sm">
-                        Open Dashboard
-                      </Button>
-                    </Link>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 border-t border-[var(--app-border-subtle)] pt-3 text-center">
-                    <div>
-                      <p className="text-[10px] uppercase font-semibold text-[var(--app-text-tertiary)]">Followers</p>
-                      <p className="mt-0.5 text-sm font-bold text-[var(--app-text-primary)]">{formatNumber(account.followerCount)}</p>
-                      <span className={`text-[10px] block ${fGrowth.className}`}>{fGrowth.text}</span>
+                    <div className="grid grid-cols-3 gap-2 border-t border-[var(--app-border-subtle)] pt-3 text-center">
+                      {[
+                        [t.followers, account.followerCount, followerGrowth],
+                        [t.totalLikes, account.likesCount, likeGrowth],
+                        [t.videos, account.videoCountRecorded ?? account.videoCount, videoGrowth],
+                      ].map(([label, value, growthItem]) => {
+                        const presentation = growthItem as ReturnType<typeof growthPresentation>;
+                        return <div key={String(label)}><p className="text-[10px] font-semibold uppercase text-[var(--app-text-tertiary)]">{String(label)}</p><p className="mt-0.5 text-sm font-bold text-[var(--app-text-primary)]">{formatCompactNumber(value as number)}</p><span className={`block text-[10px] ${presentation.className}`}>{presentation.text}</span></div>;
+                      })}
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-semibold text-[var(--app-text-tertiary)]">Total Likes</p>
-                      <p className="mt-0.5 text-sm font-bold text-[var(--app-text-primary)]">{formatCompactNumber(account.likesCount)}</p>
-                      <span className={`text-[10px] block ${lGrowth.className}`}>{lGrowth.text}</span>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-semibold text-[var(--app-text-tertiary)]">Videos</p>
-                      <p className="mt-0.5 text-sm font-bold text-[var(--app-text-primary)]">{formatNumber(account.videoCountRecorded ?? account.videoCount)}</p>
-                      <span className={`text-[10px] block ${vGrowth.className}`}>{vGrowth.text}</span>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       </PageContainer>
     );
   }
 
-  // 3. Single Account Overview
   const profile = effectiveData?.profile || {
-    display_name: accounts[0]?.displayName || "TikTok Store Account",
+    display_name: accounts[0]?.displayName || t.tiktokStoreAccount,
     username: accounts[0]?.username || null,
     avatar_url: accounts[0]?.avatarUrl || null,
     avatar_url_100: null,
@@ -714,7 +260,6 @@ export function TikTokOverviewView({
     likes_count: accounts[0]?.likesCount || 0,
     video_count: accounts[0]?.videoCount || 0,
   };
-
   const storeMaster = effectiveData?.storeMaster || accounts[0]?.storeMaster || null;
   const videos = effectiveData?.videos || [];
   const updatedAt = effectiveData?.updatedAt || accounts[0]?.lastSyncedAt || null;
@@ -725,173 +270,42 @@ export function TikTokOverviewView({
   return (
     <PageContainer>
       <div className="mx-auto max-w-6xl space-y-6">
-        <PageHeader
-          tag="OPPO Retail TikTok Monitor · Account Overview"
-          title={profile.display_name || "TikTok Store Account"}
-          description="Authorized TikTok retail store account profile and audience overview."
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href={dashboardLink}>
-                <Button variant="primary" size="sm">
-                  Open Dashboard
-                </Button>
-              </Link>
-              {profileUrl && (
-                <a href={profileUrl} target="_blank" rel="noopener noreferrer">
-                  <Button variant="secondary" size="sm">
-                    View on TikTok
-                  </Button>
-                </a>
-              )}
-            </div>
-          }
-        />
+        <PageHeader tag={t.accountOverviewTag} title={profile.display_name || t.tiktokStoreAccount} description={t.accountDescription} actions={<div className="flex flex-wrap items-center gap-2"><LanguageControl /><Link href={dashboardLink}><Button variant="primary" size="sm">{t.openDashboard}</Button></Link>{profileUrl && <a href={profileUrl} target="_blank" rel="noopener noreferrer"><Button variant="secondary" size="sm">{t.viewOnTikTok}</Button></a>}</div>} />
 
-        {/* Profile Card */}
         <Card className="p-6">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4">
-              {avatarSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarSrc}
-                  alt={profile.display_name || "TikTok Profile"}
-                  className="h-20 w-20 rounded-[var(--app-radius-xl)] border border-[var(--app-border)] object-cover shadow-[var(--app-shadow-card)]"
-                />
-              ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-[var(--app-radius-xl)] bg-[var(--app-accent-soft)] font-bold text-2xl text-[var(--app-accent)] shadow-[var(--app-shadow-card)]">
-                  {(profile.display_name || "T")[0].toUpperCase()}
-                </div>
-              )}
-
+              {avatarSrc ? <img src={avatarSrc} alt={profile.display_name || t.tiktokStoreAccount} className="h-20 w-20 rounded-[var(--app-radius-xl)] border border-[var(--app-border)] object-cover shadow-[var(--app-shadow-card)]" /> : <div className="flex h-20 w-20 items-center justify-center rounded-[var(--app-radius-xl)] bg-[var(--app-accent-soft)] text-2xl font-bold text-[var(--app-accent)] shadow-[var(--app-shadow-card)]">{(profile.display_name || "T")[0].toUpperCase()}</div>}
               <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-bold tracking-tight text-[var(--app-text-primary)]">
-                    {profile.display_name || "TikTok Store Account"}
-                  </h1>
-                  {profile.is_verified && (
-                    <span title="Verified Account" className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--app-accent)] text-white text-[10px]">
-                      ✓
-                    </span>
-                  )}
-                  {renderStatusBadge("CONNECTED")}
-                </div>
-
-                {profile.username && (
-                  <p className="text-xs font-mono font-medium text-[var(--app-accent)]">
-                    @{profile.username}
-                  </p>
-                )}
-
-                <div className="pt-1">
-                  {storeMaster ? (
-                    <div className="inline-flex items-center gap-1.5 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-primary)]">
-                      <span className="font-semibold">{storeMaster.storeName}</span>
-                      {storeMaster.province && (
-                        <>
-                          <span className="text-[var(--app-text-tertiary)]">·</span>
-                          <span className="text-[var(--app-text-secondary)]">{storeMaster.province}</span>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-secondary)]">
-                      <span>Store not linked yet</span>
-                    </div>
-                  )}
-                </div>
-
-                {profile.bio_description && (
-                  <p className="mt-1 max-w-xl text-xs leading-relaxed text-[var(--app-text-secondary)]">
-                    {profile.bio_description}
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-2"><h1 className="text-xl font-bold tracking-tight text-[var(--app-text-primary)]">{profile.display_name || t.tiktokStoreAccount}</h1>{profile.is_verified && <span title={t.verifiedAccount} className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] text-white">✓</span>}{statusBadge("CONNECTED")}</div>
+                {profile.username && <p className="font-mono text-xs font-medium text-[var(--app-accent)]">@{profile.username}</p>}
+                <div className="pt-1">{storeMaster ? <div className="inline-flex items-center gap-1.5 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-primary)]"><span className="font-semibold">{storeMaster.storeName}</span>{storeMaster.province && <><span className="text-[var(--app-text-tertiary)]">·</span><span className="text-[var(--app-text-secondary)]">{storeMaster.province}</span></>}</div> : <div className="inline-flex items-center gap-1.5 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs text-[var(--app-text-secondary)]">{t.storeNotLinked}</div>}</div>
+                {profile.bio_description && <p className="mt-1 max-w-xl text-xs leading-relaxed text-[var(--app-text-secondary)]">{profile.bio_description}</p>}
               </div>
             </div>
-
-            <div className="flex flex-col items-end gap-2 text-right">
-              <span className="text-[11px] text-[var(--app-text-tertiary)] font-mono">
-                Last synced: {formatDate(updatedAt)}
-              </span>
-            </div>
+            <span className="font-mono text-[11px] text-[var(--app-text-tertiary)]">{t.lastSynced}: {formatDate(updatedAt, locale)}</span>
           </div>
         </Card>
 
-        {/* Quick Audience Overview Grid */}
         <section className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-          <Card className="p-4 flex flex-col justify-between">
-            <div>
-              <p className="text-xs font-medium text-[var(--app-text-secondary)] uppercase">Followers</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--app-text-primary)]">
-                {formatNumber(profile.follower_count)}
-              </p>
-              <p className="text-[11px] text-[var(--app-text-tertiary)]">
-                {formatCompactNumber(profile.follower_count)} total followers
-              </p>
-            </div>
-            {/* Growth delta breakdown: Today, 7D, 30D */}
+          <Card className="flex flex-col justify-between p-4">
+            <div><p className="text-xs font-medium uppercase text-[var(--app-text-secondary)]">{t.followers}</p><p className="mt-2 text-2xl font-bold text-[var(--app-text-primary)]">{formatNumber(profile.follower_count, locale)}</p><p className="text-[11px] text-[var(--app-text-tertiary)]">{t.followersTotal(formatCompactNumber(profile.follower_count))}</p></div>
             <div className="mt-3 space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800/80">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[var(--app-text-secondary)]">Today</span>
-                {(() => {
-                  const d = formatDelta(historicalMetrics?.summary?.dailyFollowerGrowth);
-                  return <span className={d.className}>{d.text}</span>;
-                })()}
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[var(--app-text-secondary)]">7 Days</span>
-                {(() => {
-                  const d = formatDelta(historicalMetrics?.summary?.sevenDayFollowerGrowth);
-                  return <span className={d.className}>{d.text}</span>;
-                })()}
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[var(--app-text-secondary)]">30 Days</span>
-                {(() => {
-                  const d = formatDelta(historicalMetrics?.summary?.thirtyDayFollowerGrowth);
-                  return <span className={d.className}>{d.text}</span>;
-                })()}
-              </div>
+              {[
+                [t.today, historicalMetrics?.summary?.dailyFollowerGrowth],
+                [t.sevenDays, historicalMetrics?.summary?.sevenDayFollowerGrowth],
+                [t.thirtyDays, historicalMetrics?.summary?.thirtyDayFollowerGrowth],
+              ].map(([label, value]) => { const delta = deltaPresentation(value as number | null | undefined, locale); return <div key={String(label)} className="flex items-center justify-between text-[11px]"><span className="text-[var(--app-text-secondary)]">{String(label)}</span><span className={delta.className}>{delta.text}</span></div>; })}
             </div>
           </Card>
-
-          <MetricCard
-            label="Following"
-            value={formatNumber(profile.following_count)}
-            subtext="Accounts followed"
-            tone="default"
-          />
-
-          <MetricCard
-            label="Total Likes"
-            value={formatNumber(profile.likes_count)}
-            subtext={`${formatCompactNumber(profile.likes_count)} total likes`}
-            tone="accent"
-          />
-
-          <MetricCard
-            label="Public Videos"
-            value={formatNumber(profile.video_count)}
-            subtext={`${videos.length} videos synced to database`}
-            tone="info"
-          />
+          <MetricCard label={t.following} value={formatNumber(profile.following_count, locale)} subtext={t.accountsFollowed} tone="default" />
+          <MetricCard label={t.totalLikes} value={formatNumber(profile.likes_count, locale)} subtext={t.likesTotal(formatCompactNumber(profile.likes_count))} tone="accent" />
+          <MetricCard label={t.totalPublicVideos} value={formatNumber(profile.video_count, locale)} subtext={t.videosSynced(videos.length)} tone="info" />
         </section>
 
-        {/* Dashboard Entry CTA Banner */}
-        <Card className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-[var(--app-accent-soft)]/30 to-transparent border-[var(--app-accent)]/30">
-          <div className="space-y-1">
-            <h2 className="text-base font-bold text-[var(--app-text-primary)]">
-              Explore Store Video Performance &amp; Engagement
-            </h2>
-            <p className="text-xs text-[var(--app-text-secondary)]">
-              View total video views, top performing content, comment breakdown, and share ratios.
-            </p>
-          </div>
-          <Link href={dashboardLink}>
-            <Button variant="primary" size="md">
-              Open Performance Dashboard
-            </Button>
-          </Link>
+        <Card className="flex flex-col gap-4 border-[var(--app-accent)]/30 bg-gradient-to-r from-[var(--app-accent-soft)]/30 to-transparent p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1"><h2 className="text-base font-bold text-[var(--app-text-primary)]">{t.performanceTitle}</h2><p className="text-xs text-[var(--app-text-secondary)]">{t.performanceDescription}</p></div>
+          <Link href={dashboardLink}><Button variant="primary" size="md">{t.openPerformanceDashboard}</Button></Link>
         </Card>
       </div>
     </PageContainer>
