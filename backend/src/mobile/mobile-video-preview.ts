@@ -1,9 +1,12 @@
-import * as sharp from "sharp";
+import { createRequire } from "node:module";
 
 export type VideoDisplayDimensions = {
   width: number;
   height: number;
 };
+
+const requireFromHere = createRequire(__filename);
+const sharp = requireFromHere("sharp") as typeof import("sharp");
 
 const FIXED_POINT_SCALE = 65_536;
 const PREVIEW_MAX_SIDE = 320;
