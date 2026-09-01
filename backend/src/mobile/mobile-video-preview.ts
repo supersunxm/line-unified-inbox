@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp = require("sharp");
 
 export type VideoDisplayDimensions = {
   width: number;
@@ -84,11 +84,15 @@ export async function createVideoPreviewPng(
   if (!videoDimensions) return fallbackPreviewPng;
 
   const preview = getPreviewDimensions(videoDimensions);
-  return sharp(fallbackPreviewPng)
-    .resize(preview.width, preview.height, {
-      fit: "cover",
-      position: "centre",
-    })
-    .png()
-    .toBuffer();
+  try {
+    return await sharp(fallbackPreviewPng)
+      .resize(preview.width, preview.height, {
+        fit: "cover",
+        position: "centre",
+      })
+      .png()
+      .toBuffer();
+  } catch {
+    return fallbackPreviewPng;
+  }
 }
