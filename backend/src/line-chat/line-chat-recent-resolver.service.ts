@@ -1,7 +1,8 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import type { LineChatDiscoveredChat } from "./line-chat.types";
 import {
   LINE_CHAT_PILOT_BOT_ID,
   LINE_CHAT_PILOT_OA_NAME,
@@ -12,6 +13,32 @@ import {
 const MATCH_TOLERANCE_MS = 60_000;
 const MAX_RECENT_PAGES = 5;
 const MAX_RECENT_CHATS = 125;
+
+export type ResolverTargetTimestampSource = "MESSAGE_SENT_AT" | "CONVERSATION_LATEST_MESSAGE_AT";
+export type ResolverTimestampDeltaBucket =
+  | "<=15s"
+  | "16s-30s"
+  | "31s-60s"
+  | "1m-2m"
+  | "2m-5m"
+  | "5m-15m"
+  | "15m-60m"
+  | ">60m"
+  | "NO_VALID_TIMESTAMP";
+
+export interface LineChatRecentResolverDiagnostic {
+  event: "line_chat_recent_resolver_diagnostic";
+  resolutionStatus: LineChatRecentResolutionResult["status"];
+  conversationId: string;
+  recentChatCount: number;
+  validTimestampChatCount: number;
+  exactNameMatchCount: number;
+  timestampWithinToleranceCount: number;
+  combinedMatchCount: number;
+  closestExactNameTimestampDeltaBucket: ResolverTimestampDeltaBucket;
+  targetTimestampSource: ResolverTargetTimestampSource;
+  exactNameWithMissingTimestampCount: number;
+}
 
 export type LineChatRecentResolutionResult =
   | { status: "RESOLVED"; lineChatUserId: string }
@@ -37,8 +64,73 @@ function pilotStoreCode(store: { code: string | null; storeMaster: { externalSto
   return store?.code?.trim() || store?.storeMaster?.externalStoreId?.trim() || "";
 }
 
+function timestampDeltaBucket(deltaMs: number | null): ResolverTimestampDeltaBucket {
+  if (deltaMs === null || !Number.isFinite(deltaMs)) return "NO_VALID_TIMESTAMP";
+  if (deltaMs <= 15_000) return "<=15s";
+  if (deltaMs <= 30_000) return "16s-30s";
+  if (deltaMs <= 60_000) return "31s-60s";
+  if (deltaMs <= 120_000) return "1m-2m";
+  if (deltaMs <= 300_000) return "2m-5m";
+  if (deltaMs <= 900_000) return "5m-15m";
+  if (deltaMs <= 3_600_000) return "15m-60m";
+  return ">60m";
+}
+
+function buildDiagnostic(
+  conversationId: string,
+  recentChats: readonly LineChatDiscoveredChat[],
+  targetName: string,
+  targetTimestamp: Date,
+  targetTimestampSource: ResolverTargetTimestampSource,
+  resolutionStatus: LineChatRecentResolutionResult["status"],
+): LineChatRecentResolverDiagnostic {
+  const targetMs = targetTimestamp.getTime();
+  const targetIsValid = Number.isFinite(targetMs);
+  const validTimestampChatCount = recentChats.filter((chat) => {
+    const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
+    return Number.isFinite(value);
+  }).length;
+  const exactNameChats = targetName
+    ? recentChats.filter((chat) => normalizeName(chat.displayName) === targetName)
+    : [];
+  const timestampWithinToleranceCount = targetIsValid
+    ? recentChats.filter((chat) => {
+      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
+      return Number.isFinite(value) && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
+    }).length
+    : 0;
+  const combinedMatchCount = targetIsValid
+    ? exactNameChats.filter((chat) => {
+      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
+      return Number.isFinite(value) && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
+    }).length
+    : 0;
+  const exactNameDeltas = exactNameChats
+    .map((chat) => {
+      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
+      return targetIsValid && Number.isFinite(value) ? Math.abs(value - targetMs) : null;
+    })
+    .filter((value): value is number => value !== null);
+  const closestDelta = exactNameDeltas.length > 0 ? Math.min(...exactNameDeltas) : null;
+  return {
+    event: "line_chat_recent_resolver_diagnostic",
+    resolutionStatus,
+    conversationId,
+    recentChatCount: recentChats.length,
+    validTimestampChatCount,
+    exactNameMatchCount: exactNameChats.length,
+    timestampWithinToleranceCount,
+    combinedMatchCount,
+    closestExactNameTimestampDeltaBucket: timestampDeltaBucket(closestDelta),
+    targetTimestampSource,
+    exactNameWithMissingTimestampCount: exactNameChats.length - exactNameDeltas.length,
+  };
+}
+
 @Injectable()
 export class LineChatRecentResolverService {
+  private readonly logger = new Logger(LineChatRecentResolverService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
@@ -117,7 +209,11 @@ export class LineChatRecentResolverService {
     }
 
     const targetName = normalizeName(conversation.customer.displayName);
-    const targetTimestamp = conversation.messages[0]?.sentAt ?? conversation.latestMessageAt;
+    const targetMessage = conversation.messages[0]?.sentAt;
+    const targetTimestamp = targetMessage ?? conversation.latestMessageAt;
+    const targetTimestampSource: ResolverTargetTimestampSource = targetMessage
+      ? "MESSAGE_SENT_AT"
+      : "CONVERSATION_LATEST_MESSAGE_AT";
     const candidates = recent.chats.filter((chat) => {
       if (!targetName || normalizeName(chat.displayName) !== targetName || !chat.lastMessageAt) return false;
       const candidateTime = new Date(chat.lastMessageAt).getTime();
@@ -125,12 +221,32 @@ export class LineChatRecentResolverService {
         && Math.abs(candidateTime - targetTimestamp.getTime()) <= MATCH_TOLERANCE_MS;
     });
 
-    if (candidates.length === 0) return { status: "RESOLVE_NO_MATCH" };
-    if (candidates.length > 1) return { status: "RESOLVE_AMBIGUOUS" };
+    if (candidates.length === 0) {
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        recent.chats,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+        "RESOLVE_NO_MATCH",
+      ));
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+    if (candidates.length > 1) {
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        recent.chats,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+        "RESOLVE_AMBIGUOUS",
+      ));
+      return { status: "RESOLVE_AMBIGUOUS" };
+    }
     const resolvedId = candidates[0].chatUserId;
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const mappingResult = await this.prisma.$transaction(async (tx) => {
         const conflict = await tx.conversation.findFirst({
           where: {
             lineOfficialAccountId: input.lineOfficialAccountId,
@@ -160,8 +276,30 @@ export class LineChatRecentResolverService {
           ? { status: "RESOLVED", lineChatUserId: resolvedId } as const
           : { status: "RESOLVE_CONFLICT" } as const;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        recent.chats,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+        mappingResult.status,
+      ));
+      return mappingResult;
     } catch {
-      return { status: "RESOLVE_CONFLICT" };
+      const mappingResult = { status: "RESOLVE_CONFLICT" } as const;
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        recent.chats,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+        mappingResult.status,
+      ));
+      return mappingResult;
     }
+  }
+
+  private emitDiagnostic(diagnostic: LineChatRecentResolverDiagnostic): void {
+    this.logger.log(JSON.stringify(diagnostic));
   }
 }
