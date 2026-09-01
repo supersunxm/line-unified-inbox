@@ -19,17 +19,19 @@ jobs:
           set -euo pipefail
           RESPONSE="$(curl --fail --silent --show-error --location --retry 3 --retry-delay 2 https://line-unified-inbox-production-544f.up.railway.app/app/version/android)"
           echo "$RESPONSE" | jq .
-          test "$(echo "$RESPONSE" | jq -r '.version')" = "1.1.12"
+          test "$(echo "$RESPONSE" | jq -r '.latestVersion')" = "1.1.12"
           test "$(echo "$RESPONSE" | jq -r '.buildNumber')" = "32"
           APK_URL="$(echo "$RESPONSE" | jq -r '.apkUrl')"
+          EXPECTED_SHA="$(echo "$RESPONSE" | jq -r '.sha256')"
           test -n "$APK_URL"
           test "$APK_URL" != "null"
+          test "$EXPECTED_SHA" = "7e9e7a2eb219f2595bb75516f03c4a7a5e44836e3c9597422ec1faa803ee83cb"
           echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
+          echo "EXPECTED_SHA=$EXPECTED_SHA" >> "$GITHUB_ENV"
 
       - name: Verify public APK checksum
         run: |
           set -euo pipefail
-          EXPECTED_SHA="7efad55a1c22355565702bd4ac03c3b2d36de8db97fa92e63df9dff69e431586"
           curl --fail --silent --show-error --location --retry 3 --retry-delay 2 "$APK_URL" -o /tmp/oppo-line-oa-chat-v1.1.12-production.apk
           ACTUAL_SHA="$(sha256sum /tmp/oppo-line-oa-chat-v1.1.12-production.apk | cut -d' ' -f1)"
           BYTES="$(stat -c%s /tmp/oppo-line-oa-chat-v1.1.12-production.apk)"
