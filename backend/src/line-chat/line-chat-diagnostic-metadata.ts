@@ -16,6 +16,13 @@ export interface SanitizedDiagnosticUrl {
   query: DiagnosticQueryMetadata;
 }
 
+export interface SanitizedNavigationMetadata {
+  url: string;
+  origin: string;
+  pathname: string;
+  documentTitle: string | null;
+}
+
 /**
  * Returns only origin/pathname plus query names and safe pagination metadata.
  * Query values, cookies, credentials, and customer identifiers are never
@@ -56,6 +63,93 @@ export function sanitizeDiagnosticUrl(rawUrl: string): SanitizedDiagnosticUrl {
       url: "[unparseable-url]",
       query: { parameterNames: [], safeScalars: {}, redactedParameters: [] },
     };
+  }
+}
+
+/**
+ * Sanitizes a final browser URL and title for navigation diagnostics. URL
+ * queries are intentionally discarded; titles are retained only when they
+ * look like a generic LINE/authentication title, otherwise they are redacted
+ * to avoid leaking account or customer names.
+ */
+export function sanitizeNavigationMetadata(
+  rawUrl: string,
+  rawTitle?: string | null,
+): SanitizedNavigationMetadata {
+  try {
+    const parsed = new URL(rawUrl);
+    const pathname = redactCustomerPathSegments(parsed.pathname);
+    const origin = parsed.origin;
+    return {
+      url: `${origin}${pathname}`,
+      origin,
+      pathname,
+      documentTitle: sanitizeDiagnosticTitle(rawTitle),
+    };
+  } catch {
+    return {
+      url: "[unparseable-url]",
+      origin: "[unknown-origin]",
+      pathname: "[unknown-path]",
+      documentTitle: sanitizeDiagnosticTitle(rawTitle),
+    };
+  }
+}
+
+/**
+ * Returns a title only for known generic LINE/authentication surfaces. A
+ * dynamic or unknown title is represented without retaining its value.
+ */
+export function sanitizeDiagnosticTitle(rawTitle?: string | null): string | null {
+  const title = rawTitle
+    ?.split("")
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? " " : character;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title) return null;
+  if (
+    /^(?:line(?: official account(?: manager)?| chat)?|official account manager|sign[ -]?in(?: to line)?|log[ -]?in(?: to line)?|authentication(?: required)?|session expired)$/i.test(title)
+    && title.length <= 120
+  ) {
+    return title;
+  }
+  return "[redacted]";
+}
+
+export function isLoginLikeNavigationUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return /(login|sign[ -]?in|auth|oauth|sso|account|verify|verification|relogin|session[-_ ]?expired)/i.test(
+      `${parsed.hostname}${parsed.pathname}`,
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isChatLineOrigin(rawUrl: string): boolean {
+  try {
+    return new URL(rawUrl).origin === "https://chat.line.biz";
+  } catch {
+    return false;
+  }
+}
+
+export function isRequestedWorkspacePath(finalUrl: string, requestedUrl: string): boolean {
+  try {
+    const finalParsed = new URL(finalUrl);
+    const requestedParsed = new URL(requestedUrl);
+    const normalize = (pathname: string) => pathname.replace(/\/+$/, "") || "/";
+    return (
+      finalParsed.origin === "https://chat.line.biz"
+      && normalize(finalParsed.pathname) === normalize(requestedParsed.pathname)
+    );
+  } catch {
+    return false;
   }
 }
 
