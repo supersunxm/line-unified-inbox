@@ -4,27 +4,6 @@ import 'dart:typed_data';
 
 const _unset = Object();
 
-String _normalizeCustomerSalesModelName(String value) {
-  var result = normalizeProductDisplayName(value);
-  result = result.replaceAllMapped(
-    RegExp(r'\b([AFKNRX])\s+(\d{1,2})\b', caseSensitive: false),
-    (match) => '${match[1]}${match[2]}',
-  );
-  return result;
-}
-
-String? _normalizeCustomerSalesCapacity(String? value) {
-  if (value == null) return null;
-  final normalized = value
-      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F\u200B\uFEFF]+'), ' ')
-      .trim();
-  if (normalized.isEmpty) return null;
-  final compact = normalized.replaceAll(' ', '');
-  final match = RegExp(r'^(\d+)(?:GB)?$', caseSensitive: false)
-      .firstMatch(compact);
-  return match == null ? normalized : match[1];
-}
-
 class CustomerSalesProductItem {
   const CustomerSalesProductItem({
     required this.id,
@@ -69,14 +48,14 @@ class CustomerSalesProductItem {
           json['productModelId'] as String? ?? model['id'] as String? ?? '',
       productVariantId:
           json['productVariantId'] as String? ?? variant?['id'] as String?,
-      modelName: _normalizeCustomerSalesModelName(
+      modelName: normalizeProductDisplayName(
         model['name'] as String? ?? json['modelName'] as String? ?? 'Product',
       ),
       seriesName: model['seriesName'] as String?,
       category: model['category'] as String?,
-      ram: _normalizeCustomerSalesCapacity(
+      ram: normalizeProductCapacity(
           json['ram'] as String? ?? variant?['ram'] as String?),
-      rom: _normalizeCustomerSalesCapacity(
+      rom: normalizeProductCapacity(
           json['rom'] as String? ?? variant?['rom'] as String?),
       color: (json['color'] as String? ?? variant?['color'] as String?)?.trim(),
       quantity: json['quantity'] is num ? (json['quantity'] as num).toInt() : 1,
