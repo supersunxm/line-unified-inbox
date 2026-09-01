@@ -57,6 +57,64 @@ void main() {
     expect(find.text('📱 OPPO Reno16 +2'), findsOneWidget);
   });
 
+  testWidgets(
+      'conversation card parses and renders split OPPO Reno 1 6 5 G as OPPO Reno 16 5G',
+      (tester) async {
+    final rawJson = {
+      'id': 'conversation-1',
+      'customer': {'displayName': 'Somchai', 'pictureUrl': null},
+      'store': {'name': 'OPPO CentralWorld', 'code': 'CW01'},
+      'bmReplyStatus': 'NOT_REPLIED',
+      'unreadCount': 0,
+      'customerSalesSummary': {
+        'status': 'INTERESTED',
+        'interestLevel': 'HOT',
+        'products': [
+          {'modelName': 'OPPO Reno 1 6 5 G', 'quantity': 1},
+        ],
+      },
+    };
+
+    final parsed = ConversationSummary.fromJson(rawJson);
+
+    await tester.pumpWidget(_app(ConversationCard(
+      conversation: parsed,
+      onTap: () {},
+    )));
+
+    expect(find.text('📱 OPPO Reno 16 5G'), findsOneWidget);
+    expect(find.textContaining('1 6 5 G'), findsNothing);
+  });
+
+  testWidgets(
+      'conversation card parses and renders split OPPO Reno 1 6 5G as OPPO Reno 16 5G',
+      (tester) async {
+    final rawJson = {
+      'id': 'conversation-2',
+      'customer': {'displayName': 'Somchai', 'pictureUrl': null},
+      'store': {'name': 'OPPO CentralWorld', 'code': 'CW01'},
+      'bmReplyStatus': 'NOT_REPLIED',
+      'unreadCount': 0,
+      'customerSalesSummary': {
+        'status': 'INTERESTED',
+        'interestLevel': 'HOT',
+        'products': [
+          {'modelName': 'OPPO Reno 1 6 5G', 'quantity': 1},
+        ],
+      },
+    };
+
+    final parsed = ConversationSummary.fromJson(rawJson);
+
+    await tester.pumpWidget(_app(ConversationCard(
+      conversation: parsed,
+      onTap: () {},
+    )));
+
+    expect(find.text('📱 OPPO Reno 16 5G'), findsOneWidget);
+    expect(find.textContaining('1 6 5G'), findsNothing);
+  });
+
   testWidgets('conversation card hides sales tag when no sales data exists',
       (tester) async {
     await tester.pumpWidget(_app(ConversationCard(
