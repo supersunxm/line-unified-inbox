@@ -99,7 +99,7 @@ export interface DiagnosticResponseSchemaSummary {
 
 export interface DiagnosticIdentifierFieldSummary {
   stringCount: number;
-  matchesUdPattern: number;
+  matchesUserIdPattern: number;
   otherStringCount: number;
   nullOrMissing: number;
 }
@@ -117,8 +117,8 @@ export interface DiagnosticChatIdentifierShape {
 }
 
 export interface DiagnosticChatIdPrefixCounts {
-  Ud: number;
-  U_other: number;
+  validUserId: number;
+  invalidU: number;
   R: number;
   C: number;
   other: number;
@@ -242,7 +242,7 @@ export interface DiagnosticsResult {
   chatListPagination?: DiagnosticPaginationSummary;
   knownChatIdMatch?: DiagnosticKnownChatIdMatch;
   chatListFirstPageQueryNames: string[];
-  scrollCandidatesAttempted: number;
+  wheelProbeAttempts: number;
   secondPageRequestObserved: boolean;
   secondPageQueryNames: string[];
   secondPageNewQueryNames: string[];

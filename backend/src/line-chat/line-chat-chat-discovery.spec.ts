@@ -5,16 +5,30 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { APIResponse, BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
-import { parseLineChatListResponse } from "./line-chat-chat-discovery";
+import { isLineChatUserId, parseLineChatListResponse } from "./line-chat-chat-discovery";
 import {
   sanitizeDiagnosticUrl,
   summarizeChatListContractJson,
   summarizeDiagnosticJson,
 } from "./line-chat-diagnostic-metadata";
 
+const VALID_USER_ID = `U${"1a".repeat(16)}`;
+const VALID_USER_ID_2 = `Ud${"2b".repeat(15)}c`;
+
+test("LINE USER ID validation follows the official U plus 32 hex contract", () => {
+  assert.equal(isLineChatUserId(`U${"a".repeat(32)}`), true);
+  assert.equal(isLineChatUserId(`U${"ABCDEF01".repeat(4)}`), true);
+  assert.equal(isLineChatUserId(VALID_USER_ID_2), true);
+  assert.equal(isLineChatUserId(`U${"g".repeat(32)}`), false);
+  assert.equal(isLineChatUserId(`U${"a".repeat(31)}`), false);
+  assert.equal(isLineChatUserId(`U${"a".repeat(33)}`), false);
+  assert.equal(isLineChatUserId(`C${"a".repeat(32)}`), false);
+  assert.equal(isLineChatUserId(`R${"a".repeat(32)}`), false);
+});
+
 test("chat-list adapter preserves only sanitized known fields for a supported shape", () => {
   const result = parseLineChatListResponse({ data: [{
-    userId: "Ud1234567890abcdef",
+    userId: VALID_USER_ID,
     displayName: "Somchai",
     lastMessage: { text: "Hello", sentAt: "2026-08-31T05:00:00.000Z", direction: "INBOUND" },
     cookie: "must-not-be-retained",
@@ -24,7 +38,7 @@ test("chat-list adapter preserves only sanitized known fields for a supported sh
   });
   assert.equal(result.responseShape, "data");
   assert.deepEqual(result.chats, [{
-    chatUserId: "Ud1234567890abcdef",
+    chatUserId: VALID_USER_ID,
     displayName: "Somchai",
     lastMessageText: "Hello",
     lastMessageAt: "2026-08-31T05:00:00.000Z",
@@ -35,12 +49,12 @@ test("chat-list adapter preserves only sanitized known fields for a supported sh
 });
 
 test("chat-list adapter supports a direct array shape", () => {
-  const result = parseLineChatListResponse([{ id: "Ud1234567890abcdef", name: "Somchai" }], {
+  const result = parseLineChatListResponse([{ id: VALID_USER_ID, name: "Somchai" }], {
     botId: "Ubot",
     endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
   });
   assert.equal(result.responseShape, "array");
-  assert.equal(result.chats[0]?.chatUserId, "Ud1234567890abcdef");
+  assert.equal(result.chats[0]?.chatUserId, VALID_USER_ID);
 });
 
 test("chat-list adapter supports an alternate items shape and distinguishes an empty list", () => {
@@ -54,11 +68,11 @@ test("chat-list adapter supports an alternate items shape and distinguishes an e
 });
 
 test("chat-list adapter normalizes epoch seconds and milliseconds deterministically", () => {
-  const seconds = parseLineChatListResponse({ chats: [{ userId: "Ud1234567890abcdef", lastMessageAt: 1788152400 }] }, {
+  const seconds = parseLineChatListResponse({ chats: [{ userId: VALID_USER_ID, lastMessageAt: 1788152400 }] }, {
     botId: "Ubot",
     endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
   });
-  const milliseconds = parseLineChatListResponse({ chats: [{ userId: "Ud1234567890abcdef", lastMessageAt: "1788152400000" }] }, {
+  const milliseconds = parseLineChatListResponse({ chats: [{ userId: VALID_USER_ID, lastMessageAt: "1788152400000" }] }, {
     botId: "Ubot",
     endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
   });
@@ -80,10 +94,10 @@ test("malformed and unknown top-level payloads fail closed", () => {
 test("entries without usable IDs and invalid IDs are skipped safely", () => {
   const result = parseLineChatListResponse({ chats: [
     { displayName: "No ID" },
-    { userId: "U1234567890abcdef", displayName: "Messaging API" },
-    { userId: "Ud1234567890abcdef", displayName: "Valid" },
+    { userId: `U${"z".repeat(32)}`, displayName: "Non-hex" },
+    { userId: VALID_USER_ID, displayName: "Valid" },
   ] }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" });
-  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), ["Ud1234567890abcdef"]);
+  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [VALID_USER_ID]);
 });
 
 function mockResponse(status: number, body: unknown, jsonError?: Error): APIResponse {
@@ -133,7 +147,7 @@ async function discoverWithResponse(response: APIResponse | Error) {
 
 test("session discovery uses the authenticated BrowserContext request GET", async () => {
   const { result, mock } = await discoverWithResponse(mockResponse(200, {
-    chats: [{ userId: "Ud1234567890abcdef", displayName: "Somchai" }],
+    chats: [{ userId: VALID_USER_ID, displayName: "Somchai" }],
   }));
   assert.equal(result.endpoint, "https://chat.line.biz/api/v1/bots/Ubot/chats");
   assert.equal(mock.calls.length, 1);
@@ -142,7 +156,7 @@ test("session discovery uses the authenticated BrowserContext request GET", asyn
     headers: { Accept: "application/json, text/plain, */*" },
     timeout: 15000,
   });
-  assert.equal(result.chats[0]?.chatUserId, "Ud1234567890abcdef");
+  assert.equal(result.chats[0]?.chatUserId, VALID_USER_ID);
   assert.equal(result.enumerationStatus, "UNVERIFIED");
   assert.equal(mock.wasClosed(), true);
 });
@@ -222,9 +236,9 @@ test("diagnostic JSON schema summarizer emits structure only", () => {
 test("chat-list contract summarizes list identifier shapes without values", () => {
   const summary = summarizeChatListContractJson({
     list: [
-      { chatId: "Ud1234567890abcdef", userId: "Udabcdef1234567890", name: "Customer One" },
-      { chatId: "not-an-ud-id", userId: null, nickname: "Private nickname" },
-      { chatId: null, userId: "Udqwerty12345678", latestEvent: { message: "Private text" } },
+      { chatId: VALID_USER_ID, userId: VALID_USER_ID_2, name: "Customer One" },
+      { chatId: "not-a-user-id", userId: null, nickname: "Private nickname" },
+      { chatId: null, userId: `U${"3c".repeat(16)}`, latestEvent: { message: "Private text" } },
       { name: "Missing identifiers" },
     ],
     next: "opaque-next-token-value",
@@ -234,13 +248,13 @@ test("chat-list contract summarizes list identifier shapes without values", () =
   assert.equal(summary.identifierShape.listCount, 4);
   assert.deepEqual(summary.identifierShape.chatId, {
     stringCount: 2,
-    matchesUdPattern: 1,
+    matchesUserIdPattern: 1,
     otherStringCount: 1,
     nullOrMissing: 2,
   });
   assert.deepEqual(summary.identifierShape.userId, {
     stringCount: 2,
-    matchesUdPattern: 2,
+    matchesUserIdPattern: 2,
     otherStringCount: 0,
     nullOrMissing: 2,
   });
@@ -254,7 +268,8 @@ test("chat-list contract summarizes list identifier shapes without values", () =
   assert.equal(summary.pagination.nextType, "string");
   assert.equal(summary.pagination.nextStringClassification, "OPAQUE_TOKEN");
   assert.equal(summary.pagination.nextLengthBucket, "1-32");
-  assert.doesNotMatch(JSON.stringify(summary), /Ud1234567890abcdef|Customer One|Private nickname|Private text|opaque-next-token-value/);
+  assert.ok(!JSON.stringify(summary).includes(VALID_USER_ID));
+  assert.doesNotMatch(JSON.stringify(summary), /Customer One|Private nickname|Private text|opaque-next-token-value/);
 });
 
 test("chat-list contract classifies URL, empty, null, and object next metadata safely", () => {
@@ -280,7 +295,7 @@ test("chat-list contract classifies URL, empty, null, and object next metadata s
 
 test("chat-list contract classifies chatId prefixes and length buckets structurally", () => {
   const identifiers = [
-    "Ud123456",
+    VALID_USER_ID_2,
     "U1234567890123456",
     `R${"r".repeat(32)}`,
     `C${"c".repeat(40)}`,
@@ -293,8 +308,8 @@ test("chat-list contract classifies chatId prefixes and length buckets structura
 
   assert.deepEqual(summary?.chatIdStructure, {
     totalStrings: 5,
-    prefixClass: { Ud: 1, U_other: 1, R: 1, C: 1, other: 1 },
-    lengthBuckets: { lte16: 2, from17To32: 1, from33To40: 1, gte41: 1 },
+    prefixClass: { validUserId: 1, invalidU: 1, R: 1, C: 1, other: 1 },
+    lengthBuckets: { lte16: 1, from17To32: 1, from33To40: 2, gte41: 1 },
   });
   for (const identifier of identifiers) {
     assert.ok(!JSON.stringify(summary).includes(identifier));
@@ -304,7 +319,7 @@ test("chat-list contract classifies chatId prefixes and length buckets structura
 test("chat-list contract correlates safe chatType categories with ID shapes only", () => {
   const summary = summarizeChatListContractJson({
     list: [
-      { chatId: "Ud123456", chatType: "USER", friend: true, profile: { name: "Private profile" } },
+      { chatId: VALID_USER_ID, chatType: "USER", friend: true, profile: { name: "Private profile" } },
       { chatId: "U1234567890", chatType: "USER", friend: false },
       { chatId: "R1234567890", chatType: "Customer-derived category", friend: "unknown" },
       { chatId: "C1234567890", chatType: "Another private category", profile: { id: "private-profile-id" } },
@@ -315,10 +330,10 @@ test("chat-list contract correlates safe chatType categories with ID shapes only
 
   assert.deepEqual(summary?.chatTypeCorrelation, {
     matrix: [
-      { category: "USER", count: 2, idShape: { Ud: 1, U_other: 1, R: 0, C: 0, other: 0 } },
-      { category: "TYPE_A", count: 1, idShape: { Ud: 0, U_other: 0, R: 1, C: 0, other: 0 } },
-      { category: "TYPE_B", count: 1, idShape: { Ud: 0, U_other: 0, R: 0, C: 1, other: 0 } },
-      { category: "MISSING", count: 1, idShape: { Ud: 0, U_other: 0, R: 0, C: 0, other: 1 } },
+      { category: "USER", count: 2, idShape: { validUserId: 1, invalidU: 1, R: 0, C: 0, other: 0 } },
+      { category: "TYPE_A", count: 1, idShape: { validUserId: 0, invalidU: 0, R: 1, C: 0, other: 0 } },
+      { category: "TYPE_B", count: 1, idShape: { validUserId: 0, invalidU: 0, R: 0, C: 1, other: 0 } },
+      { category: "MISSING", count: 1, idShape: { validUserId: 0, invalidU: 0, R: 0, C: 0, other: 1 } },
     ],
     chatTypePresence: { present: 4, missing: 1 },
     friend: { trueCount: 1, falseCount: 1, otherOrMissing: 3 },
@@ -326,8 +341,9 @@ test("chat-list contract correlates safe chatType categories with ID shapes only
   });
   assert.doesNotMatch(
     JSON.stringify(summary),
-    /Customer-derived category|Another private category|Private profile|private-profile-id|Ud123456|U1234567890|R1234567890|C1234567890|x-other/,
+    /Customer-derived category|Another private category|Private profile|private-profile-id|U1234567890|R1234567890|C1234567890|x-other/,
   );
+  assert.ok(!JSON.stringify(summary).includes(VALID_USER_ID));
 });
 
 test("known chat ID matching returns flags only and never retains the supplied value", () => {

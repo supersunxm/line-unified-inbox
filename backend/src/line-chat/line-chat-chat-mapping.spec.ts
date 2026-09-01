@@ -17,6 +17,8 @@ import { parseLineChatListResponse } from "./line-chat-chat-discovery";
 import { parseMappingDiscoveryArgs, runMappingDiscoveryCli } from "../../scripts/discover-line-chat-mappings";
 
 const baseDate = new Date("2026-08-31T05:00:00.000Z");
+const CHAT_USER_ID_A = `U${"1a".repeat(16)}`;
+const CHAT_USER_ID_B = `U${"2b".repeat(16)}`;
 
 function conversation(overrides: Partial<MappingConversationInput> = {}): MappingConversationInput {
   return {
@@ -55,7 +57,7 @@ function candidate(overrides: Partial<{
   lastMessageDirection: string | null;
 }> = {}) {
   return {
-    chatUserId: "Ud1234567890abcdef",
+    chatUserId: CHAT_USER_ID_A,
     displayName: "Somchai",
     lastMessageText: "Hello",
     lastMessageAt: baseDate.toISOString(),
@@ -110,8 +112,8 @@ test("timestamp matching honors Bangkok offsets and the deterministic two-minute
 
 test("duplicate display names are ambiguous", () => {
   const plan = buildPilotMappingPlan(context(), discovery([
-    candidate({ chatUserId: "Ud11111111111111", lastMessageText: null, lastMessageAt: null, lastMessageDirection: null }),
-    candidate({ chatUserId: "Ud22222222222222", lastMessageText: null, lastMessageAt: null, lastMessageDirection: null }),
+    candidate({ chatUserId: CHAT_USER_ID_A, lastMessageText: null, lastMessageAt: null, lastMessageDirection: null }),
+    candidate({ chatUserId: CHAT_USER_ID_B, lastMessageText: null, lastMessageAt: null, lastMessageDirection: null }),
   ]));
   assert.equal(plan.rows[0].confidence, "AMBIGUOUS");
 });
@@ -140,8 +142,8 @@ test("exact and possible rows competing for one chat ID are both rejected", () =
 
 test("one conversation with two equal candidates is ambiguous", () => {
   const plan = buildPilotMappingPlan(context(), discovery([
-    candidate({ chatUserId: "Ud11111111111111" }),
-    candidate({ chatUserId: "Ud22222222222222" }),
+    candidate({ chatUserId: CHAT_USER_ID_A }),
+    candidate({ chatUserId: CHAT_USER_ID_B }),
   ]));
   assert.equal(plan.rows[0].confidence, "AMBIGUOUS");
 });
@@ -162,7 +164,7 @@ test("existing lineChatUserId is preserved and skipped", () => {
 });
 
 test("a discovered candidate reused by an existing mapping is counted as a conflict", () => {
-  const existing = "Ud1234567890abcdef";
+  const existing = CHAT_USER_ID_A;
   const plan = buildPilotMappingPlan(context([
     conversation({ id: "already-mapped", lineChatUserId: existing }),
     conversation({ id: "unmapped" }),
@@ -171,12 +173,14 @@ test("a discovered candidate reused by an existing mapping is counted as a confl
   assert.equal(plan.summary.conflictsDetected, 1);
 });
 
-test("invalid non-Ud destination IDs are rejected by the response adapter", () => {
+test("only official LINE USER IDs are accepted by the response adapter", () => {
   const result = parseLineChatListResponse({ chats: [
-    { userId: "U1234567890abcdef", displayName: "Messaging API user" },
-    { userId: "Ud1234567890abcdef", displayName: "OA Manager user" },
+    { userId: `U${"g".repeat(32)}`, displayName: "Non-hex" },
+    { userId: `C${"a".repeat(32)}`, displayName: "Group" },
+    { userId: `R${"a".repeat(32)}`, displayName: "Room" },
+    { userId: CHAT_USER_ID_A, displayName: "OA Manager user" },
   ] }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" });
-  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), ["Ud1234567890abcdef"]);
+  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [CHAT_USER_ID_A]);
 });
 
 test("context query never selects Customer.lineUserId", async () => {

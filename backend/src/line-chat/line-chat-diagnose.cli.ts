@@ -119,8 +119,8 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
         lines.push(" Chat ID Structure:");
         lines.push(`   totalStrings: ${structure.totalStrings}`);
         lines.push("   prefixClass:");
-        lines.push(`     Ud: ${structure.prefixClass.Ud}`);
-        lines.push(`     U_other: ${structure.prefixClass.U_other}`);
+        lines.push(`     valid USER ID: ${structure.prefixClass.validUserId}`);
+        lines.push(`     invalid U-prefixed: ${structure.prefixClass.invalidU}`);
         lines.push(`     R: ${structure.prefixClass.R}`);
         lines.push(`     C: ${structure.prefixClass.C}`);
         lines.push(`     other: ${structure.prefixClass.other}`);
@@ -137,8 +137,8 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
         for (const row of correlation.matrix) {
           lines.push(`   ${row.category}:`);
           lines.push(`     count: ${row.count}`);
-          lines.push(`     Ud: ${row.idShape.Ud}`);
-          lines.push(`     U_other: ${row.idShape.U_other}`);
+          lines.push(`     valid USER ID: ${row.idShape.validUserId}`);
+          lines.push(`     invalid U-prefixed: ${row.idShape.invalidU}`);
           lines.push(`     R: ${row.idShape.R}`);
           lines.push(`     C: ${row.idShape.C}`);
           lines.push(`     other: ${row.idShape.other}`);
@@ -170,7 +170,7 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
       lines.push(`   chatId: ${result.knownChatIdMatch.chatId}`);
       lines.push(`   userId: ${result.knownChatIdMatch.userId}`);
     }
-    lines.push(` Scroll Candidates Tried: ${result.scrollCandidatesAttempted}`);
+    lines.push(` Wheel Probe Attempts: ${result.wheelProbeAttempts}`);
     lines.push(` Second Page Request: ${result.secondPageRequestObserved ? "OBSERVED" : "NOT OBSERVED"}`);
     lines.push(` Second Page Query Names: ${result.secondPageQueryNames.length > 0 ? `[${result.secondPageQueryNames.join(", ")}]` : "[]"}`);
     lines.push(` New Query Names vs First Page: ${result.secondPageNewQueryNames.length > 0 ? `[${result.secondPageNewQueryNames.join(", ")}]` : "[]"}`);
@@ -253,11 +253,11 @@ function formatQueryMetadata(
 function formatIdentifierField(
   lines: string[],
   fieldName: string,
-  summary: { stringCount: number; matchesUdPattern: number; otherStringCount: number; nullOrMissing: number },
+  summary: { stringCount: number; matchesUserIdPattern: number; otherStringCount: number; nullOrMissing: number },
 ): void {
   lines.push(`   ${fieldName}:`);
   lines.push(`     stringCount: ${summary.stringCount}`);
-  lines.push(`     matchesUdPattern: ${summary.matchesUdPattern}`);
+  lines.push(`     matchesUserIdPattern: ${summary.matchesUserIdPattern}`);
   lines.push(`     otherStringCount: ${summary.otherStringCount}`);
   lines.push(`     nullOrMissing: ${summary.nullOrMissing}`);
 }

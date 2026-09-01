@@ -3,7 +3,7 @@ import type {
   LineChatDiscoveryResult,
 } from "./line-chat.types";
 
-const CHAT_USER_ID_PATTERN = /^Ud[A-Za-z0-9_-]{6,}$/;
+const CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/i;
 
 export function isLineChatUserId(value: unknown): value is string {
   return typeof value === "string" && CHAT_USER_ID_PATTERN.test(value.trim());
@@ -80,8 +80,9 @@ function normalizeChat(raw: unknown): LineChatDiscoveredChat | null {
  * GET /api/v1/bots/{botId}/chats endpoint into the small, non-secret signal
  * set used by the pilot matcher. The endpoint is not claimed to be the
  * current production contract; supported envelopes/fields are validated only
- * by sanitized fixtures. Unknown records and IDs outside the LINE OA Manager
- * Ud... format are ignored fail-closed.
+ * by sanitized fixtures. Unknown records and IDs outside the official LINE
+ * USER identifier format (`U` plus 32 hexadecimal characters) are ignored
+ * fail-closed.
  */
 export function parseLineChatListResponse(
   body: unknown,
