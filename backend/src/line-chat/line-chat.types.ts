@@ -96,12 +96,49 @@ export interface DiagnosticResponseSchemaSummary {
   candidateFieldNames: string[];
 }
 
+export interface DiagnosticIdentifierFieldSummary {
+  stringCount: number;
+  matchesUdPattern: number;
+  otherStringCount: number;
+  nullOrMissing: number;
+}
+
+export interface DiagnosticChatIdentifierShape {
+  listCount: number;
+  chatId: DiagnosticIdentifierFieldSummary;
+  userId: DiagnosticIdentifierFieldSummary;
+  presenceCounts: {
+    bothPresent: number;
+    chatIdOnly: number;
+    userIdOnly: number;
+    neither: number;
+  };
+}
+
+export type DiagnosticNextType = "string" | "object" | "null" | "array" | "other";
+export type DiagnosticNextStringClassification = "URL" | "OPAQUE_TOKEN" | "EMPTY" | "NOT_APPLICABLE";
+export type DiagnosticNextLengthBucket = "0" | "1-32" | "33-128" | "129+" | "NOT_APPLICABLE";
+
+export interface DiagnosticPaginationSummary {
+  nextPresent: "YES" | "NO";
+  nextType: DiagnosticNextType;
+  nextStringClassification: DiagnosticNextStringClassification;
+  nextLengthBucket: DiagnosticNextLengthBucket;
+  nextObjectKeys: string[];
+}
+
+export interface DiagnosticChatListContractSummary {
+  identifierShape: DiagnosticChatIdentifierShape;
+  pagination: DiagnosticPaginationSummary;
+}
+
 export interface ObservedResponseSummary {
   status: number;
   contentType: string;
   url: string;
   query: DiagnosticQueryMetadata;
   schema: DiagnosticResponseSchemaSummary;
+  chatListContract?: DiagnosticChatListContractSummary;
   timestamp: string;
 }
 
@@ -148,6 +185,12 @@ export interface DiagnosticsResult {
   observedRequests: ObservedRequestSummary[];
   observedResponses: ObservedResponseSummary[];
   chatListResponseObserved: boolean;
+  chatListIdentifierShape?: DiagnosticChatIdentifierShape;
+  chatListPagination?: DiagnosticPaginationSummary;
+  chatListFirstPageQueryNames: string[];
+  secondPageRequestObserved: boolean;
+  secondPageQueryNames: string[];
+  secondPageNewQueryNames: string[];
   restApiRequestsObserved: number;
   streamingSseObserved: boolean;
 }

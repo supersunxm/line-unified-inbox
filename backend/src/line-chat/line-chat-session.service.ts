@@ -21,6 +21,7 @@ import {
   isRelevantDiagnosticUrl,
   sanitizeDiagnosticUrl,
   sanitizeNavigationMetadata,
+  summarizeChatListContractJson,
   summarizeDiagnosticJson,
 } from "./line-chat-diagnostic-metadata";
 
@@ -29,16 +30,22 @@ export type ContextLauncher = (
   options?: LineChatSessionOptions
 ) => Promise<BrowserContext>;
 
-function isObservedChatListResponse(response: Response, botId: string): boolean {
+function isObservedChatListUrl(rawUrl: string, botId: string): boolean {
   try {
-    const request = response.request();
-    const responseUrl = new URL(response.url());
+    const responseUrl = new URL(rawUrl);
     const expectedPath = `/api/v2/bots/${encodeURIComponent(botId)}/chats`;
     return (
-      request.method() === "GET"
-      && responseUrl.origin === "https://chat.line.biz"
+      responseUrl.origin === "https://chat.line.biz"
       && responseUrl.pathname === expectedPath
     );
+  } catch {
+    return false;
+  }
+}
+
+function isObservedChatListResponse(response: Response, botId: string): boolean {
+  try {
+    return response.request().method() === "GET" && isObservedChatListUrl(response.url(), botId);
   } catch {
     return false;
   }
@@ -723,6 +730,8 @@ export class LineChatSessionService {
     surface?: "bot" | "chat-list";
     /** Test-only override; production diagnostics use the bounded default. */
     chatListResponseTimeoutMs?: number;
+    /** Test-only override for the natural-scroll second-page observation. */
+    chatListSecondPageTimeoutMs?: number;
     customLauncher?: ContextLauncher;
   }): Promise<DiagnosticsResult> {
     const resolvedProfile = path.resolve(options.profilePath);
@@ -748,10 +757,23 @@ export class LineChatSessionService {
     const observedResponses: DiagnosticsResult["observedResponses"] = [];
     let responseSummaryTail: Promise<void> = Promise.resolve();
     let chatListResponseObserved = false;
+    let chatListContractSummary: DiagnosticsResult["chatListIdentifierShape"];
+    let chatListPaginationSummary: DiagnosticsResult["chatListPagination"];
+    let chatListFirstRequestCaptured = false;
+    let chatListFirstPageQueryNames: string[] = [];
+    let chatListFirstResponseCompleted = false;
+    let secondPageRequestObserved = false;
+    let secondPageQueryNames: string[] = [];
+    let resolveSecondPageRequest: () => void = () => {};
     let resolveChatListResponse: () => void = () => {};
     const chatListResponseWait = surface === "chat-list"
       ? new Promise<void>((resolve) => {
         resolveChatListResponse = resolve;
+      })
+      : Promise.resolve();
+    const secondPageRequestWait = surface === "chat-list"
+      ? new Promise<void>((resolve) => {
+        resolveSecondPageRequest = resolve;
       })
       : Promise.resolve();
     let interceptedXsrfToken: string | undefined;
@@ -792,6 +814,20 @@ export class LineChatSessionService {
             headerNames: Object.keys(headers).sort(),
             timestamp: new Date().toISOString(),
           });
+          if (
+            surface === "chat-list"
+            && req.method() === "GET"
+            && isObservedChatListUrl(reqUrl, botIdForDiagnostic)
+          ) {
+            if (!chatListFirstRequestCaptured) {
+              chatListFirstRequestCaptured = true;
+              chatListFirstPageQueryNames = sanitized.query.parameterNames;
+            } else if (chatListFirstResponseCompleted && !secondPageRequestObserved) {
+              secondPageRequestObserved = true;
+              secondPageQueryNames = sanitized.query.parameterNames;
+              resolveSecondPageRequest();
+            }
+          }
           if (relevance.isRestApi) restApiRequestsObserved += 1;
           if (relevance.isStreamingSse) streamingSseObserved = true;
         } catch {
@@ -810,9 +846,13 @@ export class LineChatSessionService {
             const headers = response.headers();
             const contentType = headers["content-type"] || "(absent)";
             let schema;
+            let responseBody: unknown;
+            let responseWasJson = false;
             if (/\b(?:application|text)\/[^;]*json\b|\+json\b/i.test(contentType)) {
               try {
-                schema = summarizeDiagnosticJson(await response.json());
+                responseBody = await response.json();
+                responseWasJson = true;
+                schema = summarizeDiagnosticJson(responseBody);
               } catch {
                 schema = diagnosticResponseParseFailure("PARSE_FAILED");
               }
@@ -826,10 +866,25 @@ export class LineChatSessionService {
               url: sanitized.url,
               query: sanitized.query,
               schema,
+              ...(
+                surface === "chat-list"
+                && isObservedChatListResponse(response, botIdForDiagnostic)
+                && responseWasJson
+                ? (() => {
+                  const contract = summarizeChatListContractJson(responseBody);
+                  if (contract) {
+                    chatListContractSummary = contract.identifierShape;
+                    chatListPaginationSummary = contract.pagination;
+                  }
+                  return contract ? { chatListContract: contract } : {};
+                })()
+                : {}
+              ),
               timestamp: new Date().toISOString(),
             });
             if (surface === "chat-list" && isObservedChatListResponse(response, botIdForDiagnostic)) {
               chatListResponseObserved = true;
+              chatListFirstResponseCompleted = true;
               resolveChatListResponse();
             }
             if (relevance.isStreamingSse) streamingSseObserved = true;
@@ -892,6 +947,26 @@ export class LineChatSessionService {
           }),
         ]);
         if (timer) clearTimeout(timer);
+
+        // A real UI scroll is intentionally the only second-page trigger. If
+        // Playwright cannot provide a mouse for the current page, leave the
+        // second-page result as NOT OBSERVED rather than guessing a request.
+        if (chatListResponseObserved && page.mouse && typeof page.mouse.wheel === "function") {
+          try {
+            await page.mouse.wheel(0, 1400);
+            const secondPageTimeoutMs = options.chatListSecondPageTimeoutMs ?? 5000;
+            let secondPageTimer: ReturnType<typeof setTimeout> | undefined;
+            await Promise.race([
+              secondPageRequestWait,
+              new Promise<void>((resolve) => {
+                secondPageTimer = setTimeout(resolve, secondPageTimeoutMs);
+              }),
+            ]);
+            if (secondPageTimer) clearTimeout(secondPageTimer);
+          } catch {
+            // A failed/non-interactive scroll is safely reported as NOT OBSERVED.
+          }
+        }
       }
 
       // The response listener can append summaries while the bounded wait is
@@ -951,6 +1026,14 @@ export class LineChatSessionService {
         observedRequests,
         observedResponses,
         chatListResponseObserved,
+        chatListIdentifierShape: chatListContractSummary,
+        chatListPagination: chatListPaginationSummary,
+        chatListFirstPageQueryNames,
+        secondPageRequestObserved,
+        secondPageQueryNames,
+        secondPageNewQueryNames: secondPageQueryNames.filter(
+          (name) => !chatListFirstPageQueryNames.includes(name),
+        ),
         restApiRequestsObserved,
         streamingSseObserved,
       };

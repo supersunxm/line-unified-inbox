@@ -96,6 +96,33 @@ export function formatDiagnosticsResult(result: DiagnosticsResult): string {
   if (result.navigationError) lines.push(` Navigation Err : ${result.navigationError}`);
   if (result.surface === "chat-list") {
     lines.push(` Chat List Response: ${result.chatListResponseObserved ? "OBSERVED" : "NOT OBSERVED"}`);
+    if (result.chatListIdentifierShape && result.chatListPagination) {
+      const shape = result.chatListIdentifierShape;
+      lines.push(" Chat Identifier Shape:");
+      lines.push(`   listCount: ${shape.listCount}`);
+      formatIdentifierField(lines, "chatId", shape.chatId);
+      formatIdentifierField(lines, "userId", shape.userId);
+      lines.push(`   presence BOTH_PRESENT: ${shape.presenceCounts.bothPresent}`);
+      lines.push(`   presence CHAT_ID_ONLY: ${shape.presenceCounts.chatIdOnly}`);
+      lines.push(`   presence USER_ID_ONLY: ${shape.presenceCounts.userIdOnly}`);
+      lines.push(`   presence NEITHER: ${shape.presenceCounts.neither}`);
+
+      const pagination = result.chatListPagination;
+      lines.push(" Pagination:");
+      lines.push(`   nextPresent: ${pagination.nextPresent}`);
+      lines.push(`   nextType: ${pagination.nextType}`);
+      lines.push(`   nextStringClassification: ${pagination.nextStringClassification}`);
+      lines.push(`   nextLengthBucket: ${pagination.nextLengthBucket}`);
+      if (pagination.nextType === "object") {
+        lines.push(`   nextObjectKeys: [${pagination.nextObjectKeys.join(", ")}]`);
+      }
+    } else {
+      lines.push(" Chat Identifier Shape: NOT AVAILABLE");
+      lines.push(" Pagination: NOT AVAILABLE");
+    }
+    lines.push(` Second Page Request: ${result.secondPageRequestObserved ? "OBSERVED" : "NOT OBSERVED"}`);
+    lines.push(` Second Page Query Names: ${result.secondPageQueryNames.length > 0 ? `[${result.secondPageQueryNames.join(", ")}]` : "[]"}`);
+    lines.push(` New Query Names vs First Page: ${result.secondPageNewQueryNames.length > 0 ? `[${result.secondPageNewQueryNames.join(", ")}]` : "[]"}`);
   }
   lines.push(` Session State  : ${result.sessionStatePresent ? "PRESENT" : "NONE"}`);
   lines.push(" API Auth Probe:");
@@ -161,6 +188,18 @@ function formatQueryMetadata(
   for (const redacted of query.redactedParameters) {
     lines.push(`${indent}  ${redacted}`);
   }
+}
+
+function formatIdentifierField(
+  lines: string[],
+  fieldName: string,
+  summary: { stringCount: number; matchesUdPattern: number; otherStringCount: number; nullOrMissing: number },
+): void {
+  lines.push(`   ${fieldName}:`);
+  lines.push(`     stringCount: ${summary.stringCount}`);
+  lines.push(`     matchesUdPattern: ${summary.matchesUdPattern}`);
+  lines.push(`     otherStringCount: ${summary.otherStringCount}`);
+  lines.push(`     nullOrMissing: ${summary.nullOrMissing}`);
 }
 
 function formatResponseSchema(schema: DiagnosticsResult["observedResponses"][number]["schema"]): string {

@@ -6,7 +6,11 @@ import * as path from "node:path";
 import type { APIResponse, BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
-import { sanitizeDiagnosticUrl, summarizeDiagnosticJson } from "./line-chat-diagnostic-metadata";
+import {
+  sanitizeDiagnosticUrl,
+  summarizeChatListContractJson,
+  summarizeDiagnosticJson,
+} from "./line-chat-diagnostic-metadata";
 
 test("chat-list adapter preserves only sanitized known fields for a supported shape", () => {
   const result = parseLineChatListResponse({ data: [{
@@ -213,4 +217,63 @@ test("diagnostic JSON schema summarizer emits structure only", () => {
   assert.ok(summary.paginationKeyNames.includes("nextCursor"));
   assert.ok(summary.candidateFieldNames.includes("id"));
   assert.doesNotMatch(JSON.stringify(summary), /Ud-customer-id|Customer name|Private text|secret-next-cursor/);
+});
+
+test("chat-list contract summarizes list identifier shapes without values", () => {
+  const summary = summarizeChatListContractJson({
+    list: [
+      { chatId: "Ud1234567890abcdef", userId: "Udabcdef1234567890", name: "Customer One" },
+      { chatId: "not-an-ud-id", userId: null, nickname: "Private nickname" },
+      { chatId: null, userId: "Udqwerty12345678", latestEvent: { message: "Private text" } },
+      { name: "Missing identifiers" },
+    ],
+    next: "opaque-next-token-value",
+  });
+
+  assert.ok(summary);
+  assert.equal(summary.identifierShape.listCount, 4);
+  assert.deepEqual(summary.identifierShape.chatId, {
+    stringCount: 2,
+    matchesUdPattern: 1,
+    otherStringCount: 1,
+    nullOrMissing: 2,
+  });
+  assert.deepEqual(summary.identifierShape.userId, {
+    stringCount: 2,
+    matchesUdPattern: 2,
+    otherStringCount: 0,
+    nullOrMissing: 2,
+  });
+  assert.deepEqual(summary.identifierShape.presenceCounts, {
+    bothPresent: 1,
+    chatIdOnly: 1,
+    userIdOnly: 1,
+    neither: 1,
+  });
+  assert.equal(summary.pagination.nextPresent, "YES");
+  assert.equal(summary.pagination.nextType, "string");
+  assert.equal(summary.pagination.nextStringClassification, "OPAQUE_TOKEN");
+  assert.equal(summary.pagination.nextLengthBucket, "1-32");
+  assert.doesNotMatch(JSON.stringify(summary), /Ud1234567890abcdef|Customer One|Private nickname|Private text|opaque-next-token-value/);
+});
+
+test("chat-list contract classifies URL, empty, null, and object next metadata safely", () => {
+  const urlNext = summarizeChatListContractJson({ list: [], next: "https://chat.line.biz/api/next?cursor=secret" });
+  assert.equal(urlNext?.pagination.nextStringClassification, "URL");
+  assert.equal(urlNext?.pagination.nextLengthBucket, "33-128");
+  assert.doesNotMatch(JSON.stringify(urlNext), /secret/);
+
+  const emptyNext = summarizeChatListContractJson({ list: [], next: "" });
+  assert.equal(emptyNext?.pagination.nextStringClassification, "EMPTY");
+  assert.equal(emptyNext?.pagination.nextLengthBucket, "0");
+
+  const nullNext = summarizeChatListContractJson({ list: [], next: null });
+  assert.equal(nullNext?.pagination.nextType, "null");
+  assert.equal(nullNext?.pagination.nextStringClassification, "NOT_APPLICABLE");
+  assert.equal(nullNext?.pagination.nextLengthBucket, "NOT_APPLICABLE");
+
+  const objectNext = summarizeChatListContractJson({ list: [], next: { cursor: "secret", hasMore: true } });
+  assert.equal(objectNext?.pagination.nextType, "object");
+  assert.deepEqual(objectNext?.pagination.nextObjectKeys, ["cursor", "hasMore"]);
+  assert.doesNotMatch(JSON.stringify(objectNext), /secret/);
 });

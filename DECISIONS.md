@@ -1,3 +1,10 @@
+## Chat pagination contract diagnostics (2026-09-01)
+
+- Based on supplied production evidence, the current chat-list request is verified as the natural `GET /api/v2/bots/{botId}/chats`, with an initial query-name set of `folderType`, `tagIds`, `autoTagIds`, `limit`, and `prioritizePinnedChat`, and a `{list, next}` response envelope. Codex does not access production as part of this change.
+- The diagnostic reports only aggregate identifier-shape counts for `chatId` and `userId`, reusing the authoritative `Ud...` validator. It intentionally does not decide which field is authoritative and never emits identifier values.
+- `next` is reported only as presence, type, safe string classification/length bucket, and object key names. Pagination semantics and cursor meaning remain unresolved; no pagination request is manufactured.
+- A bounded natural mouse-wheel scroll after the first response is the only second-page probe. Any resulting matching GET is reported through sanitized query-name sets; absent or unsupported scrolling is `NOT OBSERVED`.
+
 # Real chat-list route and response boundary (2026-09-01)
 
 - The prior `/{botId}/chat` diagnostic route is disproven for the current LINE OA Manager version because it resolves to `/error`. The diagnostic chat-list surface therefore navigates the normal `/{botId}` bot surface and passively observes its network behavior.
