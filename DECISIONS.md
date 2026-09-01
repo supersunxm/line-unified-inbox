@@ -1,6 +1,13 @@
+## LINE USER ID validation and final passive pagination probe (2026-09-01)
+
+- Production evidence supplied by the operator plus the official syntax establishes USER chat identifiers as `U` followed by exactly 32 hexadecimal characters. The shared case-insensitive validator is the only structural authority; `Ud` is merely `U` followed by a hexadecimal `d`, not a separate prefix.
+- Diagnostic aggregates use `validUserId` and `invalidU` classifications so output does not preserve the disproven prefix assumption. Discovery and mapping foundations reuse the validator, but mapping apply remains gated by complete enumeration and is not enabled here.
+- Pagination probing remains passive. After the first natural v2 chat-list response, diagnostics move the Playwright mouse to at most three left-side viewport coordinates and issue bounded positive wheel deltas, stopping immediately when a second matching GET is observed. It performs no DOM text read, click, customer navigation, or manufactured chat-list request.
+- The explicit request-context boundary remains exactly one read-only `GET /api/v1/me`. Second-page query output exposes numeric `limit` only and redacts every other value.
+
 ## Chat ID shape and geometry-scroll diagnostics (2026-09-01)
 
-- Production evidence supplied by the operator shows `chatId` is the only populated identifier field on the first page, but 23 / 25 values do not match the current `Ud...` validator. This is insufficient evidence to change validity or mapping semantics, so diagnostics classify prefixes/lengths only and the validator remains untouched.
+- Production evidence supplied by the operator showed `chatId` as the only populated identifier field and exposed that 23 / 25 values failed the then-current incorrect literal-`Ud` validator. The later USER ID validation decision corrects that historical assumption without enabling mapping apply.
 - `chatType` correlation is aggregate-only. Short uppercase enum-like categories may be reported; all other non-empty string categories receive stable `TYPE_A`, `TYPE_B`, and subsequent aliases. Friend booleans and profile presence are counted without returning values.
 - `--known-chat-id` is optional, remains in memory, is never sent over the network, and produces only per-field `FOUND`/`NOT_FOUND` flags. It is excluded from URLs, logs, errors, and reports.
 - Page-2 probing may manipulate `scrollTop` on at most three visible, scrollable, geometry-ranked containers. Candidate selection reads only bounds, dimensions, overflow, and visibility; it performs no text extraction, click, customer navigation, or manufactured chat-list request.
@@ -9,7 +16,7 @@
 ## Chat pagination contract diagnostics (2026-09-01)
 
 - Based on supplied production evidence, the current chat-list request is verified as the natural `GET /api/v2/bots/{botId}/chats`, with an initial query-name set of `folderType`, `tagIds`, `autoTagIds`, `limit`, and `prioritizePinnedChat`, and a `{list, next}` response envelope. Codex does not access production as part of this change.
-- The diagnostic reports only aggregate identifier-shape counts for `chatId` and `userId`, reusing the authoritative `Ud...` validator. It intentionally does not decide which field is authoritative and never emits identifier values.
+- The diagnostic reports only aggregate identifier-shape counts for `chatId` and `userId`, reusing the shared official LINE USER ID validator. It never emits identifier values.
 - `next` is reported only as presence, type, safe string classification/length bucket, and object key names. Pagination semantics and cursor meaning remain unresolved; no pagination request is manufactured.
 - A bounded natural mouse-wheel scroll after the first response is the only second-page probe. Any resulting matching GET is reported through sanitized query-name sets; absent or unsupported scrolling is `NOT OBSERVED`.
 
@@ -73,7 +80,7 @@
 # Decoupled LINE OA Manager Chat Identifier Architecture (2026-08-31)
 
 - **Decoupling Messaging API User ID (`Customer.lineUserId`) from LINE OA Manager Chat User ID (`Conversation.lineChatUserId`)**:
-  - *Root Cause Discovery*: In LINE's ecosystem, channel-scoped Messaging API webhooks deliver a provider-scoped `userId` (e.g. `U124d80f7c70ed8f48cfc93c707853ab4`), whereas the LINE Official Account Manager web portal (`chat.line.biz`) uses internal OA-scoped chatroom identifiers in its URLs and REST APIs (e.g. `https://chat.line.biz/{botId}/chat/{lineChatUserId}` where `lineChatUserId` is e.g. `Ud8d5af30ddca3ed4237e157d5d73c2f1`).
+  - *Root Cause Discovery*: Messaging API webhooks and LINE Official Account Manager provide identifiers through different observed sources. Both may follow the official `U` plus 32-hex USER ID structure, but structural validity does not establish that the values are interchangeable. `Conversation.lineChatUserId` must therefore come from the OA Manager contract and never fall back to `Customer.lineUserId`.
   - *Domain Model Separation*: `Customer.lineUserId` is strictly preserved for Messaging API operations and is never overloaded or corrupted. The dedicated `Conversation.lineChatUserId` field represents the OA Manager chat user ID for that specific conversation.
   - *Fail-Safe Queue Processing*: When `Conversation.lineChatUserId` is absent, BM sales saves complete successfully with zero error, the nickname queue safely logs a structured skip event (`MISSING_LINE_CHAT_USER_ID`), and no invalid HTTP requests are dispatched to `chat.line.biz`.
   - *Additive Database Migration*: Added `Conversation.lineChatUserId` and `LineChatNicknameSyncJob.lineChatUserId` with indexes.

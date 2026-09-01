@@ -229,7 +229,7 @@ void test("formatDiagnosticsResult produces structured report without printing s
     }],
     chatListResponseObserved: false,
     chatListFirstPageQueryNames: [],
-    scrollCandidatesAttempted: 0,
+    wheelProbeAttempts: 0,
     secondPageRequestObserved: false,
     secondPageQueryNames: [],
     secondPageNewQueryNames: [],
@@ -285,19 +285,19 @@ void test("formatDiagnosticsResult produces structured report without printing s
     chatListResponseObserved: true,
     chatListIdentifierShape: {
       listCount: 25,
-      chatId: { stringCount: 25, matchesUdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
-      userId: { stringCount: 25, matchesUdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
+      chatId: { stringCount: 25, matchesUserIdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
+      userId: { stringCount: 25, matchesUserIdPattern: 25, otherStringCount: 0, nullOrMissing: 0 },
       presenceCounts: { bothPresent: 25, chatIdOnly: 0, userIdOnly: 0, neither: 0 },
     },
     chatIdStructure: {
       totalStrings: 25,
-      prefixClass: { Ud: 2, U_other: 20, R: 1, C: 1, other: 1 },
+      prefixClass: { validUserId: 2, invalidU: 20, R: 1, C: 1, other: 1 },
       lengthBuckets: { lte16: 1, from17To32: 20, from33To40: 3, gte41: 1 },
     },
     chatTypeCorrelation: {
       matrix: [
-        { category: "USER", count: 23, idShape: { Ud: 2, U_other: 20, R: 0, C: 0, other: 1 } },
-        { category: "TYPE_A", count: 2, idShape: { Ud: 0, U_other: 0, R: 1, C: 1, other: 0 } },
+        { category: "USER", count: 23, idShape: { validUserId: 2, invalidU: 20, R: 0, C: 0, other: 1 } },
+        { category: "TYPE_A", count: 2, idShape: { validUserId: 0, invalidU: 0, R: 1, C: 1, other: 0 } },
       ],
       chatTypePresence: { present: 25, missing: 0 },
       friend: { trueCount: 10, falseCount: 14, otherOrMissing: 1 },
@@ -312,7 +312,7 @@ void test("formatDiagnosticsResult produces structured report without printing s
     },
     chatListFirstPageQueryNames: ["folderType", "limit"],
     knownChatIdMatch: { chatId: "FOUND", userId: "NOT_FOUND" },
-    scrollCandidatesAttempted: 2,
+    wheelProbeAttempts: 2,
     secondPageRequestObserved: true,
     secondPageQueryNames: ["folderType", "limit", "cursor"],
     secondPageNewQueryNames: ["cursor"],
@@ -323,15 +323,15 @@ void test("formatDiagnosticsResult produces structured report without printing s
     },
   });
   assert.ok(contractReport.includes("listCount: 25"));
-  assert.ok(contractReport.includes("matchesUdPattern: 25"));
+  assert.ok(contractReport.includes("matchesUserIdPattern: 25"));
   assert.ok(contractReport.includes("Chat ID Structure:"));
-  assert.ok(contractReport.includes("U_other: 20"));
+  assert.ok(contractReport.includes("invalid U-prefixed: 20"));
   assert.ok(contractReport.includes("Chat Type / ID Shape:"));
   assert.ok(contractReport.includes("TYPE_A:"));
   assert.ok(contractReport.includes("Known Chat ID Match:"));
   assert.ok(contractReport.includes("chatId: FOUND"));
   assert.ok(contractReport.includes("userId: NOT_FOUND"));
-  assert.ok(contractReport.includes("Scroll Candidates Tried: 2"));
+  assert.ok(contractReport.includes("Wheel Probe Attempts: 2"));
   assert.ok(contractReport.includes("nextType: object"));
   assert.ok(contractReport.includes("nextObjectKeys: [hasMore, cursor]"));
   assert.ok(contractReport.includes("Second Page Request: OBSERVED"));

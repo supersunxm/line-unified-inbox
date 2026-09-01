@@ -271,7 +271,7 @@ export function diagnosticResponseParseFailure(
 function emptyIdentifierSummary(): DiagnosticChatListContractSummary["identifierShape"]["chatId"] {
   return {
     stringCount: 0,
-    matchesUdPattern: 0,
+    matchesUserIdPattern: 0,
     otherStringCount: 0,
     nullOrMissing: 0,
   };
@@ -285,7 +285,7 @@ function summarizeIdentifierField(values: unknown[]): DiagnosticChatListContract
       continue;
     }
     summary.stringCount += 1;
-    if (isLineChatUserId(value)) summary.matchesUdPattern += 1;
+    if (isLineChatUserId(value)) summary.matchesUserIdPattern += 1;
     else summary.otherStringCount += 1;
   }
   return summary;
@@ -296,14 +296,14 @@ function isPresentIdentifier(value: unknown): boolean {
 }
 
 function emptyChatIdPrefixCounts(): DiagnosticChatListContractSummary["chatIdStructure"]["prefixClass"] {
-  return { Ud: 0, U_other: 0, R: 0, C: 0, other: 0 };
+  return { validUserId: 0, invalidU: 0, R: 0, C: 0, other: 0 };
 }
 
 function chatIdPrefixClass(value: unknown): keyof DiagnosticChatListContractSummary["chatIdStructure"]["prefixClass"] | undefined {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim();
-  if (isLineChatUserId(normalized)) return "Ud";
-  if (normalized[0] === "U") return "U_other";
+  if (isLineChatUserId(normalized)) return "validUserId";
+  if (value.trim()[0] === "U" || value.trim()[0] === "u") return "invalidU";
   if (normalized[0] === "R") return "R";
   if (normalized[0] === "C") return "C";
   return "other";

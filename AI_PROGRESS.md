@@ -1,8 +1,17 @@
 # AI progress
 
+## Current task: LINE USER ID validation and passive pagination probe (2026-09-01) [COMPLETED]
+
+- Operator-supplied production evidence confirms current `chatType=USER` chat identifiers use the official LINE USER ID contract: `U` followed by 32 hexadecimal characters. The shared validator now uses that exact case-insensitive structure; a leading `Ud` is no longer treated as a distinct prefix.
+- Diagnostic aggregate labels now distinguish structurally valid USER IDs from invalid `U`-prefixed strings. The validator is reused by discovery and mapping foundations, while mapping apply remains blocked by incomplete pagination.
+- The zero-candidate DOM container strategy is replaced with at most three left-side viewport targets and bounded positive Playwright mouse-wheel deltas. It uses viewport geometry only, performs no click or DOM text extraction, and stops as soon as the natural SPA issues a second matching GET.
+- Second-page output remains query-name-only except numeric `limit`; all other values are `PRESENT_REDACTED`. No `/chats` request is manufactured, and no production, DB, mapping apply, nickname, queue, or worker action is performed.
+- Verification: focused LINE Chat discovery/mapping/session/CLI tests 76 / 76; full backend tests 1,596 / 1,596; changed-file ESLint, backend build, and `git diff --check` pass.
+- No production access, mapping apply, DB write, nickname mutation, queue/worker action, merge, or deployment was performed.
+
 ## Current task: Chat ID shape and scroll diagnostics (2026-09-01) [COMPLETED]
 
-- Supplied production results show all 25 first-page records populate `chatId`, none populate `userId`, only 2 match the existing `Ud...` validator, and `next` is an opaque string of 129+ characters. The validator and all mapping/discovery behavior remain unchanged pending stronger evidence.
+- Supplied production results showed all 25 first-page records populate `chatId`, none populate `userId`, only 2 matched the then-current incorrect literal-`Ud` validator, and `next` is an opaque string of 129+ characters. That historical validator assumption is corrected by the later USER ID validation task.
 - Diagnostics now classify `chatId` prefixes and lengths as aggregate counts only, correlate those structural classes with safely exposed enum-like `chatType` categories or `TYPE_*` aliases, and report aggregate friend/profile presence without retaining values.
 - An optional `--known-chat-id` is compared in memory against response fields and returns only `FOUND`/`NOT_FOUND`; the supplied value is never emitted or used for a request.
 - The unsuccessful generic wheel is replaced with at most three geometry-ranked scroll-container attempts using visibility, bounds, overflow, and scroll dimensions only. No text/content is read, no customer is clicked, and any natural second-page GET is observed with query values redacted except numeric `limit`.
@@ -12,7 +21,7 @@
 ## Current task: Chat pagination contract diagnostics (2026-09-01) [COMPLETED]
 
 - Supplied production evidence verifies the current natural chat-list request as `GET /api/v2/bots/{botId}/chats` with the observed initial query-name set and a `{list, next}` response envelope. The prior `/{botId}/chat` route remains disproven; this work does not access production.
-- Diagnostics now summarize aggregate `chatId`/`userId` string and authoritative `Ud...`-pattern counts using the existing validator, without selecting an authoritative field or emitting identifiers. `next` is classified only by safe type, string class, length bucket, and object key names; its semantics remain unresolved.
+- Diagnostics now summarize aggregate `chatId`/`userId` strings and structurally valid LINE USER ID counts using the shared validator, without emitting identifiers. `next` is classified only by safe type, string class, length bucket, and object key names; its semantics remain unresolved.
 - After the first matching response, diagnostics may issue only a natural UI mouse-wheel scroll and passively observe a second matching GET. It reports sanitized query-name differences and otherwise returns `NOT OBSERVED`; it never manufactures pagination requests.
 - Mapping/discovery, nickname, queue, DB, and apply behavior are unchanged. Focused LINE Chat tests: 50 / 50; full backend tests: 1,588 / 1,588; changed-file ESLint, backend build, and `git diff --check` pass.
 - No production access, pagination apply, mapping or nickname mutation, queue call, merge, or deployment was performed.
@@ -56,7 +65,7 @@
 ## Current task: Store 28375 Historical LINE OA Manager Chat ID Discovery (2026-08-31) [COMPLETED]
 
 - Added a pilot-only operator CLI `npm run line-chat:mapping:discover -- --store 28375 [--dry-run | --apply]`; dry-run is the default and the npm script does not require `.env`.
-- The authenticated browser path uses the existing observed endpoint `GET https://chat.line.biz/api/v1/bots/{botId}/chats`; the production response contract is not claimed as verified. The response parser is fail-closed and currently validated against sanitized known shapes, normalizing only chat ID, display name, last-message text/time/direction, and rejecting unknown top-level payloads or non-`Ud...` IDs.
+- The authenticated browser path uses the existing observed endpoint `GET https://chat.line.biz/api/v1/bots/{botId}/chats`; the production response contract is not claimed as verified. The response parser is fail-closed and currently validated against sanitized known shapes, normalizing only chat ID, display name, last-message text/time/direction, and rejecting unknown top-level payloads or IDs outside the official LINE USER ID structure.
 - Added deterministic confidence matching: display name alone is never exact; only a unique multi-signal `EXACT_CONFIDENT` row can be applied. Duplicate candidates, reused IDs, existing mappings, competing candidates, and ambiguous Store/OA topology fail closed.
 - Pagination/next-page mechanics are not verified locally, so discovery reports `UNVERIFIED` and apply is blocked until a future production dry-run proves complete enumeration. Apply writes only `Conversation.lineChatUserId` inside a transaction after the complete-enumeration and zero-conflict gates pass. It never queues nickname jobs, changes nicknames, reads `Customer.lineUserId`, or starts from AppModule.
 - Added sanitized adapter, matcher, CLI safety, idempotency, invalid-ID, conflict, existing-mapping, and no-secret-output regression coverage.
@@ -98,7 +107,7 @@
 ## Previous task: LINE OA Chat Nickname Sync: Decouple Messaging API User ID from LINE OA Manager Chat User ID (2026-08-31) [COMPLETED]
 
 - **Root Cause & Domain Decoupling**:
-  - `Customer.lineUserId` stores the provider-scoped Messaging API user ID (e.g. `U124d80f7c70ed8f48cfc93c707853ab4`), whereas the LINE OA Manager (`chat.line.biz`) web portal uses internal chatroom identifiers (e.g. `Ud8d5af30ddca3ed4237e157d5d73c2f1`).
+  - `Customer.lineUserId` stores the Messaging API-sourced user ID, while `Conversation.lineChatUserId` stores the independently observed LINE OA Manager `chatId`. Both can share the official `U` plus 32-hex structure, but syntax alone does not prove value equality and never permits a fallback between fields.
   - Added additive `Conversation.lineChatUserId` and `LineChatNicknameSyncJob.lineChatUserId` columns with indexes via migration `20260831130000_add_conversation_line_chat_user_id`.
   - `Customer.lineUserId` is strictly preserved and never modified or overloaded.
 - **Queue & Worker Architecture**:
