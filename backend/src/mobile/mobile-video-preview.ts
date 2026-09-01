@@ -1,4 +1,4 @@
-import sharp = require("sharp");
+import * as sharp from "sharp";
 
 export type VideoDisplayDimensions = {
   width: number;

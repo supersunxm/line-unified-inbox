@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import sharp = require("sharp");
+import * as sharp from "sharp";
 import {
   createVideoPreviewPng,
   getMp4DisplayDimensions,
@@ -70,7 +70,9 @@ test("creates a 9:16 preview for a rotated portrait MP4", async () => {
       channels: 3,
       background: { r: 20, g: 30, b: 25 },
     },
-  }).png().toBuffer();
+  })
+    .png()
+    .toBuffer();
 
   const preview = await createVideoPreviewPng(
     mp4WithTkhd(1920, 1080, true),
