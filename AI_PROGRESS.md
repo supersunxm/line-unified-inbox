@@ -1,5 +1,14 @@
 # AI progress
 
+## Current task: Complete v2 LINE chat discovery foundation (2026-09-01) [COMPLETED]
+
+- Operator-supplied production evidence establishes the natural `GET /api/v2/bots/{botId}/chats` contract as `{ list, next }`, with `chatId` as the authoritative `chatType=USER` identifier and `U` plus 32 hexadecimal characters as the shared validator. Codex does not access production for this change.
+- Mapping discovery now captures page one only from the SPA's natural bot-surface request, then enumerates later pages with authenticated `BrowserContext.request.get` using the observed URL/query/header contract. Opaque continuation values remain internal and are never returned or logged.
+- Enumeration is fail-closed on non-200/non-JSON/unsupported responses, invalid USER records, duplicate conflicts, repeated continuation values, and bounded page/chat limits. Apply remains gated on `COMPLETE`; mapping, nickname, queue, worker, and DB behavior are not changed or invoked.
+- The pilot CLI accepts an optional runtime-only `--profile` override while preserving Store/OA/bot/session identity guards and production profile-root containment.
+- Verification: focused discovery/mapping tests 44 / 44; full backend tests 1,597 / 1,597; changed-file ESLint, backend build, and `git diff --check` pass.
+- No production access, mapping apply, DB write, nickname mutation, queue/worker action, merge, or deployment was performed. The reviewed diff is limited to the nine intended files; next action is commit/push/open the requested PR and monitor CI without merging.
+
 ## Current task: LINE USER ID validation and passive pagination probe (2026-09-01) [COMPLETED]
 
 - Operator-supplied production evidence confirms current `chatType=USER` chat identifiers use the official LINE USER ID contract: `U` followed by 32 hexadecimal characters. The shared validator now uses that exact case-insensitive structure; a leading `Ud` is no longer treated as a distinct prefix.

@@ -14,6 +14,7 @@ import {
   type PilotMappingContext,
 } from "./line-chat-chat-mapping";
 import { parseLineChatListResponse } from "./line-chat-chat-discovery";
+import { LineChatSessionService } from "./line-chat-session.service";
 import { parseMappingDiscoveryArgs, runMappingDiscoveryCli } from "../../scripts/discover-line-chat-mappings";
 
 const baseDate = new Date("2026-08-31T05:00:00.000Z");
@@ -68,8 +69,8 @@ function candidate(overrides: Partial<{
 
 function discovery(chats: ReturnType<typeof candidate>[]) {
   return {
-    endpoint: "https://chat.line.biz/api/v1/bots/U729972869a565723cb7fcf7ea28bbc43/chats",
-    responseShape: "chats" as const,
+    endpoint: "https://chat.line.biz/api/v2/bots/U729972869a565723cb7fcf7ea28bbc43/chats",
+    responseShape: "list" as const,
     enumerationStatus: "UNVERIFIED" as const,
     chats,
   };
@@ -174,12 +175,12 @@ test("a discovered candidate reused by an existing mapping is counted as a confl
 });
 
 test("only official LINE USER IDs are accepted by the response adapter", () => {
-  const result = parseLineChatListResponse({ chats: [
-    { userId: `U${"g".repeat(32)}`, displayName: "Non-hex" },
-    { userId: `C${"a".repeat(32)}`, displayName: "Group" },
-    { userId: `R${"a".repeat(32)}`, displayName: "Room" },
-    { userId: CHAT_USER_ID_A, displayName: "OA Manager user" },
-  ] }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" });
+  const result = parseLineChatListResponse({ list: [
+    { chatId: `U${"g".repeat(32)}`, chatType: "USER", name: "Non-hex" },
+    { chatId: `C${"a".repeat(32)}`, chatType: "USER", name: "Group" },
+    { chatId: `R${"a".repeat(32)}`, chatType: "USER", name: "Room" },
+    { chatId: CHAT_USER_ID_A, chatType: "USER", name: "OA Manager user" },
+  ], next: null }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats" });
   assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [CHAT_USER_ID_A]);
 });
 
@@ -330,6 +331,59 @@ test("pilot guard rejects every store except 28375", () => {
   assert.doesNotThrow(() => assertPilotMappingStore("28375"));
   assert.throws(() => assertPilotMappingStore("99999"), /Only store 28375 is allowed/);
   assert.throws(() => parseMappingDiscoveryArgs(["--store", "99999"]), /Pilot guard rejected/);
+});
+
+test("runtime profile override is accepted without changing persisted session identity", async () => {
+  let resolvedProfileInput: unknown;
+  let discoveryInput: unknown;
+  const prisma = {
+    store: { findMany: async () => [{
+      id: "store-28375", code: "28375", name: "Pilot", storeMaster: null,
+      lineOfficialAccounts: [{
+        id: "oa-28375", name: "OPPO BS RBS Chonburi", chatBotId: "U729972869a565723cb7fcf7ea28bbc43", lineChatSessionId: "session-1",
+        lineChatSession: { sessionKey: "profile-b", profilePath: "./profile-b", profileStorageKey: null, status: LineChatSessionStatus.ACTIVE },
+      }],
+    }] },
+    conversation: { findMany: async () => [] },
+  };
+  const session = {
+    resolveProfilePath: (input: unknown) => { resolvedProfileInput = input; return "/tmp/sanitized-profile"; },
+    discoverChats: async (input: unknown) => { discoveryInput = input; return { ...discovery([]), botId: "U729972869a565723cb7fcf7ea28bbc43" }; },
+  };
+  await runMappingDiscoveryCli(["--store", "28375", "--profile", "/tmp/fixture-profile"], {
+    prisma: prisma as never,
+    session,
+    output: () => undefined,
+  });
+  assert.deepEqual(resolvedProfileInput, { profilePath: "/tmp/fixture-profile", sessionKey: undefined });
+  assert.deepEqual(discoveryInput, {
+    botId: "U729972869a565723cb7fcf7ea28bbc43",
+    profilePath: "/tmp/sanitized-profile",
+    headless: true,
+  });
+});
+
+test("production profile overrides cannot escape LINE_CHAT_PROFILE_ROOT", () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousRoot = process.env.LINE_CHAT_PROFILE_ROOT;
+  process.env.NODE_ENV = "production";
+  process.env.LINE_CHAT_PROFILE_ROOT = "/tmp/line-chat-profile-root";
+  try {
+    const service = new LineChatSessionService();
+    assert.equal(
+      service.resolveProfilePath({ profilePath: "/tmp/line-chat-profile-root/profile-b" }),
+      "/tmp/line-chat-profile-root/profile-b",
+    );
+    assert.throws(
+      () => service.resolveProfilePath({ profilePath: "/tmp/outside-profile" }),
+      /escapes configured root directory/,
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousRoot === undefined) delete process.env.LINE_CHAT_PROFILE_ROOT;
+    else process.env.LINE_CHAT_PROFILE_ROOT = previousRoot;
+  }
 });
 
 test("known pilot mapping remains unchanged and formatter masks candidate IDs", () => {

@@ -14,6 +14,7 @@ import {
 export interface MappingDiscoveryCliOptions {
   storeCode: string;
   apply: boolean;
+  profilePath?: string;
 }
 
 export interface MappingDiscoveryCliDependencies {
@@ -26,9 +27,12 @@ export function parseMappingDiscoveryArgs(args: readonly string[]): MappingDisco
   let storeCode = "";
   let apply = false;
   let dryRun = false;
+  let profilePath: string | undefined;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === "--store") storeCode = args[++index] ?? "";
+    else if (arg === "--profile") profilePath = args[++index] ?? "";
+    else if (arg.startsWith("--profile=")) profilePath = arg.slice("--profile=".length);
     else if (arg === "--apply") apply = true;
     else if (arg === "--dry-run") dryRun = true;
     else throw new Error(`Unknown argument "${arg}".`);
@@ -36,7 +40,8 @@ export function parseMappingDiscoveryArgs(args: readonly string[]): MappingDisco
   if (!storeCode) throw new Error("Missing --store. Usage: npm run line-chat:mapping:discover -- --store 28375 [--dry-run | --apply]");
   if (apply && dryRun) throw new Error("Choose either --dry-run or --apply, not both.");
   assertPilotMappingStore(storeCode);
-  return { storeCode, apply };
+  if (profilePath !== undefined && !profilePath.trim()) throw new Error("--profile requires a non-empty path.");
+  return { storeCode, apply, ...(profilePath ? { profilePath: profilePath.trim() } : {}) };
 }
 
 export async function runMappingDiscoveryCli(
@@ -52,8 +57,8 @@ export async function runMappingDiscoveryCli(
   try {
     const context = await loadPilotMappingContext(prisma, options.storeCode);
     const profilePath = session.resolveProfilePath({
-      profilePath: context.lineOfficialAccount.profilePath,
-      sessionKey: context.lineOfficialAccount.sessionKey,
+      profilePath: options.profilePath ?? context.lineOfficialAccount.profilePath,
+      sessionKey: options.profilePath ? undefined : context.lineOfficialAccount.sessionKey,
     });
     const discovery = await session.discoverChats({
       botId: context.lineOfficialAccount.chatBotId,

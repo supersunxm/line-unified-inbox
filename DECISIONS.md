@@ -1,3 +1,10 @@
+## Complete v2 LINE chat discovery foundation (2026-09-01)
+
+- The natural `GET /api/v2/bots/{botId}/chats` request and `{ list, next }` envelope are treated as verified only from operator-supplied production evidence; Codex does not access production. `chatId` is authoritative for `chatType=USER`, `userId` is never a fallback, and the shared validator is exactly `^U[0-9a-f]{32}$` (case-insensitive).
+- Page one must be captured passively from the normal `https://chat.line.biz/{botId}` SPA surface so query/header semantics are not guessed. Only subsequent pages may use `BrowserContext.request.get`, cloning the observed first-page URL/query and replacing `next`; no manual first-page request or customer-chat navigation is allowed.
+- Enumeration is complete only after a terminal absent/null/empty `next`. Non-200, transport, non-JSON, unsupported envelopes, malformed continuation values, invalid USER records, repeated continuation values, duplicate metadata conflicts, and limits of 200 pages or 10,000 unique chats fail closed. Raw IDs and opaque continuation values never leave the discovery service.
+- Apply remains blocked unless the result is `COMPLETE` and the existing pilot identity/schema/conflict gates pass. The optional `--profile` argument is runtime-only and must remain within `LINE_CHAT_PROFILE_ROOT` in production; it cannot alter persisted session/OA configuration.
+
 ## LINE USER ID validation and final passive pagination probe (2026-09-01)
 
 - Production evidence supplied by the operator plus the official syntax establishes USER chat identifiers as `U` followed by exactly 32 hexadecimal characters. The shared case-insensitive validator is the only structural authority; `Ud` is merely `U` followed by a hexadecimal `d`, not a separate prefix.

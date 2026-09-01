@@ -67,8 +67,17 @@ export interface PilotMappingPlan {
   store: { id: string; code: string; name: string };
   lineOfficialAccount: { id: string; name: string; chatBotId: string; sessionKey: string; sessionStatus: LineChatSessionStatus };
   endpoint: string;
-  responseShape: "array" | "chats" | "data" | "items";
+  responseShape: "list";
   enumerationStatus: "COMPLETE" | "PARTIAL" | "UNVERIFIED";
+  pagesFetched?: number;
+  totalRawRecords?: number;
+  validUserChats?: number;
+  ignoredNonUserRecords?: number;
+  invalidUserRecords?: number;
+  duplicateIds?: number;
+  conflictingDuplicates?: number;
+  nextTerminationObserved?: boolean;
+  enumerationError?: string;
   rows: readonly MappingPlanRow[];
   summary: MappingSummary;
 }
@@ -348,9 +357,18 @@ export function buildPilotMappingPlan(
   context: PilotMappingContext,
   discovery: {
     endpoint: string;
-    responseShape: "array" | "chats" | "data" | "items";
+    responseShape: "list";
     enumerationStatus: "COMPLETE" | "PARTIAL" | "UNVERIFIED";
     chats: readonly LineChatDiscoveredChat[];
+    pagesFetched?: number;
+    totalRawRecords?: number;
+    validUserChats?: number;
+    ignoredNonUserRecords?: number;
+    invalidUserRecords?: number;
+    duplicateIds?: number;
+    conflictingDuplicates?: number;
+    nextTerminationObserved?: boolean;
+    enumerationError?: string;
   },
 ): PilotMappingPlan {
   const { candidates, conflictingIds } = dedupeCandidates(discovery.chats);
@@ -474,6 +492,15 @@ export function buildPilotMappingPlan(
     endpoint: discovery.endpoint,
     responseShape: discovery.responseShape,
     enumerationStatus: discovery.enumerationStatus,
+    pagesFetched: discovery.pagesFetched,
+    totalRawRecords: discovery.totalRawRecords,
+    validUserChats: discovery.validUserChats,
+    ignoredNonUserRecords: discovery.ignoredNonUserRecords,
+    invalidUserRecords: discovery.invalidUserRecords,
+    duplicateIds: discovery.duplicateIds,
+    conflictingDuplicates: discovery.conflictingDuplicates,
+    nextTerminationObserved: discovery.nextTerminationObserved,
+    enumerationError: discovery.enumerationError,
     rows,
     summary,
   };
@@ -484,7 +511,7 @@ export async function applyPilotMappings(
   prisma: PrismaClient,
 ): Promise<MappingApplySummary> {
   const exactRows = plan.rows.filter((row) => row.confidence === "EXACT_CONFIDENT" && row.candidateChatUserId);
-  const expectedEndpoint = `https://chat.line.biz/api/v1/bots/${encodeURIComponent(PILOT_MAPPING_BOT_ID)}/chats`;
+  const expectedEndpoint = `https://chat.line.biz/api/v2/bots/${encodeURIComponent(PILOT_MAPPING_BOT_ID)}/chats`;
   const identityBlockReason = plan.store.code !== PILOT_MAPPING_STORE_CODE
     ? `Pilot guard rejected store "${plan.store.code}". Only store ${PILOT_MAPPING_STORE_CODE} is allowed.`
     : plan.lineOfficialAccount.name !== PILOT_MAPPING_OA_NAME
@@ -492,7 +519,7 @@ export async function applyPilotMappings(
       || plan.lineOfficialAccount.sessionKey !== PILOT_MAPPING_SESSION_KEY
       || plan.lineOfficialAccount.sessionStatus !== LineChatSessionStatus.ACTIVE
       ? "Pilot LINE OA or authenticated session identity is not the approved Store 28375 mapping target."
-      : plan.endpoint !== expectedEndpoint || !["array", "chats", "data", "items"].includes(plan.responseShape)
+      : plan.endpoint !== expectedEndpoint || plan.responseShape !== "list"
         ? "Chat-list parser/schema precondition is not an approved known shape or endpoint."
         : undefined;
   const result: MappingApplySummary = {
@@ -552,9 +579,18 @@ export function formatPilotMappingReport(plan: PilotMappingPlan, apply: boolean)
     `Bot   : ${plan.lineOfficialAccount.chatBotId}`,
     `Session: ${plan.lineOfficialAccount.sessionKey} (${plan.lineOfficialAccount.sessionStatus})`,
     `GET   : ${plan.endpoint}`,
-    "Contract: candidate endpoint; parser fail-closed; sanitized known shape",
-    `Shape : ${plan.responseShape} (fixture-supported, not production-verified)`,
+    "Contract: production-observed v2 list envelope; parser fail-closed",
+    `Shape : ${plan.responseShape} (production-verified envelope)`,
     `Chat enumeration status : ${plan.enumerationStatus}`,
+    ...(plan.pagesFetched !== undefined ? [`Pages fetched            : ${plan.pagesFetched}`] : []),
+    ...(plan.totalRawRecords !== undefined ? [`Total raw records        : ${plan.totalRawRecords}`] : []),
+    ...(plan.validUserChats !== undefined ? [`Valid USER chats         : ${plan.validUserChats}`] : []),
+    ...(plan.ignoredNonUserRecords !== undefined ? [`Ignored non-USER records : ${plan.ignoredNonUserRecords}`] : []),
+    ...(plan.invalidUserRecords !== undefined ? [`Invalid USER records     : ${plan.invalidUserRecords}`] : []),
+    ...(plan.duplicateIds !== undefined ? [`Duplicate IDs             : ${plan.duplicateIds}`] : []),
+    ...(plan.conflictingDuplicates !== undefined ? [`Conflicting duplicates   : ${plan.conflictingDuplicates}`] : []),
+    ...(plan.nextTerminationObserved !== undefined ? [`Next termination observed: ${plan.nextTerminationObserved ? "YES" : "NO"}`] : []),
+    ...(plan.enumerationError ? [`Enumeration note          : ${plan.enumerationError}`] : []),
     "---------------------------------------------------------------",
     `Total store conversations : ${summary.totalStoreConversations}`,
     `Missing lineChatUserId    : ${summary.missingLineChatUserId}`,
