@@ -6,6 +6,23 @@ import { LanguageControl, useAppLanguage, type AppLanguage } from "./language";
 export type LegacyI18nPhrase = Record<AppLanguage, string>;
 export type LegacyI18nTemplate = Record<AppLanguage, string>;
 
+const THAI_MONTHS: Record<string, number> = {
+  "ม.ค.": 1,
+  "ก.พ.": 2,
+  "มี.ค.": 3,
+  "เม.ย.": 4,
+  "พ.ค.": 5,
+  "มิ.ย.": 6,
+  "ก.ค.": 7,
+  "ส.ค.": 8,
+  "ก.ย.": 9,
+  "ต.ค.": 10,
+  "พ.ย.": 11,
+  "ธ.ค.": 12,
+};
+
+const ENGLISH_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
 function preserveWhitespace(original: string, translated: string) {
   const leading = original.match(/^\s*/)?.[0] ?? "";
   const trailing = original.match(/\s*$/)?.[0] ?? "";
@@ -15,8 +32,136 @@ function preserveWhitespace(original: string, translated: string) {
 function templateRegex(template: string) {
   const escaped = template
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\\\{\\\{value\\\}\\\}/g, "(.+?)");
+    .replace(/\\\{\\\{value\\\}\\\}/g, "([\\s\\S]+?)");
   return new RegExp(`^${escaped}$`);
+}
+
+function normalizeYear(year: number) {
+  return year >= 2400 ? year - 543 : year;
+}
+
+function formatLegacyDate(
+  language: AppLanguage,
+  parts: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number },
+) {
+  const year = normalizeYear(parts.year);
+  const hasTime = parts.hour !== undefined && parts.minute !== undefined;
+  const time = hasTime
+    ? `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}${parts.second !== undefined ? `:${String(parts.second).padStart(2, "0")}` : ""}`
+    : "";
+
+  if (language === "th") {
+    const month = Object.entries(THAI_MONTHS).find(([, value]) => value === parts.month)?.[0] ?? String(parts.month);
+    return `${parts.day} ${month} ${year + 543}${hasTime ? ` ${time}` : ""}`;
+  }
+  if (language === "zh") return `${year}年${parts.month}月${parts.day}日${hasTime ? ` ${time}` : ""}`;
+  return `${ENGLISH_MONTHS[parts.month - 1] ?? parts.month} ${parts.day}, ${year}${hasTime ? `, ${time}` : ""}`;
+}
+
+function translateLegacyDate(value: string, language: AppLanguage) {
+  const thaiMedium = value.match(/^(\d{1,2})\s+(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (thaiMedium) {
+    return formatLegacyDate(language, {
+      day: Number(thaiMedium[1]),
+      month: THAI_MONTHS[thaiMedium[2]] ?? 1,
+      year: Number(thaiMedium[3]),
+      hour: thaiMedium[4] === undefined ? undefined : Number(thaiMedium[4]),
+      minute: thaiMedium[5] === undefined ? undefined : Number(thaiMedium[5]),
+      second: thaiMedium[6] === undefined ? undefined : Number(thaiMedium[6]),
+    });
+  }
+
+  const thaiNumeric = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+)(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (thaiNumeric) {
+    return formatLegacyDate(language, {
+      day: Number(thaiNumeric[1]),
+      month: Number(thaiNumeric[2]),
+      year: Number(thaiNumeric[3]),
+      hour: Number(thaiNumeric[4]),
+      minute: Number(thaiNumeric[5]),
+      second: thaiNumeric[6] === undefined ? undefined : Number(thaiNumeric[6]),
+    });
+  }
+
+  const english = value.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s+(\d{4})(?:,\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (english) {
+    return formatLegacyDate(language, {
+      day: Number(english[2]),
+      month: ENGLISH_MONTHS.indexOf(english[1] as (typeof ENGLISH_MONTHS)[number]) + 1,
+      year: Number(english[3]),
+      hour: english[4] === undefined ? undefined : Number(english[4]),
+      minute: english[5] === undefined ? undefined : Number(english[5]),
+      second: english[6] === undefined ? undefined : Number(english[6]),
+    });
+  }
+
+  const chinese = value.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (chinese) {
+    return formatLegacyDate(language, {
+      day: Number(chinese[3]),
+      month: Number(chinese[2]),
+      year: Number(chinese[1]),
+      hour: chinese[4] === undefined ? undefined : Number(chinese[4]),
+      minute: chinese[5] === undefined ? undefined : Number(chinese[5]),
+      second: chinese[6] === undefined ? undefined : Number(chinese[6]),
+    });
+  }
+
+  return null;
+}
+
+function translateLegacyRelativeTime(value: string, language: AppLanguage) {
+  if (["เมื่อสักครู่", "Just now", "刚刚"].includes(value)) {
+    return language === "th" ? "เมื่อสักครู่" : language === "zh" ? "刚刚" : "Just now";
+  }
+
+  const patterns: Array<{ regex: RegExp; unit: "minute" | "hour" | "day" | "week" }> = [
+    { regex: /^(\d+) นาทีที่แล้ว$/, unit: "minute" },
+    { regex: /^(\d+) minutes? ago$/, unit: "minute" },
+    { regex: /^(\d+)分钟前$/, unit: "minute" },
+    { regex: /^(\d+) ชั่วโมงที่แล้ว$/, unit: "hour" },
+    { regex: /^(\d+) hours? ago$/, unit: "hour" },
+    { regex: /^(\d+)小时前$/, unit: "hour" },
+    { regex: /^(\d+) วันที่แล้ว$/, unit: "day" },
+    { regex: /^(\d+) days? ago$/, unit: "day" },
+    { regex: /^(\d+)天前$/, unit: "day" },
+    { regex: /^(\d+) สัปดาห์ที่แล้ว$/, unit: "week" },
+    { regex: /^(\d+) weeks? ago$/, unit: "week" },
+    { regex: /^(\d+)周前$/, unit: "week" },
+  ];
+
+  for (const { regex, unit } of patterns) {
+    const match = value.match(regex);
+    if (!match) continue;
+    const count = Number(match[1]);
+    if (language === "th") {
+      const unitText = unit === "minute" ? "นาที" : unit === "hour" ? "ชั่วโมง" : unit === "day" ? "วัน" : "สัปดาห์";
+      return `${count} ${unitText}ที่แล้ว`;
+    }
+    if (language === "zh") {
+      const unitText = unit === "minute" ? "分钟" : unit === "hour" ? "小时" : unit === "day" ? "天" : "周";
+      return `${count}${unitText}前`;
+    }
+    const unitText = `${unit}${count === 1 ? "" : "s"}`;
+    return `${count} ${unitText} ago`;
+  }
+
+  const combined = value.match(/^(\d+) ชั่วโมง (\d+) นาทีที่แล้ว$/)
+    ?? value.match(/^(\d+) hours? (\d+) minutes? ago$/)
+    ?? value.match(/^(\d+)小时(\d+)分钟前$/);
+  if (combined) {
+    const hours = Number(combined[1]);
+    const minutes = Number(combined[2]);
+    if (language === "th") return `${hours} ชั่วโมง ${minutes} นาทีที่แล้ว`;
+    if (language === "zh") return `${hours}小时${minutes}分钟前`;
+    return `${hours} ${hours === 1 ? "hour" : "hours"} ${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  }
+
+  return null;
+}
+
+function translateLegacyLocaleValue(value: string, language: AppLanguage) {
+  return translateLegacyRelativeTime(value, language) ?? translateLegacyDate(value, language);
 }
 
 export function LegacyI18nBoundary({
@@ -58,7 +203,8 @@ export function LegacyI18nBoundary({
           if (match) return preserveWhitespace(value, template[language].replace("{{value}}", match[1] ?? ""));
         }
       }
-      return value;
+      const localeValue = translateLegacyLocaleValue(trimmed, language);
+      return localeValue ? preserveWhitespace(value, localeValue) : value;
     };
 
     const translateElement = (element: Element) => {
