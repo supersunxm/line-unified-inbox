@@ -1,20 +1,21 @@
-name: Coupon Management CI
+name: Application CI
 
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "android_app/**"
-      - ".github/workflows/backend-ci.yml"
   workflow_dispatch:
+
+concurrency:
+  group: application-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   backend:
+    name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -54,7 +55,7 @@ jobs:
       - name: Apply migrations to clean PostgreSQL
         run: npx prisma migrate deploy
 
-      - name: Lint changed backend scope
+      - name: Lint regression scope
         run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/mobile/mobile-video-preview.ts" "src/mobile/mobile-video-preview.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/dashboard.controller.ts" "src/dashboard-executive.service.ts" "src/dashboard-executive.service.spec.ts" "src/app.module.ts"
 
       - name: Coupon unit tests
@@ -126,7 +127,9 @@ jobs:
           fi
 
   frontend:
+    name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -144,7 +147,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint changed frontend scope
+      - name: Lint regression scope
         run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/app/dashboard/dashboard-view.tsx" "src/app/dashboard/executive-dashboard-v2.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx"
 
       - name: Purchase broadcast audience UI regression tests
@@ -157,7 +160,9 @@ jobs:
         run: npm run build
 
   mobile:
+    name: Android
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: android_app
@@ -185,3 +190,25 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs:
+      - backend
+      - frontend
+      - mobile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all application checks
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          ANDROID_RESULT: ${{ needs.mobile.result }}
+        run: |
+          echo "Backend: $BACKEND_RESULT"
+          echo "Frontend: $FRONTEND_RESULT"
+          echo "Android: $ANDROID_RESULT"
+          test "$BACKEND_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
+          test "$ANDROID_RESULT" = "success"
