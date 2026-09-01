@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import sharp from "sharp";
+import sharp = require("sharp");
 import {
   createVideoPreviewPng,
   getMp4DisplayDimensions,
