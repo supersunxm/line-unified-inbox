@@ -3,12 +3,21 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthorizedSection } from "../../authorized-workspace";
+import { pickLanguageText, useAppLanguage } from "../../language";
 import AdminRegistrationsDesktop from "./admin-registrations-desktop";
 import { MobileAdminRegistrationsApp } from "./mobile-admin-registrations-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
+const routeText = {
+  th: { opening: "กำลังเปิดการจัดการบัญชี..." },
+  en: { opening: "Opening Account Management..." },
+  zh: { opening: "正在打开账户管理..." },
+};
+
 export default function AdminRegistrationsPage() {
+  const { language } = useAppLanguage();
+  const t = pickLanguageText(language, routeText);
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -22,7 +31,7 @@ export default function AdminRegistrationsPage() {
   if (mode === "loading") {
     return (
       <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
-        กำลังเปิด Account Management...
+        {t.opening}
       </main>
     );
   }
@@ -31,7 +40,7 @@ export default function AdminRegistrationsPage() {
     <AuthorizedSection section="admin-registrations">
       <Link
         href="/admin/registrations/hq"
-        className="fixed right-4 top-4 z-[80] rounded-full bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white shadow-lg"
+        className="fixed right-4 top-16 z-[80] rounded-full bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white shadow-lg"
       >
         HQ Approvals
       </Link>
