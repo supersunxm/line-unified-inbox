@@ -28,68 +28,69 @@ jobs:
           text = repo.read_text()
 
           marker = "const _unset = Object();\n"
-          helper = r'''const _unset = Object();
+          helper = """const _unset = Object();
 
-String normalizeProductDisplayName(String value) {
-  var result = value
-      .replaceAll(RegExp(r'[\s\u00A0\u2007\u202F]+'), ' ')
-      .trim();
-  result = result.replaceAllMapped(
-    RegExp(r'\b(\d)\s+(\d)\s+(\d)\s+G\b', caseSensitive: false),
-    (match) => '${match[1]}${match[2]} ${match[3]}G',
-  );
-  result = result.replaceAllMapped(
-    RegExp(r'\b(\d)\s+G\b', caseSensitive: false),
-    (match) => '${match[1]}G',
-  );
-  return result;
-}
-'''
+          String normalizeProductDisplayName(String value) {
+            var result = value
+                .replaceAll(RegExp(r'[\\s\\u00A0\\u2007\\u202F]+'), ' ')
+                .trim();
+            result = result.replaceAllMapped(
+              RegExp(r'\\b(\\d)\\s+(\\d)\\s+(\\d)\\s+G\\b', caseSensitive: false),
+              (match) => '${match[1]}${match[2]} ${match[3]}G',
+            );
+            result = result.replaceAllMapped(
+              RegExp(r'\\b(\\d)\\s+G\\b', caseSensitive: false),
+              (match) => '${match[1]}G',
+            );
+            return result;
+          }
+          """
+          helper = '\n'.join(line[10:] if line.startswith('          ') else line for line in helper.splitlines()) + '\n'
           if marker not in text:
               raise SystemExit('normalizer insertion marker not found')
           text = text.replace(marker, helper, 1)
 
-          old = """      modelName:\n          model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n"""
-          new = """      modelName: normalizeProductDisplayName(\n        model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n      ),\n"""
+          old = "      modelName:\n          model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n"
+          new = "      modelName: normalizeProductDisplayName(\n        model['name'] as String? ?? json['modelName'] as String? ?? 'Product',\n      ),\n"
           if old not in text:
               raise SystemExit('CustomerSalesProductItem modelName parser marker not found')
           text = text.replace(old, new, 1)
           repo.write_text(text)
 
           test = Path('android_app/test/product_display_normalization_test.dart')
-          test.write_text(r'''import 'package:flutter_test/flutter_test.dart';
-import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
+          test.write_text("""import 'package:flutter_test/flutter_test.dart';
+          import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 
-void main() {
-  group('product display normalization', () {
-    test('repairs split OPPO Reno 16 5G catalog tokens', () {
-      final item = CustomerSalesProductItem.fromJson({
-        'id': 'sales-product-1',
-        'productModelId': 'reno-16-5g',
-        'model': {
-          'id': 'reno-16-5g',
-          'name': 'OPPO Reno 1 6 5 G',
-        },
-        'status': 'INTERESTED',
-      });
+          void main() {
+            group('product display normalization', () {
+              test('repairs split OPPO Reno 16 5G catalog tokens', () {
+                final item = CustomerSalesProductItem.fromJson({
+                  'id': 'sales-product-1',
+                  'productModelId': 'reno-16-5g',
+                  'model': {
+                    'id': 'reno-16-5g',
+                    'name': 'OPPO Reno 1 6 5 G',
+                  },
+                  'status': 'INTERESTED',
+                });
 
-      expect(item.modelName, 'OPPO Reno 16 5G');
-    });
+                expect(item.modelName, 'OPPO Reno 16 5G');
+              });
 
-    test('repairs non-breaking-space variants', () {
-      expect(
-        normalizeProductDisplayName('OPPO Reno 1\u00A06\u202F5\u00A0G'),
-        'OPPO Reno 16 5G',
-      );
-    });
+              test('repairs non-breaking-space variants', () {
+                expect(
+                  normalizeProductDisplayName('OPPO Reno 1\\u00A06\\u202F5\\u00A0G'),
+                  'OPPO Reno 16 5G',
+                );
+              });
 
-    test('leaves normal product names unchanged', () {
-      expect(normalizeProductDisplayName('OPPO Find N6'), 'OPPO Find N6');
-      expect(normalizeProductDisplayName('OPPO Reno 16 5G'), 'OPPO Reno 16 5G');
-    });
-  });
-}
-''')
+              test('leaves normal product names unchanged', () {
+                expect(normalizeProductDisplayName('OPPO Find N6'), 'OPPO Find N6');
+                expect(normalizeProductDisplayName('OPPO Reno 16 5G'), 'OPPO Reno 16 5G');
+              });
+            });
+          }
+          """.replace('\n          ', '\n').lstrip())
           PY
 
       - name: Remove one-time hotfix workflow
