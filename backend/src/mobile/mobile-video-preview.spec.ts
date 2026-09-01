@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test from "node:test";
-import * as sharp from "sharp";
 import {
   createVideoPreviewPng,
   getMp4DisplayDimensions,
   getPreviewDimensions,
 } from "./mobile-video-preview";
+
+const requireFromHere = createRequire(__filename);
+const sharp = requireFromHere("sharp") as typeof import("sharp");
 
 function tkhd(width: number, height: number, quarterTurn = false): Buffer {
   const box = Buffer.alloc(92);
