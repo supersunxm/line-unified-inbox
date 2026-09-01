@@ -259,10 +259,29 @@ export interface LineChatDiscoveredChat {
   lastMessageDirection: string | null;
 }
 
+export interface LineChatDiscoveryPage {
+  responseShape: "list";
+  chats: LineChatDiscoveredChat[];
+  next: string | null;
+  totalRawRecords: number;
+  validUserChats: number;
+  ignoredNonUserRecords: number;
+  invalidUserRecords: number;
+}
+
 export interface LineChatDiscoveryResult {
   botId: string;
   endpoint: string;
-  responseShape: "array" | "chats" | "data" | "items";
+  responseShape: "list";
   enumerationStatus: "COMPLETE" | "PARTIAL" | "UNVERIFIED";
   chats: LineChatDiscoveredChat[];
+  pagesFetched: number;
+  totalRawRecords: number;
+  validUserChats: number;
+  ignoredNonUserRecords: number;
+  invalidUserRecords: number;
+  duplicateIds: number;
+  conflictingDuplicates: number;
+  nextTerminationObserved: boolean;
+  enumerationError?: string;
 }

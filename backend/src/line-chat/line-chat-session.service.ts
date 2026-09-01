@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { chromium, type BrowserContext, type Page, type Response } from "playwright";
 import type {
+  LineChatDiscoveredChat,
   UpdateNicknameInput,
   UpdateNicknameResult,
   LineChatSessionOptions,
@@ -13,7 +14,7 @@ import type {
   LineChatDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
-import { parseLineChatListResponse } from "./line-chat-chat-discovery";
+import { parseLineChatListPage } from "./line-chat-chat-discovery";
 import {
   diagnosticResponseParseFailure,
   isChatLineOrigin,
@@ -162,7 +163,7 @@ export class LineChatSessionService {
           if (fs.existsSync(candidate)) return candidate;
         }
       }
-      if (!directResolved.startsWith(rootDir)) {
+      if (directResolved !== rootDir && !directResolved.startsWith(`${rootDir}${path.sep}`)) {
         throw new Error(`Resolved profile path "${directResolved}" escapes configured root directory "${rootDir}"`);
       }
       return directResolved;
@@ -170,10 +171,8 @@ export class LineChatSessionService {
 
     if (session.profilePath?.trim()) {
       const rawResolved = path.resolve(session.profilePath.trim());
-      if (configuredRoot && !rawResolved.startsWith(rootDir)) {
-        const safeBase = path.basename(session.profilePath.trim()).replace(/[^a-zA-Z0-9_-]/g, "");
-        const fallbackResolved = path.resolve(rootDir, safeBase || "default");
-        return fallbackResolved;
+      if ((isProduction || configuredRoot) && rawResolved !== rootDir && !rawResolved.startsWith(`${rootDir}${path.sep}`)) {
+        throw new Error(`Resolved profile path "${rawResolved}" escapes configured root directory "${rootDir}"`);
       }
       return rawResolved;
     }
@@ -199,24 +198,17 @@ export class LineChatSessionService {
     return `https://chat.line.biz/${encodeURIComponent(trimmedBotId)}/chat/${encodeURIComponent(trimmedUserId)}`;
   }
 
-  /**
-   * Builds the legacy candidate endpoint used by mapping discovery. The
-   * current production chat-list contract is not assumed by this diagnostic
-   * surface; production observation reported no request to this path.
-   */
+  /** Builds the production-verified v2 chat-list endpoint shape. */
   public buildChatListUrl(botId: string): string {
-    return `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId.trim())}/chats`;
+    return `https://chat.line.biz/api/v2/bots/${encodeURIComponent(botId.trim())}/chats`;
   }
 
   /**
-   * Reads chats through the authenticated persistent browser profile. This
-   * intentionally performs one BrowserContext request-context GET to the
-   * retained candidate endpoint. Playwright shares the persistent context's
-   * cookies and session storage with `context.request`; no page navigation is
-   * required for this mapping path. The path is not claimed to be the current
-   * production chat-list contract; use diagnostics to observe the natural
-   * /{botId} bot surface. Non-GET chat.line.biz requests remain blocked for
-   * this discovery context.
+   * Enumerates the production-verified v2 chat list. Page one is captured from
+   * the SPA's natural GET after navigating to the bot workspace. Later pages
+   * reuse only the observed first-page query semantics and authenticated
+   * request headers, adding the opaque `next` value internally. No raw values
+   * are returned in the discovery result.
    */
   public async discoverChats(input: {
     botId: string;
@@ -240,36 +232,207 @@ export class LineChatSessionService {
     const endpoint = this.buildChatListUrl(botId);
 
     try {
+      const page = context.pages()[0] || (await context.newPage());
       const requestContext = context.request;
       if (!requestContext || typeof requestContext.get !== "function") {
-        throw new Error("LINE OA Manager chat-list transport failed");
+        return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager chat-list natural GET was not available.");
       }
 
-      let response;
+      const firstRequestWait = new Promise<{ url: string; headers: Record<string, string> }>((resolve) => {
+        const onRequest = (request: { method: () => string; url: () => string; headers: () => Record<string, string> }) => {
+          if (request.method() !== "GET" || !this.isChatListEndpoint(request.url(), botId)) return;
+          const allHeaders = request.headers();
+          const headers: Record<string, string> = { Accept: "application/json, text/plain, */*" };
+          for (const [name, value] of Object.entries(allHeaders)) {
+            if (["x-xsrf-token", "x-oa-chat-client-version", "referer", "origin"].includes(name.toLowerCase())) {
+              headers[name] = value;
+            }
+          }
+          resolve({ url: request.url(), headers });
+        };
+        page.on("request", onRequest);
+      });
+      const firstResponseWait = new Promise<{ status: number; response: Response }>((resolve) => {
+        page.on("response", (response: Response) => {
+          if (this.isChatListResponse(response, botId)) resolve({ status: response.status(), response });
+        });
+      });
+
       try {
-        response = await requestContext.get(endpoint, {
-          headers: { Accept: "application/json, text/plain, */*" },
+        await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
+          waitUntil: "domcontentloaded",
           timeout: 15000,
         });
       } catch {
-        throw new Error("LINE OA Manager chat-list transport failed");
+        // Natural background requests may still complete after navigation timeout.
       }
 
-      const status = response.status();
-      if (status < 200 || status >= 300) {
-        throw new Error(`LINE OA Manager chat-list returned HTTP ${status}`);
+      const firstRequest = await this.withTimeout(firstRequestWait, 20000);
+      if (!firstRequest) return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list natural GET was not observed.");
+      const firstResponse = await this.withTimeout(firstResponseWait, 20000);
+      if (!firstResponse) return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response was not observed.", "UNVERIFIED");
+      if (firstResponse.status !== 200) {
+        return this.emptyDiscoveryResult(botId, endpoint, `LINE OA Manager chat-list returned HTTP ${firstResponse.status}`, "PARTIAL");
       }
 
-      let body: unknown;
+      const firstPageBody = await this.readJsonResponse(firstResponse.response);
+      if (!firstPageBody.ok) return this.emptyDiscoveryResult(botId, endpoint, firstPageBody.error, "PARTIAL");
+      let firstPage;
       try {
-        body = await response.json();
+        firstPage = parseLineChatListPage(firstPageBody.body);
       } catch {
-        throw new Error("LINE OA Manager chat-list response was not JSON");
+        return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.", "PARTIAL");
       }
-      return parseLineChatListResponse(body, { botId, endpoint });
+      const pages = [firstPage];
+      const byId = new Map<string, LineChatDiscoveredChat>();
+      let duplicateIds = 0;
+      const conflictingIds = new Set<string>();
+      const mergePage = (pageResult: typeof firstPage): void => {
+        for (const chat of pageResult.chats) {
+          const previous = byId.get(chat.chatUserId);
+          if (!previous) {
+            byId.set(chat.chatUserId, chat);
+          } else {
+            duplicateIds += 1;
+            if (JSON.stringify(previous) !== JSON.stringify(chat)) conflictingIds.add(chat.chatUserId);
+          }
+        }
+      };
+      mergePage(firstPage);
+      let next = firstPage.next;
+      const seenNext = new Set<string>();
+      let enumerationError: string | undefined = byId.size > 10000
+        ? "Chat-list discovered-chat limit reached."
+        : undefined;
+      while (next !== null) {
+        if (seenNext.has(next)) {
+          enumerationError = "Repeated chat-list next token detected.";
+          break;
+        }
+        seenNext.add(next);
+        if (pages.length >= 200) {
+          enumerationError = "Chat-list page limit reached.";
+          break;
+        }
+        if (byId.size >= 10000) {
+          enumerationError = "Chat-list discovered-chat limit reached.";
+          break;
+        }
+        const nextUrl = new URL(firstRequest.url);
+        nextUrl.searchParams.set("next", next);
+        let response;
+        try {
+          response = await requestContext.get(nextUrl.toString(), {
+            headers: firstRequest.headers,
+            timeout: 15000,
+          });
+        } catch {
+          enumerationError = "LINE OA Manager chat-list transport failed on a subsequent page.";
+          break;
+        }
+        if (response.status() !== 200) {
+          enumerationError = `LINE OA Manager chat-list returned HTTP ${response.status()} on a subsequent page`;
+          break;
+        }
+        const body = await this.readJsonResponse(response);
+        if (!body.ok) {
+          enumerationError = body.error;
+          break;
+        }
+        let parsedPage;
+        try {
+          parsedPage = parseLineChatListPage(body.body);
+        } catch {
+          enumerationError = "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.";
+          break;
+        }
+        pages.push(parsedPage);
+        mergePage(parsedPage);
+        if (byId.size > 10000) {
+          enumerationError = "Chat-list discovered-chat limit reached.";
+          break;
+        }
+        next = parsedPage.next;
+      }
+
+      const invalidUserRecords = pages.reduce((sum, item) => sum + item.invalidUserRecords, 0);
+      const complete = next === null && !enumerationError && invalidUserRecords === 0 && conflictingIds.size === 0;
+      return {
+        botId,
+        endpoint,
+        responseShape: "list",
+        enumerationStatus: complete ? "COMPLETE" : "PARTIAL",
+        chats: [...byId.values()],
+        pagesFetched: pages.length,
+        totalRawRecords: pages.reduce((sum, item) => sum + item.totalRawRecords, 0),
+        validUserChats: pages.reduce((sum, item) => sum + item.validUserChats, 0),
+        ignoredNonUserRecords: pages.reduce((sum, item) => sum + item.ignoredNonUserRecords, 0),
+        invalidUserRecords,
+        duplicateIds,
+        conflictingDuplicates: conflictingIds.size,
+        nextTerminationObserved: next === null,
+        ...(enumerationError ? { enumerationError } : {}),
+      };
     } finally {
       await context.close();
     }
+  }
+
+  private isChatListEndpoint(rawUrl: string, botId: string): boolean {
+    try {
+      const parsed = new URL(rawUrl);
+      return parsed.origin === "https://chat.line.biz"
+        && parsed.pathname === `/api/v2/bots/${encodeURIComponent(botId)}/chats`;
+    } catch {
+      return false;
+    }
+  }
+
+  private isChatListResponse(response: Response, botId: string): boolean {
+    try {
+      return response.request().method() === "GET" && this.isChatListEndpoint(response.url(), botId);
+    } catch {
+      return false;
+    }
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
+    return Promise.race([
+      promise,
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), timeoutMs)),
+    ]);
+  }
+
+  private async readJsonResponse(response: { json: () => Promise<unknown> }): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+    try {
+      return { ok: true, body: await response.json() };
+    } catch {
+      return { ok: false, error: "LINE OA Manager chat-list response was not JSON" };
+    }
+  }
+
+  private emptyDiscoveryResult(
+    botId: string,
+    endpoint: string,
+    enumerationError: string,
+    enumerationStatus: "PARTIAL" | "UNVERIFIED" = "UNVERIFIED",
+  ): LineChatDiscoveryResult {
+    return {
+      botId,
+      endpoint,
+      responseShape: "list",
+      enumerationStatus,
+      chats: [],
+      pagesFetched: 0,
+      totalRawRecords: 0,
+      validUserChats: 0,
+      ignoredNonUserRecords: 0,
+      invalidUserRecords: 0,
+      duplicateIds: 0,
+      conflictingDuplicates: 0,
+      nextTerminationObserved: false,
+      enumerationError,
+    };
   }
 
   /**

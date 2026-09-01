@@ -1,5 +1,6 @@
 import type {
   LineChatDiscoveredChat,
+  LineChatDiscoveryPage,
   LineChatDiscoveryResult,
 } from "./line-chat.types";
 
@@ -23,8 +24,13 @@ function timestampValue(value: unknown): string | null {
     const milliseconds = Math.abs(numericValue) < 100_000_000_000 ? numericValue * 1000 : numericValue;
     const parsed = new Date(milliseconds);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+    return null;
   }
-  return stringValue(value);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value.trim());
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return null;
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -33,68 +39,97 @@ function objectValue(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function arrayResponse(body: unknown): {
-  shape: LineChatDiscoveryResult["responseShape"];
-  entries: unknown[];
-} {
-  if (Array.isArray(body)) return { shape: "array", entries: body };
+function assertListEnvelope(body: unknown): { entries: unknown[]; next: string | null } {
   const wrapper = objectValue(body);
-  if (!wrapper) throw new Error("Unsupported LINE OA Manager chat-list response shape.");
-
-  for (const shape of ["chats", "data", "items"] as const) {
-    if (Array.isArray(wrapper[shape])) return { shape, entries: wrapper[shape] };
+  if (!wrapper || !Array.isArray(wrapper.list)) {
+    throw new Error("LINE OA Manager v2 chat-list response must contain a list array.");
   }
 
-  throw new Error("LINE OA Manager chat-list response did not contain a supported chat array.");
+  const rawNext = wrapper.next;
+  if (rawNext === undefined || rawNext === null) return { entries: wrapper.list, next: null };
+  if (typeof rawNext !== "string") {
+    throw new Error("LINE OA Manager v2 chat-list response contained a malformed next value.");
+  }
+  return { entries: wrapper.list, next: rawNext.trim() ? rawNext : null };
 }
 
-function normalizeChat(raw: unknown): LineChatDiscoveredChat | null {
+function normalizeLatestEventTimestamp(value: Record<string, unknown>): string | null {
+  const latestEvent = objectValue(value.latestEvent);
+  if (!latestEvent || !Object.prototype.hasOwnProperty.call(latestEvent, "timestamp")) return null;
+  return timestampValue(latestEvent.timestamp);
+}
+
+function normalizeUserChat(raw: unknown): LineChatDiscoveredChat | null {
   const value = objectValue(raw);
-  if (!value) return null;
-
-  const chatUserId = stringValue(value.chatUserId) || stringValue(value.userId) || stringValue(value.id);
-  if (!isLineChatUserId(chatUserId)) return null;
-
-  const lastMessage = objectValue(value.lastMessage) || objectValue(value.latestMessage);
+  if (!value || value.chatType !== "USER" || !isLineChatUserId(value.chatId)) return null;
   return {
-    chatUserId,
-    displayName: stringValue(value.displayName) || stringValue(value.name),
-    lastMessageText:
-      stringValue(value.lastMessageText)
-      || stringValue(lastMessage?.text)
-      || stringValue(lastMessage?.content)
-      || stringValue(lastMessage?.originalText),
-    lastMessageAt:
-      timestampValue(value.lastMessageAt)
-      || timestampValue(lastMessage?.sentAt)
-      || timestampValue(lastMessage?.createdAt)
-      || timestampValue(lastMessage?.timestamp),
-    lastMessageDirection:
-      stringValue(value.lastMessageDirection)
-      || stringValue(lastMessage?.direction),
+    chatUserId: value.chatId.trim(),
+    displayName: stringValue(value.name),
+    // The verified v2 contract does not establish message text or direction semantics.
+    lastMessageText: null,
+    lastMessageAt: normalizeLatestEventTimestamp(value),
+    lastMessageDirection: null,
+  };
+}
+
+function parseV2Page(body: unknown): LineChatDiscoveryPage {
+  const { entries, next } = assertListEnvelope(body);
+  let ignoredNonUserRecords = 0;
+  let invalidUserRecords = 0;
+  const chats: LineChatDiscoveredChat[] = [];
+  for (const entry of entries) {
+    const value = objectValue(entry);
+    if (!value || value.chatType !== "USER") {
+      ignoredNonUserRecords += 1;
+      continue;
+    }
+    const chat = normalizeUserChat(value);
+    if (!chat) {
+      invalidUserRecords += 1;
+      continue;
+    }
+    chats.push(chat);
+  }
+  return {
+    responseShape: "list",
+    chats,
+    next,
+    totalRawRecords: entries.length,
+    validUserChats: chats.length,
+    ignoredNonUserRecords,
+    invalidUserRecords,
   };
 }
 
 /**
- * Adapts normalized response shapes from the previously considered
- * GET /api/v1/bots/{botId}/chats endpoint into the small, non-secret signal
- * set used by the pilot matcher. The endpoint is not claimed to be the
- * current production contract; supported envelopes/fields are validated only
- * by sanitized fixtures. Unknown records and IDs outside the official LINE
- * USER identifier format (`U` plus 32 hexadecimal characters) are ignored
- * fail-closed.
+ * Parses one page of the production-observed v2 envelope. Only `list` and
+ * `next` are supported; legacy guessed response shapes are intentionally not
+ * accepted. The opaque next value is consumed internally by enumeration and
+ * is never included in the public result.
  */
 export function parseLineChatListResponse(
   body: unknown,
   metadata: Pick<LineChatDiscoveryResult, "botId" | "endpoint">,
 ): LineChatDiscoveryResult {
-  const { shape, entries } = arrayResponse(body);
+  const page = parseV2Page(body);
+  const hasTerminalNext = page.next === null;
   return {
     ...metadata,
-    responseShape: shape,
-    // Pagination fields/mechanics are not verified locally yet. Production
-    // apply therefore remains blocked until a complete enumeration is proven.
-    enumerationStatus: "UNVERIFIED",
-    chats: entries.map(normalizeChat).filter((chat): chat is LineChatDiscoveredChat => chat !== null),
+    responseShape: "list",
+    enumerationStatus: hasTerminalNext && page.invalidUserRecords === 0 ? "COMPLETE" : "PARTIAL",
+    chats: page.chats,
+    pagesFetched: 1,
+    totalRawRecords: page.totalRawRecords,
+    validUserChats: page.validUserChats,
+    ignoredNonUserRecords: page.ignoredNonUserRecords,
+    invalidUserRecords: page.invalidUserRecords,
+    duplicateIds: 0,
+    conflictingDuplicates: 0,
+    nextTerminationObserved: hasTerminalNext,
+    ...(page.invalidUserRecords > 0 ? { enumerationError: "Invalid USER chat record encountered." } : {}),
   };
+}
+
+export function parseLineChatListPage(body: unknown): LineChatDiscoveryPage {
+  return parseV2Page(body);
 }

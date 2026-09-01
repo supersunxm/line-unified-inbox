@@ -3,7 +3,7 @@ import test from "node:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { APIResponse, BrowserContext } from "playwright";
+import type { BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
 import { isLineChatUserId, parseLineChatListResponse } from "./line-chat-chat-discovery";
 import {
@@ -26,115 +26,158 @@ test("LINE USER ID validation follows the official U plus 32 hex contract", () =
   assert.equal(isLineChatUserId(`R${"a".repeat(32)}`), false);
 });
 
-test("chat-list adapter preserves only sanitized known fields for a supported shape", () => {
-  const result = parseLineChatListResponse({ data: [{
-    userId: VALID_USER_ID,
-    displayName: "Somchai",
-    lastMessage: { text: "Hello", sentAt: "2026-08-31T05:00:00.000Z", direction: "INBOUND" },
-    cookie: "must-not-be-retained",
-  }] }, {
+test("verified v2 list envelope uses chatId as the authoritative USER ID", () => {
+  const result = parseLineChatListResponse({ list: [
+    { chatId: VALID_USER_ID, userId: `U${"f".repeat(32)}`, chatType: "USER", name: "Somchai", latestEvent: { timestamp: 1788152400 } },
+    { chatId: `U${"g".repeat(32)}`, userId: VALID_USER_ID_2, chatType: "USER", name: "Invalid" },
+    { chatId: VALID_USER_ID_2, userId: null, chatType: "GROUP", name: "Ignored" },
+  ], next: "opaque-next-value" }, {
     botId: "Ubot",
-    endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
+    endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
   });
-  assert.equal(result.responseShape, "data");
+  assert.equal(result.responseShape, "list");
   assert.deepEqual(result.chats, [{
     chatUserId: VALID_USER_ID,
     displayName: "Somchai",
-    lastMessageText: "Hello",
+    lastMessageText: null,
     lastMessageAt: "2026-08-31T05:00:00.000Z",
-    lastMessageDirection: "INBOUND",
+    lastMessageDirection: null,
   }]);
-  assert.doesNotMatch(JSON.stringify(result), /cookie/i);
-  assert.equal(result.enumerationStatus, "UNVERIFIED");
+  assert.equal(result.validUserChats, 1);
+  assert.equal(result.invalidUserRecords, 1);
+  assert.equal(result.ignoredNonUserRecords, 1);
+  assert.equal(result.nextTerminationObserved, false);
+  assert.equal(result.enumerationError, "Invalid USER chat record encountered.");
 });
 
-test("chat-list adapter supports a direct array shape", () => {
-  const result = parseLineChatListResponse([{ id: VALID_USER_ID, name: "Somchai" }], {
+test("v2 parser normalizes latestEvent.timestamp seconds and milliseconds only", () => {
+  const result = parseLineChatListResponse({ list: [
+    { chatId: VALID_USER_ID, chatType: "USER", latestEvent: { timestamp: 1788152400 } },
+    { chatId: VALID_USER_ID_2, chatType: "USER", latestEvent: { timestamp: "1788152400000" } },
+    { chatId: `U${"3c".repeat(16)}`, chatType: "USER", latestEvent: { timestamp: "not-a-date" } },
+  ], next: null }, {
     botId: "Ubot",
-    endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
+    endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
   });
-  assert.equal(result.responseShape, "array");
-  assert.equal(result.chats[0]?.chatUserId, VALID_USER_ID);
+  assert.equal(result.chats[0]?.lastMessageAt, "2026-08-31T05:00:00.000Z");
+  assert.equal(result.chats[1]?.lastMessageAt, result.chats[0]?.lastMessageAt);
+  assert.equal(result.chats[2]?.lastMessageAt, null);
+  assert.equal(result.enumerationStatus, "COMPLETE");
 });
 
-test("chat-list adapter supports an alternate items shape and distinguishes an empty list", () => {
-  const result = parseLineChatListResponse({ items: [] }, {
-    botId: "Ubot",
-    endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
-  });
-  assert.equal(result.responseShape, "items");
-  assert.deepEqual(result.chats, []);
-  assert.equal(result.enumerationStatus, "UNVERIFIED");
-});
-
-test("chat-list adapter normalizes epoch seconds and milliseconds deterministically", () => {
-  const seconds = parseLineChatListResponse({ chats: [{ userId: VALID_USER_ID, lastMessageAt: 1788152400 }] }, {
-    botId: "Ubot",
-    endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
-  });
-  const milliseconds = parseLineChatListResponse({ chats: [{ userId: VALID_USER_ID, lastMessageAt: "1788152400000" }] }, {
-    botId: "Ubot",
-    endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats",
-  });
-  assert.equal(seconds.chats[0]?.lastMessageAt, "2026-08-31T05:00:00.000Z");
-  assert.equal(milliseconds.chats[0]?.lastMessageAt, seconds.chats[0]?.lastMessageAt);
-});
-
-test("malformed and unknown top-level payloads fail closed", () => {
+test("v2 parser fails closed on malformed envelope or next", () => {
   assert.throws(
-    () => parseLineChatListResponse(null, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" }),
-    /Unsupported.*response shape/,
+    () => parseLineChatListResponse(null, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats" }),
+    /must contain a list array/,
   );
   assert.throws(
-    () => parseLineChatListResponse({ page: 1, results: [] }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" }),
-    /did not contain a supported chat array/,
+    () => parseLineChatListResponse({ list: [], next: { cursor: "secret" } }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats" }),
+    /malformed next/,
   );
 });
 
-test("entries without usable IDs and invalid IDs are skipped safely", () => {
-  const result = parseLineChatListResponse({ chats: [
-    { displayName: "No ID" },
-    { userId: `U${"z".repeat(32)}`, displayName: "Non-hex" },
-    { userId: VALID_USER_ID, displayName: "Valid" },
-  ] }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v1/bots/Ubot/chats" });
-  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [VALID_USER_ID]);
+test("v2 parser ignores non-USER entries and counts invalid USER records", () => {
+  const result = parseLineChatListResponse({ list: [
+    { chatId: VALID_USER_ID, chatType: "USER" },
+    { chatId: VALID_USER_ID_2, chatType: "ROOM" },
+    { chatType: "USER" },
+    { chatId: `C${"a".repeat(32)}`, chatType: "USER" },
+  ], next: null }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats" });
+  assert.equal(result.validUserChats, 1);
+  assert.equal(result.ignoredNonUserRecords, 1);
+  assert.equal(result.invalidUserRecords, 2);
+  assert.equal(result.enumerationStatus, "PARTIAL");
 });
 
-function mockResponse(status: number, body: unknown, jsonError?: Error): APIResponse {
-  return {
-    status: () => status,
-    json: async () => {
-      if (jsonError) throw jsonError;
-      return body;
-    },
-  } as unknown as APIResponse;
+interface MockPageOptions {
+  firstRequestUrl?: string;
+  navigationError?: Error;
 }
 
-function mockRequestContext(response: APIResponse | Error) {
+interface MockPageDefinition {
+  status?: number;
+  body?: unknown;
+  jsonError?: Error;
+  transportError?: Error;
+}
+
+function mockNaturalDiscoveryContext(
+  pageDefinitions: readonly MockPageDefinition[],
+  options: MockPageOptions = {},
+) {
+  const firstRequestUrl = options.firstRequestUrl
+    ?? "https://chat.line.biz/api/v2/bots/Ubot/chats?folderType=ALL&tagIds=&autoTagIds=&limit=25&prioritizePinnedChat=true";
   const calls: Array<{ url: string; options: Record<string, unknown> }> = [];
+  const gotoUrls: string[] = [];
+  const listeners: { request: Array<(request: unknown) => void>; response: Array<(response: unknown) => void> } = {
+    request: [],
+    response: [],
+  };
   let closed = false;
+  const responseFor = (definition: MockPageDefinition, url: string) => ({
+    status: () => definition.status ?? 200,
+    url: () => url,
+    request: () => ({ method: () => "GET", url: () => url }),
+    json: async () => {
+      if (definition.jsonError) throw definition.jsonError;
+      return definition.body;
+    },
+  });
+  const page = {
+    on: (event: "request" | "response", listener: (value: unknown) => void) => {
+      listeners[event].push(listener);
+      return page;
+    },
+    goto: async (url: string) => {
+      gotoUrls.push(url);
+      const request = {
+        method: () => "GET",
+        url: () => firstRequestUrl,
+        headers: () => ({
+          accept: "application/json, text/plain, */*",
+          "x-xsrf-token": "PRESENT",
+          "x-oa-chat-client-version": "PRESENT",
+          referer: `https://chat.line.biz/Ubot`,
+          origin: "https://chat.line.biz",
+        }),
+      };
+      for (const listener of listeners.request) listener(request);
+      const first = pageDefinitions[0] ?? { status: 200, body: { list: [], next: null } };
+      if (first.transportError) throw first.transportError;
+      const response = responseFor(first, firstRequestUrl);
+      for (const listener of listeners.response) listener(response);
+      if (options.navigationError) throw options.navigationError;
+      return null;
+    },
+    isClosed: () => false,
+  };
   const context = {
     request: {
-      get: async (url: string, options: Record<string, unknown>) => {
-        calls.push({ url, options });
-        if (response instanceof Error) throw response;
-        return response;
+      get: async (url: string, requestOptions: Record<string, unknown>) => {
+        calls.push({ url, options: requestOptions });
+        const definition = pageDefinitions[calls.length] ?? { status: 200, body: { list: [], next: null } };
+        if (definition.transportError) throw definition.transportError;
+        return responseFor(definition, url);
       },
       post: async () => { throw new Error("POST must not be called"); },
       put: async () => { throw new Error("PUT must not be called"); },
       patch: async () => { throw new Error("PATCH must not be called"); },
       delete: async () => { throw new Error("DELETE must not be called"); },
     },
-    pages: () => { throw new Error("page navigation must not be used for discovery"); },
-    newPage: async () => { throw new Error("individual chat pages must not be opened"); },
+    pages: () => [page],
+    newPage: async () => page,
     close: async () => { closed = true; },
   } as unknown as BrowserContext;
-  return { context, calls, wasClosed: () => closed };
+  return { context, calls, gotoUrls, wasClosed: () => closed };
 }
 
-async function discoverWithResponse(response: APIResponse | Error) {
+function validPage(chatUserId: string, next: string | null = null): MockPageDefinition {
+  return { body: { list: [{ chatId: chatUserId, chatType: "USER", name: "Sanitized" }], next } };
+}
+
+async function discoverWithPages(pageDefinitions: readonly MockPageDefinition[], options: MockPageOptions = {}) {
   const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-discovery-"));
-  const mock = mockRequestContext(response);
+  const mock = mockNaturalDiscoveryContext(pageDefinitions, options);
   const launcher: ContextLauncher = async () => mock.context;
   try {
     const service = new LineChatSessionService(launcher);
@@ -145,59 +188,98 @@ async function discoverWithResponse(response: APIResponse | Error) {
   }
 }
 
-test("session discovery uses the authenticated BrowserContext request GET", async () => {
-  const { result, mock } = await discoverWithResponse(mockResponse(200, {
-    chats: [{ userId: VALID_USER_ID, displayName: "Somchai" }],
-  }));
-  assert.equal(result.endpoint, "https://chat.line.biz/api/v1/bots/Ubot/chats");
+test("session discovery captures the natural v2 GET and enumerates subsequent pages", async () => {
+  const secondId = `U${"2b".repeat(16)}`;
+  const { result, mock } = await discoverWithPages([
+    validPage(VALID_USER_ID, "opaque-next-value"),
+    validPage(secondId, null),
+  ]);
+  assert.equal(result.endpoint, "https://chat.line.biz/api/v2/bots/Ubot/chats");
+  assert.deepEqual(mock.gotoUrls, ["https://chat.line.biz/Ubot"]);
   assert.equal(mock.calls.length, 1);
-  assert.equal(mock.calls[0]?.url, result.endpoint);
-  assert.deepEqual(mock.calls[0]?.options, {
-    headers: { Accept: "application/json, text/plain, */*" },
-    timeout: 15000,
-  });
-  assert.equal(result.chats[0]?.chatUserId, VALID_USER_ID);
-  assert.equal(result.enumerationStatus, "UNVERIFIED");
+  const nextUrl = new URL(mock.calls[0].url);
+  assert.equal(nextUrl.pathname, "/api/v2/bots/Ubot/chats");
+  assert.equal(nextUrl.searchParams.get("limit"), "25");
+  assert.deepEqual(nextUrl.searchParams.getAll("folderType"), ["ALL"]);
+  assert.equal(nextUrl.searchParams.get("next"), "opaque-next-value");
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.validUserChats, 2);
+  assert.equal(result.enumerationStatus, "COMPLETE");
+  assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [VALID_USER_ID, secondId]);
   assert.equal(mock.wasClosed(), true);
 });
 
-test("session discovery performs no page navigation, individual chat opening, or non-GET request", async () => {
-  const { mock } = await discoverWithResponse(mockResponse(200, { chats: [] }));
-  assert.equal(mock.calls.length, 1);
-  assert.equal(mock.wasClosed(), true);
+test("discovery uses chatId only, ignores guessed v1 paths, and never opens a customer chat", async () => {
+  const { result, mock } = await discoverWithPages([{ body: {
+    list: [{ userId: VALID_USER_ID, chatType: "USER", name: "Wrong fallback" }],
+    next: null,
+  } }]);
+  assert.equal(result.invalidUserRecords, 1);
+  assert.equal(result.chats.length, 0);
+  assert.equal(result.enumerationStatus, "PARTIAL");
+  assert.equal(mock.gotoUrls[0], "https://chat.line.biz/Ubot");
+  assert.equal(mock.calls.length, 0);
 });
 
-test("session discovery reports safe HTTP status failures", async (t) => {
+test("session discovery reports safe HTTP status, transport, JSON, and schema failures", async (t) => {
   for (const status of [401, 403, 404, 500]) {
     await t.test(`HTTP ${status}`, async () => {
-      await assert.rejects(
-        () => discoverWithResponse(mockResponse(status, { secret: "must-not-surface" })),
-        new RegExp(`LINE OA Manager chat-list returned HTTP ${status}`),
-      );
+      const { result } = await discoverWithPages([{ status, body: { secret: "must-not-surface" } }]);
+      assert.equal(result.enumerationStatus, "PARTIAL");
+      assert.match(result.enumerationError ?? "", new RegExp(`HTTP ${status}`));
+      assert.doesNotMatch(result.enumerationError ?? "", /secret|cookie|authorization/i);
     });
   }
+  const nonJson = await discoverWithPages([{ status: 200, body: null, jsonError: new Error("body secret") }]);
+  assert.match(nonJson.result.enumerationError ?? "", /was not JSON/);
+  const malformed = await discoverWithPages([{ status: 200, body: { unknown: [] } }]);
+  assert.match(malformed.result.enumerationError ?? "", /unsupported or malformed envelope/);
 });
 
-test("session discovery distinguishes transport and non-JSON failures without surfacing secrets", async () => {
-  await assert.rejects(
-    () => discoverWithResponse(new Error("cookie=secret authorization=secret")),
-    (error: unknown) => error instanceof Error
-      && error.message === "LINE OA Manager chat-list transport failed"
-      && !/cookie|authorization|secret/i.test(error.message),
-  );
-  await assert.rejects(
-    () => discoverWithResponse(mockResponse(200, "not-json", new Error("raw response secret"))),
-    (error: unknown) => error instanceof Error
-      && error.message === "LINE OA Manager chat-list response was not JSON"
-      && !/secret/i.test(error.message),
-  );
+test("pagination failure modes remain PARTIAL and do not expose opaque tokens", async () => {
+  const repeated = await discoverWithPages([
+    validPage(VALID_USER_ID, "same-next"),
+    validPage(`U${"2b".repeat(16)}`, "same-next"),
+  ]);
+  assert.equal(repeated.result.enumerationStatus, "PARTIAL");
+  assert.match(repeated.result.enumerationError ?? "", /Repeated/);
+  assert.doesNotMatch(JSON.stringify(repeated.result), /same-next/);
+
+  const failed = await discoverWithPages([
+    validPage(VALID_USER_ID, "opaque-next"),
+    { transportError: new Error("token=secret") },
+  ]);
+  assert.equal(failed.result.enumerationStatus, "PARTIAL");
+  assert.match(failed.result.enumerationError ?? "", /transport failed/);
+  assert.doesNotMatch(JSON.stringify(failed.result), /opaque-next|secret/);
 });
 
-test("session discovery preserves fail-closed errors for unsupported JSON shapes", async () => {
-  await assert.rejects(
-    () => discoverWithResponse(mockResponse(200, { unknown: [] })),
-    /did not contain a supported chat array/,
-  );
+test("duplicate candidates are deduplicated and conflicting metadata blocks completion", async () => {
+  const same = validPage(VALID_USER_ID, "next");
+  const duplicate = { body: { list: [{ chatId: VALID_USER_ID, chatType: "USER", name: "Different" }], next: null } };
+  const { result } = await discoverWithPages([same, duplicate]);
+  assert.equal(result.duplicateIds, 1);
+  assert.equal(result.conflictingDuplicates, 1);
+  assert.equal(result.enumerationStatus, "PARTIAL");
+});
+
+test("discovery fails closed at the bounded page and chat limits", async () => {
+  const manyPages = Array.from({ length: 201 }, (_, index) => validPage(
+    `U${index.toString(16).padStart(32, "0")}`,
+    `next-${index}`,
+  ));
+  const pageBound = await discoverWithPages(manyPages);
+  assert.equal(pageBound.result.enumerationStatus, "PARTIAL");
+  assert.match(pageBound.result.enumerationError ?? "", /page limit/i);
+  assert.equal(pageBound.result.pagesFetched, 200);
+
+  const manyChats = Array.from({ length: 10001 }, (_, index) => ({
+    chatId: `U${index.toString(16).padStart(32, "0")}`,
+    chatType: "USER",
+  }));
+  const chatBound = await discoverWithPages([{ body: { list: manyChats, next: null } }]);
+  assert.equal(chatBound.result.enumerationStatus, "PARTIAL");
+  assert.match(chatBound.result.enumerationError ?? "", /discovered-chat limit/i);
 });
 
 test("diagnostic URL metadata keeps pagination scalars and redacts cursor/token values", () => {
