@@ -60,7 +60,12 @@ function normalizeLatestEventTimestamp(value: Record<string, unknown>): string |
 }
 
 function normalizeCustomerName(value: Record<string, unknown>): string | null {
-  return stringValue(value.customer_name)
+  const profile = objectValue(value.profile);
+  // In LINE OA Manager chat-list responses, the customer's own LINE display name
+  // is carried as profile.name. profile.nickname is the manager-assigned nickname
+  // and must never be used as the source identity for resolving a chat.
+  return stringValue(profile?.name)
+    ?? stringValue(value.customer_name)
     ?? stringValue(value.customerName)
     ?? stringValue(value.name);
 }
