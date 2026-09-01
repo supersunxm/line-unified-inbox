@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
+import { pickLanguageText, useAppLanguage } from "../language";
+import { mobileStoresPhrases, mobileStoresTemplates } from "../mobile-route-i18n";
 import { MobileStoresApp } from "./mobile-stores-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export default function StoresPage() {
+  const { language } = useAppLanguage();
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -18,11 +22,21 @@ export default function StoresPage() {
   }, []);
 
   if (mode === "loading") {
-    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลร้านค้า...</main>;
+    return (
+      <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
+        {pickLanguageText(language, { th: "กำลังเปิดข้อมูลร้านค้า...", en: "Opening store management...", zh: "正在打开门店管理..." })}
+      </main>
+    );
   }
 
   if (mode === "mobile") {
-    return <AuthorizedSection section="stores"><MobileStoresApp /></AuthorizedSection>;
+    return (
+      <AuthorizedSection section="stores">
+        <LegacyI18nBoundary phrases={mobileStoresPhrases} templates={mobileStoresTemplates}>
+          <MobileStoresApp />
+        </LegacyI18nBoundary>
+      </AuthorizedSection>
+    );
   }
   return <AuthorizedWorkspace section="stores" />;
 }
