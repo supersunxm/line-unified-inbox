@@ -107,6 +107,63 @@ void main() {
       expect(fromFlat.modelName, 'OPPO Reno 16 5G');
     });
 
+    test('CustomerSalesProductItem repairs A-series names and spaced RAM/ROM values', () {
+      final product = CustomerSalesProductItem.fromJson({
+        'id': 'sales-product-a6',
+        'productModelId': 'oppo-a6',
+        'model': {
+          'id': 'oppo-a6',
+          'name': 'OPPO A 6',
+          'category': 'SMARTPHONE',
+        },
+        'variant': {
+          'id': 'a6-6-128',
+          'ram': '6 ',
+          'rom': '1 2 8 ',
+        },
+        'status': 'PURCHASED',
+      });
+
+      expect(product.modelName, 'OPPO A6');
+      expect(product.ram, '6');
+      expect(product.rom, '128');
+      expect(product.variantLabel, '6 GB RAM · 128 GB ROM');
+    });
+
+    test('CustomerSalesProductItem removes optional GB text from capacity fields', () {
+      final product = CustomerSalesProductItem.fromJson({
+        'id': 'sales-product-a6-units',
+        'productModelId': 'oppo-a6',
+        'modelName': 'OPPO A 6',
+        'ram': '6 G B',
+        'rom': '128 GB',
+        'status': 'PURCHASED',
+      });
+
+      expect(product.modelName, 'OPPO A6');
+      expect(product.ram, '6');
+      expect(product.rom, '128');
+      expect(product.variantLabel, '6 GB RAM · 128 GB ROM');
+    });
+
+    test('CustomerSalesProductItem repairs split Find N and X suffixes', () {
+      final findN = CustomerSalesProductItem.fromJson({
+        'id': 'find-n',
+        'productModelId': 'find-n6',
+        'modelName': 'OPPO Find N 6',
+        'status': 'INTERESTED',
+      });
+      final findX = CustomerSalesProductItem.fromJson({
+        'id': 'find-x',
+        'productModelId': 'find-x8',
+        'modelName': 'OPPO Find X 8 Pro',
+        'status': 'INTERESTED',
+      });
+
+      expect(findN.modelName, 'OPPO Find N6');
+      expect(findX.modelName, 'OPPO Find X8 Pro');
+    });
+
     test('ConversationProductTag and ProductSelectorItem normalize productName', () {
       final tag = ConversationProductTag.fromJson({
         'id': 'tag-1',
