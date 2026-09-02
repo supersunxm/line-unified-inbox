@@ -125,12 +125,21 @@ export class DashboardController {
     @Query("dateFrom") dateFrom?: string,
     @Query("dateTo") dateTo?: string,
     @Query("allowedStoreIds") allowedStoreIdsRaw?: string,
+    @Query("tier") tier?: string,
+    @Query("kpiPlan") kpiPlan?: string,
+    @Query("area") area?: string,
+    @Query("bm") bm?: string,
     @Req() req?: AuthRequest,
   ) {
     const safePeriod: AnalyticsPeriod = period === "7d" || period === "30d" ? period : "today";
     const customRange = this.parseDateRange(dateFrom, dateTo);
     const scope = await this.resolveScope(req, allowedStoreIdsRaw);
-    return this.executive.getStoreHealth(safePeriod, scope.allowedStoreIds, customRange);
+    return this.executive.getStoreHealth(safePeriod, scope.allowedStoreIds, customRange, {
+      tier: tier?.trim() || undefined,
+      kpiPlan: kpiPlan?.trim() || undefined,
+      area: area?.trim() || undefined,
+      bm: bm?.trim() || undefined,
+    });
   }
 
   @Get("root-cause-insights")

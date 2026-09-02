@@ -578,6 +578,10 @@ model StoreMaster {
   googleMapsUrl         String?
   province              String?
   region                String?
+  dashboardTier         String?
+  kpiPlan               String?
+  dashboardArea         String?
+  bmName                String?
   source                String
   sourceRowNumber       Int
   sourceUpdatedAt       DateTime?
@@ -595,6 +599,10 @@ model StoreMaster {
   @@index([tiktokUsername])
   @@index([province])
   @@index([region])
+  @@index([dashboardTier])
+  @@index([kpiPlan])
+  @@index([dashboardArea])
+  @@index([bmName])
   @@index([isActive])
 }
 
