@@ -83,6 +83,12 @@ export function AppShell({
             width: calc(100% - var(--app-sidebar-width, 16rem));
             transition: margin-left 200ms ease, width 200ms ease;
           }
+          .app-mobile-scroll {
+            min-height: 0 !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            overscroll-behavior-y: contain;
+          }
         }
 
         @media (max-width: 767px) {
