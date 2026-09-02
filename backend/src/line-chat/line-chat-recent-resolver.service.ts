@@ -4,10 +4,7 @@ import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatDiscoveredChat } from "./line-chat.types";
 import {
-  LINE_CHAT_PILOT_BOT_ID,
-  LINE_CHAT_PILOT_OA_NAME,
-  LINE_CHAT_PILOT_SESSION_KEY,
-  LINE_CHAT_PILOT_STORE_CODE,
+  isLineChatRealtimeResolverEligible,
 } from "./line-chat-pilot.constants";
 
 const MATCH_TOLERANCE_MS = 60_000;
@@ -165,7 +162,7 @@ export class LineChatRecentResolverService {
             isActive: true,
             archivedAt: true,
             chatBotId: true,
-            lineChatSession: { select: { sessionKey: true } },
+            lineChatSession: { select: { sessionKey: true, status: true } },
           },
         },
       },
@@ -179,18 +176,21 @@ export class LineChatRecentResolverService {
     }
 
     const oa = conversation.lineOfficialAccount;
-    const identityMatches = pilotStoreCode(conversation.store) === LINE_CHAT_PILOT_STORE_CODE
-      && conversation.storeId !== null
-      && oa.storeId === conversation.storeId
-      && oa.accountType === "STORE"
-      && oa.isActive
-      && oa.archivedAt === null
-      && oa.name.trim() === LINE_CHAT_PILOT_OA_NAME
-      && oa.chatBotId?.trim() === LINE_CHAT_PILOT_BOT_ID
-      && oa.lineChatSession?.sessionKey.trim() === LINE_CHAT_PILOT_SESSION_KEY
-      && input.botId.trim() === LINE_CHAT_PILOT_BOT_ID
-      && input.sessionKey.trim() === LINE_CHAT_PILOT_SESSION_KEY;
-    if (!identityMatches) return { status: "RESOLVE_CONFLICT" };
+    const storeCode = pilotStoreCode(conversation.store);
+    const eligible = isLineChatRealtimeResolverEligible({
+      storeCode,
+      conversationStoreId: conversation.storeId,
+      oaStoreId: oa.storeId,
+      oaAccountType: oa.accountType,
+      oaIsActive: oa.isActive,
+      oaArchivedAt: oa.archivedAt,
+      oaChatBotId: oa.chatBotId,
+      oaSessionKey: oa.lineChatSession?.sessionKey,
+      oaSessionStatus: oa.lineChatSession?.status,
+      expectedBotId: input.botId,
+      expectedSessionKey: input.sessionKey,
+    });
+    if (!eligible) return { status: "RESOLVE_CONFLICT" };
 
     let recent;
     try {

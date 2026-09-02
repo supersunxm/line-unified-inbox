@@ -3,40 +3,11 @@ import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus } from "@prisma/client";
 import { buildLineChatNickname } from "../line-chat-nickname";
 import {
-  LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES,
+  isLineChatRealtimeResolverEligible,
+  type LineChatRealtimeResolverEligibilityParams,
 } from "./line-chat-pilot.constants";
 
-export function isLineChatRealtimeResolverEligible(params: {
-  storeCode: string;
-  conversationStoreId: string | null;
-  oaStoreId: string | null;
-  oaAccountType: string | null;
-  oaIsActive: boolean;
-  oaArchivedAt: Date | null;
-  oaChatBotId: string | null;
-  oaSessionKey: string | null;
-  oaSessionStatus: string | null;
-  oaSyncEnabled: boolean;
-}): boolean {
-  if (!params.oaSyncEnabled) {
-    return false;
-  }
-  if (!params.conversationStoreId || !params.oaStoreId || params.conversationStoreId !== params.oaStoreId) {
-    return false;
-  }
-  if (params.oaAccountType !== "STORE") {
-    return false;
-  }
-  if (!params.oaIsActive || params.oaArchivedAt !== null) {
-    return false;
-  }
-  if (!params.oaChatBotId || !params.oaSessionKey || params.oaSessionStatus === "DISABLED") {
-    return false;
-  }
-
-  const cleanStoreCode = params.storeCode.trim();
-  return (LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES as readonly string[]).includes(cleanStoreCode);
-}
+export { isLineChatRealtimeResolverEligible, type LineChatRealtimeResolverEligibilityParams };
 
 export interface EnqueueNicknameSyncResult {
   enqueued: boolean;
