@@ -4,128 +4,224 @@ import { PrismaClient } from "@prisma/client";
 import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
 
 function fixture() {
-  const account = {
-    id: "oa-1",
-    encryptedChannelSecret: "secret-ciphertext",
-    encryptedChannelAccessToken: "token-ciphertext",
-    webhookKey: "stable-webhook-key",
-    store: {
-      id: "store-1",
-      code: "22535",
-      name: "Old Store",
-      region: "Old",
-      area: "Old",
-      storeMasterId: "new-master",
-    },
+  const chumPhaeMaster = {
+    id: "master-17469",
+    externalStoreId: "17469",
+    storeName: "OBS Lotus Chum Phae Khonkaen FL.1 By Com7",
+    accountName: "OPPOLotusChumphaeBS",
+    normalizedAccountName: "oppolotuschumphaebs",
+    lineId: "@975tvkio",
+    lineOaLink: "https://lin.ee/KwBZatG",
+    lineManagerUrl: "https://chat.line.biz/account/@975tvkio",
+    province: "Khon Kaen",
+    region: "Northeastern",
+    isActive: true,
+    updatedAt: new Date(),
   };
-  const master = {
-    id: "new-master",
-    externalStoreId: "22535",
-    storeName: "Corrected Store",
-    accountName: "Corrected Account",
-    lineId: "@correct",
-    lineOaLink: "https://lin.ee/correct",
-    lineManagerUrl: "https://manager.line.biz/account/correct",
-    province: "Lamphun",
+  const phitsanulokMaster = {
+    id: "master-30538",
+    externalStoreId: "30538",
+    storeName: "OBS Central Phitsanulok By Hengcharoen Phitsanulok",
+    accountName: "OPPO Phitsanulok",
+    normalizedAccountName: "oppophitsanulok",
+    lineId: "@nux7670t",
+    lineOaLink: "https://lin.ee/Q22BCVx",
+    lineManagerUrl: "https://chat.line.biz/account/@nux7670t",
+    province: "Phitsanulok",
     region: "Northern",
     isActive: true,
     updatedAt: new Date(),
   };
-  const writes: Array<Record<string, unknown>> = [];
-  const prisma = {
-    lineOfficialAccount: { findMany: () => Promise.resolve([account]) },
-    storeMaster: { findFirst: () => Promise.resolve(master) },
+  const account = {
+    id: "oa-chum-phae",
+    name: "OPPOLotusChumphaeBS",
+    basicId: "@975tvkio",
+    encryptedChannelSecret: "secret-ciphertext",
+    encryptedChannelAccessToken: "token-ciphertext",
+    webhookKey: "stable-webhook-key",
     store: {
+      id: "store-30538",
+      code: "30538",
+      name: phitsanulokMaster.storeName,
+      region: phitsanulokMaster.region,
+      area: phitsanulokMaster.province,
+      storeMasterId: phitsanulokMaster.id,
+    },
+  };
+  const chumPhaeStore = {
+    id: "store-17469",
+    code: "17469",
+    name: chumPhaeMaster.storeName,
+    region: chumPhaeMaster.region,
+    area: chumPhaeMaster.province,
+    storeMasterId: chumPhaeMaster.id,
+  };
+  const stores = [account.store, chumPhaeStore];
+  const storeWrites: Array<{ id: string; data: Record<string, unknown> }> = [];
+  const accountWrites: Array<Record<string, unknown>> = [];
+  const conversationWrites: Array<Record<string, unknown>> = [];
+
+  const prisma = {
+    lineOfficialAccount: {
+      findMany: () => Promise.resolve([account]),
       update: ({ data }: { data: Record<string, unknown> }) => {
-        writes.push(data);
+        accountWrites.push(data);
         return Promise.resolve({});
       },
     },
+    storeMaster: {
+      findMany: ({ where }: { where: Record<string, unknown> }) => {
+        const lineId = (where.lineId as { equals?: string } | undefined)?.equals;
+        if (lineId) {
+          return Promise.resolve(
+            [chumPhaeMaster, phitsanulokMaster].filter(
+              (master) => master.lineId.toLocaleLowerCase() === lineId.toLocaleLowerCase(),
+            ),
+          );
+        }
+        const normalizedAccountName = where.normalizedAccountName;
+        return Promise.resolve(
+          [chumPhaeMaster, phitsanulokMaster].filter(
+            (master) => master.normalizedAccountName === normalizedAccountName,
+          ),
+        );
+      },
+      findFirst: ({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(
+          [chumPhaeMaster, phitsanulokMaster].find(
+            (master) =>
+              master.id === where.id || master.externalStoreId === where.externalStoreId,
+          ) ?? null,
+        ),
+    },
+    store: {
+      findFirst: ({ where }: { where: { OR?: Array<Record<string, unknown>> } }) =>
+        Promise.resolve(
+          stores.find((store) =>
+            (where.OR ?? []).some(
+              (candidate) =>
+                candidate.storeMasterId === store.storeMasterId || candidate.code === store.code,
+            ),
+          ) ?? null,
+        ),
+      update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        storeWrites.push({ id: where.id, data });
+        return Promise.resolve({});
+      },
+      create: ({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          id: "created-store",
+          code: (data.code as string | null) ?? null,
+          name: data.name as string,
+          region: (data.region as string | null) ?? null,
+          area: (data.area as string | null) ?? null,
+          storeMasterId: data.storeMasterId as string,
+        }),
+    },
+    conversation: {
+      updateMany: ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        conversationWrites.push({ where, data });
+        return Promise.resolve({ count: 1 });
+      },
+    },
   } as unknown as PrismaClient;
-  return { account, master, writes, prisma };
+
+  return {
+    account,
+    chumPhaeMaster,
+    phitsanulokMaster,
+    chumPhaeStore,
+    stores,
+    storeWrites,
+    accountWrites,
+    conversationWrites,
+    prisma,
+  };
 }
 
-void test("sync refreshes copied metadata without credential or webhook fields", async () => {
-  const { account, writes, prisma } = fixture();
+void test("sync rebinds OPPOLotusChumphaeBS away from the unconnectable 30538 store", async () => {
+  const value = fixture();
   const before = {
-    secret: account.encryptedChannelSecret,
-    token: account.encryptedChannelAccessToken,
-    webhookKey: account.webhookKey,
+    secret: value.account.encryptedChannelSecret,
+    token: value.account.encryptedChannelAccessToken,
+    webhookKey: value.account.webhookKey,
   };
 
-  assert.deepEqual(await syncConnectedLineOaMetadata(prisma, false), {
+  assert.deepEqual(await syncConnectedLineOaMetadata(value.prisma, false), {
     processed: 1,
     updated: 1,
     unchanged: 0,
     missingStoreMaster: 0,
     failed: 0,
   });
-  assert.deepEqual(writes[0], {
-    storeMasterId: "new-master",
-    code: "22535",
-    name: "Corrected Store",
-    region: "Northern",
-    area: "Lamphun",
-    provinceSource: "MASTER",
-    regionSource: "MASTER",
-  });
+  assert.deepEqual(value.accountWrites, [{ storeId: "store-17469" }]);
+  assert.deepEqual(value.conversationWrites, [
+    {
+      where: { lineOfficialAccountId: "oa-chum-phae" },
+      data: { storeId: "store-17469" },
+    },
+  ]);
+  assert.deepEqual(value.storeWrites, []);
   assert.deepEqual(
     {
-      secret: account.encryptedChannelSecret,
-      token: account.encryptedChannelAccessToken,
-      webhookKey: account.webhookKey,
+      secret: value.account.encryptedChannelSecret,
+      token: value.account.encryptedChannelAccessToken,
+      webhookKey: value.account.webhookKey,
     },
     before,
   );
-  assert.equal("webhookKey" in writes[0], false);
-  assert.equal("encryptedChannelSecret" in writes[0], false);
-  assert.equal("encryptedChannelAccessToken" in writes[0], false);
 });
 
-void test("sync follows the linked Store Master when Store ID changes in the source sheet", async () => {
-  const { account, master, writes, prisma } = fixture();
-  account.store.code = "OLD-STORE-ID";
-  account.store.name = "OBS Lotus Chum Phae Khonkaen FL.1 By Com7";
-  master.externalStoreId = "30538";
-  master.storeName = "OBS Central Phitsanulok By Hengcharoen Phitsanulok";
-  master.province = "Phitsanulok";
-  master.region = "Northern";
+void test("sync refreshes metadata in place when the OA already belongs to the correct store", async () => {
+  const value = fixture();
+  value.account.store = {
+    id: value.chumPhaeStore.id,
+    code: value.chumPhaeStore.code,
+    name: "Old Chum Phae Name",
+    region: "Old",
+    area: "Old",
+    storeMasterId: value.chumPhaeMaster.id,
+  };
+  value.stores.splice(0, value.stores.length, value.account.store);
 
-  assert.deepEqual(await syncConnectedLineOaMetadata(prisma, false), {
+  assert.deepEqual(await syncConnectedLineOaMetadata(value.prisma, false), {
     processed: 1,
     updated: 1,
     unchanged: 0,
     missingStoreMaster: 0,
     failed: 0,
   });
-  assert.deepEqual(writes[0], {
-    storeMasterId: "new-master",
-    code: "30538",
-    name: "OBS Central Phitsanulok By Hengcharoen Phitsanulok",
-    region: "Northern",
-    area: "Phitsanulok",
-    provinceSource: "MASTER",
-    regionSource: "MASTER",
-  });
+  assert.deepEqual(value.storeWrites, [
+    {
+      id: "store-17469",
+      data: {
+        storeMasterId: "master-17469",
+        code: "17469",
+        name: "OBS Lotus Chum Phae Khonkaen FL.1 By Com7",
+        region: "Northeastern",
+        area: "Khon Kaen",
+        provinceSource: "MASTER",
+        regionSource: "MASTER",
+      },
+    },
+  ]);
+  assert.deepEqual(value.accountWrites, []);
 });
 
-void test("dry run reports the change and writes nothing", async () => {
-  const { writes, prisma } = fixture();
-  const report = await syncConnectedLineOaMetadata(prisma, true);
+void test("dry run reports a wrong OA-to-store binding without writing", async () => {
+  const value = fixture();
+  const report = await syncConnectedLineOaMetadata(value.prisma, true);
   assert.equal(report.updated, 1);
-  assert.deepEqual(writes, []);
+  assert.deepEqual(value.storeWrites, []);
+  assert.deepEqual(value.accountWrites, []);
+  assert.deepEqual(value.conversationWrites, []);
 });
 
 void test("an already synchronized account is unchanged and repeat-safe", async () => {
   const value = fixture();
-  value.account.store = {
-    id: "store-1",
-    code: "22535",
-    name: "Corrected Store",
-    region: "Northern",
-    area: "Lamphun",
-    storeMasterId: "new-master",
-  };
+  value.account.store = { ...value.chumPhaeStore };
+  value.stores.splice(0, value.stores.length, value.account.store);
+
   assert.deepEqual(await syncConnectedLineOaMetadata(value.prisma, false), {
     processed: 1,
     updated: 0,
@@ -133,5 +229,7 @@ void test("an already synchronized account is unchanged and repeat-safe", async 
     missingStoreMaster: 0,
     failed: 0,
   });
-  assert.deepEqual(value.writes, []);
+  assert.deepEqual(value.storeWrites, []);
+  assert.deepEqual(value.accountWrites, []);
+  assert.deepEqual(value.conversationWrites, []);
 });
