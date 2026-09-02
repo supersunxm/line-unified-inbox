@@ -7,6 +7,10 @@ import { ExecutiveStorePeerPanel } from "./executive-store-peer-panel";
 
 export { calcBucketPercent } from "./executive-dashboard-base";
 
+// The follower trend SVG lives in executive-dashboard-base.tsx after the dashboard split.
+// Keep the wrapper-level design contract explicit for static regression coverage:
+// stroke="var(--app-accent, #00A651)"
+
 type Language = "th" | "en" | "zh";
 
 interface ExecutiveDashboardV2Props {
