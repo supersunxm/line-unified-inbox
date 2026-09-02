@@ -70,7 +70,8 @@ export async function syncConnectedLineOaMetadata(
         continue;
       }
 
-      const targetCode = master.externalStoreId?.trim() || null;
+      // Do not erase a previously known Store ID when the source row is temporarily incomplete.
+      const targetCode = master.externalStoreId?.trim() || currentCode;
       const region = master.region;
       const area = master.province;
       const changed =
