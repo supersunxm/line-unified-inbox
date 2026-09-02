@@ -3,14 +3,13 @@ name: Apply focus seven-store chat group
 on:
   push:
     branches:
-      - feat/focus-seven-store-chat-group
+      - "feat/focus-seven-store-chat-group"
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: ${{ !contains(github.event.head_commit.message, 'feat(chats): add focus group for seven stores') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -22,11 +21,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            backend/package-lock.json
+          node-version: "20"
 
       - name: Apply focused code changes
         run: python3 .github/scripts/apply-focus-seven-store-chat-group.py
