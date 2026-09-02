@@ -23,8 +23,12 @@ const apiClientSource = readFileSync(new URL("../src/app/tiktok/tiktok-api-clien
 const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
 const overviewPageSource = readFileSync(new URL("../src/app/tiktok/page.tsx", import.meta.url), "utf8");
 const overviewViewSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url), "utf8");
+const overviewTranslationsSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-translations.ts", import.meta.url), "utf8");
+const overviewUiSource = `${overviewViewSource}\n${overviewTranslationsSource}`;
 const dashboardPageSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
 const dashboardViewSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
+const dashboardTranslationsSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-translations.ts", import.meta.url), "utf8");
+const dashboardUiSource = `${dashboardViewSource}\n${dashboardTranslationsSource}`;
 const connectRouteSource = readFileSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
@@ -33,12 +37,13 @@ test("TikTok OAuth, overview, and dashboard route files exist", () => {
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-api-client.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/tiktok-overview-translations.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-translations.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/error/page.tsx", import.meta.url)));
-  // In-memory store permanently removed
   assert.equal(existsSync(new URL("../src/app/tiktok/tiktok-data-store.ts", import.meta.url)), false);
 });
 
@@ -57,7 +62,6 @@ test("TikTok user info and video list fields request required metrics and profil
   assert.match(TIKTOK_USER_INFO_FIELDS, /following_count/);
   assert.match(TIKTOK_USER_INFO_FIELDS, /likes_count/);
   assert.match(TIKTOK_USER_INFO_FIELDS, /video_count/);
-
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /id/);
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /create_time/);
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /cover_image_url/);
@@ -68,7 +72,6 @@ test("TikTok user info and video list fields request required metrics and profil
 });
 
 test("parseTikTokTokenResponse handles valid flat JSON and nested data envelope", () => {
-  // Flat format
   const flatPayload = {
     access_token: "act.sample_access_token_12345",
     refresh_token: "rft.sample_refresh_token_67890",
@@ -78,14 +81,12 @@ test("parseTikTokTokenResponse handles valid flat JSON and nested data envelope"
     refresh_expires_in: 31536000,
     token_type: "Bearer",
   };
-
   const parsedFlat = parseTikTokTokenResponse(flatPayload);
   assert.equal(parsedFlat.accessToken, "act.sample_access_token_12345");
   assert.equal(parsedFlat.refreshToken, "rft.sample_refresh_token_67890");
   assert.equal(parsedFlat.openId, "_000sample_open_id_abc");
   assert.equal(parsedFlat.expiresIn, 86400);
 
-  // Nested data envelope format
   const nestedPayload = {
     data: {
       access_token: "act.nested_token_999",
@@ -93,32 +94,17 @@ test("parseTikTokTokenResponse handles valid flat JSON and nested data envelope"
       scope: "user.info.basic,video.list",
       expires_in: 7200,
     },
-    error: {
-      code: "ok",
-      message: "",
-    },
+    error: { code: "ok", message: "" },
   };
-
   const parsedNested = parseTikTokTokenResponse(nestedPayload);
   assert.equal(parsedNested.accessToken, "act.nested_token_999");
   assert.equal(parsedNested.openId, "_000nested_open_id");
 });
 
 test("parseTikTokTokenResponse throws safe error on invalid payload or TikTok error", () => {
-  assert.throws(() => {
-    parseTikTokTokenResponse(null);
-  }, /Invalid token response/);
-
-  assert.throws(() => {
-    parseTikTokTokenResponse({
-      error: "invalid_grant",
-      error_description: "The provided authorization code is invalid or expired.",
-    });
-  }, /The provided authorization code is invalid or expired/);
-
-  assert.throws(() => {
-    parseTikTokTokenResponse({});
-  }, /Missing access_token or open_id/);
+  assert.throws(() => parseTikTokTokenResponse(null), /Invalid token response/);
+  assert.throws(() => parseTikTokTokenResponse({ error: "invalid_grant", error_description: "The provided authorization code is invalid or expired." }), /The provided authorization code is invalid or expired/);
+  assert.throws(() => parseTikTokTokenResponse({}), /Missing access_token or open_id/);
 });
 
 test("logTikTokTokenDiagnostic emits booleans and counts without logging sensitive strings", () => {
@@ -147,7 +133,6 @@ test("parseTikTokVideoItem parses full video metrics and preserves null/undefine
     comment_count: 450,
     share_count: 230,
   };
-
   const parsed = parseTikTokVideoItem(rawVideo);
   assert.ok(parsed);
   assert.equal(parsed.id, "7123456789012345678");
@@ -158,11 +143,7 @@ test("parseTikTokVideoItem parses full video metrics and preserves null/undefine
   assert.equal(parsed.share_count, 230);
   assert.equal(parsed.cover_image_url, "https://p16-sign.tiktokcdn.com/cover1.jpg");
 
-  // Missing metric fields should remain undefined, not prematurely coerced to 0
-  const partialVideo = {
-    id: "7123456789012345679",
-    create_time: 1723600000,
-  };
+  const partialVideo = { id: "7123456789012345679", create_time: 1723600000 };
   const parsedPartial = parseTikTokVideoItem(partialVideo);
   assert.ok(parsedPartial);
   assert.equal(parsedPartial.id, "7123456789012345679");
@@ -172,40 +153,18 @@ test("parseTikTokVideoItem parses full video metrics and preserves null/undefine
 
 test("mergeTikTokVideoItems enriches list results with /video/query/ performance metrics and fresh cover URLs", () => {
   const listVideos = [
-    {
-      id: "vid-1",
-      title: "OPPO Find N3 Flip",
-      cover_image_url: "https://p16-sign.tiktokcdn.com/stale_cover.jpg",
-    },
-    {
-      id: "vid-2",
-      title: "OPPO Reno 12 AI Features",
-      cover_image_url: "https://p16-sign.tiktokcdn.com/cover2.jpg",
-      view_count: 5000,
-    },
+    { id: "vid-1", title: "OPPO Find N3 Flip", cover_image_url: "https://p16-sign.tiktokcdn.com/stale_cover.jpg" },
+    { id: "vid-2", title: "OPPO Reno 12 AI Features", cover_image_url: "https://p16-sign.tiktokcdn.com/cover2.jpg", view_count: 5000 },
   ];
-
   const queryVideos = [
-    {
-      id: "vid-1",
-      cover_image_url: "https://p16-sign.tiktokcdn.com/fresh_cover.jpg",
-      view_count: 85000,
-      like_count: 6200,
-      comment_count: 180,
-      share_count: 95,
-    },
+    { id: "vid-1", cover_image_url: "https://p16-sign.tiktokcdn.com/fresh_cover.jpg", view_count: 85000, like_count: 6200, comment_count: 180, share_count: 95 },
   ];
-
   const merged = mergeTikTokVideoItems(listVideos, queryVideos);
   assert.equal(merged.length, 2);
-
-  // Enriched vid-1 gets fresh cover URL and query metrics
   assert.equal(merged[0].id, "vid-1");
   assert.equal(merged[0].cover_image_url, "https://p16-sign.tiktokcdn.com/fresh_cover.jpg");
   assert.equal(merged[0].view_count, 85000);
   assert.equal(merged[0].like_count, 6200);
-
-  // Unmodified vid-2 keeps its existing data
   assert.equal(merged[1].id, "vid-2");
   assert.equal(merged[1].cover_image_url, "https://p16-sign.tiktokcdn.com/cover2.jpg");
   assert.equal(merged[1].view_count, 5000);
@@ -237,54 +196,41 @@ test("Frontend forwards WEB sessions to backend through the canonical oppo_sessi
 });
 
 test("Route structure: /tiktok is Overview and /tiktok/dashboard is Performance Dashboard", () => {
-  // Overview view links to /tiktok/dashboard and /tiktok/connect
   assert.match(overviewViewSource, /href="\/tiktok\/dashboard"/);
   assert.match(overviewViewSource, /href="\/tiktok\/connect"/);
   assert.doesNotMatch(overviewViewSource, /href="\/dashboard"/);
-
-  // Dashboard view links to /tiktok and /tiktok/connect
   assert.match(dashboardViewSource, /href="\/tiktok"/);
   assert.match(dashboardViewSource, /href="\/tiktok\/connect"/);
   assert.doesNotMatch(dashboardViewSource, /href="\/dashboard"/);
 });
 
-test("Overview view renders connected account info and empty state appropriately", () => {
-  // Connected elements
+test("Overview view renders connected account info and localized empty state appropriately", () => {
   assert.match(overviewViewSource, /profile\.display_name/);
   assert.match(overviewViewSource, /profile\.follower_count/);
   assert.match(overviewViewSource, /profile\.following_count/);
   assert.match(overviewViewSource, /profile\.likes_count/);
   assert.match(overviewViewSource, /profile\.video_count/);
-  assert.match(overviewViewSource, /Connected/);
-  assert.match(overviewViewSource, /Open Dashboard/);
-
-  // Neutral store attribution fallback when storeMaster is null
-  assert.match(overviewViewSource, /Store not linked yet/);
+  assert.match(overviewUiSource, /Connected/);
+  assert.match(overviewUiSource, /Open Dashboard/);
+  assert.match(overviewUiSource, /Store not linked yet/);
   assert.doesNotMatch(overviewViewSource, /POC Sandbox/);
-  assert.match(dashboardViewSource, /Store not linked yet/);
+  assert.match(dashboardUiSource, /Store not linked yet/);
   assert.doesNotMatch(dashboardViewSource, /POC Sandbox/);
-
-  // Empty state elements
-  assert.match(overviewViewSource, /No TikTok Account Connected Yet/);
-  assert.match(overviewViewSource, /Connect TikTok Account/);
+  assert.match(overviewUiSource, /No TikTok Account Connected Yet/);
+  assert.match(overviewUiSource, /Connect TikTok Account/);
 });
 
-test("TikTok dashboard renders all 6 KPI cards, performance highlights, and video analytics", () => {
-  // 6 KPIs
-  assert.match(dashboardViewSource, /Followers/);
-  assert.match(dashboardViewSource, /Following/);
-  assert.match(dashboardViewSource, /Total Likes/);
-  assert.match(dashboardViewSource, /Total Videos/);
-  assert.match(dashboardViewSource, /Total Video Views/);
-  assert.match(dashboardViewSource, /Avg Views \/ Video/);
-
-  // Performance Highlights
-  assert.match(dashboardViewSource, /Top Video by Views/);
-  assert.match(dashboardViewSource, /Top Video by Likes/);
-  assert.match(dashboardViewSource, /Total Engagement/);
-  assert.match(dashboardViewSource, /Avg Engagement \/ Post/);
-
-  // Video item analytics
+test("TikTok dashboard renders all 6 localized KPI cards, performance highlights, and video analytics", () => {
+  assert.match(dashboardUiSource, /Followers/);
+  assert.match(dashboardUiSource, /Following/);
+  assert.match(dashboardUiSource, /Total Likes/);
+  assert.match(dashboardUiSource, /Total Videos/);
+  assert.match(dashboardUiSource, /Total Video Views/);
+  assert.match(dashboardUiSource, /Avg Views \/ Video/);
+  assert.match(dashboardUiSource, /Top Video by Views/);
+  assert.match(dashboardUiSource, /Top Video by Likes/);
+  assert.match(dashboardUiSource, /Total Engagement/);
+  assert.match(dashboardUiSource, /Avg Engagement \/ Post/);
   assert.match(dashboardViewSource, /view_count/);
   assert.match(dashboardViewSource, /like_count/);
   assert.match(dashboardViewSource, /comment_count/);
@@ -294,18 +240,14 @@ test("TikTok dashboard renders all 6 KPI cards, performance highlights, and vide
 });
 
 test("Security: Client Secret, tokens, and authorization code are strictly server-side", () => {
-  // No client secret in views
   assert.doesNotMatch(overviewPageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(overviewViewSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(overviewViewSource, /access_token/);
   assert.doesNotMatch(overviewViewSource, /refresh_token/);
-
   assert.doesNotMatch(dashboardPageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(dashboardViewSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(dashboardViewSource, /access_token/);
   assert.doesNotMatch(dashboardViewSource, /refresh_token/);
-
-  // No localStorage or cookies storing tokens in views
   assert.doesNotMatch(overviewViewSource, /localStorage/);
   assert.doesNotMatch(overviewViewSource, /sessionStorage/);
   assert.doesNotMatch(overviewViewSource, /document\.cookie/);
@@ -324,90 +266,69 @@ test("Authentication boundary: Admin TikTok routes require oppo_session and redi
   const nextConfigContent = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
   const apiLibContent = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
   const callbackValidatorSource = readFileSync(new URL("../src/app/tiktok/callback/tiktok-callback-validator.ts", import.meta.url), "utf8");
-
-  // Next.js rewrites proxy /auth/* to establish oppo_session cookie on lineoppo.click
   assert.match(nextConfigContent, /createAuthRewrite/);
   assert.match(nextConfigContent, /source:\s*["']\/auth\/:path\*["']/);
   assert.match(apiLibContent, /path\.startsWith\(["']\/auth\/["']\)/);
-
-  // Admin TikTok Overview and Dashboard redirect unauthenticated requests to /login
   assert.match(overviewPageSource, /redirect\(["']\/login["']\)/);
   assert.match(dashboardPageSource, /redirect\(["']\/login["']\)/);
-
-  // Public store authorization entry does NOT redirect to /login
   assert.doesNotMatch(connectRouteSource, /redirect\(["']\/login["']\)/);
-
-  // Safe diagnostics log requestHasOppoSession boolean
   assert.match(callbackRouteSource, /requestHasOppoSession/);
   assert.match(callbackValidatorSource, /requestHasOppoSession:\s*Boolean/);
 });
 
-test("Follower growth KPI rendering and Follower Growth Chart component", () => {
+test("Follower growth KPI rendering and localized Follower Growth Chart component", () => {
   const chartSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-follower-chart.tsx", import.meta.url), "utf8");
-
-  // 1. Dashboard view incorporates growth delta breakdown and chart
-  assert.match(dashboardViewSource, /Today/);
-  assert.match(dashboardViewSource, /7 Days/);
-  assert.match(dashboardViewSource, /30 Days/);
+  const chartUiSource = `${chartSource}\n${dashboardTranslationsSource}`;
+  assert.match(dashboardUiSource, /Today/);
+  assert.match(dashboardUiSource, /7 Days/);
+  assert.match(dashboardUiSource, /30 Days/);
   assert.match(dashboardViewSource, /TikTokFollowerGrowthChart/);
   const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
   assert.match(dynamicDashboardSource, /fetchTikTokHistoricalMetricsFromBackend/);
-
-  // 2. Chart component verifies sparse data empty state (< 2 snapshots)
   assert.match(chartSource, /sortedData\.length >= 2/);
-  assert.match(chartSource, /Collecting Daily Snapshots/);
-  assert.match(chartSource, /At least 2 daily snapshots/);
-
-  // 3. Chart component implements non-interpolated SVG lines and area gradients
+  assert.match(chartUiSource, /Collecting Daily Snapshots/);
+  assert.match(chartUiSource, /At least 2 daily snapshots/);
   assert.match(chartSource, /<path\s+d=\{linePath\}/);
   assert.match(chartSource, /<path\s+d=\{areaPath\}/);
   assert.match(chartSource, /followerAreaGrad/);
-
-  // 4. Positive, negative, and null growth formatting rules
   assert.match(chartSource, /text-emerald-600/);
   assert.match(chartSource, /text-rose-600/);
   assert.match(chartSource, /--/);
 });
 
-test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboard/[accountId] route, and store switcher", () => {
+test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboard/[accountId] route, and localized store switcher", () => {
   const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
   const latestOverviewSource = readFileSync(new URL("../src/app/tiktok/tiktok-overview-view.tsx", import.meta.url), "utf8");
   const latestDashboardViewSource = readFileSync(new URL("../src/app/tiktok/dashboard/tiktok-dashboard-view.tsx", import.meta.url), "utf8");
+  const latestOverviewUiSource = `${latestOverviewSource}\n${overviewTranslationsSource}`;
+  const latestDashboardUiSource = `${latestDashboardViewSource}\n${dashboardTranslationsSource}`;
 
-  // 1. /tiktok/dashboard/[accountId]/page.tsx route exists and fetches account by ID
   assert.ok(existsSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url)));
   assert.match(dynamicDashboardSource, /fetchTikTokAccountByIdFromBackend/);
   assert.match(dynamicDashboardSource, /fetchTikTokHistoricalMetricsFromBackend/);
   assert.match(dynamicDashboardSource, /fetchTikTokAccountsListFromBackend/);
   assert.match(dynamicDashboardSource, /notFound\(\)/);
 
-  // 2. /tiktok overview renders multi-account grid when multiple accounts exist
   assert.match(latestOverviewSource, /totalAccounts > 1/);
-  assert.match(latestOverviewSource, /Connected Store Accounts/);
-  assert.match(latestOverviewSource, /Store Binding:/);
-  assert.match(latestOverviewSource, /Open Dashboard/);
+  assert.match(latestOverviewUiSource, /Connected Store Accounts/);
+  assert.match(overviewTranslationsSource, /storeBinding:\s*"Store Binding"/);
+  assert.match(latestOverviewSource, /\{t\.storeBinding\}:/);
+  assert.match(latestOverviewUiSource, /Open Dashboard/);
   assert.match(latestOverviewSource, /href=\{`\/tiktok\/dashboard\/\$\{account\.id\}`\}/);
 
-  // 3. /tiktok/dashboard view includes account switcher and links to specific accounts
   assert.match(latestDashboardViewSource, /id="tiktok-store-switcher"/);
   assert.match(latestDashboardViewSource, /`\/tiktok\/dashboard\/\$\{e\.target\.value\}`/);
-  assert.match(latestDashboardViewSource, /Stores Overview/);
+  assert.match(latestDashboardUiSource, /Stores Overview/);
 
-  // 4. API client supports fetchTikTokAccountByIdFromBackend
   assert.match(apiClientSource, /export async function fetchTikTokAccountByIdFromBackend/);
   assert.match(apiClientSource, /`\$\{API_BASE_URL\}\/tiktok\/accounts\/\$\{encodeURIComponent\(accountId\)\}`/);
 
-  // 5. Root /tiktok/dashboard page redirect behavior:
-  // - 0 accounts: renders empty state
-  // - 1 account: redirects to /tiktok/dashboard/<accountId>
-  // - 2+ accounts: redirects to /tiktok overview (never arbitrarily selects accounts[0])
   const rootDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
   assert.match(rootDashboardSource, /accounts\.length === 0/);
   assert.match(rootDashboardSource, /<TikTokDashboardResponsive data=\{null\} \/>/);
   assert.match(rootDashboardSource, /accounts\.length === 1/);
   assert.match(rootDashboardSource, /redirect\(`\/tiktok\/dashboard\/\$\{accounts\[0\]\.id\}`\)/);
   assert.match(rootDashboardSource, /redirect\(["']\/tiktok["']\)/);
-  // Guarantee no arbitrary accounts[0] fallback when accounts.length > 1
   assert.doesNotMatch(rootDashboardSource, /accounts\.length > 0\s*\)\s*\{\s*redirect\(`\/tiktok\/dashboard/);
 });
 
@@ -433,34 +354,23 @@ test("Dashboard account fetch returns valid data, preserves 404, and exposes 401
       forwardedCookie = new Headers(init?.headers).get("Cookie") || "";
       return Response.json(validAccount);
     };
-    const account = await fetchTikTokAccountByIdFromBackend("account-1", {
-      sessionToken: "valid-session",
-    });
+    const account = await fetchTikTokAccountByIdFromBackend("account-1", { sessionToken: "valid-session" });
     assert.equal(account?.id, "account-1");
     assert.equal(account?.profile.display_name, "O-Central World");
     assert.equal(forwardedCookie, "oppo_session=valid-session");
 
     globalThis.fetch = async () => new Response(null, { status: 404 });
-    assert.equal(
-      await fetchTikTokAccountByIdFromBackend("missing", { sessionToken: "valid-session" }),
-      null
-    );
+    assert.equal(await fetchTikTokAccountByIdFromBackend("missing", { sessionToken: "valid-session" }), null);
 
     globalThis.fetch = async () => new Response(null, { status: 401 });
-    await assert.rejects(
-      fetchTikTokAccountByIdFromBackend("account-1", { sessionToken: "expired-session" }),
-      TikTokBackendAuthenticationError
-    );
+    await assert.rejects(fetchTikTokAccountByIdFromBackend("account-1", { sessionToken: "expired-session" }), TikTokBackendAuthenticationError);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
 test("Dynamic dashboard redirects backend 401 to login and reserves notFound for a missing account", () => {
-  const dynamicDashboardSource = readFileSync(
-    new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url),
-    "utf8"
-  );
+  const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
   assert.match(dynamicDashboardSource, /error instanceof TikTokBackendAuthenticationError/);
   assert.match(dynamicDashboardSource, /redirect\("\/login"\)/);
   assert.match(dynamicDashboardSource, /if \(!data\) \{\s*notFound\(\);/s);
