@@ -3,6 +3,17 @@ FROM mcr.microsoft.com/playwright:v1.50.0-noble AS runner
 
 WORKDIR /app
 
+# Dormant operator tooling for localhost-only interactive login during maintenance.
+# No VNC/noVNC process or public listener is started by the image itself.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    fluxbox \
+    novnc \
+    websockify \
+    x11vnc \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy root workspace and backend package definitions
 COPY package*.json ./
 COPY backend/package*.json ./backend/
@@ -19,7 +30,10 @@ RUN npx prisma generate
 RUN npm run build
 
 # Install Chromium browser binary in container
-RUN npx playwright install chromium
+RUN npx playwright install chromium \
+  && CHROME_BIN="$(find /ms-playwright -path '*/chrome-linux*/chrome' -type f -perm -111 | head -n 1)" \
+  && test -n "$CHROME_BIN" \
+  && ln -s "$CHROME_BIN" /usr/local/bin/chromium
 
 # Runtime environment defaults
 ENV NODE_ENV=production
