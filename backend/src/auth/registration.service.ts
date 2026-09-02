@@ -29,9 +29,21 @@ export class RegistrationService {
     assertPasswordPolicy(dto.password);
     const store = await this.prisma.store.findUnique({ where: { id: dto.storeId }, select: { id: true, isActive: true, archivedAt: true } });
     if (!store || !store.isActive || store.archivedAt) throw new NotFoundException("Store is unavailable for registration");
-    if (await this.prisma.user.findUnique({ where: { normalizedEmail }, select: { id: true } })) throw new ConflictException("An account with this email already exists");
-    if (await this.prisma.user.findFirst({ where: { employeeId: { equals: employeeId, mode: "insensitive" } }, select: { id: true } })) throw new ConflictException("Employee ID is already registered");
-    if (await this.prisma.registrationRequest.findFirst({ where: { normalizedEmail, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } }, select: { id: true } })) throw new ConflictException("A registration for this email was recently submitted");
+
+    const existingUser = await this.prisma.user.findUnique({ where: { normalizedEmail }, select: { id: true, status: true, role: true } });
+    const canResubmitRejectedAccount = existingUser?.status === UserStatus.REJECTED && existingUser.role === UserRole.VIEWER;
+    if (existingUser && !canResubmitRejectedAccount) throw new ConflictException("An account with this email already exists");
+
+    const duplicateEmployee = await this.prisma.user.findFirst({
+      where: {
+        employeeId: { equals: employeeId, mode: "insensitive" },
+        ...(existingUser ? { id: { not: existingUser.id } } : {}),
+      },
+      select: { id: true },
+    });
+    if (duplicateEmployee) throw new ConflictException("Employee ID is already registered");
+
+    if (await this.prisma.registrationRequest.findFirst({ where: { normalizedEmail, status: { not: RegistrationRequestStatus.REJECTED }, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) } }, select: { id: true } })) throw new ConflictException("A registration for this email was recently submitted");
     const passwordHash = await this.passwords.hash(dto.password);
     const registration = await this.prisma.$transaction(async (tx) => {
       const name = dto.name.trim();
@@ -47,22 +59,60 @@ export class RegistrationService {
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
         },
       });
-      const user = await tx.user.create({
-        data: {
-          email: dto.email.trim(),
-          normalizedEmail,
-          displayName: name,
-          employeeId,
-          passwordHash,
-          role: UserRole.VIEWER,
-          status: UserStatus.PENDING_APPROVAL,
-          isActive: true,
-          canAccessWeb: true,
-          canAccessMobile: true,
-          canReply: false,
-        },
-      });
-      await tx.userStoreMembership.create({ data: { userId: user.id, storeId: store.id, role: dto.role, status: MembershipStatus.PENDING_APPROVAL } });
+
+      let user: { id: string };
+      if (canResubmitRejectedAccount && existingUser) {
+        const userUpdate = await tx.user.updateMany({
+          where: { id: existingUser.id, role: UserRole.VIEWER, status: UserStatus.REJECTED },
+          data: {
+            email: dto.email.trim(),
+            normalizedEmail,
+            displayName: name,
+            employeeId,
+            passwordHash,
+            status: UserStatus.PENDING_APPROVAL,
+            isActive: true,
+            canAccessWeb: true,
+            canAccessMobile: true,
+            canReply: false,
+          },
+        });
+        if (userUpdate.count !== 1) throw new ConflictException("Rejected account changed while registration was being resubmitted");
+        user = { id: existingUser.id };
+
+        const existingMembership = await tx.userStoreMembership.findUnique({
+          where: { userId_storeId: { userId: user.id, storeId: store.id } },
+          select: { id: true, status: true },
+        });
+        if (existingMembership) {
+          if (existingMembership.status !== MembershipStatus.REJECTED) throw new ConflictException("Store membership cannot be resubmitted");
+          const membershipUpdate = await tx.userStoreMembership.updateMany({
+            where: { id: existingMembership.id, status: MembershipStatus.REJECTED },
+            data: { role: dto.role, status: MembershipStatus.PENDING_APPROVAL, isPrimary: true, approvedAt: null, approvedById: null },
+          });
+          if (membershipUpdate.count !== 1) throw new ConflictException("Store membership changed while registration was being resubmitted");
+        } else {
+          await tx.userStoreMembership.create({ data: { userId: user.id, storeId: store.id, role: dto.role, status: MembershipStatus.PENDING_APPROVAL } });
+        }
+      } else {
+        user = await tx.user.create({
+          data: {
+            email: dto.email.trim(),
+            normalizedEmail,
+            displayName: name,
+            employeeId,
+            passwordHash,
+            role: UserRole.VIEWER,
+            status: UserStatus.PENDING_APPROVAL,
+            isActive: true,
+            canAccessWeb: true,
+            canAccessMobile: true,
+            canReply: false,
+          },
+        });
+        await tx.userStoreMembership.create({ data: { userId: user.id, storeId: store.id, role: dto.role, status: MembershipStatus.PENDING_APPROVAL } });
+      }
+
       await tx.registrationRequest.update({ where: { id: request.id }, data: { createdUserId: user.id } });
       return { request, user };
     });
