@@ -8,6 +8,33 @@ export interface AppShellProps extends TopNavigationProps {
   children: React.ReactNode;
 }
 
+const shellFallbacks = {
+  th: {
+    dashboard: "แดชบอร์ด",
+    language: "ภาษา",
+    searchPlaceholder: "ค้นหาลูกค้า ร้านค้า หรือข้อความ",
+    loadingData: "กำลังโหลดข้อมูลจากระบบ...",
+    apiError: "ไม่สามารถเชื่อมต่อระบบข้อมูลได้",
+    retry: "ลองอีกครั้ง",
+  },
+  en: {
+    dashboard: "Dashboard",
+    language: "Language",
+    searchPlaceholder: "Search customers, stores, or messages",
+    loadingData: "Loading system data...",
+    apiError: "Unable to connect to the data service",
+    retry: "Retry",
+  },
+  zh: {
+    dashboard: "仪表盘",
+    language: "语言",
+    searchPlaceholder: "搜索客户、门店或消息",
+    loadingData: "正在加载系统数据...",
+    apiError: "无法连接数据服务",
+    retry: "重试",
+  },
+} as const;
+
 export function AppShell({
   isLoading,
   apiError,
@@ -15,6 +42,26 @@ export function AppShell({
   children,
   ...topNavProps
 }: AppShellProps) {
+  const fallback = shellFallbacks[topNavProps.language];
+  const normalizedText = {
+    ...topNavProps.text,
+    dashboard:
+      topNavProps.language === "zh" && topNavProps.text.dashboard === "Dashboard"
+        ? fallback.dashboard
+        : topNavProps.text.dashboard || fallback.dashboard,
+    language:
+      topNavProps.language === "zh" && topNavProps.text.language === "Language"
+        ? fallback.language
+        : topNavProps.text.language || fallback.language,
+    searchPlaceholder:
+      topNavProps.language === "zh" && (topNavProps.text.searchPlaceholder === "Search" || topNavProps.text.searchPlaceholder === "Search customers, stores, or messages")
+        ? fallback.searchPlaceholder
+        : topNavProps.text.searchPlaceholder || fallback.searchPlaceholder,
+    loadingData: topNavProps.text.loadingData || fallback.loadingData,
+    apiError: topNavProps.text.apiError || fallback.apiError,
+    retry: topNavProps.text.retry || fallback.retry,
+  };
+
   return (
     <div className="app-shell flex h-dvh min-h-dvh max-h-dvh w-full min-w-0 max-w-full flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <style>{`
@@ -114,24 +161,24 @@ export function AppShell({
         }
       `}</style>
 
-      <TopNavigation {...topNavProps} />
+      <TopNavigation {...topNavProps} text={normalizedText} />
 
       {isLoading && (
         <div className="app-shell-status shrink-0 border-b border-[var(--app-info)]/30 bg-[var(--app-info-soft)] px-4 py-2 text-center text-xs font-medium text-[var(--app-info)]">
-          {topNavProps.text.loadingData || "กำลังโหลดข้อมูลจากระบบ..."}
+          {normalizedText.loadingData}
         </div>
       )}
 
       {apiError && (
         <div role="alert" className="app-shell-status shrink-0 flex items-center justify-center gap-3 border-b border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--app-danger)]">
-          <span>{topNavProps.text.apiError || "ไม่สามารถเชื่อมต่อระบบข้อมูลได้"}: {apiError}</span>
+          <span>{normalizedText.apiError}: {apiError}</span>
           {loadApplicationData && (
             <button
               type="button"
               onClick={() => void loadApplicationData()}
               className="rounded-[var(--app-radius-sm)] border border-[var(--app-danger)]/30 bg-[var(--app-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger)] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-danger)]/40"
             >
-              {topNavProps.text.retry || "ลองอีกครั้ง"}
+              {normalizedText.retry}
             </button>
           )}
         </div>

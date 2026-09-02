@@ -19,6 +19,7 @@ permissions:
 jobs:
   web-adaptive-auth:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -47,6 +48,7 @@ jobs:
 
   mobile-adaptive-auth:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: android_app

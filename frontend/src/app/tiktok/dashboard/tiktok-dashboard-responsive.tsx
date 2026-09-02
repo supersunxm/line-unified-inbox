@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAppLanguage } from "../../language";
 import type { TikTokAccountListItem, TikTokHistoricalMetricsData, TikTokStoreData } from "../tiktok-types";
 import { MobileTikTokDashboardView } from "./mobile-tiktok-dashboard-view";
+import { getTikTokDashboardText } from "./tiktok-dashboard-translations";
 import { TikTokDashboardView } from "./tiktok-dashboard-view";
 
 type Props = {
@@ -15,6 +17,8 @@ type Props = {
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export function TikTokDashboardResponsive(props: Props) {
+  const { language } = useAppLanguage();
+  const t = getTikTokDashboardText(language);
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -25,7 +29,7 @@ export function TikTokDashboardResponsive(props: Props) {
     return () => media.removeEventListener("change", sync);
   }, []);
 
-  if (mode === "loading") return <main className="flex h-dvh items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิด TikTok Dashboard...</main>;
+  if (mode === "loading") return <main className="flex h-dvh items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{t.opening}</main>;
   if (mode === "mobile") return <MobileTikTokDashboardView {...props} />;
   return <TikTokDashboardView {...props} />;
 }

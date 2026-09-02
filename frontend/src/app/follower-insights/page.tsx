@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
+import { pickLanguageText, useAppLanguage } from "../language";
 import { MobileFollowerInsightsApp } from "./mobile-follower-insights-app";
 import styles from "./follower-insights-modern.module.css";
 import polish from "./follower-insights-polish.module.css";
@@ -9,6 +10,7 @@ import polish from "./follower-insights-polish.module.css";
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export default function FollowerInsightsPage() {
+  const { language } = useAppLanguage();
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -20,7 +22,7 @@ export default function FollowerInsightsPage() {
   }, []);
 
   if (mode === "loading") {
-    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิดข้อมูลผู้ติดตาม...</main>;
+    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{pickLanguageText(language, { th: "กำลังเปิดข้อมูลผู้ติดตาม...", en: "Opening follower insights...", zh: "正在打开关注者数据..." })}</main>;
   }
 
   if (mode === "mobile") {

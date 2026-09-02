@@ -8,6 +8,7 @@ import {
   MobilePageShell,
 } from "@/components/mobile/adaptive-mobile";
 import { DashboardView } from "./dashboard-view";
+import { LanguageControl, useAppLanguage } from "../language";
 
 type MobileUser = {
   displayName: string;
@@ -15,6 +16,7 @@ type MobileUser = {
 };
 
 export function MobileDashboardApp() {
+  const { language } = useAppLanguage();
   const [user, setUser] = useState<MobileUser | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -38,14 +40,11 @@ export function MobileDashboardApp() {
   }, []);
 
   return (
-    <MobilePageShell
-      bottomNav={
-        <MobileBottomNav current="dashboard" onMore={() => setMoreOpen(true)} />
-      }
-    >
-      <div className="min-h-full overflow-x-hidden bg-[var(--app-bg)]">
+    <MobilePageShell bottomNav={<MobileBottomNav current="dashboard" onMore={() => setMoreOpen(true)} />}>
+      <div className="relative min-h-full overflow-x-hidden bg-[var(--app-bg)]">
+        <div className="absolute right-3 top-3 z-30"><LanguageControl /></div>
         <DashboardView
-          language="th"
+          language={language}
           getStoreDisplayName={(name) => name}
           onOpenStore={(storeId) => {
             const params = new URLSearchParams({ store: storeId });
@@ -56,11 +55,7 @@ export function MobileDashboardApp() {
       </div>
 
       {moreOpen && user ? (
-        <MobileMoreSheet
-          displayName={user.displayName}
-          role={user.role}
-          onClose={() => setMoreOpen(false)}
-        />
+        <MobileMoreSheet displayName={user.displayName} role={user.role} onClose={() => setMoreOpen(false)} />
       ) : null}
     </MobilePageShell>
   );

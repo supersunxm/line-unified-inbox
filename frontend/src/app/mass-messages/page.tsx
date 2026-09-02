@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
+import { pickLanguageText, useAppLanguage } from "../language";
+import { mobileMassMessagesPhrases, mobileMassMessagesTemplates } from "../mobile-route-i18n";
 import { MobileMassMessagesApp } from "./mobile-mass-messages-app";
 import { PurchaseBroadcastDraftBanner } from "./purchase-broadcast-draft-banner";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export default function MassMessagesPage() {
+  const { language } = useAppLanguage();
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -21,17 +25,27 @@ export default function MassMessagesPage() {
   if (mode === "loading") {
     return (
       <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
-        กำลังเปิด Mass Message...
+        {pickLanguageText(language, { th: "กำลังเปิด Mass Message...", en: "Opening mass messages...", zh: "正在打开群发消息..." })}
       </main>
     );
   }
 
-  if (mode === "mobile") return <AuthorizedSection section="mass-messages"><MobileMassMessagesApp /></AuthorizedSection>;
+  if (mode === "mobile") {
+    return (
+      <AuthorizedSection section="mass-messages">
+        <LegacyI18nBoundary phrases={mobileMassMessagesPhrases} templates={mobileMassMessagesTemplates}>
+          <MobileMassMessagesApp />
+        </LegacyI18nBoundary>
+      </AuthorizedSection>
+    );
+  }
 
   return (
     <>
       <AuthorizedWorkspace section="mass-messages" />
-      <AuthorizedSection section="mass-messages"><PurchaseBroadcastDraftBanner /></AuthorizedSection>
+      <AuthorizedSection section="mass-messages">
+        <PurchaseBroadcastDraftBanner />
+      </AuthorizedSection>
     </>
   );
 }

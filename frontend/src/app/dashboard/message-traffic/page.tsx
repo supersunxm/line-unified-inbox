@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { pickLanguageText, useAppLanguage } from "../../language";
 import { MessageTrafficView } from "./message-traffic-view";
 import { MobileMessageTrafficApp } from "./mobile-message-traffic-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export default function MessageTrafficPage() {
+  const { language } = useAppLanguage();
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function MessageTrafficPage() {
   }, []);
 
   if (mode === "loading") {
-    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิด Message Traffic...</main>;
+    return <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{pickLanguageText(language, { th: "กำลังเปิด Message Traffic...", en: "Opening Message Traffic...", zh: "正在打开消息流量..." })}</main>;
   }
 
   if (mode === "mobile") return <MobileMessageTrafficApp />;
