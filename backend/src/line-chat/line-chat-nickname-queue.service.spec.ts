@@ -331,3 +331,197 @@ void test("enqueueSalesSync fails safe and returns error reason without throwing
   assert.equal(result.enqueued, false);
   assert.equal(result.reason, "DB connection pool exhausted");
 });
+
+void test("isLineChatRealtimeResolverEligible: Phase 1 and Phase 2 controlled rollout boundaries", async () => {
+  const { isLineChatRealtimeResolverEligible } = await import("./line-chat-nickname-queue.service");
+
+  const baseParams = {
+    storeCode: "25610",
+    conversationStoreId: "store-25610",
+    oaStoreId: "store-25610",
+    oaAccountType: "STORE",
+    oaIsActive: true,
+    oaArchivedAt: null,
+    oaChatBotId: "U001732513bc5f534c1a40d36c89bb43f",
+    oaSessionKey: "account-1",
+    oaSessionStatus: "ACTIVE",
+    oaSyncEnabled: true,
+  };
+
+  // 1. Phase 1 store 28375 is eligible
+  assert.equal(
+    isLineChatRealtimeResolverEligible({
+      ...baseParams,
+      storeCode: "28375",
+      oaChatBotId: "U729972869a565723cb7fcf7ea28bbc43",
+      oaSessionKey: "profile-b",
+    }),
+    true
+  );
+
+  // 2. Central World 25610 is eligible when sync=true
+  assert.equal(isLineChatRealtimeResolverEligible(baseParams), true);
+
+  // 3. Central World with sync=false is NOT eligible
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaSyncEnabled: false }), false);
+
+  // 4. Other Phase 2 store (Bangkapi 27627) with sync=false is NOT eligible
+  assert.equal(
+    isLineChatRealtimeResolverEligible({ ...baseParams, storeCode: "27627", oaSyncEnabled: false }),
+    false
+  );
+
+  // 5. Unknown/non-allowlisted store (99999) is NOT eligible even if sync=true and DB configured
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, storeCode: "99999" }), false);
+
+  // 7. Mismatched conversationStoreId and oaStoreId fails closed
+  assert.equal(
+    isLineChatRealtimeResolverEligible({ ...baseParams, conversationStoreId: "store-other" }),
+    false
+  );
+
+  // 8. HEAD_OFFICE accountType fails closed
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaAccountType: "HEAD_OFFICE" }), false);
+
+  // 9. Inactive or archived OA fails closed
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaIsActive: false }), false);
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaArchivedAt: new Date() }), false);
+
+  // Session disabled fails closed
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaSessionStatus: "DISABLED" }), false);
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaChatBotId: null }), false);
+  assert.equal(isLineChatRealtimeResolverEligible({ ...baseParams, oaSessionKey: null }), false);
+});
+
+void test("enqueueSalesSync: Central World 25610 unmapped customer successfully creates PENDING job with null lineChatUserId", async () => {
+  let createdJob: Record<string, unknown> | null = null;
+
+  const prisma = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-cw-1",
+        storeId: "store-cw",
+        lineOfficialAccountId: "oa-cw",
+        lineChatUserId: null, // Unmapped customer
+        customerSalesStatus: CustomerSalesStatus.PURCHASED,
+        paymentMethod: PaymentMethodType.CASH,
+        salesRecordedAt: new Date("2026-09-02T10:00:00.000Z"),
+        salesProducts: [{ customProductName: "Reno 12", productModel: { name: "Reno 12" } }],
+        customer: { lineUserId: "U_cust_line_user_id_never_used_as_chat_id" },
+        store: {
+          code: "25610",
+          storeMaster: { externalStoreId: "25610" },
+        },
+        lineOfficialAccount: {
+          id: "oa-cw",
+          name: "OPPO Central World",
+          storeId: "store-cw",
+          accountType: "STORE",
+          isActive: true,
+          archivedAt: null,
+          chatBotId: "U001732513bc5f534c1a40d36c89bb43f",
+          lineChatSessionId: "session-cw",
+          lineChatNicknameSyncEnabled: true,
+          lineChatSession: { id: "session-cw", sessionKey: "account-1", status: "ACTIVE" },
+        },
+      }),
+    },
+    lineChatNicknameSyncJob: {
+      updateMany: async () => ({ count: 0 }),
+      create: async (args: { data: Record<string, unknown> }) => {
+        createdJob = args.data;
+        return { id: "job-cw-1", ...args.data };
+      },
+    },
+  };
+
+  const service = new LineChatNicknameQueueService(prisma as never);
+  const result = await service.enqueueSalesSync("conv-cw-1");
+
+  assert.equal(result.enqueued, true);
+  assert.equal(result.jobId, "job-cw-1");
+  assert.ok(createdJob);
+  // 10. Customer.lineUserId is NOT used as lineChatUserId (lineChatUserId must be null for worker resolution)
+  assert.equal(createdJob.lineChatUserId, null);
+  assert.equal(createdJob.status, LineChatNicknameSyncJobStatus.PENDING);
+});
+
+void test("enqueueSalesSync: Central World with sync=false skips enqueuing", async () => {
+  const prisma = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-cw-disabled",
+        storeId: "store-cw",
+        lineOfficialAccountId: "oa-cw",
+        lineChatUserId: null,
+        customerSalesStatus: CustomerSalesStatus.ONLINE,
+        paymentMethod: null,
+        salesRecordedAt: new Date(),
+        salesProducts: [],
+        store: { code: "25610" },
+        lineOfficialAccount: {
+          id: "oa-cw",
+          storeId: "store-cw",
+          accountType: "STORE",
+          isActive: true,
+          archivedAt: null,
+          chatBotId: "U001732513bc5f534c1a40d36c89bb43f",
+          lineChatSessionId: "session-cw",
+          lineChatNicknameSyncEnabled: false, // DISABLED
+          lineChatSession: { id: "session-cw", sessionKey: "account-1", status: "ACTIVE" },
+        },
+      }),
+    },
+  };
+
+  const service = new LineChatNicknameQueueService(prisma as never);
+  const result = await service.enqueueSalesSync("conv-cw-disabled");
+
+  assert.equal(result.enqueued, false);
+  assert.equal(result.reason, "ROLLOUT_DISABLED");
+});
+
+void test("enqueueSalesSync: Existing mapped customer bypasses resolver check and queues directly", async () => {
+  let createdJob: Record<string, unknown> | null = null;
+
+  const prisma = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-mapped-1",
+        storeId: "store-any",
+        lineOfficialAccountId: "oa-any",
+        lineChatUserId: "U_already_mapped_chat_user",
+        customerSalesStatus: CustomerSalesStatus.ONLINE,
+        paymentMethod: null,
+        salesRecordedAt: new Date(),
+        salesProducts: [],
+        store: { code: "99999" }, // Non-allowlisted store, but already mapped!
+        lineOfficialAccount: {
+          id: "oa-any",
+          storeId: "store-any",
+          accountType: "STORE",
+          isActive: true,
+          archivedAt: null,
+          chatBotId: "U_any_bot_id",
+          lineChatSessionId: "sess-any",
+          lineChatNicknameSyncEnabled: true,
+          lineChatSession: { id: "sess-any", sessionKey: "account-x", status: "ACTIVE" },
+        },
+      }),
+    },
+    lineChatNicknameSyncJob: {
+      updateMany: async () => ({ count: 0 }),
+      create: async (args: { data: Record<string, unknown> }) => {
+        createdJob = args.data;
+        return { id: "job-mapped-1", ...args.data };
+      },
+    },
+  };
+
+  const service = new LineChatNicknameQueueService(prisma as never);
+  const result = await service.enqueueSalesSync("conv-mapped-1");
+
+  assert.equal(result.enqueued, true);
+  assert.equal(createdJob?.lineChatUserId, "U_already_mapped_chat_user");
+});
+

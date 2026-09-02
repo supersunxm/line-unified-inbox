@@ -3,11 +3,40 @@ import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus } from "@prisma/client";
 import { buildLineChatNickname } from "../line-chat-nickname";
 import {
-  LINE_CHAT_PILOT_BOT_ID,
-  LINE_CHAT_PILOT_OA_NAME,
-  LINE_CHAT_PILOT_SESSION_KEY,
-  LINE_CHAT_PILOT_STORE_CODE,
+  LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES,
 } from "./line-chat-pilot.constants";
+
+export function isLineChatRealtimeResolverEligible(params: {
+  storeCode: string;
+  conversationStoreId: string | null;
+  oaStoreId: string | null;
+  oaAccountType: string | null;
+  oaIsActive: boolean;
+  oaArchivedAt: Date | null;
+  oaChatBotId: string | null;
+  oaSessionKey: string | null;
+  oaSessionStatus: string | null;
+  oaSyncEnabled: boolean;
+}): boolean {
+  if (!params.oaSyncEnabled) {
+    return false;
+  }
+  if (!params.conversationStoreId || !params.oaStoreId || params.conversationStoreId !== params.oaStoreId) {
+    return false;
+  }
+  if (params.oaAccountType !== "STORE") {
+    return false;
+  }
+  if (!params.oaIsActive || params.oaArchivedAt !== null) {
+    return false;
+  }
+  if (!params.oaChatBotId || !params.oaSessionKey || params.oaSessionStatus === "DISABLED") {
+    return false;
+  }
+
+  const cleanStoreCode = params.storeCode.trim();
+  return (LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES as readonly string[]).includes(cleanStoreCode);
+}
 
 export interface EnqueueNicknameSyncResult {
   enqueued: boolean;
@@ -154,16 +183,19 @@ export class LineChatNicknameQueueService {
       const storeCode = conversation.store?.code?.trim()
         || conversation.store?.storeMaster?.externalStoreId?.trim()
         || "";
-      const pilotResolverEligible = storeCode === LINE_CHAT_PILOT_STORE_CODE
-        && conversation.storeId !== null
-        && oa.storeId === conversation.storeId
-        && oa.accountType === "STORE"
-        && oa.isActive
-        && oa.archivedAt === null
-        && oa.name.trim() === LINE_CHAT_PILOT_OA_NAME
-        && chatBotId === LINE_CHAT_PILOT_BOT_ID
-        && oa.lineChatSession?.sessionKey.trim() === LINE_CHAT_PILOT_SESSION_KEY;
-      if (!lineChatUserId && !pilotResolverEligible) {
+      const realtimeResolverEligible = isLineChatRealtimeResolverEligible({
+        storeCode,
+        conversationStoreId: conversation.storeId,
+        oaStoreId: oa.storeId,
+        oaAccountType: oa.accountType,
+        oaIsActive: oa.isActive,
+        oaArchivedAt: oa.archivedAt,
+        oaChatBotId: chatBotId,
+        oaSessionKey: oa.lineChatSession?.sessionKey.trim() || null,
+        oaSessionStatus: oa.lineChatSession?.status || null,
+        oaSyncEnabled: oa.lineChatNicknameSyncEnabled,
+      });
+      if (!lineChatUserId && !realtimeResolverEligible) {
         this.logger.log(
           JSON.stringify({
             event: "line_chat_nickname_job_skipped",
