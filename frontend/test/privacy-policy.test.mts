@@ -2,24 +2,29 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const privacySource = readFileSync(new URL("../src/app/privacy/page.tsx", import.meta.url), "utf8");
+const privacyPageSource = readFileSync(new URL("../src/app/privacy/page.tsx", import.meta.url), "utf8");
+const privacyContentSource = readFileSync(new URL("../src/app/privacy/privacy-content.tsx", import.meta.url), "utf8");
 const topNavSource = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
 test("Privacy Policy page file exists at src/app/privacy/page.tsx", () => {
   assert.ok(existsSync(new URL("../src/app/privacy/page.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/privacy/privacy-content.tsx", import.meta.url)));
 });
 
-test("Privacy Policy has appropriate metadata and page title", () => {
-  assert.match(privacySource, /title:\s*"Privacy Policy \| OPPO Retail TikTok Monitor"/);
-  assert.match(privacySource, /description:\s*"Privacy Policy for OPPO Retail TikTok Monitor/);
-  assert.match(privacySource, /<h1[^>]*>\s*Privacy Policy\s*<\/h1>/);
+test("Privacy Policy has appropriate metadata and localized page content", () => {
+  assert.match(privacyPageSource, /title:\s*"Privacy Policy \| OPPO Retail TikTok Monitor"/);
+  assert.match(privacyPageSource, /description:\s*"Privacy Policy for OPPO Retail TikTok Monitor/);
+  assert.match(privacyPageSource, /<PrivacyContent\s*\/>/);
+  assert.match(privacyContentSource, /documentLabel:\s*"Privacy Policy"/);
+  assert.match(privacyContentSource, /documentLabel:\s*"นโยบายความเป็นส่วนตัว"/);
+  assert.match(privacyContentSource, /documentLabel:\s*"隐私政策"/);
 });
 
 test("Privacy Policy specifies product name as OPPO Retail TikTok Monitor", () => {
-  assert.match(privacySource, /OPPO Retail TikTok Monitor/);
+  assert.match(privacyContentSource, /OPPO Retail TikTok Monitor/);
 });
 
-test("Privacy Policy includes all 11 required sections", () => {
+test("Privacy Policy includes all 11 required English policy sections", () => {
   const requiredSections = [
     "1. Information We Collect",
     "2. How We Collect Information",
@@ -36,7 +41,7 @@ test("Privacy Policy includes all 11 required sections", () => {
 
   for (const section of requiredSections) {
     assert.match(
-      privacySource,
+      privacyContentSource,
       new RegExp(section.replace(".", "\\.")),
       `Privacy Policy must contain section: ${section}`
     );
@@ -44,38 +49,38 @@ test("Privacy Policy includes all 11 required sections", () => {
 });
 
 test("Privacy Policy details collected information and technical token data", () => {
-  assert.match(privacySource, /TikTok account identifiers/i);
-  assert.match(privacySource, /TikTok profile information/i);
-  assert.match(privacySource, /follower count/i);
-  assert.match(privacySource, /following count/i);
-  assert.match(privacySource, /total likes/i);
-  assert.match(privacySource, /video count/i);
-  assert.match(privacySource, /video views/i);
-  assert.match(privacySource, /video likes/i);
-  assert.match(privacySource, /comments/i);
-  assert.match(privacySource, /shares/i);
-  assert.match(privacySource, /tokens/i);
+  assert.match(privacyContentSource, /TikTok account identifiers/i);
+  assert.match(privacyContentSource, /TikTok profile information/i);
+  assert.match(privacyContentSource, /follower count/i);
+  assert.match(privacyContentSource, /following count/i);
+  assert.match(privacyContentSource, /total likes/i);
+  assert.match(privacyContentSource, /video count/i);
+  assert.match(privacyContentSource, /video views/i);
+  assert.match(privacyContentSource, /video likes/i);
+  assert.match(privacyContentSource, /comments/i);
+  assert.match(privacyContentSource, /shares/i);
+  assert.match(privacyContentSource, /tokens/i);
 });
 
 test("Privacy Policy specifies collection methods through Login Kit and APIs with permission", () => {
-  assert.match(privacySource, /TikTok Login Kit/i);
-  assert.match(privacySource, /authorized TikTok APIs/i);
-  assert.match(privacySource, /permission/i);
+  assert.match(privacyContentSource, /TikTok Login Kit/i);
+  assert.match(privacyContentSource, /authorized TikTok APIs/i);
+  assert.match(privacyContentSource, /permission/i);
 });
 
 test("Privacy Policy states data is not sold and not shared with advertisers", () => {
-  assert.match(privacySource, /Data is not sold/i);
-  assert.match(privacySource, /No advertiser sharing/i);
+  assert.match(privacyContentSource, /Data is not sold/i);
+  assert.match(privacyContentSource, /No advertiser sharing/i);
 });
 
 test("Privacy Policy specifies secure backend token storage and no frontend exposure", () => {
-  assert.match(privacySource, /stored securely on backend/i);
-  assert.match(privacySource, /never exposed to frontend/i);
+  assert.match(privacyContentSource, /stored securely on backend/i);
+  assert.match(privacyContentSource, /never exposed to frontend/i);
 });
 
 test("Privacy Policy provides deletion and contact email obsthailand@gmail.com", () => {
-  assert.match(privacySource, /obsthailand@gmail\.com/);
-  assert.match(privacySource, /https:\/\/lineoppo\.click/);
+  assert.match(privacyContentSource, /obsthailand@gmail\.com/);
+  assert.match(privacyContentSource, /https:\/\/lineoppo\.click/);
 });
 
 test("Privacy Policy is NOT linked from existing TopNavigation", () => {
