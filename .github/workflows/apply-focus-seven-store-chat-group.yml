@@ -21,7 +21,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Apply focused code changes
         run: python3 .github/scripts/apply-focus-seven-store-chat-group.py
