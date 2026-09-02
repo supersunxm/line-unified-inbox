@@ -105,7 +105,7 @@ export async function syncConnectedLineOaMetadata(
         continue;
       }
 
-      const targetCode = master.externalStoreId?.trim() || null;
+      const masterCode = master.externalStoreId?.trim() || null;
       const region = master.region;
       const area = master.province;
 
@@ -117,7 +117,7 @@ export async function syncConnectedLineOaMetadata(
           archivedAt: null,
           OR: [
             { storeMasterId: master.id },
-            ...(targetCode ? [{ code: targetCode }] : []),
+            ...(masterCode ? [{ code: masterCode }] : []),
           ],
         },
         select: {
@@ -139,7 +139,7 @@ export async function syncConnectedLineOaMetadata(
           targetStore = await prisma.store.create({
             data: {
               storeMasterId: master.id,
-              code: targetCode,
+              code: masterCode,
               name: master.storeName,
               region,
               area,
@@ -161,6 +161,11 @@ export async function syncConnectedLineOaMetadata(
         }
       }
 
+      // If the source row is temporarily missing Store ID, preserve the ID already held
+      // by the correct target store instead of copying an ID from a wrongly linked store.
+      const targetCode =
+        masterCode || targetStore.code?.trim() ||
+        (targetStore.id === account.store.id ? currentCode : null);
       const storeMetadataChanged =
         targetStore.storeMasterId !== master.id ||
         targetStore.code !== targetCode ||
