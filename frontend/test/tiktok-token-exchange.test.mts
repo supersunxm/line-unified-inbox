@@ -308,18 +308,15 @@ test("Multi-account store support: /tiktok overview cards grid, /tiktok/dashboar
   assert.match(dynamicDashboardSource, /fetchTikTokHistoricalMetricsFromBackend/);
   assert.match(dynamicDashboardSource, /fetchTikTokAccountsListFromBackend/);
   assert.match(dynamicDashboardSource, /notFound\(\)/);
-
   assert.match(latestOverviewSource, /totalAccounts > 1/);
   assert.match(latestOverviewUiSource, /Connected Store Accounts/);
   assert.match(overviewTranslationsSource, /storeBinding:\s*"Store Binding"/);
   assert.match(latestOverviewSource, /\{t\.storeBinding\}:/);
   assert.match(latestOverviewUiSource, /Open Dashboard/);
   assert.match(latestOverviewSource, /href=\{`\/tiktok\/dashboard\/\$\{account\.id\}`\}/);
-
   assert.match(latestDashboardViewSource, /id="tiktok-store-switcher"/);
-  assert.match(latestDashboardViewSource, /`\/tiktok\/dashboard\/\$\{e\.target\.value\}`/);
+  assert.match(latestDashboardViewSource, /window\.location\.assign\(`\/tiktok\/dashboard\/\$\{event\.target\.value\}`\)/);
   assert.match(latestDashboardUiSource, /Stores Overview/);
-
   assert.match(apiClientSource, /export async function fetchTikTokAccountByIdFromBackend/);
   assert.match(apiClientSource, /`\$\{API_BASE_URL\}\/tiktok\/accounts\/\$\{encodeURIComponent\(accountId\)\}`/);
 
@@ -358,10 +355,8 @@ test("Dashboard account fetch returns valid data, preserves 404, and exposes 401
     assert.equal(account?.id, "account-1");
     assert.equal(account?.profile.display_name, "O-Central World");
     assert.equal(forwardedCookie, "oppo_session=valid-session");
-
     globalThis.fetch = async () => new Response(null, { status: 404 });
     assert.equal(await fetchTikTokAccountByIdFromBackend("missing", { sessionToken: "valid-session" }), null);
-
     globalThis.fetch = async () => new Response(null, { status: 401 });
     await assert.rejects(fetchTikTokAccountByIdFromBackend("account-1", { sessionToken: "expired-session" }), TikTokBackendAuthenticationError);
   } finally {
