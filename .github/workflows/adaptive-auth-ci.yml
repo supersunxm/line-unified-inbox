@@ -41,7 +41,24 @@ jobs:
         run: npx eslint "src/lib/authorization.ts" "test/authorization.test.mts"
 
       - name: Frontend tests
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee frontend-test.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > frontend-test-status.txt
+          exit "$status"
+
+      - name: Upload frontend test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-auth-frontend-test-diagnostics
+          path: |
+            frontend/frontend-test.log
+            frontend/frontend-test-status.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Frontend build
         run: npm run build
