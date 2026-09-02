@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 
 const WORKER_POLL_INTERVAL_MS = 3_000;
+const MAINTENANCE_KEEPALIVE_INTERVAL_MS = 60_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const LEASE_DURATION_MS = 60_000; // 1 minute per job execution lease
 const RESOLUTION_LEASE_DURATION_MS = 3 * 60_000;
@@ -23,6 +24,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       (process.env.NODE_ENV === "production" ? "/data/line-chat-profiles" : "./local-data")
   );
   private timer: NodeJS.Timeout | null = null;
+  private maintenanceTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
   constructor(
@@ -33,6 +35,17 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
 
   onModuleInit() {
     if (process.env.NODE_ENV === "test") {
+      return;
+    }
+
+    if (process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE === "true") {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_nickname_worker_maintenance_mode",
+        ...this.workerIdentity(),
+      }));
+      // This referenced timer intentionally keeps the standalone ApplicationContext alive
+      // while polling is paused and the profile volume remains available to operators.
+      this.maintenanceTimer = setInterval(() => undefined, MAINTENANCE_KEEPALIVE_INTERVAL_MS);
       return;
     }
 
@@ -56,6 +69,10 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    if (this.maintenanceTimer) {
+      clearInterval(this.maintenanceTimer);
+      this.maintenanceTimer = null;
     }
   }
 

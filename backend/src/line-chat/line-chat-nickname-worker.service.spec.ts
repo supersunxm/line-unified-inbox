@@ -6,6 +6,83 @@ import { LineChatSessionService } from "./line-chat-session.service";
 
 const CHAT_ID_FOR_TEST = `U${"a".repeat(32)}`;
 
+void test("worker lifecycle keeps maintenance alive without polling and preserves flag precedence", async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalMaintenance = process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE;
+  const originalDisabled = process.env.DISABLE_NICKNAME_WORKER;
+
+  const createWorker = () => {
+    let queueCycles = 0;
+    let browserCalls = 0;
+    const worker = new LineChatNicknameWorkerService({} as never, {
+      updateNickname: async () => {
+        browserCalls += 1;
+        return { success: true, status: 200 };
+      },
+    } as unknown as LineChatSessionService);
+    worker.processQueueCycle = async () => {
+      queueCycles += 1;
+      return 0;
+    };
+    return {
+      worker,
+      queueCycles: () => queueCycles,
+      browserCalls: () => browserCalls,
+      internals: worker as unknown as {
+        timer: NodeJS.Timeout | null;
+        maintenanceTimer: NodeJS.Timeout | null;
+      },
+    };
+  };
+
+  try {
+    process.env.NODE_ENV = "production";
+    delete process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE;
+    delete process.env.DISABLE_NICKNAME_WORKER;
+    const normal = createWorker();
+    normal.worker.onModuleInit();
+    assert.equal(normal.queueCycles(), 1);
+    assert.ok(normal.internals.timer);
+    assert.equal(normal.internals.maintenanceTimer, null);
+    normal.worker.onModuleDestroy();
+
+    process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE = "true";
+    process.env.DISABLE_NICKNAME_WORKER = "true";
+    const maintenance = createWorker();
+    maintenance.worker.onModuleInit();
+    assert.equal(maintenance.queueCycles(), 0);
+    assert.equal(maintenance.browserCalls(), 0);
+    assert.equal(maintenance.internals.timer, null);
+    assert.ok(maintenance.internals.maintenanceTimer);
+    assert.equal(maintenance.internals.maintenanceTimer.hasRef(), true);
+    maintenance.worker.onModuleDestroy();
+    assert.equal(maintenance.internals.maintenanceTimer, null);
+
+    delete process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE;
+    process.env.DISABLE_NICKNAME_WORKER = "true";
+    const disabled = createWorker();
+    disabled.worker.onModuleInit();
+    assert.equal(disabled.queueCycles(), 0);
+    assert.equal(disabled.internals.timer, null);
+    assert.equal(disabled.internals.maintenanceTimer, null);
+
+    process.env.NODE_ENV = "test";
+    process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE = "true";
+    const testMode = createWorker();
+    testMode.worker.onModuleInit();
+    assert.equal(testMode.queueCycles(), 0);
+    assert.equal(testMode.internals.timer, null);
+    assert.equal(testMode.internals.maintenanceTimer, null);
+  } finally {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalMaintenance === undefined) delete process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE;
+    else process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE = originalMaintenance;
+    if (originalDisabled === undefined) delete process.env.DISABLE_NICKNAME_WORKER;
+    else process.env.DISABLE_NICKNAME_WORKER = originalDisabled;
+  }
+});
+
 void test("worker processes job successfully and marks SUCCESS using only lineChatUserId", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
   let updatedSessionData: Record<string, unknown> | undefined;
