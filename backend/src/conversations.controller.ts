@@ -6,13 +6,14 @@ import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
 import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
+import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
 
 @Controller("conversations")
 export class ConversationsController {
   constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly storeAccess: StoreAccessService) { }
   @Get() async list(@Query() query: ConversationQueryDto, @Req() req: AuthRequest) {
     const storeIds = await this.storeAccess.accessibleStoreIds(req.user!);
-    if (query.storeId) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
+    if (query.storeId && query.storeId !== FOCUS_STORE_GROUP_ID) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
     return this.service.list(query, storeIds);
   }
   @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Req() req: AuthRequest) {
@@ -23,7 +24,7 @@ export class ConversationsController {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
     const summary = await this.service.getBmReplyStatusSummary(accessibleStoreIds);
     return {
-      stores: summary.stores.map((s) => ({
+      stores: summary.stores.filter((s) => s.storeId !== FOCUS_STORE_GROUP_ID).map((s) => ({
         id: s.storeId,
         name: s.storeName,
         notReplied: s.notReplied,

@@ -3024,3 +3024,10 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added one aggregate-only resolver diagnostic event per candidate-analysis attempt. It reports recent/valid-timestamp/name/tolerance/combined counts, a safe closest-delta bucket, timestamp source, and missing-timestamp count; no customer names, chat IDs, timestamps, message contents, tokens, session state, or profile paths are emitted.
 - Focused resolver diagnostics tests pass 18/18; full backend tests pass 1,622/1,622; changed-file ESLint, backend build, and `git diff --check` pass. The four-file diff was reviewed, committed as `066bc5f`, pushed, and opened as PR #127.
 - No production access, mapping apply, nickname update, queue mutation, migration, deployment, or historical mapping work was performed. CI is running on the PR; merge and deployment remain intentionally untouched.
+
+## 2026-09-02 — Desktop focus chat group (7 stores)
+- Added a prominent virtual focus group to the desktop chat sidebar for store IDs 28375, 25610, 27627, 25391, 24804, 27789, and 3791.
+- Selecting the group combines conversations from the seven stores into the normal chat list while each conversation continues to show its source store.
+- Added group-level Not Replied / BM Notified / Replied counts without creating a fake Store record.
+- Kept the mobile UI unchanged. Desktop routing uses `focusGroup=priority-seven` instead of exposing the virtual store ID in the shared `store` query parameter.
+- The group respects existing user store access; restricted users only receive focus stores they are authorized to access.
