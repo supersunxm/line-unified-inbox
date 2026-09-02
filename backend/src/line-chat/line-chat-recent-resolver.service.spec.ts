@@ -232,3 +232,149 @@ test("non-pilot or mismatched OA identity fails before browser discovery", async
   assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_CONFLICT" });
   assert.equal(value.discoveryInputs.length, 0);
 });
+
+test("Phase 2 Central World 25610 resolves successfully with DB routing", async () => {
+  const cwConversation = conversation({
+    id: "conversation-cw-1",
+    storeId: "store-cw",
+    lineOfficialAccountId: "oa-cw",
+    store: { code: "25610", storeMaster: null },
+    lineOfficialAccount: {
+      name: "OPPO Central World",
+      storeId: "store-cw",
+      accountType: "STORE",
+      isActive: true,
+      archivedAt: null,
+      chatBotId: "U001732513bc5f534c1a40d36c89bb43f",
+      lineChatSession: { sessionKey: "account-1", status: "ACTIVE" },
+    },
+  });
+
+  const cwInput = {
+    conversationId: "conversation-cw-1",
+    lineOfficialAccountId: "oa-cw",
+    botId: "U001732513bc5f534c1a40d36c89bb43f",
+    sessionKey: "account-1",
+    profilePath: "/safe/profiles/account-1-v1",
+  };
+
+  const value = fixture({ conversation: cwConversation });
+  const result = await value.service.resolve(cwInput);
+  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.equal(value.writes.length, 1);
+  assert.deepEqual(value.writes[0], {
+    where: { id: "conversation-cw-1", lineOfficialAccountId: "oa-cw", lineChatUserId: null },
+    data: { lineChatUserId: CHAT_ID },
+  });
+});
+
+test("cross-OA or mismatched invocation parameters fail closed with RESOLVE_CONFLICT", async (t) => {
+  const cwConversation = conversation({
+    id: "conversation-cw-1",
+    storeId: "store-cw",
+    lineOfficialAccountId: "oa-cw",
+    store: { code: "25610", storeMaster: null },
+    lineOfficialAccount: {
+      name: "OPPO Central World",
+      storeId: "store-cw",
+      accountType: "STORE",
+      isActive: true,
+      archivedAt: null,
+      chatBotId: "U001732513bc5f534c1a40d36c89bb43f",
+      lineChatSession: { sessionKey: "account-1", status: "ACTIVE" },
+    },
+  });
+
+  await t.test("wrong botId", async () => {
+    const value = fixture({ conversation: cwConversation });
+    const result = await value.service.resolve({
+      conversationId: "conversation-cw-1",
+      lineOfficialAccountId: "oa-cw",
+      botId: "U_WRONG_BOT_ID",
+      sessionKey: "account-1",
+      profilePath: "/safe/profiles/account-1-v1",
+    });
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+    assert.equal(value.discoveryInputs.length, 0);
+  });
+
+  await t.test("wrong sessionKey", async () => {
+    const value = fixture({ conversation: cwConversation });
+    const result = await value.service.resolve({
+      conversationId: "conversation-cw-1",
+      lineOfficialAccountId: "oa-cw",
+      botId: "U001732513bc5f534c1a40d36c89bb43f",
+      sessionKey: "profile-wrong",
+      profilePath: "/safe/profiles/account-1-v1",
+    });
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+    assert.equal(value.discoveryInputs.length, 0);
+  });
+
+  await t.test("HEAD_OFFICE accountType fails closed", async () => {
+    const value = fixture({
+      conversation: conversation({
+        lineOfficialAccount: {
+          ...cwConversation.lineOfficialAccount,
+          accountType: "HEAD_OFFICE",
+        },
+      }),
+    });
+    const result = await value.service.resolve(input);
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+  });
+
+  await t.test("inactive OA fails closed", async () => {
+    const value = fixture({
+      conversation: conversation({
+        lineOfficialAccount: {
+          ...cwConversation.lineOfficialAccount,
+          isActive: false,
+        },
+      }),
+    });
+    const result = await value.service.resolve(input);
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+  });
+
+  await t.test("archived OA fails closed", async () => {
+    const value = fixture({
+      conversation: conversation({
+        lineOfficialAccount: {
+          ...cwConversation.lineOfficialAccount,
+          archivedAt: new Date(),
+        },
+      }),
+    });
+    const result = await value.service.resolve(input);
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+  });
+
+  await t.test("mismatched conversation.storeId and oa.storeId fails closed", async () => {
+    const value = fixture({
+      conversation: conversation({
+        storeId: "store-other",
+        lineOfficialAccount: {
+          ...cwConversation.lineOfficialAccount,
+          storeId: "store-cw",
+        },
+      }),
+    });
+    const result = await value.service.resolve(input);
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+  });
+
+  await t.test("session status DISABLED fails closed", async () => {
+    const value = fixture({
+      conversation: conversation({
+        lineOfficialAccount: {
+          ...cwConversation.lineOfficialAccount,
+          lineChatSession: { sessionKey: "account-1", status: "DISABLED" },
+        },
+      }),
+    });
+    const result = await value.service.resolve(input);
+    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
+  });
+});
+

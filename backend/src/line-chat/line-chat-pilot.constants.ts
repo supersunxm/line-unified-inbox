@@ -12,3 +12,49 @@ export const LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES = [
   "27789", // Phase 2: OPPO MKV Suwannaphum
   "3791",  // Phase 2: OPPO CentralKhonkaen
 ] as const;
+
+export interface LineChatRealtimeResolverEligibilityParams {
+  storeCode: string | null | undefined;
+  conversationStoreId: string | null | undefined;
+  oaStoreId: string | null | undefined;
+  oaAccountType: string | null | undefined;
+  oaIsActive: boolean;
+  oaArchivedAt: Date | null | undefined;
+  oaChatBotId: string | null | undefined;
+  oaSessionKey: string | null | undefined;
+  oaSessionStatus: string | null | undefined;
+  oaSyncEnabled?: boolean;
+  expectedBotId?: string | null | undefined;
+  expectedSessionKey?: string | null | undefined;
+}
+
+export function isLineChatRealtimeResolverEligible(
+  params: LineChatRealtimeResolverEligibilityParams,
+): boolean {
+  if (params.oaSyncEnabled !== undefined && !params.oaSyncEnabled) {
+    return false;
+  }
+  if (!params.conversationStoreId || !params.oaStoreId || params.conversationStoreId !== params.oaStoreId) {
+    return false;
+  }
+  if (params.oaAccountType !== "STORE") {
+    return false;
+  }
+  if (!params.oaIsActive || params.oaArchivedAt != null) {
+    return false;
+  }
+  const botId = params.oaChatBotId?.trim();
+  const sessionKey = params.oaSessionKey?.trim();
+  if (!botId || !sessionKey || params.oaSessionStatus === "DISABLED") {
+    return false;
+  }
+  if (params.expectedBotId != null && params.expectedBotId.trim() !== botId) {
+    return false;
+  }
+  if (params.expectedSessionKey != null && params.expectedSessionKey.trim() !== sessionKey) {
+    return false;
+  }
+
+  const cleanStoreCode = (params.storeCode ?? "").trim();
+  return (LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES as readonly string[]).includes(cleanStoreCode);
+}
