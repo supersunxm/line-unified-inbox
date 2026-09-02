@@ -1,0 +1,74 @@
+name: Apply focus seven-store chat group
+
+on:
+  push:
+    branches:
+      - feat/focus-seven-store-chat-group
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'feat(chats): add focus group for seven stores') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Apply focused code changes
+        run: python3 .github/scripts/apply-focus-seven-store-chat-group.py
+
+      - name: Guard mobile source from changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          if echo "$changed" | grep -E '^(android/|mobile/|frontend/src/app/chats/page\.tsx$|backend/src/mobile/)'; then
+            echo 'Mobile source changed unexpectedly.' >&2
+            exit 1
+          fi
+
+      - name: Verify frontend focus group
+        working-directory: frontend
+        run: |
+          npm ci
+          node --test --experimental-strip-types test/focus-store-group.test.mts
+          npm run build
+
+      - name: Verify backend focus group
+        working-directory: backend
+        run: |
+          npm ci
+          npx tsx --test src/focus-store-group.spec.ts
+          npm run build
+
+      - name: Remove one-time codemod files
+        run: |
+          rm .github/workflows/apply-focus-seven-store-chat-group.yml
+          rm .github/scripts/apply-focus-seven-store-chat-group.py
+
+      - name: Commit verified changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git diff --cached --name-only
+          git commit -m 'feat(chats): add focus group for seven stores'
+          git push origin HEAD:${GITHUB_REF_NAME}
