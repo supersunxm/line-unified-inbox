@@ -5,6 +5,7 @@ export interface UpdateNicknameInput {
   profilePath: string;
   dryRun?: boolean;
   headless?: boolean;
+  operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
 }
 
 export interface UpdateNicknameResult {

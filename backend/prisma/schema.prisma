@@ -1939,6 +1939,14 @@ enum LineChatSessionStatus {
   DISABLED
 }
 
+enum LineChatProfileOperationKind {
+  NICKNAME_UPDATE
+  RECENT_RESOLUTION
+  HEALTH_SESSION
+  HEALTH_OA
+  MANUAL_DIAGNOSTIC
+}
+
 model LineChatSession {
   id                      String                @id @default(uuid())
   sessionKey              String                @unique
@@ -1954,8 +1962,26 @@ model LineChatSession {
   updatedAt               DateTime              @updatedAt
 
   lineOfficialAccounts LineOfficialAccount[]
+  profileOperationLease LineChatProfileOperationLease?
 
   @@index([status])
+}
+
+model LineChatProfileOperationLease {
+  id                String                       @id @default(uuid())
+  lineChatSessionId String                       @unique
+  ownerToken        String
+  operationKind     LineChatProfileOperationKind
+  acquiredAt        DateTime                     @default(now())
+  heartbeatAt       DateTime                     @default(now())
+  leaseUntil        DateTime
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  lineChatSession LineChatSession @relation(fields: [lineChatSessionId], references: [id], onDelete: Cascade)
+
+  @@index([leaseUntil])
+  @@index([operationKind])
 }
 
 model LineChatNicknameSyncJob {

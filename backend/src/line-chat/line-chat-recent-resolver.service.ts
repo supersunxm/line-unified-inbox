@@ -6,6 +6,7 @@ import type { LineChatDiscoveredChat } from "./line-chat.types";
 import {
   isLineChatRealtimeResolverEligible,
 } from "./line-chat-pilot.constants";
+import type { LineChatProfileOperationContext } from "./line-chat-profile-operation-coordinator.service";
 
 const MATCH_TOLERANCE_MS = 60_000;
 const MAX_RECENT_PAGES = 5;
@@ -51,6 +52,7 @@ export interface ResolveRecentLineChatInput {
   botId: string;
   sessionKey: string;
   profilePath: string;
+  operationContext?: LineChatProfileOperationContext;
 }
 
 function normalizeName(value: string | null | undefined): string {
@@ -200,6 +202,7 @@ export class LineChatRecentResolverService {
         headless: true,
         maxPages: MAX_RECENT_PAGES,
         maxChats: MAX_RECENT_CHATS,
+        operationContext: input.operationContext,
       });
     } catch {
       return { status: "RESOLVE_TRANSPORT" };
