@@ -167,12 +167,11 @@ export class LineChatProfileOperationCoordinator {
     ownerToken: string,
     operationKind: LineChatProfileOperationKind,
   ): Promise<DatabaseLease | null> {
-    const leaseUntil = new Date(Date.now() + PROFILE_OPERATION_LEASE_DURATION_MS);
     const rows = await this.prisma.$queryRaw<DatabaseLease[]>`
       INSERT INTO "LineChatProfileOperationLease"
         ("id", "lineChatSessionId", "ownerToken", "operationKind", "acquiredAt", "heartbeatAt", "leaseUntil", "createdAt", "updatedAt")
       VALUES
-        (${randomUUID()}, ${sessionId}, ${ownerToken}, ${operationKind}::"LineChatProfileOperationKind", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ${leaseUntil}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        (${randomUUID()}, ${sessionId}, ${ownerToken}, ${operationKind}::"LineChatProfileOperationKind", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '90 seconds', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT ("lineChatSessionId") DO UPDATE
         SET "ownerToken" = EXCLUDED."ownerToken",
             "operationKind" = EXCLUDED."operationKind",
@@ -189,11 +188,10 @@ export class LineChatProfileOperationCoordinator {
   }
 
   private async renewDatabaseLease(sessionId: string, ownerToken: string): Promise<boolean> {
-    const leaseUntil = new Date(Date.now() + PROFILE_OPERATION_LEASE_DURATION_MS);
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       UPDATE "LineChatProfileOperationLease"
       SET "heartbeatAt" = CURRENT_TIMESTAMP,
-          "leaseUntil" = ${leaseUntil},
+          "leaseUntil" = CURRENT_TIMESTAMP + INTERVAL '90 seconds',
           "updatedAt" = CURRENT_TIMESTAMP
       WHERE "lineChatSessionId" = ${sessionId}
         AND "ownerToken" = ${ownerToken}

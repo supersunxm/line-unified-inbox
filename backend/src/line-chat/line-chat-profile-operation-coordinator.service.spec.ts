@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
-import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import {
+  LineChatProfileOperationCoordinator,
+  PROFILE_OPERATION_LEASE_DURATION_MS,
+} from "./line-chat-profile-operation-coordinator.service";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 
 type LeaseRow = {
@@ -11,37 +14,85 @@ type LeaseRow = {
   leaseUntil: Date;
 };
 
+type RenewGate = {
+  started: Promise<void>;
+  markStarted: () => void;
+  released: Promise<void>;
+  release: () => void;
+};
+
+type CoordinatorInternals = {
+  acquireDatabaseLease: (
+    sessionId: string,
+    ownerToken: string,
+    operationKind: "NICKNAME_UPDATE",
+  ) => Promise<{ id: string; ownerToken: string; leaseUntil: Date } | null>;
+  renewDatabaseLease: (sessionId: string, ownerToken: string) => Promise<boolean>;
+  releaseDatabaseLease: (sessionId: string, ownerToken: string) => Promise<void>;
+};
+
+function createRenewGate(): RenewGate {
+  let markStarted!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  return { started, markStarted, released, release };
+}
+
+function coordinatorInternals(coordinator: LineChatProfileOperationCoordinator): CoordinatorInternals {
+  return coordinator as unknown as CoordinatorInternals;
+}
+
 function createFakePrisma() {
   const leases = new Map<string, LeaseRow>();
+  const clock = { nowMs: Date.parse("2026-09-03T00:00:00.000Z") };
+  const queries: string[] = [];
+  let renewGate: RenewGate | null = null;
   let sequence = 0;
+  const databaseNow = () => new Date(clock.nowMs);
 
   const prisma = {
     leases,
+    clock,
+    queries,
+    pauseNextRenew: () => {
+      renewGate = createRenewGate();
+      return renewGate;
+    },
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const query = strings.join(" ");
+      queries.push(query);
       if (query.includes("INSERT INTO \"LineChatProfileOperationLease\"")) {
         const sessionId = String(values[1]);
         const ownerToken = String(values[2]);
-        const requestedLeaseUntil = new Date(String(values[4]));
+        assert.equal(values.some((value) => value instanceof Date), false);
+        assert.match(query, /CURRENT_TIMESTAMP \+ INTERVAL '90 seconds'/);
         const existing = leases.get(sessionId);
-        if (existing && existing.leaseUntil > new Date()) return [];
+        if (existing && existing.leaseUntil > databaseNow()) return [];
         const row: LeaseRow = {
           id: `lease-${++sequence}`,
           sessionId,
           ownerToken,
-          leaseUntil: requestedLeaseUntil,
+          leaseUntil: new Date(clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS),
         };
         leases.set(sessionId, row);
         return [{ id: row.id, ownerToken: row.ownerToken, leaseUntil: row.leaseUntil }];
       }
 
       if (query.includes("UPDATE \"LineChatProfileOperationLease\"")) {
-        const requestedLeaseUntil = new Date(String(values[0]));
-        const sessionId = String(values[1]);
-        const ownerToken = String(values[2]);
+        assert.equal(values.some((value) => value instanceof Date), false);
+        assert.match(query, /CURRENT_TIMESTAMP \+ INTERVAL '90 seconds'/);
+        const sessionId = String(values[0]);
+        const ownerToken = String(values[1]);
+        if (renewGate) {
+          const activeGate = renewGate;
+          renewGate = null;
+          activeGate.markStarted();
+          await activeGate.released;
+        }
         const existing = leases.get(sessionId);
-        if (!existing || existing.ownerToken !== ownerToken || existing.leaseUntil <= new Date()) return [];
-        existing.leaseUntil = requestedLeaseUntil;
+        if (!existing || existing.ownerToken !== ownerToken || existing.leaseUntil <= databaseNow()) return [];
+        existing.leaseUntil = new Date(clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS);
         return [{ id: existing.id }];
       }
 
@@ -61,6 +112,11 @@ function createFakePrisma() {
   };
 
   return prisma;
+}
+
+function assertDbClockLeaseQuery(query: string): void {
+  assert.match(query, /CURRENT_TIMESTAMP \+ INTERVAL '90 seconds'/);
+  assert.doesNotMatch(query, /Date\.now/);
 }
 
 test("coordinator blocks concurrent operations for the same session", async () => {
@@ -109,6 +165,61 @@ test("different sessions operate concurrently", async () => {
   assert.equal((await second).acquired, true);
 });
 
+test("lease acquisition uses the database clock instead of worker Date.now", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const workerNow = Date.now;
+  let leaseUntil = 0;
+  try {
+    Date.now = () => prisma.clock.nowMs + 10 * PROFILE_OPERATION_LEASE_DURATION_MS;
+    const result = await coordinator.withProfileOperation(
+      { sessionId: "session-a", operationKind: "NICKNAME_UPDATE" },
+      async () => {
+        leaseUntil = prisma.leases.get("session-a")?.leaseUntil.getTime() ?? 0;
+        return "ok";
+      },
+    );
+    assert.equal(result.acquired, true);
+  } finally {
+    Date.now = workerNow;
+  }
+
+  assert.equal(leaseUntil, prisma.clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS);
+  for (const query of prisma.queries) assertDbClockLeaseQuery(query);
+});
+
+test("heartbeat renewal uses the database clock instead of worker Date.now", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const workerNow = Date.now;
+  let before = 0;
+  let after = 0;
+  try {
+    Date.now = () => prisma.clock.nowMs - 10 * PROFILE_OPERATION_LEASE_DURATION_MS;
+    const result = await coordinator.withProfileOperation(
+      { sessionId: "session-a", operationKind: "NICKNAME_UPDATE" },
+      async (context) => {
+        before = prisma.leases.get(context.sessionId)?.leaseUntil.getTime() ?? 0;
+        prisma.clock.nowMs += 1_000;
+        const renewed = await coordinatorInternals(coordinator).renewDatabaseLease(
+          context.sessionId,
+          context.ownerToken,
+        );
+        assert.equal(renewed, true);
+        after = prisma.leases.get(context.sessionId)?.leaseUntil.getTime() ?? 0;
+        return "ok";
+      },
+    );
+    assert.equal(result.acquired, true);
+  } finally {
+    Date.now = workerNow;
+  }
+
+  assert.ok(after > before);
+  assert.equal(after, prisma.clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS);
+  for (const query of prisma.queries) assertDbClockLeaseQuery(query);
+});
+
 test("database lease fences foreign release and permits expired takeover", async () => {
   const prisma = createFakePrisma();
   const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
@@ -134,13 +245,53 @@ test("database lease fences foreign release and permits expired takeover", async
 
   const expired = prisma.leases.get("session-a");
   assert.ok(expired);
-  expired.leaseUntil = new Date(Date.now() - 1_000);
+  expired.leaseUntil = new Date(prisma.clock.nowMs - 1_000);
   const takeover = await coordinator.withProfileOperation(
     { sessionId: "session-a", operationKind: "NICKNAME_UPDATE" },
     async () => "reacquired",
   );
   assert.equal(takeover.acquired, true);
   if (takeover.acquired) assert.equal(takeover.value, "reacquired");
+});
+
+test("foreign owner cannot renew or release an unexpired lease", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const internals = coordinatorInternals(coordinator);
+  const acquired = await internals.acquireDatabaseLease("session-a", "owner-a", "NICKNAME_UPDATE");
+  assert.ok(acquired);
+
+  const renewed = await internals.renewDatabaseLease("session-a", "owner-b");
+  assert.equal(renewed, false);
+  await internals.releaseDatabaseLease("session-a", "owner-b");
+  assert.equal(prisma.leases.get("session-a")?.ownerToken, "owner-a");
+});
+
+test("an in-flight old heartbeat cannot overwrite or release a replacement owner", async () => {
+  const prisma = createFakePrisma();
+  const oldCoordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const oldInternals = coordinatorInternals(oldCoordinator);
+  const oldLease = await oldInternals.acquireDatabaseLease("session-a", "owner-a", "NICKNAME_UPDATE");
+  assert.ok(oldLease);
+
+  const gate = prisma.pauseNextRenew();
+  const oldRenewal = oldInternals.renewDatabaseLease("session-a", "owner-a");
+  await gate.started;
+
+  prisma.clock.nowMs = oldLease.leaseUntil.getTime() + 1;
+  const newCoordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const replacement = await coordinatorInternals(newCoordinator).acquireDatabaseLease(
+    "session-a",
+    "owner-b",
+    "NICKNAME_UPDATE",
+  );
+  assert.equal(replacement?.ownerToken, "owner-b");
+
+  gate.release();
+  assert.equal(await oldRenewal, false);
+  assert.equal(prisma.leases.get("session-a")?.ownerToken, "owner-b");
+  await oldInternals.releaseDatabaseLease("session-a", "owner-a");
+  assert.equal(prisma.leases.get("session-a")?.ownerToken, "owner-b");
 });
 
 test("heartbeat renews ownership and profile-lock errors fail closed without file cleanup", async () => {
