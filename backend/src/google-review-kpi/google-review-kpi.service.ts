@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { createHash, randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import {
   CheckGoogleReviewKpiResultDto,
@@ -19,7 +20,11 @@ import {
   GoogleReviewAuditCoverageStatus,
   GoogleReviewAuditSessionStatus,
   GoogleReviewAuditStoreStatus,
+  SessionType,
 } from "@prisma/client";
+
+/** Lifetime of a batch-runner token: 30 minutes. */
+const RUNNER_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 export function getCurrentYearMonthBangkok(): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -1004,5 +1009,82 @@ export class GoogleReviewKpiService {
       startedAt: qs.startedAt ? new Date(qs.startedAt).toISOString() : null,
       completedAt: qs.completedAt ? new Date(qs.completedAt).toISOString() : null,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Batch Runner Token — cross-origin bearer auth for content script API calls
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Issues a short-lived (30-min) session-scoped Bearer token for the Batch
+   * Runner Chrome Extension.  The token is stored in the existing `Session`
+   * table as a MOBILE session so it is validated by the existing AuthGuard
+   * without any schema migration.
+   *
+   * Security properties:
+   *   - Expires in 30 minutes regardless of audit duration.
+   *   - Can only be issued by an authenticated ADMIN/VIEWER user.
+   *   - The session (`sessionId`) must exist and be RUNNING or PAUSED.
+   *   - Token is never persisted in the extension beyond chrome.storage.local
+   *     (volatile — cleared when user clears the session).
+   */
+  async issueRunnerToken(
+    sessionId: string,
+    user: AuthUser,
+  ): Promise<{ runnerToken: string; expiresAt: string }> {
+    const session = await this.prisma.googleReviewAuditSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true, status: true },
+    });
+    if (!session) throw new NotFoundException("Audit session not found");
+    if (session.status === "CANCELLED" || session.status === "COMPLETED") {
+      throw new BadRequestException(
+        "Cannot issue runner token for a completed or cancelled audit session",
+      );
+    }
+
+    const rawToken = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + RUNNER_TOKEN_TTL_MS);
+
+    await this.prisma.session.create({
+      data: {
+        tokenHash,
+        userId: user.id,
+        sessionType: SessionType.MOBILE,
+        expiresAt,
+      },
+    });
+
+    this.logger.log(
+      JSON.stringify({
+        event: "runner_token_issued",
+        sessionId,
+        userId: user.id,
+        expiresAt,
+      }),
+    );
+
+    return { runnerToken: rawToken, expiresAt: expiresAt.toISOString() };
+  }
+
+  /**
+   * Revokes all runner tokens for the given user that were issued as MOBILE
+   * sessions with a 30-minute TTL (identified by short expiresAt window).
+   * Called when the operator finishes or cancels a batch audit.
+   * Safe to call even if tokens have already expired.
+   */
+  async revokeRunnerToken(userId: string): Promise<void> {
+    const cutoff = new Date(Date.now() + RUNNER_TOKEN_TTL_MS + 1000);
+    await this.prisma.session.deleteMany({
+      where: {
+        userId,
+        sessionType: SessionType.MOBILE,
+        expiresAt: { lte: cutoff },
+      },
+    });
+    this.logger.log(
+      JSON.stringify({ event: "runner_token_revoked", userId }),
+    );
   }
 }

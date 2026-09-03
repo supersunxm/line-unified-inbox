@@ -22,7 +22,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableShutdownHooks();
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
-  app.enableCors({ origin: frontendUrl, credentials: true, exposedHeaders: ["Content-Disposition", "X-Export-Row-Count"] });
+  const allowedOrigins = [
+    frontendUrl,
+    // Google Maps content script fetches batch-runner endpoints from this origin.
+    // The routes still require a valid Bearer token issued by the dashboard.
+    "https://www.google.com",
+    "https://www.google.co.th",
+  ];
+  app.enableCors({ origin: allowedOrigins, credentials: true, exposedHeaders: ["Content-Disposition", "X-Export-Row-Count"] });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );

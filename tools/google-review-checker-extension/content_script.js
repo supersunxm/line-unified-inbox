@@ -978,9 +978,11 @@
         notes: "Auto-verified via Extension Batch Audit Runner"
       };
       const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/stores/${storeId}/complete`;
+      const headers = this.buildAuthHeaders({ "Content-Type": "application/json" });
+      console.debug("[BatchAuditRunner] fetch", { method: "POST", url, hasToken: !!this.sessionInfo.runnerToken });
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
@@ -998,9 +1000,11 @@
       if ((_a = this.sessionInfo) == null ? void 0 : _a.sessionId) {
         try {
           const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/stores/${storeId}/flag-attention`;
+          const headers = this.buildAuthHeaders({ "Content-Type": "application/json" });
+          console.debug("[BatchAuditRunner] fetch", { method: "POST", url, hasToken: !!this.sessionInfo.runnerToken });
           await fetch(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({ errorCode, errorMessage })
           });
         } catch (err) {
@@ -1015,7 +1019,9 @@
       var _a, _b, _c, _d, _e;
       if (!((_a = this.sessionInfo) == null ? void 0 : _a.sessionId)) return;
       const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/next-store`;
-      const res = await fetch(url);
+      const headers = this.buildAuthHeaders();
+      console.debug("[BatchAuditRunner] fetch", { method: "GET", url, hasToken: !!this.sessionInfo.runnerToken });
+      const res = await fetch(url, { headers });
       if (!res.ok) {
         throw new Error(`Failed to fetch next store: ${res.status}`);
       }
@@ -1047,6 +1053,19 @@
     }
     sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+    /**
+     * Builds fetch headers including the Authorization Bearer token when a
+     * runner token is available.  Never logs the token value itself.
+     */
+    buildAuthHeaders(base = {}) {
+      var _a;
+      const token = (_a = this.sessionInfo) == null ? void 0 : _a.runnerToken;
+      if (token) {
+        return { ...base, Authorization: `Bearer ${token}` };
+      }
+      console.warn("[BatchAuditRunner] No runner token available \u2014 request will be unauthenticated");
+      return base;
     }
   };
 

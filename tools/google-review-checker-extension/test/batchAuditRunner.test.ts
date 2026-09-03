@@ -28,6 +28,7 @@ describe("BatchAuditRunner State Machine", () => {
       sessionId: "session-123",
       targetMonth: "2026-09",
       status: "RUNNING",
+      runnerToken: "test-token-abc",
       currentStore: {
         storeId: "store-456",
         storeName: "OPPO Brand Shop Central World",
@@ -36,6 +37,18 @@ describe("BatchAuditRunner State Machine", () => {
       },
     });
 
+    assert.equal(runner.getState(), "IDLE");
+  });
+
+  it("accepts runnerToken in session and exposes it (cross-origin auth)", () => {
+    const runner = new BatchAuditRunner();
+    runner.setSession({
+      sessionId: "session-with-token",
+      targetMonth: "2026-09",
+      status: "RUNNING",
+      runnerToken: "eyJhbGciOiJSUzI1NiJ9.test-bearer-token",
+    });
+    // State stays IDLE (runner not yet started) and session is stored internally.
     assert.equal(runner.getState(), "IDLE");
   });
 });

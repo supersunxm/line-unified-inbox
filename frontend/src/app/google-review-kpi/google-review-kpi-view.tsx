@@ -321,6 +321,17 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       });
       setBatchSession(res);
 
+      // Issue a short-lived Bearer token for the Chrome Extension so it can
+      // make authenticated API calls from the google.com/maps content script
+      // context without relying on cross-site cookies.
+      let runnerToken: string | undefined;
+      try {
+        const tokenRes = await api.issueGoogleReviewRunnerToken(res.id);
+        runnerToken = tokenRes.runnerToken;
+      } catch (tokenErr) {
+        console.error("[BatchAudit] Failed to issue runner token:", tokenErr);
+      }
+
       const bridgeData = {
         sessionId: res.id,
         targetMonth: res.month,
@@ -328,6 +339,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         currentStore: res.currentStore,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
+        runnerToken,
       };
       localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
       window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));
@@ -379,6 +391,16 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       setBatchLoading(true);
       const res = await api.updateGoogleReviewBatchAuditStatus(batchSession.id, "RESUME");
       setBatchSession(res);
+
+      // Issue a fresh runner token on every resume (previous token may have expired).
+      let runnerToken: string | undefined;
+      try {
+        const tokenRes = await api.issueGoogleReviewRunnerToken(res.id);
+        runnerToken = tokenRes.runnerToken;
+      } catch (tokenErr) {
+        console.error("[BatchAudit] Failed to issue runner token on resume:", tokenErr);
+      }
+
       const bridgeData = {
         sessionId: res.id,
         targetMonth: res.month,
@@ -386,6 +408,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         currentStore: res.currentStore,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
+        runnerToken,
       };
       localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
       window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));

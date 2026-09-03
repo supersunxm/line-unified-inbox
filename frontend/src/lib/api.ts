@@ -776,4 +776,15 @@ export const api = {
         method: "POST",
       },
     ),
+  /**
+   * Issues a short-lived (30-min) Bearer token scoped to the given audit
+   * session.  Must be called from the dashboard (same-origin) immediately
+   * after a session is started or resumed so the token can be forwarded to
+   * the Chrome Extension via chrome.storage.local.
+   */
+  issueGoogleReviewRunnerToken: (sessionId: string) =>
+    request<{ runnerToken: string; expiresAt: string }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/runner-token`,
+      { method: "POST" },
+    ),
 };

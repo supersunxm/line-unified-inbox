@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -102,6 +103,33 @@ export class GoogleReviewKpiController {
     @Param("storeId") storeId: string,
   ) {
     return this.kpiService.reRunStore(sessionId, storeId);
+  }
+
+  /**
+   * Issues a short-lived (30-min) Bearer token scoped to one audit session.
+   * The dashboard calls this on Start / Resume and passes the token to the
+   * Chrome Extension via chrome.storage.local so the content script on
+   * google.com/maps can authenticate batch-runner API calls without relying
+   * on cross-site cookies.
+   */
+  @Post("audit-session/:sessionId/runner-token")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async issueRunnerToken(
+    @Param("sessionId") sessionId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.kpiService.issueRunnerToken(sessionId, req.user!);
+  }
+
+  /**
+   * Revokes the runner token for the current user.
+   * Called when the operator cancels or explicitly closes the audit session.
+   */
+  @Delete("audit-session/:sessionId/runner-token")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async revokeRunnerToken(@Req() req: AuthRequest) {
+    await this.kpiService.revokeRunnerToken(req.user!.id);
+    return { success: true };
   }
 
   // ==========================================
