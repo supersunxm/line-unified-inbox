@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   // src/dashboard_bridge.ts
   var lastSyncedSessionJson = "";

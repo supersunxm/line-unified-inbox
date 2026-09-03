@@ -87,6 +87,15 @@ export class GoogleMapsDomAdapter {
   }
 
   /**
+   * Extracts raw review data for all currently rendered review cards.
+   * Reuses the canonical extractReviewData implementation.
+   */
+  static extractReviews(): ExtractedRawReview[] {
+    const cards = this.getReviewCardElements();
+    return cards.map((c) => this.extractReviewData(c));
+  }
+
+  /**
    * Finds the scrollable container that holds Google Maps reviews.
    */
   static getReviewScrollContainer(): HTMLElement | null {

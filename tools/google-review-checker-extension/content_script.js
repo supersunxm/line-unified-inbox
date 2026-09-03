@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   // src/core/googleMapsDomAdapter.ts
   function cleanReviewText(rawText) {
@@ -45,6 +46,14 @@
         return el.querySelector("span[class*='date'], span.rsqaWe, span.wiI7Bm, div.MyEned") !== null;
       });
       return fallbackCards;
+    }
+    /**
+     * Extracts raw review data for all currently rendered review cards.
+     * Reuses the canonical extractReviewData implementation.
+     */
+    static extractReviews() {
+      const cards = this.getReviewCardElements();
+      return cards.map((c) => this.extractReviewData(c));
     }
     /**
      * Finds the scrollable container that holds Google Maps reviews.

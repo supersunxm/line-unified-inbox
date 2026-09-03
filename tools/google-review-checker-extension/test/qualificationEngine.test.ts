@@ -23,6 +23,7 @@ test("QualificationEngine: correct month + image + 16 words -> qualified === tru
     dateText: "1 month ago", // August 2026
     reviewText: thai16Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -40,6 +41,7 @@ test("QualificationEngine: correct month + image + 15 words -> qualified === tru
     dateText: "1 month ago",
     reviewText: thai15Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -57,6 +59,7 @@ test("QualificationEngine: correct month + image + 14 words -> qualified === fal
     dateText: "1 month ago",
     reviewText: thai14Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -74,6 +77,7 @@ test("QualificationEngine: correct month + no image + 16 words -> qualified === 
     dateText: "1 month ago",
     reviewText: thai16Words,
     hasCustomerPhoto: false,
+    photoEvidence: "NONE",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -91,6 +95,7 @@ test("QualificationEngine: wrong month + image + 16 words -> qualified === false
     dateText: "today", // September 2026
     reviewText: thai16Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -108,6 +113,7 @@ test("QualificationEngine: unknown date + image + 16 words -> qualified === fals
     dateText: "unknown date text",
     reviewText: thai16Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -124,6 +130,7 @@ test("QualificationEngine: Edited review with unknown original date -> excluded 
     dateText: "Edited 4 weeks ago",
     reviewText: thai16Words,
     hasCustomerPhoto: true,
+    photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
   };
 
   const evalItem = QualificationEngine.evaluateReview(raw, "2026-08", 0, ref);
@@ -144,6 +151,7 @@ test("Audit Completion Test 1: August target + unedited July review exists -> OL
       dateText: "1 month ago", // August 2026
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
     {
       element: createMockElement({ "data-review-id": "rev-jul" }),
@@ -151,6 +159,7 @@ test("Audit Completion Test 1: August target + unedited July review exists -> OL
       dateText: "2 months ago", // July 2026
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
   ];
 
@@ -168,6 +177,7 @@ test("Audit Completion Test 2: August target + review list ends with August revi
       dateText: "today", // September 2026
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
     {
       element: createMockElement({ "data-review-id": "rev-aug-1" }),
@@ -175,6 +185,7 @@ test("Audit Completion Test 2: August target + review list ends with August revi
       dateText: "1 week ago", // August 2026
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
     {
       element: createMockElement({ "data-review-id": "rev-aug-2" }),
@@ -182,6 +193,7 @@ test("Audit Completion Test 2: August target + review list ends with August revi
       dateText: "1 month ago", // August 2026 (oldest review available)
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
   ];
 
@@ -200,6 +212,7 @@ test("Audit Completion Test 3: August target + user not at bottom + scan returns
       dateText: "1 month ago", // August 2026
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
   ];
 
@@ -218,6 +231,7 @@ test("Audit Completion Test 4: August target + Edited July-looking review only -
       dateText: "Edited 2 months ago", // Edited review (looks like July, but creation date unknown)
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
   ];
 
@@ -236,6 +250,7 @@ test("Audit Completion Test 5: August target + UNKNOWN_DATE review only -> must 
       dateText: "some unknown date string",
       reviewText: thai16Words,
       hasCustomerPhoto: true,
+      photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
     },
   ];
 
