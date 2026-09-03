@@ -4,6 +4,8 @@
  * and batch audit runner state from Dashboard into chrome.storage.local.
  */
 
+let lastSyncedSessionJson = "";
+
 function syncActiveKpiStore() {
   try {
     const rawStore = localStorage.getItem("oppo_active_kpi_store");
@@ -15,7 +17,8 @@ function syncActiveKpiStore() {
     }
 
     const rawBatch = localStorage.getItem("oppo_active_batch_audit");
-    if (rawBatch) {
+    if (rawBatch && rawBatch !== lastSyncedSessionJson) {
+      lastSyncedSessionJson = rawBatch;
       const batchData = JSON.parse(rawBatch);
       if (batchData && batchData.sessionId) {
         chrome.storage?.local?.set({ batchAuditSession: batchData });
@@ -36,6 +39,9 @@ window.addEventListener("oppo_open_kpi_store", (e: any) => {
 // Listen for batch audit start/action events
 window.addEventListener("oppo_batch_audit_action", (e: any) => {
   if (e.detail) {
+    try {
+      lastSyncedSessionJson = JSON.stringify(e.detail);
+    } catch {}
     chrome.storage?.local?.set({ batchAuditSession: e.detail });
   }
 });

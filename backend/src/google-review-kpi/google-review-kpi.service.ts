@@ -497,6 +497,9 @@ export class GoogleReviewKpiService {
       `Created monthly batch audit session id=${session.id} month=${month} eligibleStores=${eligibleStores.length}/${stores.length}`,
     );
 
+    // Automatically claim the first pending store so currentStore is immediately populated
+    await this.getNextPendingStore(session.id);
+
     const active = await this.getActiveAuditSession(month);
     if (!active) {
       throw new BadRequestException("Failed to retrieve created audit session");
@@ -640,6 +643,8 @@ export class GoogleReviewKpiService {
         where: { id: sessionId },
         data: { status: GoogleReviewAuditSessionStatus.RUNNING },
       });
+      // Ensure there is a RUNNING store claimed (claims next pending store if none running)
+      await this.getNextPendingStore(sessionId);
     } else if (dto.action === "CANCEL") {
       await this.prisma.googleReviewAuditSession.update({
         where: { id: sessionId },

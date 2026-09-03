@@ -1089,6 +1089,9 @@
       var _a, _b;
       (_b = (_a = chrome.storage) == null ? void 0 : _a.local) == null ? void 0 : _b.get(["batchAuditSession"], (res) => {
         this.batchSession = (res == null ? void 0 : res.batchAuditSession) || null;
+        if (!this.batchSession || this.batchSession.status !== "RUNNING") {
+          return;
+        }
         this.isBatchMode = true;
         this.renderBatchRunnerBar();
         this.startBatchStoreRun();
@@ -1813,7 +1816,10 @@
     }
   };
   if (typeof window !== "undefined" && window.location.href.includes("google")) {
-    const overlay = new ReviewCheckerOverlay();
-    setTimeout(() => overlay.init(), 1e3);
+    if (!window.__OPPO_KPI_OVERLAY_INITIALIZED__) {
+      window.__OPPO_KPI_OVERLAY_INITIALIZED__ = true;
+      const overlay = new ReviewCheckerOverlay();
+      setTimeout(() => overlay.init(), 1e3);
+    }
   }
 })();

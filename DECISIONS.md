@@ -1,3 +1,17 @@
+## Google Review KPI: Runner Handoff & Dashboard Polling Architecture (2026-09-03)
+
+- **Immediate Store Claiming on Session Initialization & Resume**:
+  - `startMonthlyAudit` and `updateAuditSessionStatus(..., "RESUME")` automatically claim the next pending store using `getNextPendingStore(sessionId)`.
+  - Guarantees that `currentStore` is never `null` when a session is active.
+  - Enables the Dashboard client to open the canonical Google Maps handoff URL for the first store in a new visible tab on click without race conditions or manual URL injection.
+- **Silent Background Dashboard Polling**:
+  - Live progress updates during `RUNNING` status must not mutate high-level view loading states.
+  - Setting `loading = true` during periodic polling unmounts and remounts data tables, causing visible UI flickering. Polling queries must run silently with in-place diffing.
+- **Single-Flight Runner Protection & Cross-Domain Idempotency**:
+  - Content scripts and dashboard bridges use window and session guards (`__OPPO_KPI_OVERLAY_INITIALIZED__`, `lastSyncedSessionJson`) to prevent duplicate instance mounting, duplicate Google Maps runs, or repeated storage writes.
+- **Universal API Rewrites for Browser Extension Integration**:
+  - Next.js proxies `/google-review-kpi/check-result` and `/google-review-kpi/audit-session/:path*` directly to the Express backend, enabling both standard relative API calls and extension cross-origin calls against `https://lineoppo.click` to reach the backend seamlessly.
+
 ## Google Review KPI: Monthly Batch Audit Runner (100+ Stores) (2026-09-03)
 
 - **Local Browser Runner Architecture over Server-Side Harvesters**: To process 100+ stores each month without triggering Railway IP blocks, Cloudflare blocks, or Google bot CAPTCHAs, the audit runner operates strictly inside the operator's active desktop Chrome browser. Server-side headless browser farms and bulk parallel tab scrapers are explicitly avoided in favor of a sequential, visible, operator-controlled loop.
@@ -1775,3 +1789,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - Reason: the feature is an operational grouping, not a physical store. Keeping it virtual avoids contaminating Store Master, LINE OA management, analytics, and store membership data.
 - The backend resolves the seven target stores from Store code / Store Master external ID with name fallbacks, then intersects the result with the caller's accessible-store scope.
 - The desktop route stores the selection in a dedicated `focusGroup` query parameter so the existing mobile `store` route contract remains unchanged.
+
+# LINE profile operation exclusivity (2026-09-03)
+
+- Decision: serialize all worker-owned persistent Chromium work by authoritative `LineChatSession.id` using a process-local mutex plus an additive database lease table. Chromium's own profile lock remains the final boundary.
+- The lease uses a unique owner token, operation kind, heartbeat renewal, and expiry. Release is fenced by owner token; an expired lease never authorizes deletion of Singleton artifacts. Contention returns `PROFILE_OPERATION_BUSY` and the nickname job is briefly deferred without incrementing attempts or becoming `FAILED_AUTH`.
+- A single coordinator context spans unresolved recent-chat resolution and the subsequent nickname PUT. Lower-level session helpers accept that context, preventing nested acquisition deadlocks while preserving bounded five-page/125-chat resolution and latest-wins behavior.
+- Phase A1 intentionally adds no health scheduler, UI, alerts, production probes, reauthentication, routing/profile changes, or customer/job mutations. Migration initialization creates no active leases.
