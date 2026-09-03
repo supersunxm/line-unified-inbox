@@ -114,6 +114,8 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "auto-responses":
     case "greeting-messages":
       return hasBackendAdminAccess(auth);
+    case "google-review-kpi":
+      return auth.workspaces.hq || auth.workspaces.store;
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;
     case "chats":

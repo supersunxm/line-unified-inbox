@@ -98,7 +98,11 @@ export type MessageTranslationFeedbackResult = {
 };
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) { super(message); }
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -707,6 +711,69 @@ export const api = {
       {
         method: "POST",
         body: JSON.stringify(body || {}),
+      },
+    ),
+  getGoogleReviewKpis: (params?: { month?: string; search?: string; region?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.month) sp.set("month", params.month);
+    if (params?.search) sp.set("search", params.search);
+    if (params?.region) sp.set("region", params.region);
+    const qs = sp.toString();
+    return request<import("@/types/api").GoogleReviewKpiSummary>(`/google-review-kpi${qs ? `?${qs}` : ""}`);
+  },
+  getStoreGoogleReviewKpi: (storeId: string, month?: string) => {
+    const sp = new URLSearchParams();
+    if (month) sp.set("month", month);
+    const qs = sp.toString();
+    return request<{
+      store: { id: string; storeId: string | null; name: string; code: string | null; googleMapsUrl: string | null };
+      month?: string;
+      kpiResult?: import("@/types/api").GoogleReviewKpiStoreItem["kpiResult"];
+      history?: Array<NonNullable<import("@/types/api").GoogleReviewKpiStoreItem["kpiResult"]>>;
+    }>(`/google-review-kpi/${encodeURIComponent(storeId)}${qs ? `?${qs}` : ""}`);
+  },
+  submitGoogleReviewKpiResult: (body: import("@/types/api").CheckGoogleReviewKpiResultInput) =>
+    request<{ success: boolean; data: unknown }>("/google-review-kpi/check-result", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  startGoogleReviewBatchAudit: (
+    params: string | { month: string; scope?: "SELECTED" | "ALL_ELIGIBLE"; storeIds?: string[] },
+  ) => {
+    const payload = typeof params === "string" ? { month: params } : params;
+    return request<import("@/types/api").GoogleReviewAuditSessionResponse>("/google-review-kpi/audit-session/start", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getActiveGoogleReviewBatchAudit: (month?: string) => {
+    const sp = new URLSearchParams();
+    if (month) sp.set("month", month);
+    const qs = sp.toString();
+    return request<import("@/types/api").GoogleReviewAuditSessionResponse | null>(
+      `/google-review-kpi/audit-session/active${qs ? `?${qs}` : ""}`,
+    );
+  },
+  updateGoogleReviewBatchAuditStatus: (sessionId: string, action: "PAUSE" | "RESUME" | "CANCEL") =>
+    request<import("@/types/api").GoogleReviewAuditSessionResponse>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/action`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      },
+    ),
+  skipGoogleReviewAuditStore: (sessionId: string, storeId: string) =>
+    request<{ success: boolean; storeId: string; status: string }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/skip`,
+      {
+        method: "POST",
+      },
+    ),
+  reRunGoogleReviewAuditStore: (sessionId: string, storeId: string) =>
+    request<{ success: boolean; storeId: string; status: string }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/rerun`,
+      {
+        method: "POST",
       },
     ),
 };

@@ -1,0 +1,127 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import { GoogleReviewKpiService } from "./google-review-kpi.service";
+import {
+  CheckGoogleReviewKpiResultDto,
+  CompleteStoreAuditDto,
+  FailStoreAuditDto,
+  QueryGoogleReviewKpiDto,
+  StartMonthlyAuditDto,
+  UpdateAuditSessionStatusDto,
+} from "./google-review-kpi.dto";
+import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
+import { Roles } from "../auth/auth.decorators";
+import { UserRole } from "@prisma/client";
+
+@Controller("google-review-kpi")
+@UseGuards(AuthGuard)
+export class GoogleReviewKpiController {
+  constructor(private readonly kpiService: GoogleReviewKpiService) {}
+
+  @Get()
+  async list(@Query() query: QueryGoogleReviewKpiDto, @Req() req: AuthRequest) {
+    return this.kpiService.listMonthlyKpis(query, req.user);
+  }
+
+  // ==========================================
+  // Monthly Batch Audit Session Endpoints
+  // (Defined before :storeId to prevent routing collision)
+  // ==========================================
+
+  @Post("audit-session/start")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async startBatchAudit(
+    @Body() dto: StartMonthlyAuditDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.kpiService.startMonthlyAudit(dto, req.user);
+  }
+
+  @Get("audit-session/active")
+  async getActiveBatchAudit(@Query("month") month?: string) {
+    return this.kpiService.getActiveAuditSession(month);
+  }
+
+  @Post("audit-session/:sessionId/action")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async updateBatchAuditStatus(
+    @Param("sessionId") sessionId: string,
+    @Body() dto: UpdateAuditSessionStatusDto,
+  ) {
+    return this.kpiService.updateAuditSessionStatus(sessionId, dto);
+  }
+
+  @Get("audit-session/:sessionId/next-store")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async getNextPendingStore(@Param("sessionId") sessionId: string) {
+    return this.kpiService.getNextPendingStore(sessionId);
+  }
+
+  @Post("audit-session/:sessionId/stores/:storeId/complete")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async completeStoreAudit(
+    @Param("sessionId") sessionId: string,
+    @Param("storeId") storeId: string,
+    @Body() dto: CompleteStoreAuditDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.kpiService.completeStoreAudit(sessionId, storeId, dto, req.user);
+  }
+
+  @Post(["audit-session/:sessionId/stores/:storeId/needs-attention", "audit-session/:sessionId/stores/:storeId/flag-attention"])
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async flagStoreNeedsAttention(
+    @Param("sessionId") sessionId: string,
+    @Param("storeId") storeId: string,
+    @Body() dto: FailStoreAuditDto,
+  ) {
+    return this.kpiService.flagStoreNeedsAttention(sessionId, storeId, dto);
+  }
+
+  @Post("audit-session/:sessionId/stores/:storeId/skip")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async skipStore(
+    @Param("sessionId") sessionId: string,
+    @Param("storeId") storeId: string,
+  ) {
+    return this.kpiService.skipStore(sessionId, storeId);
+  }
+
+  @Post("audit-session/:sessionId/stores/:storeId/rerun")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async reRunStore(
+    @Param("sessionId") sessionId: string,
+    @Param("storeId") storeId: string,
+  ) {
+    return this.kpiService.reRunStore(sessionId, storeId);
+  }
+
+  // ==========================================
+  // Single Store KPI Endpoints
+  // ==========================================
+
+  @Get(":storeId")
+  async getStoreKpi(
+    @Param("storeId") storeId: string,
+    @Query("month") month?: string,
+  ) {
+    return this.kpiService.getStoreKpi(storeId, month);
+  }
+
+  @Post("check-result")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async recordResult(
+    @Body() dto: CheckGoogleReviewKpiResultDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.kpiService.recordCheckResult(dto, req.user);
+  }
+}

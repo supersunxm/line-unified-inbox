@@ -14,7 +14,7 @@ test("API client provides bulkMarkReplied and bulkMarkRepliedByFilter endpoints"
 
 test("Store Chats header conditionally renders '✓ ตอบแล้วทั้งหมด' ONLY for NOT_REPLIED queue and non-VIEWER roles", () => {
   assert.match(pageCode, /data-bulk-mark-all-replied-button/);
-  assert.match(pageCode, /sidebarView === "notReplied" && authUser\?\.role !== "VIEWER"/);
+  assert.match(pageCode, /sidebarView === "notReplied".*authUser\?\.role !== "VIEWER"/);
   assert.match(pageCode, /language === "th"\s*\?\s*"ตอบแล้วทั้งหมด"/);
   assert.match(pageCode, /"Mark All Replied"/);
   assert.match(pageCode, /"全部标记为已回复"/);

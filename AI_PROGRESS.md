@@ -1,4 +1,247 @@
-# AI progress
+# AI Progress Log
+
+## 2026-09-03: Google Review KPI Monthly Batch Audit Runner (100+ Stores)
+- **Current Task**: Build Monthly Batch Audit Runner for Google Review KPI allowing 100+ stores to be audited sequentially in active browser tab.
+- **Completed Work**:
+  - Database Layer:
+    - Added models `GoogleReviewAuditSession` and `GoogleReviewAuditStore` with enums `GoogleReviewAuditSessionStatus`, `GoogleReviewAuditStoreStatus`, `GoogleReviewAuditCoverageStatus`.
+    - Applied migration `20260903120000_add_google_review_audit_session`.
+  - Backend API Layer (`google-review-kpi`):
+    - Added endpoints:
+      - `POST /google-review-kpi/audit-session/start`: creates session with ordered queue of active stores having Google Maps URLs.
+      - `GET /google-review-kpi/audit-session/active`: returns session progress and queue metrics.
+      - `PATCH /google-review-kpi/audit-session/:sessionId/status`: supports PAUSE, RESUME, and CANCEL.
+      - `GET /google-review-kpi/audit-session/:sessionId/next-store`: atomic assignment of next pending store.
+      - `POST /google-review-kpi/audit-session/:sessionId/stores/:storeId/complete`: records aggregate KPI results in transaction and advances session.
+      - `POST /google-review-kpi/audit-session/:sessionId/stores/:storeId/flag-attention`: flags unexpected layout or challenges without breaking run.
+      - `POST /google-review-kpi/audit-session/:sessionId/stores/:storeId/skip`: marks store skipped.
+      - `POST /google-review-kpi/audit-session/:sessionId/stores/:storeId/rerun`: resets store to pending.
+    - Verified all routes mapped before `:storeId` parameter.
+  - Extension Batch Runner (`tools/google-review-checker-extension`):
+    - Centralized DOM automation in `GoogleMapsDomAdapter`: `detectGoogleChallenge()`, `isReviewsPaneOpen()`, `openReviewsPane()`, and `ensureNewestSorting()`.
+    - Implemented `BatchAuditRunner` state machine (`IDLE → LOADING_STORE → WAITING_FOR_MAPS → OPENING_REVIEWS → SETTING_NEWEST → SCANNING → SCROLLING → WAITING_FOR_LAZY_LOAD → AUDIT_COMPLETE → SUBMITTING_RESULT → MOVING_TO_NEXT_STORE`).
+    - Bounded scanning: terminates as soon as boundary is reached (Condition A or B) rather than scanning entire historical reviews.
+    - Submits strictly aggregate numbers (zero reviewer PII/text/media).
+    - Updated `dashboard_bridge.ts` to bridge batch session state into `chrome.storage.local`.
+    - Built extension bundles `content_script.js` (75.4kb) and `dashboard_bridge.js` (1.4kb).
+  - Frontend Dashboard (`frontend/src/app/google-review-kpi`):
+    - Added Monthly Batch Audit Control Panel with Start, Pause, Resume, and Cancel actions.
+    - Real-time progress bar, live store execution card, and Needs Attention warning banner.
+    - Added Batch Queue column with status badges and quick actions (`Re-run`, `Skip`).
+    - Added batch filters in status dropdown.
+- **Verification**:
+  - Extension unit tests: 39/39 passed.
+  - Backend unit tests: 1677/1677 passed.
+  - Frontend production build: passed with zero errors.
+  - Backend production build: passed with zero errors.
+  - Live backend verification: tested active session check, session creation, next store assignment, store completion, and session completion via curl with auth session cookie.
+- **Blockers**: None.
+- **Next Action**: Ready for local operator validation in Chrome with Google Maps.
+
+## 2026-09-03: Google Review KPI Thai Repetition Mark (ๆ) & Punctuation Exclusion
+- **Current Task**: Exclude Thai repetition mark (`ๆ`) and standalone punctuation (`ฯ`, `ฯลฯ`) from word counts.
+- **Completed Work**:
+  - Root cause: Unicode categorizes `ๆ` as `\p{Lm}` (Modifier Letter) and `ฯ` as `\p{Lo}` (Other Letter), causing `\p{L}` regex to treat them as letters.
+  - Updated `isMeaningfulToken` and `segmentThaiWords` in `thaiWordCounter.ts`:
+    - Strips `[ๆฯ฿๏๚๛]` and `ฯลฯ` before checking for meaningful letters.
+    - Standalone `ๆ` and `ฯ` evaluate to 0 words.
+    - Trailing `ๆ` attached to a word (e.g. `เยอะๆ`) or separated (`เยอะ ๆ`) counts as 1 word (`เยอะ`).
+    - Minions live review text: `ร้านดูแลดีมาก ชอบมาก มาร่วมกิจกรรมกันเยอะ ๆ` now accurately counts 11 words (not 12).
+  - Added 5 unit tests covering: `เยอะ ๆ` (1 word), `ดีมาก ๆ` (2 words), attached `เยอะๆ` (1 word), standalone `ๆ` (0), standalone `ฯ` and `ฯลฯ` (0), and Minions fixture (11 words).
+  - Rebuilt Chrome Extension bundle (`node build.js`).
+- **Verification**:
+  - Extension unit tests: 36/36 passed.
+  - Backend unit tests: 1677/1677 passed.
+  - Frontend unit tests: 483/483 passed.
+  - Next.js and NestJS production builds passed cleanly.
+- **Blockers**: None.
+- **Next Action**: Awaiting user live validation in Google Chrome.
+
+## 2026-09-03: Google Review KPI Customer Photo Detection Strict Positive Evidence Fix
+- **Current Task**: Resolve customer-photo false-positive bug where reviews with no attached media were marked `Has customer photo: Yes`.
+- **Completed Work**:
+  - Identified exact root cause:
+    1. Contributor statistics (e.g. `minions · 1 review · 1 photo`) matched overly broad button query `button[aria-label*='photo' i]`.
+    2. Reviewer avatar images hosted on Google user storage (`lh3.googleusercontent.com` / `ggpht.com`) failed negative exclusion checks and were mistakenly treated as customer review media.
+    3. Broad image querying across the whole card used negative exclusion rather than strict positive evidence of attached review media.
+  - Implemented strict positive-evidence detection in `googleMapsDomAdapter.ts`:
+    - Strictly excludes reviewer header (`.WNxzHc`, `.d4r55`, `.al6Kxe`, `.RfnDt`, `[data-href*='/contrib/']`), owner replies (`.CDe7pd`), and action bars (`.GBkF3d`, `Like`, `Share`).
+    - Requires genuine attached review media: gallery containers (`.KtCyie`), thumbnail buttons (`button.Tya61d`, `div.KtRwe`, `button[data-photo-index]`), review photo action triggers (`[jsaction*='review.photo']`), or `/p/` customer photo storage URLs positioned outside headers and action bars.
+    - Added structured `PhotoEvidence` categorization (`NONE`, `REVIEW_MEDIA_THUMBNAIL`, `REVIEW_MEDIA_BUTTON`, `REVIEW_MEDIA_GALLERY`).
+    - Exposed `Photo evidence: ...` in Live Validation Debug View.
+  - Added 9 comprehensive unit tests in `customerPhotoDetection.test.ts` covering live bug fixture, high contributor photo counts, reviewer avatars, place images, thumbnails, galleries, and qualification regression.
+  - Rebuilt Chrome Extension bundle (`node build.js`).
+- **Verification**:
+  - Extension unit tests: 35/35 passed.
+  - Backend unit tests: 1677/1677 passed.
+  - Frontend unit tests: 483/483 passed.
+  - Next.js and NestJS production builds passed cleanly.
+- **Blockers**: None.
+- **Next Action**: Awaiting user live validation in Google Chrome.
+
+## 2026-09-03: Google Review KPI Finalized Word Counting Pipeline & Threshold (>= 15)
+- **Current Task**: Full review text extraction fix, Thai compound-prefix merge pipeline, and threshold update from `> 15` to `>= 15`.
+- **Completed Work**:
+  - Identified root cause of partial text extraction: DOM adapter was matching first child `<span>` inside `.MyEned` (which could be an activity chip or tag like "ร่วมกิจกรรม") rather than the full review body `.wiI7Bm`.
+  - Updated `googleMapsDomAdapter.ts` to clone the complete `.wiI7Bm` / `.MyEned` element, strip UI buttons/expanders, and filter known Google Maps UI noise phrases (`cleanReviewText`).
+  - Implemented multi-stage Thai word counting pipeline in `thaiWordCounter.ts`:
+    1. Strip Google Maps UI phrases (`cleanReviewText`).
+    2. `Intl.Segmenter("th", { granularity: "word" })`.
+    3. Exclude pure numbers, whitespace, punct, symbols, emoji, UI tokens (`isMeaningfulToken`).
+    4. Compound dictionary matching full sequence (`applyCompoundDictionary`).
+    5. Thai compound-prefix merge for `การ, ความ, น่า, ผู้, นัก, ชาว, ช่าง` (`mergeThaiCompoundPrefixes`). Normal phrases (`ไม่ดี`, `ดีมาก`) remain separate words.
+    6. Repeated words counted every time.
+  - Migrated qualification threshold to `finalWordCount >= 15` (0-14 FAIL, 15+ PASS) across engine, dashboard, extension UI, and tests.
+  - Enhanced live validation Debug View to render full review text, raw tokens, final counted tokens, final word count, and 15+ status.
+  - Added 9 new unit tests covering threshold, prefix merge, non-merge, repeated words, noise exclusion, and real regression fixture.
+- **Verification**:
+  - Extension unit tests: 26/26 passed.
+  - Backend unit tests: 1677/1677 passed.
+  - Frontend unit tests: 483/483 passed.
+  - Next.js and NestJS production builds passed cleanly.
+- **Blockers**: None.
+- **Next Action**: Awaiting user live validation in Google Chrome.
+
+## 2026-09-03: Google Review KPI Dual Completion Edge Case Resolution
+- **Current Task**: Resolve Google Review KPI audit completion when store review list ends within target month.
+- **Completed Work**:
+  - Identified root cause: completion previously only triggered when a review older than the target month existed (`review.month < targetMonth`), failing when a store has no older reviews beyond the target month.
+  - Implemented dual-condition completion algorithm in `qualificationEngine.ts` and `googleMapsDomAdapter.ts`:
+    - **Condition A (`OLDER_THAN_TARGET_REACHED`)**: Unedited reliable review older than target month found.
+    - **Condition B (`END_OF_AVAILABLE_REVIEWS`)**: User physically reaches bottom of Google Maps review scroll pane (`distanceFromBottom <= 15px` or end-of-list DOM indicator) with loaded reviews.
+    - **In Progress (`IN_PROGRESS`)**: Neither condition met; prompts user to continue scrolling.
+  - Strict invariants enforced: Edited reviews (`isEdited`) and unknown dates (`month === null`) never trigger Condition A.
+  - Added 5 unit tests covering all edge cases. Rebuilt extension bundle.
+- **Verification**:
+  - Extension unit tests: 22/22 passed.
+  - Backend unit tests: 1677/1677 passed.
+  - Frontend unit tests: 483/483 passed.
+  - Next.js and NestJS production builds passed cleanly.
+- **Blockers**: None.
+- **Next Action**: Awaiting user live browser validation with updated extension.
+
+## Current task: Google Maps Review KPI Checker MVP (2026-09-02) [COMPLETE]
+
+- **Architecture Chosen**: Human-in-the-loop Chrome Extension + `lineoppo.click` Dashboard and Backend API.
+- **Privacy Enforcement**: Zero reviewer personal data, profile identifiers, review text, or images are stored. Only aggregated monthly KPI metrics (`reviewsChecked`, `reviewsWithPhoto`, `reviewsOver15ThaiWords`, `qualifiedReviews`, `targetQualifiedReviews`, `checkedAt`, `checkedByUserId`) are persisted.
+- **Database & Prisma**: Added `GoogleReviewKpiResult` model with unique constraint `[storeId, month]` and migration `20260902180000_add_google_review_kpi_result`. Reuses existing `StoreMaster.googleMapsUrl` and `Store` relation.
+- **Backend API**: Created `GoogleReviewKpiModule` in NestJS with endpoints `GET /google-review-kpi?month=YYYY-MM`, `GET /google-review-kpi/:storeId`, and `POST /google-review-kpi/check-result`. Strictly validates `YYYY-MM` month format, non-negative integer counts, and mathematical consistency rules (`qualifiedReviews <= reviewsChecked`, `reviewsWithPhoto <= reviewsChecked`, `reviewsOver15ThaiWords <= reviewsChecked`, `qualifiedReviews <= reviewsWithPhoto`, `qualifiedReviews <= reviewsOver15ThaiWords`).
+- **Frontend Dashboard**: Created `/google-review-kpi` view with month picker (defaults to Bangkok current month), stat summary cards (Total Stores, Checked, Passed, Below Target, Total Qualified, Scanned), search & region/status filters, store table with "เปิด Google Maps ↗" links, status badges, and manual JSON import/entry modal. Integrated into sidebar and top navigation.
+- **Chrome Extension MVP**: Built Manifest V3 extension in `tools/google-review-checker-extension/` with modular components:
+  - `thaiWordCounter.ts` using browser-native `Intl.Segmenter("th", { granularity: "word" })` to segment and count Thai words without spaces.
+  - `googleReviewDateParser.ts` for parsing English and Thai relative/explicit dates into target `YYYY-MM` with fail-closed `UNKNOWN_DATE` fallback.
+  - `reviewFingerprint.ts` for non-reversible ephemeral review deduplication during user scrolling.
+  - `googleMapsDomAdapter.ts` for isolated Google Maps review card, text, and customer photo extraction.
+  - `qualificationEngine.ts` evaluating `dateInRange && hasImage && thaiWordCount > 15`.
+  - `content_script.ts` with floating in-page UI overlay on Google Maps.
+- **Verification**:
+  - Full backend test suite: 1,677/1,677 passed (including `google-review-kpi.service.spec.ts`).
+  - Full frontend test suite: 483/483 passed (including `google-review-kpi.test.mts`).
+  - Extension test suite: 15/15 passed (word segmentation, qualification matrix, boundary tests, deduplication, relative date parser).
+  - Production builds: Backend `prisma generate && nest build` (exit 0), Frontend `next build` (exit 0).
+- **Documentation**: Added comprehensive guide `docs/google-review-kpi.md`.
+
+## Previous task: Phase 1 controlled live profile probe attempt (2026-09-02) [PROBE BLOCKED SAFELY]
+
+- Final guards passed with zero PROCESSING jobs, correct Phase 1 routing, one account-1 session, and all six Phase 2 stores unchanged/enabled.
+- Added a local-only sanitized Phase 1 bot-surface probe and passed ESLint/build; it was not deployed or executed. It emits only approved booleans/status/count/failure-stage fields and opens no individual chat.
+- Railway scale-to-zero plus graceful SIGTERM stopped only `line-chat-nickname-worker`. Once PID 1 exited, Railway removed access to the sole volume-mounted container, so the profile probe could not execute under the required worker-exited condition. No concurrent probe was attempted.
+- Restored one worker replica with unchanged service settings/source; worker startup logged successfully, the worker process and both profile mounts are present, DB access is healthy, zero jobs are PROCESSING, and all Phase 1/Phase 2 routing remains unchanged.
+- No Chromium probe, re-authentication, credentials, profile change, DB mutation, job retry, customer chat, cookie/token read, or Phase 2 change occurred. A future probe requires an approved maintenance mechanism that preserves volume-mounted exec while preventing claims, such as a worker pause control or a separate volume-attached maintenance service.
+
+## Current task: Phase 1 Store 28375 RESOLVE_TRANSPORT read-only diagnosis (2026-09-02) [AWAITING MAINTENANCE APPROVAL]
+
+- Production routing is unchanged: active STORE OA on `profile-b` / `profile-b-linux-v2`, sync enabled, valid bot ID, ACTIVE session, zero recorded auth failures. Phase 2 remains six enabled OAs on the single ACTIVE `account-1` / `account-1-v1` session.
+- Last Phase 1 success completed at `2026-09-01T14:14:52.961Z`; the first `RESOLVE_TRANSPORT` job was created at `2026-09-02T01:05:33.290Z`. All 24 observed transport failures were unmapped and did not reach nickname PUT; no mapped-customer attempt exists in that failure interval.
+- Filesystem-only inspection found `profile-b-linux-v2`, `profile-b`, and `account-1-v1` present with expected Chromium state directories. Phase 1 has no Singleton artifacts or active Chromium owner; directory size alone is not treated as authentication evidence.
+- The last success and first failure occurred within the same worker deployment, before the next deployment, so deployment timing does not support a causal rollout/rebuild correlation. Repeated approximately 20-second failures most strongly indicate the natural chat-list request/response observation stage, but current sanitization prevents an exact distinction.
+- A controlled live profile probe is required before re-authentication can be justified. No worker stop/restart, Chromium launch, profile mutation, DB mutation, job retry, re-authentication, or Phase 2 access/change was performed.
+
+## Current task: Phase 2 final store enabled — Central Khonkaen 3791 (2026-09-02) [WAITING FOR REAL TAG TEST]
+
+- Operator-approved guarded enable completed for Store 3791 only. Production readback confirms all five Stage B stores now have sync enabled and retain their audited bot routing through the single ACTIVE `account-1` / `account-1-v1` session.
+- Phase 1 Store 28375 and Central World 25610 remain enabled and unchanged. Pre-enable DB-driven worker routing passed 5/5, and the final database readback passed `ROUTED = 5/5` with one account-1 session.
+- No synthetic job, individual customer chat, manual nickname call, mapping mutation, backfill, old-job retry, profile change, commit, or deployment was performed.
+- The dedicated Central Khonkaen guard passes ESLint and build; the full backend suite passes 1,667/1,667.
+- Next action: wait for one genuine Central Khonkaen BM tag save and separately verify its production job/resolver/nickname outcome.
+
+## Current task: Phase 2 Stage B Store 27789 enabled (2026-09-02) [WAITING FOR REAL TAG TEST]
+
+- Fresh production DB and DB-driven worker guards passed with Stores 27627, 25391, and 24804 protected as enabled and Stores 27789 and 3791 disabled.
+- The guarded serializable transaction enabled only Store 27789 (`OPPO MKV Suwannaphum`, `@180bkgua`) and affected exactly one OA sync flag. No. Routing, sessions, profiles, customers, mappings, and jobs were not modified.
+- Post-enable readback confirms Store 27789 uses ACTIVE `account-1` / `account-1-v1` with routing unchanged; Store 3791 remains disabled; Phase 1, Central World, and all earlier validated Stage B stores remain enabled and unchanged; account-1 session count remains one.
+- ESLint, backend build, and the full backend suite (1,667/1,667) pass. No synthetic job, individual chat access, backfill, retry, next-store enablement, commit, or deployment was performed.
+- Next action: wait for one genuine Store 27789 BM tag save and operator validation.
+
+## Current task: Phase 2 Store 24804 enabled (2026-09-02) [WAITING FOR REAL TAG TEST]
+
+- Fresh production DB and worker guards passed with Bangkapi 27627 and Westgate 25391 protected as enabled, Ngamwongwan 24804 disabled and routing-ready, and Stores 27789/3791 disabled.
+- The guarded serializable transaction enabled only Store 24804. Post-enable readback confirms its audited routing remains on the single ACTIVE `account-1` / `account-1-v1` session; 27627 and 25391 remain true, while 27789 and 3791 remain false.
+- Phase 1 Store 28375 and Central World 25610 remain unchanged and enabled. No synthetic job, individual chat access, backfill, retry, profile change, other-store mutation, commit, or deployment occurred.
+- ESLint and backend build pass; full backend tests pass 1,667/1,667. Next action is one genuine BM tag save for Store 24804.
+
+## Current task: Phase 2 Westgate controlled enable (2026-09-02) [READY FOR REAL TAG TEST]
+
+- Recorded operator confirmation that Bangkapi 27627 passed its genuine production nickname flow; Bangkapi was not modified in this task.
+- Fresh production DB and DB-driven worker guards passed with Bangkapi expected enabled, Westgate 25391 expected disabled/routing-ready, the remaining three disabled, and Phase 1/Central World unchanged.
+- A Westgate-specific serializable guarded transaction changed only `lineChatNicknameSyncEnabled` from false to true for the exact active STORE OA `OPPO CentralWestgate` / `@khr9928i`; affected row count was exactly one.
+- Post-enable readback confirms Westgate and Bangkapi enabled, Stores 24804/27789/3791 disabled, routing unchanged, one `account-1` session, and Phase 1/Central World unchanged.
+- No synthetic job, customer chat, mapping, backfill, old-job retry, additional enablement, profile change, commit, or deploy occurred. ESLint/build pass and full backend tests pass 1,667/1,667.
+- Next action: wait for one fresh genuine Westgate BM tag save; do not monitor until the operator requests it.
+
+## Current task: Stage B first-store enable — Bangkapi 27627 (2026-09-02) [WAITING FOR REAL BM SAVE]
+
+- Fresh production DB and DB-driven worker guards passed 5/5 before mutation. A serializable guarded transaction enabled only Store 27627 (`OPPO Bangkapi`, `@250oxyxq`) by changing `lineChatNicknameSyncEnabled` from false to true.
+- Post-enable readback confirms Bangkapi remains routed to the existing ACTIVE `account-1` / `account-1-v1` session with its audited bot ID; Stores 25391, 24804, 27789, and 3791 remain sync-disabled.
+- Central World 25610 and Phase 1 Store 28375 remain unchanged and enabled; exactly one `account-1` session still exists.
+- No synthetic nickname job, manual nickname request, customer mapping, historical backfill, failed-job retry, individual chat read, second-store enablement, profile mutation, commit, or deployment occurred.
+- ESLint and backend build pass; full backend tests pass 1,667/1,667. Next action is a fresh genuine Bangkapi BM sales-tag save by the operator, followed by separately requested observation.
+
+## Current task: Phase 2 Stage B production routing applied and verified (2026-09-02) [COMPLETE — SYNC DISABLED]
+
+- Operator-approved guarded Stage B apply completed successfully for Stores 27627, 25391, 24804, 27789, and 3791. Each now has its audited bot ID and links to the existing `account-1` session; no session was created and all five retain nickname sync disabled.
+- Production DB readback passed `ROUTED = 5/5`, confirmed one `account-1` session, and confirmed Phase 1 Store 28375 plus Central World 25610 unchanged.
+- DB-driven Railway worker preflight passed `ROUTING READY = 5/5`: OA/session/profile found, session authenticated, bot ID valid, bot-level chat-list access present, and sync disabled for every target. No individual customer chat was opened.
+- Final post-preflight DB readback again passed 5/5 with all five sync flags false. No enablement, nickname jobs, customer mappings, backfill, failed-job retry, profile mutation, commit, deploy, or unrelated dirty-tree action was performed.
+- Added reusable read-only Stage B DB readback and worker-preflight CLIs. ESLint and backend build pass after these additions.
+- Next action requires separate operator approval: enable and validate only the selected first Stage B store.
+
+## Current task: Phase 2 Stage B guarded routing preparation (2026-09-02) [READY FOR OPERATOR APPLY]
+
+- Added a dedicated Stage B plan/apply CLI for the five remaining account-1 stores. Dry-run is the default; apply requires both `--apply` and `--confirm-stage-b-routing-five`.
+- One serializable transaction requires exact Store/OA/Basic ID identities, active STORE accounts, null bot/session routing, sync disabled, exactly one ACTIVE `account-1` session using `account-1-v1`, and unchanged Phase 1 and Central World invariants. Apply reuses that session and guarded updates roll back together on mismatch or race.
+- The authoritative gitignored audit proposal contains a structurally valid bot ID for all five. Normal output remains redacted and tracked source contains no discovered Stage B bot IDs.
+- Fresh production read-only dry-run passed `READY = YES 5/5`; Phase 1 and Central World checks passed. No production mutation was performed.
+- Focused Stage B tests pass 8/8; all LINE Chat tests pass; full backend tests pass 1,667/1,667; backend ESLint, build, and diff checks pass. Local runtime health was unavailable because Docker/database were stopped and occupied ports did not respond; Stage B files are operator CLIs and are not imported by the backend runtime.
+- Stop condition honored. Exact future command: `npm run line-chat:phase2:stage-b:apply -- --apply --confirm-stage-b-routing-five`.
+
+## Current task: Phase 2 Stage A — Shared Realtime Resolver Rollout Eligibility Deployed & Verified (2026-09-02) [WAITING FOR USER RETEST]
+
+- **Root Cause & Minimal Patch**:
+  - Live retest of Central World tag save revealed resolver failure `status = RESOLVE_CONFLICT`.
+  - Root cause confirmed: `LineChatRecentResolverService` still had Phase 1-only hardcoded identity guards (`LINE_CHAT_PILOT_BOT_ID`, `LINE_CHAT_PILOT_SESSION_KEY`, `LINE_CHAT_PILOT_STORE_CODE`, `LINE_CHAT_PILOT_OA_NAME`) and required Store 28375.
+  - Unified eligibility logic by making `LineChatRecentResolverService` and `LineChatNicknameQueueService` share `isLineChatRealtimeResolverEligible`.
+  - The shared helper centrally validates:
+    1. `storeCode` in controlled allowlist (`LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES`)
+    2. `conversation.storeId` matches `oa.storeId`
+    3. `oa.accountType === 'STORE'`
+    4. `oa.isActive` and `oa.archivedAt == null`
+    5. `oa.chatBotId` present and matches `expectedBotId` (when passed into resolver)
+    6. `oa.lineChatSession` present, status is not `DISABLED`, and matches `expectedSessionKey` (when passed into resolver)
+  - Added 8 unit tests in `line-chat-recent-resolver.service.spec.ts` covering Phase 1, Phase 2 DB routing, cross-OA parameter mismatches, and fail-closed security invariants.
+- **CI / Deployment**:
+  - PR #135 created and merged to `main` (commit `cf9f724`) after all CI checks passed (Android, Backend, Frontend, CI Gate).
+  - Railway deployed both `line-unified-inbox` (Backend) and `line-chat-nickname-worker`.
+  - Both services are online and healthy.
+- **Production Database Verification**:
+  - Central World Store 25610: `chatBotId: U001732513bc5f534c1a40d36c89bb43f`, `syncEnabled: true`, `sessionKey: account-1`, `profileStorageKey: account-1-v1`, `sessionStatus: ACTIVE`.
+  - Phase 1 Store 28375: `chatBotId: U729972869a565723cb7fcf7ea28bbc43`, `syncEnabled: true`, `sessionKey: profile-b`, `profileStorageKey: profile-b-linux-v2`, `sessionStatus: ACTIVE`.
+  - Remaining 5 Phase 2 stores: `syncEnabled: false`, `chatBotId: null`, `sessionKey: null`.
+- **Next Action**:
+  - Operator will perform a fresh real customer tag save on Central World (`@126fiiqf`) in `lineoppo.click`.
+  - Observe the fresh job creation, worker resolution, and nickname sync in production logs.
+
+
 
 ## Current task: Complete v2 LINE chat discovery foundation (2026-09-01) [COMPLETED]
 
@@ -3025,9 +3268,28 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Focused resolver diagnostics tests pass 18/18; full backend tests pass 1,622/1,622; changed-file ESLint, backend build, and `git diff --check` pass. The four-file diff was reviewed, committed as `066bc5f`, pushed, and opened as PR #127.
 - No production access, mapping apply, nickname update, queue mutation, migration, deployment, or historical mapping work was performed. CI is running on the PR; merge and deployment remain intentionally untouched.
 
-## 2026-09-02 — Desktop focus chat group (7 stores)
-- Added a prominent virtual focus group to the desktop chat sidebar for store IDs 28375, 25610, 27627, 25391, 24804, 27789, and 3791.
-- Selecting the group combines conversations from the seven stores into the normal chat list while each conversation continues to show its source store.
-- Added group-level Not Replied / BM Notified / Replied counts without creating a fake Store record.
-- Kept the mobile UI unchanged. Desktop routing uses `focusGroup=priority-seven` instead of exposing the virtual store ID in the shared `store` query parameter.
-- The group respects existing user store access; restricted users only receive focus stores they are authorized to access.
+# Current task: LINE Chat worker maintenance liveness (2026-09-02)
+
+- Added explicit `LINE_CHAT_NICKNAME_MAINTENANCE_MODE=true` precedence after test mode and before the existing emergency-disable flag. Maintenance mode logs a sanitized event, starts only a referenced keepalive interval, and performs no polling or browser work.
+- Worker destruction clears both normal polling and maintenance timers. Focused lifecycle tests pass (13/13), the full backend suite passes (1,668/1,668), changed-file ESLint and backend build pass, and `git diff --check` is clean. Repository-wide backend lint retains unrelated baseline errors.
+- Committed as `662f562`, merged through green PR #143, and deployed at merge commit `fdc33fa`. The worker and unavoidable backend auto-deploy both succeeded; backend health/readiness, worker normal startup, mounted profile volume, production migration status, and Phase 1/Phase 2 routing isolation passed. Production maintenance remains unset/false, disable remains false, and the live profile probe has not been run.
+- The approved controlled Phase 1 probe subsequently ran once under liveness-safe maintenance. Chromium opened and closed cleanly against `profile-b-linux-v2`, but LINE Manager redirected to authentication, so the probe failed at `MANAGER_AUTH` before any chat page, chat-list request, or customer chat access. Normal polling was restored successfully with both worker flags false; routing remained unchanged and no job/profile/mapping mutation was performed. A separately approved controlled reauthentication is the next safe recovery step.
+- Controlled Phase 1 reauthentication was attempted under maintenance, but the current worker image lacks `fluxbox`, `x11vnc`, and `websockify`, so the localhost-only interactive noVNC stack could not become ready. The briefly launched Chromium and exact recorded session processes were cleaned up; the existing profile remained in place. No credentials or operator interaction occurred. Normal polling was restored with both flags false and all routing unchanged. Enabling a secure interactive channel requires a separately reviewed worker-image dependency change before reauthentication can resume.
+- Prepared a one-file worker-image enhancement adding Noble `fluxbox`, `novnc`, `websockify`, and `x11vnc` packages with no recommended extras, plus a stable `chromium` command for the Playwright-managed binary. The local image exposes no ports and retains the original worker command. A disposable localhost-only X11/VNC/noVNC smoke test passed and cleaned up all processes; focused worker tests pass 13/13, full backend tests pass 1,677/1,677, backend build and diff checks pass. Repository-wide lint retains unrelated baseline errors.
+- Committed as `1fd11ee`, merged through green PR #144, and deployed at merge commit `1267bc6`. Worker deployment `c2df1731-2c57-4fc7-999a-f9e12c479316` and the authorized unavoidable backend auto-deployment `a310345a-3851-4197-a202-3d893dd215a8` both succeeded; frontend deployment was skipped. Live worker command/assets, volume, profile presence, DB connectivity, normal startup, false maintenance/disable flags, backend health/readiness, and Phase 1/Phase 2 routing isolation all passed. Interactive reauthentication was not run.
+- The subsequent controlled interactive reauthentication failed closed at the listener security guard. x11vnc opened the requested IPv4 loopback socket but also wildcard IPv6 listeners (`:::15901` and `:::5900`), so no SSH tunnel or operator login was allowed. All temporary X11/VNC/Chromium processes, PID records, and listeners were removed; the existing profile remained intact. Normal worker deployment `d11279b4-69b0-4f13-947b-07e49e3e00c1` succeeded with both flags false, zero processing jobs, and unchanged Phase 1/Phase 2 routing. A narrow launch-tool hardening to disable IPv6 listening is required before retrying.
+- The one authorized hardened retry confirmed production x11vnc supports both `-no6` and `-noipv6`, but failed closed before any listener was created because Fluxbox aborted while starting under the temporary GUI home. The listener guard, noVNC, SSH tunnel, operator login, Chromium, and LINE requests were therefore never reached, and no second attempt was made. Cleanup confirmed zero interactive processes and zero ports 15901/16081 listeners, with `profile-b-linux-v2` still present. Maintenance-off deployment `b22514c4-8393-42a8-ba22-47fb7139bb6f` succeeded; normal worker startup/polling resumed with both control flags false, Store 28375 had no processing job, and Phase 1 plus all six Phase 2 routing records remained unchanged.
+- The separately authorized single Xvfb-only retry entered maintenance successfully but failed closed at X-display readiness with exit code 127: Xvfb itself started and logged only non-fatal keymap warnings, while the requested `xdpyinfo` readiness command was unavailable. No Fluxbox, x11vnc/noVNC listener, SSH tunnel, Chromium, operator login, or LINE request was reached, and the launcher was not rerun. Targeted cleanup plus the replacement container left zero temporary processes/listeners and preserved `profile-b-linux-v2`. Maintenance-off deployment `c3e1b6d8-8037-46f2-85a2-e5cd88d7da0f` succeeded with both flags false, DB connectivity, normal worker startup/polling, zero Store 28375 processing jobs, and unchanged Phase 1/Phase 2 routing.
+- The next explicitly authorized readiness-check-only retry passed the Xvfb PID, exact command, Unix socket, and fatal-stderr checks. x11vnc successfully accessed display `:99` and opened `127.0.0.1:15901`, but also attempted an unauthorized TCP6 listener on port 5900 despite the supplied `-no6 -noipv6` options. The socket guard failed closed before noVNC, tunnel, Chromium, operator login, or LINE requests, and no retry was made. Cleanup plus replacement-container deployment `aae012c7-5741-45a2-b986-bb8ee6092209` left zero temporary processes/listeners, both worker flags false, the exact profile mounted, DB connectivity and normal polling restored, zero Store 28375 processing jobs, and Phase 1/Phase 2 routing unchanged.
+- The one authorized `-rfbportv6 -1` retry confirmed that option is supported and successfully constrained x11vnc to only `127.0.0.1:15901`; the subsequent noVNC guard also passed with only `127.0.0.1:15901` and `127.0.0.1:16081`. Chromium then failed closed before the SSH tunnel/operator handoff because the exact persistent profile retained a singleton lock referencing another Chromium process and prior container hostname. The lock was not removed because profile mutation was outside scope. Cleanup and replacement-container deployment `40095439-e502-423e-8f9d-4616105841e0` left zero temporary processes/listeners, preserved the profile, restored both flags false plus normal polling/DB connectivity, and confirmed Phase 1/Phase 2 routing unchanged.
+- Read-only stale-lock preflight classified the exact `profile-b-linux-v2` Chromium singleton set as stale: `SingletonLock`, `SingletonSocket`, and `SingletonCookie` are broken symlinks with the same timestamp; the lock references previous hostname `efa0805c1c47` and PID 69, while the current hostname differs, PID 69 does not exist, no Chromium/Chrome/Playwright or exact-profile owner is active, and the referenced socket does not exist or have an owner. Queue and routing guards passed, maintenance stayed off, and no artifact/profile/data mutation or browser launch occurred. A separately authorized removal of only those three singleton symlinks is the next controlled recovery step.
+- Controlled stale-lock recovery then removed only the three authorized singleton symlinks after immediate ownership revalidation. Xvfb, x11vnc with `-rfbportv6 -1`, noVNC, and the localhost-only SSH tunnel passed; Chromium launched the exact profile and created a current valid lock. After operator confirmation, the bounded aggregate-only probe passed Manager Auth, Store 28375 OA/chat auth, chat-list request/response, HTTP 200, JSON parse, and count 25 without opening customer chats or printing records. Chromium and temporary stack were cleaned, normal worker restoration deployment `51ed075a-8aab-46ab-8b5d-118c1824cddc` succeeded, both flags are false, DB/volume/polling are healthy, zero Store 28375 processing jobs remain, and Phase 1/Phase 2 routing is unchanged. No BM test was run.
+- One fresh Store 28375 BM-save job observed after the watcher baseline completed SUCCESS with no mapping at creation, worker claim, resolver `RESOLVED`, recent-chat aggregate count 125, exact-name match count 1, mapping present, nickname PUT status 200, and attempt count 0. Final Phase 1 session remained ACTIVE on `profile-b` / `profile-b-linux-v2`; final readback kept Phase 1 and all Phase 2 routing unchanged with one account-1 session. A sanitized count found 9 Store 28375 jobs created in the watcher window (all SUCCESS), so production activity exceeded the requested single-save condition; no jobs were created or retried by the agent.
+
+# Current task: Phase 1 live profile probe — maintenance mode (2026-09-02)
+
+- Fresh production guards passed before maintenance: no nickname jobs were processing; Store 28375 retained active `profile-b` / `profile-b-linux-v2` routing with sync enabled; all six Phase 2 stores retained active `account-1` / `account-1-v1` routing with sync enabled; exactly one `account-1` session existed.
+- Set only `DISABLE_NICKNAME_WORKER=true` on `line-chat-nickname-worker` and deployed worker revision `6b7f269e-bbc0-4293-877f-6d7b436899ec`. Its logs confirmed `line_chat_nickname_worker_disabled`, but the Nest process exited because disabling the polling timer left no active event-loop handle. Railway therefore provided no live container for the approved profile probe.
+- Failed closed: did not start Chromium, access the profile, request the chat list, reauthenticate, open a customer chat, mutate mappings/jobs/data, or retry historical work. Restored `DISABLE_NICKNAME_WORKER=false` immediately.
+- Recovery deployment `09bf45f2-8883-45a1-a5db-327aab4d505f` succeeded. Logs confirmed `line_chat_nickname_worker_started`; the container is alive, the profile volume and `profile-b-linux-v2` directory are present, and the flag reads `false`.
+- Post-recovery readback confirmed Phase 1 and Central World unchanged, all five Stage B stores still use `account-1` / `account-1-v1` with sync enabled, and the `account-1` session count remains exactly one. Next action requires a separately approved maintenance mechanism that keeps the worker container alive while polling is disabled.

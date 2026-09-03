@@ -53,6 +53,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     "rich-menus": ["จัดการ Rich Menu", "Rich Menu Manager", "Rich Menu 管理"],
     "auto-responses": ["ข้อความตอบกลับอัตโนมัติ", "Auto-response", "自动回复"],
     "greeting-messages": ["ข้อความต้อนรับ", "Greeting Messages", "欢迎消息"],
+    "google-review-kpi": ["Google Review KPI", "Google Review KPI", "Google Review KPI"],
   };
   const index = language === "th" ? 0 : language === "zh" ? 2 : 1;
   return labels[section][index];
@@ -142,6 +143,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
             {canTool("message-traffic") && <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span>›</span></Link>}
             {can("coupons") && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
             {can("stores") && <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>}
+            {can("google-review-kpi") && <Link href="/google-review-kpi" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>Google Review KPI</span><span>›</span></Link>}
             {can("purchase-analytics") && <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span>›</span></Link>}
             {can("friend-source-links") && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span>›</span></Link>}
             {can("mass-messages") && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span>›</span></Link>}

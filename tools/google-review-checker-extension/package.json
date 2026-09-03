@@ -1,0 +1,17 @@
+{
+  "name": "google-review-checker-extension",
+  "version": "1.0.0",
+  "description": "Chrome Extension for Google Maps Store Review KPI Checking",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}
