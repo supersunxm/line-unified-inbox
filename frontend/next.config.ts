@@ -22,6 +22,19 @@ export function createBackendRewrite(apiBaseUrl: string) {
   };
 }
 
+export function createGoogleReviewApiRewrite(apiBaseUrl: string) {
+  return [
+    {
+      source: "/google-review-kpi/check-result",
+      destination: `${apiBaseUrl}/google-review-kpi/check-result`,
+    },
+    {
+      source: "/google-review-kpi/audit-session/:path*",
+      destination: `${apiBaseUrl}/google-review-kpi/audit-session/:path*`,
+    },
+  ];
+}
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -41,6 +54,7 @@ const nextConfig: NextConfig = {
       createFriendSourceLinkRewrite(API_BASE_URL),
       createAuthRewrite(API_BASE_URL),
       createBackendRewrite(API_BASE_URL),
+      ...createGoogleReviewApiRewrite(API_BASE_URL),
     ];
   },
 };

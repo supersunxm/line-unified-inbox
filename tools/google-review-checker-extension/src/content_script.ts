@@ -60,6 +60,9 @@ class ReviewCheckerOverlay {
   private async initBatchMode() {
     chrome.storage?.local?.get(["batchAuditSession"], (res) => {
       this.batchSession = res?.batchAuditSession || null;
+      if (!this.batchSession || this.batchSession.status !== "RUNNING") {
+        return;
+      }
       this.isBatchMode = true;
       this.renderBatchRunnerBar();
       this.startBatchStoreRun();
@@ -862,6 +865,9 @@ class ReviewCheckerOverlay {
 
 // Auto-initialize when running as content script on Google Maps
 if (typeof window !== "undefined" && window.location.href.includes("google")) {
-  const overlay = new ReviewCheckerOverlay();
-  setTimeout(() => overlay.init(), 1000);
+  if (!(window as any).__OPPO_KPI_OVERLAY_INITIALIZED__) {
+    (window as any).__OPPO_KPI_OVERLAY_INITIALIZED__ = true;
+    const overlay = new ReviewCheckerOverlay();
+    setTimeout(() => overlay.init(), 1000);
+  }
 }

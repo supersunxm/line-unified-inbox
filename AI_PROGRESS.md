@@ -1,5 +1,34 @@
 # AI Progress Log
 
+## 2026-09-03: Google Review KPI Production Pilot Diagnosis & Runner Handoff Fix
+- **Current Task**: Diagnose and fix runner handoff for real production pilot on `https://lineoppo.click/google-review-kpi`.
+- **Findings & Root Causes**:
+  1. Dashboard flickering: `loadData` set `setLoading(true)` on every 3-second live poll, unmounting the table and replacing it with a spinner every 3 seconds.
+  2. Queue #1 not starting / `/next-store` never called: `startMonthlyAudit` initialized all stores as `PENDING` without claiming store 1; `res.currentStore` was `null`, which prevented `window.open` from opening the initial Google Maps tab.
+  3. API routing: Next.js lacked rewrites for `/google-review-kpi/check-result` and `/google-review-kpi/audit-session/:path*`.
+  4. Single-flight protection: Extension required explicit window initialization guards and deduplication against repeated `chrome.storage.local` writes.
+- **Completed Fixes**:
+  - `backend/src/google-review-kpi/google-review-kpi.service.ts`:
+    - Automatically claim first pending store via `getNextPendingStore` in `startMonthlyAudit`.
+    - Automatically claim next pending store on session `RESUME` if no store is currently `RUNNING`.
+  - `frontend/next.config.ts`:
+    - Added rewrites for `/google-review-kpi/check-result` and `/google-review-kpi/audit-session/:path*` to `API_BASE_URL`.
+  - `frontend/src/app/google-review-kpi/google-review-kpi-view.tsx`:
+    - Added silent polling flag to `loadData(selectedMonth, true)` to eliminate page flicker.
+    - Updated active store banner and Google Maps link to display during both `RUNNING` and `PAUSED` states.
+  - Extension (`tools/google-review-checker-extension`):
+    - Added `__OPPO_KPI_OVERLAY_INITIALIZED__` single-flight guard to `content_script.ts`.
+    - Added storage deduplication in `dashboard_bridge.ts`.
+    - Rebuilt `content_script.js` (75.6kb) and `dashboard_bridge.js` (1.6kb).
+- **Verification**:
+  - Active production session `e4bd4d8a-fc9d-43f5-9740-748389cfc7d8` preserved in `PAUSED` state with all 3 stores intact.
+  - Extension unit tests: 39/39 passed.
+  - Frontend unit tests: 485/485 passed.
+  - Backend unit tests: 1,685/1,685 passed.
+  - Frontend production build: passed with zero errors.
+  - Backend production build: passed with zero errors.
+- **Next Action**: Commit, push, and deploy fixes to Railway, then operator resumes pilot.
+
 ## 2026-09-03: Google Review KPI Monthly Batch Audit Runner (100+ Stores)
 - **Current Task**: Build Monthly Batch Audit Runner for Google Review KPI allowing 100+ stores to be audited sequentially in active browser tab.
 - **Completed Work**:
@@ -3293,3 +3322,11 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Failed closed: did not start Chromium, access the profile, request the chat list, reauthenticate, open a customer chat, mutate mappings/jobs/data, or retry historical work. Restored `DISABLE_NICKNAME_WORKER=false` immediately.
 - Recovery deployment `09bf45f2-8883-45a1-a5db-327aab4d505f` succeeded. Logs confirmed `line_chat_nickname_worker_started`; the container is alive, the profile volume and `profile-b-linux-v2` directory are present, and the flag reads `false`.
 - Post-recovery readback confirmed Phase 1 and Central World unchanged, all five Stage B stores still use `account-1` / `account-1-v1` with sync enabled, and the `account-1` session count remains exactly one. Next action requires a separately approved maintenance mechanism that keeps the worker container alive while polling is disabled.
+
+# Current task: Phase A1 LINE profile operation coordinator (2026-09-03)
+
+- Added an additive `LineChatProfileOperationLease` model/migration keyed uniquely by `LineChatSession`, with fenced owner tokens, operation kinds, heartbeat timestamps, and expiry. No existing routing, profile, customer, conversation, or nickname-job data is changed by the migration.
+- Added a shared coordinator with a process-local session mutex plus atomic database lease acquisition, renewal, owner-token-guarded release, bounded contention, and fail-closed lease-loss handling. The nickname worker now holds one ownership context across unresolved recent-chat resolution and nickname PUT, preventing nested-lock deadlocks.
+- Profile contention is requeued as `PROFILE_OPERATION_BUSY` without incrementing attempts or classifying the job as `FAILED_AUTH`. Existing latest-wins, bounded resolver, identity, and nickname semantics remain unchanged. Maintenance-mode precedence and keepalive behavior remain unchanged.
+- Focused coordinator/worker/resolver/discovery tests pass; full backend tests pass (1,685/1,685); Prisma validation, backend build, and changed-file ESLint pass. Repository-wide backend lint retains unrelated baseline violations. No production browser probe, profile access, Railway change, migration deployment, push, merge, or deploy was performed.
+- Next action: operator review of the scoped diff, then separately authorize any commit/push/PR workflow. Phase A1 does not enable health scheduling, UI, alerts, or production probes.

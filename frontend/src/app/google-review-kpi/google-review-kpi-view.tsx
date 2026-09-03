@@ -245,9 +245,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formMessage, setFormMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const loadData = async (month: string) => {
+  const loadData = async (month: string, silent: boolean = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const res = await api.getGoogleReviewKpis({ month });
       setSummary(res);
@@ -259,9 +259,11 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load KPI data");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Failed to load KPI data");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -285,12 +287,12 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     loadBatchSession(selectedMonth);
   }, [selectedMonth]);
 
-  // Live poll queue progress while session is RUNNING
+  // Live poll queue progress while session is RUNNING (silent polling to prevent screen flicker)
   useEffect(() => {
     if (batchSession?.status === "RUNNING") {
       const interval = setInterval(() => {
         loadBatchSession(selectedMonth);
-        loadData(selectedMonth);
+        loadData(selectedMonth, true);
       }, 3000);
       return () => clearInterval(interval);
     }
@@ -802,8 +804,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               />
             </div>
 
-            {/* Current store banner if running */}
-            {batchSession.currentStore && batchSession.status === "RUNNING" && (
+            {/* Current store banner if running or paused */}
+            {batchSession.currentStore && (batchSession.status === "RUNNING" || batchSession.status === "PAUSED") && (
               <div className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/20 px-3.5 py-2 text-xs text-blue-700 dark:text-blue-300">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-blue-500 animate-ping" />
