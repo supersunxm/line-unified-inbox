@@ -1,5 +1,26 @@
 # AI Progress Log
 
+## 2026-09-03: Google Review KPI Extension Transport & CORS Resolution
+- **Current Task**: Resolve "Attention needed: Failed to fetch" transport error when Google Maps content script calls production API.
+- **Root Cause**:
+  1. CORS Preflight Failure: Google Maps content script on `https://www.google.com` called `https://lineoppo.click/google-review-kpi/...`. Express CORS allowlist only included `frontendUrl`, rejecting preflights with missing `Access-Control-Allow-Origin`.
+  2. Cross-site Cookie Isolation: `submitAuditResult`, `handleNeedsAttention`, and `navigateToNextStore` did not attach authentication tokens and relied on cookies blocked in cross-origin contexts by modern browser third-party cookie restrictions.
+- **Solution Architecture**:
+  - Maintained zero-leak, session-scoped security without opening insecure wildcard CORS.
+  - Added short-lived (30-min) session-scoped Bearer token issuance (`POST /google-review-kpi/audit-session/:sessionId/runner-token`) utilizing existing `Session` model (`SessionType.MOBILE`).
+  - Added `https://www.google.com` and `https://www.google.co.th` to backend CORS allowed origins.
+  - Updated dashboard to fetch runner token on Start/Resume and store it in `chrome.storage.local`.
+  - Updated extension `BatchAuditRunner` to attach `Authorization: Bearer <token>` and debug logging to all fetch calls.
+- **Verification**:
+  - Extension unit tests: 49/49 passed.
+  - Frontend production build: passed with zero errors.
+  - Deployed to Railway (`6496462c-b041-4c2a-b1ef-f0571f717262` | SUCCESS).
+  - Production verification:
+    - Preflight OPTIONS from `Origin: https://www.google.com` returns HTTP 204 with valid CORS headers.
+    - Unauthorized request returns HTTP 401.
+    - Active production session `e4bd4d8a-fc9d-43f5-9740-748389cfc7d8` preserved; Queue #1 intact in RUNNING state.
+- **Next Action**: Operator reloads Chrome Extension and clicks Resume on Dashboard.
+
 ## 2026-09-03: Google Review KPI Production Pilot Diagnosis & Runner Handoff Fix
 - **Current Task**: Diagnose and fix runner handoff for real production pilot on `https://lineoppo.click/google-review-kpi`.
 - **Findings & Root Causes**:
