@@ -60,9 +60,46 @@ class ReviewCheckerOverlay {
   private async initBatchMode() {
     chrome.storage?.local?.get(["batchAuditSession"], (res) => {
       this.batchSession = res?.batchAuditSession || null;
+
+      // Check URL hash fallback for runnerToken or sessionId if missing in storage
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      const hashParams = new URLSearchParams(hash);
+      const hashToken = hashParams.get("oppoToken");
+      const hashSessionId = hashParams.get("oppoSessionId");
+
+      if (this.batchSession) {
+        if (hashToken && !this.batchSession.runnerToken) {
+          this.batchSession.runnerToken = hashToken;
+          chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+        }
+        if (hashSessionId && !this.batchSession.sessionId) {
+          this.batchSession.sessionId = hashSessionId;
+          chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+        }
+      } else if (hashToken && hashSessionId) {
+        // Bootstrap session from URL hash if storage was empty
+        this.batchSession = {
+          sessionId: hashSessionId,
+          targetMonth: this.selectedMonth,
+          runnerToken: hashToken,
+          status: "RUNNING",
+          currentStore: {
+            storeId: this.storeId,
+            storeName: this.storeName,
+            storeCode: this.storeCode,
+            googleMapsUrl: window.location.href,
+          },
+        };
+        chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+      }
+
       if (!this.batchSession || this.batchSession.status !== "RUNNING") {
         return;
       }
+
+      // Explicitly inject the current batchSession with runnerToken into batchRunner
+      this.batchRunner.setSession(this.batchSession);
+
       this.isBatchMode = true;
       this.renderBatchRunnerBar();
       this.startBatchStoreRun();

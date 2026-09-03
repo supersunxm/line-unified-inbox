@@ -1,3 +1,16 @@
+## Google Review KPI: Cross-Origin Runner Token Authentication & Hash Handoff (2026-09-03)
+
+- **Dedicated Scoped Runner Tokens**:
+  - `POST /google-review-kpi/audit-session/:sessionId/runner-token` issues a short-lived `MOBILE` session token specifically for the browser extension.
+  - Avoids weakening global API authentication guards or converting public endpoints. The token carries `SessionType.MOBILE` and is accepted by `AuthGuard` via `Authorization: Bearer <token>`.
+- **Fail-Closed Runner Request Invariant**:
+  - `BatchAuditRunner.buildAuthHeaders` fails closed: if no valid runner token is available, it throws an explicit error and triggers `NEEDS_ATTENTION` rather than silently issuing an unauthenticated HTTP request that results in confusing 401 errors.
+- **Immediate Hash-Fragment Handoff Fallback**:
+  - Because `chrome.storage.local` cross-tab events from the dashboard bridge can race with page navigation, the dashboard appends `#oppoToken=${runnerToken}&oppoSessionId=${sessionId}` to the handoff URL.
+  - Hash fragments are client-side only (never transmitted over the wire to external servers), providing an instantaneous, race-free synchronous transport for the content script to bootstrap its session.
+- **Explicit Runner State Binding**:
+  - `content_script.ts` explicitly propagates the session with its runner token into `BatchAuditRunner.setSession()` before initiating any store run.
+
 ## Google Review KPI: Runner Handoff & Dashboard Polling Architecture (2026-09-03)
 
 - **Immediate Store Claiming on Session Initialization & Resume**:

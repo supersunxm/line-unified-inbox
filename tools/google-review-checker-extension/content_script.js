@@ -794,6 +794,16 @@
               return;
             }
           }
+          if (typeof window !== "undefined" && window.location) {
+            const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+            const hashParams = new URLSearchParams(hash);
+            const hashToken = hashParams.get("oppoToken");
+            const hashSessionId = hashParams.get("oppoSessionId");
+            if (hashToken && hashSessionId) {
+              resolve(true);
+              return;
+            }
+          }
           resolve(false);
         });
       });
@@ -1016,7 +1026,7 @@
      * Fetches the next pending store from backend and navigates to its Google Maps URL.
      */
     async navigateToNextStore(backendUrl) {
-      var _a, _b, _c, _d, _e;
+      var _a, _b, _c, _d, _e, _f, _g, _h;
       if (!((_a = this.sessionInfo) == null ? void 0 : _a.sessionId)) return;
       const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/next-store`;
       const headers = this.buildAuthHeaders();
@@ -1048,24 +1058,58 @@
         }
       };
       (_e = (_d = chrome.storage) == null ? void 0 : _d.local) == null ? void 0 : _e.set({ batchAuditSession: updatedSession });
+      let navUrl = nextStore.googleMapsUrl;
+      try {
+        const parsed = new URL(navUrl);
+        parsed.searchParams.set("oppoStoreId", nextStore.storeId);
+        if (nextStore.storeCode) {
+          parsed.searchParams.set("oppoCode", nextStore.storeCode);
+          parsed.searchParams.set("oppoExtId", nextStore.storeCode);
+        }
+        parsed.searchParams.set("oppoName", nextStore.storeName);
+        if ((_f = this.sessionInfo) == null ? void 0 : _f.targetMonth) {
+          parsed.searchParams.set("oppoMonth", this.sessionInfo.targetMonth);
+        }
+        if (((_g = this.sessionInfo) == null ? void 0 : _g.runnerToken) || ((_h = this.sessionInfo) == null ? void 0 : _h.sessionId)) {
+          const hashParams = new URLSearchParams();
+          if (this.sessionInfo.runnerToken) hashParams.set("oppoToken", this.sessionInfo.runnerToken);
+          if (this.sessionInfo.sessionId) hashParams.set("oppoSessionId", this.sessionInfo.sessionId);
+          parsed.hash = hashParams.toString();
+        }
+        navUrl = parsed.toString();
+      } catch {
+      }
       await this.sleep(1e3);
-      window.location.href = nextStore.googleMapsUrl;
+      window.location.href = navUrl;
     }
     sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
     /**
      * Builds fetch headers including the Authorization Bearer token when a
-     * runner token is available.  Never logs the token value itself.
+     * runner token is available. Never logs the token value itself.
+     * Fails closed by throwing an Error if no token is present, preventing
+     * silent 401 unauthenticated requests from breaking runner flows.
      */
     buildAuthHeaders(base = {}) {
       var _a;
-      const token = (_a = this.sessionInfo) == null ? void 0 : _a.runnerToken;
+      let token = (_a = this.sessionInfo) == null ? void 0 : _a.runnerToken;
+      if (!token && typeof window !== "undefined" && window.location) {
+        const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+        const hashParams = new URLSearchParams(hash);
+        const hashToken = hashParams.get("oppoToken");
+        if (hashToken) {
+          token = hashToken;
+          if (this.sessionInfo) {
+            this.sessionInfo.runnerToken = hashToken;
+          }
+        }
+      }
       if (token) {
         return { ...base, Authorization: `Bearer ${token}` };
       }
-      console.warn("[BatchAuditRunner] No runner token available \u2014 request will be unauthenticated");
-      return base;
+      console.error("[BatchAuditRunner] Runner token missing \u2014 refusing unauthenticated request");
+      throw new Error("Runner authentication token is missing. Please resume the session from the dashboard to acquire a fresh token.");
     }
   };
 
@@ -1116,10 +1160,40 @@
     async initBatchMode() {
       var _a, _b;
       (_b = (_a = chrome.storage) == null ? void 0 : _a.local) == null ? void 0 : _b.get(["batchAuditSession"], (res) => {
+        var _a2, _b2, _c, _d, _e, _f;
         this.batchSession = (res == null ? void 0 : res.batchAuditSession) || null;
+        const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+        const hashParams = new URLSearchParams(hash);
+        const hashToken = hashParams.get("oppoToken");
+        const hashSessionId = hashParams.get("oppoSessionId");
+        if (this.batchSession) {
+          if (hashToken && !this.batchSession.runnerToken) {
+            this.batchSession.runnerToken = hashToken;
+            (_b2 = (_a2 = chrome.storage) == null ? void 0 : _a2.local) == null ? void 0 : _b2.set({ batchAuditSession: this.batchSession });
+          }
+          if (hashSessionId && !this.batchSession.sessionId) {
+            this.batchSession.sessionId = hashSessionId;
+            (_d = (_c = chrome.storage) == null ? void 0 : _c.local) == null ? void 0 : _d.set({ batchAuditSession: this.batchSession });
+          }
+        } else if (hashToken && hashSessionId) {
+          this.batchSession = {
+            sessionId: hashSessionId,
+            targetMonth: this.selectedMonth,
+            runnerToken: hashToken,
+            status: "RUNNING",
+            currentStore: {
+              storeId: this.storeId,
+              storeName: this.storeName,
+              storeCode: this.storeCode,
+              googleMapsUrl: window.location.href
+            }
+          };
+          (_f = (_e = chrome.storage) == null ? void 0 : _e.local) == null ? void 0 : _f.set({ batchAuditSession: this.batchSession });
+        }
         if (!this.batchSession || this.batchSession.status !== "RUNNING") {
           return;
         }
+        this.batchRunner.setSession(this.batchSession);
         this.isBatchMode = true;
         this.renderBatchRunnerBar();
         this.startBatchStoreRun();

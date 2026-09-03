@@ -88,6 +88,19 @@ export class BatchAuditRunner {
             return;
           }
         }
+
+        // URL hash fallback if storage hasn't synced yet
+        if (typeof window !== "undefined" && window.location) {
+          const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+          const hashParams = new URLSearchParams(hash);
+          const hashToken = hashParams.get("oppoToken");
+          const hashSessionId = hashParams.get("oppoSessionId");
+          if (hashToken && hashSessionId) {
+            resolve(true);
+            return;
+          }
+        }
+
         resolve(false);
       });
     });
@@ -420,9 +433,32 @@ export class BatchAuditRunner {
     };
     chrome.storage?.local?.set({ batchAuditSession: updatedSession });
 
-    // Navigate to next store
+    // Navigate to next store with query & hash params preserved
+    let navUrl = nextStore.googleMapsUrl;
+    try {
+      const parsed = new URL(navUrl);
+      parsed.searchParams.set("oppoStoreId", nextStore.storeId);
+      if (nextStore.storeCode) {
+        parsed.searchParams.set("oppoCode", nextStore.storeCode);
+        parsed.searchParams.set("oppoExtId", nextStore.storeCode);
+      }
+      parsed.searchParams.set("oppoName", nextStore.storeName);
+      if (this.sessionInfo?.targetMonth) {
+        parsed.searchParams.set("oppoMonth", this.sessionInfo.targetMonth);
+      }
+      if (this.sessionInfo?.runnerToken || this.sessionInfo?.sessionId) {
+        const hashParams = new URLSearchParams();
+        if (this.sessionInfo.runnerToken) hashParams.set("oppoToken", this.sessionInfo.runnerToken);
+        if (this.sessionInfo.sessionId) hashParams.set("oppoSessionId", this.sessionInfo.sessionId);
+        parsed.hash = hashParams.toString();
+      }
+      navUrl = parsed.toString();
+    } catch {
+      // Keep original url if parsing failed
+    }
+
     await this.sleep(1000);
-    window.location.href = nextStore.googleMapsUrl;
+    window.location.href = navUrl;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -431,14 +467,29 @@ export class BatchAuditRunner {
 
   /**
    * Builds fetch headers including the Authorization Bearer token when a
-   * runner token is available.  Never logs the token value itself.
+   * runner token is available. Never logs the token value itself.
+   * Fails closed by throwing an Error if no token is present, preventing
+   * silent 401 unauthenticated requests from breaking runner flows.
    */
   private buildAuthHeaders(base: Record<string, string> = {}): Record<string, string> {
-    const token = this.sessionInfo?.runnerToken;
+    let token = this.sessionInfo?.runnerToken;
+    if (!token && typeof window !== "undefined" && window.location) {
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      const hashParams = new URLSearchParams(hash);
+      const hashToken = hashParams.get("oppoToken");
+      if (hashToken) {
+        token = hashToken;
+        if (this.sessionInfo) {
+          this.sessionInfo.runnerToken = hashToken;
+        }
+      }
+    }
+
     if (token) {
       return { ...base, Authorization: `Bearer ${token}` };
     }
-    console.warn("[BatchAuditRunner] No runner token available — request will be unauthenticated");
-    return base;
+
+    console.error("[BatchAuditRunner] Runner token missing — refusing unauthenticated request");
+    throw new Error("Runner authentication token is missing. Please resume the session from the dashboard to acquire a fresh token.");
   }
 }

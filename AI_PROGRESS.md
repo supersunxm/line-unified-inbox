@@ -1,5 +1,29 @@
 # AI Progress Log
 
+## 2026-09-03: Google Review KPI Batch Runner 401 Auth & State Binding Resolution
+- **Current Task**: Resolve 401 Unauthorized error (`{"message":"Authentication required"}`) when extension Batch Runner attempts to submit audit results.
+- **Root Causes Identified**:
+  1. Content Script State Decoupling: `content_script.ts` read `batchAuditSession` from storage in `initBatchMode()` but never invoked `batchRunner.setSession(this.batchSession)`. As a result, `BatchAuditRunner.sessionInfo` had no runner token.
+  2. Silent Degradation in Runner: `BatchAuditRunner.buildAuthHeaders` treated missing runner tokens with a console warning and returned unauthenticated headers without Bearer token or cookies, which backend rejected with 401.
+  3. Dashboard Handoff Tab Race: Handoff URL opened Google Maps tab immediately while storage sync via `dashboard_bridge.ts` was asynchronous.
+- **Fixes Applied**:
+  - `tools/google-review-checker-extension/src/content_script.ts`:
+    - Updated `initBatchMode()` to explicitly bind `this.batchRunner.setSession(this.batchSession)`.
+    - Added fallback inspection of URL hash params (`#oppoToken=...&oppoSessionId=...`) to ensure immediate token bootstrapping even if storage hasn't synced yet.
+  - `tools/google-review-checker-extension/src/batch/batchAuditRunner.ts`:
+    - Updated `initFromStorage` to check URL hash params.
+    - Updated `buildAuthHeaders` to fail closed: throws an error if runner token is missing, preventing silent unauthenticated calls.
+    - Updated `navigateToNextStore` to append store parameters and `#oppoToken=...&oppoSessionId=...` hash fragment when transitioning between stores.
+  - `frontend/src/app/google-review-kpi/google-review-kpi-view.tsx`:
+    - Updated `buildGoogleMapsHandoffUrl` to accept `runnerToken` and `sessionId`, appending them securely via `#oppoToken=${runnerToken}&oppoSessionId=${sessionId}`.
+    - Passed fresh runner tokens into `buildGoogleMapsHandoffUrl` in both `handleStartBatchAudit` and `handleResumeBatchAudit`.
+- **Verification**:
+  - Extension unit tests: 49/49 passed.
+  - Extension build: bundled `content_script.js` and `dashboard_bridge.js` cleanly.
+  - Frontend production build: completed successfully with zero TypeScript or build errors.
+  - Pilot session `e4bd4d8a-fc9d-43f5-9740-748389cfc7d8` preserved in `PAUSED` state; Queue #1 intact in `RUNNING` state.
+- **Next Action**: Deploy frontend to Railway, reload Chrome Extension, and resume audit.
+
 ## 2026-09-03: Google Review KPI Extension Transport & CORS Resolution
 - **Current Task**: Resolve "Attention needed: Failed to fetch" transport error when Google Maps content script calls production API.
 - **Root Cause**:

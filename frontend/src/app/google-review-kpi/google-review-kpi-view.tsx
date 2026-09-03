@@ -45,6 +45,8 @@ function buildGoogleMapsHandoffUrl(
   originalUrl: string,
   store: GoogleReviewKpiStoreItem,
   month: string,
+  runnerToken?: string,
+  sessionId?: string,
 ): string {
   try {
     const url = new URL(originalUrl);
@@ -53,10 +55,23 @@ function buildGoogleMapsHandoffUrl(
     if (store.code) url.searchParams.set("oppoCode", store.code);
     url.searchParams.set("oppoName", store.name);
     url.searchParams.set("oppoMonth", month);
+    if (runnerToken || sessionId) {
+      const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : "");
+      if (runnerToken) hashParams.set("oppoToken", runnerToken);
+      if (sessionId) hashParams.set("oppoSessionId", sessionId);
+      url.hash = hashParams.toString();
+    }
     return url.toString();
   } catch {
     const sep = originalUrl.includes("?") ? "&" : "?";
-    return `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(store.code || "")}&oppoName=${encodeURIComponent(store.name)}&oppoMonth=${encodeURIComponent(month)}`;
+    let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(store.code || "")}&oppoName=${encodeURIComponent(store.name)}&oppoMonth=${encodeURIComponent(month)}`;
+    if (runnerToken || sessionId) {
+      const hashParts: string[] = [];
+      if (runnerToken) hashParts.push(`oppoToken=${encodeURIComponent(runnerToken)}`);
+      if (sessionId) hashParts.push(`oppoSessionId=${encodeURIComponent(sessionId)}`);
+      base += `#${hashParts.join("&")}`;
+    }
+    return base;
   }
 }
 
@@ -359,6 +374,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             kpiResult: null,
           },
           res.month,
+          runnerToken,
+          res.id,
         );
         window.open(handoffUrl, "_blank");
       }
@@ -428,6 +445,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             kpiResult: null,
           },
           res.month,
+          runnerToken,
+          res.id,
         );
         window.open(handoffUrl, "_blank");
       }
