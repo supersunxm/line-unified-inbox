@@ -17,6 +17,7 @@ import { RealtimeEventService } from "./realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "./messages/sticker-message";
 import { serializeConversationOwner } from "./conversation-owner";
 import { ownerTrackingInboundFilter } from "./owner-tracking";
+import { FOCUS_STORE_GROUP_ID, isFocusStoreReference } from "./focus-store-group";
 
 const conversationBaseInclude = {
   customer: true,
@@ -111,6 +112,24 @@ export class ConversationsService {
     private readonly auditLog?: AuditLogService,
     private readonly realtime?: RealtimeEventService,
   ) { }
+
+  private async resolveFocusStoreIds(accessibleStoreIds: string[] | null): Promise<string[]> {
+    const candidates = await this.prisma.store.findMany({
+      where: {
+        isActive: true,
+        archivedAt: null,
+        ...(accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } }),
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        storeMaster: { select: { externalStoreId: true } },
+      },
+    });
+    return candidates.filter(isFocusStoreReference).map(({ id }) => id);
+  }
+
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
@@ -174,9 +193,14 @@ export class ConversationsService {
 
   async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null, accountType: "STORE" | "HEAD_OFFICE" = "STORE") {
     const search = query.search?.trim();
-    const storeFilter = accessibleStoreIds === null
-      ? query.storeId
-      : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
+    const focusStoreIds = query.storeId === FOCUS_STORE_GROUP_ID
+      ? await this.resolveFocusStoreIds(accessibleStoreIds)
+      : null;
+    const storeFilter = focusStoreIds !== null
+      ? { in: focusStoreIds }
+      : accessibleStoreIds === null
+        ? query.storeId
+        : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
     const where: Prisma.ConversationWhereInput = {
       store: accountType === "STORE" ? { archivedAt: null } : undefined,
@@ -983,6 +1007,7 @@ export class ConversationsService {
       select: {
         id: true,
         name: true,
+        code: true,
         storeMaster: { select: { externalStoreId: true } },
       },
     });
@@ -1062,6 +1087,36 @@ export class ConversationsService {
         oldestWaitingMinutes: counts.notReplied > 0 ? (oldestMap.get(store.id) ?? 0) : 0,
       };
     });
+
+    const focusStores = stores.filter(isFocusStoreReference);
+    if (focusStores.length > 0) {
+      const focusCounts = focusStores.reduce(
+        (result, store) => {
+          const counts = storeMap.get(store.id);
+          if (!counts) return result;
+          result.notReplied += counts.notReplied;
+          result.notifiedBm += counts.notifiedBm;
+          result.replied += counts.replied;
+          return result;
+        },
+        { notReplied: 0, notifiedBm: 0, replied: 0 },
+      );
+      const focusOldestWaitingMinutes = focusStores.reduce(
+        (oldest, store) => Math.max(oldest, oldestMap.get(store.id) ?? 0),
+        0,
+      );
+      storesList.unshift({
+        id: FOCUS_STORE_GROUP_ID,
+        storeId: FOCUS_STORE_GROUP_ID,
+        masterStoreId: null,
+        externalStoreId: null,
+        storeName: "Focus group · 7 stores",
+        notReplied: focusCounts.notReplied,
+        notifiedBm: focusCounts.notifiedBm,
+        replied: focusCounts.replied,
+        oldestWaitingMinutes: focusCounts.notReplied > 0 ? focusOldestWaitingMinutes : 0,
+      });
+    }
 
     return {
       overview,

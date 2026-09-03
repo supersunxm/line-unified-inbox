@@ -1635,3 +1635,9 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Keep realtime matching conservative and unchanged while investigating pilot `RESOLVE_NO_MATCH` results. Diagnostics are aggregate-only and emitted after bounded recent-chat analysis, so operators can distinguish name mismatch from timestamp mismatch without exposing customer or LINE identifiers.
 - The diagnostic event may contain only the conversation reference, aggregate counts, the target timestamp source (`MESSAGE_SENT_AT` or `CONVERSATION_LATEST_MESSAGE_AT`), a fixed closest-delta bucket, and the resolver outcome. Exact timestamps, names, message content, chat IDs, response `userId`, `Customer.lineUserId`, continuation values, cookies, browser storage, and credentials remain excluded.
+
+## 2026-09-02 — Virtual focus chat group, not a persisted Store
+- Decision: model the seven-store focus view as a virtual conversation scope (`focus-seven-store-group`) rather than inserting a synthetic Store row into the database.
+- Reason: the feature is an operational grouping, not a physical store. Keeping it virtual avoids contaminating Store Master, LINE OA management, analytics, and store membership data.
+- The backend resolves the seven target stores from Store code / Store Master external ID with name fallbacks, then intersects the result with the caller's accessible-store scope.
+- The desktop route stores the selection in a dedicated `focusGroup` query parameter so the existing mobile `store` route contract remains unchanged.

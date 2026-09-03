@@ -5,6 +5,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api } from "@/lib/api";
+import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import type { PrimarySection } from "./primary-navigation";
@@ -1652,6 +1653,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     return text.aiReviewConversation;
   }, [customerIntelligence, text]);
   const chatsPaginationText = getChatsPaginationText(language);
+  const focusStoreGroupCopy = getFocusStoreGroupCopy(language);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
     [availableStores],
@@ -2011,7 +2013,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!uiPreferencesLoaded || initialSection !== "chats") return;
     const restoreRoute = () => {
       const route = readChatRouteFilters(window.location.search);
-      setSelectedStore(route.store ?? "all");
+      const routeParams = new URLSearchParams(window.location.search);
+      const focusGroupSelected = routeParams.get(FOCUS_STORE_GROUP_ROUTE_PARAM) === FOCUS_STORE_GROUP_ROUTE_VALUE;
+      setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
       setSidebarView(
         route.bmReplyStatus === "NOTIFIED_BM"
           ? "notifiedBm"
@@ -2045,7 +2049,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             ? "NOT_REPLIED"
             : undefined;
     const href = buildChatsHref({
-      store: selectedStore,
+      store: selectedStore === FOCUS_STORE_GROUP_ID ? "all" : selectedStore,
       bmReplyStatus,
       status: statusFilter !== "all" ? statusFilter : undefined,
       priority: priorityFilter === "High" ? "high" : undefined,
@@ -2054,7 +2058,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       lineOaId: lineOaFilter,
       conversationId: selectedConversationId || undefined,
     });
-    window.history.replaceState(null, "", href);
+    const routeUrl = new URL(href, window.location.origin);
+    if (selectedStore === FOCUS_STORE_GROUP_ID) {
+      routeUrl.searchParams.set(FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE);
+    }
+    window.history.replaceState(null, "", `${routeUrl.pathname}${routeUrl.search}${routeUrl.hash}`);
   }, [initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
 
   useEffect(() => {
@@ -2085,7 +2093,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!uiPreferencesLoaded || !supportingDataLoaded) return;
 
     const validateFilters = window.setTimeout(() => {
-      if (selectedStore !== "all" && !storeOptions.includes(selectedStore)) {
+      if (selectedStore !== "all" && selectedStore !== FOCUS_STORE_GROUP_ID && !storeOptions.includes(selectedStore)) {
         setSelectedStore("all");
       }
       if (
@@ -3015,6 +3023,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               selectedStore={selectedStore}
               setSelectedStore={setSelectedStore}
               clearAllFilters={clearAllFilters}
+              focusGroupLabel={focusStoreGroupCopy.label}
+              focusGroupSubtitle={focusStoreGroupCopy.subtitle}
               stores={stores}
               text={text}
               getStoreDisplayName={getStoreDisplayName}
@@ -4113,7 +4123,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 data-chat-list-title className="text-sm font-bold text-[var(--app-text-primary)]">
-                        {conversationListTitle}
+                        {selectedStore === FOCUS_STORE_GROUP_ID ? `${focusStoreGroupCopy.label}${sidebarView === "all" ? "" : ` · ${conversationListTitle}`}` : conversationListTitle}
                       </h2>
                       <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">
                         {chatTotalCount} {text.searchResults}
@@ -4121,7 +4131,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {sidebarView === "notReplied" && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
+                      {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
                         <button
                           type="button"
                           data-bulk-mark-all-replied-button
@@ -4176,6 +4186,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         {text.storeFilter}
                         <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allStores}</option>
+                          <option value={FOCUS_STORE_GROUP_ID}>{focusStoreGroupCopy.label}</option>
                           {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
                         </select>
                       </label>
@@ -4227,7 +4238,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                   {hasActiveFilters && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
-                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {selectedStore === FOCUS_STORE_GROUP_ID ? focusStoreGroupCopy.label : getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
                       {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
                       {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
                       {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}

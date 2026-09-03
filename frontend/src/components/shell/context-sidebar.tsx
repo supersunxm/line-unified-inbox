@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { sortStoresByPriority } from "./store-priority-sorting.ts";
 import { filterStoresBySearch } from "./store-search.ts";
 import { formatWaitingDuration, getSlaRiskVariant, type StoreBmCountsItem } from "./store-priority-score.ts";
+import { FOCUS_STORE_GROUP_ID } from "@/lib/focus-store-group";
 
 export type SidebarView =
   | "dashboard"
@@ -31,6 +32,8 @@ export interface ContextSidebarProps {
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
+  focusGroupLabel: string;
+  focusGroupSubtitle: string;
   stores: Array<{ id: string; storeId?: string | null; masterStoreId?: string | null; externalStoreId?: string | null; name: string; waiting: number; lineOaCount: number; code?: string; accountName?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   text: Record<string, any>;
@@ -50,6 +53,8 @@ export function ContextSidebar({
   selectedStore,
   setSelectedStore,
   clearAllFilters,
+  focusGroupLabel,
+  focusGroupSubtitle,
   stores,
   text,
   getStoreDisplayName,
@@ -88,6 +93,10 @@ export function ContextSidebar({
   };
 
   const totalOverviewCount = (overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0);
+  const focusGroupCounts = storeBmCounts[FOCUS_STORE_GROUP_ID];
+  const focusGroupTotalCount = focusGroupCounts
+    ? focusGroupCounts.notReplied + focusGroupCounts.notifiedBm + focusGroupCounts.replied
+    : 0;
 
   return (
     <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-surface)]">
@@ -205,6 +214,47 @@ export function ContextSidebar({
         </div>
       ) : (
         <div className="space-y-0.5">
+          {focusGroupCounts && (
+            <button
+              type="button"
+              data-focus-store-group
+              onClick={() => {
+                setSelectedStore(FOCUS_STORE_GROUP_ID);
+                selectSidebarView("all");
+              }}
+              className={`mb-1.5 w-full rounded-[var(--app-radius-md)] border px-2.5 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 ${
+                selectedStore === FOCUS_STORE_GROUP_ID
+                  ? "border-purple-400/70 bg-purple-50 text-purple-950 shadow-sm dark:border-purple-500/50 dark:bg-purple-950/35 dark:text-purple-100"
+                  : "border-purple-200/80 bg-purple-50/55 text-[var(--app-text-primary)] hover:border-purple-300 hover:bg-purple-50 dark:border-purple-900/70 dark:bg-purple-950/20 dark:hover:bg-purple-950/30"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-purple-600 text-[12px] text-white shadow-sm">★</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-bold">{focusGroupLabel}</span>
+                    <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white">NEW</span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-[10px] font-medium text-purple-700/80 dark:text-purple-300/80">{focusGroupSubtitle}</span>
+                </span>
+                <span className="font-tabular shrink-0 rounded-full border border-purple-200 bg-white/80 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
+                  {focusGroupTotalCount}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-1 pl-8 font-tabular">
+                <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-danger)]" title="Not Replied">
+                  {focusGroupCounts.notReplied}
+                </span>
+                <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] px-1.5 py-0.5 text-[10px] font-semibold text-[#8e44ec] dark:bg-[#2b1c40] dark:text-[#d8b4fe]" title="Notified BM">
+                  {focusGroupCounts.notifiedBm}
+                </span>
+                <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-success)]" title="Replied">
+                  {focusGroupCounts.replied}
+                </span>
+              </div>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setSelectedStore("all")}
