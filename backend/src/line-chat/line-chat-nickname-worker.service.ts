@@ -5,6 +5,11 @@ import { LineChatSessionService } from "./line-chat-session.service";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
+import {
+  LineChatProfileOperationCoordinator,
+  type LineChatProfileOperationContext,
+  type ProfileOperationResult,
+} from "./line-chat-profile-operation-coordinator.service";
 
 const WORKER_POLL_INTERVAL_MS = 3_000;
 const MAINTENANCE_KEEPALIVE_INTERVAL_MS = 60_000;
@@ -31,6 +36,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatRecentResolverService) private readonly recentResolver?: LineChatRecentResolverService,
+    @Inject(LineChatProfileOperationCoordinator) private readonly profileCoordinator?: LineChatProfileOperationCoordinator,
   ) {}
 
   onModuleInit() {
@@ -378,7 +384,86 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     }
 
     const profilePath = this.sessionService.resolveProfilePath(session);
+    const operation = await this.withProfileOperation(
+      session.id,
+      "NICKNAME_UPDATE",
+      (operationContext) => this.processBrowserOperation(job, session, botId, profilePath, operationContext),
+    );
+    if (!operation.acquired) {
+      await this.deferProfileOperationBusy(job.id, operation.retryAfterMs);
+    }
+  }
 
+  private async withProfileOperation<T>(
+    sessionId: string,
+    operationKind: "NICKNAME_UPDATE" | "RECENT_RESOLUTION",
+    callback: (context: LineChatProfileOperationContext) => Promise<T>,
+  ): Promise<ProfileOperationResult<T>> {
+    if (this.profileCoordinator) {
+      return this.profileCoordinator.withProfileOperation({ sessionId, operationKind }, callback);
+    }
+
+    // Never allow a production worker to touch a persistent profile without
+    // the coordinator. Direct construction is retained only for non-production
+    // unit tests that provide their own browser fakes.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("PROFILE_OPERATION_COORDINATOR_UNAVAILABLE");
+    }
+
+    // Directly constructed worker instances are used by unit tests. Production
+    // composition always injects the coordinator through the worker module.
+    const testContext: LineChatProfileOperationContext = {
+      sessionId,
+      ownerToken: "test-only",
+      operationKind,
+      assertOwnership: () => undefined,
+    };
+    return {
+      acquired: true,
+      value: await callback(testContext),
+      sessionId,
+      operationKind,
+    };
+  }
+
+  private async deferProfileOperationBusy(jobId: string, retryAfterMs: number): Promise<void> {
+    await this.prisma.lineChatNicknameSyncJob.update({
+      where: { id: jobId },
+      data: {
+        status: LineChatNicknameSyncJobStatus.PENDING,
+        scheduledAt: new Date(Date.now() + retryAfterMs),
+        lastError: "PROFILE_OPERATION_BUSY",
+        lockedUntil: null,
+        workerId: null,
+      },
+    });
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_nickname_job_profile_operation_busy",
+      jobId,
+      retryAfterMs,
+    }));
+  }
+
+  private async processBrowserOperation(
+    job: {
+      id: string;
+      conversationId: string;
+      lineOfficialAccountId: string;
+      lineChatUserId: string | null;
+      nickname: string;
+      attemptCount: number;
+      maxAttempts: number;
+      createdAt: Date;
+    },
+    session: {
+      id: string;
+      sessionKey: string;
+    },
+    botId: string,
+    profilePath: string,
+    operationContext: LineChatProfileOperationContext,
+  ): Promise<void> {
+    operationContext.assertOwnership();
     let targetChatUserId = job.lineChatUserId?.trim();
     if (!targetChatUserId) {
       if (!this.recentResolver) {
@@ -406,6 +491,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
         botId,
         sessionKey: session.sessionKey,
         profilePath,
+        operationContext,
       });
       if (resolution.status === "RESOLVED") {
         targetChatUserId = resolution.lineChatUserId;
@@ -497,6 +583,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       nickname: job.nickname,
       profilePath,
       headless: true,
+      operationContext,
     });
 
     if (result.success) {

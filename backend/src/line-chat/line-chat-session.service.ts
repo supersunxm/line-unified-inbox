@@ -231,6 +231,7 @@ export class LineChatSessionService {
     customLauncher?: ContextLauncher;
     maxPages?: number;
     maxChats?: number;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatRecentDiscoveryResult> {
     const maxPages = Math.min(5, Math.max(1, input.maxPages ?? 5));
     const maxChats = Math.min(125, Math.max(1, input.maxChats ?? 125));
@@ -262,6 +263,7 @@ export class LineChatSessionService {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }, maxPages: number, maxChats: number, boundedWindow: boolean): Promise<LineChatDiscoveryResult> {
     const botId = input.botId.trim();
     if (!botId) throw new Error("Missing LINE OA Manager bot ID.");
@@ -272,6 +274,7 @@ export class LineChatSessionService {
     }
 
     const launcher = input.customLauncher ?? this.defaultLauncher;
+    input.operationContext?.assertOwnership();
     const context = await launcher(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: input.headless ?? true,
@@ -306,6 +309,7 @@ export class LineChatSessionService {
       });
 
       try {
+        input.operationContext?.assertOwnership();
         await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
           waitUntil: "domcontentloaded",
           timeout: 15000,
@@ -369,6 +373,7 @@ export class LineChatSessionService {
         nextUrl.searchParams.set("next", next);
         let response;
         try {
+          input.operationContext?.assertOwnership();
           response = await requestContext.get(nextUrl.toString(), {
             headers: firstRequest.headers,
             timeout: 15000,
@@ -668,6 +673,7 @@ export class LineChatSessionService {
   ): Promise<UpdateNicknameResult> {
     const { botId, lineUserId, nickname, profilePath } = this.validateInput(input);
     const resolvedProfile = path.resolve(profilePath);
+    input.operationContext?.assertOwnership();
 
     if (input.dryRun) {
       return {
@@ -703,6 +709,7 @@ export class LineChatSessionService {
       });
 
       const page = context.pages()[0] || (await context.newPage());
+      input.operationContext?.assertOwnership();
 
       // Network listener to intercept headers used by the real LINE web application
       let interceptedXsrfToken: string | undefined;
@@ -729,6 +736,7 @@ export class LineChatSessionService {
 
       // Navigate to the target chat page to initialize LINE app session context
       try {
+        input.operationContext?.assertOwnership();
         await page.goto(chatPageUrl, {
           waitUntil: "domcontentloaded",
           timeout: 15000,
@@ -740,6 +748,7 @@ export class LineChatSessionService {
       // Allow background bootstrap requests to fire
       await page.waitForTimeout(1000).catch(() => {});
 
+      input.operationContext?.assertOwnership();
       const sessionValidation = await this.inspectSession(context, page, {
         xsrfToken: interceptedXsrfToken,
         clientVersion: interceptedClientVersion,
@@ -762,6 +771,7 @@ export class LineChatSessionService {
       }
 
       // Execute PUT request from within the authenticated page's execution context
+      input.operationContext?.assertOwnership();
       const fetchResult = await page.evaluate(
         async ({ targetUrl, payload, headers }) => {
           try {
