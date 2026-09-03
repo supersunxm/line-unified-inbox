@@ -658,8 +658,19 @@ model LineOfficialAccount {
   chatBotId                   String?
   lineChatSessionId           String?
   lineChatNicknameSyncEnabled Boolean                            @default(false)
+  healthStatus                LineChatOaHealthStatus              @default(UNKNOWN)
+  healthFailureStage          LineChatHealthFailureStage?
+  healthLastCheckedAt         DateTime?
+  healthLastHealthyAt         DateTime?
+  healthLastFailureAt         DateTime?
+  healthLastHttpStatus        Int?
+  healthLastDurationMs        Int?
+  healthConsecutiveFailures   Int                                @default(0)
+  healthNextCheckAt           DateTime?
+  healthSessionSnapshotAt     DateTime?
   lineChatSession             LineChatSession?                   @relation(fields: [lineChatSessionId], references: [id], onDelete: SetNull)
   nicknameSyncJobs            LineChatNicknameSyncJob[]
+  healthEvents                LineChatHealthEvent[]               @relation("LineChatHealthEventOa")
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -1939,6 +1950,59 @@ enum LineChatSessionStatus {
   DISABLED
 }
 
+enum LineChatSessionHealthStatus {
+  UNKNOWN
+  CONNECTED
+  DEGRADED
+  AUTH_REQUIRED
+  CONFIG_ERROR
+}
+
+enum LineChatOaHealthStatus {
+  UNKNOWN
+  CONNECTED
+  DEGRADED
+  OA_ACCESS_LOST
+  AUTH_REQUIRED
+  CONFIG_ERROR
+}
+
+enum LineChatHealthFailureStage {
+  PROFILE_MISSING
+  PROFILE_PATH_INVALID
+  CHROMIUM_LAUNCH
+  PROFILE_LOCK
+  MANAGER_AUTH
+  OA_ACCESS
+  CHAT_AUTH
+  CHAT_LIST_REQUEST
+  CHAT_LIST_RESPONSE
+  CHAT_LIST_PARSE
+  RATE_LIMIT
+  TIMEOUT
+  CONFIG_ERROR
+  UNKNOWN
+}
+
+enum LineChatHealthEventEntityType {
+  SESSION
+  OA
+}
+
+enum LineChatHealthEventStatus {
+  UNKNOWN
+  CONNECTED
+  DEGRADED
+  OA_ACCESS_LOST
+  AUTH_REQUIRED
+  CONFIG_ERROR
+}
+
+enum LineChatHealthEventSource {
+  SCHEDULED
+  MANUAL
+}
+
 enum LineChatProfileOperationKind {
   NICKNAME_UPDATE
   RECENT_RESOLUTION
@@ -1958,11 +2022,21 @@ model LineChatSession {
   lastSuccessfulRequestAt DateTime?
   lastAuthFailureAt       DateTime?
   consecutiveAuthFailures Int                   @default(0)
+  healthStatus            LineChatSessionHealthStatus @default(UNKNOWN)
+  healthFailureStage      LineChatHealthFailureStage?
+  healthLastCheckedAt     DateTime?
+  healthLastHealthyAt     DateTime?
+  healthLastFailureAt     DateTime?
+  healthLastHttpStatus    Int?
+  healthLastDurationMs    Int?
+  healthConsecutiveFailures Int                 @default(0)
+  healthNextCheckAt       DateTime?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
   lineOfficialAccounts LineOfficialAccount[]
   profileOperationLease LineChatProfileOperationLease?
+  healthEvents          LineChatHealthEvent[] @relation("LineChatHealthEventSession")
 
   @@index([status])
 }
@@ -1982,6 +2056,27 @@ model LineChatProfileOperationLease {
 
   @@index([leaseUntil])
   @@index([operationKind])
+}
+
+model LineChatHealthEvent {
+  id                    String                         @id @default(uuid())
+  entityType            LineChatHealthEventEntityType
+  lineChatSessionId     String?
+  lineOfficialAccountId String?
+  status                LineChatHealthEventStatus
+  failureStage          LineChatHealthFailureStage?
+  httpStatus            Int?
+  durationMs            Int?
+  source                LineChatHealthEventSource
+  detectedAt            DateTime
+  createdAt             DateTime                       @default(now())
+
+  lineChatSession     LineChatSession?      @relation("LineChatHealthEventSession", fields: [lineChatSessionId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount?  @relation("LineChatHealthEventOa", fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([lineChatSessionId, detectedAt])
+  @@index([lineOfficialAccountId, detectedAt])
+  @@index([detectedAt])
 }
 
 model LineChatNicknameSyncJob {

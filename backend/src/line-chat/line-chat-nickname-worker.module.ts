@@ -4,6 +4,7 @@ import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.servi
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import { LineChatHealthService } from "./line-chat-health.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -14,7 +15,7 @@ import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operati
  */
 @Module({
   imports: [PrismaModule],
-  providers: [LineChatProfileOperationCoordinator, LineChatSessionService, LineChatRecentResolverService, LineChatNicknameWorkerService],
+  providers: [LineChatProfileOperationCoordinator, LineChatSessionService, LineChatRecentResolverService, LineChatHealthService, LineChatNicknameWorkerService],
   exports: [LineChatNicknameWorkerService],
 })
 export class LineChatNicknameWorkerModule {}

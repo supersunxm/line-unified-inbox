@@ -6,6 +6,7 @@ import { LineChatNicknameQueueService } from "./line-chat-nickname-queue.service
 import { LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatOperationsController } from "./line-chat-operations.controller";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import { LineChatHealthService } from "./line-chat-health.service";
 
 @Global()
 @Module({
@@ -16,12 +17,14 @@ import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operati
     LineChatNicknameQueueService,
     LineChatOperationsService,
     LineChatProfileOperationCoordinator,
+    LineChatHealthService,
   ],
   exports: [
     LineChatSessionService,
     LineChatNicknameQueueService,
     LineChatOperationsService,
     LineChatProfileOperationCoordinator,
+    LineChatHealthService,
   ],
 })
 export class LineChatModule {}
