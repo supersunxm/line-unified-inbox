@@ -1692,3 +1692,94 @@ export type GreetingReadinessResponse = {
   assignedStores: number;
   stores: GreetingStoreReadinessItem[];
 };
+
+export type GoogleReviewKpiStoreItem = {
+  id: string;
+  storeId: string | null;
+  name: string;
+  code: string | null;
+  region: string | null;
+  province: string | null;
+  googleMapsUrl: string | null;
+  hasGoogleMaps: boolean;
+  kpiResult: {
+    id: string;
+    month: string;
+    reviewsChecked: number;
+    reviewsWithPhoto: number;
+    reviewsOver15ThaiWords: number;
+    qualifiedReviews: number;
+    targetQualifiedReviews: number;
+    isPassed: boolean;
+    checkedAt: string;
+    checkedBy: {
+      id: string;
+      displayName: string;
+      email: string;
+    } | null;
+  } | null;
+};
+
+export type GoogleReviewKpiSummary = {
+  month: string;
+  totalStores: number;
+  storesWithGoogleMaps: number;
+  checkedStores: number;
+  uncheckedStores: number;
+  passedStores: number;
+  belowTargetStores: number;
+  totalQualifiedReviews: number;
+  totalReviewsChecked: number;
+  stores: GoogleReviewKpiStoreItem[];
+};
+
+export type CheckGoogleReviewKpiResultInput = {
+  storeId: string;
+  month: string;
+  reviewsChecked: number;
+  reviewsWithPhoto: number;
+  reviewsOver15ThaiWords: number;
+  qualifiedReviews: number;
+  targetQualifiedReviews?: number;
+  googleMapsReviewUrl?: string;
+};
+
+export type GoogleReviewAuditQueueStoreItem = {
+  id: string;
+  sessionId: string;
+  storeId: string;
+  storeName: string;
+  storeCode: string | null;
+  region: string | null;
+  googleMapsUrl: string | null;
+  queueOrder: number;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "NEEDS_ATTENTION" | "SKIPPED" | "FAILED";
+  reviewsChecked: number;
+  reviewsWithPhoto: number;
+  reviewsOver15ThaiWords: number;
+  qualifiedReviews: number;
+  coverageStatus: string | null;
+  attemptCount: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type GoogleReviewAuditSessionResponse = {
+  id: string;
+  month: string;
+  status: "IDLE" | "RUNNING" | "PAUSED" | "COMPLETED" | "CANCELLED";
+  totalStores: number;
+  completedStores: number;
+  failedStores: number;
+  skippedStores: number;
+  pendingStores: number;
+  runningStores: number;
+  needsAttentionStores: number;
+  missingMapsUrlCount: number;
+  startedAt: string;
+  completedAt: string | null;
+  currentStore: GoogleReviewAuditQueueStoreItem | null;
+  stores: GoogleReviewAuditQueueStoreItem[];
+};

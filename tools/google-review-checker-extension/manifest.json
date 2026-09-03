@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "OPPO Google Maps Review KPI Checker",
+  "version": "1.1.0",
+  "description": "Scans currently loaded Google Maps reviews locally to calculate monthly store KPI without storing reviewer personal data.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://www.google.com/maps/*",
+    "*://www.google.co.th/maps/*",
+    "*://maps.google.com/*",
+    "*://maps.google.co.th/*",
+    "*://maps.app.goo.gl/*",
+    "http://localhost:3000/*",
+    "https://lineoppo.click/*",
+    "https://*.lineoppo.click/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OPPO Review KPI Checker"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.google.com/maps/*",
+        "*://www.google.co.th/maps/*",
+        "*://maps.google.com/*",
+        "*://maps.google.co.th/*",
+        "*://maps.app.goo.gl/*"
+      ],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "https://lineoppo.click/*",
+        "https://*.lineoppo.click/*"
+      ],
+      "js": ["dashboard_bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

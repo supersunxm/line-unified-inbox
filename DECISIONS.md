@@ -1,3 +1,100 @@
+## Google Review KPI: Monthly Batch Audit Runner (100+ Stores) (2026-09-03)
+
+- **Local Browser Runner Architecture over Server-Side Harvesters**: To process 100+ stores each month without triggering Railway IP blocks, Cloudflare blocks, or Google bot CAPTCHAs, the audit runner operates strictly inside the operator's active desktop Chrome browser. Server-side headless browser farms and bulk parallel tab scrapers are explicitly avoided in favor of a sequential, visible, operator-controlled loop.
+- **Canonical Session & Queue Storage with Transient Browser State**:
+  - `GoogleReviewAuditSession` and `GoogleReviewAuditStore` models in PostgreSQL serve as the immutable, authoritative record of monthly audit queue status and progress.
+  - `chrome.storage.local` is used exclusively for transient runner context (`sessionId`, `targetMonth`, `currentStore`) to allow seamless page reloads and cross-domain navigation.
+  - Completed stores are never rescanned on crash recovery or resume unless the operator explicitly triggers a `Re-run`.
+- **Bounded Scanning Invariant**:
+  - The runner stops scanning a store immediately upon reaching either verified completion condition (Condition A: review older than target month reached; Condition B: physical end of available reviews reached).
+  - For stores with thousands of historical reviews, scanning halts after the target month reviews plus the boundary older review are verified, preventing excessive DOM traversal and browser memory strain.
+- **Strict Privacy Invariant Preserved in Batch Mode**:
+  - The runner submits strictly aggregate metrics (`reviewsChecked`, `reviewsWithPhoto`, `reviewsOver15ThaiWords`, `qualifiedReviews`, `coverageStatus`, `oldestReviewDateText`) directly to the backend session endpoint.
+  - No reviewer personal data, profile URLs, avatars, raw text, tokens, or photos are ever persisted.
+- **Fail-Safe Exception Handling & Needs Attention Isolation**:
+  - If a store encounters CAPTCHAs, missing reviews panes, or unconfirmed sorting, the runner does not abort the entire monthly session; instead, it flags the store as `NEEDS_ATTENTION` with a specific error code, alerts the operator, and allows skipping or retrying while preserving all completed work.
+
+## Google Review KPI Checker: Thai Repetition Mark (ๆ) & Punctuation Exclusion (2026-09-03)
+
+- **Exclusion of Non-Word Thai Notation Marks**: The Thai repetition mark `ๆ` (Maiyamok) is classified in Unicode as `\p{Lm}` (Modifier Letter), which caused standard Unicode letter regex (`\p{L}`) to count standalone `ๆ` as a distinct word.
+- **Normalization Invariant**:
+  - `ๆ` is repetition notation, not a meaningful vocabulary word.
+  - Stripped during token filtering: standalone `ๆ` and `ฯ` (Paiyannoi) evaluate to zero counted words.
+  - Words with attached repetition (e.g. `เยอะๆ`) or spaced repetition (`เยอะ ๆ`) count as a single word (`เยอะ`).
+  - Paiyanyai (`ฯลฯ`) is explicitly stripped in `cleanReviewText` and token filtering.
+
+## Google Review KPI Checker: Strict Positive-Evidence Review Media Detection (2026-09-03)
+
+- **Elimination of Broad Negative-Exclusion Image Matching**: Previously, `detectCustomerPhotos` evaluated all `<img>` and `background-image` elements in a review card using negative exclusion (checking if class is `N3EgBe` or `aria-hidden`). This caused severe false positives:
+  1. Reviewer avatars hosted on Google profile domains (`googleusercontent.com/a/`, `ggpht.com`) that lacked the `N3EgBe` class were incorrectly identified as review photos.
+  2. Contributor history metadata buttons (e.g. `minions · 1 review · 1 photo`) matched broad `button[aria-label*='photo']` queries.
+- **Strict Positive Evidence Requirement**: `hasCustomerPhoto` now evaluates to `true` ONLY when positive evidence of genuine attached review media exists:
+  - **Review Media Gallery Container**: Presence of `.KtCyie` with media thumbnails strictly outside contributor headers and owner responses (`REVIEW_MEDIA_GALLERY`).
+  - **Explicit Thumbnail Buttons**: Presence of `button.Tya61d`, `div.Tya61d`, `div.KtRwe`, or `button[data-photo-index]` strictly outside contributor headers (`REVIEW_MEDIA_THUMBNAIL` / `REVIEW_MEDIA_BUTTON`).
+  - **Google Maps Media Viewer Triggers**: Presence of `[jsaction*='review.photo']`, `[jsaction*='pane.review.photo']`, or `[jsaction*='openPhoto']`.
+  - **Customer Photo Storage Path (`/p/`)**: Background image or `img` containing `googleusercontent.com/p/` (Google Maps user photo upload path), while explicitly excluding account avatars (`/a/`, `/a-/`) and action bar buttons (`Like`, `Share`, `.GBkF3d`).
+- **Zero Impact from Contributor Statistics & Profile Images**: Reviewer avatars, contributor statistics (`"1 review · 1 photo"`, `"10 reviews · 200 photos"`), store photos, and owner replies are strictly excluded from media detection.
+- **Debug Evidence Classification**: Evaluates each review with explicit `photoEvidence: "NONE" | "REVIEW_MEDIA_THUMBNAIL" | "REVIEW_MEDIA_BUTTON" | "REVIEW_MEDIA_GALLERY"` rendered in the Live Validation Debug View for full auditor transparency.
+
+## Google Review KPI Checker: Thai Word Counting Pipeline & Threshold Evolution (2026-09-03)
+
+- **Threshold Migration (`finalWordCount >= 15`)**: Updated the monthly KPI text requirement from `> 15` words to `finalWordCount >= 15` words. Exactly 15 words passes (0-14 words fails, 15+ passes). UI labels in Dashboard and Extension updated from `> 15 Thai words` to `15+ Thai words` / `ข้อความ 15 คำขึ้นไป`. Database column name `reviewsOver15ThaiWords` is preserved for schema stability.
+- **Full Text Extraction via Clean DOM Cloning**: Google Maps review cards often embed tag chips (e.g., activity chips like `ร่วมกิจกรรม`) or expandable "อ่านเพิ่มเติม" / "More" buttons inside `.MyEned`. Querying first child spans caused partial text truncation. The adapter now clones the full `.wiI7Bm` / `.MyEned` container outside owner response blocks, strips interactive buttons and expanders, and cleans UI noise phrases before segmentation.
+- **Thai Word Counting Pipeline**:
+  1. **UI Noise Stripping**: Excludes Google Maps UI strings (`See translation`, `Translate`, `More`, `Like`, `Share`, `Reply`, `NEW`, `อ่านเพิ่มเติม`, `ดูคำแปล`, `ถูกใจ`, `แชร์`, etc.).
+  2. **Intl.Segmenter Boundary Analysis**: Uses `Intl.Segmenter("th", { granularity: "word" })` for native dictionary boundaries.
+  3. **Meaningful Token Filtering**: Excludes whitespace, pure numbers (Arabic and Thai numerals), punctuation, emojis, and symbols. Requires at least one Unicode letter (`\p{L}`).
+  4. **Compound Dictionary**: Matches configured explicit compound sequences (`["โรง", "พยาบาล"]`, `["เครื่อง", "ใช้"]`, `["แม่", "บ้าน"]`, `["ท่อง", "เที่ยว"]`, `["ต่าง", "ชาติ"]`) without arbitrary wildcard merging.
+  5. **Compound-Prefix Merging**: Merges grammatical prefixes (`การ`, `ความ`, `น่า`, `ผู้`, `นัก`, `ชาว`, `ช่าง`) with the following token (e.g. `น่า + รัก -> น่ารัก`, `การ + ร่วม -> การร่วม`, `นัก + ท่องเที่ยว -> นักท่องเที่ยว`). Normal phrases (`ไม่ + ดี`, `ดี + มาก`, `บริการ + ดี`) are strictly preserved as separate words.
+  6. **Repetition Preservation**: Repeated words (`ดี มาก ดี มาก`) are counted every time they appear.
+
+## Google Review KPI Checker: Store Handoff, Edited Review Policy & Scroll Guidance (2026-09-03)
+
+- **Dual-Redundancy Browser-Local Store ID Handoff**: Rather than requiring retail staff to manually enter Store IDs or guessing stores by ambiguous Google Maps display names, the `/google-review-kpi` dashboard automatically passes the canonical Store UUID, external ID, store code, store name, and audit month via URL parameters and a browser bridge into `chrome.storage.local`. The extension locks the Store ID field as read-only ("🔒 Linked Store: DASHBOARD VERIFIED"), preventing human typos or accidental submission to wrong stores.
+- **Fail-Closed Edited Review Handling (`EDITED_ORIGINAL_UNKNOWN`)**: Google Maps displays edited reviews as "Edited X ago" ("แก้ไขเมื่อ X ที่แล้ว") without revealing the original publication date. Since monthly KPIs strictly require reviews *created* within the audit month, edited reviews without an explicit original timestamp are categorized as `EDITED_ORIGINAL_UNKNOWN` (`month = null`) and strictly excluded from Qualified Reviews to prevent older reviews from contaminating new month metrics.
+- **Incremental Scroll Accounting & Dual Audit Completion Conditions**: To support infinite scrolling without auto-scraping, the extension tracks in-memory fingerprints, displays `+N new reviews detected`, and evaluates two distinct completion conditions:
+  - **Condition A (`OLDER_THAN_TARGET_REACHED`)**: A reliable, unedited review with `month < targetMonth` is encountered (`🏁 Reached reviews older than [Month]. Audit coverage complete.`). Edited reviews and unknown dates are strictly excluded from triggering this condition.
+  - **Condition B (`END_OF_AVAILABLE_REVIEWS`)**: The auditor has physically reached the bottom of the Google Maps review scroll pane (`distanceFromBottom <= 15px` or end indicator present) and no more reviews exist (`✅ Reached the end of available Google Maps reviews. [Month] audit complete.`). This ensures stores whose entire review history ends within or newer than the target month can complete successfully.
+  - Neither condition met keeps status as `IN_PROGRESS` (`📜 Scroll down the reviews pane to load older reviews.`).
+
+## Google Review KPI Checker Architecture & Privacy Boundary (2026-09-02)
+
+- **Human-in-the-loop Architecture**: Instead of Google Maps Places API (5-review limit) or server-side headless scrapers (risk of IP bans and CAPTCHAs), a Chrome Extension (Manifest V3) operates locally in the staff member's browser, analyzing rendered reviews on demand.
+- **Strict Privacy Invariant**: Zero reviewer PII, usernames, avatars, review text, or photos are ever persisted to PostgreSQL. Only aggregated monthly KPI metrics (`reviewsChecked`, `reviewsWithPhoto`, `reviewsOver15ThaiWords`, `qualifiedReviews`, `checkedAt`, `checkedByUserId`) are stored in `GoogleReviewKpiResult`.
+- **Accurate Thai Word Segmentation**: Implemented `Intl.Segmenter("th", { granularity: "word" })` rather than whitespace splitting, because Thai text has no inter-word spaces. Filters out punctuation and numbers.
+- **Fail-Closed Date Parsing**: Relative date strings in English and Thai (e.g. "2 วันที่แล้ว", "3 weeks ago") are mapped to the target month relative to Bangkok time. Ambiguous or unparseable dates evaluate to `UNKNOWN_DATE` and fail closed (marked not qualified).
+- **Ephemeral Non-Reversible Fingerprints**: Review card deduplication uses transient in-memory composite fingerprints to handle DOM re-renders during scrolling without storing personal data.
+- **Store Master Integration**: Reuses existing `StoreMaster.googleMapsUrl` associated with `Store`. Endpoints resolve stores by UUID, store code, or external Store Master ID.
+
+## Shared realtime resolver rollout eligibility architecture (2026-09-02)
+
+- Decoupled `LineChatRecentResolverService` and `LineChatNicknameQueueService` from hardcoded Phase 1 constants (`LINE_CHAT_PILOT_BOT_ID`, `LINE_CHAT_PILOT_SESSION_KEY`, `LINE_CHAT_PILOT_STORE_CODE`, `LINE_CHAT_PILOT_OA_NAME`).
+- Centralized eligibility validation in `isLineChatRealtimeResolverEligible` against `LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES` allowlist (`["28375", "25610", "27627", "25391", "24804", "27789", "3791"]`).
+- Cross-OA / cross-session security invariants enforced:
+  - Invocation `botId` must match OA's configured `chatBotId`.
+  - Invocation `sessionKey` must match OA's linked session's `sessionKey`.
+  - Session status must not be `DISABLED`.
+  - `accountType` must be `STORE`.
+  - `oa.isActive` must be true and `oa.archivedAt` must be null.
+  - `conversation.storeId` must match `oa.storeId`.
+- Guaranteed backward compatibility with Phase 1 Store 28375 while enabling seamless DB-driven routing for Phase 2 Stage A pilot (Central World).
+
+## Railway Linux browser profile portability and authentication boundary (2026-09-02)
+
+- Chromium persistent browser profiles created on macOS encrypt SQLite cookie tables (`Default/Network/Cookies`) using macOS Keychain AES keys (`OSCrypt`). When copied to Railway Linux, Linux Chromium cannot decrypt these cookies and defaults to unauthenticated state.
+- Copying/staging raw profile directories across OS platforms (macOS -> Linux) is disproven for authentication persistence.
+- Phase 2 production session (`account-1-v1`) must be authenticated natively on Railway Linux (e.g. via secure operator SSH tunnel with Playwright CDP / headed proxy) directly into `/data/line-chat-profiles/account-1-v1`.
+- Phase 1 profile (`/data/line-chat-profiles/profile-b-linux-v2`, `sessionKey: profile-b`) is strictly isolated, retains its verified Linux-native state, and must remain untouched.
+
+## Phase 2 OA-level router navigation and authoritative botId discovery (2026-09-02)
+
+- Authoritative LINE OA Manager bot IDs conform strictly to `^U[0-9a-fA-F]{32}$` (U followed by exactly 32 hexadecimal characters).
+- Navigating directly to `https://chat.line.biz/account/@{basicId}` (preserving `@`) triggers LINE's OA-level routing, issuing an authenticated 302 redirect to `https://chat.line.biz/{botId}` and emitting scoped OA-level network requests to `/api/v2/bots/{botId}/chats`.
+- Preflight discovery operates sequentially per OA with scoped candidate tracking reset before each navigation. Exactly one valid bot ID candidate is required (`PRESENT`); 0 candidates fail closed as `NOT_FOUND`, and >1 conflicting candidates fail closed as `AMBIGUOUS`.
+- Read-only chat verification probes `GET https://chat.line.biz/api/v2/bots/{botId}/chats?limit=1` to confirm API authentication and `{ list: [...] }` response envelope without entering or reading customer chats.
+- Discovered bot IDs are saved to a gitignored local proposal file (`local-data/line-chat-sessions/phase2-account-1-proposal.json`) with `proposedNicknameSyncEnabled: false` and zero database mutations.
+- The Phase 1 production profile (`/data/line-chat-profiles/profile-b-linux-v2`, `sessionKey: profile-b`) remains untouched and strictly isolated from Phase 2 (`account-1`).
+
 ## Complete v2 LINE chat discovery foundation (2026-09-01)
 
 - The natural `GET /api/v2/bots/{botId}/chats` request and `{ list, next }` envelope are treated as verified only from operator-supplied production evidence; Codex does not access production. `chatId` is authoritative for `chatType=USER`, `userId` is never a fallback, and the shared validator is exactly `^U[0-9a-f]{32}$` (case-insensitive).
@@ -91,6 +188,32 @@
   - *Domain Model Separation*: `Customer.lineUserId` is strictly preserved for Messaging API operations and is never overloaded or corrupted. The dedicated `Conversation.lineChatUserId` field represents the OA Manager chat user ID for that specific conversation.
   - *Fail-Safe Queue Processing*: When `Conversation.lineChatUserId` is absent, BM sales saves complete successfully with zero error, the nickname queue safely logs a structured skip event (`MISSING_LINE_CHAT_USER_ID`), and no invalid HTTP requests are dispatched to `chat.line.biz`.
   - *Additive Database Migration*: Added `Conversation.lineChatUserId` and `LineChatNicknameSyncJob.lineChatUserId` with indexes.
+
+# LINE Official Account Chat Nickname Sync Phase 2 Onboarding Architecture (2026-09-02)
+
+- **Source-of-Truth Account Mapping & Isolation**:
+  - The source-of-truth file `line_manager_all_accounts_mapping` is established as the sole authority for LINE OA $\to$ LINE Manager account assignments.
+  - Phase 2 pilot covers exact 6 stores mapped to LINE Manager `account-1`:
+    - 25610 | OPPO Central World | @126fiiqf | `account-1`
+    - 27627 | OPPO Bangkapi | @250oxyxq | `account-1`
+    - 25391 | OPPO CentralWestgate | @khr9928i | `account-1`
+    - 24804 | OPPO TM Ngamwongwan | @688zunxx | `account-1`
+    - 27789 | OPPO MKV Suwannaphum | @180bkgua | `account-1`
+    - 3791  | OPPO CentralKhonkaen | @450rdrtw | `account-1`
+- **Complete Profile & Session Isolation**:
+  - Existing Phase 1 production profile (`profile-b-linux-v2` / `sessionKey: profile-b` / Store 28375) is strictly preserved and untouched.
+  - `account-1` profile is provisioned in a completely separate directory (`backend/local-data/line-chat-sessions/account-1` locally, `/data/line-chat-profiles/account-1-v1` on Railway persistent volume).
+  - Profile directories are completely gitignored; zero browser tokens, cookies, or storage states are stored in Git, DB, env variables, or logs.
+  - Phase 2 `account-1` resolution is strictly isolated and can never resolve or fall back to `profile-b-linux-v2`, `profile-b`, or any Phase 1 profile path.
+- **Fail-Closed Preflight Audit (`npm run line-chat:session:audit -- --session account-1`)**:
+  - Read-only verification: tests manager access (`manager.line.biz`), discovers `botId` from OA dashboard / chat transition endpoints, and tests chat workspace / v2 chats endpoint readiness (`chat.line.biz`).
+  - Strict non-mutation: does not enter customer conversations, does not fetch sensitive conversation history, does not change nicknames, and does not send messages.
+  - Safe tabular reporting: presents `STORE ID | BASIC ID | OA | SESSION | BOT ID STATUS | MANAGER ACCESS | CHAT ACCESS | READY` with zero sensitive tokens or secrets printed.
+- **Dry-Run Routing Proposal & Zero Production DB Mutation**:
+  - Routing dry run (`npm run line-chat:phase2:plan`) generates proposed bindings without modifying any production database rows or toggling sync flags (`lineChatNicknameSyncEnabled = false`).
+- **Two-Stage Rollout Governance**:
+  - Stage A: Pilot Central World (Store 25610) with 3–5 customer sales updates to verify end-to-end resolver mapping, DB storage in `Conversation.lineChatUserId`, and nickname update HTTP 200.
+  - Stage B: Enable remaining five Phase 2 stores only after Stage A verification succeeds.
 
 # LINE Official Account Chat Nickname Sync Production Architecture (2026-08-31)
 
@@ -1635,6 +1758,17 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 
 - Keep realtime matching conservative and unchanged while investigating pilot `RESOLVE_NO_MATCH` results. Diagnostics are aggregate-only and emitted after bounded recent-chat analysis, so operators can distinguish name mismatch from timestamp mismatch without exposing customer or LINE identifiers.
 - The diagnostic event may contain only the conversation reference, aggregate counts, the target timestamp source (`MESSAGE_SENT_AT` or `CONVERSATION_LATEST_MESSAGE_AT`), a fixed closest-delta bucket, and the resolver outcome. Exact timestamps, names, message content, chat IDs, response `userId`, `Customer.lineUserId`, continuation values, cookies, browser storage, and credentials remain excluded.
+## Phase 2 Stage B routing boundary (2026-09-02)
+
+- Stage B changes only routing metadata for Stores 27627, 25391, 24804, 27789, and 3791: audited `chatBotId`, the existing `account-1` session ID, and an explicitly preserved `lineChatNicknameSyncEnabled = false`.
+- Bot IDs come from the existing gitignored authenticated audit proposal and must match `U` plus 32 hexadecimal characters. They are not inferred, hardcoded into normal worker routing, or printed in full.
+- One serializable transaction validates Phase 1, Central World, the unique ACTIVE `account-1`/`account-1-v1` session, and every target before guarded updates. Any identity drift, HEAD_OFFICE/non-pilot row, existing mapping, duplicate session, or concurrent change aborts the full transaction.
+- Stage B creates no session, customer mapping, nickname job, backfill, or sync enablement. Worker routing remains database-driven; five-store worker access verification is run only after routing exists and never by manually supplying the profile path.
+
+## LINE Chat worker maintenance liveness (2026-09-02)
+
+- Use a dedicated `LINE_CHAT_NICKNAME_MAINTENANCE_MODE=true` flag instead of changing the emergency-disable contract. Test mode has highest precedence; maintenance is next; the existing disable flag remains next; normal polling is the fallback.
+- Maintenance owns one referenced, empty 60-second interval solely to retain the standalone Nest process and mounted profile volume. It starts no queue cycle or browser path, and module destruction clears both maintenance and polling timers for graceful signal shutdown.
 
 ## 2026-09-02 — Virtual focus chat group, not a persisted Store
 - Decision: model the seven-store focus view as a virtual conversation scope (`focus-seven-store-group`) rather than inserting a synthetic Store row into the database.

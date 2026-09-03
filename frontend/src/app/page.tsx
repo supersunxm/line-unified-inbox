@@ -28,6 +28,7 @@ import { MassMessagesView } from "./mass-messages/mass-messages-view";
 import { RichMenusView } from "./rich-menus/rich-menus-view";
 import { AutoResponsesView } from "./auto-responses/auto-responses-view";
 import { GreetingMessagesView } from "./greeting-messages/greeting-messages-view";
+import { GoogleReviewKpiView } from "./google-review-kpi/google-review-kpi-view";
 import { DashboardView } from "./dashboard/dashboard-view";
 import { AppShell, ContextSidebar, PageContainer, PageHeader, FilterBar } from "@/components/shell";
 import {
@@ -4115,6 +4116,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ) : initialSection === "greeting-messages" ? (
             <PageContainer variant="full">
               <GreetingMessagesView language={language} userRole={authUser.role} />
+            </PageContainer>
+          ) : initialSection === "google-review-kpi" ? (
+            <PageContainer variant="full">
+              <GoogleReviewKpiView language={language} userRole={authUser?.role} />
             </PageContainer>
           ) : (
             <>
