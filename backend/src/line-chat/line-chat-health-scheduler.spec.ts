@@ -88,8 +88,8 @@ function makeFixture(options: {
   };
 }
 
-test("scheduler constants keep the conservative rollout cadence", () => {
-  assert.equal(LINE_CHAT_HEALTH_SCHEDULER_TICK_MS, 60_000);
+test("scheduler constants keep the conservative rollout cadence with two-per-minute capacity", () => {
+  assert.equal(LINE_CHAT_HEALTH_SCHEDULER_TICK_MS, 30_000);
   assert.equal(LINE_CHAT_SESSION_HEALTH_TARGET_MS, 12 * 60_000);
   assert.equal(LINE_CHAT_OA_HEALTH_TARGET_MS, 3 * 60 * 60_000);
 });
