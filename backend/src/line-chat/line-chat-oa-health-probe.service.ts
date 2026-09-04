@@ -166,7 +166,8 @@ export class LineChatOaHealthProbeService {
     if (!oa) throw new NotFoundException(`Line official account "${lineOfficialAccountId}" not found.`);
 
     const botId = oa.chatBotId?.trim();
-    if (!botId || !oa.lineChatSessionId || !oa.lineChatSession) {
+    const session = oa.lineChatSession;
+    if (!botId || !oa.lineChatSessionId || !session) {
       return this.recordOaFailure({
         lineOfficialAccountId: oa.id,
         status: "CONFIG_ERROR",
@@ -179,7 +180,7 @@ export class LineChatOaHealthProbeService {
 
     let profilePath: string;
     try {
-      profilePath = this.sessionService.resolveProfilePath(oa.lineChatSession);
+      profilePath = this.sessionService.resolveProfilePath(session);
     } catch {
       return this.recordOaFailure({
         lineOfficialAccountId: oa.id,
@@ -203,7 +204,7 @@ export class LineChatOaHealthProbeService {
     }
 
     const coordinated = await this.profileCoordinator.withProfileOperation(
-      { sessionId: oa.lineChatSession.id, operationKind: "HEALTH_OA" },
+      { sessionId: session.id, operationKind: "HEALTH_OA" },
       async () => {
         try {
           const diagnostics = await this.sessionService.runDiagnostics({
@@ -216,7 +217,7 @@ export class LineChatOaHealthProbeService {
           const durationMs = boundedDurationMs(startedAt);
           const sessionClassification = sessionClassificationFromDiagnostics(diagnostics);
           const sessionRecorded = await this.healthService.recordSessionHealthResult({
-            sessionId: oa.lineChatSession.id,
+            sessionId: session.id,
             status: sessionClassification.status,
             failureStage: sessionClassification.failureStage,
             checkedAt,
