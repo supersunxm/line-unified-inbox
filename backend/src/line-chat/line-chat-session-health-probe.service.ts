@@ -9,10 +9,7 @@ import type {
   LineChatHealthManagerAuth,
   LineChatSessionHealthStatus,
 } from "./line-chat-health.types";
-import {
-  LineChatProfileOperationCoordinator,
-  ProfileOperationLeaseLostError,
-} from "./line-chat-profile-operation-coordinator.service";
+import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { DiagnosticsResult } from "./line-chat.types";
 
@@ -29,10 +26,6 @@ export type LineChatSessionHealthProbeResult =
       outcome: "SKIPPED_BUSY";
       sessionId: string;
       retryAfterMs: number;
-    }
-  | {
-      outcome: "SKIPPED_LEASE_LOST";
-      sessionId: string;
     };
 
 function boundedDurationMs(startedAt: number): number {
@@ -115,74 +108,67 @@ export class LineChatSessionHealthProbeService {
       });
     }
 
-    try {
-      const coordinated = await this.profileCoordinator.withProfileOperation(
-        { sessionId, operationKind: "HEALTH_SESSION" },
-        async () => {
-          try {
-            const diagnostics = await this.sessionService.runDiagnostics({
-              profilePath,
-              surface: "bot",
-              headless: true,
-            });
-            const managerAuth = managerAuthFromDiagnostics(diagnostics);
-            const classification = classifySessionHealth({
-              endpoint: "MANAGER",
-              profileState: "PRESENT",
-              managerAuth,
-              loginRedirect: diagnostics.authDestinationDetected,
-              httpStatus: diagnostics.apiAuthProbe.status ?? diagnostics.mainDocumentStatus,
-              ...(managerAuth === "UNKNOWN"
-                && !diagnostics.navigationSucceeded
-                && diagnostics.apiAuthProbe.transport === "FAILED"
-                ? { failure: "UNEXPECTED" as const }
-                : {}),
-            });
-            const durationMs = boundedDurationMs(startedAt);
-            const recorded = await this.healthService.recordSessionHealthResult({
-              sessionId,
-              status: classification.status,
-              failureStage: classification.failureStage,
-              checkedAt: new Date(),
-              httpStatus: diagnostics.apiAuthProbe.status ?? diagnostics.mainDocumentStatus ?? null,
-              durationMs,
-              source,
-            });
-            return {
-              outcome: "RECORDED" as const,
-              sessionId,
-              status: recorded.status,
-              failureStage: recorded.failureStage,
-              transitionEventCreated: recorded.transitionEventCreated,
-              durationMs,
-            };
-          } catch (error: unknown) {
-            const failureStage = classifySessionProbeExecutionFailure(error);
-            return this.recordFailure({
-              sessionId,
-              status: "DEGRADED",
-              failureStage,
-              source,
-              startedAt,
-            });
-          }
-        },
-      );
+    const coordinated = await this.profileCoordinator.withProfileOperation(
+      { sessionId, operationKind: "HEALTH_SESSION" },
+      async () => {
+        try {
+          const diagnostics = await this.sessionService.runDiagnostics({
+            profilePath,
+            surface: "bot",
+            headless: true,
+          });
+          const managerAuth = managerAuthFromDiagnostics(diagnostics);
+          const classification = classifySessionHealth({
+            endpoint: "MANAGER",
+            profileState: "PRESENT",
+            managerAuth,
+            loginRedirect: diagnostics.authDestinationDetected,
+            httpStatus: diagnostics.apiAuthProbe.status ?? diagnostics.mainDocumentStatus,
+            ...(managerAuth === "UNKNOWN"
+              && !diagnostics.navigationSucceeded
+              && diagnostics.apiAuthProbe.transport === "FAILED"
+              ? { failure: "UNEXPECTED" as const }
+              : {}),
+          });
+          const durationMs = boundedDurationMs(startedAt);
+          const recorded = await this.healthService.recordSessionHealthResult({
+            sessionId,
+            status: classification.status,
+            failureStage: classification.failureStage,
+            checkedAt: new Date(),
+            httpStatus: diagnostics.apiAuthProbe.status ?? diagnostics.mainDocumentStatus ?? null,
+            durationMs,
+            source,
+          });
+          return {
+            outcome: "RECORDED" as const,
+            sessionId,
+            status: recorded.status,
+            failureStage: recorded.failureStage,
+            transitionEventCreated: recorded.transitionEventCreated,
+            durationMs,
+          };
+        } catch (error: unknown) {
+          const failureStage = classifySessionProbeExecutionFailure(error);
+          return this.recordFailure({
+            sessionId,
+            status: "DEGRADED",
+            failureStage,
+            source,
+            startedAt,
+          });
+        }
+      },
+    );
 
-      if (!coordinated.acquired) {
-        return {
-          outcome: "SKIPPED_BUSY",
-          sessionId,
-          retryAfterMs: coordinated.retryAfterMs,
-        };
-      }
-      return coordinated.value;
-    } catch (error: unknown) {
-      if (error instanceof ProfileOperationLeaseLostError) {
-        return { outcome: "SKIPPED_LEASE_LOST", sessionId };
-      }
-      throw error;
+    if (!coordinated.acquired) {
+      return {
+        outcome: "SKIPPED_BUSY",
+        sessionId,
+        retryAfterMs: coordinated.retryAfterMs,
+      };
     }
+    return coordinated.value;
   }
 
   private async recordFailure(input: {
