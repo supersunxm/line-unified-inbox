@@ -5,9 +5,10 @@ import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
 import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
+import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 
 const prisma = new PrismaClient();
-const PERSISTENT_PROFILE_DIR = "/Users/chutisoa.nup/Library/Application Support/GoogleReviewKpiChromeProfile";
+export const PERSISTENT_PROFILE_DIR = resolveGoogleReviewProfileDir();
 
 export function getTodayBangkokDate() {
   const formatter = new Intl.DateTimeFormat("en-CA", {

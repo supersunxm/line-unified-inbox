@@ -1,5 +1,14 @@
 # AI Progress Log
 
+## 2026-09-04: Google Review Collector Runtime Config for Railway/Linux [COMPLETED & VERIFIED]
+- **Current Task**: Make persistent Chrome profile directory, headless mode, and Chromium launch arguments configurable for Linux/Railway container environments.
+- **Changes**:
+  - Created `backend/scripts/weekly-collector/browser-runtime-config.mjs` resolving `GOOGLE_REVIEW_PROFILE_DIR` (falling back to Mac path on darwin or `/tmp/google-review-kpi-profile` on Linux/containers).
+  - Configurable headless mode via `GOOGLE_REVIEW_HEADLESS` (defaulting to `true` in Railway/CI/Linux and `false` on macOS local dev).
+  - Injected container-safe args (`--no-sandbox`, `--disable-setuid-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`) when running in Linux/Railway.
+  - Added unit test suite `backend/scripts/weekly-collector/browser-runtime-config.spec.ts` (12/12 passing).
+  - Verified Week 1/Week 2 historical invariants remain untouched (Week 1 = 274, Week 2 = 92).
+
 ## 2026-09-04: Daily Continuous Tracking for Weekly Google Review KPI (65 Stores) [COMPLETED & VERIFIED]
 - **Current Task**: Transition Weekly Google Review KPI from historical backfill to Daily Continuous Tracking for 65 Focus Stores.
 - **Scope & Baseline Invariants**:

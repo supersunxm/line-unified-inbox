@@ -6,13 +6,19 @@ import { segmentThaiWords } from "../../../tools/google-review-checker-extension
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
 import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
 
+import {
+  buildGoogleReviewLaunchOptions,
+  resolveGoogleReviewProfileDir,
+} from "./browser-runtime-config.mjs";
+
 const prisma = new PrismaClient();
-const PERSISTENT_PROFILE_DIR = "/Users/chutisoa.nup/Library/Application Support/GoogleReviewKpiChromeProfile";
+const persistentProfileDir = resolveGoogleReviewProfileDir();
 
 async function main() {
   console.log("================================================================================");
   console.log(" HISTORICAL BASELINE SEEDING FOR DAILY CONTINUOUS TRACKING");
   console.log(" Purpose: Seed existing reviews into GoogleReviewFingerprint table");
+  console.log(` Chrome Profile Directory: ${persistentProfileDir}`);
   console.log(" Invariant: Week 1 must remain 274, Week 2 must remain 92 (Sep 4 = 33)");
   console.log("================================================================================\n");
 
@@ -33,11 +39,11 @@ async function main() {
     throw new Error(`Expected 65 weekly stores, found ${memberships.length}!`);
   }
 
-  const context = await chromium.launchPersistentContext(PERSISTENT_PROFILE_DIR, {
-    headless: false,
-    args: ["--disable-blink-features=AutomationControlled"],
-    viewport: { width: 1440, height: 900 },
-  });
+  const launchOptions = buildGoogleReviewLaunchOptions();
+  console.log(`Browser Launch Options: Headless=${launchOptions.headless}, Args=${JSON.stringify(launchOptions.args)}`);
+
+  const context = await chromium.launchPersistentContext(persistentProfileDir, launchOptions);
+
 
   const page = context.pages()[0] || (await context.newPage());
   let totalFingerprintsSeeded = 0;
