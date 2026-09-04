@@ -116,7 +116,14 @@ function parseUneditedDateToMonth(text: string, referenceDate: Date): string | n
   // 4. Weeks ago
   const weeksMatch =
     text.match(/(\d+)\s*(week|weeks|สัปดาห์|อาทิตย์)/) ||
-    (text.includes("a week ago") || text.includes("หนึ่งสัปดาห์") ? [null, "1"] : null);
+    (text.includes("a week ago") ||
+    text.includes("หนึ่งสัปดาห์") ||
+    text.includes("สัปดาห์ที่แล้ว") ||
+    text.includes("สัปดาห์ที่ผ่านมา") ||
+    text.includes("อาทิตย์ที่แล้ว") ||
+    text.includes("อาทิตย์ที่ผ่านมา")
+      ? [null, "1"]
+      : null);
   if (weeksMatch) {
     const weeks = parseInt(weeksMatch[1] ?? "1", 10);
     const d = new Date(ref);
@@ -127,7 +134,12 @@ function parseUneditedDateToMonth(text: string, referenceDate: Date): string | n
   // 5. Months ago
   const monthsMatch =
     text.match(/(\d+)\s*(month|months|เดือน)/) ||
-    (text.includes("a month ago") || text.includes("หนึ่งเดือน") ? [null, "1"] : null);
+    (text.includes("a month ago") ||
+    text.includes("หนึ่งเดือน") ||
+    text.includes("เดือนที่แล้ว") ||
+    text.includes("เดือนที่ผ่านมา")
+      ? [null, "1"]
+      : null);
   if (monthsMatch) {
     const months = parseInt(monthsMatch[1] ?? "1", 10);
     const d = new Date(ref);
@@ -138,7 +150,12 @@ function parseUneditedDateToMonth(text: string, referenceDate: Date): string | n
   // 6. Years ago
   const yearsMatch =
     text.match(/(\d+)\s*(year|years|ปี)/) ||
-    (text.includes("a year ago") || text.includes("หนึ่งปี") ? [null, "1"] : null);
+    (text.includes("a year ago") ||
+    text.includes("หนึ่งปี") ||
+    text.includes("ปีที่แล้ว") ||
+    text.includes("ปีที่ผ่านมา")
+      ? [null, "1"]
+      : null);
   if (yearsMatch) {
     const years = parseInt(yearsMatch[1] ?? "1", 10);
     const d = new Date(ref);
@@ -206,4 +223,273 @@ function formatYearMonth(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+export type ChronologicalRelation = "NEWER" | "TARGET_OR_OVERLAP" | "OLDER" | "UNKNOWN";
+
+export type ChronologyClassification = {
+  rawDateText: string | null;
+  isEditedTimestamp: boolean;
+  relativeDateRange: RelativeDateRange | null;
+  chronologicalRelation: ChronologicalRelation;
+  chronologicalBoundaryEligible: boolean;
+};
+
+export function classifyChronologicalRelation(
+  rawDateText?: string | null,
+  targetMonth?: string | null,
+  referenceDate: Date = new Date(),
+): ChronologyClassification {
+  if (!rawDateText || typeof rawDateText !== "string" || !rawDateText.trim()) {
+    return {
+      rawDateText: rawDateText ?? null,
+      isEditedTimestamp: false,
+      relativeDateRange: null,
+      chronologicalRelation: "UNKNOWN",
+      chronologicalBoundaryEligible: false,
+    };
+  }
+
+  const text = rawDateText.trim().toLowerCase();
+  const isEdited = isEditedReviewDateText(text);
+  const range = estimateRelativeDateRange(text, referenceDate);
+
+  if (isEdited) {
+    // Edited reviews: Do NOT establish a defensible feed stop boundary!
+    // Google Maps edited relative timestamps indicate when the edit happened, not original creation.
+    return {
+      rawDateText,
+      isEditedTimestamp: true,
+      relativeDateRange: range,
+      chronologicalRelation: range ? (range.startMonth > (targetMonth || "") ? "NEWER" : "TARGET_OR_OVERLAP") : "UNKNOWN",
+      chronologicalBoundaryEligible: false,
+    };
+  }
+
+  if (!range || !targetMonth) {
+    return {
+      rawDateText,
+      isEditedTimestamp: false,
+      relativeDateRange: range,
+      chronologicalRelation: "UNKNOWN",
+      chronologicalBoundaryEligible: false,
+    };
+  }
+
+  // If the earliest possible date (startMonth) is strictly newer than targetMonth:
+  if (range.startMonth > targetMonth) {
+    return {
+      rawDateText,
+      isEditedTimestamp: false,
+      relativeDateRange: range,
+      chronologicalRelation: "NEWER",
+      chronologicalBoundaryEligible: false,
+    };
+  }
+
+  // If the latest possible date (endMonth) is strictly older than targetMonth:
+  // e.g. targetMonth = "2026-09", range.endMonth = "2026-08" (e.g. "1 เดือนที่แล้ว" / "1 month ago" on Sep 4)
+  if (range.endMonth < targetMonth) {
+    return {
+      rawDateText,
+      isEditedTimestamp: false,
+      relativeDateRange: range,
+      chronologicalRelation: "OLDER",
+      chronologicalBoundaryEligible: true,
+    };
+  }
+
+  // Otherwise, the date range touches or overlaps the target month
+  return {
+    rawDateText,
+    isEditedTimestamp: false,
+    relativeDateRange: range,
+    chronologicalRelation: "TARGET_OR_OVERLAP",
+    chronologicalBoundaryEligible: false,
+  };
+}
+
+export type RelativeDateRange = {
+  startDate: Date;
+  endDate: Date;
+  startMonth: string;
+  endMonth: string;
+  isEdited: boolean;
+  isAmbiguous: boolean;
+};
+
+/**
+ * Estimates the calendar date range for a Google Maps relative timestamp
+ * anchored to the provided referenceDate (browser date).
+ *
+ * NOTE: This is strictly for navigation optimization (fast-skipping reviews)
+ * and MUST NOT determine KPI qualification.
+ */
+export function estimateRelativeDateRange(
+  rawDateText?: string | null,
+  referenceDate: Date = new Date(),
+): RelativeDateRange | null {
+  if (!rawDateText || typeof rawDateText !== "string") return null;
+  const text = rawDateText.trim().toLowerCase();
+  if (!text) return null;
+
+  const isEdited = isEditedReviewDateText(text);
+  const ref = new Date(referenceDate);
+
+  // Today / Yesterday / Hours / Minutes
+  if (
+    text.includes("hour") ||
+    text.includes("minute") ||
+    text.includes("second") ||
+    text.includes("today") ||
+    text.includes("ชั่วโมง") ||
+    text.includes("นาที") ||
+    text.includes("วินาที") ||
+    text.includes("วันนี้")
+  ) {
+    const start = new Date(ref);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(ref);
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: formatYearMonth(start),
+      endMonth: formatYearMonth(end),
+      isEdited,
+      isAmbiguous: false,
+    };
+  }
+
+  if (text.includes("yesterday") || text.includes("เมื่อวาน")) {
+    const d = new Date(ref);
+    d.setDate(d.getDate() - 1);
+    const start = new Date(d);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(d);
+    end.setHours(23, 59, 59, 999);
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: formatYearMonth(start),
+      endMonth: formatYearMonth(end),
+      isEdited,
+      isAmbiguous: false,
+    };
+  }
+
+  // Days ago: "X days ago" / "X วันที่แล้ว"
+  const daysMatch = text.match(/(\d+)\s*(day|days|วัน)/) || (text.includes("a day ago") ? [null, "1"] : null);
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1] ?? "1", 10);
+    // Google Maps "X days ago": posted X days ago (e.g. 3 days ago from Sep 4 is Sep 1)
+    const start = new Date(ref);
+    start.setDate(start.getDate() - days);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(ref);
+    end.setDate(end.getDate() - days);
+    end.setHours(23, 59, 59, 999);
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: formatYearMonth(start),
+      endMonth: formatYearMonth(end),
+      isEdited,
+      isAmbiguous: false,
+    };
+  }
+
+  // Weeks ago: "X weeks ago" / "X สัปดาห์ที่แล้ว"
+  const weeksMatch =
+    text.match(/(\d+)\s*(week|weeks|สัปดาห์|อาทิตย์)/) ||
+    (text.includes("a week ago") ||
+    text.includes("หนึ่งสัปดาห์") ||
+    text.includes("สัปดาห์ที่แล้ว") ||
+    text.includes("สัปดาห์ที่ผ่านมา") ||
+    text.includes("อาทิตย์ที่แล้ว") ||
+    text.includes("อาทิตย์ที่ผ่านมา")
+      ? [null, "1"]
+      : null);
+  if (weeksMatch) {
+    const weeks = parseInt(weeksMatch[1] ?? "1", 10);
+    // Google Maps "1 week ago" typically spans 7 to 13 days ago; "2 weeks ago" 14 to 20 days ago, etc.
+    const end = new Date(ref);
+    end.setDate(end.getDate() - weeks * 7);
+    const start = new Date(ref);
+    start.setDate(start.getDate() - (weeks * 7 + 6));
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: formatYearMonth(start),
+      endMonth: formatYearMonth(end),
+      isEdited,
+      isAmbiguous: false,
+    };
+  }
+
+  // Months ago: "X months ago" / "X เดือนที่แล้ว"
+  const monthsMatch =
+    text.match(/(\d+)\s*(month|months|เดือน)/) ||
+    (text.includes("a month ago") ||
+    text.includes("หนึ่งเดือน") ||
+    text.includes("เดือนที่แล้ว") ||
+    text.includes("เดือนที่ผ่านมา")
+      ? [null, "1"]
+      : null);
+  if (monthsMatch) {
+    const months = parseInt(monthsMatch[1] ?? "1", 10);
+    // "a month ago" / "1 month ago" typically spans 30 to 59 days ago
+    const end = new Date(ref);
+    end.setMonth(end.getMonth() - months);
+    const start = new Date(ref);
+    start.setMonth(start.getMonth() - (months + 1));
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: formatYearMonth(start),
+      endMonth: formatYearMonth(end),
+      isEdited,
+      isAmbiguous: true,
+    };
+  }
+
+  // Fallback to parsed month if single exact month is known
+  const singleMonth = parseGoogleReviewDateToMonth(rawDateText, referenceDate);
+  if (singleMonth) {
+    const [y, m] = singleMonth.split("-").map((s) => parseInt(s, 10));
+    const start = new Date(y, m - 1, 1);
+    const end = new Date(y, m, 0);
+    return {
+      startDate: start,
+      endDate: end,
+      startMonth: singleMonth,
+      endMonth: singleMonth,
+      isEdited,
+      isAmbiguous: false,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Determines whether a relative timestamp proves that the review was definitely
+ * created in a month NEWER than targetMonth, allowing photo viewer fast-skip.
+ *
+ * Example: Auditing August 2026 on September 4:
+ * "12 hours ago" -> startMonth="2026-09", endMonth="2026-09" -> definitely newer than "2026-08" -> TRUE.
+ * "3 days ago" -> startMonth="2026-09", endMonth="2026-09" -> definitely newer -> TRUE.
+ * "1 week ago" -> startMonth="2026-08", endMonth="2026-08" -> NOT newer -> FALSE.
+ */
+export function isDefinitelyNewerThanMonth(
+  rawDateText?: string | null,
+  targetMonth?: string | null,
+  referenceDate: Date = new Date(),
+): boolean {
+  if (!rawDateText || !targetMonth) return false;
+  const range = estimateRelativeDateRange(rawDateText, referenceDate);
+  if (!range) return false;
+
+  // If the earliest possible date (startMonth) is strictly greater than targetMonth,
+  // then the review could not possibly have been created in targetMonth or older.
+  return range.startMonth > targetMonth;
 }

@@ -18,6 +18,7 @@
     "test:line-webhook": "tsx --env-file=.env scripts/send-test-line-webhook.ts",
     "test:line-verify": "tsx --env-file=.env scripts/send-test-line-verify.ts",
     "test:line-onboarding": "tsx --env-file=.env scripts/test-line-oa-onboarding.ts",
+    "google-review:weekly-collector": "node scripts/weekly-collector/run-single-cycle.mjs",
     "worker:rich-menu-publish": "tsx src/rich-menu/rich-menu-worker.ts",
     "worker:rich-menu-publish:prod": "node dist/rich-menu/rich-menu-worker.js",
     "worker:line-chat-nickname": "tsx src/line-chat/line-chat-nickname-worker.ts",

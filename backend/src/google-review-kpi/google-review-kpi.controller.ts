@@ -11,10 +11,13 @@ import {
 } from "@nestjs/common";
 import { GoogleReviewKpiService } from "./google-review-kpi.service";
 import {
+  AggregateWeeklyKpiDto,
   CheckGoogleReviewKpiResultDto,
   CompleteStoreAuditDto,
   FailStoreAuditDto,
   QueryGoogleReviewKpiDto,
+  QueryWeeklyLeaderboardDto,
+  RecordDailyKpiDto,
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
 } from "./google-review-kpi.dto";
@@ -30,6 +33,50 @@ export class GoogleReviewKpiController {
   @Get()
   async list(@Query() query: QueryGoogleReviewKpiDto, @Req() req: AuthRequest) {
     return this.kpiService.listMonthlyKpis(query, req.user);
+  }
+
+  // ==========================================
+  // Weekly Google Review KPI Endpoints
+  // (Defined before :storeId to prevent routing collision)
+  // ==========================================
+
+  @Get("weekly/stores")
+  async getWeeklyStores() {
+    return this.kpiService.getWeeklyStores();
+  }
+
+  @Get("weekly/periods")
+  async getWeeklyPeriods() {
+    return this.kpiService.getWeeklyPeriods();
+  }
+
+  @Get("weekly/leaderboard")
+  async getWeeklyLeaderboard(@Query() query: QueryWeeklyLeaderboardDto) {
+    return this.kpiService.getWeeklyLeaderboard(query);
+  }
+
+  @Get("weekly/collector-status")
+  async getWeeklyCollectorStatus() {
+    return this.kpiService.getWeeklyCollectorStatus();
+  }
+
+  @Post("weekly/sync-stores")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async syncWeeklyStores() {
+    return this.kpiService.syncWeeklyStoreMemberships();
+  }
+
+  @Post("weekly/daily-record")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async recordDailyKpi(@Body() dto: RecordDailyKpiDto) {
+    return this.kpiService.recordDailyKpi(dto);
+  }
+
+  @Post("weekly/aggregate")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async aggregateWeeklyKpi(@Body() dto: AggregateWeeklyKpiDto) {
+    await this.kpiService.aggregateWeeklyKpi(dto.weekNumber);
+    return { success: true, weekNumber: dto.weekNumber };
   }
 
   // ==========================================

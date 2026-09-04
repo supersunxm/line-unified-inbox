@@ -1,3 +1,97 @@
+# Architecture & Design Decisions
+
+## Google Review KPI: Weekly Top Store Ranking & 65-Store Set Architecture (2026-09-04)
+
+- **Store Code Canonical Key & Non-Duplication**:
+  - `Store Code` (`externalStoreId` in `StoreMaster` and `Store`) is the single canonical key for weekly store membership and aggregations.
+  - Zero duplicate `Store` or `StoreMaster` rows are created. If a store code is not yet present in `StoreMaster` (e.g. `32569`), a `GoogleReviewWeeklyStoreMembership` record is safely registered with `storeId: null`, maintaining referential integrity without polluting store master records.
+- **Weekly Qualification Rules**:
+  - **Store Rating Eligibility**: `storeRating > 4.8` (stores with rating $\le 4.8$ or null are not eligible for weekly ranking).
+  - **Review Qualification**: Review must be unedited (`isEdited === false`), have a genuine customer-uploaded photo, and have $\ge 15$ Thai words.
+- **Continuous 7-Day Asia/Bangkok Week Boundaries**:
+  - All periods follow `Asia/Bangkok` timezone (UTC+7).
+  - Week 1 begins at `2026-08-26T00:00:00+07:00` and ends at `2026-09-02T00:00:00+07:00` (`第一周 สัปดาห์ที่ 1 (26.08-02.09.2026)`).
+  - Week 2 begins at `2026-09-02T00:00:00+07:00` and ends at `2026-09-09T00:00:00+07:00` (`第二周 สัปดาห์ที่ 2 (02-09.09.2026)`).
+  - Daily records freeze at 23:59:59.999 Asia/Bangkok; Weekly totals freeze at 23:59:59.999 of the 7th day.
+- **Privacy & Aggregate-Only Persistence**:
+  - Zero PII, reviewer identities, review texts, or photos are persisted. Only daily aggregate counts (`reviewsChecked`, `reviewsWithPhoto`, `reviewsOver15Words`, `qualifiedReviews`) and weekly computed totals are stored.
+
+## Google Review KPI: Separation of Review Chronology from Image Capture Month (2026-09-04)
+
+- **Strict Separation of Concerns**:
+  1. **Image Capture Month (`Image capture: <Month Year>`)**: Strictly and exclusively the source of truth for **KPI qualification** (`hasCustomerPhoto === true && resolvedImageCaptureMonth === targetMonth && finalWordCount >= 15`). Image capture date is **NOT** the stop boundary for feed navigation. An older image attached to a recent or edited review (e.g. Review #6 created recently with a photo taken months ago) fails qualification but must **CONTINUE** scanning.
+  2. **Review Creation Chronology (`Google Review relative timestamps`)**: Strictly and exclusively the source of truth for **feed navigation and defensible stop boundary**.
+- **Edited Reviews Policy**:
+  - Edited reviews (`แก้ไขเมื่อ X ที่แล้ว` / `Edited X ago`): the relative label reflects when the edit occurred, not creation. Therefore, edited reviews are marked `isEditedTimestamp = true`, `chronologicalBoundaryEligible = false`, and **never trigger a chronological stop boundary**.
+- **Un-edited Reviews Policy**:
+  - Un-edited reviews: dynamic calendar range is estimated against `referenceDate`.
+  - `chronologicalRelation`:
+    - `NEWER`: range is strictly newer than `targetMonth` -> continue.
+    - `TARGET_OR_OVERLAP`: range touches or overlaps `targetMonth` -> process review.
+    - `OLDER`: range is definitively older than `targetMonth` (e.g. `endMonth < targetMonth` like `4 วันที่แล้ว` = Aug 31 when target is Sep 2026) -> `chronologicalBoundaryEligible = true`, triggers immediate **`stopBoundaryTriggered = true`** (`OLDER_THAN_TARGET_REACHED`).
+
+## Google Review KPI: Month Navigation, Dynamic Date Range Estimation & Exact Stop Boundary (2026-09-04)
+
+- **Source-of-Truth Hierarchy**:
+  1. Image Capture Month (`Image capture: <Month Year>`) = Sole authoritative KPI month for qualification and store audit completion.
+  2. Google review relative timestamp (`12 hours ago`, `3 days ago`, `1 week ago`) = Navigation and fast-skip optimization hint only. Never authoritative for KPI qualification.
+  3. Review edited timestamp (`Edited X ago`) = Never authoritative.
+  4. Contributor/profile photo dates = Never relevant.
+- **Dynamic Relative Date-Range Estimation**:
+  - Rather than naive static mappings ("3 weeks ago = August"), relative labels are dynamically converted to calendar date ranges `[startDate, endDate]` anchored to the browser's current date `referenceDate`.
+  - For example, on 2026-09-04: "3 days ago" -> September; "1 week ago" -> August. On 2026-09-28: "3 weeks ago" -> September.
+  - In previous-month audits (e.g. auditing August from September), reviews whose relative date range proves they are strictly newer than the target month are fast-skipped without opening unnecessary photo viewers.
+- **Exact Defensible Stop Boundary**:
+  - The audit scans downward in Newest order. The audit stops immediately when encountering the first defensible customer review image with `resolvedImageCaptureMonth < targetMonth`.
+  - The following do NOT stop the audit: text-only reviews, unparsed/missing photo metadata (`IMAGE_MONTH_UNKNOWN`), edited timestamps, or mixed metadata (`MIXED_IMAGE_MONTH`). Fails toward completeness.
+- **Dedicated Persistent Chrome Profile**:
+  - Automation runs use `/Users/chutisoa.nup/Library/Application Support/GoogleReviewKpiChromeProfile`.
+  - The operator signs into their Google account once in this dedicated profile, allowing future automated audit runs to reuse the authenticated session and eliminating Google Maps "มุมมองแบบจำกัด" (limited view) blocks without touching personal profiles.
+
+## Google Review KPI: Image Capture Month Rule Migration (IMAGE_CAPTURE_MONTH_V1) (2026-09-04)
+
+- **Timestamp Source of Truth Migration**:
+  - The source of truth for whether a review belongs to the target audit month is now the timestamp of customer-uploaded media (`Image capture: <Month Year>` / `ถ่ายภาพเมื่อ: <เดือน พ.ศ./ค.ศ.>`), replacing the review creation date (e.g., "22 hours ago", "3 weeks ago", "Edited").
+  - Review creation date is completely disconnected from KPI qualification and is retained strictly for debugging and completion boundary detection.
+- **Fail-Closed Multi-Image Resolution**:
+  - Reviews with multiple images qualify only if all images belong to the same target month.
+  - Mixed months resolve to `MIXED_IMAGE_MONTH` (fail-closed, not qualified).
+  - Any unknown/missing photo timestamp resolves to `IMAGE_MONTH_UNKNOWN` (fail-closed, not qualified).
+  - Each review card is counted at most once toward monthly metrics regardless of photo count.
+- **Strict Privacy Preserved**:
+  - Personal identifiable information (PII) of reviewers—including names, avatars, review text, raw/final word tokens, image URLs, binary data, and Google internal photo IDs—is never transmitted or persisted in PostgreSQL. Only aggregate numbers (`reviewsChecked`, `reviewsWithPhoto`, `photoReviewsInTargetMonth`, `reviewsOver15ThaiWords`, `qualifiedReviews`, `coverageStatus`) are stored.
+- **Immutable Rule Versioning & Historical Pilot Preservation**:
+  - Database schema models `GoogleReviewAuditSession`, `GoogleReviewAuditStore`, and `GoogleReviewKpiResult` carry `qualificationRuleVersion` ("REVIEW_CREATION_DATE_V1" vs "IMAGE_CAPTURE_MONTH_V1") and `photoReviewsInTargetMonth`.
+  - Historical 3-store pilot (`e4bd4d8a-fc9d-43f5-9740-748389cfc7d8`) and 10-store pilot (`8b1d94ee-0df7-4d3e-b84c-4ff4c9564324`) remain untouched with their historical results under `REVIEW_CREATION_DATE_V1`.
+  - All new audit sessions automatically use and enforce `IMAGE_CAPTURE_MONTH_V1`.
+- **Dynamic Origin Adaptation in Extension Transport**:
+  - `buildGoogleMapsHandoffUrl`, `dashboard_bridge.ts`, and `EARLY_LOCATION` pass `oppoBackendUrl` dynamically in hash and storage, allowing the extension to communicate with either local development environments or production without hardcoded endpoints.
+- **Validation Scope**:
+  - Successfully validated across 5 varied stores (including zero-review store edge case and multi-photo stores) under `IMAGE_CAPTURE_MONTH_V1` with 100% automated completion and zero operator interventions.
+
+## Google Review KPI: Zero-Review Store Detection & Iterative Runner Retries (2026-09-03)
+
+- **Zero-Review Store Domain Modeling**:
+  - Newly registered or smaller retail kiosks on Google Maps often have zero customer reviews. In Google Maps DOM, these places render a loaded header title and a "Write a review" / "เขียนรีวิว" button, but have no Reviews tab (`รีวิว`), no star rating summary button, and no review cards (`.jftiEf`).
+  - Previously, the runner treated the missing reviews pane as an error (`REVIEWS_PANE_NOT_FOUND`).
+  - `GoogleMapsDomAdapter.isZeroReviewsPlace()` accurately identifies this condition. The runner immediately records `reviewsChecked: 0`, `reviewsWithPhoto: 0`, `reviewsOver15ThaiWords: 0`, `qualifiedReviews: 0`, and `coverageStatus: END_OF_AVAILABLE_REVIEWS`, submits the valid aggregate result, and seamlessly advances to the next store.
+- **Iterative Retry Loop vs Recursive Call Locking**:
+  - `BatchAuditRunner.runForCurrentStore()` previously attempted to retry opening the reviews pane by recursively calling `return this.runForCurrentStore(storeInfo);`.
+  - Because `this.isRunning` was already `true`, the recursive call immediately hit `if (this.isRunning) return;`, silently abandoning attempts and preventing `handleNeedsAttention` from executing.
+  - Replaced recursion with an iterative, bounded retry loop within the active run, ensuring attempts 1..3 execute cleanly with appropriate sleep delays before reaching terminal fallback.
+
+## Google Review KPI: Deterministic Storage Bridge ACK & Shortlink-Resilient Token Transport (2026-09-03)
+
+- **Deterministic Storage Bridge ACK Protocol**:
+  - `maps.app.goo.gl` shortlink URLs trigger HTTP 302 redirects in browsers, which strip URL hash fragments (`#oppoToken=...`) and custom query parameters before landing on `www.google.com/maps/place/...`.
+  - To guarantee that `chrome.storage.local` contains the active session and fresh runner token *before* the browser opens the Google Maps tab, the Next.js Dashboard uses an asynchronous request/response protocol (`window.postMessage`) and awaits `OPPO_PERSIST_BATCH_SESSION_ACK` from `dashboard_bridge.js` before calling `window.open()`.
+- **Token Precedence Invariant (`URL Token > Storage Token > Fail Closed`)**:
+  - `BatchAuditRunner` and `ReviewCheckerOverlay` evaluate token sources with strict precedence: a fresh token passed in the URL (when resuming or starting) overrides any existing or expired token in `chrome.storage.local`.
+  - If neither source contains a valid runner token, the runner fails closed with an explicit operator warning instead of issuing unauthenticated HTTP requests.
+- **Synchronous URL Parameter Snapshot (`EARLY_LOCATION`)**:
+  - Google Maps' Single Page Application (SPA) client-side router rewrites the address bar and strips custom hash parameters during page bootstrap.
+  - `handoffParams.ts` takes a synchronous snapshot (`EARLY_LOCATION`) of `window.location.hash`, `search`, and `href` at the exact moment the content script evaluates, ensuring handoff parameters are never lost to subsequent SPA URL rewrites.
+
 ## Google Review KPI: Cross-Origin Runner Token Authentication & Hash Handoff (2026-09-03)
 
 - **Dedicated Scoped Runner Tokens**:
@@ -1809,3 +1903,10 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The lease uses a unique owner token, operation kind, heartbeat renewal, and expiry. Release is fenced by owner token; an expired lease never authorizes deletion of Singleton artifacts. Contention returns `PROFILE_OPERATION_BUSY` and the nickname job is briefly deferred without incrementing attempts or becoming `FAILED_AUTH`.
 - A single coordinator context spans unresolved recent-chat resolution and the subsequent nickname PUT. Lower-level session helpers accept that context, preventing nested acquisition deadlocks while preserving bounded five-page/125-chat resolution and latest-wins behavior.
 - Phase A1 intentionally adds no health scheduler, UI, alerts, production probes, reauthentication, routing/profile changes, or customer/job mutations. Migration initialization creates no active leases.
+
+# Admin LINE Chat health semantics (2026-09-04)
+
+- Session connectivity and job outcomes are independent signals. An `ACTIVE` / `CONNECTED` session with failed non-auth jobs is a warning (`Connected with job failures`), never an authentication or offline state.
+- The existing admin-protected operations controller remains the single API boundary. Its health response is enriched with per-session counts, active leases, timestamps, and classified recent failures; retry continues through the existing session-scoped endpoint with explicit UI confirmation.
+- Failure diagnostics are allowlisted to identifiers, category/stage, attempts, and timestamps. Raw errors, profile paths, browser state, credentials, cookies, tokens, nicknames, and customer/chat content are excluded.
+- Maintenance toggling, browser re-authentication, and active health-probe execution are intentionally omitted until dedicated safe backend capabilities exist; a UI must not imply that Railway controls are available when they are not.

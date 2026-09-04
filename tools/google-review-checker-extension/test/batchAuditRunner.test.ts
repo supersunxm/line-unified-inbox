@@ -81,6 +81,10 @@ describe("GoogleMapsDomAdapter contract: every method called by BatchAuditRunner
     assert.equal(typeof GoogleMapsDomAdapter.openReviewsPane, "function");
   });
 
+  it("isZeroReviewsPlace is a callable static method", () => {
+    assert.equal(typeof GoogleMapsDomAdapter.isZeroReviewsPlace, "function");
+  });
+
   it("ensureNewestSorting is a callable static method", () => {
     assert.equal(typeof GoogleMapsDomAdapter.ensureNewestSorting, "function");
   });
