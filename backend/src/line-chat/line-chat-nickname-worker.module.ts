@@ -6,6 +6,7 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatHealthService } from "./line-chat-health.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
+import { LineChatOaHealthProbeService } from "./line-chat-oa-health-probe.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -22,6 +23,7 @@ import { LineChatSessionHealthProbeService } from "./line-chat-session-health-pr
     LineChatRecentResolverService,
     LineChatHealthService,
     LineChatSessionHealthProbeService,
+    LineChatOaHealthProbeService,
     LineChatNicknameWorkerService,
   ],
   exports: [LineChatNicknameWorkerService],
