@@ -9,7 +9,7 @@ import { LINE_CHAT_SESSION_HEALTH_GREEN_FRESHNESS_MS } from "./line-chat-health-
 import { LineChatOaHealthProbeService } from "./line-chat-oa-health-probe.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
 
-export const LINE_CHAT_HEALTH_SCHEDULER_TICK_MS = 60_000;
+export const LINE_CHAT_HEALTH_SCHEDULER_TICK_MS = 30_000;
 export const LINE_CHAT_SESSION_HEALTH_TARGET_MS = 12 * 60_000;
 export const LINE_CHAT_OA_HEALTH_TARGET_MS = 3 * 60 * 60_000;
 const SESSION_JITTER_WINDOW_MS = 2 * 60_000;
