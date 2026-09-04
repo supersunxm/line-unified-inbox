@@ -13,6 +13,27 @@ export interface LineChatSessionSummary {
   consecutiveAuthFailures: number;
   mappedOaCount: number;
   enabledOaCount: number;
+  healthStatus: string;
+  healthFailureStage: string | null;
+  healthLastCheckedAt: string | null;
+  healthLastHealthyAt: string | null;
+  activeProfileLeases: number;
+  activeLeaseOperation: string | null;
+  jobs: LineChatQueueMetrics;
+  recentFailures: LineChatSafeJobFailure[];
+}
+
+export type LineChatFailureCategory = "AUTHENTICATION" | "TRANSPORT" | "EXECUTION" | "VALIDATION" | "TIMEOUT" | "PROFILE_LOCK" | "COORDINATOR" | "UNKNOWN";
+
+export interface LineChatSafeJobFailure {
+  jobId: string;
+  oaId: string;
+  oaName: string;
+  failureCategory: LineChatFailureCategory;
+  failureStage: string | null;
+  attemptCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LineChatQueueMetrics {
@@ -40,12 +61,37 @@ export interface LineChatHealthReport {
   rollout: LineChatRolloutSummary;
 }
 
+export function classifyLineChatJobFailure(status: string, lastError?: string | null): LineChatFailureCategory {
+  if (status === "FAILED_AUTH") return "AUTHENTICATION";
+  const value = (lastError ?? "").toUpperCase();
+  if (value.includes("PROFILE_LOCK") || value.includes("PROFILE OPERATION BUSY")) return "PROFILE_LOCK";
+  if (value.includes("COORDINATOR") || value.includes("LEASE")) return "COORDINATOR";
+  if (value.includes("TIMEOUT") || value.includes("ETIMEDOUT")) return "TIMEOUT";
+  if (value.includes("NETWORK") || value.includes("ECONN") || value.includes("TRANSPORT")) return "TRANSPORT";
+  if (value.includes("VALIDATION") || value.includes("MISSING") || value.includes("INVALID") || value.includes("NO_MATCH")) return "VALIDATION";
+  if (value.includes("EXECUTION") || value.includes("HTTP") || value.includes("REQUEST")) return "EXECUTION";
+  return value ? "EXECUTION" : "UNKNOWN";
+}
+
+function emptyQueue(): LineChatQueueMetrics {
+  return { pending: 0, processing: 0, success: 0, failed: 0, failedAuth: 0, superseded: 0, total: 0 };
+}
+
+function addJobCount(queue: LineChatQueueMetrics, status: LineChatNicknameSyncJobStatus, count: number) {
+  const keys: Record<LineChatNicknameSyncJobStatus, keyof Omit<LineChatQueueMetrics, "total">> = {
+    PENDING: "pending", PROCESSING: "processing", SUCCESS: "success", FAILED: "failed", FAILED_AUTH: "failedAuth", SUPERSEDED: "superseded",
+  };
+  queue[keys[status]] += count;
+  queue.total += count;
+}
+
 @Injectable()
 export class LineChatOperationsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   public async getHealthSummary(): Promise<LineChatHealthReport> {
-    const [sessions, oas, queueCounts] = await Promise.all([
+    const now = new Date();
+    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures] = await Promise.all([
       this.prisma.lineChatSession.findMany({
         include: {
           lineOfficialAccounts: {
@@ -70,6 +116,28 @@ export class LineChatOperationsService {
         by: ["status"],
         _count: { id: true },
       }),
+      this.prisma.lineChatNicknameSyncJob.groupBy({
+        by: ["lineOfficialAccountId", "status"],
+        _count: { id: true },
+      }),
+      this.prisma.lineChatProfileOperationLease.findMany({
+        where: { leaseUntil: { gt: now } },
+        select: { lineChatSessionId: true, operationKind: true },
+      }),
+      this.prisma.lineChatNicknameSyncJob.findMany({
+        where: { status: { in: [LineChatNicknameSyncJobStatus.FAILED_AUTH, LineChatNicknameSyncJobStatus.FAILED] } },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          status: true,
+          lastError: true,
+          attemptCount: true,
+          createdAt: true,
+          updatedAt: true,
+          lineOfficialAccount: { select: { id: true, name: true, lineChatSessionId: true } },
+        },
+      }),
     ]);
 
     const queueMap: Record<LineChatNicknameSyncJobStatus, number> = {
@@ -87,18 +155,46 @@ export class LineChatOperationsService {
       totalJobs += group._count.id;
     }
 
-    const sessionSummaries: LineChatSessionSummary[] = sessions.map((s) => ({
-      id: s.id,
-      sessionKey: s.sessionKey,
-      displayName: s.displayName,
-      status: s.status,
-      lastAuthenticatedAt: s.lastAuthenticatedAt ? s.lastAuthenticatedAt.toISOString() : null,
-      lastSuccessfulRequestAt: s.lastSuccessfulRequestAt ? s.lastSuccessfulRequestAt.toISOString() : null,
-      lastAuthFailureAt: s.lastAuthFailureAt ? s.lastAuthFailureAt.toISOString() : null,
-      consecutiveAuthFailures: s.consecutiveAuthFailures,
-      mappedOaCount: s.lineOfficialAccounts.length,
-      enabledOaCount: s.lineOfficialAccounts.filter((oa) => oa.lineChatNicknameSyncEnabled).length,
-    }));
+    const sessionSummaries: LineChatSessionSummary[] = sessions.map((s) => {
+      const oaIds = new Set(s.lineOfficialAccounts.map((oa) => oa.id));
+      const jobs = emptyQueue();
+      for (const group of sessionQueueCounts) {
+        if (oaIds.has(group.lineOfficialAccountId)) addJobCount(jobs, group.status, group._count.id);
+      }
+      const leases = activeLeases.filter((lease) => lease.lineChatSessionId === s.id);
+      return {
+        id: s.id,
+        sessionKey: s.sessionKey,
+        displayName: s.displayName,
+        status: s.status,
+        lastAuthenticatedAt: s.lastAuthenticatedAt ? s.lastAuthenticatedAt.toISOString() : null,
+        lastSuccessfulRequestAt: s.lastSuccessfulRequestAt ? s.lastSuccessfulRequestAt.toISOString() : null,
+        lastAuthFailureAt: s.lastAuthFailureAt ? s.lastAuthFailureAt.toISOString() : null,
+        consecutiveAuthFailures: s.consecutiveAuthFailures,
+        mappedOaCount: s.lineOfficialAccounts.length,
+        enabledOaCount: s.lineOfficialAccounts.filter((oa) => oa.lineChatNicknameSyncEnabled).length,
+        healthStatus: s.healthStatus,
+        healthFailureStage: s.healthFailureStage,
+        healthLastCheckedAt: s.healthLastCheckedAt?.toISOString() ?? null,
+        healthLastHealthyAt: s.healthLastHealthyAt?.toISOString() ?? null,
+        activeProfileLeases: leases.length,
+        activeLeaseOperation: leases[0]?.operationKind ?? null,
+        jobs,
+        recentFailures: recentFailures
+          .filter((job) => job.lineOfficialAccount.lineChatSessionId === s.id)
+          .slice(0, 10)
+          .map((job) => ({
+            jobId: job.id,
+            oaId: job.lineOfficialAccount.id,
+            oaName: job.lineOfficialAccount.name,
+            failureCategory: classifyLineChatJobFailure(job.status, job.lastError),
+            failureStage: job.lastError?.startsWith("RESOLVE_") ? job.lastError : null,
+            attemptCount: job.attemptCount,
+            createdAt: job.createdAt.toISOString(),
+            updatedAt: job.updatedAt.toISOString(),
+          })),
+      };
+    });
 
     let enabledCount = 0;
     let missingBotIdCount = 0;

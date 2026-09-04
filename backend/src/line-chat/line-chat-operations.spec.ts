@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LineChatOperationsService } from "./line-chat-operations.service";
+import { classifyLineChatJobFailure, LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
 
 test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics", async () => {
@@ -15,6 +15,10 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
       lastSuccessfulRequestAt: new Date("2026-08-31T11:00:00Z"),
       lastAuthFailureAt: null,
       consecutiveAuthFailures: 0,
+      healthStatus: "CONNECTED",
+      healthFailureStage: null,
+      healthLastCheckedAt: new Date("2026-08-31T11:05:00Z"),
+      healthLastHealthyAt: new Date("2026-08-31T11:05:00Z"),
       lineOfficialAccounts: [{ id: "oa-1", lineChatNicknameSyncEnabled: true }],
     },
     {
@@ -26,6 +30,10 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
       lastSuccessfulRequestAt: null,
       lastAuthFailureAt: new Date("2026-08-31T11:30:00Z"),
       consecutiveAuthFailures: 2,
+      healthStatus: "AUTH_REQUIRED",
+      healthFailureStage: "MANAGER_AUTH",
+      healthLastCheckedAt: new Date("2026-08-31T11:30:00Z"),
+      healthLastHealthyAt: null,
       lineOfficialAccounts: [{ id: "oa-2", lineChatNicknameSyncEnabled: false }],
     },
   ];
@@ -51,8 +59,13 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
       findMany: async () => mockOas,
     },
     lineChatNicknameSyncJob: {
-      groupBy: async () => mockQueueCounts,
+      groupBy: async (args: { by: string[] }) => args.by.includes("lineOfficialAccountId") ? [
+        { lineOfficialAccountId: "oa-1", status: LineChatNicknameSyncJobStatus.SUCCESS, _count: { id: 10 } },
+        { lineOfficialAccountId: "oa-2", status: LineChatNicknameSyncJobStatus.FAILED_AUTH, _count: { id: 3 } },
+      ] : mockQueueCounts,
+      findMany: async () => [],
     },
+    lineChatProfileOperationLease: { findMany: async () => [] },
   };
 
   const ops = new LineChatOperationsService(mockPrisma);
@@ -65,6 +78,8 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.sessions[1].sessionKey, "profile-b");
   assert.equal(health.sessions[1].status, LineChatSessionStatus.AUTH_REQUIRED);
   assert.equal(health.sessions[1].consecutiveAuthFailures, 2);
+  assert.equal(health.sessions[0].healthStatus, "CONNECTED");
+  assert.equal(health.sessions[0].jobs.success, 10);
 
   assert.equal(health.queue.pending, 5);
   assert.equal(health.queue.processing, 1);
@@ -77,6 +92,14 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.rollout.disabledOas, 1);
   assert.equal(health.rollout.missingChatBotId, 1);
   assert.equal(health.rollout.missingSession, 1);
+});
+
+test("LineChatOperationsService: failures are classified without treating job failures as session health", () => {
+  assert.equal(classifyLineChatJobFailure("FAILED_AUTH", "anything"), "AUTHENTICATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "RESOLVE_NO_MATCH"), "VALIDATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "Network failure"), "TRANSPORT");
+  assert.equal(classifyLineChatJobFailure("FAILED", "ETIMEDOUT"), "TIMEOUT");
+  assert.equal(classifyLineChatJobFailure("FAILED", "PROFILE_LOCK"), "PROFILE_LOCK");
 });
 
 test("LineChatOperationsService: retryFailedJobs resets failed jobs and reactivates session", async () => {

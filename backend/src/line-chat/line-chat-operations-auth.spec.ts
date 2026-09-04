@@ -88,6 +88,10 @@ test("Operations Security: Health summary output never exposes sensitive credent
           lastSuccessfulRequestAt: new Date(),
           lastAuthFailureAt: null,
           consecutiveAuthFailures: 0,
+          healthStatus: "CONNECTED",
+          healthFailureStage: null,
+          healthLastCheckedAt: new Date(),
+          healthLastHealthyAt: new Date(),
           lineOfficialAccounts: [{ id: "oa-1", lineChatNicknameSyncEnabled: true }],
         },
       ],
@@ -103,10 +107,12 @@ test("Operations Security: Health summary output never exposes sensitive credent
       ],
     },
     lineChatNicknameSyncJob: {
-      groupBy: async () => [
+      groupBy: async (args: { by: string[] }) => args.by.includes("lineOfficialAccountId") ? [] : [
         { status: LineChatNicknameSyncJobStatus.SUCCESS, _count: { id: 10 } },
       ],
+      findMany: async () => [],
     },
+    lineChatProfileOperationLease: { findMany: async () => [] },
   };
 
   const ops = new LineChatOperationsService(mockPrisma as never);
