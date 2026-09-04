@@ -3,14 +3,20 @@ const { chromium } = playwright;
 import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { collectStoreContinuous, getTodayBangkokDate } from "./continuous-collector.mjs";
 
+import {
+  buildGoogleReviewLaunchOptions,
+  resolveGoogleReviewProfileDir,
+} from "./browser-runtime-config.mjs";
+
 const prisma = new PrismaClient();
-const PERSISTENT_PROFILE_DIR = "/Users/chutisoa.nup/Library/Application Support/GoogleReviewKpiChromeProfile";
+const persistentProfileDir = resolveGoogleReviewProfileDir();
 
 async function main() {
   const todayBangkok = getTodayBangkokDate();
   console.log("================================================================================");
   console.log(" DAILY CONTINUOUS TRACKING - WEEKLY GOOGLE REVIEW KPI (65 FOCUS STORES)");
   console.log(` Target Bangkok Date (Today): ${todayBangkok}`);
+  console.log(` Chrome Profile Directory: ${persistentProfileDir}`);
   console.log(" Fast Stop Rule: 5 consecutive previously-seen reviews stops store scan");
   console.log(" Invariant: Week 1 remains CLOSED (274). Closed days (02/09, 03/09) remain frozen.");
   console.log(" Single Controlled Cycle: Executes 1 cycle across 65 stores, then halts.");
@@ -45,12 +51,12 @@ async function main() {
     throw new Error(`Expected 65 weekly stores, found ${memberships.length}!`);
   }
 
-  // 3. Launch Persistent Chrome Context (Single tab)
-  const context = await chromium.launchPersistentContext(PERSISTENT_PROFILE_DIR, {
-    headless: false,
-    args: ["--disable-blink-features=AutomationControlled"],
-    viewport: { width: 1440, height: 900 },
-  });
+  // 3. Launch Persistent Chrome Context (Single tab) with configurable profile & launch args
+  const launchOptions = buildGoogleReviewLaunchOptions();
+  console.log(`Browser Launch Options: Headless=${launchOptions.headless}, Args=${JSON.stringify(launchOptions.args)}`);
+
+  const context = await chromium.launchPersistentContext(persistentProfileDir, launchOptions);
+
 
   const page = context.pages()[0] || (await context.newPage());
   const cycleStartTime = Date.now();
