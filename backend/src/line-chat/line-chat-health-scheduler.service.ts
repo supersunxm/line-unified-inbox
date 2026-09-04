@@ -1,6 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
+import {
+  LineChatNicknameSyncJobStatus,
+  LineChatSessionHealthStatus,
+  LineChatSessionStatus,
+} from "@prisma/client";
 import { PrismaService } from "../prisma.service";
+import { LINE_CHAT_SESSION_HEALTH_GREEN_FRESHNESS_MS } from "./line-chat-health-freshness";
 import { LineChatOaHealthProbeService } from "./line-chat-oa-health-probe.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
 
@@ -80,6 +85,11 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
     this.timer = null;
   }
 
+  /**
+   * Executes at most one browser-backed health operation. Nickname work always
+   * wins. OA checks additionally require a fresh CONNECTED parent session so a
+   * single expired Manager login does not fan out into redundant child probes.
+   */
   public async runTick(now = new Date()): Promise<"SESSION" | "OA" | "SKIPPED_NICKNAME" | "IDLE" | "BUSY"> {
     if (this.running) return "BUSY";
     this.running = true;
@@ -158,6 +168,7 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
       }
 
       const oaDueBefore = new Date(now.getTime() - LINE_CHAT_OA_HEALTH_TARGET_MS);
+      const sessionFreshAfter = new Date(now.getTime() - LINE_CHAT_SESSION_HEALTH_GREEN_FRESHNESS_MS);
       const oa = await this.prisma.lineOfficialAccount.findFirst({
         where: {
           isActive: true,
@@ -165,6 +176,13 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
           lineChatNicknameSyncEnabled: true,
           chatBotId: { not: null },
           lineChatSessionId: { not: null },
+          lineChatSession: {
+            is: {
+              status: LineChatSessionStatus.ACTIVE,
+              healthStatus: LineChatSessionHealthStatus.CONNECTED,
+              healthLastCheckedAt: { gte: sessionFreshAfter },
+            },
+          },
           OR: [
             { healthNextCheckAt: { lte: now } },
             {
