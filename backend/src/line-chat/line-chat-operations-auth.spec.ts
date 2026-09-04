@@ -48,12 +48,10 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
 
   const guard = new AuthGuard(reflector, mockAuthService as never);
 
-  // 1. ADMIN -> Allowed
   const adminContext = createMockExecutionContext("Bearer admin-token");
   const adminCanActivate = await guard.canActivate(adminContext);
   assert.equal(adminCanActivate, true, "ADMIN must be allowed");
 
-  // 2. VIEWER -> Forbidden (403)
   const viewerContext = createMockExecutionContext("Bearer viewer-token");
   await assert.rejects(
     async () => guard.canActivate(viewerContext),
@@ -61,7 +59,6 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
     "VIEWER must be rejected with ForbiddenException"
   );
 
-  // 3. BM / Non-Admin -> Forbidden (403)
   const bmContext = createMockExecutionContext("Bearer bm-token");
   await assert.rejects(
     async () => guard.canActivate(bmContext),
@@ -69,7 +66,6 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
     "BM user must be rejected with ForbiddenException"
   );
 
-  // 4. Unauthenticated -> Unauthorized (401)
   const unauthContext = createMockExecutionContext();
   await assert.rejects(
     async () => guard.canActivate(unauthContext),
@@ -86,7 +82,7 @@ test("Operations Security: Health summary output never exposes sensitive credent
           id: "sess-1",
           sessionKey: "profile-a",
           displayName: "Profile A",
-          profilePath: "/private/data/passwords/profile-a", // Sensitive path
+          profilePath: "/private/data/passwords/profile-a",
           status: LineChatSessionStatus.ACTIVE,
           lastAuthenticatedAt: new Date(),
           lastSuccessfulRequestAt: new Date(),
@@ -114,10 +110,7 @@ test("Operations Security: Health summary output never exposes sensitive credent
   };
 
   const ops = new LineChatOperationsService(mockPrisma as never);
-  const controller = new LineChatOperationsController(
-    ops,
-    { probeSession: async () => ({ outcome: "SKIPPED_BUSY", sessionId: "unused", retryAfterMs: 1000 }) } as never,
-  );
+  const controller = new LineChatOperationsController(ops);
   const report = await controller.getHealth();
 
   const serialized = JSON.stringify(report);
@@ -126,44 +119,4 @@ test("Operations Security: Health summary output never exposes sensitive credent
   assert.equal(serialized.includes("xsrf"), false, "Must never expose XSRF tokens");
   assert.equal(serialized.includes("password"), false, "Must never expose passwords");
   assert.equal(serialized.includes("token"), false, "Must never expose tokens");
-});
-
-test("Operations Security: Manual session health probe is ADMIN-scoped and delegates with MANUAL source", async () => {
-  const reflector = new Reflector();
-  const requiredRoles = reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [
-    LineChatOperationsController.prototype.probeSessionHealth,
-    LineChatOperationsController,
-  ]);
-  assert.deepEqual(requiredRoles, [UserRole.ADMIN], "Manual health probe must remain ADMIN-only");
-
-  const calls: Array<{ sessionId: string; source: string }> = [];
-  const probe = {
-    probeSession: async (sessionId: string, source: string) => {
-      calls.push({ sessionId, source });
-      return {
-        outcome: "RECORDED" as const,
-        sessionId,
-        status: "CONNECTED" as const,
-        failureStage: null,
-        transitionEventCreated: false,
-        durationMs: 42,
-      };
-    },
-  };
-  const controller = new LineChatOperationsController({} as never, probe as never);
-  const result = await controller.probeSessionHealth("sess-safe");
-
-  assert.deepEqual(calls, [{ sessionId: "sess-safe", source: "MANUAL" }]);
-  assert.deepEqual(result, {
-    outcome: "RECORDED",
-    sessionId: "sess-safe",
-    status: "CONNECTED",
-    failureStage: null,
-    transitionEventCreated: false,
-    durationMs: 42,
-  });
-  const serialized = JSON.stringify(result);
-  assert.equal(serialized.includes("profilePath"), false);
-  assert.equal(serialized.includes("cookie"), false);
-  assert.equal(serialized.includes("token"), false);
 });
