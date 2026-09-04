@@ -1,5 +1,16 @@
 # AI Progress Log
 
+## 2026-09-04: Google Review Collector Dedicated Railway Container Runtime [COMPLETED & VERIFIED]
+- **Current Task**: Build dedicated Playwright-based Dockerfile (`backend/Dockerfile.google-review-collector`) for Google Review Continuous Collector Railway cron service.
+- **Changes**:
+  - Created `backend/Dockerfile.google-review-collector` based on `mcr.microsoft.com/playwright:v1.50.0-noble`.
+  - Configured workspace layer structure preserving relative path resolution for `tools/google-review-checker-extension/src/`.
+  - Set container runtime defaults: `NODE_ENV=production`, `NODE_OPTIONS="--experimental-strip-types"`, `GOOGLE_REVIEW_HEADLESS=true`, `GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile`.
+  - Packaged standalone `backend/scripts/weekly-collector/date-classifier.mjs` resolving self-contained date classification without missing backfill dependencies.
+  - Executed 10/10 container smoke tests: Node v22, Prisma Client 78 models, Thai word segmentation, date parsing, Linux sandbox launch flags, headless Chromium rendering.
+  - Target command: `node scripts/weekly-collector/run-single-cycle.mjs` (runs exactly 1 cycle across 65 stores and exits; does not run baseline seeding or infinite loop).
+  - Preserved Week 1/Week 2 historical invariants (Week 1 = 274, Week 2 = 92).
+
 ## 2026-09-04: Google Review Collector Runtime Config for Railway/Linux [COMPLETED & VERIFIED]
 - **Current Task**: Make persistent Chrome profile directory, headless mode, and Chromium launch arguments configurable for Linux/Railway container environments.
 - **Changes**:

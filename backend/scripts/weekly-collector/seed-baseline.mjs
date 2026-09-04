@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
+import { classifyWeek2Date } from "./date-classifier.mjs";
 
 import {
   buildGoogleReviewLaunchOptions,
