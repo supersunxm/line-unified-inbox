@@ -114,7 +114,10 @@ test("Operations Security: Health summary output never exposes sensitive credent
   };
 
   const ops = new LineChatOperationsService(mockPrisma as never);
-  const controller = new LineChatOperationsController(ops);
+  const controller = new LineChatOperationsController(
+    ops,
+    { probeSession: async () => ({ outcome: "SKIPPED_BUSY", sessionId: "unused", retryAfterMs: 1000 }) } as never,
+  );
   const report = await controller.getHealth();
 
   const serialized = JSON.stringify(report);
@@ -123,4 +126,44 @@ test("Operations Security: Health summary output never exposes sensitive credent
   assert.equal(serialized.includes("xsrf"), false, "Must never expose XSRF tokens");
   assert.equal(serialized.includes("password"), false, "Must never expose passwords");
   assert.equal(serialized.includes("token"), false, "Must never expose tokens");
+});
+
+test("Operations Security: Manual session health probe is ADMIN-scoped and delegates with MANUAL source", async () => {
+  const reflector = new Reflector();
+  const requiredRoles = reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [
+    LineChatOperationsController.prototype.probeSessionHealth,
+    LineChatOperationsController,
+  ]);
+  assert.deepEqual(requiredRoles, [UserRole.ADMIN], "Manual health probe must remain ADMIN-only");
+
+  const calls: Array<{ sessionId: string; source: string }> = [];
+  const probe = {
+    probeSession: async (sessionId: string, source: string) => {
+      calls.push({ sessionId, source });
+      return {
+        outcome: "RECORDED" as const,
+        sessionId,
+        status: "CONNECTED" as const,
+        failureStage: null,
+        transitionEventCreated: false,
+        durationMs: 42,
+      };
+    },
+  };
+  const controller = new LineChatOperationsController({} as never, probe as never);
+  const result = await controller.probeSessionHealth("sess-safe");
+
+  assert.deepEqual(calls, [{ sessionId: "sess-safe", source: "MANUAL" }]);
+  assert.deepEqual(result, {
+    outcome: "RECORDED",
+    sessionId: "sess-safe",
+    status: "CONNECTED",
+    failureStage: null,
+    transitionEventCreated: false,
+    durationMs: 42,
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("profilePath"), false);
+  assert.equal(serialized.includes("cookie"), false);
+  assert.equal(serialized.includes("token"), false);
 });
