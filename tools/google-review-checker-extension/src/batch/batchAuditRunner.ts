@@ -16,6 +16,7 @@ import {
   type EvaluatedReview,
   type KpiScanResult,
 } from "../core/qualificationEngine.ts";
+import { parseUrlHandoffParams } from "../core/handoffParams.ts";
 
 export type BatchRunnerState =
   | "IDLE"
@@ -81,24 +82,53 @@ export class BatchAuditRunner {
   public async initFromStorage(): Promise<boolean> {
     return new Promise((resolve) => {
       chrome.storage?.local?.get(["batchAuditSession", "batchRunnerState"], (result) => {
+        const handoff = parseUrlHandoffParams();
+
         if (result?.batchAuditSession) {
           this.sessionInfo = result.batchAuditSession;
+          // URL hash/query token takes precedence over existing storage token
+          if (this.sessionInfo && handoff.oppoToken) {
+            this.sessionInfo.runnerToken = handoff.oppoToken;
+          }
+          if (this.sessionInfo && handoff.oppoSessionId && !this.sessionInfo.sessionId) {
+            this.sessionInfo.sessionId = handoff.oppoSessionId;
+          }
+          if (this.sessionInfo && handoff.oppoBackendUrl) {
+            this.sessionInfo.backendUrl = handoff.oppoBackendUrl;
+          }
           if (this.sessionInfo && this.sessionInfo.status === "RUNNING") {
             resolve(true);
             return;
           }
         }
 
-        // URL hash fallback if storage hasn't synced yet
-        if (typeof window !== "undefined" && window.location) {
-          const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-          const hashParams = new URLSearchParams(hash);
-          const hashToken = hashParams.get("oppoToken");
-          const hashSessionId = hashParams.get("oppoSessionId");
-          if (hashToken && hashSessionId) {
-            resolve(true);
-            return;
+        // Bootstrap from URL parameters if storage is empty or not yet RUNNING
+        if (handoff.oppoToken && handoff.oppoSessionId) {
+          if (!this.sessionInfo) {
+            this.sessionInfo = {
+              sessionId: handoff.oppoSessionId,
+              targetMonth: handoff.oppoMonth || "",
+              runnerToken: handoff.oppoToken,
+              backendUrl: handoff.oppoBackendUrl || undefined,
+              status: "RUNNING",
+              currentStore: handoff.oppoStoreId
+                ? {
+                    storeId: handoff.oppoStoreId,
+                    storeName: handoff.oppoName || "Store",
+                    storeCode: handoff.oppoCode,
+                    googleMapsUrl: typeof window !== "undefined" ? window.location.href : "",
+                  }
+                : null,
+            };
+          } else {
+            this.sessionInfo.runnerToken = handoff.oppoToken;
+            this.sessionInfo.sessionId = handoff.oppoSessionId;
+            if (handoff.oppoBackendUrl) {
+              this.sessionInfo.backendUrl = handoff.oppoBackendUrl;
+            }
           }
+          resolve(true);
+          return;
         }
 
         resolve(false);
@@ -145,22 +175,66 @@ export class BatchAuditRunner {
       }
 
       this.notify("WAITING_FOR_MAPS", { storeName: storeInfo.storeName });
-      await this.sleep(1200);
+      // Poll up to 5s for maps place to render
+      for (let i = 0; i < 10; i++) {
+        if (GoogleMapsDomAdapter.getStoreName() || GoogleMapsDomAdapter.isReviewsPaneOpen()) {
+          break;
+        }
+        await this.sleep(500);
+      }
 
-      // 2. Open Reviews Pane if not yet open
-      this.notify("OPENING_REVIEWS");
+      // Check if this place has zero reviews on Google Maps
+      if (GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+        console.log("[BatchAuditRunner] Place has zero reviews on Google Maps. Coverage complete.");
+        this.notify("SCANNING");
+        await this.sleep(600);
+        const zeroResult = {
+          reviewsChecked: 0,
+          reviewsWithPhoto: 0,
+          reviewsOver15ThaiWords: 0,
+          qualifiedReviews: 0,
+          coverageStatus: "END_OF_AVAILABLE_REVIEWS" as AuditCoverageStatus,
+        };
+        this.notify("SUBMITTING_RESULT", zeroResult);
+        await this.submitAuditResult(storeInfo.storeId, zeroResult, storeInfo.backendUrl);
+        this.notify("MOVING_TO_NEXT_STORE");
+        await this.navigateToNextStore(storeInfo.backendUrl);
+        return;
+      }
+
+      // 2. Open Reviews Pane if not yet open (clean retry loop)
       let reviewsOpen = GoogleMapsDomAdapter.isReviewsPaneOpen();
-      if (!reviewsOpen) {
+      for (let attempt = 1; attempt <= this.maxAttempts && !reviewsOpen; attempt++) {
+        this.notify("OPENING_REVIEWS");
         GoogleMapsDomAdapter.openReviewsPane();
         await this.sleep(1500);
         reviewsOpen = GoogleMapsDomAdapter.isReviewsPaneOpen();
+        if (!reviewsOpen && GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+          break;
+        }
       }
 
       if (!reviewsOpen) {
-        if (this.attemptCount < this.maxAttempts) {
-          await this.sleep(1000);
-          return this.runForCurrentStore(storeInfo);
+        if (GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+          console.log("[BatchAuditRunner] Place has zero reviews on Google Maps after open attempt. Coverage complete.");
+          this.notify("SCANNING");
+          await this.sleep(600);
+          const zeroResult = {
+            reviewsChecked: 0,
+            reviewsWithPhoto: 0,
+            photoReviewsInTargetMonth: 0,
+            reviewsOver15ThaiWords: 0,
+            qualifiedReviews: 0,
+            coverageStatus: "END_OF_AVAILABLE_REVIEWS" as AuditCoverageStatus,
+            qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1" as const,
+          };
+          this.notify("SUBMITTING_RESULT", zeroResult);
+          await this.submitAuditResult(storeInfo.storeId, zeroResult, storeInfo.backendUrl);
+          this.notify("MOVING_TO_NEXT_STORE");
+          await this.navigateToNextStore(storeInfo.backendUrl);
+          return;
         }
+
         await this.handleNeedsAttention(
           storeInfo.storeId,
           "REVIEWS_PANE_NOT_FOUND",
@@ -218,9 +292,11 @@ export class BatchAuditRunner {
   private async scrollAndScanReviews(targetMonth: string): Promise<{
     reviewsChecked: number;
     reviewsWithPhoto: number;
+    photoReviewsInTargetMonth: number;
     reviewsOver15ThaiWords: number;
     qualifiedReviews: number;
     coverageStatus: AuditCoverageStatus;
+    qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1";
     oldestReviewDateText?: string;
   } | null> {
     const scrollContainer = GoogleMapsDomAdapter.getReviewScrollContainer();
@@ -232,7 +308,7 @@ export class BatchAuditRunner {
       if (!this.isRunning) return null;
 
       // Extract and evaluate currently loaded reviews using single-store detection engine
-      const rawReviews = GoogleMapsDomAdapter.extractReviews();
+      const rawReviews = await GoogleMapsDomAdapter.extractReviewsAsync(targetMonth);
       const scanResult = QualificationEngine.calculateScanSummary(
         rawReviews,
         targetMonth,
@@ -247,9 +323,11 @@ export class BatchAuditRunner {
         return {
           reviewsChecked: scanResult.reviewsChecked,
           reviewsWithPhoto: scanResult.reviewsWithPhoto,
+          photoReviewsInTargetMonth: scanResult.photoReviewsInTargetMonth,
           reviewsOver15ThaiWords: scanResult.reviewsOver15ThaiWords,
           qualifiedReviews: scanResult.qualifiedReviews,
           coverageStatus: scanResult.auditCoverageStatus,
+          qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
           oldestReviewDateText: oldest?.rawDateText || undefined,
         };
       }
@@ -270,9 +348,11 @@ export class BatchAuditRunner {
           return {
             reviewsChecked: finalResult.reviewsChecked,
             reviewsWithPhoto: finalResult.reviewsWithPhoto,
+            photoReviewsInTargetMonth: finalResult.photoReviewsInTargetMonth,
             reviewsOver15ThaiWords: finalResult.reviewsOver15ThaiWords,
             qualifiedReviews: finalResult.qualifiedReviews,
             coverageStatus: finalResult.auditCoverageStatus,
+            qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
             oldestReviewDateText: oldest?.rawDateText || undefined,
           };
         }
@@ -295,7 +375,7 @@ export class BatchAuditRunner {
     }
 
     // Safety fallback if reached maxScrolls
-    const finalRaw = GoogleMapsDomAdapter.extractReviews();
+    const finalRaw = await GoogleMapsDomAdapter.extractReviewsAsync();
     const fallbackResult = QualificationEngine.calculateScanSummary(
       finalRaw,
       targetMonth,
@@ -307,9 +387,11 @@ export class BatchAuditRunner {
     return {
       reviewsChecked: fallbackResult.reviewsChecked,
       reviewsWithPhoto: fallbackResult.reviewsWithPhoto,
+      photoReviewsInTargetMonth: fallbackResult.photoReviewsInTargetMonth,
       reviewsOver15ThaiWords: fallbackResult.reviewsOver15ThaiWords,
       qualifiedReviews: fallbackResult.qualifiedReviews,
       coverageStatus: fallbackResult.auditCoverageStatus,
+      qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
       oldestReviewDateText: oldestFallback?.rawDateText || undefined,
     };
   }
@@ -322,9 +404,11 @@ export class BatchAuditRunner {
     result: {
       reviewsChecked: number;
       reviewsWithPhoto: number;
+      photoReviewsInTargetMonth?: number;
       reviewsOver15ThaiWords: number;
       qualifiedReviews: number;
       coverageStatus: AuditCoverageStatus;
+      qualificationRuleVersion?: string;
       oldestReviewDateText?: string;
     },
     backendUrl: string,
@@ -336,15 +420,17 @@ export class BatchAuditRunner {
     const payload = {
       reviewsChecked: result.reviewsChecked,
       reviewsWithPhoto: result.reviewsWithPhoto,
+      photoReviewsInTargetMonth: result.photoReviewsInTargetMonth || 0,
       reviewsOver15ThaiWords: result.reviewsOver15ThaiWords,
       qualifiedReviews: result.qualifiedReviews,
+      qualificationRuleVersion: result.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
       targetQualifiedReviews: 10,
       auditCoverageStatus:
         result.coverageStatus === "OLDER_THAN_TARGET_REACHED"
           ? "OLDER_THAN_TARGET_REACHED"
           : "END_OF_AVAILABLE_REVIEWS",
       oldestReviewDateText: result.oldestReviewDateText || null,
-      notes: "Auto-verified via Extension Batch Audit Runner",
+      notes: "Auto-verified via Extension Batch Audit Runner (IMAGE_CAPTURE_MONTH_V1)",
     };
 
     const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/stores/${storeId}/complete`;
@@ -420,7 +506,7 @@ export class BatchAuditRunner {
       return this.navigateToNextStore(backendUrl);
     }
 
-    // Update transient storage
+    // Update transient storage and await persistence before navigating
     const updatedSession = {
       ...this.sessionInfo,
       currentStore: {
@@ -431,7 +517,13 @@ export class BatchAuditRunner {
         region: nextStore.region,
       },
     };
-    chrome.storage?.local?.set({ batchAuditSession: updatedSession });
+    await new Promise<void>((resolve) => {
+      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ batchAuditSession: updatedSession }, () => resolve());
+      } else {
+        resolve();
+      }
+    });
 
     // Navigate to next store with query & hash params preserved
     let navUrl = nextStore.googleMapsUrl;
@@ -447,7 +539,7 @@ export class BatchAuditRunner {
         parsed.searchParams.set("oppoMonth", this.sessionInfo.targetMonth);
       }
       if (this.sessionInfo?.runnerToken || this.sessionInfo?.sessionId) {
-        const hashParams = new URLSearchParams();
+        const hashParams = new URLSearchParams(parsed.hash.startsWith("#") ? parsed.hash.slice(1) : "");
         if (this.sessionInfo.runnerToken) hashParams.set("oppoToken", this.sessionInfo.runnerToken);
         if (this.sessionInfo.sessionId) hashParams.set("oppoSessionId", this.sessionInfo.sessionId);
         parsed.hash = hashParams.toString();
@@ -457,7 +549,7 @@ export class BatchAuditRunner {
       // Keep original url if parsing failed
     }
 
-    await this.sleep(1000);
+    await this.sleep(800);
     window.location.href = navUrl;
   }
 
@@ -473,14 +565,12 @@ export class BatchAuditRunner {
    */
   private buildAuthHeaders(base: Record<string, string> = {}): Record<string, string> {
     let token = this.sessionInfo?.runnerToken;
-    if (!token && typeof window !== "undefined" && window.location) {
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-      const hashParams = new URLSearchParams(hash);
-      const hashToken = hashParams.get("oppoToken");
-      if (hashToken) {
-        token = hashToken;
+    if (!token) {
+      const handoff = parseUrlHandoffParams();
+      if (handoff.oppoToken) {
+        token = handoff.oppoToken;
         if (this.sessionInfo) {
-          this.sessionInfo.runnerToken = hashToken;
+          this.sessionInfo.runnerToken = handoff.oppoToken;
         }
       }
     }

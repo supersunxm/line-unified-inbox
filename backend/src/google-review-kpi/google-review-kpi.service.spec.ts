@@ -292,3 +292,121 @@ test("GoogleReviewKpiService.listMonthlyKpis aggregates store statistics correct
   assert.equal(s3Item?.hasGoogleMaps, false);
   assert.equal(s3Item?.kpiResult, null);
 });
+
+test("LOCKED_WEEKLY_KPI_STORE_CODES has exactly 65 unique store codes", () => {
+  const { LOCKED_WEEKLY_KPI_STORE_CODES } = require("./google-review-kpi.dto");
+  assert.equal(LOCKED_WEEKLY_KPI_STORE_CODES.length, 65);
+  const unique = new Set(LOCKED_WEEKLY_KPI_STORE_CODES);
+  assert.equal(unique.size, 65);
+  assert.ok(LOCKED_WEEKLY_KPI_STORE_CODES.includes("25610"));
+  assert.ok(LOCKED_WEEKLY_KPI_STORE_CODES.includes("32569"));
+});
+
+test("GoogleReviewKpiService.syncWeeklyStoreMemberships handles matched and unmatched stores cleanly", async () => {
+  const storeMasters = [
+    { id: "sm-25610", externalStoreId: "25610", storeName: "OBS Central World", region: "Central", province: "Bangkok", googleMapsUrl: "https://maps.google.com" },
+    { id: "sm-26239", externalStoreId: "26239", storeName: "OBS Central Rama 3", region: "Central", province: "Bangkok", googleMapsUrl: "" },
+  ];
+
+  const stores = [
+    { id: "store-25610", code: "25610", storeMasterId: "sm-25610" },
+  ];
+
+  const createdStores: any[] = [];
+  const memberships: any[] = [];
+
+  const mockPrisma = {
+    storeMaster: {
+      findMany: async () => storeMasters,
+    },
+    store: {
+      findFirst: async ({ where }: any) => {
+        const byMaster = stores.find((s) => s.storeMasterId === where.OR?.[0]?.storeMasterId);
+        const byCode = stores.find((s) => s.code === where.OR?.[1]?.code);
+        return byMaster || byCode || null;
+      },
+      create: async ({ data }: any) => {
+        const s = { id: `store-${data.code}`, ...data };
+        createdStores.push(s);
+        return s;
+      },
+      update: async ({ data, where }: any) => {
+        return { id: where.id, ...data };
+      },
+    },
+    googleReviewWeeklyStoreMembership: {
+      findFirst: async () => null,
+      create: async ({ data }: any) => {
+        memberships.push(data);
+        return data;
+      },
+      update: async ({ data }: any) => data,
+    },
+  } as unknown as PrismaService;
+
+  const service = new GoogleReviewKpiService(mockPrisma);
+  const result = await service.syncWeeklyStoreMemberships();
+
+  assert.equal(result.expectedStoreCount, 65);
+  assert.equal(result.matchedStoreMasterCount, 2);
+  assert.equal(result.duplicateMappings, 0);
+  assert.ok(result.unmatchedStoreCodes.includes("32569"));
+  assert.equal(result.syncedMembershipsCount, 65);
+  assert.equal(memberships.length, 65);
+});
+
+test("computeReviewFingerprint produces consistent HMAC-SHA256 and zero PII", async () => {
+  const { computeReviewFingerprint } = await import("./review-fingerprint.util");
+
+  const fp1 = computeReviewFingerprint("25610", "Ci9DQUlRQUNvZENodHljRjlv");
+  const fp2 = computeReviewFingerprint("25610", "Ci9DQUlRQUNvZENodHljRjlv");
+  const fpOtherStore = computeReviewFingerprint("26239", "Ci9DQUlRQUNvZENodHljRjlv");
+
+  assert.equal(typeof fp1, "string");
+  assert.equal(fp1.length, 64); // 32 bytes hex
+  assert.equal(fp1, fp2);
+  assert.notEqual(fp1, fpOtherStore);
+
+  // Fallback test
+  const fallback = computeReviewFingerprint("25610", null, {
+    relativeDateText: "today",
+    wordCount: 16,
+    hasPhoto: true,
+    cardIndex: 0,
+  });
+  assert.equal(typeof fallback, "string");
+  assert.equal(fallback.length, 64);
+});
+
+test("GoogleReviewKpiService.getWeeklyCollectorStatus returns aggregated statistics", async () => {
+  const mockPrisma = {
+    googleReviewWeeklyStoreMembership: {
+      count: async () => 65,
+    },
+    googleReviewFingerprint: {
+      count: async (args?: any) => {
+        if (args?.where?.reviewDate) return 4;
+        return 120;
+      },
+      findFirst: async () => ({
+        createdAt: new Date("2026-09-04T10:00:00.000Z"),
+      }),
+    },
+    googleReviewDailyKpi: {
+      aggregate: async () => ({
+        _sum: { qualifiedReviews: 33 },
+      }),
+    },
+  } as unknown as PrismaService;
+
+  const service = new GoogleReviewKpiService(mockPrisma);
+  const status = await service.getWeeklyCollectorStatus();
+
+  assert.equal(status.totalStores, 65);
+  assert.equal(status.fingerprintsTracked, 120);
+  assert.equal(status.status, "COMPLETED");
+  assert.equal(status.summaryToday.totalQualifiedToday, 33);
+  assert.equal(status.summaryToday.newReviewsDiscoveredToday, 4);
+  assert.ok(status.lastRunAt);
+});
+

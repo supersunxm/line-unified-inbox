@@ -7,6 +7,7 @@ import {
   type AuditCoverageStatus,
 } from "./core/qualificationEngine.ts";
 import { BatchAuditRunner, type BatchAuditSessionInfo } from "./batch/batchAuditRunner.ts";
+import { parseUrlHandoffParams } from "./core/handoffParams.ts";
 
 function getCurrentMonthString(): string {
   const d = new Date();
@@ -61,39 +62,58 @@ class ReviewCheckerOverlay {
     chrome.storage?.local?.get(["batchAuditSession"], (res) => {
       this.batchSession = res?.batchAuditSession || null;
 
-      // Check URL hash fallback for runnerToken or sessionId if missing in storage
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-      const hashParams = new URLSearchParams(hash);
-      const hashToken = hashParams.get("oppoToken");
-      const hashSessionId = hashParams.get("oppoSessionId");
+      const handoff = parseUrlHandoffParams();
+      const urlToken = handoff.oppoToken;
+      const urlSessionId = handoff.oppoSessionId;
+      const urlBackendUrl = handoff.oppoBackendUrl;
 
       if (this.batchSession) {
-        if (hashToken && !this.batchSession.runnerToken) {
-          this.batchSession.runnerToken = hashToken;
-          chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+        // Fresh token from URL takes precedence over existing storage token
+        if (urlToken) {
+          this.batchSession.runnerToken = urlToken;
         }
-        if (hashSessionId && !this.batchSession.sessionId) {
-          this.batchSession.sessionId = hashSessionId;
-          chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+        if (urlSessionId && !this.batchSession.sessionId) {
+          this.batchSession.sessionId = urlSessionId;
         }
-      } else if (hashToken && hashSessionId) {
-        // Bootstrap session from URL hash if storage was empty
+        if (urlBackendUrl) {
+          this.batchSession.backendUrl = urlBackendUrl;
+        }
+        chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
+      } else if (urlToken && urlSessionId) {
+        // Bootstrap session from URL parameters if storage was empty
         this.batchSession = {
-          sessionId: hashSessionId,
-          targetMonth: this.selectedMonth,
-          runnerToken: hashToken,
+          sessionId: urlSessionId,
+          targetMonth: handoff.oppoMonth || this.selectedMonth,
+          runnerToken: urlToken,
+          backendUrl: urlBackendUrl || this.backendUrl,
           status: "RUNNING",
           currentStore: {
-            storeId: this.storeId,
-            storeName: this.storeName,
-            storeCode: this.storeCode,
+            storeId: handoff.oppoStoreId || this.storeId,
+            storeName: handoff.oppoName || this.storeName,
+            storeCode: handoff.oppoCode || this.storeCode,
             googleMapsUrl: window.location.href,
           },
         };
         chrome.storage?.local?.set({ batchAuditSession: this.batchSession });
       }
 
+      if (this.batchSession?.backendUrl) {
+        this.backendUrl = this.batchSession.backendUrl;
+      }
+
       if (!this.batchSession || this.batchSession.status !== "RUNNING") {
+        return;
+      }
+
+      // Invariant check: runner token must be present before starting runner
+      if (!this.batchSession.runnerToken) {
+        console.error("[ReviewCheckerOverlay] Runner authentication token is missing");
+        this.renderBatchRunnerBar();
+        const statusText = document.getElementById("oppo-batch-status-text");
+        if (statusText) {
+          statusText.textContent = "⚠ Attention needed: Runner authentication token is missing. Please resume from dashboard.";
+          statusText.style.background = "#dc2626";
+        }
         return;
       }
 
@@ -248,32 +268,23 @@ class ReviewCheckerOverlay {
   }
 
   private detectStoreContextFromUrl() {
-    // 1. Search params
-    const searchParams = new URLSearchParams(window.location.search);
-    // 2. Hash params (e.g. #oppoStoreId=... or #storeId=...)
-    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-    const hashParams = new URLSearchParams(hash);
+    const handoff = parseUrlHandoffParams();
 
-    const q = (key: string) => searchParams.get(key) || hashParams.get(key);
-
-    const storeId = q("oppoStoreId") || q("storeId");
-    if (storeId) {
-      this.storeId = storeId.trim();
+    if (handoff.oppoStoreId) {
+      this.storeId = handoff.oppoStoreId.trim();
       this.isStoreLocked = true;
     }
-
-    const extId = q("oppoExtId") || q("externalStoreId");
-    if (extId) this.externalStoreId = extId.trim();
-
-    const code = q("oppoCode") || q("code");
-    if (code) this.storeCode = code.trim();
-
-    const name = q("oppoName") || q("storeName");
-    if (name) this.storeName = decodeURIComponent(name).trim();
-
-    const month = q("oppoMonth") || q("kpiMonth");
-    if (month && /^\d{4}-\d{2}$/.test(month)) {
-      this.selectedMonth = month;
+    if (handoff.oppoExtId) {
+      this.externalStoreId = handoff.oppoExtId.trim();
+    }
+    if (handoff.oppoCode) {
+      this.storeCode = handoff.oppoCode.trim();
+    }
+    if (handoff.oppoName) {
+      this.storeName = handoff.oppoName.trim();
+    }
+    if (handoff.oppoMonth && /^\d{4}-\d{2}$/.test(handoff.oppoMonth)) {
+      this.selectedMonth = handoff.oppoMonth;
     }
   }
 
@@ -477,25 +488,41 @@ class ReviewCheckerOverlay {
           gap: 6px;
         ">
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Unique reviews detected:</span>
+            <span style="color: #64748b;">Reviews Scanned:</span>
             <span style="font-weight: 700; font-family: monospace;">${this.lastResult?.reviewsChecked ?? 0}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">With customer photo:</span>
+            <span style="color: #64748b;">With Customer Photo:</span>
             <span style="font-weight: 700; font-family: monospace;">${this.lastResult?.reviewsWithPhoto ?? 0}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">15+ Thai words:</span>
+            <span style="color: #64748b;">Photo in Target Month:</span>
+            <span style="font-weight: 700; font-family: monospace; color: #0284c7;">${this.lastResult?.photoReviewsInTargetMonth ?? 0}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span style="color: #64748b;">15+ Thai Words:</span>
             <span style="font-weight: 700; font-family: monospace;">${this.lastResult?.reviewsOver15ThaiWords ?? 0}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Edited reviews (unverifiable):</span>
-            <span style="font-weight: 700; font-family: monospace; color: #d97706;">${this.lastResult?.editedReviewCount ?? 0}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Unknown date reviews:</span>
-            <span style="font-weight: 700; font-family: monospace; color: #d97706;">${this.lastResult?.unknownDateCount ?? 0}</span>
-          </div>
+          ${
+            (this.lastResult?.imageMonthUnknownCount ?? 0) > 0
+              ? `
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="color: #64748b;">Image Month Unknown:</span>
+              <span style="font-weight: 700; font-family: monospace; color: #d97706;">${this.lastResult?.imageMonthUnknownCount ?? 0}</span>
+            </div>
+            `
+              : ""
+          }
+          ${
+            (this.lastResult?.mixedImageMonthCount ?? 0) > 0
+              ? `
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="color: #64748b;">Mixed Image Months:</span>
+              <span style="font-weight: 700; font-family: monospace; color: #dc2626;">${this.lastResult?.mixedImageMonthCount ?? 0}</span>
+            </div>
+            `
+              : ""
+          }
           <div style="border-top: 1px dashed #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; font-size: 12px; color: #059669; font-weight: 800;">
             <span>Qualified Reviews:</span>
             <span style="font-size: 14px; font-family: monospace;">${this.lastResult?.qualifiedReviews ?? 0}</span>
@@ -637,24 +664,23 @@ class ReviewCheckerOverlay {
                   padding: 8px 10px;
                   line-height: 1.4;
                 ">
-                  <div style="font-weight: 700; color: #0f172a; margin-bottom: 2px;">Review #${i + 1}</div>
-                  ${r.fullReviewText ? `<div style="margin-bottom: 3px; color: #334155; word-break: break-word;"><strong>Full review text:</strong> "${r.fullReviewText}"</div>` : ""}
-                  ${r.rawTokens && r.rawTokens.length > 0 ? `<div style="color: #64748b; font-size: 9px; margin-bottom: 2px; word-break: break-word;"><strong>Raw tokens (${r.rawTokens.length}):</strong> [${r.rawTokens.join(", ")}]</div>` : ""}
-                  ${r.finalTokens && r.finalTokens.length > 0 ? `<div style="color: #0284c7; font-size: 9px; margin-bottom: 3px; word-break: break-word;"><strong>Final counted tokens (${r.finalTokens.length}):</strong> [${r.finalTokens.join(", ")}]</div>` : ""}
-                  <div><strong>Final word count:</strong> ${r.thaiWordCount}</div>
-                  <div><strong>15+ words:</strong> ${r.isAtLeast15Words ? "Yes ✅" : "No ❌"}</div>
-                  <div><strong>Photo evidence:</strong> ${r.photoEvidence ?? "NONE"}</div>
-                  <div><strong>Has customer photo:</strong> ${r.hasPhoto ? "Yes ✅" : "No ❌"}</div>
-                  <div><strong>Date:</strong> ${r.month ?? "ORIGINAL_DATE_UNKNOWN"} ${r.isDateInMonth ? "✅" : "❌"}</div>
-                  ${
-                    r.isEdited
-                      ? `<div style="color: #d97706; font-weight: 700; font-size: 9px; margin: 1px 0;">
-                          ⚠️ EDITED REVIEW — Original creation date unknown. Excluded from monthly KPI.
-                         </div>`
-                      : ""
-                  }
-                  <div style="font-weight: 700; color: ${r.isQualified ? "#16a34a" : "#dc2626"}; margin-top: 3px;">
-                    Qualified: ${r.isQualified ? "Yes ✅" : "No ❌"}
+                  <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Review #${i + 1}</div>
+                  <div><strong>reviewRelativeLabel:</strong> "${r.rawDateText || ""}"</div>
+                  <div><strong>isEditedTimestamp:</strong> ${r.isEdited ? "true ✏️" : "false"}</div>
+                  <div><strong>relativeDateRange:</strong> ${r.chronology?.relativeDateRange ? `${r.chronology.relativeDateRange.startMonth} .. ${r.chronology.relativeDateRange.endMonth}` : "null"}</div>
+                  <div><strong>chronologicalRelation:</strong> <span style="font-weight: 700; color: ${r.chronologicalRelation === "OLDER" ? "#dc2626" : r.chronologicalRelation === "NEWER" ? "#2563eb" : "#059669"};">${r.chronologicalRelation}</span></div>
+                  <div><strong>chronologicalBoundaryEligible:</strong> ${r.chronologicalBoundaryEligible ? "true (un-edited)" : "false (edited or within range)"}</div>
+                  <div><strong>hasCustomerPhoto:</strong> ${r.hasPhoto ? "true ✅" : "false ❌"}</div>
+                  <div><strong>photoEvidence:</strong> ${r.photoEvidence ?? "NONE"}</div>
+                  <div><strong>imageCaptureMonths:</strong> ${JSON.stringify(r.imageCaptureMonths || [])}</div>
+                  <div><strong>resolvedImageCaptureMonth:</strong> ${r.resolvedImageCaptureMonth ?? "null"}</div>
+                  <div><strong>targetMonth:</strong> ${this.selectedMonth}</div>
+                  <div><strong>monthRelation:</strong> <span style="font-weight: 700; color: ${r.monthRelation === "TARGET" ? "#16a34a" : r.monthRelation === "OLDER" ? "#dc2626" : "#2563eb"};">${r.monthRelation}</span></div>
+                  <div><strong>finalWordCount:</strong> ${r.thaiWordCount} (${r.isAtLeast15Words ? "15+ ✅" : "<15 ❌"})</div>
+                  <div><strong>stopBoundaryTriggered:</strong> <span style="font-weight: 700; color: ${r.stopBoundaryTriggered ? "#dc2626" : "#64748b"};">${r.stopBoundaryTriggered ? "YES 🛑" : "false"}</span></div>
+                  ${r.stopBoundaryReason ? `<div style="color: #dc2626; font-size: 9px;"><strong>stopReason:</strong> ${r.stopBoundaryReason}</div>` : ""}
+                  <div style="font-weight: 700; color: ${r.isQualified ? "#16a34a" : "#dc2626"}; margin-top: 4px; padding-top: 3px; border-top: 1px dashed #e2e8f0;">
+                    qualified: ${r.isQualified ? "true ✅" : "false ❌"}
                   </div>
                 </div>
               `
@@ -727,17 +753,23 @@ class ReviewCheckerOverlay {
     // Re-evaluate previously seen reviews against new target month without creating duplicates
     const targetMonth = this.selectedMonth;
     let withPhoto = 0;
+    let photoInTarget = 0;
     let over15 = 0;
     let qualified = 0;
     let unknownDate = 0;
     let editedCount = 0;
+    let imageUnknown = 0;
+    let imageMixed = 0;
 
     for (const r of this.allEvaluatedReviews) {
-      r.isDateInMonth = Boolean(r.month && r.month === targetMonth);
-      r.isQualified = r.isDateInMonth && r.hasPhoto && r.isOver15Words;
+      r.isTargetImageMonth = Boolean(r.resolvedImageCaptureMonth && r.resolvedImageCaptureMonth === targetMonth);
+      r.isQualified = !r.isEdited && r.hasPhoto && r.isTargetImageMonth && r.isAtLeast15Words;
       if (r.hasPhoto) withPhoto++;
-      if (r.isOver15Words) over15++;
+      if (r.isTargetImageMonth) photoInTarget++;
+      if (r.isAtLeast15Words) over15++;
       if (r.isQualified) qualified++;
+      if (r.imageMonthStatus === "IMAGE_MONTH_UNKNOWN") imageUnknown++;
+      if (r.imageMonthStatus === "MIXED_IMAGE_MONTH") imageMixed++;
       if (r.month === null) unknownDate++;
       if (r.isEdited) editedCount++;
     }
@@ -752,10 +784,17 @@ class ReviewCheckerOverlay {
 
     this.lastResult = {
       targetMonth,
+      qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+      reviewsScanned: this.allEvaluatedReviews.length,
       reviewsChecked: this.allEvaluatedReviews.length,
       reviewsWithPhoto: withPhoto,
+      reviewsWithCustomerPhoto: withPhoto,
+      photoReviewsInTargetMonth: photoInTarget,
       reviewsOver15ThaiWords: over15,
+      reviewsAtLeast15Words: over15,
       qualifiedReviews: qualified,
+      imageMonthUnknownCount: imageUnknown,
+      mixedImageMonthCount: imageMixed,
       unknownDateCount: unknownDate,
       editedReviewCount: editedCount,
       hasReachedOlderReviews: hasReachedOlder,
@@ -767,9 +806,8 @@ class ReviewCheckerOverlay {
     this.render();
   }
 
-  private performScan() {
-    const cards = GoogleMapsDomAdapter.getReviewCardElements();
-    const rawReviews = cards.map((c) => GoogleMapsDomAdapter.extractReviewData(c));
+  private async performScan() {
+    const rawReviews = await GoogleMapsDomAdapter.extractReviewsAsync(this.selectedMonth);
 
     const ref = new Date();
     let newlyAdded = 0;
@@ -784,20 +822,31 @@ class ReviewCheckerOverlay {
         this.allEvaluatedReviews.push(evaluated);
         newlyAdded++;
       }
+
+      // Exact Stop Boundary: Stop processing immediately when the first older Image Capture Month is encountered
+      if (evaluated.stopBoundaryTriggered) {
+        break;
+      }
     }
 
     this.lastScanNewCount = newlyAdded;
 
     let withPhoto = 0;
+    let photoInTarget = 0;
     let over15 = 0;
     let qualified = 0;
     let unknownDate = 0;
     let editedCount = 0;
+    let imageUnknown = 0;
+    let imageMixed = 0;
 
     for (const r of this.allEvaluatedReviews) {
       if (r.hasPhoto) withPhoto++;
-      if (r.isOver15Words) over15++;
+      if (r.isTargetImageMonth) photoInTarget++;
+      if (r.isAtLeast15Words) over15++;
       if (r.isQualified) qualified++;
+      if (r.imageMonthStatus === "IMAGE_MONTH_UNKNOWN") imageUnknown++;
+      if (r.imageMonthStatus === "MIXED_IMAGE_MONTH") imageMixed++;
       if (r.month === null) unknownDate++;
       if (r.isEdited) editedCount++;
     }
@@ -812,10 +861,17 @@ class ReviewCheckerOverlay {
 
     this.lastResult = {
       targetMonth: this.selectedMonth,
+      qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+      reviewsScanned: this.allEvaluatedReviews.length,
       reviewsChecked: this.allEvaluatedReviews.length,
       reviewsWithPhoto: withPhoto,
+      reviewsWithCustomerPhoto: withPhoto,
+      photoReviewsInTargetMonth: photoInTarget,
       reviewsOver15ThaiWords: over15,
+      reviewsAtLeast15Words: over15,
       qualifiedReviews: qualified,
+      imageMonthUnknownCount: imageUnknown,
+      mixedImageMonthCount: imageMixed,
       unknownDateCount: unknownDate,
       editedReviewCount: editedCount,
       hasReachedOlderReviews: hasReachedOlder,

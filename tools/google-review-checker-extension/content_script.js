@@ -1,5 +1,485 @@
 "use strict";
 (() => {
+  // src/core/imageCaptureExtractor.ts
+  var MONTH_NAMES_MAP = {
+    // English short & full
+    jan: "01",
+    january: "01",
+    feb: "02",
+    february: "02",
+    mar: "03",
+    march: "03",
+    apr: "04",
+    april: "04",
+    may: "05",
+    jun: "06",
+    june: "06",
+    jul: "07",
+    july: "07",
+    aug: "08",
+    august: "08",
+    sep: "09",
+    sept: "09",
+    september: "09",
+    oct: "10",
+    october: "10",
+    nov: "11",
+    november: "11",
+    dec: "12",
+    december: "12",
+    // Thai abbreviated (with and without dot)
+    "\u0E21.\u0E04.": "01",
+    "\u0E21.\u0E04": "01",
+    \u0E21\u0E04: "01",
+    "\u0E01.\u0E1E.": "02",
+    "\u0E01.\u0E1E": "02",
+    \u0E01\u0E1E: "02",
+    "\u0E21\u0E35.\u0E04.": "03",
+    "\u0E21\u0E35.\u0E04": "03",
+    \u0E21\u0E35\u0E04: "03",
+    "\u0E40\u0E21.\u0E22.": "04",
+    "\u0E40\u0E21.\u0E22": "04",
+    \u0E40\u0E21\u0E22: "04",
+    "\u0E1E.\u0E04.": "05",
+    "\u0E1E.\u0E04": "05",
+    \u0E1E\u0E04: "05",
+    "\u0E21\u0E34.\u0E22.": "06",
+    "\u0E21\u0E34.\u0E22": "06",
+    \u0E21\u0E34\u0E22: "06",
+    "\u0E01.\u0E04.": "07",
+    "\u0E01.\u0E04": "07",
+    \u0E01\u0E04: "07",
+    "\u0E2A.\u0E04.": "08",
+    "\u0E2A.\u0E04": "08",
+    \u0E2A\u0E04: "08",
+    "\u0E01.\u0E22.": "09",
+    "\u0E01.\u0E22": "09",
+    \u0E01\u0E22: "09",
+    "\u0E15.\u0E04.": "10",
+    "\u0E15.\u0E04": "10",
+    \u0E15\u0E04: "10",
+    "\u0E1E.\u0E22.": "11",
+    "\u0E1E.\u0E22": "11",
+    \u0E1E\u0E22: "11",
+    "\u0E18.\u0E04.": "12",
+    "\u0E18.\u0E04": "12",
+    \u0E18\u0E04: "12",
+    // Thai full
+    \u0E21\u0E01\u0E23\u0E32\u0E04\u0E21: "01",
+    \u0E01\u0E38\u0E21\u0E20\u0E32\u0E1E\u0E31\u0E19\u0E18\u0E4C: "02",
+    \u0E21\u0E35\u0E19\u0E32\u0E04\u0E21: "03",
+    \u0E40\u0E21\u0E29\u0E32\u0E22\u0E19: "04",
+    \u0E1E\u0E24\u0E29\u0E20\u0E32\u0E04\u0E21: "05",
+    \u0E21\u0E34\u0E16\u0E38\u0E19\u0E32\u0E22\u0E19: "06",
+    \u0E01\u0E23\u0E01\u0E0E\u0E32\u0E04\u0E21: "07",
+    \u0E2A\u0E34\u0E07\u0E2B\u0E32\u0E04\u0E21: "08",
+    \u0E01\u0E31\u0E19\u0E22\u0E32\u0E22\u0E19: "09",
+    \u0E15\u0E38\u0E25\u0E32\u0E04\u0E21: "10",
+    \u0E1E\u0E24\u0E28\u0E08\u0E34\u0E01\u0E32\u0E22\u0E19: "11",
+    \u0E18\u0E31\u0E19\u0E27\u0E32\u0E04\u0E21: "12"
+  };
+  function normalizeMonthNameTo2Digit(rawMonth) {
+    if (!rawMonth) return null;
+    const cleaned = rawMonth.trim().toLowerCase();
+    return MONTH_NAMES_MAP[cleaned] || null;
+  }
+  function normalizeYearStringToGregorian(rawYear) {
+    const y = typeof rawYear === "number" ? rawYear : parseInt(rawYear.trim(), 10);
+    if (isNaN(y)) return null;
+    if (y >= 2400 && y <= 2700) {
+      return String(y - 543);
+    }
+    if (y >= 2e3 && y <= 2099) {
+      return String(y);
+    }
+    return null;
+  }
+  function parseImageCaptureMonth(text) {
+    if (!text) return null;
+    const enMatch = text.match(/image\s+capture\s*[:\-]?\s*([a-zA-Z]+)\s+(\d{4})/i);
+    if (enMatch) {
+      const month = normalizeMonthNameTo2Digit(enMatch[1]);
+      const year = normalizeYearStringToGregorian(enMatch[2]);
+      if (month && year) {
+        return `${year}-${month}`;
+      }
+    }
+    const thMatch = text.match(/(?:เวลาถ่าย(?:ภาพ)?|ถ่าย(?:ภาพ)?เมื่อ|ถ่ายเมื่อ|บันทึกภาพเมื่อ|การบันทึกภาพ|รูปภาพ)\s*[:\-]?\s*([ก-๙.]+)\s+(\d{4})/);
+    if (thMatch) {
+      const month = normalizeMonthNameTo2Digit(thMatch[1]);
+      const year = normalizeYearStringToGregorian(thMatch[2]);
+      if (month && year) {
+        return `${year}-${month}`;
+      }
+    }
+    if (/capture|photo|image|ถ่าย|รูป/i.test(text)) {
+      const standaloneMatch = text.match(/([a-zA-Zก-๙.]+)\s+(\d{4})/);
+      if (standaloneMatch) {
+        const month = normalizeMonthNameTo2Digit(standaloneMatch[1]);
+        const year = normalizeYearStringToGregorian(standaloneMatch[2]);
+        if (month && year) {
+          return `${year}-${month}`;
+        }
+      }
+    }
+    return null;
+  }
+  function resolveReviewImageMonths(imageMonths) {
+    if (!imageMonths || imageMonths.length === 0) {
+      return {
+        resolvedMonth: null,
+        status: "NO_IMAGES",
+        rawMonths: []
+      };
+    }
+    const hasUnknown = imageMonths.some((m) => !m || m === "IMAGE_MONTH_UNKNOWN");
+    if (hasUnknown) {
+      return {
+        resolvedMonth: null,
+        status: "IMAGE_MONTH_UNKNOWN",
+        rawMonths: imageMonths
+      };
+    }
+    const validMonths = imageMonths.filter((m) => Boolean(m));
+    const uniqueMonths = Array.from(new Set(validMonths));
+    if (uniqueMonths.length > 1) {
+      return {
+        resolvedMonth: null,
+        status: "MIXED_IMAGE_MONTH",
+        rawMonths: imageMonths
+      };
+    }
+    if (uniqueMonths.length === 1) {
+      return {
+        resolvedMonth: uniqueMonths[0],
+        status: "RESOLVED",
+        rawMonths: imageMonths
+      };
+    }
+    return {
+      resolvedMonth: null,
+      status: "IMAGE_MONTH_UNKNOWN",
+      rawMonths: imageMonths
+    };
+  }
+
+  // src/core/googleReviewDateParser.ts
+  function isEditedReviewDateText(text) {
+    return text.includes("edited") || text.includes("\u0E41\u0E01\u0E49\u0E44\u0E02\u0E40\u0E21\u0E37\u0E48\u0E2D") || text.includes("\u0E41\u0E01\u0E49\u0E44\u0E02");
+  }
+  function parseGoogleReviewDate(rawDateText, referenceDate = /* @__PURE__ */ new Date()) {
+    if (!rawDateText || typeof rawDateText !== "string") {
+      return { month: null, isEdited: false, status: "UNKNOWN_DATE" };
+    }
+    const text = rawDateText.trim().toLowerCase();
+    if (!text) {
+      return { month: null, isEdited: false, status: "UNKNOWN_DATE" };
+    }
+    const isEdited = isEditedReviewDateText(text);
+    if (isEdited) {
+      const explicitDateMatch = text.match(/\b(original|เดิม|โพสต์เมื่อ)\s*:\s*(\d{4}-\d{2})/i);
+      if (explicitDateMatch) {
+        return { month: explicitDateMatch[2], isEdited: true, status: "VALID" };
+      }
+      return {
+        month: null,
+        isEdited: true,
+        status: "EDITED_ORIGINAL_UNKNOWN"
+      };
+    }
+    const month = parseUneditedDateToMonth(text, referenceDate);
+    return {
+      month,
+      isEdited: false,
+      status: month ? "VALID" : "UNKNOWN_DATE"
+    };
+  }
+  function parseGoogleReviewDateToMonth(rawDateText, referenceDate = /* @__PURE__ */ new Date()) {
+    return parseGoogleReviewDate(rawDateText, referenceDate).month;
+  }
+  function parseUneditedDateToMonth(text, referenceDate) {
+    const ref = new Date(referenceDate);
+    const isoMatch = text.match(/^(\d{4})-(0[1-9]|1[0-2])(-\d{2})?/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}`;
+    }
+    if (text.includes("hour") || text.includes("minute") || text.includes("second") || text.includes("today") || text.includes("\u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07") || text.includes("\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E34\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49")) {
+      return formatYearMonth(ref);
+    }
+    if (text.includes("yesterday") || text.includes("\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E27\u0E32\u0E19")) {
+      const d = new Date(ref);
+      d.setDate(d.getDate() - 1);
+      return formatYearMonth(d);
+    }
+    const daysMatch = text.match(/(\d+)\s*(day|days|วัน)/) || (text.includes("a day ago") ? [null, "1"] : null);
+    if (daysMatch) {
+      const days = parseInt(daysMatch[1] ?? "1", 10);
+      const d = new Date(ref);
+      d.setDate(d.getDate() - days);
+      return formatYearMonth(d);
+    }
+    const weeksMatch = text.match(/(\d+)\s*(week|weeks|สัปดาห์|อาทิตย์)/) || (text.includes("a week ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C") || text.includes("\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") || text.includes("\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") ? [null, "1"] : null);
+    if (weeksMatch) {
+      const weeks = parseInt(weeksMatch[1] ?? "1", 10);
+      const d = new Date(ref);
+      d.setDate(d.getDate() - weeks * 7);
+      return formatYearMonth(d);
+    }
+    const monthsMatch = text.match(/(\d+)\s*(month|months|เดือน)/) || (text.includes("a month ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E40\u0E14\u0E37\u0E2D\u0E19") || text.includes("\u0E40\u0E14\u0E37\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E40\u0E14\u0E37\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") ? [null, "1"] : null);
+    if (monthsMatch) {
+      const months = parseInt(monthsMatch[1] ?? "1", 10);
+      const d = new Date(ref);
+      d.setMonth(d.getMonth() - months);
+      return formatYearMonth(d);
+    }
+    const yearsMatch = text.match(/(\d+)\s*(year|years|ปี)/) || (text.includes("a year ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E1B\u0E35") || text.includes("\u0E1B\u0E35\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E1B\u0E35\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") ? [null, "1"] : null);
+    if (yearsMatch) {
+      const years = parseInt(yearsMatch[1] ?? "1", 10);
+      const d = new Date(ref);
+      d.setFullYear(d.getFullYear() - years);
+      return formatYearMonth(d);
+    }
+    const englishMonths = {
+      jan: "01",
+      january: "01",
+      feb: "02",
+      february: "02",
+      mar: "03",
+      march: "03",
+      apr: "04",
+      april: "04",
+      may: "05",
+      jun: "06",
+      june: "06",
+      jul: "07",
+      july: "07",
+      aug: "08",
+      august: "08",
+      sep: "09",
+      september: "09",
+      oct: "10",
+      october: "10",
+      nov: "11",
+      november: "11",
+      dec: "12",
+      december: "12"
+    };
+    for (const [mName, mNum] of Object.entries(englishMonths)) {
+      const regex = new RegExp(`\\b${mName}\\b.*?(\\d{4})`, "i");
+      const match = text.match(regex);
+      if (match) {
+        return `${match[1]}-${mNum}`;
+      }
+    }
+    const thaiMonths = {
+      "\u0E21.\u0E04.": "01",
+      "\u0E21\u0E01\u0E23\u0E32\u0E04\u0E21": "01",
+      "\u0E01.\u0E1E.": "02",
+      "\u0E01\u0E38\u0E21\u0E20\u0E32\u0E1E\u0E31\u0E19\u0E18\u0E4C": "02",
+      "\u0E21\u0E35.\u0E04.": "03",
+      "\u0E21\u0E35\u0E19\u0E32\u0E04\u0E21": "03",
+      "\u0E40\u0E21.\u0E22.": "04",
+      "\u0E40\u0E21\u0E29\u0E32\u0E22\u0E19": "04",
+      "\u0E1E.\u0E04.": "05",
+      "\u0E1E\u0E24\u0E29\u0E20\u0E32\u0E04\u0E21": "05",
+      "\u0E21\u0E34.\u0E22.": "06",
+      "\u0E21\u0E34\u0E16\u0E38\u0E19\u0E32\u0E22\u0E19": "06",
+      "\u0E01.\u0E04.": "07",
+      "\u0E01\u0E23\u0E01\u0E0E\u0E32\u0E04\u0E21": "07",
+      "\u0E2A.\u0E04.": "08",
+      "\u0E2A\u0E34\u0E07\u0E2B\u0E32\u0E04\u0E21": "08",
+      "\u0E01.\u0E22.": "09",
+      "\u0E01\u0E31\u0E19\u0E22\u0E32\u0E22\u0E19": "09",
+      "\u0E15.\u0E04.": "10",
+      "\u0E15\u0E38\u0E25\u0E32\u0E04\u0E21": "10",
+      "\u0E1E.\u0E22.": "11",
+      "\u0E1E\u0E24\u0E28\u0E08\u0E34\u0E01\u0E32\u0E22\u0E19": "11",
+      "\u0E18.\u0E04.": "12",
+      "\u0E18\u0E31\u0E19\u0E27\u0E32\u0E04\u0E21": "12"
+    };
+    for (const [mName, mNum] of Object.entries(thaiMonths)) {
+      if (text.includes(mName)) {
+        const yearMatch = text.match(/\b(\d{4})\b/);
+        if (yearMatch) {
+          let year = parseInt(yearMatch[1], 10);
+          if (year > 2400) year -= 543;
+          return `${year}-${mNum}`;
+        }
+        return `${ref.getFullYear()}-${mNum}`;
+      }
+    }
+    return null;
+  }
+  function formatYearMonth(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }
+  function classifyChronologicalRelation(rawDateText, targetMonth, referenceDate = /* @__PURE__ */ new Date()) {
+    if (!rawDateText || typeof rawDateText !== "string" || !rawDateText.trim()) {
+      return {
+        rawDateText: rawDateText ?? null,
+        isEditedTimestamp: false,
+        relativeDateRange: null,
+        chronologicalRelation: "UNKNOWN",
+        chronologicalBoundaryEligible: false
+      };
+    }
+    const text = rawDateText.trim().toLowerCase();
+    const isEdited = isEditedReviewDateText(text);
+    const range = estimateRelativeDateRange(text, referenceDate);
+    if (isEdited) {
+      return {
+        rawDateText,
+        isEditedTimestamp: true,
+        relativeDateRange: range,
+        chronologicalRelation: range ? range.startMonth > (targetMonth || "") ? "NEWER" : "TARGET_OR_OVERLAP" : "UNKNOWN",
+        chronologicalBoundaryEligible: false
+      };
+    }
+    if (!range || !targetMonth) {
+      return {
+        rawDateText,
+        isEditedTimestamp: false,
+        relativeDateRange: range,
+        chronologicalRelation: "UNKNOWN",
+        chronologicalBoundaryEligible: false
+      };
+    }
+    if (range.startMonth > targetMonth) {
+      return {
+        rawDateText,
+        isEditedTimestamp: false,
+        relativeDateRange: range,
+        chronologicalRelation: "NEWER",
+        chronologicalBoundaryEligible: false
+      };
+    }
+    if (range.endMonth < targetMonth) {
+      return {
+        rawDateText,
+        isEditedTimestamp: false,
+        relativeDateRange: range,
+        chronologicalRelation: "OLDER",
+        chronologicalBoundaryEligible: true
+      };
+    }
+    return {
+      rawDateText,
+      isEditedTimestamp: false,
+      relativeDateRange: range,
+      chronologicalRelation: "TARGET_OR_OVERLAP",
+      chronologicalBoundaryEligible: false
+    };
+  }
+  function estimateRelativeDateRange(rawDateText, referenceDate = /* @__PURE__ */ new Date()) {
+    if (!rawDateText || typeof rawDateText !== "string") return null;
+    const text = rawDateText.trim().toLowerCase();
+    if (!text) return null;
+    const isEdited = isEditedReviewDateText(text);
+    const ref = new Date(referenceDate);
+    if (text.includes("hour") || text.includes("minute") || text.includes("second") || text.includes("today") || text.includes("\u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07") || text.includes("\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E34\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49")) {
+      const start = new Date(ref);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(ref);
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: formatYearMonth(start),
+        endMonth: formatYearMonth(end),
+        isEdited,
+        isAmbiguous: false
+      };
+    }
+    if (text.includes("yesterday") || text.includes("\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E27\u0E32\u0E19")) {
+      const d = new Date(ref);
+      d.setDate(d.getDate() - 1);
+      const start = new Date(d);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(d);
+      end.setHours(23, 59, 59, 999);
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: formatYearMonth(start),
+        endMonth: formatYearMonth(end),
+        isEdited,
+        isAmbiguous: false
+      };
+    }
+    const daysMatch = text.match(/(\d+)\s*(day|days|วัน)/) || (text.includes("a day ago") ? [null, "1"] : null);
+    if (daysMatch) {
+      const days = parseInt(daysMatch[1] ?? "1", 10);
+      const start = new Date(ref);
+      start.setDate(start.getDate() - days);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(ref);
+      end.setDate(end.getDate() - days);
+      end.setHours(23, 59, 59, 999);
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: formatYearMonth(start),
+        endMonth: formatYearMonth(end),
+        isEdited,
+        isAmbiguous: false
+      };
+    }
+    const weeksMatch = text.match(/(\d+)\s*(week|weeks|สัปดาห์|อาทิตย์)/) || (text.includes("a week ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C") || text.includes("\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") || text.includes("\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") ? [null, "1"] : null);
+    if (weeksMatch) {
+      const weeks = parseInt(weeksMatch[1] ?? "1", 10);
+      const end = new Date(ref);
+      end.setDate(end.getDate() - weeks * 7);
+      const start = new Date(ref);
+      start.setDate(start.getDate() - (weeks * 7 + 6));
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: formatYearMonth(start),
+        endMonth: formatYearMonth(end),
+        isEdited,
+        isAmbiguous: false
+      };
+    }
+    const monthsMatch = text.match(/(\d+)\s*(month|months|เดือน)/) || (text.includes("a month ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E40\u0E14\u0E37\u0E2D\u0E19") || text.includes("\u0E40\u0E14\u0E37\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27") || text.includes("\u0E40\u0E14\u0E37\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E1C\u0E48\u0E32\u0E19\u0E21\u0E32") ? [null, "1"] : null);
+    if (monthsMatch) {
+      const months = parseInt(monthsMatch[1] ?? "1", 10);
+      const end = new Date(ref);
+      end.setMonth(end.getMonth() - months);
+      const start = new Date(ref);
+      start.setMonth(start.getMonth() - (months + 1));
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: formatYearMonth(start),
+        endMonth: formatYearMonth(end),
+        isEdited,
+        isAmbiguous: true
+      };
+    }
+    const singleMonth = parseGoogleReviewDateToMonth(rawDateText, referenceDate);
+    if (singleMonth) {
+      const [y, m] = singleMonth.split("-").map((s) => parseInt(s, 10));
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0);
+      return {
+        startDate: start,
+        endDate: end,
+        startMonth: singleMonth,
+        endMonth: singleMonth,
+        isEdited,
+        isAmbiguous: false
+      };
+    }
+    return null;
+  }
+  function isDefinitelyNewerThanMonth(rawDateText, targetMonth, referenceDate = /* @__PURE__ */ new Date()) {
+    if (!rawDateText || !targetMonth) return false;
+    const range = estimateRelativeDateRange(rawDateText, referenceDate);
+    if (!range) return false;
+    return range.startMonth > targetMonth;
+  }
+
   // src/core/googleMapsDomAdapter.ts
   function cleanReviewText(rawText) {
     if (!rawText) return "";
@@ -54,6 +534,85 @@
     static extractReviews() {
       const cards = this.getReviewCardElements();
       return cards.map((c) => this.extractReviewData(c));
+    }
+    /**
+     * Asynchronously extracts reviews and inspects attached photo viewer metadata for cards with photos.
+     * If targetMonth is provided, fast-skips reviews whose relative timestamp proves they are definitely
+     * newer than targetMonth (e.g. in previous-month audits).
+     */
+    static async extractReviewsAsync(targetMonth, referenceDate = /* @__PURE__ */ new Date()) {
+      const rawReviews = this.extractReviews();
+      for (const rev of rawReviews) {
+        if (rev.hasCustomerPhoto && (!rev.imageCaptureMonths || rev.imageCaptureMonths.length === 0)) {
+          if (targetMonth && isDefinitelyNewerThanMonth(rev.dateText, targetMonth, referenceDate)) {
+            continue;
+          }
+          rev.imageCaptureMonths = await this.inspectCardPhotoViewerMonths(rev.element);
+        }
+      }
+      return rawReviews;
+    }
+    /**
+     * Opens photo viewer for a review card to extract image capture metadata.
+     * Clicks attached review photo thumbnails, inspects viewer text nodes for
+     * "Image capture: <Month> <Year>" or "ถ่ายภาพเมื่อ: <Month> <Year>", and closes the viewer.
+     */
+    static async inspectCardPhotoViewerMonths(card) {
+      var _a;
+      if (typeof document === "undefined") return [];
+      const photoButtons = Array.from(
+        card.querySelectorAll("button.Tya61d, div.KtCyie button, [jsaction*='review.photo'], button[data-photo-index]")
+      );
+      if (photoButtons.length === 0) return [];
+      const extractedMonths = [];
+      for (const btn of photoButtons.slice(0, 5)) {
+        try {
+          if (typeof btn.scrollIntoView === "function") {
+            btn.scrollIntoView({ behavior: "smooth", block: "center" });
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+          btn.click();
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          let foundMonth = null;
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            const val = ((_a = walker.currentNode.nodeValue) == null ? void 0 : _a.trim()) || "";
+            if (val.length > 0 && (/capture/i.test(val) || /ถ่าย/i.test(val) || /รูปภาพ/i.test(val) || /photo/i.test(val))) {
+              const parsed = parseImageCaptureMonth(val);
+              if (parsed) {
+                foundMonth = parsed;
+                break;
+              }
+            }
+          }
+          if (foundMonth) {
+            extractedMonths.push(foundMonth);
+          } else {
+            extractedMonths.push("IMAGE_MONTH_UNKNOWN");
+          }
+          const dialog = document.querySelector("div[role='dialog'], .fp6v7d, .dryRY");
+          if (dialog) {
+            const dialogCloseBtn = dialog.querySelector(
+              "button[aria-label*='\u0E22\u0E49\u0E2D\u0E19\u0E01\u0E25\u0E31\u0E1A' i], button[aria-label*='Back' i], button[aria-label*='Close' i], button[aria-label*='\u0E1B\u0E34\u0E14' i]"
+            );
+            if (dialogCloseBtn) {
+              dialogCloseBtn.click();
+            } else {
+              document.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+              );
+            }
+          } else {
+            document.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        } catch {
+          extractedMonths.push("IMAGE_MONTH_UNKNOWN");
+        }
+      }
+      return extractedMonths;
     }
     /**
      * Finds the scrollable container that holds Google Maps reviews.
@@ -159,13 +718,26 @@
       }
       reviewText = cleanReviewText(reviewText);
       const photoDetection = this.detectCustomerPhotoEvidence(card);
+      const inlineMonths = [];
+      if (photoDetection.hasPhoto) {
+        const captureEls = Array.from(
+          card.querySelectorAll("[aria-label*='capture' i], [aria-label*='\u0E16\u0E48\u0E32\u0E22' i], span[class*='capture' i], div[class*='capture' i]")
+        );
+        for (const el of captureEls) {
+          const parsed = parseImageCaptureMonth(el.getAttribute("aria-label") || el.textContent);
+          if (parsed && !inlineMonths.includes(parsed)) {
+            inlineMonths.push(parsed);
+          }
+        }
+      }
       return {
         element: card,
         reviewId,
         dateText,
         reviewText,
         hasCustomerPhoto: photoDetection.hasPhoto,
-        photoEvidence: photoDetection.evidence
+        photoEvidence: photoDetection.evidence,
+        imageCaptureMonths: inlineMonths.length > 0 ? inlineMonths : void 0
       };
     }
     /**
@@ -262,6 +834,42 @@
       return false;
     }
     /**
+     * Determines if the loaded Google Maps place has zero reviews.
+     * A place with zero reviews displays a loaded header and "Write a review" / "เขียนรีวิว"
+     * action, but has no Reviews tab, no Star rating reviews button, and no review cards.
+     */
+    static isZeroReviewsPlace() {
+      if (typeof document === "undefined") return false;
+      const placeName = this.getStoreName();
+      if (!placeName) return false;
+      const cards = this.getReviewCardElements();
+      if (cards.length > 0) return false;
+      const reviewTab = document.querySelector(
+        "button[role='tab'][aria-label*='Reviews' i], button[role='tab'][aria-label*='\u0E23\u0E35\u0E27\u0E34\u0E27' i], div[role='tab'][aria-label*='Reviews' i], div[role='tab'][aria-label*='\u0E23\u0E35\u0E27\u0E34\u0E27' i]"
+      );
+      if (reviewTab) return false;
+      const starsButton = document.querySelector(
+        "button[aria-label*='\u0E14\u0E32\u0E27' i], button[aria-label*='stars' i], button[jsaction*='pane.rating' i]"
+      );
+      if (starsButton) return false;
+      const writeReviewBtn = document.querySelector(
+        "button[aria-label*='\u0E40\u0E02\u0E35\u0E22\u0E19\u0E23\u0E35\u0E27\u0E34\u0E27' i], button[aria-label*='Write a review' i], button[jsaction*='pane.review.write' i]"
+      );
+      if (writeReviewBtn) return true;
+      const overviewTab = document.querySelector(
+        "button[role='tab'][aria-label*='\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21' i], button[role='tab'][aria-label*='Overview' i]"
+      );
+      if (overviewTab) {
+        const allTabs = Array.from(document.querySelectorAll("button[role='tab']"));
+        const hasAnyReviewTab = allTabs.some((t) => {
+          const label = (t.getAttribute("aria-label") || t.textContent || "").toLowerCase();
+          return label.includes("\u0E23\u0E35\u0E27\u0E34\u0E27") || label.includes("review");
+        });
+        if (!hasAnyReviewTab) return true;
+      }
+      return false;
+    }
+    /**
      * Checks if the reviews pane is currently open and visible.
      */
     static isReviewsPaneOpen() {
@@ -300,11 +908,18 @@
      * Checks or selects "Newest" / "ใหม่ที่สุด" review sorting mode.
      */
     static async ensureNewestSorting() {
-      var _a, _b;
+      var _a, _b, _c, _d;
       if (typeof document === "undefined") return { success: false, reason: "NO_DOM" };
-      const sortBtn = document.querySelector(
-        "button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='\u0E40\u0E23\u0E35\u0E22\u0E07\u0E15\u0E32\u0E21' i], button[aria-label*='\u0E08\u0E31\u0E14\u0E40\u0E23\u0E35\u0E22\u0E07' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]"
+      let sortBtn = document.querySelector(
+        "button.HQzyZ, button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='\u0E40\u0E23\u0E35\u0E22\u0E07\u0E15\u0E32\u0E21' i], button[aria-label*='\u0E08\u0E31\u0E14\u0E40\u0E23\u0E35\u0E22\u0E07' i], button[aria-label*='\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E02\u0E49\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14' i], button[aria-label*='\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]"
       );
+      if (!sortBtn) {
+        sortBtn = Array.from(document.querySelectorAll("button, div[role='button']")).find((b) => {
+          const t = (b.textContent || "").trim();
+          const a = (b.getAttribute("aria-label") || "").trim();
+          return t.includes("\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E02\u0E49\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || t.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || t.includes("\u0E40\u0E23\u0E35\u0E22\u0E07") || t.includes("Sort") || a.includes("\u0E40\u0E01\u0E35\u0E48\u0E22\u0E27\u0E02\u0E49\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || a.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || a.includes("\u0E40\u0E23\u0E35\u0E22\u0E07") || a.includes("Sort");
+        }) || null;
+      }
       if (!sortBtn) {
         const cards = this.getReviewCardElements();
         if (cards.length > 0 && cards.length <= 5) {
@@ -314,32 +929,32 @@
       }
       const currentSortText = ((_a = sortBtn.textContent) == null ? void 0 : _a.trim().toLowerCase()) || "";
       const currentSortAria = ((_b = sortBtn.getAttribute("aria-label")) == null ? void 0 : _b.toLowerCase()) || "";
-      const isAlreadyNewest = currentSortText.includes("newest") || currentSortText.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || currentSortText.includes("most recent") || currentSortAria.includes("newest") || currentSortAria.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14");
+      const isAlreadyNewest = currentSortText.includes("newest") || currentSortText.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || currentSortText.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14") || currentSortText.includes("most recent") || currentSortAria.includes("newest") || currentSortAria.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || currentSortAria.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14");
       if (isAlreadyNewest) {
         return { success: true };
       }
       sortBtn.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 600));
       const menuItems = Array.from(
-        document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio']")
+        document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio'], [role='option'], .fxNQSb")
       );
       const newestOption = menuItems.find((el) => {
         const text = (el.textContent || "").toLowerCase();
         const aria = (el.getAttribute("aria-label") || "").toLowerCase();
-        return text.includes("newest") || text.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || text.includes("most recent") || aria.includes("newest") || aria.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14");
-      });
+        return text.includes("newest") || text.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || text.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14") || text.includes("most recent") || aria.includes("newest") || aria.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || aria.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14");
+      }) || menuItems[1];
       if (newestOption) {
         newestOption.click();
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        return { success: true };
-      }
-      if (menuItems.length >= 2) {
-        const secondOption = menuItems[1];
-        if (secondOption) {
-          secondOption.click();
-          await new Promise((resolve) => setTimeout(resolve, 800));
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        const sortBtnAfter = document.querySelector(
+          "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='\u0E40\u0E23\u0E35\u0E22\u0E07\u0E15\u0E32\u0E21' i], button[aria-label*='\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14' i]"
+        );
+        const textAfter = ((_c = sortBtnAfter == null ? void 0 : sortBtnAfter.textContent) == null ? void 0 : _c.trim().toLowerCase()) || "";
+        const ariaAfter = ((_d = sortBtnAfter == null ? void 0 : sortBtnAfter.getAttribute("aria-label")) == null ? void 0 : _d.toLowerCase()) || "";
+        if (textAfter.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || textAfter.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14") || textAfter.includes("newest") || ariaAfter.includes("\u0E43\u0E2B\u0E21\u0E48\u0E17\u0E35\u0E48\u0E2A\u0E38\u0E14") || ariaAfter.includes("\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14") || ariaAfter.includes("newest")) {
           return { success: true };
         }
+        return { success: true };
       }
       return { success: false, reason: "NEWEST_OPTION_NOT_FOUND" };
     }
@@ -482,156 +1097,6 @@
     };
   }
 
-  // src/core/googleReviewDateParser.ts
-  function isEditedReviewDateText(text) {
-    return text.includes("edited") || text.includes("\u0E41\u0E01\u0E49\u0E44\u0E02\u0E40\u0E21\u0E37\u0E48\u0E2D") || text.includes("\u0E41\u0E01\u0E49\u0E44\u0E02");
-  }
-  function parseGoogleReviewDate(rawDateText, referenceDate = /* @__PURE__ */ new Date()) {
-    if (!rawDateText || typeof rawDateText !== "string") {
-      return { month: null, isEdited: false, status: "UNKNOWN_DATE" };
-    }
-    const text = rawDateText.trim().toLowerCase();
-    if (!text) {
-      return { month: null, isEdited: false, status: "UNKNOWN_DATE" };
-    }
-    const isEdited = isEditedReviewDateText(text);
-    if (isEdited) {
-      const explicitDateMatch = text.match(/\b(original|เดิม|โพสต์เมื่อ)\s*:\s*(\d{4}-\d{2})/i);
-      if (explicitDateMatch) {
-        return { month: explicitDateMatch[2], isEdited: true, status: "VALID" };
-      }
-      return {
-        month: null,
-        isEdited: true,
-        status: "EDITED_ORIGINAL_UNKNOWN"
-      };
-    }
-    const month = parseUneditedDateToMonth(text, referenceDate);
-    return {
-      month,
-      isEdited: false,
-      status: month ? "VALID" : "UNKNOWN_DATE"
-    };
-  }
-  function parseUneditedDateToMonth(text, referenceDate) {
-    const ref = new Date(referenceDate);
-    const isoMatch = text.match(/^(\d{4})-(0[1-9]|1[0-2])(-\d{2})?/);
-    if (isoMatch) {
-      return `${isoMatch[1]}-${isoMatch[2]}`;
-    }
-    if (text.includes("hour") || text.includes("minute") || text.includes("second") || text.includes("today") || text.includes("\u0E0A\u0E31\u0E48\u0E27\u0E42\u0E21\u0E07") || text.includes("\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E34\u0E19\u0E32\u0E17\u0E35") || text.includes("\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49")) {
-      return formatYearMonth(ref);
-    }
-    if (text.includes("yesterday") || text.includes("\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E27\u0E32\u0E19")) {
-      const d = new Date(ref);
-      d.setDate(d.getDate() - 1);
-      return formatYearMonth(d);
-    }
-    const daysMatch = text.match(/(\d+)\s*(day|days|วัน)/) || (text.includes("a day ago") ? [null, "1"] : null);
-    if (daysMatch) {
-      const days = parseInt(daysMatch[1] ?? "1", 10);
-      const d = new Date(ref);
-      d.setDate(d.getDate() - days);
-      return formatYearMonth(d);
-    }
-    const weeksMatch = text.match(/(\d+)\s*(week|weeks|สัปดาห์|อาทิตย์)/) || (text.includes("a week ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C") ? [null, "1"] : null);
-    if (weeksMatch) {
-      const weeks = parseInt(weeksMatch[1] ?? "1", 10);
-      const d = new Date(ref);
-      d.setDate(d.getDate() - weeks * 7);
-      return formatYearMonth(d);
-    }
-    const monthsMatch = text.match(/(\d+)\s*(month|months|เดือน)/) || (text.includes("a month ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E40\u0E14\u0E37\u0E2D\u0E19") ? [null, "1"] : null);
-    if (monthsMatch) {
-      const months = parseInt(monthsMatch[1] ?? "1", 10);
-      const d = new Date(ref);
-      d.setMonth(d.getMonth() - months);
-      return formatYearMonth(d);
-    }
-    const yearsMatch = text.match(/(\d+)\s*(year|years|ปี)/) || (text.includes("a year ago") || text.includes("\u0E2B\u0E19\u0E36\u0E48\u0E07\u0E1B\u0E35") ? [null, "1"] : null);
-    if (yearsMatch) {
-      const years = parseInt(yearsMatch[1] ?? "1", 10);
-      const d = new Date(ref);
-      d.setFullYear(d.getFullYear() - years);
-      return formatYearMonth(d);
-    }
-    const englishMonths = {
-      jan: "01",
-      january: "01",
-      feb: "02",
-      february: "02",
-      mar: "03",
-      march: "03",
-      apr: "04",
-      april: "04",
-      may: "05",
-      jun: "06",
-      june: "06",
-      jul: "07",
-      july: "07",
-      aug: "08",
-      august: "08",
-      sep: "09",
-      september: "09",
-      oct: "10",
-      october: "10",
-      nov: "11",
-      november: "11",
-      dec: "12",
-      december: "12"
-    };
-    for (const [mName, mNum] of Object.entries(englishMonths)) {
-      const regex = new RegExp(`\\b${mName}\\b.*?(\\d{4})`, "i");
-      const match = text.match(regex);
-      if (match) {
-        return `${match[1]}-${mNum}`;
-      }
-    }
-    const thaiMonths = {
-      "\u0E21.\u0E04.": "01",
-      "\u0E21\u0E01\u0E23\u0E32\u0E04\u0E21": "01",
-      "\u0E01.\u0E1E.": "02",
-      "\u0E01\u0E38\u0E21\u0E20\u0E32\u0E1E\u0E31\u0E19\u0E18\u0E4C": "02",
-      "\u0E21\u0E35.\u0E04.": "03",
-      "\u0E21\u0E35\u0E19\u0E32\u0E04\u0E21": "03",
-      "\u0E40\u0E21.\u0E22.": "04",
-      "\u0E40\u0E21\u0E29\u0E32\u0E22\u0E19": "04",
-      "\u0E1E.\u0E04.": "05",
-      "\u0E1E\u0E24\u0E29\u0E20\u0E32\u0E04\u0E21": "05",
-      "\u0E21\u0E34.\u0E22.": "06",
-      "\u0E21\u0E34\u0E16\u0E38\u0E19\u0E32\u0E22\u0E19": "06",
-      "\u0E01.\u0E04.": "07",
-      "\u0E01\u0E23\u0E01\u0E0E\u0E32\u0E04\u0E21": "07",
-      "\u0E2A.\u0E04.": "08",
-      "\u0E2A\u0E34\u0E07\u0E2B\u0E32\u0E04\u0E21": "08",
-      "\u0E01.\u0E22.": "09",
-      "\u0E01\u0E31\u0E19\u0E22\u0E32\u0E22\u0E19": "09",
-      "\u0E15.\u0E04.": "10",
-      "\u0E15\u0E38\u0E25\u0E32\u0E04\u0E21": "10",
-      "\u0E1E.\u0E22.": "11",
-      "\u0E1E\u0E24\u0E28\u0E08\u0E34\u0E01\u0E32\u0E22\u0E19": "11",
-      "\u0E18.\u0E04.": "12",
-      "\u0E18\u0E31\u0E19\u0E27\u0E32\u0E04\u0E21": "12"
-    };
-    for (const [mName, mNum] of Object.entries(thaiMonths)) {
-      if (text.includes(mName)) {
-        const yearMatch = text.match(/\b(\d{4})\b/);
-        if (yearMatch) {
-          let year = parseInt(yearMatch[1], 10);
-          if (year > 2400) year -= 543;
-          return `${year}-${mNum}`;
-        }
-        return `${ref.getFullYear()}-${mNum}`;
-      }
-    }
-    return null;
-  }
-  function formatYearMonth(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    return `${y}-${m}`;
-  }
-
   // src/core/reviewFingerprint.ts
   function generateReviewFingerprint(domElement, reviewIndex) {
     var _a;
@@ -658,10 +1123,8 @@
 
   // src/core/qualificationEngine.ts
   function determineAuditCoverageStatus(params) {
-    const hasOlder = params.reviews.some(
-      (r) => r.month !== null && !r.isEdited && r.dateStatus === "VALID" && r.month < params.targetMonth
-    );
-    if (hasOlder) {
+    const hasOlderReview = params.reviews.some((r) => r.stopBoundaryTriggered);
+    if (hasOlderReview) {
       return "OLDER_THAN_TARGET_REACHED";
     }
     if (params.isAtScrollBottom && params.reviews.length > 0) {
@@ -671,41 +1134,85 @@
   }
   var QualificationEngine = class {
     /**
-     * Evaluates a single review against the monthly KPI criteria.
-     * STRICT PRIVACY: Keeps only anonymous evaluation attributes.
+     * Evaluates a single review under the IMAGE_CAPTURE_MONTH_V1 business rule:
      *
-     * QUALIFICATION RULE:
-     * 1. Date matches target audit month
-     * 2. Has customer uploaded photo
-     * 3. Final Thai word count >= 15 (0-14 = FAIL, 15+ = PASS)
+     * QUALIFIED REVIEW =
+     *   hasCustomerPhoto === true
+     *   AND resolvedImageCaptureMonth === targetMonth
+     *   AND finalWordCount >= 15
+     *
+     * STRICT PRIVACY: Zero PII, reviewer identity, review text, or photo URLs persisted.
      */
     static evaluateReview(raw, targetMonth, index, referenceDate = /* @__PURE__ */ new Date()) {
       const fingerprint = generateReviewFingerprint(raw.element, index);
       const dateParsed = parseGoogleReviewDate(raw.dateText, referenceDate);
-      const estimatedMonth = dateParsed.month;
-      const isDateInMonth = estimatedMonth === targetMonth;
+      const estimatedCreationMonth = dateParsed.month;
+      const isDateInMonth = estimatedCreationMonth === targetMonth;
+      const chronology = classifyChronologicalRelation(raw.dateText, targetMonth, referenceDate);
+      const chronologicalRelation = chronology.chronologicalRelation;
+      const chronologicalBoundaryEligible = chronology.chronologicalBoundaryEligible;
       const hasPhoto = raw.hasCustomerPhoto;
+      const photoEvidence = raw.photoEvidence || (hasPhoto ? "REVIEW_MEDIA_THUMBNAIL" : "NONE");
+      let rawMonths = raw.imageCaptureMonths || [];
+      if (hasPhoto && rawMonths.length === 0 && raw.element && typeof raw.element.querySelector === "function") {
+        const inlineCapture = raw.element.querySelector(
+          "[aria-label*='capture' i], [aria-label*='\u0E16\u0E48\u0E32\u0E22' i], span[class*='capture' i], div[class*='capture' i]"
+        );
+        if (inlineCapture) {
+          const parsed = parseImageCaptureMonth(
+            inlineCapture.getAttribute("aria-label") || inlineCapture.textContent
+          );
+          if (parsed) rawMonths = [parsed];
+        }
+      }
+      const imageResolution = resolveReviewImageMonths(rawMonths);
+      const resolvedImageCaptureMonth = imageResolution.resolvedMonth;
+      const imageMonthStatus = hasPhoto ? imageResolution.status === "NO_IMAGES" ? "IMAGE_MONTH_UNKNOWN" : imageResolution.status : "NO_IMAGES";
+      const isTargetImageMonth = hasPhoto && resolvedImageCaptureMonth === targetMonth;
+      let monthRelation = "UNKNOWN";
+      if (hasPhoto && resolvedImageCaptureMonth) {
+        if (resolvedImageCaptureMonth === targetMonth) {
+          monthRelation = "TARGET";
+        } else if (resolvedImageCaptureMonth > targetMonth) {
+          monthRelation = "NEWER";
+        } else {
+          monthRelation = "OLDER";
+        }
+      }
+      const stopBoundaryTriggered = Boolean(chronologicalBoundaryEligible && chronologicalRelation === "OLDER");
+      const stopBoundaryReason = stopBoundaryTriggered ? `Review creation chronology reached older than target month (${raw.dateText || "unknown"})` : null;
       const segmentation = segmentThaiWords(raw.reviewText);
       const thaiWordCount = segmentation.count;
       const isAtLeast15Words = thaiWordCount >= 15;
-      const isQualified = isDateInMonth && hasPhoto && isAtLeast15Words;
+      const isQualified = !dateParsed.isEdited && hasPhoto && isTargetImageMonth && isAtLeast15Words;
       return {
         fingerprint,
         rawDateText: raw.dateText,
         fullReviewText: raw.reviewText,
-        month: estimatedMonth,
+        month: estimatedCreationMonth,
         isDateInMonth,
         isEdited: dateParsed.isEdited,
         dateStatus: dateParsed.status,
+        chronology,
+        chronologicalRelation,
+        chronologicalBoundaryEligible,
+        stopBoundaryTriggered,
+        stopBoundaryReason,
         hasPhoto,
-        photoEvidence: raw.photoEvidence || (hasPhoto ? "REVIEW_MEDIA_THUMBNAIL" : "NONE"),
+        photoEvidence,
+        imageCaptureMonths: imageResolution.rawMonths.filter((m) => Boolean(m)),
+        resolvedImageCaptureMonth,
+        imageMonthStatus,
+        isTargetImageMonth,
+        monthRelation,
         rawTokens: segmentation.rawTokens,
         finalTokens: segmentation.finalTokens,
         thaiWordCount,
         wordTokens: segmentation.finalTokens,
         isAtLeast15Words,
         isOver15Words: isAtLeast15Words,
-        isQualified
+        isQualified,
+        qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1"
       };
     }
     /**
@@ -716,10 +1223,15 @@
       const evaluated = [];
       let reviewsChecked = 0;
       let reviewsWithPhoto = 0;
+      let photoReviewsInTargetMonth = 0;
       let reviewsOver15ThaiWords = 0;
       let qualifiedReviews = 0;
+      let imageMonthUnknownCount = 0;
+      let mixedImageMonthCount = 0;
       let unknownDateCount = 0;
       let editedReviewCount = 0;
+      let firstOlderReviewDateText = null;
+      let stopBoundarySequence = null;
       for (let i = 0; i < rawReviews.length; i++) {
         const raw = rawReviews[i];
         const evalItem = this.evaluateReview(raw, targetMonth, i, referenceDate);
@@ -729,11 +1241,19 @@
         seenFingerprints.add(evalItem.fingerprint);
         reviewsChecked++;
         if (evalItem.hasPhoto) reviewsWithPhoto++;
+        if (evalItem.isTargetImageMonth) photoReviewsInTargetMonth++;
         if (evalItem.isAtLeast15Words) reviewsOver15ThaiWords++;
         if (evalItem.isQualified) qualifiedReviews++;
+        if (evalItem.imageMonthStatus === "IMAGE_MONTH_UNKNOWN") imageMonthUnknownCount++;
+        if (evalItem.imageMonthStatus === "MIXED_IMAGE_MONTH") mixedImageMonthCount++;
         if (evalItem.month === null) unknownDateCount++;
         if (evalItem.isEdited) editedReviewCount++;
         evaluated.push(evalItem);
+        if (evalItem.stopBoundaryTriggered && !firstOlderReviewDateText) {
+          firstOlderReviewDateText = evalItem.rawDateText;
+          stopBoundarySequence = evaluated.length;
+          break;
+        }
       }
       const auditCoverageStatus = determineAuditCoverageStatus({
         targetMonth,
@@ -743,19 +1263,63 @@
       const hasReachedOlderReviews = auditCoverageStatus === "OLDER_THAN_TARGET_REACHED";
       return {
         targetMonth,
+        qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+        reviewsScanned: reviewsChecked,
         reviewsChecked,
         reviewsWithPhoto,
+        reviewsWithCustomerPhoto: reviewsWithPhoto,
+        photoReviewsInTargetMonth,
         reviewsOver15ThaiWords,
+        reviewsAtLeast15Words: reviewsOver15ThaiWords,
         qualifiedReviews,
+        imageMonthUnknownCount,
+        mixedImageMonthCount,
         unknownDateCount,
         editedReviewCount,
         hasReachedOlderReviews,
         isAtScrollBottom,
         auditCoverageStatus,
+        firstOlderReviewDateText,
+        firstOlderImageCaptureMonth: firstOlderReviewDateText,
+        stopBoundarySequence,
         reviews: evaluated
       };
     }
   };
+
+  // src/core/handoffParams.ts
+  var EARLY_LOCATION = {
+    href: typeof window !== "undefined" ? window.location.href : "",
+    hash: typeof window !== "undefined" ? window.location.hash : "",
+    search: typeof window !== "undefined" ? window.location.search : ""
+  };
+  function parseUrlHandoffParams() {
+    const earlyHash = EARLY_LOCATION.hash.startsWith("#") ? EARLY_LOCATION.hash.slice(1) : "";
+    const currentHash = typeof window !== "undefined" && window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+    const earlyHashParams = new URLSearchParams(earlyHash);
+    const currentHashParams = new URLSearchParams(currentHash);
+    const searchParams = new URLSearchParams(EARLY_LOCATION.search || (typeof window !== "undefined" ? window.location.search : ""));
+    const getParam = (key) => currentHashParams.get(key) || earlyHashParams.get(key) || searchParams.get(key);
+    const rawName = getParam("oppoName") || getParam("storeName");
+    let decodedName = null;
+    if (rawName) {
+      try {
+        decodedName = decodeURIComponent(rawName).trim();
+      } catch {
+        decodedName = rawName.trim();
+      }
+    }
+    return {
+      oppoToken: getParam("oppoToken"),
+      oppoSessionId: getParam("oppoSessionId"),
+      oppoStoreId: getParam("oppoStoreId") || getParam("storeId"),
+      oppoExtId: getParam("oppoExtId") || getParam("externalStoreId"),
+      oppoCode: getParam("oppoCode") || getParam("code"),
+      oppoName: decodedName,
+      oppoMonth: getParam("oppoMonth") || getParam("kpiMonth"),
+      oppoBackendUrl: getParam("oppoBackendUrl") || getParam("backendUrl")
+    };
+  }
 
   // src/batch/batchAuditRunner.ts
   var BatchAuditRunner = class {
@@ -787,22 +1351,47 @@
       return new Promise((resolve) => {
         var _a, _b;
         (_b = (_a = chrome.storage) == null ? void 0 : _a.local) == null ? void 0 : _b.get(["batchAuditSession", "batchRunnerState"], (result) => {
+          const handoff = parseUrlHandoffParams();
           if (result == null ? void 0 : result.batchAuditSession) {
             this.sessionInfo = result.batchAuditSession;
+            if (this.sessionInfo && handoff.oppoToken) {
+              this.sessionInfo.runnerToken = handoff.oppoToken;
+            }
+            if (this.sessionInfo && handoff.oppoSessionId && !this.sessionInfo.sessionId) {
+              this.sessionInfo.sessionId = handoff.oppoSessionId;
+            }
+            if (this.sessionInfo && handoff.oppoBackendUrl) {
+              this.sessionInfo.backendUrl = handoff.oppoBackendUrl;
+            }
             if (this.sessionInfo && this.sessionInfo.status === "RUNNING") {
               resolve(true);
               return;
             }
           }
-          if (typeof window !== "undefined" && window.location) {
-            const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-            const hashParams = new URLSearchParams(hash);
-            const hashToken = hashParams.get("oppoToken");
-            const hashSessionId = hashParams.get("oppoSessionId");
-            if (hashToken && hashSessionId) {
-              resolve(true);
-              return;
+          if (handoff.oppoToken && handoff.oppoSessionId) {
+            if (!this.sessionInfo) {
+              this.sessionInfo = {
+                sessionId: handoff.oppoSessionId,
+                targetMonth: handoff.oppoMonth || "",
+                runnerToken: handoff.oppoToken,
+                backendUrl: handoff.oppoBackendUrl || void 0,
+                status: "RUNNING",
+                currentStore: handoff.oppoStoreId ? {
+                  storeId: handoff.oppoStoreId,
+                  storeName: handoff.oppoName || "Store",
+                  storeCode: handoff.oppoCode,
+                  googleMapsUrl: typeof window !== "undefined" ? window.location.href : ""
+                } : null
+              };
+            } else {
+              this.sessionInfo.runnerToken = handoff.oppoToken;
+              this.sessionInfo.sessionId = handoff.oppoSessionId;
+              if (handoff.oppoBackendUrl) {
+                this.sessionInfo.backendUrl = handoff.oppoBackendUrl;
+              }
             }
+            resolve(true);
+            return;
           }
           resolve(false);
         });
@@ -836,18 +1425,58 @@
           return;
         }
         this.notify("WAITING_FOR_MAPS", { storeName: storeInfo.storeName });
-        await this.sleep(1200);
-        this.notify("OPENING_REVIEWS");
+        for (let i = 0; i < 10; i++) {
+          if (GoogleMapsDomAdapter.getStoreName() || GoogleMapsDomAdapter.isReviewsPaneOpen()) {
+            break;
+          }
+          await this.sleep(500);
+        }
+        if (GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+          console.log("[BatchAuditRunner] Place has zero reviews on Google Maps. Coverage complete.");
+          this.notify("SCANNING");
+          await this.sleep(600);
+          const zeroResult = {
+            reviewsChecked: 0,
+            reviewsWithPhoto: 0,
+            reviewsOver15ThaiWords: 0,
+            qualifiedReviews: 0,
+            coverageStatus: "END_OF_AVAILABLE_REVIEWS"
+          };
+          this.notify("SUBMITTING_RESULT", zeroResult);
+          await this.submitAuditResult(storeInfo.storeId, zeroResult, storeInfo.backendUrl);
+          this.notify("MOVING_TO_NEXT_STORE");
+          await this.navigateToNextStore(storeInfo.backendUrl);
+          return;
+        }
         let reviewsOpen = GoogleMapsDomAdapter.isReviewsPaneOpen();
-        if (!reviewsOpen) {
+        for (let attempt = 1; attempt <= this.maxAttempts && !reviewsOpen; attempt++) {
+          this.notify("OPENING_REVIEWS");
           GoogleMapsDomAdapter.openReviewsPane();
           await this.sleep(1500);
           reviewsOpen = GoogleMapsDomAdapter.isReviewsPaneOpen();
+          if (!reviewsOpen && GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+            break;
+          }
         }
         if (!reviewsOpen) {
-          if (this.attemptCount < this.maxAttempts) {
-            await this.sleep(1e3);
-            return this.runForCurrentStore(storeInfo);
+          if (GoogleMapsDomAdapter.isZeroReviewsPlace()) {
+            console.log("[BatchAuditRunner] Place has zero reviews on Google Maps after open attempt. Coverage complete.");
+            this.notify("SCANNING");
+            await this.sleep(600);
+            const zeroResult = {
+              reviewsChecked: 0,
+              reviewsWithPhoto: 0,
+              photoReviewsInTargetMonth: 0,
+              reviewsOver15ThaiWords: 0,
+              qualifiedReviews: 0,
+              coverageStatus: "END_OF_AVAILABLE_REVIEWS",
+              qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1"
+            };
+            this.notify("SUBMITTING_RESULT", zeroResult);
+            await this.submitAuditResult(storeInfo.storeId, zeroResult, storeInfo.backendUrl);
+            this.notify("MOVING_TO_NEXT_STORE");
+            await this.navigateToNextStore(storeInfo.backendUrl);
+            return;
           }
           await this.handleNeedsAttention(
             storeInfo.storeId,
@@ -900,7 +1529,7 @@
       const maxScrolls = 40;
       for (let scrollIdx = 0; scrollIdx < maxScrolls; scrollIdx++) {
         if (!this.isRunning) return null;
-        const rawReviews = GoogleMapsDomAdapter.extractReviews();
+        const rawReviews = await GoogleMapsDomAdapter.extractReviewsAsync(targetMonth);
         const scanResult = QualificationEngine.calculateScanSummary(
           rawReviews,
           targetMonth,
@@ -913,9 +1542,11 @@
           return {
             reviewsChecked: scanResult.reviewsChecked,
             reviewsWithPhoto: scanResult.reviewsWithPhoto,
+            photoReviewsInTargetMonth: scanResult.photoReviewsInTargetMonth,
             reviewsOver15ThaiWords: scanResult.reviewsOver15ThaiWords,
             qualifiedReviews: scanResult.qualifiedReviews,
             coverageStatus: scanResult.auditCoverageStatus,
+            qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
             oldestReviewDateText: (oldest == null ? void 0 : oldest.rawDateText) || void 0
           };
         }
@@ -933,9 +1564,11 @@
             return {
               reviewsChecked: finalResult.reviewsChecked,
               reviewsWithPhoto: finalResult.reviewsWithPhoto,
+              photoReviewsInTargetMonth: finalResult.photoReviewsInTargetMonth,
               reviewsOver15ThaiWords: finalResult.reviewsOver15ThaiWords,
               qualifiedReviews: finalResult.qualifiedReviews,
               coverageStatus: finalResult.auditCoverageStatus,
+              qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
               oldestReviewDateText: (oldest == null ? void 0 : oldest.rawDateText) || void 0
             };
           }
@@ -952,7 +1585,7 @@
         this.notify("WAITING_FOR_LAZY_LOAD");
         await this.sleep(1400);
       }
-      const finalRaw = GoogleMapsDomAdapter.extractReviews();
+      const finalRaw = await GoogleMapsDomAdapter.extractReviewsAsync();
       const fallbackResult = QualificationEngine.calculateScanSummary(
         finalRaw,
         targetMonth,
@@ -963,9 +1596,11 @@
       return {
         reviewsChecked: fallbackResult.reviewsChecked,
         reviewsWithPhoto: fallbackResult.reviewsWithPhoto,
+        photoReviewsInTargetMonth: fallbackResult.photoReviewsInTargetMonth,
         reviewsOver15ThaiWords: fallbackResult.reviewsOver15ThaiWords,
         qualifiedReviews: fallbackResult.qualifiedReviews,
         coverageStatus: fallbackResult.auditCoverageStatus,
+        qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
         oldestReviewDateText: (oldestFallback == null ? void 0 : oldestFallback.rawDateText) || void 0
       };
     }
@@ -980,12 +1615,14 @@
       const payload = {
         reviewsChecked: result.reviewsChecked,
         reviewsWithPhoto: result.reviewsWithPhoto,
+        photoReviewsInTargetMonth: result.photoReviewsInTargetMonth || 0,
         reviewsOver15ThaiWords: result.reviewsOver15ThaiWords,
         qualifiedReviews: result.qualifiedReviews,
+        qualificationRuleVersion: result.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
         targetQualifiedReviews: 10,
         auditCoverageStatus: result.coverageStatus === "OLDER_THAN_TARGET_REACHED" ? "OLDER_THAN_TARGET_REACHED" : "END_OF_AVAILABLE_REVIEWS",
         oldestReviewDateText: result.oldestReviewDateText || null,
-        notes: "Auto-verified via Extension Batch Audit Runner"
+        notes: "Auto-verified via Extension Batch Audit Runner (IMAGE_CAPTURE_MONTH_V1)"
       };
       const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/stores/${storeId}/complete`;
       const headers = this.buildAuthHeaders({ "Content-Type": "application/json" });
@@ -1026,7 +1663,7 @@
      * Fetches the next pending store from backend and navigates to its Google Maps URL.
      */
     async navigateToNextStore(backendUrl) {
-      var _a, _b, _c, _d, _e, _f, _g, _h;
+      var _a, _b, _c, _d, _e, _f;
       if (!((_a = this.sessionInfo) == null ? void 0 : _a.sessionId)) return;
       const url = `${backendUrl}/google-review-kpi/audit-session/${this.sessionInfo.sessionId}/next-store`;
       const headers = this.buildAuthHeaders();
@@ -1057,7 +1694,13 @@
           region: nextStore.region
         }
       };
-      (_e = (_d = chrome.storage) == null ? void 0 : _d.local) == null ? void 0 : _e.set({ batchAuditSession: updatedSession });
+      await new Promise((resolve) => {
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ batchAuditSession: updatedSession }, () => resolve());
+        } else {
+          resolve();
+        }
+      });
       let navUrl = nextStore.googleMapsUrl;
       try {
         const parsed = new URL(navUrl);
@@ -1067,11 +1710,11 @@
           parsed.searchParams.set("oppoExtId", nextStore.storeCode);
         }
         parsed.searchParams.set("oppoName", nextStore.storeName);
-        if ((_f = this.sessionInfo) == null ? void 0 : _f.targetMonth) {
+        if ((_d = this.sessionInfo) == null ? void 0 : _d.targetMonth) {
           parsed.searchParams.set("oppoMonth", this.sessionInfo.targetMonth);
         }
-        if (((_g = this.sessionInfo) == null ? void 0 : _g.runnerToken) || ((_h = this.sessionInfo) == null ? void 0 : _h.sessionId)) {
-          const hashParams = new URLSearchParams();
+        if (((_e = this.sessionInfo) == null ? void 0 : _e.runnerToken) || ((_f = this.sessionInfo) == null ? void 0 : _f.sessionId)) {
+          const hashParams = new URLSearchParams(parsed.hash.startsWith("#") ? parsed.hash.slice(1) : "");
           if (this.sessionInfo.runnerToken) hashParams.set("oppoToken", this.sessionInfo.runnerToken);
           if (this.sessionInfo.sessionId) hashParams.set("oppoSessionId", this.sessionInfo.sessionId);
           parsed.hash = hashParams.toString();
@@ -1079,7 +1722,7 @@
         navUrl = parsed.toString();
       } catch {
       }
-      await this.sleep(1e3);
+      await this.sleep(800);
       window.location.href = navUrl;
     }
     sleep(ms) {
@@ -1094,14 +1737,12 @@
     buildAuthHeaders(base = {}) {
       var _a;
       let token = (_a = this.sessionInfo) == null ? void 0 : _a.runnerToken;
-      if (!token && typeof window !== "undefined" && window.location) {
-        const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-        const hashParams = new URLSearchParams(hash);
-        const hashToken = hashParams.get("oppoToken");
-        if (hashToken) {
-          token = hashToken;
+      if (!token) {
+        const handoff = parseUrlHandoffParams();
+        if (handoff.oppoToken) {
+          token = handoff.oppoToken;
           if (this.sessionInfo) {
-            this.sessionInfo.runnerToken = hashToken;
+            this.sessionInfo.runnerToken = handoff.oppoToken;
           }
         }
       }
@@ -1160,37 +1801,53 @@
     async initBatchMode() {
       var _a, _b;
       (_b = (_a = chrome.storage) == null ? void 0 : _a.local) == null ? void 0 : _b.get(["batchAuditSession"], (res) => {
-        var _a2, _b2, _c, _d, _e, _f;
+        var _a2, _b2, _c, _d, _e;
         this.batchSession = (res == null ? void 0 : res.batchAuditSession) || null;
-        const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-        const hashParams = new URLSearchParams(hash);
-        const hashToken = hashParams.get("oppoToken");
-        const hashSessionId = hashParams.get("oppoSessionId");
+        const handoff = parseUrlHandoffParams();
+        const urlToken = handoff.oppoToken;
+        const urlSessionId = handoff.oppoSessionId;
+        const urlBackendUrl = handoff.oppoBackendUrl;
         if (this.batchSession) {
-          if (hashToken && !this.batchSession.runnerToken) {
-            this.batchSession.runnerToken = hashToken;
-            (_b2 = (_a2 = chrome.storage) == null ? void 0 : _a2.local) == null ? void 0 : _b2.set({ batchAuditSession: this.batchSession });
+          if (urlToken) {
+            this.batchSession.runnerToken = urlToken;
           }
-          if (hashSessionId && !this.batchSession.sessionId) {
-            this.batchSession.sessionId = hashSessionId;
-            (_d = (_c = chrome.storage) == null ? void 0 : _c.local) == null ? void 0 : _d.set({ batchAuditSession: this.batchSession });
+          if (urlSessionId && !this.batchSession.sessionId) {
+            this.batchSession.sessionId = urlSessionId;
           }
-        } else if (hashToken && hashSessionId) {
+          if (urlBackendUrl) {
+            this.batchSession.backendUrl = urlBackendUrl;
+          }
+          (_b2 = (_a2 = chrome.storage) == null ? void 0 : _a2.local) == null ? void 0 : _b2.set({ batchAuditSession: this.batchSession });
+        } else if (urlToken && urlSessionId) {
           this.batchSession = {
-            sessionId: hashSessionId,
-            targetMonth: this.selectedMonth,
-            runnerToken: hashToken,
+            sessionId: urlSessionId,
+            targetMonth: handoff.oppoMonth || this.selectedMonth,
+            runnerToken: urlToken,
+            backendUrl: urlBackendUrl || this.backendUrl,
             status: "RUNNING",
             currentStore: {
-              storeId: this.storeId,
-              storeName: this.storeName,
-              storeCode: this.storeCode,
+              storeId: handoff.oppoStoreId || this.storeId,
+              storeName: handoff.oppoName || this.storeName,
+              storeCode: handoff.oppoCode || this.storeCode,
               googleMapsUrl: window.location.href
             }
           };
-          (_f = (_e = chrome.storage) == null ? void 0 : _e.local) == null ? void 0 : _f.set({ batchAuditSession: this.batchSession });
+          (_d = (_c = chrome.storage) == null ? void 0 : _c.local) == null ? void 0 : _d.set({ batchAuditSession: this.batchSession });
+        }
+        if ((_e = this.batchSession) == null ? void 0 : _e.backendUrl) {
+          this.backendUrl = this.batchSession.backendUrl;
         }
         if (!this.batchSession || this.batchSession.status !== "RUNNING") {
+          return;
+        }
+        if (!this.batchSession.runnerToken) {
+          console.error("[ReviewCheckerOverlay] Runner authentication token is missing");
+          this.renderBatchRunnerBar();
+          const statusText = document.getElementById("oppo-batch-status-text");
+          if (statusText) {
+            statusText.textContent = "\u26A0 Attention needed: Runner authentication token is missing. Please resume from dashboard.";
+            statusText.style.background = "#dc2626";
+          }
           return;
         }
         this.batchRunner.setSession(this.batchSession);
@@ -1334,24 +1991,22 @@
       });
     }
     detectStoreContextFromUrl() {
-      const searchParams = new URLSearchParams(window.location.search);
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-      const hashParams = new URLSearchParams(hash);
-      const q = (key) => searchParams.get(key) || hashParams.get(key);
-      const storeId = q("oppoStoreId") || q("storeId");
-      if (storeId) {
-        this.storeId = storeId.trim();
+      const handoff = parseUrlHandoffParams();
+      if (handoff.oppoStoreId) {
+        this.storeId = handoff.oppoStoreId.trim();
         this.isStoreLocked = true;
       }
-      const extId = q("oppoExtId") || q("externalStoreId");
-      if (extId) this.externalStoreId = extId.trim();
-      const code = q("oppoCode") || q("code");
-      if (code) this.storeCode = code.trim();
-      const name = q("oppoName") || q("storeName");
-      if (name) this.storeName = decodeURIComponent(name).trim();
-      const month = q("oppoMonth") || q("kpiMonth");
-      if (month && /^\d{4}-\d{2}$/.test(month)) {
-        this.selectedMonth = month;
+      if (handoff.oppoExtId) {
+        this.externalStoreId = handoff.oppoExtId.trim();
+      }
+      if (handoff.oppoCode) {
+        this.storeCode = handoff.oppoCode.trim();
+      }
+      if (handoff.oppoName) {
+        this.storeName = handoff.oppoName.trim();
+      }
+      if (handoff.oppoMonth && /^\d{4}-\d{2}$/.test(handoff.oppoMonth)) {
+        this.selectedMonth = handoff.oppoMonth;
       }
     }
     async detectStoreContextFromStorage() {
@@ -1374,7 +2029,7 @@
       }
     }
     render() {
-      var _a, _b, _c, _d, _e, _f, _g, _h;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       if (this.container) {
         this.container.remove();
       }
@@ -1541,28 +2196,36 @@
           gap: 6px;
         ">
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Unique reviews detected:</span>
+            <span style="color: #64748b;">Reviews Scanned:</span>
             <span style="font-weight: 700; font-family: monospace;">${((_c = this.lastResult) == null ? void 0 : _c.reviewsChecked) ?? 0}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">With customer photo:</span>
+            <span style="color: #64748b;">With Customer Photo:</span>
             <span style="font-weight: 700; font-family: monospace;">${((_d = this.lastResult) == null ? void 0 : _d.reviewsWithPhoto) ?? 0}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">15+ Thai words:</span>
-            <span style="font-weight: 700; font-family: monospace;">${((_e = this.lastResult) == null ? void 0 : _e.reviewsOver15ThaiWords) ?? 0}</span>
+            <span style="color: #64748b;">Photo in Target Month:</span>
+            <span style="font-weight: 700; font-family: monospace; color: #0284c7;">${((_e = this.lastResult) == null ? void 0 : _e.photoReviewsInTargetMonth) ?? 0}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Edited reviews (unverifiable):</span>
-            <span style="font-weight: 700; font-family: monospace; color: #d97706;">${((_f = this.lastResult) == null ? void 0 : _f.editedReviewCount) ?? 0}</span>
+            <span style="color: #64748b;">15+ Thai Words:</span>
+            <span style="font-weight: 700; font-family: monospace;">${((_f = this.lastResult) == null ? void 0 : _f.reviewsOver15ThaiWords) ?? 0}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px;">
-            <span style="color: #64748b;">Unknown date reviews:</span>
-            <span style="font-weight: 700; font-family: monospace; color: #d97706;">${((_g = this.lastResult) == null ? void 0 : _g.unknownDateCount) ?? 0}</span>
-          </div>
+          ${(((_g = this.lastResult) == null ? void 0 : _g.imageMonthUnknownCount) ?? 0) > 0 ? `
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="color: #64748b;">Image Month Unknown:</span>
+              <span style="font-weight: 700; font-family: monospace; color: #d97706;">${((_h = this.lastResult) == null ? void 0 : _h.imageMonthUnknownCount) ?? 0}</span>
+            </div>
+            ` : ""}
+          ${(((_i = this.lastResult) == null ? void 0 : _i.mixedImageMonthCount) ?? 0) > 0 ? `
+            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+              <span style="color: #64748b;">Mixed Image Months:</span>
+              <span style="font-weight: 700; font-family: monospace; color: #dc2626;">${((_j = this.lastResult) == null ? void 0 : _j.mixedImageMonthCount) ?? 0}</span>
+            </div>
+            ` : ""}
           <div style="border-top: 1px dashed #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; font-size: 12px; color: #059669; font-weight: 800;">
             <span>Qualified Reviews:</span>
-            <span style="font-size: 14px; font-family: monospace;">${((_h = this.lastResult) == null ? void 0 : _h.qualifiedReviews) ?? 0}</span>
+            <span style="font-size: 14px; font-family: monospace;">${((_k = this.lastResult) == null ? void 0 : _k.qualifiedReviews) ?? 0}</span>
           </div>
         </div>
 
@@ -1687,7 +2350,9 @@
               font-size: 10px;
             ">
               ${reviews.length === 0 ? `<div style="color: #94a3b8; text-align: center; padding: 12px;">No reviews scanned yet. Scroll down and click "Scan Loaded Reviews".</div>` : reviews.map(
-        (r, i) => `
+        (r, i) => {
+          var _a2;
+          return `
                 <div style="
                   background: #ffffff;
                   border: 1px solid ${r.isQualified ? "#86efac" : "#e2e8f0"};
@@ -1696,23 +2361,27 @@
                   padding: 8px 10px;
                   line-height: 1.4;
                 ">
-                  <div style="font-weight: 700; color: #0f172a; margin-bottom: 2px;">Review #${i + 1}</div>
-                  ${r.fullReviewText ? `<div style="margin-bottom: 3px; color: #334155; word-break: break-word;"><strong>Full review text:</strong> "${r.fullReviewText}"</div>` : ""}
-                  ${r.rawTokens && r.rawTokens.length > 0 ? `<div style="color: #64748b; font-size: 9px; margin-bottom: 2px; word-break: break-word;"><strong>Raw tokens (${r.rawTokens.length}):</strong> [${r.rawTokens.join(", ")}]</div>` : ""}
-                  ${r.finalTokens && r.finalTokens.length > 0 ? `<div style="color: #0284c7; font-size: 9px; margin-bottom: 3px; word-break: break-word;"><strong>Final counted tokens (${r.finalTokens.length}):</strong> [${r.finalTokens.join(", ")}]</div>` : ""}
-                  <div><strong>Final word count:</strong> ${r.thaiWordCount}</div>
-                  <div><strong>15+ words:</strong> ${r.isAtLeast15Words ? "Yes \u2705" : "No \u274C"}</div>
-                  <div><strong>Photo evidence:</strong> ${r.photoEvidence ?? "NONE"}</div>
-                  <div><strong>Has customer photo:</strong> ${r.hasPhoto ? "Yes \u2705" : "No \u274C"}</div>
-                  <div><strong>Date:</strong> ${r.month ?? "ORIGINAL_DATE_UNKNOWN"} ${r.isDateInMonth ? "\u2705" : "\u274C"}</div>
-                  ${r.isEdited ? `<div style="color: #d97706; font-weight: 700; font-size: 9px; margin: 1px 0;">
-                          \u26A0\uFE0F EDITED REVIEW \u2014 Original creation date unknown. Excluded from monthly KPI.
-                         </div>` : ""}
-                  <div style="font-weight: 700; color: ${r.isQualified ? "#16a34a" : "#dc2626"}; margin-top: 3px;">
-                    Qualified: ${r.isQualified ? "Yes \u2705" : "No \u274C"}
+                  <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Review #${i + 1}</div>
+                  <div><strong>reviewRelativeLabel:</strong> "${r.rawDateText || ""}"</div>
+                  <div><strong>isEditedTimestamp:</strong> ${r.isEdited ? "true \u270F\uFE0F" : "false"}</div>
+                  <div><strong>relativeDateRange:</strong> ${((_a2 = r.chronology) == null ? void 0 : _a2.relativeDateRange) ? `${r.chronology.relativeDateRange.startMonth} .. ${r.chronology.relativeDateRange.endMonth}` : "null"}</div>
+                  <div><strong>chronologicalRelation:</strong> <span style="font-weight: 700; color: ${r.chronologicalRelation === "OLDER" ? "#dc2626" : r.chronologicalRelation === "NEWER" ? "#2563eb" : "#059669"};">${r.chronologicalRelation}</span></div>
+                  <div><strong>chronologicalBoundaryEligible:</strong> ${r.chronologicalBoundaryEligible ? "true (un-edited)" : "false (edited or within range)"}</div>
+                  <div><strong>hasCustomerPhoto:</strong> ${r.hasPhoto ? "true \u2705" : "false \u274C"}</div>
+                  <div><strong>photoEvidence:</strong> ${r.photoEvidence ?? "NONE"}</div>
+                  <div><strong>imageCaptureMonths:</strong> ${JSON.stringify(r.imageCaptureMonths || [])}</div>
+                  <div><strong>resolvedImageCaptureMonth:</strong> ${r.resolvedImageCaptureMonth ?? "null"}</div>
+                  <div><strong>targetMonth:</strong> ${this.selectedMonth}</div>
+                  <div><strong>monthRelation:</strong> <span style="font-weight: 700; color: ${r.monthRelation === "TARGET" ? "#16a34a" : r.monthRelation === "OLDER" ? "#dc2626" : "#2563eb"};">${r.monthRelation}</span></div>
+                  <div><strong>finalWordCount:</strong> ${r.thaiWordCount} (${r.isAtLeast15Words ? "15+ \u2705" : "<15 \u274C"})</div>
+                  <div><strong>stopBoundaryTriggered:</strong> <span style="font-weight: 700; color: ${r.stopBoundaryTriggered ? "#dc2626" : "#64748b"};">${r.stopBoundaryTriggered ? "YES \u{1F6D1}" : "false"}</span></div>
+                  ${r.stopBoundaryReason ? `<div style="color: #dc2626; font-size: 9px;"><strong>stopReason:</strong> ${r.stopBoundaryReason}</div>` : ""}
+                  <div style="font-weight: 700; color: ${r.isQualified ? "#16a34a" : "#dc2626"}; margin-top: 4px; padding-top: 3px; border-top: 1px dashed #e2e8f0;">
+                    qualified: ${r.isQualified ? "true \u2705" : "false \u274C"}
                   </div>
                 </div>
-              `
+              `;
+        }
       ).join("")}
             </div>
           ` : ""}
@@ -1767,16 +2436,22 @@
     recalculateCurrentReviews() {
       const targetMonth = this.selectedMonth;
       let withPhoto = 0;
+      let photoInTarget = 0;
       let over15 = 0;
       let qualified = 0;
       let unknownDate = 0;
       let editedCount = 0;
+      let imageUnknown = 0;
+      let imageMixed = 0;
       for (const r of this.allEvaluatedReviews) {
-        r.isDateInMonth = Boolean(r.month && r.month === targetMonth);
-        r.isQualified = r.isDateInMonth && r.hasPhoto && r.isOver15Words;
+        r.isTargetImageMonth = Boolean(r.resolvedImageCaptureMonth && r.resolvedImageCaptureMonth === targetMonth);
+        r.isQualified = !r.isEdited && r.hasPhoto && r.isTargetImageMonth && r.isAtLeast15Words;
         if (r.hasPhoto) withPhoto++;
-        if (r.isOver15Words) over15++;
+        if (r.isTargetImageMonth) photoInTarget++;
+        if (r.isAtLeast15Words) over15++;
         if (r.isQualified) qualified++;
+        if (r.imageMonthStatus === "IMAGE_MONTH_UNKNOWN") imageUnknown++;
+        if (r.imageMonthStatus === "MIXED_IMAGE_MONTH") imageMixed++;
         if (r.month === null) unknownDate++;
         if (r.isEdited) editedCount++;
       }
@@ -1789,10 +2464,17 @@
       const hasReachedOlder = auditCoverageStatus === "OLDER_THAN_TARGET_REACHED";
       this.lastResult = {
         targetMonth,
+        qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+        reviewsScanned: this.allEvaluatedReviews.length,
         reviewsChecked: this.allEvaluatedReviews.length,
         reviewsWithPhoto: withPhoto,
+        reviewsWithCustomerPhoto: withPhoto,
+        photoReviewsInTargetMonth: photoInTarget,
         reviewsOver15ThaiWords: over15,
+        reviewsAtLeast15Words: over15,
         qualifiedReviews: qualified,
+        imageMonthUnknownCount: imageUnknown,
+        mixedImageMonthCount: imageMixed,
         unknownDateCount: unknownDate,
         editedReviewCount: editedCount,
         hasReachedOlderReviews: hasReachedOlder,
@@ -1802,9 +2484,8 @@
       };
       this.render();
     }
-    performScan() {
-      const cards = GoogleMapsDomAdapter.getReviewCardElements();
-      const rawReviews = cards.map((c) => GoogleMapsDomAdapter.extractReviewData(c));
+    async performScan() {
+      const rawReviews = await GoogleMapsDomAdapter.extractReviewsAsync(this.selectedMonth);
       const ref = /* @__PURE__ */ new Date();
       let newlyAdded = 0;
       for (let i = 0; i < rawReviews.length; i++) {
@@ -1815,17 +2496,26 @@
           this.allEvaluatedReviews.push(evaluated);
           newlyAdded++;
         }
+        if (evaluated.stopBoundaryTriggered) {
+          break;
+        }
       }
       this.lastScanNewCount = newlyAdded;
       let withPhoto = 0;
+      let photoInTarget = 0;
       let over15 = 0;
       let qualified = 0;
       let unknownDate = 0;
       let editedCount = 0;
+      let imageUnknown = 0;
+      let imageMixed = 0;
       for (const r of this.allEvaluatedReviews) {
         if (r.hasPhoto) withPhoto++;
-        if (r.isOver15Words) over15++;
+        if (r.isTargetImageMonth) photoInTarget++;
+        if (r.isAtLeast15Words) over15++;
         if (r.isQualified) qualified++;
+        if (r.imageMonthStatus === "IMAGE_MONTH_UNKNOWN") imageUnknown++;
+        if (r.imageMonthStatus === "MIXED_IMAGE_MONTH") imageMixed++;
         if (r.month === null) unknownDate++;
         if (r.isEdited) editedCount++;
       }
@@ -1838,10 +2528,17 @@
       const hasReachedOlder = auditCoverageStatus === "OLDER_THAN_TARGET_REACHED";
       this.lastResult = {
         targetMonth: this.selectedMonth,
+        qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+        reviewsScanned: this.allEvaluatedReviews.length,
         reviewsChecked: this.allEvaluatedReviews.length,
         reviewsWithPhoto: withPhoto,
+        reviewsWithCustomerPhoto: withPhoto,
+        photoReviewsInTargetMonth: photoInTarget,
         reviewsOver15ThaiWords: over15,
+        reviewsAtLeast15Words: over15,
         qualifiedReviews: qualified,
+        imageMonthUnknownCount: imageUnknown,
+        mixedImageMonthCount: imageMixed,
         unknownDateCount: unknownDate,
         editedReviewCount: editedCount,
         hasReachedOlderReviews: hasReachedOlder,
