@@ -1,6 +1,297 @@
 # AI Progress Log
 
-## 2026-09-03: Google Review KPI Batch Runner 401 Auth & State Binding Resolution
+## 2026-09-05: Dynamic Asia/Bangkok Date Classifier for Google Review Continuous Collector [COMPLETED & VERIFIED]
+- **Current Task**: Resolve blocker in PR #156 by replacing hardcoded `2026-09-04` reference date with dynamic `Asia/Bangkok` date computation.
+- **Changes**:
+  - Refactored `backend/scripts/weekly-collector/date-classifier.mjs` to dynamically compute current date in `Asia/Bangkok` timezone (`Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" })`).
+  - Added deterministic date math via UTC noon offsets (`offsetBangkokDate`) preventing DST/local-time drift.
+  - Dynamically resolved relative dates (`today`, `yesterday`, `N days ago`, hours/minutes/seconds ago) relative to current Bangkok day.
+  - Preserved Week 2 candidate boundaries (`[2026-09-02, 2026-09-09)`) and stop boundaries (`OLDER_THAN_WEEK2` for dates before `2026-09-02`).
+  - Updated `backend/scripts/weekly-collector/continuous-collector.mjs` to pass dynamic Bangkok date.
+  - Added unit test suite `backend/scripts/weekly-collector/date-classifier.spec.ts` (18/18 tests passing).
+  - Executed Playwright Linux container rebuild and 11-point smoke test.
+  - Verified database invariants: Week 1 = 274, Week 2 = 92 (Sep 2 = 25, Sep 3 = 34, Sep 4 = 33), Week 3 = 0.
+
+- **Current Task**: Build dedicated Playwright-based Dockerfile (`backend/Dockerfile.google-review-collector`) for Google Review Continuous Collector Railway cron service.
+- **Changes**:
+  - Created `backend/Dockerfile.google-review-collector` based on `mcr.microsoft.com/playwright:v1.50.0-noble`.
+  - Configured workspace layer structure preserving relative path resolution for `tools/google-review-checker-extension/src/`.
+  - Set container runtime defaults: `NODE_ENV=production`, `NODE_OPTIONS="--experimental-strip-types"`, `GOOGLE_REVIEW_HEADLESS=true`, `GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile`.
+  - Packaged standalone `backend/scripts/weekly-collector/date-classifier.mjs` resolving self-contained date classification without missing backfill dependencies.
+  - Executed 10/10 container smoke tests: Node v22, Prisma Client 78 models, Thai word segmentation, date parsing, Linux sandbox launch flags, headless Chromium rendering.
+  - Target command: `node scripts/weekly-collector/run-single-cycle.mjs` (runs exactly 1 cycle across 65 stores and exits; does not run baseline seeding or infinite loop).
+  - Preserved Week 1/Week 2 historical invariants (Week 1 = 274, Week 2 = 92).
+
+## 2026-09-04: Google Review Collector Runtime Config for Railway/Linux [COMPLETED & VERIFIED]
+- **Current Task**: Make persistent Chrome profile directory, headless mode, and Chromium launch arguments configurable for Linux/Railway container environments.
+- **Changes**:
+  - Created `backend/scripts/weekly-collector/browser-runtime-config.mjs` resolving `GOOGLE_REVIEW_PROFILE_DIR` (falling back to Mac path on darwin or `/tmp/google-review-kpi-profile` on Linux/containers).
+  - Configurable headless mode via `GOOGLE_REVIEW_HEADLESS` (defaulting to `true` in Railway/CI/Linux and `false` on macOS local dev).
+  - Injected container-safe args (`--no-sandbox`, `--disable-setuid-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`) when running in Linux/Railway.
+  - Added unit test suite `backend/scripts/weekly-collector/browser-runtime-config.spec.ts` (12/12 passing).
+  - Verified Week 1/Week 2 historical invariants remain untouched (Week 1 = 274, Week 2 = 92).
+
+## 2026-09-04: Daily Continuous Tracking for Weekly Google Review KPI (65 Stores) [COMPLETED & VERIFIED]
+- **Current Task**: Transition Weekly Google Review KPI from historical backfill to Daily Continuous Tracking for 65 Focus Stores.
+- **Scope & Baseline Invariants**:
+  - Reference Date: `2026-09-04 Asia/Bangkok` (UTC+7).
+  - Week 1 (`26.08-02.09.2026`): **CLOSED**, Total Qualified = **274** (455 daily rows, 65 weekly rows) — STRICT INVARIANT: VERIFIED UNTOUCHED.
+  - Week 2 (`02-09.09.2026`): **OPEN**, Accumulated Qualified = **92** (`02/09` = 25 CLOSED, `03/09` = 34 CLOSED, `04/09` = 33 OPEN) — VERIFIED UNCHANGED.
+  - Week 3: **NOT STARTED** (0 records) — VERIFIED 0 RECORDS.
+- **Completed Implementations**:
+  1. **Prisma Model**: `GoogleReviewFingerprint` with `storeCode`, `fingerprint` (HMAC-SHA256 hex, zero PII), `isQualified`, `reviewDate`, `weekNumber`, `firstSeenAt`.
+  2. **Baseline Seeding**: Executed across all 65 Focus Stores, recording exactly 199 fingerprints (92 qualified).
+  3. **Continuous Collector Engine**: `backend/scripts/weekly-collector/continuous-collector.mjs` & `run-single-cycle.mjs`:
+     - Sort verification (`Sort = ใหม่ที่สุด`).
+     - Fast stop boundary: 5 consecutive previously-seen reviews stops scan immediately (`CONSECUTIVE_SEEN_BOUNDARY_5`).
+     - Chronology stop: non-Week 2 dates terminate scan immediately (`STOP_CHRONOLOGY_OLDER_THAN_WEEK2`).
+     - Qualification engine: `!isEdited`, customer photo exists, Thai word count >= 15, rating > 4.8.
+     - Added npm script `"google-review:weekly-collector": "node scripts/weekly-collector/run-single-cycle.mjs"`.
+  4. **Backend API**:
+     - `GET /google-review-kpi/weekly/collector-status` returns tracked fingerprints, live run status, last run timestamp, and today's summary.
+  5. **Frontend UI**:
+     - Added Daily Continuous Review Discovery status card on `/google-review-kpi` (Weekly Top Store tab).
+  6. **Controlled Live Cycle**:
+     - Successfully executed across all 65 stores in 9.5 minutes.
+     - 11 stores reached fast-stop threshold (5 seen boundary).
+     - 54 stores reached older chronology stop (Sep 2 boundary).
+     - 0 errors, 0 invariant breaches.
+     - Verified: Week 1 remains 274, Week 2 remains 92 (Sep 4 = 33).
+     - STOPPED and waiting for operator review before activating unattended scheduler.
+- **Verification Status**:
+  - Backend unit tests: **1,690 / 1,690 passed**.
+  - Frontend unit tests: **485 / 485 passed**.
+  - Chrome extension unit tests: **73 / 73 passed**.
+  - Frontend build: **Passed (0 errors)**.
+  - Backend build: **Passed (0 errors)**.
+
+## 2026-09-04: Historical Weekly Google Review KPI Backfill — Week 2 Only [COMPLETED & VERIFIED]
+- **Current Task**: Execute Historical Weekly Google Review KPI backfill for **WEEK 2 ONLY** across the 65 Weekly KPI focus stores. Week 1 remains completely untouched; Week 3 not started.
+- **Target Period**: `第二周 สัปดาห์ที่ 2 (02-09.09.2026)` (Bangkok `[2026-09-02 00:00:00+07:00, 2026-09-09 00:00:00+07:00)`).
+- **Period & Freeze Policy**: Week 2 is currently active/open; Period status remains strictly **`OPEN`** (unfrozen).
+- **Date Population**: Populated dates are `2026-09-02` (CLOSED), `2026-09-03` (CLOSED), and `2026-09-04` (OPEN live date). Future dates (`05/09–08/09`) remain empty `-` and unpopulated.
+- **Rules Applied**:
+  - Review Chronology source of truth (Newest order verified before extraction).
+  - Candidates: today (Sep 4), 1 day ago (Sep 3), 2 days ago (Sep 2).
+  - Stop condition: Terminate store scan immediately when a non-edited review is older than Sep 2, 2026 (e.g. 3 days ago / Sep 1, 1 week ago).
+  - Qualification: `hasCustomerPhoto === true`, `isEdited === false`, `finalWordCount >= 15`, `storeRating > 4.8`.
+  - Sequential single-tab execution in dedicated Chrome profile session.
+- **Audit Execution & Readback Results**:
+  - Stores Attempted: **65 / 65** (100%)
+  - Stores Completed: **65 / 65** (100%)
+  - Stores Needing Attention: **0** (Remediated transient redirect for store 31736 cleanly)
+  - Stores Failed: **0**
+  - Total Reviews Checked: **199**
+  - Total Reviews with Customer Photo: **115**
+  - Total Reviews with >= 15 Thai Words: **98**
+  - Total Qualified Reviews for Week 2 so far: **92**
+  - Daily Totals:
+    - `02/09` (Sep 2): **25**
+    - `03/09` (Sep 3): **34**
+    - `04/09` (Sep 4 live): **33**
+  - historicalUnresolvedDayCount: **0** (all Week 2 candidates mapped to exact days 02, 03, 04)
+  - Passed Stores so far (Qualified >= 10 & Rating > 4.8): **1**
+    - #1 Store `25610` (*OBS Central World FL.4 By OPPO*): **10 qualified**, rating: 4.9
+  - Below Target Stores so far: **64**
+  - Total Execution Duration: **11.1 minutes**
+  - Database Persistence: 195 daily KPI rows (65 stores × 3 days) and 65 weekly KPI rows written to PostgreSQL.
+  - Invariant Verification:
+    - **Week 1 data verified UNCHANGED**: 455 daily rows, 65 weekly rows, 274 total qualified reviews intact.
+    - **Week 2 Period status verified OPEN**: `status: OPEN`, `frozenAt: null`.
+    - **Week 3 verified NOT STARTED**: 0 daily rows, 0 weekly rows.
+- **Verification Status**:
+  - Backend unit test suite: **1,688 / 1,688 passed**.
+  - Chrome Extension unit test suite: **73 / 73 passed**.
+  - Frontend production build: **Passed (0 errors)**.
+
+## 2026-09-04: Historical Weekly Google Review KPI Backfill — Week 1 Only [COMPLETED & VERIFIED]
+- **Current Task**: Execute Historical Weekly Google Review KPI backfill for **WEEK 1 ONLY** across the 65 Weekly KPI focus stores. Week 2 remains completely untouched.
+- **Target Period**: `第一周 สัปดาห์ที่ 1 (26.08-02.09.2026)` (Bangkok `[2026-08-26 00:00:00+07:00, 2026-09-02 00:00:00+07:00)`).
+- **Rules Applied**:
+  - Review Chronology source of truth (Newest order verified before extraction).
+  - Candidates: 3-6 days ago (Sep 1, Aug 31, Aug 30, Aug 29) + 1 week ago (unresolved candidate across range).
+  - Stop condition: Terminate store scan immediately when a non-edited review's chronology is older than August 26, 2026 (e.g. 2 weeks ago, 2 months ago).
+  - Qualification: `hasCustomerPhoto === true`, `isEdited === false`, `finalWordCount >= 15` (prefix merge & noise excluded), `storeRating > 4.8`.
+  - Sequential single-tab execution in dedicated Chrome profile session.
+- **Audit Execution & Readback Results**:
+  - Stores Attempted: **65 / 65** (100%)
+  - Stores Completed: **65 / 65** (100%)
+  - Stores Needing Attention: **0**
+  - Total Reviews Checked: **606**
+  - Total Reviews with Customer Photo: **370**
+  - Total Reviews with >= 15 Thai Words: **287**
+  - Total Qualified Reviews: **274**
+  - Passed Stores (Qualified >= 10 & Rating > 4.8): **4**
+    - #1 Store `28375` (*OBS Robinson Chonburi By OPPO*): **23 qualified**, rating: 5.0
+    - #2 Store `18127` (*OBS Imperial World Samrong FL.4 By OPPO 1*): **21 qualified**, rating: 5.0
+    - #3 Store `25610` (*OBS Central World FL.4 By OPPO*): **15 qualified**, rating: 4.9
+    - #4 Store `30606` (*OBS Central Suratthani FL.2 By OPPO 2*): **12 qualified**, rating: 5.0
+  - Below Target Stores: **61**
+  - Total Execution Duration: **12.6 minutes**
+  - Database Persistence: 455 daily KPI rows and 65 weekly KPI rows written to PostgreSQL.
+  - Invariant Verification: **Week 2 has NOT been started** (0 daily records, 0 weekly records).
+- **Verification Status**:
+  - Backend unit test suite: **1,688 / 1,688 passed**.
+  - Chrome Extension unit test suite: **73 / 73 passed**.
+  - Frontend production build: **Passed (0 errors)**.
+
+## 2026-09-04: Weekly Google Review KPI Store Set & StoreMaster Full Sync [COMPLETED & VERIFIED]
+- **Current Task**: Re-sync StoreMaster from canonical Google Sheet, ensure all 65 Weekly KPI stores are cleanly mapped with zero duplicates, verify Google Maps URLs for all 65 stores, update Weekly Top Store UI with exact 7-day columns and 5 summary cards, and verify CentralWorld reference regression baselines.
+- **Rules & Invariants Enforced**:
+  - `Store Code` / `externalStoreId` used as canonical mapping key (zero duplicate Store or StoreMaster rows).
+  - Qualification criteria for Weekly Top Store: `storeRating > 4.8`, `isEdited === false`, genuine customer photo attached, `finalWordCount >= 15`.
+  - Continuous 7-day Bangkok timezone week periods starting from `2026-08-26T00:00:00+07:00` (Week 1 = Aug 26 to Sep 2, Week 2 = Sep 2 to Sep 9, etc.).
+  - Daily records freeze at 23:59:59.999 Asia/Bangkok; Weekly totals freeze at 23:59:59.999 of the 7th day.
+- **StoreMaster Re-Sync & Mapping Results**:
+  - Expected Weekly Stores: **65**
+  - Matched StoreMaster Records: **65** (100% matched, including `32569` -> `OBS Central Khonkaen Campus FL.1 By OPPO`)
+  - Unmatched Store Codes: **0**
+  - Stores with Google Maps URL: **65 / 65** (100% ready)
+  - Stores Missing Google Maps URL: **0**
+  - Duplicate Mappings: **0**
+- **CentralWorld Reference Regression Baselines**:
+  - Store 25610:
+    - September 2026: Qualified Reviews = **8**
+    - August 2026: Qualified Reviews = **68**
+- **Weekly UI Updates**:
+  - Top summary cards: Weekly Stores (65), Passed, Below Target, Total Qualified Reviews, Current Week (with OPEN/CLOSED status badge).
+  - Dynamic 7-day columns table: `Rank`, `Store`, `Rating`, `<Day 1>` through `<Day 7>`, `Weekly Total`, `Target`, `Achievement`, `Status`.
+  - Live value handling: current/open dates show live values, future dates show `-`, closed/past dates show frozen values with `🔒`.
+- **Verification Status**:
+  - Chrome Extension test suite: **73 / 73 passed**.
+  - Chrome Extension build: **Passed (content_script.js 112.5kb, dashboard_bridge.js 4.3kb)**.
+  - Backend unit & integration test suite: **1,688 / 1,688 passed**.
+  - StoreMaster specs: **34 / 34 passed**.
+  - Frontend Next.js production build: **Passed (0 errors)**.
+  - Backend NestJS production build: **Passed (0 errors)**.
+- **Historical Audit Status**: **NOT STARTED**. Awaiting operator approval before launching review collections.
+
+
+## 2026-09-04: Google Review KPI Previous-Month (2026-08) Acceptance Run on CentralWorld (25610) [COMPLETED]
+- **Current Task**: Execute previous-month (`2026-08`) workflow acceptance validation strictly on OPPO Brand Shop CentralWorld (`25610`).
+- **Workflow & Rules Tested**:
+  - Phase 1 (September Reviews / Navigation Skip): Reviews definitively newer than August 2026 (`14 hours ago`, `1 day ago`, etc.) skipped opening photo viewers (`navigationSkipped = true`, `navigationSkipReason = "DEFINITELY_NEWER_THAN_TARGET"`, `imageViewerOpened = false`).
+  - Phase 2 (August Reviews / Target Evaluation): Reviews entering August 2026 candidate range (`4 วันที่ผ่านมา` = Aug 31, `1 week ago`, `2 weeks ago`) opened photo viewer if customer photo attached, extracted Image Capture Month, and verified 15+ Thai words.
+  - Edited Reviews Policy: Edited reviews (`isEdited === true`) excluded from KPI, cannot establish chronology, cannot trigger stop (`qualified = false`, `stopBoundaryTriggered = false`).
+- **Results**:
+  - Total Reviews Scanned: **40** (physical end of available reviews reached)
+  - Phase 1 Skipped Reviews: **14** (zero photo viewers opened for newer September reviews)
+  - Phase 2 Evaluated Reviews: **22**
+  - Photo Viewers Opened: **19**
+  - Edited Reviews Excluded: **4** (Reviews #1, #7, #23, #38)
+  - Non-edited Reviews with Aug Image Capture: **19**
+  - Non-edited Aug Image Capture + >=15 Words: **17**
+  - Final Qualified Reviews for Aug 2026: **17**
+  - Stop Boundary Review: Reached physical end of feed at sequence #40
+  - Lazy Load Cycles: **2**
+  - Confirmation: 0 edited reviews counted toward KPI, 0 edited reviews triggered stop boundary.
+- **Verification**: Extension unit tests (70/70 passed), extension build succeeded.
+
+## 2026-09-04: Google Review KPI Review Chronology vs Image Capture Month Separation & CentralWorld Acceptance [COMPLETED]
+- **Current Task**: Decouple `Image Capture Month` (KPI qualification source of truth) from `Review Creation Chronology` (feed navigation and stop boundary source of truth). Re-run single-store acceptance validation on CentralWorld (`25610`) in NEWEST order for Target Month `2026-09`.
+- **Architectural Rules Applied**:
+  - `Image Capture Month` is strictly used for KPI qualification (`hasCustomerPhoto === true && imageCaptureMonth === targetMonth && finalWordCount >= 15`). An older image in a recent/edited review fails qualification but **must NOT trigger stop**.
+  - `Review Creation Chronology` (`isEditedTimestamp`, `relativeDateRange`, `chronologicalRelation`, `chronologicalBoundaryEligible`) is strictly used for feed stop boundary.
+  - `isEditedTimestamp === true` -> `chronologicalBoundaryEligible = false` (never stops scan).
+  - `isEditedTimestamp === false` -> evaluates dynamic date range relative to referenceDate; if `endMonth < targetMonth` (e.g. `4 วันที่แล้ว` = Aug 31 when target is Sep 2026) -> `chronologicalRelation = "OLDER"`, `chronologicalBoundaryEligible = true`, `stopBoundaryTriggered = true`.
+- **CentralWorld Runtime Acceptance Results (Newest Order)**:
+  - Sort Verification: `sortTextBefore: เกี่ยวข้องที่สุด -> sortTextAfter: ใหม่ที่สุด` (`isNewest: true`).
+  - Review #1: `14 ชั่วโมงที่ผ่านมา` -> No photo, 0 words -> Qualified: `false`, Stop: `false`
+  - Review #2: `16 ชั่วโมงที่ผ่านมา` -> No photo, 5 words -> Qualified: `false`, Stop: `false`
+  - Review #3: `18 ชั่วโมงที่ผ่านมา` -> Photo: `2026-09`, 29 words -> Qualified: **`true`**, Stop: `false`
+  - Review #4: `21 ชั่วโมงที่ผ่านมา` -> Photo: `2026-09`, 17 words -> Qualified: **`true`**, Stop: `false`
+  - Review #5: `22 ชั่วโมงที่ผ่านมา` -> Photo: `2026-09`, 41 words -> Qualified: **`true`**, Stop: `false`
+  - Review #6: `แก้ไขเมื่อ 22 ชั่วโมงที่ผ่านมา` (Edited) -> Photo: `2026-01`, 15 words -> Qualified: `false`, `isEdited: true`, `chronologicalBoundaryEligible: false`, Stop: **`false`** (Correctly continued past Review #6!)
+  - Review #7: `23 ชั่วโมงที่ผ่านมา` -> Photo: `2026-09`, 17 words -> Qualified: **`true`**, Stop: `false`
+  - Review #8: `23 ชั่วโมงที่ผ่านมา` -> Photo: `2026-09`, 37 words -> Qualified: **`true`**, Stop: `false`
+  - Review #9: `1 วันที่ผ่านมา` -> Photo: `2026-09`, 25 words -> Qualified: **`true`**, Stop: `false`
+  - Review #10: `1 วันที่ผ่านมา` -> No photo, 0 words -> Qualified: `false`, Stop: `false`
+  - Review #11: `1 วันที่ผ่านมา` -> Photo: `2026-09`, 13 words (<15) -> Qualified: `false`, Stop: `false`
+  - Review #12: `1 วันที่ผ่านมา` -> No photo, 11 words -> Qualified: `false`, Stop: `false`
+  - Review #13: `1 วันที่ผ่านมา` -> No photo, 2 words -> Qualified: `false`, Stop: `false`
+  - Review #14: `1 วันที่ผ่านมา` -> Photo: `2026-09`, 21 words -> Qualified: **`true`**, Stop: `false`
+  - Review #15: `1 วันที่ผ่านมา` -> Photo: `2026-09`, 27 words -> Qualified: **`true`**, Stop: `false`
+  - Review #16: `4 วันที่ผ่านมา` (Un-edited, Aug 31) -> Photo: `2026-08`, 18 words -> `chronologicalRelation: OLDER`, `chronologicalBoundaryEligible: true`, Stop: **`true 🛑`** (`Review creation chronology reached older than target month (4 วันที่ผ่านมา)`)
+- **CentralWorld Final Summary Metrics**:
+  - Reviews Scanned: **16**
+  - With Customer Photo: **11**
+  - Photo in Target Month (`2026-09`): **9**
+  - 15+ Thai Words: **10**
+  - Qualified Reviews: **8** (Reviews #3, #4, #5, #7, #8, #9, #14, #15)
+  - Coverage Status: **`OLDER_THAN_TARGET_REACHED`** (Halted at sequence #16)
+- **Verification Status**:
+  - Extension test suite: 69/69 passed.
+  - Extension build: `content_script.js` (110.8kb) and `dashboard_bridge.js` (4.3kb) compiled cleanly.
+- **Next Action**: Report full 13-point acceptance output to operator.
+
+## 2026-09-03: Google Review KPI Controlled 10-Store Production Pilot [COMPLETED: 10/10]
+- **Current Task**: Execute a controlled 10-store production pilot for month `2026-09` using real browser and unpacked Chrome Extension.
+- **Pre-Conditions Verified**:
+  - Previous 3-store pilot session `e4bd4d8a-fc9d-43f5-9740-748389cfc7d8` confirmed `COMPLETED` (3/3 completed).
+  - No active/running audit session conflict existed.
+  - Selected 10 non-duplicate stores covering 6 distinct regions with varied characteristics (tourist destinations, hypermarkets, major malls, dealer partners).
+  - Created new session `8b1d94ee-0df7-4d3e-b84c-4ff4c9564324`.
+- **Runtime Discovery & Safe Fix**:
+  - Store #1 (`OBS Ayutthaya City Park By TG 1`) was a zero-review place on Google Maps (has "เขียนรีวิว" but no Reviews tab or star summary).
+  - Identified two runner bugs:
+    1. Recursive `runForCurrentStore` retry lock hit `if (this.isRunning) return;` preventing retry and hanging.
+    2. Lack of zero-review place detection in `GoogleMapsDomAdapter`.
+  - Fixes applied:
+    1. Added `GoogleMapsDomAdapter.isZeroReviewsPlace()` detecting loaded place header, "Write a review" action, and absence of review cards/tabs.
+    2. Replaced recursive retry in `batchAuditRunner.ts` with a bounded iterative retry loop.
+    3. Auto-submitted zero-count metrics (`reviewsChecked: 0`, `coverageStatus: END_OF_AVAILABLE_REVIEWS`) and auto-transitioned to next store.
+  - Added contract tests in `test/batchAuditRunner.test.ts` (55/55 passed). Rebuilt extension bundles.
+- **Browser Pilot Execution & Results**:
+  - Ran automated validation in real Chromium with unpacked extension across all 10 stores:
+    1. `OBS Ayutthaya City Park By TG 1` (`27369`): 0 checked, 0 photo, 0 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+    2. `OBS Central Rama 3 FL.3 By OPPO` (`26239`): 3 checked, 3 photo, 3 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+    3. `OBS Central Chanthaburi FL.1 By OPPO` (`28882`): 3 checked, 3 photo, 0 words >= 15, 0 qualified, `OLDER_THAN_TARGET_REACHED` -> COMPLETED (HTTP 201)
+    4. `OBS Central Pattaya Beach FL.3 By OPPO` (`2997`): 3 checked, 3 photo, 3 words >= 15, 0 qualified, `OLDER_THAN_TARGET_REACHED` -> COMPLETED (HTTP 201)
+    5. `OBS Big C Udonthani By OPPO` (`28374`): 3 checked, 3 photo, 2 words >= 15, 0 qualified, `OLDER_THAN_TARGET_REACHED` -> COMPLETED (HTTP 201)
+    6. `OBS Central Khonkaen FL.3 By OPPO` (`3791`): 3 checked, 3 photo, 2 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+    7. `OBS Big C Chiangrai By IT CITY` (`26197`): 3 checked, 0 photo, 2 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+    8. `OBS Big C Lampang By IT CITY` (`26456`): 3 checked, 3 photo, 3 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+    9. `OBS Big C Klong Khae Hatyai FL.2 By Com7` (`22868`): 3 checked, 0 photo, 0 words >= 15, 0 qualified, `OLDER_THAN_TARGET_REACHED` -> COMPLETED (HTTP 201)
+    10. `OBS Market Village Huahin FL.3 By IT CITY` (`26533`): 3 checked, 3 photo, 1 words >= 15, 0 qualified, `END_OF_AVAILABLE_REVIEWS` -> COMPLETED (HTTP 201)
+  - Final Session Status: **10/10 COMPLETED** (`8b1d94ee-0df7-4d3e-b84c-4ff4c9564324`).
+  - No manual intervention required during execution. Zero PII/text/photos persisted. All aggregate metrics recorded in PostgreSQL.
+
+## 2026-09-03: Google Review KPI Token Handoff, Storage ACK Bridge & End-to-End Pilot Completion
+- **Current Task**: Resolve runner authentication token handoff between Next.js dashboard and Chrome Extension, eliminate missing token errors on Google Maps, and validate real browser execution through pilot stores.
+- **Root Causes Identified**:
+  1. `maps.app.goo.gl` 302 Redirection: Shortlink URLs returned HTTP 302 redirects to `www.google.com/maps/place/...`, stripping URL hash fragments (`#oppoToken=...&oppoSessionId=...`) and custom query parameters during the server-side redirect.
+  2. Isolated World Event Serialization: `CustomEvent.detail` between Dashboard and Extension content scripts suffered from Chrome isolated world boundary restrictions and asynchronous race conditions when `window.open` opened new tabs before `chrome.storage.local` write completed.
+  3. Precedence & Invariant Enforcement: Content script lacked deterministic URL vs storage token precedence and fail-closed validation before launching the batch runner loop.
+- **Completed Fixes**:
+  - `tools/google-review-checker-extension/src/core/handoffParams.ts`:
+    - Created synchronous `EARLY_LOCATION` snapshot capturing URL parameters before client-side SPA routing can mutate them.
+    - Created `parseUrlHandoffParams()` extracting `oppoToken`, `oppoSessionId`, `oppoStoreId`, `oppoMonth`, and store metadata.
+  - `tools/google-review-checker-extension/src/dashboard_bridge.ts`:
+    - Implemented bidirectional `window.postMessage` protocol listening for `OPPO_PERSIST_BATCH_SESSION_REQUEST`, persisting session to `chrome.storage.local`, and replying with `OPPO_PERSIST_BATCH_SESSION_ACK`.
+    - Added `storage` event listeners for automatic `localStorage` synchronization.
+  - `tools/google-review-checker-extension/src/batch/batchAuditRunner.ts`:
+    - Integrated `parseUrlHandoffParams()` with token precedence (`URL token > storage token > fail closed`).
+    - Added fail-closed authentication header construction (`Authorization: Bearer <token>`).
+    - Updated `navigateToNextStore()` to deterministically persist updated session state in `chrome.storage.local` before navigation.
+  - `tools/google-review-checker-extension/src/content_script.ts`:
+    - Integrated `parseUrlHandoffParams()`.
+    - Added fail-closed invariant check in `initBatchMode()` alerting operator if token is missing.
+    - Updated `detectStoreContextFromUrl()` to use normalized parameters.
+  - `frontend/src/app/google-review-kpi/google-review-kpi-view.tsx`:
+    - Implemented `persistBatchSessionWithAck(bridgeData, timeoutMs)` ensuring deterministic storage write and ACK before calling `window.open()`.
+    - Applied `persistBatchSessionWithAck` across `handleStartBatchAudit`, `handleResumeBatchAudit`, and `handlePauseBatchAudit`.
+- **Real Browser Validation Results**:
+  - Executed automated browser validation in Chromium with the unpacked extension on production `https://lineoppo.click/google-review-kpi`.
+  - Queue #1: `OBS Central World FL.4 By OPPO` (Code: 25610) -> Scanned, Submitted (`POST .../complete` -> 201), status: `COMPLETED` (`END_OF_AVAILABLE_REVIEWS`).
+  - Queue #2: `OBS Imperial World Samrong FL.4 By OPPO 1` (Code: 18127) -> Auto-transitioned, Scanned, Submitted (`POST .../complete` -> 201), status: `COMPLETED` (`OLDER_THAN_TARGET_REACHED`).
+  - Queue #3: `OBS Imperial World Samrong FL.4 By OPPO 2` (Code: 26346) -> Auto-transitioned, Scanned, Submitted (`POST .../complete` -> 201), status: `COMPLETED` (`OLDER_THAN_TARGET_REACHED`).
+  - Monthly Batch Audit Session `e4bd4d8a-fc9d-43f5-9740-748389cfc7d8`: Completed 3/3 stores with status `COMPLETED`.
+  - Dashboard verified: All 3 stores updated in PostgreSQL with aggregate KPI results.
+- **Verification Summary**:
+  - Extension unit tests: 54/54 passed (including `tokenHandoff.test.ts`).
+  - Frontend unit tests: passed.
+  - Frontend production build: passed with zero errors.
+  - Live production browser execution: 100% automated completion across all pilot stores.
 - **Current Task**: Resolve 401 Unauthorized error (`{"message":"Authentication required"}`) when extension Batch Runner attempts to submit audit results.
 - **Root Causes Identified**:
   1. Content Script State Decoupling: `content_script.ts` read `batchAuditSession` from storage in `initBatchMode()` but never invoked `batchRunner.setSession(this.batchSession)`. As a result, `BatchAuditRunner.sessionInfo` had no runner token.
@@ -3375,3 +3666,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Profile contention is requeued as `PROFILE_OPERATION_BUSY` without incrementing attempts or classifying the job as `FAILED_AUTH`. Existing latest-wins, bounded resolver, identity, and nickname semantics remain unchanged. Maintenance-mode precedence and keepalive behavior remain unchanged.
 - Focused coordinator/worker/resolver/discovery tests pass; full backend tests pass (1,685/1,685); Prisma validation, backend build, and changed-file ESLint pass. Repository-wide backend lint retains unrelated baseline violations. No production browser probe, profile access, Railway change, migration deployment, push, merge, or deploy was performed.
 - Next action: operator review of the scoped diff, then separately authorize any commit/push/PR workflow. Phase A1 does not enable health scheduling, UI, alerts, or production probes.
+
+# Current task: Admin LINE Chat Operations Health page (2026-09-04)
+
+- Production verification 2026-09-05: remote `deploy/line-chat-health-dashboard` retained at `360e55dbe5be20cb9e126d6f74247fb8ecaa7ef8`; repository-backed frontend deployment `da1ecbe5-1c2d-40a0-ae45-f91e8fb9ccbb` SUCCESS. Dashboard/public routes and health routes return 200; unauthenticated operations API returns 401. All 28 APK assets exist in runtime; advertised v1.1.15 asset returns 200 (60,081,670 bytes), resolving the previously observed 404.
+- Verification blocker: newer main-backed backend deployment `5162fa2f-c71a-448c-a9de-99f635ad231e` at `78624d56bc19e863f1275e2adbd36a197e3d14ee` replaced the dashboard backend and omits the dashboard health/job/failure fields. Authenticated browser unavailable. No retry, worker/maintenance/profile changes, or main merge performed. Next action: reconcile dashboard backend changes with current main before final functional sign-off.
+
+- Added admin-only `/operations/line-chat-health` with separate session-health and job-health presentation, responsive overview/detail views, safe failure diagnostics, active lease visibility, and a confirmation-gated session-scoped retry action.
+- Extended the existing `GET /operations/line-chat-nickname/health` response; no credentials, tokens, cookies, profile paths, nicknames, or customer/chat content are returned. Existing `POST /operations/line-chat-nickname/retry-failed?sessionKey=...` remains the only mutation exposed by this page.
+- Health classification keeps `ACTIVE / CONNECTED` green even when individual jobs fail; those accounts render as yellow `Connected with job failures`, not disconnected or authentication failed.
+- Prisma validation/generation, backend and frontend production builds, targeted lint, 1,691 backend tests, and 487 frontend tests pass. Local HTTP checks returned 200 for the page/backend health and 401 for the unauthenticated admin API. Repository-wide lint retains unrelated pre-existing dirty-worktree failures.
+- No production deployment, Railway change, profile access, job retry, or session mutation was performed for this UI task.

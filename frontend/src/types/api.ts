@@ -1707,8 +1707,10 @@ export type GoogleReviewKpiStoreItem = {
     month: string;
     reviewsChecked: number;
     reviewsWithPhoto: number;
+    photoReviewsInTargetMonth: number;
     reviewsOver15ThaiWords: number;
     qualifiedReviews: number;
+    qualificationRuleVersion: string;
     targetQualifiedReviews: number;
     isPassed: boolean;
     checkedAt: string;
@@ -1738,8 +1740,10 @@ export type CheckGoogleReviewKpiResultInput = {
   month: string;
   reviewsChecked: number;
   reviewsWithPhoto: number;
+  photoReviewsInTargetMonth?: number;
   reviewsOver15ThaiWords: number;
   qualifiedReviews: number;
+  qualificationRuleVersion?: string;
   targetQualifiedReviews?: number;
   googleMapsReviewUrl?: string;
 };
@@ -1756,6 +1760,7 @@ export type GoogleReviewAuditQueueStoreItem = {
   status: "PENDING" | "RUNNING" | "COMPLETED" | "NEEDS_ATTENTION" | "SKIPPED" | "FAILED";
   reviewsChecked: number;
   reviewsWithPhoto: number;
+  photoReviewsInTargetMonth: number;
   reviewsOver15ThaiWords: number;
   qualifiedReviews: number;
   coverageStatus: string | null;
@@ -1770,6 +1775,7 @@ export type GoogleReviewAuditSessionResponse = {
   id: string;
   month: string;
   status: "IDLE" | "RUNNING" | "PAUSED" | "COMPLETED" | "CANCELLED";
+  qualificationRuleVersion: string;
   totalStores: number;
   completedStores: number;
   failedStores: number;
@@ -1783,3 +1789,81 @@ export type GoogleReviewAuditSessionResponse = {
   currentStore: GoogleReviewAuditQueueStoreItem | null;
   stores: GoogleReviewAuditQueueStoreItem[];
 };
+
+export type GoogleReviewWeeklyStoreItem = {
+  id: string;
+  storeCode: string;
+  storeId: string | null;
+  storeName: string;
+  region: string | null;
+  province: string | null;
+  googleMapsUrl: string | null;
+  hasGoogleMaps: boolean;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+
+export type GoogleReviewWeeklyPeriodItem = {
+  id: string;
+  weekNumber: number;
+  labelZh: string;
+  labelTh: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  status: "OPEN" | "CLOSED";
+  frozenAt: string | null;
+};
+
+export type GoogleReviewDailyBreakdownItem = {
+  date: string;
+  qualifiedReviews: number;
+  reviewsChecked: number;
+  reviewsWithPhoto: number;
+  status: "OPEN" | "CLOSED";
+};
+
+export type GoogleReviewWeeklyRankItem = {
+  rank: number;
+  storeCode: string;
+  storeId: string | null;
+  storeName: string;
+  region: string | null;
+  province: string | null;
+  googleMapsUrl: string | null;
+  storeRating: number | null;
+  isRatingEligible: boolean;
+  qualifiedReviews: number;
+  reviewsChecked: number;
+  reviewsWithPhoto: number;
+  reviewsOver15ThaiWords: number;
+  status: "OPEN" | "CLOSED";
+  dailyBreakdown: GoogleReviewDailyBreakdownItem[];
+};
+
+export type GoogleReviewWeeklyLeaderboardResponse = {
+  weekNumber: number;
+  period: GoogleReviewWeeklyPeriodItem;
+  totalStores: number;
+  eligibleRatingStores: number;
+  totalQualifiedReviews: number;
+  topStore: GoogleReviewWeeklyRankItem | null;
+  stores: GoogleReviewWeeklyRankItem[];
+};
+
+export type GoogleReviewWeeklyCollectorStatusResponse = {
+  activeWeekNumber: number;
+  todayBangkok: string;
+  totalStores: number;
+  fingerprintsTracked: number;
+  lastRunAt: string | null;
+  isRunning: boolean;
+  status: "IDLE" | "RUNNING" | "COMPLETED" | "ERROR";
+  summaryToday: {
+    totalQualifiedToday: number;
+    newReviewsDiscoveredToday: number;
+  };
+};
+
+

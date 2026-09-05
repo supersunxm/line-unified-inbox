@@ -5,8 +5,14 @@ import { api } from "@/lib/api";
 import type {
   GoogleReviewAuditQueueStoreItem,
   GoogleReviewAuditSessionResponse,
+  GoogleReviewDailyBreakdownItem,
   GoogleReviewKpiStoreItem,
   GoogleReviewKpiSummary,
+  GoogleReviewWeeklyLeaderboardResponse,
+  GoogleReviewWeeklyCollectorStatusResponse,
+  GoogleReviewWeeklyPeriodItem,
+  GoogleReviewWeeklyRankItem,
+  GoogleReviewWeeklyStoreItem,
 } from "@/types/api";
 import type { Language } from "@/components/shell/top-navigation";
 
@@ -47,7 +53,9 @@ function buildGoogleMapsHandoffUrl(
   month: string,
   runnerToken?: string,
   sessionId?: string,
+  backendUrl?: string,
 ): string {
+  const origin = backendUrl || (typeof window !== "undefined" ? window.location.origin : undefined);
   try {
     const url = new URL(originalUrl);
     url.searchParams.set("oppoStoreId", store.id);
@@ -55,31 +63,167 @@ function buildGoogleMapsHandoffUrl(
     if (store.code) url.searchParams.set("oppoCode", store.code);
     url.searchParams.set("oppoName", store.name);
     url.searchParams.set("oppoMonth", month);
-    if (runnerToken || sessionId) {
+    if (runnerToken || sessionId || origin) {
       const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : "");
       if (runnerToken) hashParams.set("oppoToken", runnerToken);
       if (sessionId) hashParams.set("oppoSessionId", sessionId);
+      if (origin) hashParams.set("oppoBackendUrl", origin);
       url.hash = hashParams.toString();
     }
     return url.toString();
   } catch {
     const sep = originalUrl.includes("?") ? "&" : "?";
     let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(store.code || "")}&oppoName=${encodeURIComponent(store.name)}&oppoMonth=${encodeURIComponent(month)}`;
-    if (runnerToken || sessionId) {
+    if (runnerToken || sessionId || origin) {
       const hashParts: string[] = [];
       if (runnerToken) hashParts.push(`oppoToken=${encodeURIComponent(runnerToken)}`);
       if (sessionId) hashParts.push(`oppoSessionId=${encodeURIComponent(sessionId)}`);
+      if (origin) hashParts.push(`oppoBackendUrl=${encodeURIComponent(origin)}`);
       base += `#${hashParts.join("&")}`;
     }
     return base;
   }
 }
 
+async function persistBatchSessionWithAck(
+  bridgeData: {
+    sessionId: string;
+    targetMonth: string;
+    status: string;
+    currentStore?: any;
+    totalStores?: number;
+    completedStores?: number;
+    runnerToken?: string;
+  },
+  timeoutMs: number = 2000,
+): Promise<{ acked: boolean; error?: string | null }> {
+  // Always update localStorage first
+  try {
+    localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
+  } catch {}
+
+  // Fire legacy event for backwards compatibility
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));
+  }
+
+  if (typeof window === "undefined") {
+    return { acked: false, error: "NO_WINDOW" };
+  }
+
+  return new Promise((resolve) => {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    let settled = false;
+
+    const cleanup = () => {
+      window.removeEventListener("OPPO_PERSIST_BATCH_SESSION_ACK", customEventHandler);
+      window.removeEventListener("message", messageHandler);
+    };
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        console.warn(
+          "[BatchAudit] Extension bridge persistence ACK timed out after " +
+            timeoutMs +
+            "ms — proceeding with URL fallback",
+        );
+        resolve({ acked: false, error: "TIMEOUT" });
+      }
+    }, timeoutMs);
+
+    const onAckReceived = (detail: any) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        console.debug("[BatchAudit] Extension bridge persistence ACK:", {
+          sessionId: detail.sessionId,
+          runnerTokenPresent: detail.runnerTokenPresent,
+          success: detail.success,
+        });
+        resolve({ acked: detail.success, error: detail.error });
+      }
+    };
+
+    const customEventHandler = (e: any) => {
+      if (e.detail?.requestId === requestId) {
+        onAckReceived(e.detail);
+      }
+    };
+
+    const messageHandler = (event: MessageEvent) => {
+      if (
+        event.data &&
+        event.data.type === "OPPO_PERSIST_BATCH_SESSION_ACK" &&
+        event.data.requestId === requestId
+      ) {
+        onAckReceived(event.data);
+      }
+    };
+
+    window.addEventListener("OPPO_PERSIST_BATCH_SESSION_ACK", customEventHandler);
+    window.addEventListener("message", messageHandler);
+
+    // 1. Post message across isolated worlds
+    try {
+      window.postMessage(
+        {
+          type: "OPPO_PERSIST_BATCH_SESSION_REQUEST",
+          requestId,
+          data: bridgeData,
+        },
+        "*",
+      );
+    } catch {}
+
+    // 2. Also dispatch DOM CustomEvent
+    try {
+      window.dispatchEvent(
+        new CustomEvent("OPPO_PERSIST_BATCH_SESSION_REQUEST", {
+          detail: {
+            requestId,
+            data: bridgeData,
+          },
+        }),
+      );
+    } catch {}
+  });
+}
+
 const translations = {
   th: {
     title: "Google Maps Review KPI Checker",
     subtitle: "ตรวจสอบและติดตาม KPI รีวิวร้านค้าบน Google Maps ประจำเดือน",
+    tabMonthly: "Monthly KPI (ประจำเดือน)",
+    tabWeeklyTopStore: "Weekly Top Store (อันดับประจำสัปดาห์)",
     selectMonth: "เลือกเดือน",
+    selectWeek: "เลือกสัปดาห์",
+    weeklyTopStoreTitle: "Weekly Top Store Leaderboard",
+    weeklyTopStoreSubtitle: "ตารางจัดอันดับ 65 ร้านค้าเป้าหมาย Google Maps Review KPI ประจำสัปดาห์",
+    topStoreNumberOne: "Top Store อันดับ 1",
+    weeklyStoresCount: "ร้านค้าในชุด 65 ร้าน",
+    storesRatingAbove48: "คะแนนร้าน > 4.8",
+    totalWeeklyQualified: "รีวิวผ่านเกณฑ์ในสัปดาห์นี้",
+    weeklyQualificationRule: "เกณฑ์การจัดอันดับ Weekly: คะแนนร้านค้า > 4.8 ดาว, รีวิวไม่ถูกแก้ไข (isEdited === false), มีรูปถ่ายจริงของลูกค้า, ข้อความ 15 คำขึ้นไป",
+    dailyBreakdown: "สถิติรายวัน 7 วัน",
+    syncStoresBtn: "ซิงค์ชุด 65 ร้านค้า",
+    syncingStores: "กำลังซิงค์...",
+    storeCode: "รหัสร้าน",
+    storeRating: "คะแนนร้าน",
+    rank: "อันดับ",
+    allRatings: "ทุกคะแนน",
+    ratingAbove48: "คะแนน > 4.8 เท่านั้น",
+    ratingBelow48: "คะแนน ≤ 4.8",
+    statusOpen: "เปิดรับข้อมูล (OPEN)",
+    statusClosed: "ปิดรับข้อมูลแล้ว (CLOSED)",
+    achievement: "ความสำเร็จ",
+    weeklyTotal: "รวมสัปดาห์",
+    currentWeek: "สัปดาห์ปัจจุบัน",
+    dailyBreakdownTitle: "รายละเอียดรีวิว 7 วันประจำสัปดาห์",
+    close: "ปิด",
+    date: "วันที่",
     totalStores: "ร้านค้าทั้งหมด",
     storesWithMaps: "มีลิงก์ Google Maps",
     checkedStores: "ตรวจแล้ว",
@@ -128,7 +272,34 @@ const translations = {
   en: {
     title: "Google Maps Review KPI Checker",
     subtitle: "Monthly store review KPI tracking and verification on Google Maps",
+    tabMonthly: "Monthly KPI",
+    tabWeeklyTopStore: "Weekly Top Store",
     selectMonth: "Select Month",
+    selectWeek: "Select Week",
+    weeklyTopStoreTitle: "Weekly Top Store Leaderboard",
+    weeklyTopStoreSubtitle: "Weekly Review KPI tracking and ranking for 65 focus stores",
+    topStoreNumberOne: "Top Store #1",
+    weeklyStoresCount: "Weekly Focus Stores",
+    storesRatingAbove48: "Rating > 4.8",
+    totalWeeklyQualified: "Weekly Qualified Reviews",
+    weeklyQualificationRule: "Weekly Qualification Criteria: Store Rating > 4.8, Non-edited review, genuine customer photo, 15+ Thai words.",
+    dailyBreakdown: "7-Day Daily Breakdown",
+    syncStoresBtn: "Sync 65 Store Set",
+    syncingStores: "Syncing...",
+    storeCode: "Store Code",
+    storeRating: "Store Rating",
+    rank: "Rank",
+    allRatings: "All Ratings",
+    ratingAbove48: "Rating > 4.8 Only",
+    ratingBelow48: "Rating ≤ 4.8",
+    statusOpen: "OPEN",
+    statusClosed: "CLOSED",
+    achievement: "Achievement",
+    weeklyTotal: "Weekly Total",
+    currentWeek: "Current Week",
+    dailyBreakdownTitle: "7-Day Daily Review Breakdown",
+    close: "Close",
+    date: "Date",
     totalStores: "Total Stores",
     storesWithMaps: "With Maps Link",
     checkedStores: "Checked",
@@ -177,7 +348,34 @@ const translations = {
   zh: {
     title: "Google Maps 评价 KPI 检查器",
     subtitle: "月度门店 Google Maps 评价 KPI 审核与追踪",
+    tabMonthly: "月度 KPI",
+    tabWeeklyTopStore: "周度 Top 门店榜",
     selectMonth: "选择月份",
+    selectWeek: "选择周次",
+    weeklyTopStoreTitle: "周度 Top 门店排行榜",
+    weeklyTopStoreSubtitle: "65家重点门店 Google Maps 评价 KPI 追踪与周度排行榜",
+    topStoreNumberOne: "周度第一名",
+    weeklyStoresCount: "重点门店数量",
+    storesRatingAbove48: "评分 > 4.8",
+    totalWeeklyQualified: "本周合格评价总数",
+    weeklyQualificationRule: "周度达标标准：门店评分 > 4.8星、非编辑评价（isEdited === false）、含真实顾客图片、泰语正文15词及以上。",
+    dailyBreakdown: "7天每日明细",
+    syncStoresBtn: "同步65家门店集",
+    syncingStores: "同步中...",
+    storeCode: "门店代码",
+    storeRating: "门店评分",
+    rank: "排名",
+    allRatings: "全部评分",
+    ratingAbove48: "仅评分 > 4.8",
+    ratingBelow48: "评分 ≤ 4.8",
+    statusOpen: "进行中 (OPEN)",
+    statusClosed: "已封榜 (CLOSED)",
+    achievement: "达成率",
+    weeklyTotal: "周度总计",
+    currentWeek: "当前周次",
+    dailyBreakdownTitle: "本周7天每日评价明细",
+    close: "关闭",
+    date: "日期",
     totalStores: "全部门店",
     storesWithMaps: "已配置地图链接",
     checkedStores: "已审核",
@@ -258,7 +456,20 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [formQualifiedReviews, setFormQualifiedReviews] = useState<number>(0);
   const [formTarget, setFormTarget] = useState<number>(10);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [formMessage, setFormMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"monthly" | "weekly">("monthly");
+
+  // Weekly KPI State
+  const [weeklyPeriods, setWeeklyPeriods] = useState<GoogleReviewWeeklyPeriodItem[]>([]);
+  const [selectedWeekNumber, setSelectedWeekNumber] = useState<number>(2);
+  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState<GoogleReviewWeeklyLeaderboardResponse | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState<boolean>(false);
+  const [weeklySearch, setWeeklySearch] = useState<string>("");
+  const [weeklyRegionFilter, setWeeklyRegionFilter] = useState<string>("ALL");
+  const [weeklyMinRating, setWeeklyMinRating] = useState<number | undefined>(undefined);
+  const [selectedDailyStore, setSelectedDailyStore] = useState<GoogleReviewWeeklyRankItem | null>(null);
+  const [syncingStores, setSyncingStores] = useState<boolean>(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [collectorStatus, setCollectorStatus] = useState<GoogleReviewWeeklyCollectorStatusResponse | null>(null);
 
   const loadData = async (month: string, silent: boolean = false) => {
     try {
@@ -296,6 +507,95 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       // Ignore background errors
     }
   };
+
+  const loadWeeklyData = async (weekNum?: number, silent: boolean = false) => {
+    try {
+      if (!silent) setWeeklyLoading(true);
+      const targetWeek = weekNum ?? selectedWeekNumber;
+      const periods = await api.getGoogleReviewWeeklyPeriods();
+      setWeeklyPeriods(periods);
+
+      const res = await api.getGoogleReviewWeeklyLeaderboard({
+        weekNumber: targetWeek,
+        search: weeklySearch,
+        region: weeklyRegionFilter !== "ALL" ? weeklyRegionFilter : undefined,
+        minRating: weeklyMinRating,
+      });
+      setWeeklyLeaderboard(res);
+      setSelectedWeekNumber(res.weekNumber);
+
+      try {
+        const cStatus = await api.getGoogleReviewWeeklyCollectorStatus();
+        setCollectorStatus(cStatus);
+      } catch {}
+    } catch (err: unknown) {
+      console.error("Failed to load weekly leaderboard:", err);
+    } finally {
+      if (!silent) setWeeklyLoading(false);
+    }
+  };
+
+  const handleSyncWeeklyStores = async () => {
+    try {
+      setSyncingStores(true);
+      setSyncResult(null);
+      const res = await api.syncGoogleReviewWeeklyStores();
+      setSyncResult(
+        `Synced ${res.syncedMembershipsCount}/${res.expectedStoreCount} stores (${res.matchedStoreMasterCount} matched StoreMaster, ${res.unmatchedStoreCodes.length} unmatched).`,
+      );
+      await loadWeeklyData(selectedWeekNumber);
+    } catch (err: unknown) {
+      setSyncResult(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setSyncingStores(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "weekly") {
+      loadWeeklyData(selectedWeekNumber);
+    }
+  }, [activeTab, selectedWeekNumber, weeklyRegionFilter, weeklyMinRating]);
+
+  const weekDays = useMemo(() => {
+    if (!weeklyLeaderboard?.period?.startDate) return [];
+    const start = new Date(weeklyLeaderboard.period.startDate);
+    const days: { dateStr: string; label: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      const dateStr = formatter.format(d);
+      const parts = dateStr.split("-");
+      const label = `${parts[2]}/${parts[1]}`;
+      days.push({ dateStr, label });
+    }
+    return days;
+  }, [weeklyLeaderboard?.period?.startDate]);
+
+  const todayBangkok = useMemo(() => {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }, []);
+
+  const weeklyStats = useMemo(() => {
+    const totalStores = weeklyLeaderboard?.totalStores ?? 65;
+    const totalQualified = weeklyLeaderboard?.totalQualifiedReviews ?? 0;
+    const stores = weeklyLeaderboard?.stores ?? [];
+    const passed = stores.filter(
+      (s) => s.qualifiedReviews >= 10 && (s.storeRating === null || s.storeRating > 4.8)
+    ).length;
+    const belowTarget = Math.max(0, totalStores - passed);
+    return { totalStores, totalQualified, passed, belowTarget };
+  }, [weeklyLeaderboard]);
 
   useEffect(() => {
     loadData(selectedMonth);
@@ -356,8 +656,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         completedStores: res.completedStores,
         runnerToken,
       };
-      localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
-      window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));
+
+      // Deterministically persist session in extension storage with ACK before opening tab
+      await persistBatchSessionWithAck(bridgeData);
 
       if (res.currentStore?.googleMapsUrl) {
         const handoffUrl = buildGoogleMapsHandoffUrl(
@@ -393,8 +694,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       const res = await api.updateGoogleReviewBatchAuditStatus(batchSession.id, "PAUSE");
       setBatchSession(res);
       const bridgeData = { ...res, status: "PAUSED" };
-      localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
-      window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));
+      await persistBatchSessionWithAck(bridgeData, 1000);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to pause audit");
     } finally {
@@ -427,8 +727,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         completedStores: res.completedStores,
         runnerToken,
       };
-      localStorage.setItem("oppo_active_batch_audit", JSON.stringify(bridgeData));
-      window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: bridgeData }));
+
+      // Deterministically persist session in extension storage with ACK before opening tab
+      await persistBatchSessionWithAck(bridgeData);
 
       if (res.currentStore?.googleMapsUrl) {
         const handoffUrl = buildGoogleMapsHandoffUrl(
@@ -618,64 +919,580 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-[var(--app-background)] p-4 sm:p-6 space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-5 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </span>
-            <h1 className="text-xl font-bold text-[var(--app-text-primary)]">{t.title}</h1>
-          </div>
-          <p className="text-xs text-[var(--app-text-secondary)]">{t.subtitle}</p>
-        </div>
-
-        {/* Month Picker & Actions */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-1.5 shadow-sm">
-            <label htmlFor="kpi-month-select" className="text-xs font-semibold text-[var(--app-text-secondary)]">
-              {t.selectMonth}:
-            </label>
-            <select
-              id="kpi-month-select"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-sm font-bold text-[var(--app-text-primary)] focus:outline-none cursor-pointer"
-            >
-              {recentMonths.map((m) => (
-                <option key={m} value={m} className="bg-[var(--app-surface)] text-[var(--app-text-primary)]">
-                  {formatMonthLabel(m, language)} ({m})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleOpenModal()}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            {t.importJson}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => loadData(selectedMonth)}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50"
-          >
-            <svg className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {t.refresh}
-          </button>
-        </div>
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-[var(--app-border)] pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("monthly")}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+            activeTab === "monthly"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
+          }`}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          {t.tabMonthly}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("weekly");
+            loadWeeklyData(selectedWeekNumber);
+          }}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+            activeTab === "weekly"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
+          }`}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          {t.tabWeeklyTopStore}
+        </button>
       </div>
+
+      {activeTab === "weekly" ? (
+        <div className="space-y-6">
+          {/* Weekly Header Banner */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-5 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 font-bold">
+                  🏆
+                </span>
+                <h1 className="text-xl font-bold text-[var(--app-text-primary)]">{t.weeklyTopStoreTitle}</h1>
+              </div>
+              <p className="text-xs text-[var(--app-text-secondary)]">{t.weeklyTopStoreSubtitle}</p>
+            </div>
+
+            {/* Week Selector & Sync Button */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-1.5 shadow-sm">
+                <label htmlFor="kpi-week-select" className="text-xs font-semibold text-[var(--app-text-secondary)]">
+                  {t.selectWeek}:
+                </label>
+                <select
+                  id="kpi-week-select"
+                  value={selectedWeekNumber}
+                  onChange={(e) => {
+                    const num = parseInt(e.target.value, 10);
+                    setSelectedWeekNumber(num);
+                    loadWeeklyData(num);
+                  }}
+                  className="bg-transparent text-sm font-bold text-[var(--app-text-primary)] focus:outline-none cursor-pointer"
+                >
+                  {weeklyPeriods.map((p) => (
+                    <option key={p.weekNumber} value={p.weekNumber} className="bg-[var(--app-surface)] text-[var(--app-text-primary)]">
+                      {p.label} {p.status === "CLOSED" ? "🔒 (CLOSED)" : "🟢 (OPEN)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {weeklyLeaderboard?.period && (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold ${
+                    weeklyLeaderboard.period.status === "OPEN"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                      : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20"
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${weeklyLeaderboard.period.status === "OPEN" ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+                  {weeklyLeaderboard.period.status === "OPEN" ? t.statusOpen : t.statusClosed}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSyncWeeklyStores}
+                disabled={syncingStores}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition-colors disabled:opacity-50"
+              >
+                <svg className={`h-4 w-4 ${syncingStores ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {syncingStores ? t.syncingStores : t.syncStoresBtn}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loadWeeklyData(selectedWeekNumber)}
+                disabled={weeklyLoading}
+                className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50"
+              >
+                <svg className={`h-4 w-4 ${weeklyLoading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {t.refresh}
+              </button>
+            </div>
+          </div>
+
+          {/* Sync Result Banner */}
+          {syncResult && (
+            <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+              <span>{syncResult}</span>
+              <button type="button" onClick={() => setSyncResult(null)} className="text-xs font-bold opacity-75 hover:opacity-100">✕</button>
+            </div>
+          )}
+
+          {/* Daily Continuous Tracking Status Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold">
+                📡
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[var(--app-text-primary)]">
+                    {language === "th" ? "ระบบตรวจจับรีวิวต่อเนื่องรายวัน (Daily Continuous Discovery)" : "Daily Continuous Review Discovery"}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {language === "th" ? "กำลังทำงานต่อเนื่อง (Active)" : "Active"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[var(--app-text-tertiary)]">
+                  {language === "th"
+                    ? `ติดตาม ${collectorStatus?.fingerprintsTracked ?? "—"} รอยเท้าดิจิทัล (Zero-PII) • หยุดอัตโนมัติเมื่อพบรีวิวเดิม 5 รายการติดกัน`
+                    : `Tracking ${collectorStatus?.fingerprintsTracked ?? "—"} zero-PII fingerprints • Fast-stops on 5 consecutive previously-seen reviews`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs">
+              <div className="text-right">
+                <div className="text-[10px] text-[var(--app-text-tertiary)]">
+                  {language === "th" ? "รีวิวค้นพบใหม่วันนี้" : "Discovered Today"}
+                </div>
+                <div className="text-xs font-bold text-purple-600 dark:text-purple-400">
+                  +{collectorStatus?.summaryToday?.newReviewsDiscoveredToday ?? 0}
+                </div>
+              </div>
+              <div className="h-6 w-px bg-[var(--app-border)]" />
+              <div className="text-right">
+                <div className="text-[10px] text-[var(--app-text-tertiary)]">
+                  {language === "th" ? "สถานะการตรวจล่าสุด" : "Last Collection"}
+                </div>
+                <div className="text-xs font-mono font-medium text-[var(--app-text-primary)]">
+                  {collectorStatus?.lastRunAt ? new Date(collectorStatus.lastRunAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Weekly Qualification Rule Banner */}
+          <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
+            <span className="text-base shrink-0">⭐</span>
+            <div className="space-y-0.5">
+              <p className="font-semibold">{t.weeklyQualificationRule}</p>
+              <p className="opacity-90">
+                {language === "th"
+                  ? "การบันทึกรายวันจะฟรีซอัตโนมัติเมื่อสิ้นสุดวัน (23:59 น.) และสัปดาห์จะฟรีซ ณ สิ้นสุดวันที่ 7 ของรอบสัปดาห์"
+                  : language === "zh"
+                  ? "每日数据于当地时间 23:59 自动封存，周度数据于该周第7天 23:59 最终封榜。"
+                  : "Daily records freeze at 23:59 Asia/Bangkok and weekly totals freeze at 23:59 of the final day of the week period."}
+              </p>
+            </div>
+          </div>
+
+          {/* Weekly Stat Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* 1. Weekly Stores */}
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--app-text-secondary)]">{t.weeklyStoresCount}</span>
+                <span className="text-sm font-bold text-[var(--app-text-tertiary)]">🏬</span>
+              </div>
+              <div className="mt-2 text-2xl font-black text-[var(--app-text-primary)] font-mono">
+                {weeklyStats.totalStores}
+              </div>
+              <p className="text-[11px] text-[var(--app-text-tertiary)] mt-1">
+                {language === "th" ? "ชุดร้านค้าเป้าหมาย 65 ร้าน" : "65 Focus Stores"}
+              </p>
+            </div>
+
+            {/* 2. Passed */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{t.passed}</span>
+                <span className="text-sm font-bold text-emerald-500">✅</span>
+              </div>
+              <div className="mt-2 text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                {weeklyStats.passed}
+              </div>
+              <p className="text-[11px] text-[var(--app-text-tertiary)] mt-1">
+                {language === "th" ? "ผ่านเกณฑ์เป้าหมาย & คะแนน > 4.8" : "Met Target & Rating > 4.8"}
+              </p>
+            </div>
+
+            {/* 3. Below Target */}
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">{t.belowTarget}</span>
+                <span className="text-sm font-bold text-amber-500">⚠️</span>
+              </div>
+              <div className="mt-2 text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                {weeklyStats.belowTarget}
+              </div>
+              <p className="text-[11px] text-[var(--app-text-tertiary)] mt-1">
+                {language === "th" ? "ยังไม่ถึงเป้าหมายหรือคะแนน ≤ 4.8" : "Below Target or Rating ≤ 4.8"}
+              </p>
+            </div>
+
+            {/* 4. Total Qualified Reviews */}
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--app-text-secondary)]">{t.totalWeeklyQualified}</span>
+                <span className="text-sm font-bold text-emerald-500">📊</span>
+              </div>
+              <div className="mt-2 text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                {weeklyStats.totalQualified}
+              </div>
+              <p className="text-[11px] text-[var(--app-text-tertiary)] mt-1">
+                {weeklyLeaderboard?.period ? `Week ${weeklyLeaderboard.period.weekNumber}` : "—"}
+              </p>
+            </div>
+
+            {/* 5. Current Week */}
+            <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm col-span-2 md:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--app-text-secondary)]">{t.currentWeek}</span>
+                <span className="text-sm font-bold text-indigo-500">📅</span>
+              </div>
+              <div className="mt-2 text-sm font-bold text-[var(--app-text-primary)] truncate">
+                {weeklyLeaderboard?.period?.label ?? "—"}
+              </div>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    weeklyLeaderboard?.period?.status === "OPEN"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-slate-500/10 text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${weeklyLeaderboard?.period?.status === "OPEN" ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+                  {weeklyLeaderboard?.period?.status === "OPEN" ? t.statusOpen : t.statusClosed}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-4 shadow-sm">
+            <div className="relative flex-1 max-w-md">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--app-text-tertiary)]">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={weeklySearch}
+                onChange={(e) => {
+                  setWeeklySearch(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") loadWeeklyData(selectedWeekNumber);
+                }}
+                placeholder={t.searchPlaceholder}
+                className="h-9 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-4 text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Region Filter */}
+              <select
+                value={weeklyRegionFilter}
+                onChange={(e) => setWeeklyRegionFilter(e.target.value)}
+                className="h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-medium text-[var(--app-text-primary)] focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">{t.allRegions}</option>
+                {uniqueRegions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+
+              {/* Rating Filter */}
+              <select
+                value={weeklyMinRating === undefined ? "ALL" : String(weeklyMinRating)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setWeeklyMinRating(val === "ALL" ? undefined : parseFloat(val));
+                }}
+                className="h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-medium text-[var(--app-text-primary)] focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">{t.allRatings}</option>
+                <option value="4.81">{t.ratingAbove48}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Leaderboard Table */}
+          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm overflow-hidden">
+            {weeklyLoading ? (
+              <div className="flex items-center justify-center p-12 text-xs text-[var(--app-text-secondary)]">
+                <svg className="h-6 w-6 animate-spin text-emerald-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {language === "th" ? "กำลังโหลดข้อมูล..." : "Loading Weekly Leaderboard..."}
+              </div>
+            ) : !weeklyLeaderboard?.stores || weeklyLeaderboard.stores.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[var(--app-text-secondary)]">
+                {language === "th" ? "ไม่พบข้อมูลร้านค้าตามเงื่อนไขที่เลือก" : "No stores found matching criteria"}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] font-semibold">
+                      <th className="py-3 px-3 w-12 text-center">{t.rank}</th>
+                      <th className="py-3 px-4 min-w-[200px]">{t.storeName}</th>
+                      <th className="py-3 px-3 text-center w-20">{t.storeRating}</th>
+                      {weekDays.map((d) => (
+                        <th key={d.dateStr} className="py-3 px-2 text-center font-mono w-16">
+                          {d.label}
+                        </th>
+                      ))}
+                      <th className="py-3 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400 w-24">
+                        {t.weeklyTotal}
+                      </th>
+                      <th className="py-3 px-3 text-center w-16">{t.target}</th>
+                      <th className="py-3 px-3 text-center w-20">{t.achievement}</th>
+                      <th className="py-3 px-3 text-center w-28">{t.status}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--app-border)]">
+                    {weeklyLeaderboard.stores.map((store) => {
+                      const rankBadge =
+                        store.rank === 1 ? (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-slate-950 font-bold text-xs shadow-sm">
+                            1
+                          </span>
+                        ) : store.rank === 2 ? (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-300 text-slate-900 font-bold text-xs shadow-sm">
+                            2
+                          </span>
+                        ) : store.rank === 3 ? (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs shadow-sm">
+                            3
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-[var(--app-text-secondary)]">
+                            #{store.rank}
+                          </span>
+                        );
+
+                      const target = 10;
+                      const achievementPct = Math.round((store.qualifiedReviews / target) * 100);
+                      const isPassed =
+                        store.qualifiedReviews >= target &&
+                        (store.storeRating === null || store.storeRating > 4.8);
+
+                      return (
+                        <tr
+                          key={store.storeCode}
+                          className="hover:bg-[var(--app-surface-hover)] transition-colors"
+                        >
+                          <td className="py-3 px-3 text-center">{rankBadge}</td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-[var(--app-text-primary)] max-w-xs truncate">
+                              {store.storeName}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-mono text-[11px] text-[var(--app-text-tertiary)]">
+                                {store.storeCode}
+                              </span>
+                              {store.googleMapsUrl ? (
+                                <a
+                                  href={store.googleMapsUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                >
+                                  {t.openMaps}
+                                </a>
+                              ) : (
+                                <span className="text-[11px] text-[var(--app-text-tertiary)] italic">
+                                  {t.noMapsLink}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDailyStore(store)}
+                                className="text-[10px] text-[var(--app-text-secondary)] hover:text-emerald-600 underline ml-1"
+                              >
+                                {t.dailyBreakdown}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono">
+                            {store.storeRating !== null ? (
+                              <span
+                                className={`inline-flex items-center gap-0.5 font-bold text-xs ${
+                                  store.storeRating > 4.8
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-amber-600 dark:text-amber-400"
+                                }`}
+                              >
+                                ⭐ {store.storeRating.toFixed(1)}
+                              </span>
+                            ) : (
+                              <span className="text-[var(--app-text-tertiary)]">—</span>
+                            )}
+                          </td>
+
+                          {/* 7 Day Columns */}
+                          {weekDays.map((day) => {
+                            const isFuture = day.dateStr > todayBangkok;
+                            if (isFuture) {
+                              return (
+                                <td
+                                  key={day.dateStr}
+                                  className="py-3 px-2 text-center font-mono text-[var(--app-text-tertiary)]"
+                                >
+                                  -
+                                </td>
+                              );
+                            }
+                            const dRecord = store.dailyBreakdown.find((d) => d.date === day.dateStr);
+                            const qCount = dRecord ? dRecord.qualifiedReviews : 0;
+                            const isFrozen = dRecord ? dRecord.isFrozen : day.dateStr < todayBangkok;
+                            return (
+                              <td key={day.dateStr} className="py-3 px-2 text-center font-mono">
+                                <span
+                                  className={`inline-flex items-center gap-0.5 font-medium ${
+                                    qCount > 0
+                                      ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                                      : "text-[var(--app-text-secondary)] opacity-70"
+                                  }`}
+                                >
+                                  {qCount}
+                                  {isFrozen && (
+                                    <span className="text-[9px] text-slate-400 opacity-60" title="Closed (Frozen)">
+                                      🔒
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                            );
+                          })}
+
+                          {/* Weekly Total */}
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 font-bold font-mono text-emerald-600 dark:text-emerald-400 text-xs">
+                              {store.qualifiedReviews}
+                            </span>
+                          </td>
+
+                          {/* Target */}
+                          <td className="py-3 px-3 text-center font-mono text-xs text-[var(--app-text-secondary)]">
+                            {target}
+                          </td>
+
+                          {/* Achievement */}
+                          <td className="py-3 px-3 text-center font-mono text-xs font-semibold">
+                            <span
+                              className={
+                                achievementPct >= 100
+                                  ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                                  : "text-[var(--app-text-secondary)]"
+                              }
+                            >
+                              {achievementPct}%
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                isPassed
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                              }`}
+                            >
+                              {isPassed ? t.passed : t.belowTarget}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-5 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </span>
+                <h1 className="text-xl font-bold text-[var(--app-text-primary)]">{t.title}</h1>
+              </div>
+              <p className="text-xs text-[var(--app-text-secondary)]">{t.subtitle}</p>
+            </div>
+
+            {/* Month Picker & Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-1.5 shadow-sm">
+                <label htmlFor="kpi-month-select" className="text-xs font-semibold text-[var(--app-text-secondary)]">
+                  {t.selectMonth}:
+                </label>
+                <select
+                  id="kpi-month-select"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="bg-transparent text-sm font-bold text-[var(--app-text-primary)] focus:outline-none cursor-pointer"
+                >
+                  {recentMonths.map((m) => (
+                    <option key={m} value={m} className="bg-[var(--app-surface)] text-[var(--app-text-primary)]">
+                      {formatMonthLabel(m, language)} ({m})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleOpenModal()}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                {t.importJson}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loadData(selectedMonth)}
+                disabled={loading}
+                className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50"
+              >
+                <svg className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {t.refresh}
+              </button>
+            </div>
+          </div>
+
 
       {/* Criteria Info Tip */}
       <div className="flex items-start gap-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3 text-xs text-blue-700 dark:text-blue-300">
@@ -716,9 +1533,19 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   COMPLETED
                 </span>
               )}
+              {batchSession?.qualificationRuleVersion === "IMAGE_CAPTURE_MONTH_V1" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  📸 IMAGE_CAPTURE_MONTH_V1
+                </span>
+              )}
+              {batchSession?.qualificationRuleVersion === "REVIEW_CREATION_DATE_V1" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-500/20">
+                  REVIEW_CREATION_DATE_V1
+                </span>
+              )}
             </div>
             <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">
-              ตรวจและบันทึกผล KPI อัตโนมัติทีละร้านผ่าน Chrome Extension โดยไม่ต้องเลื่อนหน้าจอเอง
+              ตรวจและบันทึกผล KPI อัตโนมัติทีละร้านผ่าน Chrome Extension โดยใช้ Image Capture Month เป็นเกณฑ์ความถูกต้อง
             </p>
           </div>
 
@@ -1027,6 +1854,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   <th className="py-3 px-3">{t.googleMaps}</th>
                   <th className="py-3 px-3 text-right">{t.reviewsChecked}</th>
                   <th className="py-3 px-3 text-right">{t.withPhoto}</th>
+                  <th className="py-3 px-3 text-right text-blue-600 dark:text-blue-400" title="รีวิวที่มีรูปถ่ายตรงกับเดือนที่ตรวจ">รูปตรงเดือน</th>
                   <th className="py-3 px-3 text-right">{t.over15Words}</th>
                   <th className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{t.qualified}</th>
                   <th className="py-3 px-3 text-center">คิว Batch</th>
@@ -1113,6 +1941,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                       </td>
                       <td className="py-3.5 px-3 text-right font-mono text-xs">
                         {kpi ? kpi.reviewsWithPhoto : "—"}
+                      </td>
+                      <td className="py-3.5 px-3 text-right font-mono text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                        {kpi ? (kpi.photoReviewsInTargetMonth ?? "—") : "—"}
                       </td>
                       <td className="py-3.5 px-3 text-right font-mono text-xs">
                         {kpi ? kpi.reviewsOver15ThaiWords : "—"}
@@ -1244,6 +2075,108 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           </div>
         )}
       </div>
+      </div>
+      )}
+
+      {/* Modal: Daily Breakdown for Weekly Store */}
+      {selectedDailyStore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[var(--app-border)] pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-[var(--app-text-primary)]">
+                    {selectedDailyStore.storeName}
+                  </span>
+                  <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                    {selectedDailyStore.storeCode}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--app-text-secondary)] mt-0.5">
+                  {t.dailyBreakdown} — {weeklyLeaderboard?.period?.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDailyStore(null)}
+                className="text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)] p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Total Summary */}
+            <div className="grid grid-cols-3 gap-3 p-3 rounded-xl bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-center">
+              <div>
+                <div className="text-[11px] text-[var(--app-text-secondary)]">{t.storeRating}</div>
+                <div className="text-sm font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                  ⭐ {selectedDailyStore.storeRating !== null ? selectedDailyStore.storeRating.toFixed(1) : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-[var(--app-text-secondary)]">{t.totalWeeklyQualified}</div>
+                <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                  {selectedDailyStore.qualifiedReviews}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-[var(--app-text-secondary)]">{t.rank}</div>
+                <div className="text-sm font-bold text-[var(--app-text-primary)] mt-0.5 font-mono">
+                  #{selectedDailyStore.rank}
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Table */}
+            <div className="rounded-xl border border-[var(--app-border)] overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] font-semibold">
+                    <th className="py-2.5 px-3">{t.date}</th>
+                    <th className="py-2.5 px-3 text-center">{t.reviewsChecked}</th>
+                    <th className="py-2.5 px-3 text-center">{t.withPhoto}</th>
+                    <th className="py-2.5 px-3 text-center">{t.over15Words}</th>
+                    <th className="py-2.5 px-3 text-center font-bold text-emerald-600">{t.qualified}</th>
+                    <th className="py-2.5 px-3 text-center">{t.status}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--app-border)] font-mono">
+                  {selectedDailyStore.dailyBreakdown.map((d) => (
+                    <tr key={d.date} className="hover:bg-[var(--app-surface-hover)]">
+                      <td className="py-2.5 px-3 font-semibold text-[var(--app-text-primary)]">
+                        {d.date} {d.isFrozen ? "🔒" : ""}
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-[var(--app-text-secondary)]">{d.reviewsChecked}</td>
+                      <td className="py-2.5 px-3 text-center text-[var(--app-text-secondary)]">{d.reviewsWithPhoto}</td>
+                      <td className="py-2.5 px-3 text-center text-[var(--app-text-secondary)]">{d.reviewsOver15Words}</td>
+                      <td className="py-2.5 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">
+                        {d.qualifiedReviews}
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-[10px]">
+                        {d.isFrozen ? (
+                          <span className="text-slate-500 font-sans">Frozen</span>
+                        ) : (
+                          <span className="text-emerald-600 font-sans">Open</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedDailyStore(null)}
+                className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2 text-xs font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors"
+              >
+                {t.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Manual Entry / JSON Import */}
       {modalOpen && (

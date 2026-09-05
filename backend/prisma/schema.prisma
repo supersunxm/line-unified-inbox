@@ -562,6 +562,9 @@ model Store {
   autoResponseRules          AutoResponseRule[]         @relation("AutoResponseRuleScope")
   googleReviewKpiResults     GoogleReviewKpiResult[]
   googleReviewAuditStores    GoogleReviewAuditStore[]
+  weeklyStoreMemberships     GoogleReviewWeeklyStoreMembership[]
+  googleReviewDailyKpis      GoogleReviewDailyKpi[]
+  googleReviewWeeklyKpis     GoogleReviewWeeklyKpi[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -2115,8 +2118,10 @@ model GoogleReviewKpiResult {
   month                  String
   reviewsChecked         Int       @default(0)
   reviewsWithPhoto       Int       @default(0)
+  photoReviewsInTargetMonth Int    @default(0)
   reviewsOver15ThaiWords Int       @default(0)
   qualifiedReviews       Int       @default(0)
+  qualificationRuleVersion String  @default("REVIEW_CREATION_DATE_V1")
   targetQualifiedReviews Int       @default(10)
   checkedAt              DateTime  @default(now())
   checkedByUserId        String?
@@ -2154,18 +2159,19 @@ enum GoogleReviewAuditCoverageStatus {
 }
 
 model GoogleReviewAuditSession {
-  id               String                         @id @default(uuid())
-  month            String                         // YYYY-MM
-  status           GoogleReviewAuditSessionStatus @default(IDLE)
-  totalStores      Int                            @default(0)
-  completedStores  Int                            @default(0)
-  failedStores     Int                            @default(0)
-  skippedStores    Int                            @default(0)
-  startedAt        DateTime                       @default(now())
-  completedAt      DateTime?
-  startedByUserId  String?
-  createdAt        DateTime                       @default(now())
-  updatedAt        DateTime                       @updatedAt
+  id                       String                         @id @default(uuid())
+  month                    String                         // YYYY-MM
+  status                   GoogleReviewAuditSessionStatus @default(IDLE)
+  qualificationRuleVersion String                         @default("REVIEW_CREATION_DATE_V1")
+  totalStores              Int                            @default(0)
+  completedStores          Int                            @default(0)
+  failedStores             Int                            @default(0)
+  skippedStores            Int                            @default(0)
+  startedAt                DateTime                       @default(now())
+  completedAt              DateTime?
+  startedByUserId          String?
+  createdAt                DateTime                       @default(now())
+  updatedAt                DateTime                       @updatedAt
 
   startedByUser    User?                          @relation("GoogleReviewAuditStarter", fields: [startedByUserId], references: [id], onDelete: SetNull)
   queueStores      GoogleReviewAuditStore[]
@@ -2175,17 +2181,18 @@ model GoogleReviewAuditSession {
 }
 
 model GoogleReviewAuditStore {
-  id                     String                           @id @default(uuid())
-  sessionId              String
-  storeId                String
-  queueOrder             Int                              @default(0)
-  status                 GoogleReviewAuditStoreStatus     @default(PENDING)
+  id                        String                           @id @default(uuid())
+  sessionId                 String
+  storeId                   String
+  queueOrder                Int                              @default(0)
+  status                    GoogleReviewAuditStoreStatus     @default(PENDING)
 
-  reviewsChecked         Int                              @default(0)
-  reviewsWithPhoto       Int                              @default(0)
-  reviewsOver15ThaiWords Int                              @default(0)
-  qualifiedReviews       Int                              @default(0)
-  coverageStatus         GoogleReviewAuditCoverageStatus?
+  reviewsChecked            Int                              @default(0)
+  reviewsWithPhoto          Int                              @default(0)
+  photoReviewsInTargetMonth Int                              @default(0)
+  reviewsOver15ThaiWords    Int                              @default(0)
+  qualifiedReviews          Int                              @default(0)
+  coverageStatus            GoogleReviewAuditCoverageStatus?
 
   attemptCount           Int                              @default(0)
   errorCode              String?
@@ -2202,4 +2209,113 @@ model GoogleReviewAuditStore {
   @@unique([sessionId, storeId])
   @@index([sessionId, status, queueOrder])
   @@index([storeId])
+}
+
+enum GoogleReviewPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model GoogleReviewWeeklyStoreMembership {
+  id            String    @id @default(uuid())
+  storeCode     String
+  storeId       String?
+  isActive      Boolean   @default(true)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  store         Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([storeCode, isActive])
+  @@index([storeId])
+  @@index([isActive])
+}
+
+model GoogleReviewWeeklyPeriod {
+  id         String                   @id @default(uuid())
+  weekNumber Int                      @unique
+  labelZh    String
+  labelTh    String
+  label      String
+  startDate  DateTime
+  endDate    DateTime
+  status     GoogleReviewPeriodStatus @default(OPEN)
+  frozenAt   DateTime?
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  dailyKpis  GoogleReviewDailyKpi[]
+  weeklyKpis GoogleReviewWeeklyKpi[]
+
+  @@index([startDate, endDate])
+  @@index([status])
+}
+
+model GoogleReviewDailyKpi {
+  id                     String                   @id @default(uuid())
+  storeCode              String
+  storeId                String?
+  date                   String                   // YYYY-MM-DD in Asia/Bangkok
+  weekPeriodId           String?
+  weekNumber             Int?
+  storeRating            Float?
+  reviewsChecked         Int                      @default(0)
+  reviewsWithPhoto       Int                      @default(0)
+  reviewsOver15ThaiWords Int                      @default(0)
+  qualifiedReviews       Int                      @default(0)
+  status                 GoogleReviewPeriodStatus @default(OPEN)
+  frozenAt               DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  store                  Store?                    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  weekPeriod             GoogleReviewWeeklyPeriod? @relation(fields: [weekPeriodId], references: [id], onDelete: SetNull)
+
+  @@unique([storeCode, date])
+  @@index([date, status])
+  @@index([weekNumber])
+  @@index([storeId])
+}
+
+model GoogleReviewWeeklyKpi {
+  id                     String                   @id @default(uuid())
+  weekPeriodId           String
+  weekNumber             Int
+  storeCode              String
+  storeId                String?
+  storeRating            Float?
+  reviewsChecked         Int                      @default(0)
+  reviewsWithPhoto       Int                      @default(0)
+  reviewsOver15ThaiWords Int                      @default(0)
+  qualifiedReviews       Int                      @default(0)
+  rank                   Int?
+  status                 GoogleReviewPeriodStatus @default(OPEN)
+  frozenAt               DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  store                  Store?                   @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  weekPeriod             GoogleReviewWeeklyPeriod @relation(fields: [weekPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([weekPeriodId, storeCode])
+  @@index([weekNumber, qualifiedReviews])
+  @@index([storeCode])
+}
+
+model GoogleReviewFingerprint {
+  id           String   @id @default(uuid())
+  storeCode    String
+  fingerprint  String   @unique
+  reviewDate   String?  // YYYY-MM-DD in Asia/Bangkok if resolved
+  isQualified  Boolean  @default(false)
+  weekNumber   Int?
+  firstSeenAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([storeCode])
+  @@index([fingerprint])
+  @@index([storeCode, isQualified])
+  @@index([reviewDate])
 }

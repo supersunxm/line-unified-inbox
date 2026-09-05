@@ -16,7 +16,6 @@ export type MessageTranslationResult = {
   translatedText: string;
   cached: boolean;
 };
-
 export type StoreMasterSyncResult = {
   source: { type: string; sheetName: string; fetchedAt: string; rows: number };
   validation: {
@@ -800,4 +799,35 @@ export const api = {
       `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/runner-token`,
       { method: "POST" },
     ),
+  getGoogleReviewWeeklyStores: () =>
+    request<import("@/types/api").GoogleReviewWeeklyStoreItem[]>("/google-review-kpi/weekly/stores"),
+  getGoogleReviewWeeklyPeriods: () =>
+    request<import("@/types/api").GoogleReviewWeeklyPeriodItem[]>("/google-review-kpi/weekly/periods"),
+  getGoogleReviewWeeklyLeaderboard: (params?: {
+    weekNumber?: number;
+    search?: string;
+    region?: string;
+    minRating?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.weekNumber) query.set("weekNumber", String(params.weekNumber));
+    if (params?.search) query.set("search", params.search);
+    if (params?.region) query.set("region", params.region);
+    if (params?.minRating !== undefined) query.set("minRating", String(params.minRating));
+    const qs = query.toString();
+    return request<import("@/types/api").GoogleReviewWeeklyLeaderboardResponse>(
+      `/google-review-kpi/weekly/leaderboard${qs ? `?${qs}` : ""}`,
+    );
+  },
+  syncGoogleReviewWeeklyStores: () =>
+    request<{
+      expectedStoreCount: number;
+      matchedStoreMasterCount: number;
+      unmatchedStoreCodes: string[];
+      duplicateMappings: number;
+      storesMissingGoogleMapsUrl: string[];
+      syncedMembershipsCount: number;
+    }>("/google-review-kpi/weekly/sync-stores", { method: "POST" }),
+  getGoogleReviewWeeklyCollectorStatus: () =>
+    request<import("@/types/api").GoogleReviewWeeklyCollectorStatusResponse>("/google-review-kpi/weekly/collector-status"),
 };

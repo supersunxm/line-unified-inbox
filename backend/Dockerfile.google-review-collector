@@ -1,0 +1,39 @@
+# Dedicated container for Google Review KPI Daily Continuous Collector cron runs
+FROM mcr.microsoft.com/playwright:v1.50.0-noble AS runner
+
+WORKDIR /app
+
+# Copy root workspace and backend package definitions
+COPY package*.json ./
+COPY backend/package*.json ./backend/
+
+# Install backend dependencies cleanly
+WORKDIR /app/backend
+RUN npm ci
+
+# Copy extension tools required for Thai word segmentation and date parsing
+WORKDIR /app
+COPY tools/google-review-checker-extension/src/ ./tools/google-review-checker-extension/src/
+
+# Copy backend codebase, prisma schema, and collector scripts
+COPY backend/ ./backend/
+
+# Generate Prisma client and build backend
+WORKDIR /app/backend
+RUN npx prisma generate
+RUN npm run build
+
+# Install Chromium browser binary in container
+RUN npx playwright install chromium \
+  && CHROME_BIN="$(find /ms-playwright -path '*/chrome-linux*/chrome' -type f -perm -111 | head -n 1)" \
+  && test -n "$CHROME_BIN" \
+  && ln -s "$CHROME_BIN" /usr/local/bin/chromium
+
+# Runtime environment defaults for Railway container
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--experimental-strip-types"
+ENV GOOGLE_REVIEW_HEADLESS=true
+ENV GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile
+
+# Executes exactly ONE collector cycle across active Focus Stores, then exits
+CMD ["node", "scripts/weekly-collector/run-single-cycle.mjs"]

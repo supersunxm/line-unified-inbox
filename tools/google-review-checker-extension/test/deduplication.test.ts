@@ -24,6 +24,7 @@ test("QualificationEngine.calculateScanSummary deduplicates review cards appeari
       reviewText: thai16Words,
       hasCustomerPhoto: true,
       photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
+      imageCaptureMonths: ["2026-08"],
     },
     // Duplicate of review-abc (e.g. re-rendered on scroll)
     {
@@ -33,6 +34,7 @@ test("QualificationEngine.calculateScanSummary deduplicates review cards appeari
       reviewText: thai16Words,
       hasCustomerPhoto: true,
       photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
+      imageCaptureMonths: ["2026-08"],
     },
     {
       element: createMockElement({ "data-review-id": "review-def" }),
@@ -41,6 +43,7 @@ test("QualificationEngine.calculateScanSummary deduplicates review cards appeari
       reviewText: thai16Words,
       hasCustomerPhoto: true,
       photoEvidence: "REVIEW_MEDIA_THUMBNAIL",
+      imageCaptureMonths: ["2026-08"],
     },
   ];
 
