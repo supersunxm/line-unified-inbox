@@ -7,7 +7,8 @@ import { isEditedReviewDateText } from "../../../tools/google-review-checker-ext
 import { classifyWeek2Date } from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 
-const prisma = new PrismaClient();
+const dbUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient(dbUrl ? { datasources: { db: { url: dbUrl } } } : undefined);
 export const PERSISTENT_PROFILE_DIR = resolveGoogleReviewProfileDir();
 
 export function getTodayBangkokDate() {

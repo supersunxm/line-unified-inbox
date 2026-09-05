@@ -9,7 +9,8 @@ import {
   resolveGoogleReviewProfileDir,
 } from "./browser-runtime-config.mjs";
 
-const prisma = new PrismaClient();
+const dbUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient(dbUrl ? { datasources: { db: { url: dbUrl } } } : undefined);
 const persistentProfileDir = resolveGoogleReviewProfileDir();
 
 async function upsertDailyByReviewDate({
