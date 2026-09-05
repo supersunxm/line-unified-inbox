@@ -4,7 +4,7 @@ import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
+import { classifyWeek2Date } from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 
 const prisma = new PrismaClient();
@@ -214,7 +214,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
       newReviewsDiscovered++;
 
       // Check if review is older than Week 2 start (Sep 2)
-      const dateClass = classifyWeek2Date(cardData.dateText);
+      const dateClass = classifyWeek2Date(cardData.dateText, todayBangkok);
       if (dateClass.type === "OLDER_THAN_WEEK2") {
         console.log(`  🛑 [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week 2 start (Sep 2). Halting store scan immediately.`);
         stopReason = "STOP_CHRONOLOGY_OLDER_THAN_WEEK2";
