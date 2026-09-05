@@ -443,3 +443,15 @@ export class TriggerWeeklyCollectorRunDto {
   targetStoreCodes?: string[];
 }
 
+export class ExportWeeklyLeaderboardDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  weekNumber?: number;
+
+  @IsOptional()
+  @IsIn(["xlsx", "csv"])
+  format?: "xlsx" | "csv";
+}
+

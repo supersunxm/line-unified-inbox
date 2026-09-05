@@ -7,13 +7,16 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { GoogleReviewKpiService } from "./google-review-kpi.service";
 import {
   AggregateWeeklyKpiDto,
   CheckGoogleReviewKpiResultDto,
   CompleteStoreAuditDto,
+  ExportWeeklyLeaderboardDto,
   FailStoreAuditDto,
   QueryGoogleReviewKpiDto,
   QueryWeeklyLeaderboardDto,
@@ -58,6 +61,18 @@ export class GoogleReviewKpiController {
   @Get("weekly/collector-status")
   async getWeeklyCollectorStatus() {
     return this.kpiService.getWeeklyCollectorStatus();
+  }
+
+  @Get("weekly/export")
+  async exportWeeklyLeaderboard(
+    @Query() query: ExportWeeklyLeaderboardDto,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename, contentType } = await this.kpiService.exportWeeklyLeaderboard(query);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", buffer.length);
+    res.end(buffer);
   }
 
   @Post("weekly/sync-stores")

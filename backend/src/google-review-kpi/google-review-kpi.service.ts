@@ -5,6 +5,7 @@ import {
   AggregateWeeklyKpiDto,
   CheckGoogleReviewKpiResultDto,
   CompleteStoreAuditDto,
+  ExportWeeklyLeaderboardDto,
   FailStoreAuditDto,
   GoogleReviewAuditQueueStoreItem,
   GoogleReviewAuditSessionResponse,
@@ -24,6 +25,7 @@ import {
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
 } from "./google-review-kpi.dto";
+import ExcelJS from "exceljs";
 import {
   generateWeeklyPeriods,
   getBangkokDateParts,
@@ -1678,6 +1680,168 @@ export class GoogleReviewKpiService {
         totalQualifiedToday: todayDailySum._sum.qualifiedReviews ?? 0,
         newReviewsDiscoveredToday: newFingerprintsToday,
       },
+    };
+  }
+
+  /**
+   * Generates a downloadable export file (XLSX or CSV) for the Weekly Leaderboard.
+   */
+  async exportWeeklyLeaderboard(dto: ExportWeeklyLeaderboardDto): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+  }> {
+    const currentWeekNumber = resolveWeekNumber();
+    const weekNumber = dto.weekNumber ?? currentWeekNumber;
+    const format = dto.format ?? "xlsx";
+
+    // Reuse leaderboard source of truth
+    const leaderboard = await this.getWeeklyLeaderboard({ weekNumber });
+    const period = leaderboard.period;
+
+    // Resolve 7 calendar dates of the week
+    const start = new Date(period.startDate);
+    const weekDays: { dateStr: string; label: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      const parts = getBangkokDateParts(d);
+      const label = `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`;
+      weekDays.push({ dateStr: parts.dateStr, label });
+    }
+
+    const exportedAt = new Date().toISOString();
+    const startRange = getBangkokDateParts(new Date(period.startDate)).dateStr;
+    const endRange = getBangkokDateParts(new Date(period.endDate)).dateStr;
+    const filename = `google-review-kpi-week-${weekNumber}_${startRange}_to_${endRange}.${format}`;
+
+    // Build rows
+    const rows = leaderboard.stores.map((store) => {
+      const target = 10;
+      const isPassed =
+        store.qualifiedReviews >= target &&
+        (store.storeRating === null || store.storeRating > 4.8);
+      const achievement = store.qualifiedReviews / target;
+
+      const row: Record<string, any> = {
+        "Rank": store.rank,
+        "Store Code": store.storeCode,
+        "Store Name": store.storeName,
+        "Region": store.region ?? "",
+        "Province": store.province ?? "",
+        "Store Rating": store.storeRating !== null ? Number(store.storeRating.toFixed(1)) : null,
+      };
+
+      // 7 Daily Columns:
+      // If Daily KPI record exists, export real qualifiedReviews (including 0).
+      // If missing/future/uncollected date, leave as null (blank in Excel, empty in CSV).
+      for (const day of weekDays) {
+        const dRecord = store.dailyBreakdown.find((d) => d.date === day.dateStr);
+        row[day.label] = dRecord !== undefined ? dRecord.qualifiedReviews : null;
+      }
+
+      row["Weekly Total"] = store.qualifiedReviews;
+      row["Target"] = target;
+      // In Excel: numeric ratio (e.g. 0.3 for 30%) with percentage format
+      // In CSV: formatted percentage string e.g. "30%"
+      row["Achievement %"] = format === "xlsx" ? achievement : `${Math.round(achievement * 100)}%`;
+      row["Status"] = isPassed ? "PASSED" : "NOT_PASSED";
+      row["Week Number"] = weekNumber;
+      row["Week Label"] = period.label;
+      row["Period Start"] = startRange;
+      row["Period End"] = endRange;
+      row["Period Status"] = period.status;
+      row["Exported At"] = exportedAt;
+
+      return row;
+    });
+
+    if (format === "csv") {
+      // Build UTF-8 CSV with BOM
+      if (rows.length === 0) {
+        const bomBuffer = Buffer.from("\uFEFF", "utf8");
+        return {
+          buffer: bomBuffer,
+          filename,
+          contentType: "text/csv; charset=utf-8",
+        };
+      }
+
+      const headers = Object.keys(rows[0]);
+      const escapeCsvVal = (val: any): string => {
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        if (str.includes(",") || str.includes("\"") || str.includes("\n") || str.includes("\r")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const csvLines: string[] = [];
+      csvLines.push(headers.map(escapeCsvVal).join(","));
+      for (const r of rows) {
+        csvLines.push(headers.map((h) => escapeCsvVal(r[h])).join(","));
+      }
+
+      const csvString = "\uFEFF" + csvLines.join("\r\n");
+      const buffer = Buffer.from(csvString, "utf8");
+
+      return {
+        buffer,
+        filename,
+        contentType: "text/csv; charset=utf-8",
+      };
+    }
+
+    // XLSX format using ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Weekly KPI", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+
+    const headers = Object.keys(rows[0] ?? {});
+    worksheet.columns = headers.map((key) => {
+      let maxLen = key.length;
+      for (const row of rows) {
+        const val = row[key];
+        const len = val !== null && val !== undefined ? String(val).length : 0;
+        if (len > maxLen) maxLen = len;
+      }
+      return {
+        header: key,
+        key,
+        width: Math.max(maxLen + 3, 10),
+      };
+    });
+
+    // Format header row (Row 1): bold font
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+
+    // Add data rows
+    for (const rowData of rows) {
+      const addedRow = worksheet.addRow(rowData);
+      // Format Achievement % cell as percentage (0.0%)
+      const achievementCell = addedRow.getCell("Achievement %");
+      if (achievementCell && typeof achievementCell.value === "number") {
+        achievementCell.numFmt = "0.0%";
+      }
+    }
+
+    // Enable autofilter across all columns
+    if (rows.length > 0) {
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: rows.length + 1, column: headers.length },
+      };
+    }
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    const excelBuffer = Buffer.from(arrayBuffer);
+
+    return {
+      buffer: excelBuffer,
+      filename,
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };
   }
 }

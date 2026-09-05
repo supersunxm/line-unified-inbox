@@ -62,3 +62,12 @@ test("API client and UI integration exposes Google Review KPI methods and routes
   assert.match(kpiViewCode, /Google Maps Review KPI Checker/);
   assert.match(kpiViewCode, /openMaps/);
 });
+
+test("Google Review KPI view has Download / Export buttons and handlers", () => {
+  assert.match(apiCode, /downloadGoogleReviewWeeklyExport/);
+  assert.match(kpiViewCode, /downloadGoogleReviewWeeklyExport/);
+  assert.match(kpiViewCode, /downloadBtn/);
+  assert.match(kpiViewCode, /downloadExcel/);
+  assert.match(kpiViewCode, /downloadCsv/);
+  assert.match(kpiViewCode, /handleDownloadWeeklyExport/);
+});

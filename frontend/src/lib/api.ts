@@ -860,4 +860,10 @@ export const api = {
     }>("/google-review-kpi/weekly/sync-stores", { method: "POST" }),
   getGoogleReviewWeeklyCollectorStatus: () =>
     request<import("@/types/api").GoogleReviewWeeklyCollectorStatusResponse>("/google-review-kpi/weekly/collector-status"),
+  downloadGoogleReviewWeeklyExport: (params: { weekNumber?: number; format: "xlsx" | "csv" }) => {
+    const query = new URLSearchParams();
+    if (params.weekNumber) query.set("weekNumber", String(params.weekNumber));
+    query.set("format", params.format);
+    return download(`/google-review-kpi/weekly/export?${query.toString()}`);
+  },
 };
