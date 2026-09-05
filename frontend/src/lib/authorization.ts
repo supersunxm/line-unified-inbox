@@ -118,6 +118,8 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
       return auth.workspaces.hq || auth.workspaces.store;
     case "admin-registrations":
       return hasBackendAdminAccess(auth) && auth.capabilities.manageAccounts;
+    case "line-chat-health":
+      return hasBackendAdminAccess(auth);
     case "chats":
       return auth.workspaces.store || auth.scope.allStores;
     case "follower-insights":

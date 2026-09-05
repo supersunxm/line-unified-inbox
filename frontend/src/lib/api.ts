@@ -86,13 +86,33 @@ export type RegistrationApprovalResult = {
 };
 
 export type LineChatFailureCategory = "AUTHENTICATION" | "TRANSPORT" | "EXECUTION" | "VALIDATION" | "TIMEOUT" | "PROFILE_LOCK" | "COORDINATOR" | "UNKNOWN";
+export type LineChatRecommendedAction =
+  | "RE_LOGIN_REQUIRED"
+  | "RETRY_RECOMMENDED"
+  | "RETRY_OR_INSPECT"
+  | "MANUAL_REVIEW"
+  | "SYSTEM_ATTENTION"
+  | "INVESTIGATE";
 export type LineChatJobCounts = { pending: number; processing: number; success: number; failed: number; failedAuth: number; superseded: number; total: number };
+export type LineChatSafeJobFailure = {
+  jobId: string;
+  oaId: string;
+  oaName: string;
+  failureCategory: LineChatFailureCategory;
+  failureStage: string | null;
+  attemptCount: number;
+  createdAt: string;
+  updatedAt: string;
+  conversationId: string | null;
+  recommendedAction: LineChatRecommendedAction;
+  isAutoFixable: boolean;
+};
 export type LineChatOperationsSession = {
   id: string; sessionKey: string; displayName: string; status: string; healthStatus: string; healthFailureStage: string | null;
   consecutiveAuthFailures: number; mappedOaCount: number; enabledOaCount: number; activeProfileLeases: number; activeLeaseOperation: string | null;
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
-  recentFailures: Array<{ jobId: string; oaId: string; oaName: string; failureCategory: LineChatFailureCategory; failureStage: string | null; attemptCount: number; createdAt: string; updatedAt: string }>;
+  recentFailures: LineChatSafeJobFailure[];
 };
 export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number } };
 
@@ -218,6 +238,16 @@ export const api = {
   operationalErrors: () => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors"),
   lineChatOperationsHealth: () => request<LineChatOperationsHealth>("/operations/line-chat-nickname/health", { cache: "no-store" }),
   retryLineChatFailedJobs: (sessionKey: string) => request<{ retriedCount: number }>(`/operations/line-chat-nickname/retry-failed?sessionKey=${encodeURIComponent(sessionKey)}`, { method: "POST" }),
+  retryLineChatSelectedJobs: (payload: { sessionKey: string; jobIds: string[]; overrideNonRetryable?: boolean }) =>
+    request<{ retriedCount: number; skippedCount: number; retriedJobIds: string[] }>("/operations/line-chat-nickname/retry-selected", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  fixLineChatRetryableJobs: (sessionKey: string) =>
+    request<{ retriedCount: number; totalFailed: number; remainingFailed: number; retriedJobIds: string[] }>("/operations/line-chat-nickname/fix-retryable", {
+      method: "POST",
+      body: JSON.stringify({ sessionKey }),
+    }),
   resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
   pilotChecklist: (lineOaId: string) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`),
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),

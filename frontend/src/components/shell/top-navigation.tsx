@@ -46,6 +46,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     stores: ["จัดการร้านค้า", "Store Management", "门店管理"],
     "admin-registrations": ["อนุมัติ BM", "BM Approval", "BM 审批"],
     "purchase-analytics": ["ข้อมูลการซื้อ", "Purchase Intelligence", "购买洞察"],
+    "line-chat-health": ["สถานะ LINE Chat", "LINE Chat Health", "LINE Chat 健康"],
     "follower-insights": ["ข้อมูลผู้ติดตาม", "Follower Insights", "关注者洞察"],
     "friend-source-links": ["ลิงก์เพิ่มเพื่อน", "Friend Source Links", "加好友来源链接"],
     "mass-messages": ["ส่งข้อความ", "Mass Message", "群发消息"],
@@ -105,7 +106,7 @@ function MobileNavIcon({ type }: { type: "home" | "chat" | "insights" | "main-oa
 
 function MobileBottomNavigation({ authUser, currentSection, language, changeLanguage, logout }: Pick<TopNavigationProps, "authUser" | "currentSection" | "language" | "changeLanguage" | "logout">) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const secondaryActive = ["dashboard", "stores", "admin-registrations", "purchase-analytics", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
+  const secondaryActive = ["dashboard", "stores", "admin-registrations", "purchase-analytics", "line-chat-health", "friend-source-links", "mass-messages", "coupons"].includes(currentSection);
   const labels = language === "th"
     ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
     : language === "zh"
@@ -151,6 +152,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
             {can("auto-responses") && <Link href="/auto-responses" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.autoResponses}</span><span>›</span></Link>}
             {can("greeting-messages") && <Link href="/greeting-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.greetingMessages}</span><span>›</span></Link>}
             {can("admin-registrations") && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.approval}</span><span>›</span></Link>}
+            {can("line-chat-health") && <Link href="/operations/line-chat-health" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>LINE Chat Health</span><span>›</span></Link>}
             {can("main-oa") && <Link href="/main-oa" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mainOa}</span><span>›</span></Link>}
             {canTool("tiktok") && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok</span><span>›</span></Link>}
           </div>

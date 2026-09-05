@@ -17,7 +17,7 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
 type SidebarProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "currentSection" | "language" | "logout" | "pilotMode" | "text">;
 type AccountPanel = "profile" | "settings" | null;
 type SidebarTooltip = { label: string; top: number } | null;
-type IconName = "home" | "dashboard" | "chat" | "main-oa" | "followers" | "traffic" | "coupon" | "store" | "purchase" | "friend" | "broadcast" | "approval" | "tiktok" | "rich-menu" | "auto-response" | "greeting" | "review" | "profile" | "settings" | "logout";
+type IconName = "home" | "dashboard" | "chat" | "main-oa" | "followers" | "traffic" | "coupon" | "store" | "purchase" | "friend" | "broadcast" | "approval" | "health" | "tiktok" | "rich-menu" | "auto-response" | "greeting" | "review" | "profile" | "settings" | "logout";
 
 type NavItem = {
   href: string;
@@ -44,6 +44,7 @@ function SidebarIcon({ name, className = "" }: { name: IconName; className?: str
       {name === "friend" && <><circle {...common} cx="9" cy="8" r="3.2"/><path {...common} d="M3.5 19c.6-4 2.6-6 5.5-6 2.1 0 3.8 1.1 4.8 3"/><path {...common} d="M18 13v7m-3.5-3.5h7"/></>}
       {name === "broadcast" && <><path {...common} d="M3 10v4l11 4V6L3 10Z"/><path {...common} d="M3 10H1v4h2m3 1 1.5 5h3l-1-4"/><path {...common} d="m17 8 3-2m-2 6h4m-5 4 3 2"/></>}
       {name === "approval" && <><path {...common} d="M12 3c3 2.5 6 2.7 8 3v5.5c0 4.5-2.7 7.7-8 9.5-5.3-1.8-8-5-8-9.5V6c2-.3 5-.5 8-3Z"/><path {...common} d="m8.5 12 2.2 2.2 4.8-5"/></>}
+      {name === "health" && <><path {...common} d="M3 12h4l2-5 4 10 2-5h6"/><path {...common} d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></>}
       {name === "tiktok" && <><path {...common} d="M13 4v10a4.5 4.5 0 1 1-4-4.5"/><path {...common} d="M13 4c1.6 2.8 3.7 4 6 4.3"/></>}
       {name === "rich-menu" && <><rect {...common} x="3" y="3" width="18" height="18" rx="2"/><path {...common} d="M3 9h18M3 15h18M9 9v12M15 9v12"/></>}
       {name === "auto-response" && <><path {...common} d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path {...common} d="M13 8l-3 4h4l-2 4"/></>}
@@ -59,7 +60,7 @@ function SidebarIcon({ name, className = "" }: { name: IconName; className?: str
 function labels(language: Language) {
   if (language === "th") return { workspace: "พื้นที่ทำงาน", mainOa: "Main OA", operations: "เครื่องมือ", home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", followers: "ข้อมูลผู้ติดตาม", traffic: "Message Traffic", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", googleReviewKpi: "Google Review KPI", profile: "โปรไฟล์", settings: "ตั้งค่า", logout: "ออกจากระบบ", language: "ภาษา", appearance: "รูปแบบการแสดงผล", role: "สิทธิ์การใช้งาน", environment: "สภาพแวดล้อม", standard: "Production", pilot: "Pilot", collapse: "ย่อแถบเมนู", expand: "ขยายแถบเมนู" };
   if (language === "zh") return { workspace: "工作区", mainOa: "Main OA", operations: "工具", home: "主页", dashboard: "仪表盘", chats: "门店聊天", followers: "关注者洞察", traffic: "消息流量", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友来源链接", mass: "群发消息", approval: "BM 审批", richMenus: "Rich Menu 管理", autoResponses: "自动回复", greetingMessages: "欢迎消息", googleReviewKpi: "Google Review KPI", profile: "个人资料", settings: "设置", logout: "退出", language: "语言", appearance: "外观", role: "角色", environment: "环境", standard: "Production", pilot: "Pilot", collapse: "收起侧栏", expand: "展开侧栏" };
-  return { workspace: "Workspace", mainOa: "Main OA", operations: "Tools", home: "Main", dashboard: "Dashboard", chats: "Store Chats", followers: "Follower Insights", traffic: "Message Traffic", coupons: "Coupons", stores: "Store Management", purchase: "Purchase Intelligence", friendLinks: "Friend Source Links", mass: "Mass Message", approval: "BM Approval", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", googleReviewKpi: "Google Review KPI", profile: "Profile", settings: "Settings", logout: "Logout", language: "Language", appearance: "Appearance", role: "Role", environment: "Environment", standard: "Production", pilot: "Pilot", collapse: "Collapse sidebar", expand: "Expand sidebar" };
+  return { workspace: "Workspace", mainOa: "Main OA", operations: "Tools", home: "Main", dashboard: "Dashboard", chats: "Store Chats", followers: "Follower Insights", traffic: "Message Traffic", coupons: "Coupons", stores: "Store Management", purchase: "Purchase Intelligence", friendLinks: "Friend Source Links", mass: "Mass Message", approval: "BM Approval", health: "LINE Chat Health", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", googleReviewKpi: "Google Review KPI", profile: "Profile", settings: "Settings", logout: "Logout", language: "Language", appearance: "Appearance", role: "Role", environment: "Environment", standard: "Production", pilot: "Pilot", collapse: "Collapse sidebar", expand: "Expand sidebar" };
 }
 
 export function AppSidebar({ authUser, changeLanguage, currentSection, language, logout, pilotMode, text }: SidebarProps) {
@@ -110,6 +111,7 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
     { href: "/auto-responses", label: t.autoResponses, icon: "auto-response", section: "auto-responses" },
     { href: "/greeting-messages", label: t.greetingMessages, icon: "greeting", section: "greeting-messages" },
     { href: "/admin/registrations", label: t.approval, icon: "approval", section: "admin-registrations" },
+    { href: "/operations/line-chat-health", label: "LINE Chat Health", icon: "health", section: "line-chat-health" },
     { href: "/tiktok", label: "TikTok", icon: "tiktok", tool: "tiktok" },
   ];
   const mainOaItems: NavItem[] = [
