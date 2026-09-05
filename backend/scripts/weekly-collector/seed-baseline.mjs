@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
+import { classifyWeek2Date } from "./date-classifier.mjs";
 
 import {
   buildGoogleReviewLaunchOptions,
@@ -165,7 +165,8 @@ async function main() {
           continue;
         }
 
-        const dateClass = classifyWeek2Date(cardData.dateText);
+        // Baseline was seeded with reference date 2026-09-04 (anchor for Week 2 backfill)
+        const dateClass = classifyWeek2Date(cardData.dateText, "2026-09-04");
 
         // Stop condition: definitively before Sep 2, 2026 (or 5 cards deep into older)
         if (dateClass.type === "OLDER_THAN_WEEK2") {

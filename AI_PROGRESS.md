@@ -1,5 +1,27 @@
 # AI Progress Log
 
+## 2026-09-05: Dynamic Asia/Bangkok Date Classifier for Google Review Continuous Collector [COMPLETED & VERIFIED]
+- **Current Task**: Resolve blocker in PR #156 by replacing hardcoded `2026-09-04` reference date with dynamic `Asia/Bangkok` date computation.
+- **Changes**:
+  - Refactored `backend/scripts/weekly-collector/date-classifier.mjs` to dynamically compute current date in `Asia/Bangkok` timezone (`Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" })`).
+  - Added deterministic date math via UTC noon offsets (`offsetBangkokDate`) preventing DST/local-time drift.
+  - Dynamically resolved relative dates (`today`, `yesterday`, `N days ago`, hours/minutes/seconds ago) relative to current Bangkok day.
+  - Preserved Week 2 candidate boundaries (`[2026-09-02, 2026-09-09)`) and stop boundaries (`OLDER_THAN_WEEK2` for dates before `2026-09-02`).
+  - Updated `backend/scripts/weekly-collector/continuous-collector.mjs` to pass dynamic Bangkok date.
+  - Added unit test suite `backend/scripts/weekly-collector/date-classifier.spec.ts` (18/18 tests passing).
+  - Executed Playwright Linux container rebuild and 11-point smoke test.
+  - Verified database invariants: Week 1 = 274, Week 2 = 92 (Sep 2 = 25, Sep 3 = 34, Sep 4 = 33), Week 3 = 0.
+
+- **Current Task**: Build dedicated Playwright-based Dockerfile (`backend/Dockerfile.google-review-collector`) for Google Review Continuous Collector Railway cron service.
+- **Changes**:
+  - Created `backend/Dockerfile.google-review-collector` based on `mcr.microsoft.com/playwright:v1.50.0-noble`.
+  - Configured workspace layer structure preserving relative path resolution for `tools/google-review-checker-extension/src/`.
+  - Set container runtime defaults: `NODE_ENV=production`, `NODE_OPTIONS="--experimental-strip-types"`, `GOOGLE_REVIEW_HEADLESS=true`, `GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile`.
+  - Packaged standalone `backend/scripts/weekly-collector/date-classifier.mjs` resolving self-contained date classification without missing backfill dependencies.
+  - Executed 10/10 container smoke tests: Node v22, Prisma Client 78 models, Thai word segmentation, date parsing, Linux sandbox launch flags, headless Chromium rendering.
+  - Target command: `node scripts/weekly-collector/run-single-cycle.mjs` (runs exactly 1 cycle across 65 stores and exits; does not run baseline seeding or infinite loop).
+  - Preserved Week 1/Week 2 historical invariants (Week 1 = 274, Week 2 = 92).
+
 ## 2026-09-04: Google Review Collector Runtime Config for Railway/Linux [COMPLETED & VERIFIED]
 - **Current Task**: Make persistent Chrome profile directory, headless mode, and Chromium launch arguments configurable for Linux/Railway container environments.
 - **Changes**:
@@ -3646,6 +3668,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Next action: operator review of the scoped diff, then separately authorize any commit/push/PR workflow. Phase A1 does not enable health scheduling, UI, alerts, or production probes.
 
 # Current task: Admin LINE Chat Operations Health page (2026-09-04)
+
+- Production verification 2026-09-05: remote `deploy/line-chat-health-dashboard` retained at `360e55dbe5be20cb9e126d6f74247fb8ecaa7ef8`; repository-backed frontend deployment `da1ecbe5-1c2d-40a0-ae45-f91e8fb9ccbb` SUCCESS. Dashboard/public routes and health routes return 200; unauthenticated operations API returns 401. All 28 APK assets exist in runtime; advertised v1.1.15 asset returns 200 (60,081,670 bytes), resolving the previously observed 404.
+- Verification blocker: newer main-backed backend deployment `5162fa2f-c71a-448c-a9de-99f635ad231e` at `78624d56bc19e863f1275e2adbd36a197e3d14ee` replaced the dashboard backend and omits the dashboard health/job/failure fields. Authenticated browser unavailable. No retry, worker/maintenance/profile changes, or main merge performed. Next action: reconcile dashboard backend changes with current main before final functional sign-off.
 
 - Added admin-only `/operations/line-chat-health` with separate session-health and job-health presentation, responsive overview/detail views, safe failure diagnostics, active lease visibility, and a confirmation-gated session-scoped retry action.
 - Extended the existing `GET /operations/line-chat-nickname/health` response; no credentials, tokens, cookies, profile paths, nicknames, or customer/chat content are returned. Existing `POST /operations/line-chat-nickname/retry-failed?sessionKey=...` remains the only mutation exposed by this page.

@@ -4,7 +4,7 @@ import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyWeek2Date } from "../week1-backfill/store-auditor-week2.mjs";
+import { classifyWeek2Date } from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 
 const prisma = new PrismaClient();
@@ -20,9 +20,24 @@ export function getTodayBangkokDate() {
   return formatter.format(new Date()); // YYYY-MM-DD
 }
 
+function ensureDateStats(statsByDate, reviewDate) {
+  if (!statsByDate[reviewDate]) {
+    statsByDate[reviewDate] = {
+      reviewsChecked: 0,
+      reviewsWithPhoto: 0,
+      reviewsOver15ThaiWords: 0,
+      newReviewsDiscovered: 0,
+      newQualifiedReviews: 0,
+    };
+  }
+  return statsByDate[reviewDate];
+}
+
 /**
  * Runs a single continuous discovery cycle on a single store.
  * Stops immediately if 5 consecutive already-seen review fingerprints are encountered.
+ * New Week 2 reviews are attributed to the review's resolved Bangkok calendar date,
+ * not the date on which the collector happens to run.
  */
 export async function collectStoreContinuous(page, store, options = {}) {
   const { storeCode, storeId, storeName, googleMapsUrl } = store;
@@ -39,6 +54,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
   let reviewsOver15ThaiWords = 0;
   let newReviewsDiscovered = 0;
   let newQualifiedReviews = 0;
+  const newReviewStatsByDate = {};
   let storeRating = null;
   let stopReason = "END_OF_AVAILABLE_REVIEWS";
   let consecutiveSeenCount = 0;
@@ -47,7 +63,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
     await page.goto(googleMapsUrl, { waitUntil: "commit" });
     await page.waitForTimeout(3000);
 
-    // 1. Extract place rating and review tab
     const placeInfo = await page.evaluate(() => {
       const title = document.querySelector("h1")?.textContent?.trim();
       const ratingEl = document.querySelector(".F7nice, span.ceNzKf");
@@ -79,14 +94,16 @@ export async function collectStoreContinuous(page, store, options = {}) {
         storeId,
         storeRating,
         reviewsChecked: 0,
+        reviewsWithPhoto: 0,
+        reviewsOver15ThaiWords: 0,
         newReviewsDiscovered: 0,
         newQualifiedReviews: 0,
+        newReviewStatsByDate: {},
         stopReason: "ZERO_REVIEWS_PLACE",
         durationMs: Date.now() - startTime,
       };
     }
 
-    // 2. Open Reviews Tab
     await page.evaluate(() => {
       const reviewTab = Array.from(document.querySelectorAll("button[role='tab']")).find((t) => {
         const l = (t.getAttribute("aria-label") || t.textContent || "").toLowerCase();
@@ -96,9 +113,8 @@ export async function collectStoreContinuous(page, store, options = {}) {
     });
     await page.waitForTimeout(2000);
 
-    // 3. Ensure Newest Sorting
-    const sortResult = await page.evaluate(async () => {
-      let sortBtn = document.querySelector(
+    await page.evaluate(async () => {
+      const sortBtn = document.querySelector(
         "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i]"
       );
       if (!sortBtn) return { success: false, reason: "NO_SORT_BTN" };
@@ -118,7 +134,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
       return { success: isNewest, textBefore, textAfter };
     });
 
-    // 4. Scan Reviews from top down with 5-seen stop boundary
     let currentCardIndex = 0;
     let stopTriggered = false;
 
@@ -126,7 +141,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
       const renderedCardsCount = await page.evaluate(() => document.querySelectorAll(".jftiEf").length);
 
       if (currentCardIndex >= renderedCardsCount) {
-        // Scroll down to load next batch
         await page.evaluate(() => {
           const container = document.querySelector(".m6QErb.DxyBCb, div[role='feed'], div.m6QErb[aria-label]");
           if (container) container.scrollTop += 2500;
@@ -140,7 +154,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
         continue;
       }
 
-      // Extract card
       const cardData = await page.evaluate(async (idx) => {
         const cards = Array.from(document.querySelectorAll(".jftiEf"));
         const card = cards[idx];
@@ -181,7 +194,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
       const thaiSeg = segmentThaiWords(cardData.reviewText);
       const wordCount = thaiSeg.count;
 
-      // Compute zero-PII fingerprint
       const fp = computeReviewFingerprint(storeCode, cardData.dataReviewId, {
         relativeDateText: cardData.dateText,
         wordCount,
@@ -189,7 +201,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
         cardIndex: currentCardIndex,
       });
 
-      // Check if fingerprint is already in database
       const existingFp = await prisma.googleReviewFingerprint.findUnique({
         where: { fingerprint: fp },
       });
@@ -199,7 +210,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
         console.log(`  [SEEN ${consecutiveSeenCount}/5] Card #${currentCardIndex + 1}: previously processed (fp: ${fp.slice(0, 10)}...)`);
 
         if (consecutiveSeenCount >= 5) {
-          console.log(`  🛑 [FAST STOP TRIGGERED] 5 consecutive previously-seen reviews reached. Store scan caught up to boundary!`);
+          console.log(`  [FAST STOP TRIGGERED] 5 consecutive previously-seen reviews reached. Store scan caught up to boundary!`);
           stopReason = "CONSECUTIVE_SEEN_BOUNDARY_5";
           stopTriggered = true;
           break;
@@ -209,14 +220,12 @@ export async function collectStoreContinuous(page, store, options = {}) {
         continue;
       }
 
-      // If we reach here, this is a BRAND NEW review never seen before
       consecutiveSeenCount = 0;
       newReviewsDiscovered++;
 
-      // Check if review is older than Week 2 start (Sep 2)
-      const dateClass = classifyWeek2Date(cardData.dateText);
+      const dateClass = classifyWeek2Date(cardData.dateText, todayBangkok);
       if (dateClass.type === "OLDER_THAN_WEEK2") {
-        console.log(`  🛑 [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week 2 start (Sep 2). Halting store scan immediately.`);
+        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week 2 start (Sep 2). Halting store scan immediately.`);
         stopReason = "STOP_CHRONOLOGY_OLDER_THAN_WEEK2";
         stopTriggered = true;
         break;
@@ -225,27 +234,30 @@ export async function collectStoreContinuous(page, store, options = {}) {
       if (cardData.hasPhoto) reviewsWithPhoto++;
       if (wordCount >= 15) reviewsOver15ThaiWords++;
 
-      // Qualification rules for Week 2 continuous discovery:
-      // 1. Must be a Week 2 candidate (e.g. today / hours / minutes / 1-2 days ago)
-      // 2. unedited (isEdited === false)
-      // 3. has genuine customer photo
-      // 4. wordCount >= 15
-      // 5. store rating > 4.8 (checked for weekly rank eligibility)
       const isCandidate = dateClass.type === "WEEK2_CANDIDATE";
+      const reviewDate = isCandidate ? (dateClass.exactDate || todayBangkok) : null;
       const isQualified = isCandidate && !isEdited && cardData.hasPhoto && wordCount >= 15;
 
-      console.log(`  ✨ [NEW REVIEW #${newReviewsDiscovered}] Date: "${cardData.dateText}" | Candidate: ${isCandidate} | Photo: ${cardData.hasPhoto ? "YES" : "NO"} | Words: ${wordCount} | Edited: ${isEdited} | Qualified: ${isQualified}`);
+      console.log(`  [NEW REVIEW #${newReviewsDiscovered}] Date: "${cardData.dateText}" -> ${reviewDate ?? dateClass.type} | Candidate: ${isCandidate} | Photo: ${cardData.hasPhoto ? "YES" : "NO"} | Words: ${wordCount} | Edited: ${isEdited} | Qualified: ${isQualified}`);
+
+      if (reviewDate) {
+        const dateStats = ensureDateStats(newReviewStatsByDate, reviewDate);
+        dateStats.reviewsChecked++;
+        dateStats.newReviewsDiscovered++;
+        if (cardData.hasPhoto) dateStats.reviewsWithPhoto++;
+        if (wordCount >= 15) dateStats.reviewsOver15ThaiWords++;
+        if (isQualified) dateStats.newQualifiedReviews++;
+      }
 
       if (isQualified) {
         newQualifiedReviews++;
       }
 
-      // Persist new fingerprint immediately
       await prisma.googleReviewFingerprint.create({
         data: {
           storeCode,
           fingerprint: fp,
-          reviewDate: isCandidate ? (dateClass.exactDate || todayBangkok) : todayBangkok,
+          reviewDate: reviewDate || todayBangkok,
           isQualified,
           weekNumber: 2,
         },
@@ -259,7 +271,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
   }
 
   const durationMs = Date.now() - startTime;
-  console.log(`  [Store ${storeCode} Collection Summary] Checked: ${reviewsChecked}, New Discovered: ${newReviewsDiscovered}, New Qualified: ${newQualifiedReviews}, Stop: ${stopReason}, Time: ${(durationMs / 1000).toFixed(1)}s`);
+  console.log(`  [Store ${storeCode} Collection Summary] Checked: ${reviewsChecked}, New Discovered: ${newReviewsDiscovered}, New Qualified: ${newQualifiedReviews}, By Date: ${JSON.stringify(newReviewStatsByDate)}, Stop: ${stopReason}, Time: ${(durationMs / 1000).toFixed(1)}s`);
 
   return {
     storeCode,
@@ -270,6 +282,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
     reviewsOver15ThaiWords,
     newReviewsDiscovered,
     newQualifiedReviews,
+    newReviewStatsByDate,
     stopReason,
     durationMs,
   };
