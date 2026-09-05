@@ -1,5 +1,64 @@
 # AI Progress Log
 
+## 2026-09-05: Actionable Failed-Job Handling on LINE Chat Operations Health Dashboard [COMPLETED & VERIFIED]
+- **Current Task**: Implement actionable failed-job handling for the LINE Chat Operations Health dashboard (`/operations/line-chat-health`).
+  - Clicking failed count/badge opens detail modal with safe fields only (`jobId`, `oaId`, `oaName`, `failureCategory`, `failureStage`, `attemptCount`, `createdAt`, `updatedAt`, `conversationId`, `recommendedAction`, `isAutoFixable`). Zero exposure of customer names, nicknames, message text, tokens, or credentials.
+  - Recommended action classification: `AUTHENTICATION` -> `RE_LOGIN_REQUIRED`, `TRANSPORT`/`TIMEOUT` -> `RETRY_RECOMMENDED` (auto-fixable), `EXECUTION` -> `RETRY_OR_INSPECT` (attemptCount < 2 auto-fixable; attemptCount >= 2 -> `MANUAL_REVIEW`), `VALIDATION` -> `MANUAL_REVIEW`, `PROFILE_LOCK`/`COORDINATOR` -> `SYSTEM_ATTENTION`, `UNKNOWN` -> `INVESTIGATE`.
+  - Grouped summary metrics: `Total Failed`, `Auto-fixable`, `Manual review`, `System attention` with category filter chips (`All`, `Auto-fixable`, `Manual review`, `Authentication`, `System attention`).
+  - Safe navigation: "View in Chat" linking to `/chats?conversationId=${encodeURIComponent(failure.conversationId)}` only when safe internal reference exists.
+  - "Retry selected" with checkbox selection (non-retryable unselected by default) and confirmation modal showing category breakdown and non-retryable warnings.
+  - "Fix retryable failures" with preview modal showing exact counts, server-side re-validation, and scoped retry.
+  - Strict account isolation: operations on `sessionKey` cannot touch other profiles (e.g. `account-1`).
+- **Completed Actions**:
+  - `backend/src/line-chat/line-chat-operations.service.ts`:
+    - Added `LineChatRecommendedAction`, `getRecommendedAction`, updated `LineChatSafeJobFailure`.
+    - Added `retrySelectedJobs` and `fixRetryableFailures` with server-side category and status re-validation, execution attempt tracking, and session OA isolation.
+    - Updated `getHealthSummary()` to select `conversationId`, map `recommendedAction` and `isAutoFixable`.
+  - `backend/src/line-chat/line-chat-operations.controller.ts`:
+    - Added `RetrySelectedJobsDto`, `FixRetryableJobsDto` with class-validator.
+    - Added `@Post("retry-selected")` and `@Post("fix-retryable")` guarded with `AuthGuard` and `ADMIN` role.
+  - `frontend/src/lib/api.ts`:
+    - Added `LineChatRecommendedAction`, updated `LineChatSafeJobFailure`, added `retryLineChatSelectedJobs` and `fixLineChatRetryableJobs`.
+  - `frontend/src/app/operations/line-chat-health/line-chat-health-view.tsx`:
+    - Implemented clickable failed badge opening Failed Jobs Detail Modal.
+    - Added summary metrics cards (`Total Failed`, `Auto-fixable`, `Manual review`, `System attention`).
+    - Added filter chips (`All`, `Auto-fixable`, `Manual review`, `Authentication`, `System attention`) with select-all toggle.
+    - Rendered safe job failure cards with safe navigation link to `/chats?conversationId=...`.
+    - Implemented "Fix retryable failures" preview modal and confirmation.
+    - Implemented "Retry selected" confirmation dialog with breakdown and non-retryable override option.
+  - **Verification Results**:
+    - Backend tests: 9/9 passing (`src/line-chat/line-chat-operations.spec.ts`, `src/line-chat/line-chat-operations-auth.spec.ts`). Full backend suite: 1,725 / 1,725 passing.
+    - Backend build: `npm run build` succeeded (0 errors).
+    - Backend lint: `npx eslint` passed (0 errors, 0 warnings).
+    - Frontend tests: 9/9 passing (`test/line-chat-health.test.mts`).
+    - Frontend build: `npm run build` succeeded (0 errors).
+    - Frontend lint: `npx eslint` passed (0 errors, 0 warnings).
+- **Blockers**: None.
+- **Next Action**: Present verified solution to user.
+
+## 2026-09-05: LINE Chat Profile B Safe Authentication Recovery & Queue Resumption [COMPLETED & VERIFIED]
+- **Current Task**: Recover LINE Chat Profile B (`sessionKey: profile-b`) authentication in production safely. Transition Profile B from `ACTIVE / AUTH_REQUIRED / MANAGER_AUTH` to `ACTIVE / CONNECTED` (`healthFailureStage = null`, `consecutiveAuthFailures = 0`), review 80 failed jobs, requeue, and safely resume without touching `account-1`.
+- **Pre-flight & Boundaries Enforced**:
+  - `account-1` strictly preserved untouched (`ACTIVE / CONNECTED`, `consecutiveAuthFailures: 0`).
+  - Pre-reauth safety backup created on Railway persistent volume: `/data/line-chat-profiles/profile-b-linux-v2-backup-before-reauth-20260905`.
+  - Quiesced Profile B OA (`OPPO BS RBS Chonburi`, `4ec394cb-81ee-452e-966a-24cd88d0e18e`) by setting `lineChatNicknameSyncEnabled: false`. Confirmed 0 active leases.
+- **Completed Actions**:
+  - Re-authenticated Profile B via `npm run line-chat:login` with operator interactive login in visible Chromium.
+  - Exported fresh decrypted session storage state from local profile.
+  - Injected cookies natively into `/data/line-chat-profiles/profile-b-linux-v2` using Linux Playwright on the worker container, ensuring correct Linux OSCrypt persistence and zero locks.
+  - Verified API authentication on worker: `GET https://chat.line.biz/api/v1/me` returned HTTP 200, `GET https://chat.line.biz/api/v2/bots/U729972869a565723cb7fcf7ea28bbc43/chats?limit=1` returned HTTP 200 with valid chat list envelope.
+  - Cleaned up temporary transfer files and verified absence of Singleton locks.
+  - Executed official session health probe CLI: `node dist/line-chat/line-chat-health-probe.cli.js --session-key profile-b --confirm-read-only` -> `RECORDED`, `status: CONNECTED`, `failureStage: null`, duration 2,905ms.
+  - Executed official OA health probe CLI: `node dist/line-chat/line-chat-oa-health-probe.cli.js --oa-id 4ec394cb-81ee-452e-966a-24cd88d0e18e --confirm-read-only` -> `RECORDED`, `status: CONNECTED`, `failureStage: null`, duration 3,242ms.
+  - Evaluated 80 historical failed jobs: classified failure categories (56 TRANSPORT/TIMEOUT, 14 VALIDATION, 5 COORDINATOR, 5 EXECUTION). Zero FAILED_AUTH.
+  - Scoped requeue executed exclusively on Profile B OA (`lineOfficialAccountId: 4ec394cb-81ee-452e-966a-24cd88d0e18e`): 80 jobs updated to PENDING (`attemptCount: 0`).
+  - Resumed Profile B OA sync: `lineChatNicknameSyncEnabled = true`.
+  - Monitored live worker processing: confirmed jobs claimed, recent-chat resolver resolving (`recentChatCount: 125`), nickname mutations succeeding (HTTP 200), superseded duplicates safely retired, and zero auth failures.
+- **Final Readback State**:
+  - Profile B session: `status: ACTIVE`, `healthStatus: CONNECTED`, `healthFailureStage: null`, `consecutiveAuthFailures: 0`, `healthLastHttpStatus: 200`.
+  - account-1 session: `status: ACTIVE`, `healthStatus: CONNECTED`, `healthFailureStage: null`, `consecutiveAuthFailures: 0` (100% untouched).
+  - Profile B OA (`OPPO BS RBS Chonburi`): `lineChatNicknameSyncEnabled: true`, `healthStatus: CONNECTED`.
+
 ## 2026-09-05: Dynamic Asia/Bangkok Date Classifier for Google Review Continuous Collector [COMPLETED & VERIFIED]
 - **Current Task**: Resolve blocker in PR #156 by replacing hardcoded `2026-09-04` reference date with dynamic `Asia/Bangkok` date computation.
 - **Changes**:

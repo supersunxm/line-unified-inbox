@@ -1,5 +1,42 @@
 # Architecture & Design Decisions
 
+## LINE Chat: Actionable Failed-Job Remediation, Retryability Policies, and Server Re-Validation (2026-09-05)
+
+- **Independent Session Health vs Job Failure State**:
+  - Browser session connectivity (`CONNECTED`, `AUTH_REQUIRED`, `DEGRADED`) is strictly decoupled from individual nickname sync job outcomes. A healthy connected session may experience job failures due to customer profile changes, transient transport timeouts, or data validation constraints.
+  - Remediating or retrying failed jobs never mutates or masks browser session health.
+- **Hierarchical Classification & Controlled Retry Boundaries**:
+  - `AUTHENTICATION`: mapped to `RE_LOGIN_REQUIRED` (not auto-fixable; operator must re-authenticate the session before re-queueing).
+  - `TRANSPORT` / `TIMEOUT`: mapped to `RETRY_RECOMMENDED` (auto-fixable; reset `attemptCount: 0` because failures are network/infrastructure transient).
+  - `EXECUTION`: mapped to `RETRY_OR_INSPECT`. To prevent infinite retry loops on stubborn unhandled bugs:
+    - Jobs with `attemptCount < 2` are auto-fixable for exactly ONE controlled retry and maintain `attemptCount >= 1` upon re-queueing.
+    - Jobs with `attemptCount >= 2` transition automatically to `MANUAL_REVIEW` and are flagged `isAutoFixable: false`.
+  - `VALIDATION`: mapped to `MANUAL_REVIEW` (not auto-fixable; requires engineer or admin inspection of invalid customer payload).
+  - `PROFILE_LOCK` / `COORDINATOR`: mapped to `SYSTEM_ATTENTION` (not auto-fixable; requires container process or profile lock inspection).
+  - `UNKNOWN`: mapped to `INVESTIGATE` (not auto-fixable).
+- **Server-Side Re-Validation & Client Decoupling**:
+  - The server never trusts client-side categorization or retryability flags. Both `retrySelectedJobs` and `fixRetryableFailures` query Prisma, re-classify failures using server rules, and strictly filter out non-retryable categories unless an explicit administrative override is supplied.
+  - In-flight (`PROCESSING`) and superseded (`SUPERSEDED`) jobs are permanently protected and can never be re-queued or revived.
+- **Account & Session Isolation**:
+  - All retry operations require `sessionKey` and resolve the exact set of mapped `lineOfficialAccountId`s. Database queries filter strictly by `lineOfficialAccountId: { in: sessionOaIds }`. Operations on `profile-b` can never inspect, re-queue, or mutate jobs belonging to `account-1`.
+- **Privacy & PII Boundary**:
+  - Failed job diagnostics expose exclusively safe fields: `jobId`, `oaId`, `oaName`, `failureCategory`, `failureStage`, `attemptCount`, `createdAt`, `updatedAt`, `recommendedAction`, and safe internal `conversationId`.
+  - Customer names, nicknames, message content, tokens, cookies, and profile paths are strictly excluded from API payloads, component state, and the DOM.
+
+## LINE Chat: Linux-Native Cookie Persistence via CDP Storage-State Injection (2026-09-05)
+
+- **Cross-Platform Chromium OSCrypt Decryption Boundary**:
+  - macOS Chromium encrypts SQLite cookies (`Default/Cookies`) using macOS Keychain AES keys (`OSCrypt`). Raw filesystem directory copy from macOS to Linux results in undecryptable cookies on Linux containers.
+  - To bridge cross-platform re-authentication without running a full GUI desktop or VNC server on production Linux containers, session credentials from operator-authenticated desktop sessions are extracted in decrypted JSON form via Playwright's `BrowserContext.storageState()`.
+- **Targeted Linux CDP Injection**:
+  - On the Railway Linux worker container, Playwright launches a persistent headless context targeting the production volume directory (`/data/line-chat-profiles/profile-b-linux-v2`).
+  - Storage-state cookies are injected via Chrome DevTools Protocol (`BrowserContext.addCookies()`).
+  - The Linux Chromium browser writes and encrypts the cookies natively using Linux OSCrypt in its local SQLite database.
+  - Upon `context.close()`, all SQLite tables flush cleanly and all temporary processes and locks terminate.
+- **Fail-Safe Pre-Reauth Snapshot & Scoped Retry**:
+  - A pre-reauth snapshot of the remote profile directory (`profile-b-linux-v2-backup-before-reauth-20260905`) is preserved before writing.
+  - Profile B failure jobs are evaluated by failure taxonomy (transport vs validation vs execution) and re-queued strictly under Profile B OA scope (`lineOfficialAccountId: 4ec394cb-81ee-452e-966a-24cd88d0e18e`), guaranteeing zero mutation to `account-1` or unassociated OAs.
+
 ## Google Review KPI: Weekly Top Store Ranking & 65-Store Set Architecture (2026-09-04)
 
 - **Store Code Canonical Key & Non-Duplication**:
