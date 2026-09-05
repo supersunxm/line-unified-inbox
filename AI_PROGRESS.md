@@ -1,6 +1,65 @@
 # AI Progress Log
 
-## 2026-09-05: Actionable Failed-Job Handling on LINE Chat Operations Health Dashboard [COMPLETED & VERIFIED]
+## 2026-09-05: Google Review Weekly Leaderboard Export (XLSX & CSV) [COMPLETED & VERIFIED]
+- **Current Task**: Add a production-safe Download / Export feature (Excel `.xlsx` and CSV `.csv`) to the Weekly Top Store Leaderboard on `https://lineoppo.click/google-review-kpi`.
+- **Safety Boundaries & Invariants Enforced**:
+  - Export the currently selected week only (Week 1 or Week 2), containing all 65 weekly focus stores.
+  - Zero mutation of review fingerprints, historical counts, or leaderboard ranking logic.
+  - Authentication boundary preserved: protected under `@UseGuards(AuthGuard)` with full role compatibility.
+  - Week 1 historical verified invariant strictly preserved (274 qualified reviews, CLOSED).
+  - Week 2 live data strictly preserved (OPEN).
+- **Completed Actions**:
+  - `backend/`:
+    - Installed `xlsx` library.
+    - Added `ExportWeeklyLeaderboardDto` in `src/google-review-kpi/google-review-kpi.dto.ts`.
+    - Added `exportWeeklyLeaderboard` in `src/google-review-kpi/google-review-kpi.service.ts`:
+      - Reuses `getWeeklyLeaderboard` as source of truth for all 65 stores and deterministic ranking.
+      - Calculates 7 daily date columns dynamically from Bangkok start date.
+      - Generates Excel workbook (`.xlsx`) with "Weekly KPI" sheet, bold headers, auto column widths, and autofilter.
+      - Generates UTF-8 CSV (`.csv`) with BOM (`\uFEFF`) and proper RFC4180 escaping for Windows Excel compatibility with Thai characters.
+      - Deterministic filename format: `google-review-kpi-week-${weekNumber}_${startRange}_to_${endRange}.${format}`.
+    - Added `GET /google-review-kpi/weekly/export` route in `src/google-review-kpi/google-review-kpi.controller.ts`.
+    - Added unit test suite `src/google-review-kpi/google-review-weekly-export.spec.ts`.
+  - `frontend/`:
+    - Added `downloadGoogleReviewWeeklyExport` in `src/lib/api.ts` using existing `download()` blob utility.
+    - Updated `src/app/google-review-kpi/google-review-kpi-view.tsx` with:
+      - Trilingual translations (`downloadBtn`, `downloadExcel`, `downloadCsv`, `downloading`, `downloadError`).
+      - Download dropdown menu button beside `Sync 65 Store Set` and `Refresh Data`.
+      - Safe client-side blob download trigger without page reload.
+      - Loading spinner and error state handling.
+    - Added UI and API integration test assertions in `frontend/test/google-review-kpi.test.mts`.
+- **Verification Results**:
+  - Backend tests: 1,727 / 1,727 passing (`npm --prefix backend test`).
+  - Frontend tests: 496 / 496 passing (`npm --prefix frontend test`).
+  - Backend production build: `npm --prefix backend run build` succeeded (0 errors).
+  - Frontend production build: `npm --prefix frontend run build` succeeded (0 errors).
+
+## 2026-09-05: LINE Chat Session account-1 Safe Authentication Recovery [COMPLETED & VERIFIED]
+- **Current Task**: Recover production LINE Chat session `account-1` (`LINE Manager Account 1`, mapped to 6 OAs) from `ACTIVE / AUTH_REQUIRED / MANAGER_AUTH` to `ACTIVE / CONNECTED` (`healthFailureStage = null`, `consecutiveAuthFailures = 0`), and resume its 6 mapped OAs without retrying failed jobs or touching Profile B.
+- **Safety Boundaries & Invariants Enforced**:
+  - `profile-b` (`OPPO BS RBS Chonburi`, Store 28375) strictly preserved untouched (`ACTIVE / CONNECTED`, `consecutiveAuthFailures: 0`, 1 mapped / 1 enabled OA).
+  - Failed jobs preserved untouched (zero failed jobs retried; `account-1` has 11 FAILED, 2 SUPERSEDED, 22 SUCCESS; `profile-b` has 7 FAILED, 51 SUPERSEDED, 105 SUCCESS).
+  - Zero automation of credentials, passwords, OTP, QR, or 2FA. Operator authenticated manually via visible Chromium desktop window.
+  - Safe quiesce: all 6 `account-1` OAs temporarily paused during re-auth (`lineChatNicknameSyncEnabled: false`). Verified 0 active leases, 0 processing jobs.
+  - Pre-reauth volume snapshot preserved: `/data/line-chat-profiles/account-1-v1-backup-before-reauth-20260905`. Prior backup preserved: `/data/line-chat-profiles/account-1-v1-backup-before-reauth-20260904`.
+- **Completed Actions**:
+  - Launched visible Chromium browser targeting existing persistent profile `backend/local-data/line-chat-profiles/account-1-v1` at `https://chat.line.biz/`.
+  - Operator completed manual interactive login and access to LINE OA Manager / Chat was verified.
+  - Extracted fresh session storage state cleanly via Playwright `context.storageState()`.
+  - Injected cookies natively into `/data/line-chat-profiles/account-1-v1` on `line-chat-nickname-worker` container using Linux Playwright CDP (`context.addCookies()`), ensuring correct Linux OSCrypt persistence.
+  - Verified API authentication on worker: `GET https://chat.line.biz/api/v1/me` returned HTTP 200 with user profile JSON; `GET https://chat.line.biz/api/v2/bots/U57f2de3eaa032f5226d75146ce6db483/chats?limit=1` returned HTTP 200 with chat list envelope.
+  - Cleaned up temporary storage state files locally and remotely; verified zero `Singleton*` lock files.
+  - Executed official manual session probe CLI: `node dist/line-chat/line-chat-health-probe.cli.js --session-key account-1 --confirm-read-only` -> `RECORDED`, `status: CONNECTED`, `failureStage: null`, duration 2,802ms.
+  - Executed official manual OA probes across all 6 mapped OAs: all 6 returned `status: CONNECTED`, `failureStage: null`.
+  - Executed subsequent session health probe: `RECORDED`, `status: CONNECTED`, `failureStage: null`, `duration: 2,783ms`.
+  - Resumed `account-1` OAs: re-enabled all 6 mapped OAs (`lineChatNicknameSyncEnabled: true`).
+- **Final Readback State**:
+  - `account-1` session: `status: ACTIVE`, `healthStatus: CONNECTED`, `healthFailureStage: null`, `consecutiveAuthFailures: 0`, `profileOperationLease: null`.
+  - `account-1` OAs: 6 mapped, 6 enabled, all 6 `healthStatus: CONNECTED`, `healthFailureStage: null`.
+  - `profile-b` session: `status: ACTIVE`, `healthStatus: CONNECTED`, `healthFailureStage: null`, `consecutiveAuthFailures: 0`, `profileOperationLease: null` (100% untouched).
+  - `profile-b` OAs: 1 mapped, 1 enabled, `healthStatus: CONNECTED`, `healthFailureStage: null`.
+  - Failed jobs: zero retried. Account-1 failed count = 11, Profile B failed count = 7.
+
 - **Current Task**: Implement actionable failed-job handling for the LINE Chat Operations Health dashboard (`/operations/line-chat-health`).
   - Clicking failed count/badge opens detail modal with safe fields only (`jobId`, `oaId`, `oaName`, `failureCategory`, `failureStage`, `attemptCount`, `createdAt`, `updatedAt`, `conversationId`, `recommendedAction`, `isAutoFixable`). Zero exposure of customer names, nicknames, message text, tokens, or credentials.
   - Recommended action classification: `AUTHENTICATION` -> `RE_LOGIN_REQUIRED`, `TRANSPORT`/`TIMEOUT` -> `RETRY_RECOMMENDED` (auto-fixable), `EXECUTION` -> `RETRY_OR_INSPECT` (attemptCount < 2 auto-fixable; attemptCount >= 2 -> `MANUAL_REVIEW`), `VALIDATION` -> `MANUAL_REVIEW`, `PROFILE_LOCK`/`COORDINATOR` -> `SYSTEM_ATTENTION`, `UNKNOWN` -> `INVESTIGATE`.

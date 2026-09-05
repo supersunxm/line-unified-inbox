@@ -5,6 +5,7 @@ import {
   AggregateWeeklyKpiDto,
   CheckGoogleReviewKpiResultDto,
   CompleteStoreAuditDto,
+  ExportWeeklyLeaderboardDto,
   FailStoreAuditDto,
   GoogleReviewAuditQueueStoreItem,
   GoogleReviewAuditSessionResponse,
@@ -24,6 +25,7 @@ import {
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
 } from "./google-review-kpi.dto";
+import * as XLSX from "xlsx";
 import {
   generateWeeklyPeriods,
   getBangkokDateParts,
@@ -1678,6 +1680,145 @@ export class GoogleReviewKpiService {
         totalQualifiedToday: todayDailySum._sum.qualifiedReviews ?? 0,
         newReviewsDiscoveredToday: newFingerprintsToday,
       },
+    };
+  }
+
+  /**
+   * Generates a downloadable export file (XLSX or CSV) for the Weekly Leaderboard.
+   */
+  async exportWeeklyLeaderboard(dto: ExportWeeklyLeaderboardDto): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+  }> {
+    const currentWeekNumber = resolveWeekNumber();
+    const weekNumber = dto.weekNumber ?? currentWeekNumber;
+    const format = dto.format ?? "xlsx";
+
+    // Reuse leaderboard source of truth
+    const leaderboard = await this.getWeeklyLeaderboard({ weekNumber });
+    const period = leaderboard.period;
+
+    // Resolve 7 calendar dates of the week
+    const start = new Date(period.startDate);
+    const weekDays: { dateStr: string; label: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+      const parts = getBangkokDateParts(d);
+      const label = `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`;
+      weekDays.push({ dateStr: parts.dateStr, label });
+    }
+
+    const exportedAt = new Date().toISOString();
+    const startRange = getBangkokDateParts(new Date(period.startDate)).dateStr;
+    const endRange = getBangkokDateParts(new Date(period.endDate)).dateStr;
+    const filename = `google-review-kpi-week-${weekNumber}_${startRange}_to_${endRange}.${format}`;
+
+    // Build rows
+    const rows = leaderboard.stores.map((store) => {
+      const target = 10;
+      const isPassed =
+        store.qualifiedReviews >= target &&
+        (store.storeRating === null || store.storeRating > 4.8);
+      const achievement = store.qualifiedReviews / target;
+
+      const row: Record<string, any> = {
+        "Rank": store.rank,
+        "Store Code": store.storeCode,
+        "Store Name": store.storeName,
+        "Region": store.region ?? "",
+        "Province": store.province ?? "",
+        "Store Rating": store.storeRating !== null ? Number(store.storeRating.toFixed(1)) : "",
+      };
+
+      // 7 Daily Columns
+      for (const day of weekDays) {
+        const dRecord = store.dailyBreakdown.find((d) => d.date === day.dateStr);
+        row[day.label] = dRecord ? dRecord.qualifiedReviews : 0;
+      }
+
+      row["Weekly Total"] = store.qualifiedReviews;
+      row["Target"] = target;
+      row["Achievement %"] = format === "xlsx" ? Number((achievement * 100).toFixed(1)) : `${Math.round(achievement * 100)}%`;
+      row["Status"] = isPassed ? "PASSED" : "NOT_PASSED";
+      row["Week Number"] = weekNumber;
+      row["Week Label"] = period.label;
+      row["Period Start"] = startRange;
+      row["Period End"] = endRange;
+      row["Period Status"] = period.status;
+      row["Exported At"] = exportedAt;
+
+      return row;
+    });
+
+    if (format === "csv") {
+      // Build UTF-8 CSV with BOM
+      if (rows.length === 0) {
+        const bomBuffer = Buffer.from("\uFEFF", "utf8");
+        return {
+          buffer: bomBuffer,
+          filename,
+          contentType: "text/csv; charset=utf-8",
+        };
+      }
+
+      const headers = Object.keys(rows[0]);
+      const escapeCsvVal = (val: any): string => {
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        if (str.includes(",") || str.includes("\"") || str.includes("\n") || str.includes("\r")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const csvLines: string[] = [];
+      csvLines.push(headers.map(escapeCsvVal).join(","));
+      for (const r of rows) {
+        csvLines.push(headers.map((h) => escapeCsvVal(r[h])).join(","));
+      }
+
+      const csvString = "\uFEFF" + csvLines.join("\r\n");
+      const buffer = Buffer.from(csvString, "utf8");
+
+      return {
+        buffer,
+        filename,
+        contentType: "text/csv; charset=utf-8",
+      };
+    }
+
+    // XLSX format
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    // Auto column widths
+    const headers = Object.keys(rows[0] ?? {});
+    const colWidths = headers.map((key) => {
+      let maxLen = key.length;
+      for (const row of rows) {
+        const val = row[key];
+        const len = val !== null && val !== undefined ? String(val).length : 0;
+        if (len > maxLen) maxLen = len;
+      }
+      return { wch: Math.max(maxLen + 3, 10) };
+    });
+    worksheet["!cols"] = colWidths;
+
+    // Enable autofilter
+    if (rows.length > 0) {
+      const endColLetter = XLSX.utils.encode_col(headers.length - 1);
+      worksheet["!autofilter"] = { ref: `A1:${endColLetter}${rows.length + 1}` };
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Weekly KPI");
+
+    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    return {
+      buffer: excelBuffer as Buffer,
+      filename,
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };
   }
 }

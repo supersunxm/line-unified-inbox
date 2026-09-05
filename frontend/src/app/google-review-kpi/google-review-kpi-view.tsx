@@ -210,6 +210,11 @@ const translations = {
     dailyBreakdown: "สถิติรายวัน 7 วัน",
     syncStoresBtn: "ซิงค์ชุด 65 ร้านค้า",
     syncingStores: "กำลังซิงค์...",
+    downloadBtn: "ดาวน์โหลด (Download)",
+    downloadExcel: "ดาวน์โหลด Excel (.xlsx)",
+    downloadCsv: "ดาวน์โหลด CSV (.csv)",
+    downloading: "กำลังดาวน์โหลด...",
+    downloadError: "ไม่สามารถดาวน์โหลดไฟล์ได้",
     storeCode: "รหัสร้าน",
     storeRating: "คะแนนร้าน",
     rank: "อันดับ",
@@ -286,6 +291,11 @@ const translations = {
     dailyBreakdown: "7-Day Daily Breakdown",
     syncStoresBtn: "Sync 65 Store Set",
     syncingStores: "Syncing...",
+    downloadBtn: "Download",
+    downloadExcel: "Download Excel (.xlsx)",
+    downloadCsv: "Download CSV (.csv)",
+    downloading: "Downloading...",
+    downloadError: "Failed to download file",
     storeCode: "Store Code",
     storeRating: "Store Rating",
     rank: "Rank",
@@ -362,6 +372,11 @@ const translations = {
     dailyBreakdown: "7天每日明细",
     syncStoresBtn: "同步65家门店集",
     syncingStores: "同步中...",
+    downloadBtn: "下载 (Download)",
+    downloadExcel: "下载 Excel (.xlsx)",
+    downloadCsv: "下载 CSV (.csv)",
+    downloading: "下载中...",
+    downloadError: "文件下载失败",
     storeCode: "门店代码",
     storeRating: "门店评分",
     rank: "排名",
@@ -470,6 +485,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [syncingStores, setSyncingStores] = useState<boolean>(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [collectorStatus, setCollectorStatus] = useState<GoogleReviewWeeklyCollectorStatusResponse | null>(null);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState<boolean>(false);
+  const [exportingFormat, setExportingFormat] = useState<"xlsx" | "csv" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const loadData = async (month: string, silent: boolean = false) => {
     try {
@@ -548,6 +566,31 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       setSyncResult(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setSyncingStores(false);
+    }
+  };
+
+  const handleDownloadWeeklyExport = async (format: "xlsx" | "csv") => {
+    try {
+      setExportingFormat(format);
+      setExportError(null);
+      setDownloadMenuOpen(false);
+      const { blob, filename } = await api.downloadGoogleReviewWeeklyExport({
+        weekNumber: selectedWeekNumber,
+        format,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      console.error("Download failed:", err);
+      setExportError(err instanceof Error ? err.message : t.downloadError);
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -1020,6 +1063,61 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 {syncingStores ? t.syncingStores : t.syncStoresBtn}
               </button>
 
+              {/* Download / Export Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDownloadMenuOpen((prev) => !prev)}
+                  disabled={exportingFormat !== null || weeklyLoading}
+                  className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50"
+                  aria-expanded={downloadMenuOpen}
+                  aria-haspopup="true"
+                >
+                  {exportingFormat !== null ? (
+                    <svg className="h-4 w-4 animate-spin text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                  )}
+                  <span>{exportingFormat !== null ? t.downloading : t.downloadBtn}</span>
+                  <svg className={`h-3 w-3 transition-transform ${downloadMenuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+
+                {downloadMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setDownloadMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-lg z-20">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWeeklyExport("xlsx")}
+                        disabled={exportingFormat !== null}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50 text-left"
+                      >
+                        <span className="text-emerald-500 font-bold">📊</span>
+                        <span>{t.downloadExcel}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWeeklyExport("csv")}
+                        disabled={exportingFormat !== null}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors disabled:opacity-50 text-left"
+                      >
+                        <span className="text-blue-500 font-bold">📄</span>
+                        <span>{t.downloadCsv}</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => loadWeeklyData(selectedWeekNumber)}
@@ -1039,6 +1137,14 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-xs text-emerald-700 dark:text-emerald-300">
               <span>{syncResult}</span>
               <button type="button" onClick={() => setSyncResult(null)} className="text-xs font-bold opacity-75 hover:opacity-100">✕</button>
+            </div>
+          )}
+
+          {/* Export Error Banner */}
+          {exportError && (
+            <div className="flex items-center justify-between rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-300">
+              <span>{exportError}</span>
+              <button type="button" onClick={() => setExportError(null)} className="text-xs font-bold opacity-75 hover:opacity-100">✕</button>
             </div>
           )}
 
