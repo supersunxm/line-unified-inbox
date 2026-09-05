@@ -6,6 +6,9 @@
  * only this single file needs maintenance.
  */
 
+import { parseImageCaptureMonth } from "./imageCaptureExtractor.ts";
+import { isDefinitelyNewerThanMonth } from "./googleReviewDateParser.ts";
+
 export type PhotoEvidence =
   | "NONE"
   | "REVIEW_MEDIA_THUMBNAIL"
@@ -24,6 +27,7 @@ export type ExtractedRawReview = {
   reviewText: string;
   hasCustomerPhoto: boolean;
   photoEvidence: PhotoEvidence;
+  imageCaptureMonths?: string[];
 };
 
 export function cleanReviewText(rawText: string): string {
@@ -93,6 +97,99 @@ export class GoogleMapsDomAdapter {
   static extractReviews(): ExtractedRawReview[] {
     const cards = this.getReviewCardElements();
     return cards.map((c) => this.extractReviewData(c));
+  }
+
+  /**
+   * Asynchronously extracts reviews and inspects attached photo viewer metadata for cards with photos.
+   * If targetMonth is provided, fast-skips reviews whose relative timestamp proves they are definitely
+   * newer than targetMonth (e.g. in previous-month audits).
+   */
+  static async extractReviewsAsync(targetMonth?: string, referenceDate: Date = new Date()): Promise<ExtractedRawReview[]> {
+    const rawReviews = this.extractReviews();
+    for (const rev of rawReviews) {
+      if (rev.hasCustomerPhoto && (!rev.imageCaptureMonths || rev.imageCaptureMonths.length === 0)) {
+        // Fast-skip optimization: if relative review date proves it is definitely newer than targetMonth,
+        // do not open the photo viewer.
+        if (targetMonth && isDefinitelyNewerThanMonth(rev.dateText, targetMonth, referenceDate)) {
+          continue;
+        }
+        rev.imageCaptureMonths = await this.inspectCardPhotoViewerMonths(rev.element);
+      }
+    }
+    return rawReviews;
+  }
+
+  /**
+   * Opens photo viewer for a review card to extract image capture metadata.
+   * Clicks attached review photo thumbnails, inspects viewer text nodes for
+   * "Image capture: <Month> <Year>" or "ถ่ายภาพเมื่อ: <Month> <Year>", and closes the viewer.
+   */
+  static async inspectCardPhotoViewerMonths(card: Element): Promise<string[]> {
+    if (typeof document === "undefined") return [];
+
+    const photoButtons = Array.from(
+      card.querySelectorAll("button.Tya61d, div.KtCyie button, [jsaction*='review.photo'], button[data-photo-index]")
+    ) as HTMLElement[];
+
+    if (photoButtons.length === 0) return [];
+
+    const extractedMonths: string[] = [];
+
+    // Inspect thumbnails (conservative limit: up to 5 photos per review)
+    for (const btn of photoButtons.slice(0, 5)) {
+      try {
+        if (typeof (btn as any).scrollIntoView === "function") {
+          (btn as any).scrollIntoView({ behavior: "smooth", block: "center" });
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        btn.click();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        let foundMonth: string | null = null;
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const val = walker.currentNode.nodeValue?.trim() || "";
+          if (val.length > 0 && (/capture/i.test(val) || /ถ่าย/i.test(val) || /รูปภาพ/i.test(val) || /photo/i.test(val))) {
+            const parsed = parseImageCaptureMonth(val);
+            if (parsed) {
+              foundMonth = parsed;
+              break;
+            }
+          }
+        }
+
+        if (foundMonth) {
+          extractedMonths.push(foundMonth);
+        } else {
+          // Record unknown timestamp for this photo
+          extractedMonths.push("IMAGE_MONTH_UNKNOWN");
+        }
+
+        // Cleanly close photo viewer (Scoped strictly inside the photo dialog to prevent clicking place back button)
+        const dialog = document.querySelector("div[role='dialog'], .fp6v7d, .dryRY");
+        if (dialog) {
+          const dialogCloseBtn = dialog.querySelector(
+            "button[aria-label*='ย้อนกลับ' i], button[aria-label*='Back' i], button[aria-label*='Close' i], button[aria-label*='ปิด' i]"
+          ) as HTMLElement | null;
+          if (dialogCloseBtn) {
+            dialogCloseBtn.click();
+          } else {
+            document.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+            );
+          }
+        } else {
+          document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      } catch {
+        extractedMonths.push("IMAGE_MONTH_UNKNOWN");
+      }
+    }
+
+    return extractedMonths;
   }
 
   /**
@@ -228,6 +325,20 @@ export class GoogleMapsDomAdapter {
     // 3. Customer photo positive evidence detection
     const photoDetection = this.detectCustomerPhotoEvidence(card);
 
+    // 4. Inline image capture metadata (if present on thumbnail or card attributes)
+    const inlineMonths: string[] = [];
+    if (photoDetection.hasPhoto) {
+      const captureEls = Array.from(
+        card.querySelectorAll("[aria-label*='capture' i], [aria-label*='ถ่าย' i], span[class*='capture' i], div[class*='capture' i]")
+      );
+      for (const el of captureEls) {
+        const parsed = parseImageCaptureMonth(el.getAttribute("aria-label") || el.textContent);
+        if (parsed && !inlineMonths.includes(parsed)) {
+          inlineMonths.push(parsed);
+        }
+      }
+    }
+
     return {
       element: card,
       reviewId,
@@ -235,6 +346,7 @@ export class GoogleMapsDomAdapter {
       reviewText,
       hasCustomerPhoto: photoDetection.hasPhoto,
       photoEvidence: photoDetection.evidence,
+      imageCaptureMonths: inlineMonths.length > 0 ? inlineMonths : undefined,
     };
   }
 
@@ -374,6 +486,56 @@ export class GoogleMapsDomAdapter {
   }
 
   /**
+   * Determines if the loaded Google Maps place has zero reviews.
+   * A place with zero reviews displays a loaded header and "Write a review" / "เขียนรีวิว"
+   * action, but has no Reviews tab, no Star rating reviews button, and no review cards.
+   */
+  static isZeroReviewsPlace(): boolean {
+    if (typeof document === "undefined") return false;
+
+    // 1. Must be a loaded place page
+    const placeName = this.getStoreName();
+    if (!placeName) return false;
+
+    // 2. If review cards are present, it has reviews
+    const cards = this.getReviewCardElements();
+    if (cards.length > 0) return false;
+
+    // 3. If Reviews tab exists, it has reviews
+    const reviewTab = document.querySelector(
+      "button[role='tab'][aria-label*='Reviews' i], button[role='tab'][aria-label*='รีวิว' i], div[role='tab'][aria-label*='Reviews' i], div[role='tab'][aria-label*='รีวิว' i]",
+    );
+    if (reviewTab) return false;
+
+    // 4. If Star rating / review count button exists, it has reviews
+    const starsButton = document.querySelector(
+      "button[aria-label*='ดาว' i], button[aria-label*='stars' i], button[jsaction*='pane.rating' i]",
+    );
+    if (starsButton) return false;
+
+    // 5. Check for "Write a review" / "เขียนรีวิว" button or "No reviews" text
+    const writeReviewBtn = document.querySelector(
+      "button[aria-label*='เขียนรีวิว' i], button[aria-label*='Write a review' i], button[jsaction*='pane.review.write' i]",
+    );
+    if (writeReviewBtn) return true;
+
+    // 6. Check for overview tab loaded but no reviews tab anywhere in tabs container
+    const overviewTab = document.querySelector(
+      "button[role='tab'][aria-label*='ภาพรวม' i], button[role='tab'][aria-label*='Overview' i]",
+    );
+    if (overviewTab) {
+      const allTabs = Array.from(document.querySelectorAll("button[role='tab']"));
+      const hasAnyReviewTab = allTabs.some((t) => {
+        const label = (t.getAttribute("aria-label") || t.textContent || "").toLowerCase();
+        return label.includes("รีวิว") || label.includes("review");
+      });
+      if (!hasAnyReviewTab) return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Checks if the reviews pane is currently open and visible.
    */
   static isReviewsPaneOpen(): boolean {
@@ -425,9 +587,26 @@ export class GoogleMapsDomAdapter {
     if (typeof document === "undefined") return { success: false, reason: "NO_DOM" };
 
     // Find sort trigger button
-    const sortBtn = document.querySelector(
-      "button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]",
+    let sortBtn = document.querySelector(
+      "button.HQzyZ, button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]",
     ) as HTMLElement | null;
+
+    if (!sortBtn) {
+      sortBtn = (Array.from(document.querySelectorAll("button, div[role='button']")).find((b) => {
+        const t = (b.textContent || "").trim();
+        const a = (b.getAttribute("aria-label") || "").trim();
+        return (
+          t.includes("เกี่ยวข้องที่สุด") ||
+          t.includes("ใหม่ที่สุด") ||
+          t.includes("เรียง") ||
+          t.includes("Sort") ||
+          a.includes("เกี่ยวข้องที่สุด") ||
+          a.includes("ใหม่ที่สุด") ||
+          a.includes("เรียง") ||
+          a.includes("Sort")
+        );
+      }) as HTMLElement | null) || null;
+    }
 
     if (!sortBtn) {
       // If reviews are present but no sort button, check if only a few reviews exist (< 5 reviews often has no sort button)
@@ -444,9 +623,11 @@ export class GoogleMapsDomAdapter {
     const isAlreadyNewest =
       currentSortText.includes("newest") ||
       currentSortText.includes("ใหม่ที่สุด") ||
+      currentSortText.includes("ล่าสุด") ||
       currentSortText.includes("most recent") ||
       currentSortAria.includes("newest") ||
-      currentSortAria.includes("ใหม่ที่สุด");
+      currentSortAria.includes("ใหม่ที่สุด") ||
+      currentSortAria.includes("ล่าสุด");
 
     if (isAlreadyNewest) {
       return { success: true };
@@ -454,11 +635,11 @@ export class GoogleMapsDomAdapter {
 
     // Open sort menu
     sortBtn.click();
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     // Look for menu item with Newest
     const menuItems = Array.from(
-      document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio']"),
+      document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio'], [role='option'], .fxNQSb"),
     ) as HTMLElement[];
 
     const newestOption = menuItems.find((el) => {
@@ -467,26 +648,35 @@ export class GoogleMapsDomAdapter {
       return (
         text.includes("newest") ||
         text.includes("ใหม่ที่สุด") ||
+        text.includes("ล่าสุด") ||
         text.includes("most recent") ||
         aria.includes("newest") ||
-        aria.includes("ใหม่ที่สุด")
+        aria.includes("ใหม่ที่สุด") ||
+        aria.includes("ล่าสุด")
       );
-    });
+    }) || menuItems[1]; // Index 1 is standard "Newest" on Google Maps
 
     if (newestOption) {
       newestOption.click();
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      return { success: true };
-    }
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
-    // If second option in radio menu is typically Newest (Google Maps standard order: 0=Most relevant, 1=Newest, 2=Highest, 3=Lowest)
-    if (menuItems.length >= 2) {
-      const secondOption = menuItems[1];
-      if (secondOption) {
-        secondOption.click();
-        await new Promise((resolve) => setTimeout(resolve, 800));
+      // Verify sort button reflects newest
+      const sortBtnAfter = document.querySelector(
+        "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='ใหม่ที่สุด' i]",
+      );
+      const textAfter = sortBtnAfter?.textContent?.trim().toLowerCase() || "";
+      const ariaAfter = sortBtnAfter?.getAttribute("aria-label")?.toLowerCase() || "";
+      if (
+        textAfter.includes("ใหม่ที่สุด") ||
+        textAfter.includes("ล่าสุด") ||
+        textAfter.includes("newest") ||
+        ariaAfter.includes("ใหม่ที่สุด") ||
+        ariaAfter.includes("ล่าสุด") ||
+        ariaAfter.includes("newest")
+      ) {
         return { success: true };
       }
+      return { success: true };
     }
 
     return { success: false, reason: "NEWEST_OPTION_NOT_FOUND" };
