@@ -550,6 +550,61 @@ void test("worker marks FAILED when max attempts are exhausted", async () => {
   assert.deepEqual(updatedJobData?.attemptCount, { increment: 1 });
 });
 
+void test("worker records HTTP 400 nickname rejection as permanent FAILED without retry", async () => {
+  let updatedJobData: Record<string, unknown> | undefined;
+
+  const prisma = {
+    lineChatNicknameSyncJob: {
+      findUnique: async () => ({
+        id: "job-validation-failure",
+        conversationId: "conv-101",
+        lineOfficialAccountId: "oa-101",
+        lineChatUserId: "Uchat_user_1",
+        lineUserId: "Uuser1",
+        nickname: "Reno16 Pro 5G ผ่อน 09/26",
+        status: LineChatNicknameSyncJobStatus.PROCESSING,
+        attemptCount: 0,
+        maxAttempts: 3,
+        createdAt: new Date("2026-08-31T10:00:00Z"),
+      }),
+      findFirst: async () => null,
+      update: async (args: { data: Record<string, unknown> }) => {
+        updatedJobData = args.data;
+        return {};
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-101",
+        chatBotId: "U092441d025f688e389d25779dd8debf4",
+        lineChatSessionId: "session-1",
+        lineChatSession: {
+          id: "session-1",
+          sessionKey: "profile-a",
+          profilePath: "./local-data/line-chat-profile-a",
+          status: LineChatSessionStatus.ACTIVE,
+        },
+      }),
+    },
+  };
+
+  const sessionService = {
+    resolveProfilePath: (session: any) => session?.profilePath || "./local-data/line-chat-profile-a",
+    updateNickname: async () => ({
+      success: false,
+      status: 400,
+      error: "LINE chat nickname rejected: HTTP 400 (NICKNAME_VALIDATION_FAILED)",
+    }),
+  } as unknown as LineChatSessionService;
+
+  const worker = new LineChatNicknameWorkerService(prisma as never, sessionService);
+  await worker.processSingleJob("job-validation-failure");
+
+  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.FAILED);
+  assert.equal(updatedJobData?.lastError, "LINE chat nickname rejected: HTTP 400 (NICKNAME_VALIDATION_FAILED)");
+  assert.deepEqual(updatedJobData?.attemptCount, { increment: 1 });
+});
+
 void test("worker records a failed attempt without auto-retrying a missing profile directory", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
   let updateNicknameCalls = 0;

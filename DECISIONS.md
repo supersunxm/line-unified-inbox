@@ -1,5 +1,26 @@
 # Architecture & Design Decisions
 
+## LINE Chat: 20-Character Hard Limit Compaction & HTTP 400 Validation Error Classification (2026-09-05)
+
+- **Hard Boundary Context**:
+  - LINE Official Account Chat (`chat.line.biz`) enforces a hard maximum length of 20 characters on customer nicknames (`string.length <= 20`). Submitting a nickname with $>20$ characters returns `HTTP 400 Bad Request`.
+- **Deterministic Multi-Stage Compaction**:
+  - `buildLineChatNickname` in `backend/src/line-chat-nickname.ts` serves as the single canonical enforcement boundary across the backend (including queueing, backfills, and direct nickname updates).
+  - Information hierarchy is strictly prioritized:
+    1. Model identity (compacted as needed)
+    2. Payment method (`สด` / `ผ่อน`) — **NEVER truncated or omitted**
+    3. Month/year (`MM/YY` in `Asia/Bangkok` timezone) — **NEVER truncated or omitted**
+  - Staged deterministic reduction order:
+    1. If canonical full nickname `${model} ${payment} ${month}/${year}` is $\le 20$ chars, return unchanged (e.g. `"Reno16 5G ผ่อน 09/26"` = 20 chars).
+    2. If $>20$ chars, remove redundant network suffixes from model name (`" 5G"`, `"(5G)"`, `"-5G"`, etc.) (e.g. `"Reno16 F 5G"` $\to$ `"Reno16 F"`).
+    3. If still $>20$ chars, remove unnecessary symbols (`+`, `(`, `)`).
+    4. If still $>20$ chars, compact whitespace inside model name only (e.g. `"Reno16 Pro"` $\to$ `"Reno16Pro"`, preserving separator before payment method).
+    5. If still $>20$ chars, truncate ONLY the model portion to the remaining budget (`20 - suffix.length`).
+- **HTTP 400 Validation Classification & Transport Disambiguation**:
+  - Previously, HTTP 400 responses from LINE Chat were classified under `safeExecutionError` as `LINE_NICKNAME_TRANSPORT_OR_EXECUTION`, misleadingly categorizing validation errors as transport failures.
+  - HTTP 400 is now explicitly mapped to `LINE_NICKNAME_VALIDATION_FAILED` and classified by `classifyLineChatJobFailure` as `VALIDATION` (`recommendedAction = MANUAL_REVIEW`, `isAutoFixable = false`).
+  - Raw LINE error bodies are never exposed to prevent PII leakage; safe structured reason strings (`NICKNAME_VALIDATION_FAILED`) are recorded instead.
+
 ## LINE Chat: Actionable Failed-Job Remediation, Retryability Policies, and Server Re-Validation (2026-09-05)
 
 - **Independent Session Health vs Job Failure State**:

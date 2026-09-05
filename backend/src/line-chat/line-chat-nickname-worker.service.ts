@@ -92,6 +92,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
   }
 
   private safeExecutionError(status: number | undefined): string {
+    if (status === 400) return "LINE_NICKNAME_VALIDATION_FAILED";
     if (status === 401) return "LINE_NICKNAME_AUTH";
     if (status === 403) return "LINE_NICKNAME_FORBIDDEN";
     if (status === 404) return "LINE_NICKNAME_TARGET_NOT_FOUND";

@@ -99,7 +99,7 @@ test("historical PURCHASED INSTALLMENT targets model plus Thai payment label", (
   }));
 
   assert.equal(row.classification, "WOULD_ENQUEUE_PURCHASED");
-  assert.equal(row.targetNickname, "Reno14 Pro ผ่อน 08/26");
+  assert.equal(row.targetNickname, "Reno14Pro ผ่อน 08/26");
 });
 
 test("INTERESTED and no sales status are skipped without nickname changes", () => {

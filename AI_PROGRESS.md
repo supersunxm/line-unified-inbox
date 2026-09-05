@@ -1,5 +1,30 @@
 # AI Progress Log
 
+## 2026-09-05: LINE Chat Nickname 20-Character Limit & HTTP 400 Classification Fix [COMPLETED & VERIFIED]
+- **Current Task**: Implement the confirmed LINE Chat nickname length fix ($\le 20$ characters) across the backend with deterministic compaction preserving model identity, payment method (`สด` / `ผ่อน`), and month/year (`MM/YY`), and improve HTTP 400 error classification as `VALIDATION` / `MANUAL_REVIEW`.
+- **Root Cause Confirmed**: LINE Official Account Chat (`chat.line.biz`) enforces a hard maximum length of 20 characters on customer nicknames. Nicknames $>20$ characters fail with HTTP 400 Bad Request.
+- **Compaction Flow Implemented (`backend/src/line-chat-nickname.ts`)**:
+  - `MAX_LINE_CHAT_NICKNAME_LENGTH = 20`.
+  - 1. If `${model}${suffix}.length <= 20`: return unchanged.
+  - 2. If $>20$: remove redundant network suffix `(?:\s*\(5g\)|(?:\s+|-|_)5g\b)` (e.g. `"Reno16 F 5G"` $\to$ `"Reno16 F"`).
+  - 3. If still $>20$: remove unnecessary symbols `[+()]`.
+  - 4. If still $>20$: compact whitespace inside model name only (e.g. `"Reno16 Pro"` $\to$ `"Reno16Pro"`).
+  - 5. If still $>20$: truncate ONLY model portion to available budget (`20 - suffix.length`).
+  - Preserves payment label (`สด`/`ผ่อน`) and `MM/YY` completely intact.
+- **Error Classification Improvement**:
+  - `backend/src/line-chat/line-chat-session.service.ts`: returns sanitized `LINE chat nickname rejected: HTTP 400 (NICKNAME_VALIDATION_FAILED)` without leaking response bodies.
+  - `backend/src/line-chat/line-chat-nickname-worker.service.ts`: maps status 400 to `LINE_NICKNAME_VALIDATION_FAILED`.
+  - `backend/src/line-chat/line-chat-operations.service.ts`: `classifyLineChatJobFailure` maps `HTTP 400`, `400`, `NICKNAME_VALIDATION_FAILED`, and `NICKNAME_LENGTH_EXCEEDED` to `VALIDATION` (`action: "MANUAL_REVIEW"`, `isAutoFixable: false`).
+- **Safety Boundaries Enforced**:
+  - Zero production jobs retried. Zero production mutations. No session/profile changes. Zero deployment.
+- **Verification Results**:
+  - Targeted unit tests: 87/87 passing.
+  - Full backend test suite: 1,735 / 1,735 passing.
+  - Targeted eslint: 0 errors, 0 warnings.
+  - Backend build: succeeded (0 errors).
+  - Simulation of 7 failed production jobs: all 7 successfully compact to $\le 20$ characters.
+- **Next Action**: Report results to user for review.
+
 ## 2026-09-05: Google Review Weekly Leaderboard Export (XLSX & CSV) [COMPLETED & VERIFIED]
 - **Current Task**: Add a production-safe Download / Export feature (Excel `.xlsx` and CSV `.csv`) to the Weekly Top Store Leaderboard on `https://lineoppo.click/google-review-kpi`.
 - **Safety Boundaries & Invariants Enforced**:
@@ -62,6 +87,7 @@
   - `profile-b` OAs: 1 mapped, 1 enabled, `healthStatus: CONNECTED`, `healthFailureStage: null`.
   - Failed jobs: zero retried. Account-1 failed count = 11, Profile B failed count = 7.
 
+## 2026-09-05: Actionable Failed-Job Handling on LINE Chat Operations Health Dashboard [COMPLETED & VERIFIED]
 - **Current Task**: Implement actionable failed-job handling for the LINE Chat Operations Health dashboard (`/operations/line-chat-health`).
   - Clicking failed count/badge opens detail modal with safe fields only (`jobId`, `oaId`, `oaName`, `failureCategory`, `failureStage`, `attemptCount`, `createdAt`, `updatedAt`, `conversationId`, `recommendedAction`, `isAutoFixable`). Zero exposure of customer names, nicknames, message text, tokens, or credentials.
   - Recommended action classification: `AUTHENTICATION` -> `RE_LOGIN_REQUIRED`, `TRANSPORT`/`TIMEOUT` -> `RETRY_RECOMMENDED` (auto-fixable), `EXECUTION` -> `RETRY_OR_INSPECT` (attemptCount < 2 auto-fixable; attemptCount >= 2 -> `MANUAL_REVIEW`), `VALIDATION` -> `MANUAL_REVIEW`, `PROFILE_LOCK`/`COORDINATOR` -> `SYSTEM_ATTENTION`, `UNKNOWN` -> `INVESTIGATE`.
