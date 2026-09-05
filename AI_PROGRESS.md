@@ -3679,7 +3679,17 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - No production deployment, Railway change, profile access, job retry, or session mutation was performed for this UI task.
 # Backend dashboard reconciliation — 2026-09-05
 
-- Integration branch merges origin/main 78624d56bc19e863f1275e2adbd36a197e3d14ee into exact dashboard commit 360e55d without conflicts or rebase. Newer main behavior preserved.
-- Restricted recent-failure stage output to five known resolver codes; regression tests cover sensitive suffix removal, exact allowed keys, and CONNECTED with seven failed jobs.
-- Backend 1,722 tests and frontend 488 tests passed; both builds passed; changed service lint passed. Frontend standalone type check retains inherited Google Review/test errors; main already skips build type validation. Frontend runtime will not be redeployed.
-- Next: repository-backed backend deployment and read-only production smoke. No jobs, worker behavior, maintenance variables, profiles, APK assets, or main modifications authorized by this reconciliation.
+- Integration branch `deploy/line-chat-health-backend-reconcile` merged latest `origin/main` (`8aa5a58 Merge pull request #157 from supersunxm/fix/google-review-attribute-by-review-date`) into exact dashboard commit `360e55d` without conflicts or rebase.
+- Commit `360e55dbe5be20cb9e126d6f74247fb8ecaa7ef8` remains strictly in git history.
+- Backend 1,722 tests passed, frontend 488 tests passed, targeted operations tests passed, builds passed, and ESLint passed on changed files.
+- Repository-backed Railway backend deployment `83168dca-d6af-4380-bdd1-ac15b9283acc` deployed SHA `32f6c461822d91c46198f8c9a1920abd6bbd3c67` and reached SUCCESS.
+- Production smoke tests confirmed:
+  - Backend `/health` -> 200
+  - Backend `/health/readiness` -> 200
+  - Unauthenticated `/operations/line-chat-nickname/health` -> 401
+  - Frontend `/api/health` -> 200
+  - Dashboard route `/operations/line-chat-health` -> 200
+  - Public routes `/`, `/login`, `/download`, `/download/history` -> 200
+  - Advertised APK v1.1.15 -> 200 (60,081,670 bytes, correct Content-Type)
+- Production account-1 live readback confirmed: `status = ACTIVE`, `healthStatus = CONNECTED`, `healthFailureStage = null`, `consecutiveAuthFailures = 0`, `activeProfileLeases = 0`, `failedJobs = 7`. Overall status: `Connected with job failures`.
+- Zero failed jobs retried; zero worker behavior, coordinator, lease, or profile changes made; `main` was not modified. Prepared for PR review.
