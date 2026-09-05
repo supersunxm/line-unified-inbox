@@ -2,6 +2,7 @@ import playwright from "playwright";
 const { chromium } = playwright;
 import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { collectStoreContinuous, getTodayBangkokDate } from "./continuous-collector.mjs";
+import { offsetBangkokDate } from "./date-classifier.mjs";
 
 import {
   buildGoogleReviewLaunchOptions,
@@ -108,12 +109,17 @@ async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPe
 
 async function main() {
   const todayBangkok = getTodayBangkokDate();
+  const previousBangkokDate = offsetBangkokDate(todayBangkok, -1);
+  const writableReviewDates = new Set([todayBangkok, previousBangkokDate]);
+
   console.log("================================================================================");
   console.log(" DAILY CONTINUOUS TRACKING - WEEKLY GOOGLE REVIEW KPI (65 FOCUS STORES)");
   console.log(` Target Bangkok Date (Today): ${todayBangkok}`);
+  console.log(` Previous Bangkok Date (late-arrival catch-up): ${previousBangkokDate}`);
   console.log(` Chrome Profile Directory: ${persistentProfileDir}`);
   console.log(" Fast Stop Rule: 5 consecutive previously-seen reviews stops store scan");
   console.log(" Review-date attribution: unseen Week 2 reviews are written to their resolved Bangkok review date.");
+  console.log(" Write window: current Bangkok date + previous Bangkok date only; older historical days stay frozen.");
   console.log(" Invariant: Week 1 remains CLOSED (274). Existing fingerprints are never double-counted.");
   console.log(" Single Controlled Cycle: Executes 1 cycle across 65 stores, then halts.");
   console.log("================================================================================\n");
@@ -157,6 +163,7 @@ async function main() {
     totalNewReviewsDiscovered: 0,
     totalNewQualifiedReviews: 0,
     qualifiedByReviewDate: {},
+    skippedFrozenQualifiedByReviewDate: {},
     storesWithNewReviews: 0,
     fastStopTriggeredStores: 0,
     errors: [],
@@ -199,8 +206,17 @@ async function main() {
     }
 
     const dateEntries = Object.entries(res.newReviewStatsByDate || {});
+    let wroteQualifiedForStore = false;
+
     for (const [reviewDate, stats] of dateEntries) {
       if (stats.newQualifiedReviews <= 0) {
+        continue;
+      }
+
+      if (!writableReviewDates.has(reviewDate)) {
+        console.log(`  [FROZEN DATE SKIP] ${storeCode} review date ${reviewDate}: ${stats.newQualifiedReviews} qualified unseen review(s) fingerprinted but KPI not mutated.`);
+        summary.skippedFrozenQualifiedByReviewDate[reviewDate] =
+          (summary.skippedFrozenQualifiedByReviewDate[reviewDate] || 0) + stats.newQualifiedReviews;
         continue;
       }
 
@@ -214,10 +230,11 @@ async function main() {
         stats,
       });
 
+      wroteQualifiedForStore = true;
       summary.qualifiedByReviewDate[reviewDate] = (summary.qualifiedByReviewDate[reviewDate] || 0) + stats.newQualifiedReviews;
     }
 
-    if (dateEntries.some(([, stats]) => stats.newQualifiedReviews > 0)) {
+    if (wroteQualifiedForStore) {
       const totalStoreQualifiedWeek2 = await refreshWeeklyStoreTotal({
         storeCode,
         storeId: store?.id || null,
@@ -259,8 +276,9 @@ async function main() {
   console.log(`Fast-Stop Triggered (5 seen boundary): ${summary.fastStopTriggeredStores} stores`);
   console.log(`Stores with New Reviews: ${summary.storesWithNewReviews}`);
   console.log(`Total New Reviews Discovered: ${summary.totalNewReviewsDiscovered}`);
-  console.log(`Total New Qualified Reviews: ${summary.totalNewQualifiedReviews}`);
-  console.log(`Qualified by Review Date: ${JSON.stringify(summary.qualifiedByReviewDate)}`);
+  console.log(`Total New Qualified Reviews Discovered: ${summary.totalNewQualifiedReviews}`);
+  console.log(`Qualified written by Review Date: ${JSON.stringify(summary.qualifiedByReviewDate)}`);
+  console.log(`Qualified skipped on frozen dates: ${JSON.stringify(summary.skippedFrozenQualifiedByReviewDate)}`);
   console.log(`Errors: ${summary.errors.length}`);
   console.log(`================================================================================\n`);
 }
