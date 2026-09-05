@@ -112,7 +112,11 @@ test("LineChatOperationsService: failures are classified without treating job fa
   assert.equal(classifyLineChatJobFailure("FAILED", "ETIMEDOUT"), "TIMEOUT");
   assert.equal(classifyLineChatJobFailure("FAILED", "PROFILE_LOCK"), "PROFILE_LOCK");
   assert.equal(classifyLineChatJobFailure("FAILED", "Profile directory does not exist"), "COORDINATOR");
-  assert.equal(classifyLineChatJobFailure("FAILED", "HTTP 400"), "EXECUTION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "HTTP 400"), "VALIDATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "HTTP 400 (Bad Request)"), "VALIDATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "NICKNAME_VALIDATION_FAILED"), "VALIDATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "NICKNAME_LENGTH_EXCEEDED"), "VALIDATION");
+  assert.equal(classifyLineChatJobFailure("FAILED", "HTTP 500"), "EXECUTION");
   assert.equal(classifyLineChatJobFailure("FAILED", ""), "UNKNOWN");
 });
 

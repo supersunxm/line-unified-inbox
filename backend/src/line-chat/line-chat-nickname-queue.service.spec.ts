@@ -137,9 +137,9 @@ void test("enqueueSalesSync creates Installment purchase nickname job with custo
   const result = await service.enqueueSalesSync("conv-3");
 
   assert.equal(result.enqueued, true);
-  assert.equal(result.nickname, "Reno14 Pro ผ่อน 08/26");
+  assert.equal(result.nickname, "Reno14Pro ผ่อน 08/26");
   assert.equal(createdJobs.length, 1);
-  assert.equal(createdJobs[0].nickname, "Reno14 Pro ผ่อน 08/26");
+  assert.equal(createdJobs[0].nickname, "Reno14Pro ผ่อน 08/26");
   assert.equal(createdJobs[0].lineChatUserId, "Uchat_user_inst_3");
 });
 

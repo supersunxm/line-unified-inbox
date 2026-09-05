@@ -878,6 +878,21 @@ export class LineChatSessionService {
         };
       }
 
+      if (status === 400) {
+        return {
+          success: false,
+          dryRun: false,
+          botId,
+          lineUserId,
+          nickname,
+          profilePath: resolvedProfile,
+          status: 400,
+          error: "LINE chat nickname rejected: HTTP 400 (NICKNAME_VALIDATION_FAILED)",
+          xsrfTokenFound: Boolean(xsrfToken),
+          tokenSource,
+        };
+      }
+
       if (status === 0) {
         return {
           success: false,

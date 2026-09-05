@@ -395,6 +395,38 @@ void test("updateNickname executes page-context fetch with intercepted runtime h
   }
 });
 
+void test("updateNickname on HTTP 400 returns sanitized validation error without leaking response", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
+
+  try {
+    const mock = createMockPageContext({
+      cookies: [{ name: "SES", value: "valid-session" }],
+      responseStatus: 400,
+      responseStatusText: "Bad Request",
+    });
+
+    const customLauncher: ContextLauncher = async () => mock.context;
+    const service = new LineChatSessionService(customLauncher);
+
+    const result = await service.updateNickname(
+      {
+        botId: "Ubot123",
+        lineUserId: "Uuser456",
+        nickname: "Reno16 Pro 5G ผ่อน 09/26",
+        profilePath: tempDir,
+      },
+      customLauncher
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.status, 400);
+    assert.equal(result.error, "LINE chat nickname rejected: HTTP 400 (NICKNAME_VALIDATION_FAILED)");
+    assert.equal(mock.closed(), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 void test("updateNickname on HTTP 401 returns clear unauthenticated error", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-test-"));
 

@@ -79,8 +79,19 @@ export function classifyLineChatJobFailure(status: string, lastError?: string | 
   if (value.includes("PROFILE_LOCK") || value.includes("PROFILE OPERATION BUSY")) return "PROFILE_LOCK";
   if (value.includes("COORDINATOR") || value.includes("LEASE") || value.includes("PROFILE DIRECTORY DOES NOT EXIST")) return "COORDINATOR";
   if (value.includes("TIMEOUT") || value.includes("ETIMEDOUT")) return "TIMEOUT";
+  if (
+    value.includes("VALIDATION") ||
+    value.includes("MISSING") ||
+    value.includes("INVALID") ||
+    value.includes("NO_MATCH") ||
+    value.includes("HTTP 400") ||
+    value.includes("400") ||
+    value.includes("NICKNAME_VALIDATION_FAILED") ||
+    value.includes("NICKNAME_LENGTH_EXCEEDED")
+  ) {
+    return "VALIDATION";
+  }
   if (value.includes("NETWORK") || value.includes("ECONN") || value.includes("TRANSPORT") || value.includes("FAILED TO FETCH")) return "TRANSPORT";
-  if (value.includes("VALIDATION") || value.includes("MISSING") || value.includes("INVALID") || value.includes("NO_MATCH")) return "VALIDATION";
   if (value.includes("EXECUTION") || value.includes("HTTP") || value.includes("REQUEST")) return "EXECUTION";
   return value ? "EXECUTION" : "UNKNOWN";
 }
