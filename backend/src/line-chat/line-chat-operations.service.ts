@@ -188,7 +188,7 @@ export class LineChatOperationsService {
             oaId: job.lineOfficialAccount.id,
             oaName: job.lineOfficialAccount.name,
             failureCategory: classifyLineChatJobFailure(job.status, job.lastError),
-            failureStage: job.lastError?.startsWith("RESOLVE_") ? job.lastError : null,
+            failureStage: ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_CONFLICT", "RESOLVE_SESSION_AUTH", "RESOLVE_TRANSPORT"].includes(job.lastError ?? "") ? job.lastError : null,
             attemptCount: job.attemptCount,
             createdAt: job.createdAt.toISOString(),
             updatedAt: job.updatedAt.toISOString(),

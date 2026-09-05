@@ -1910,3 +1910,6 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 - The existing admin-protected operations controller remains the single API boundary. Its health response is enriched with per-session counts, active leases, timestamps, and classified recent failures; retry continues through the existing session-scoped endpoint with explicit UI confirmation.
 - Failure diagnostics are allowlisted to identifiers, category/stage, attempts, and timestamps. Raw errors, profile paths, browser state, credentials, cookies, tokens, nicknames, and customer/chat content are excluded.
 - Maintenance toggling, browser re-authentication, and active health-probe execution are intentionally omitted until dedicated safe backend capabilities exist; a UI must not imply that Railway controls are available when they are not.
+# Dashboard backend reconciliation — 2026-09-05
+
+Merge current main into a new branch descended from exact commit 360e55d, preserving both production histories. Deploy only the backend; keep the existing frontend branch. Failure stages use an explicit allowlist because a RESOLVE_ prefix alone does not guarantee safe output.

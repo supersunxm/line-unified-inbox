@@ -3652,3 +3652,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Health classification keeps `ACTIVE / CONNECTED` green even when individual jobs fail; those accounts render as yellow `Connected with job failures`, not disconnected or authentication failed.
 - Prisma validation/generation, backend and frontend production builds, targeted lint, 1,691 backend tests, and 487 frontend tests pass. Local HTTP checks returned 200 for the page/backend health and 401 for the unauthenticated admin API. Repository-wide lint retains unrelated pre-existing dirty-worktree failures.
 - No production deployment, Railway change, profile access, job retry, or session mutation was performed for this UI task.
+# Backend dashboard reconciliation — 2026-09-05
+
+- Integration branch merges origin/main 78624d56bc19e863f1275e2adbd36a197e3d14ee into exact dashboard commit 360e55d without conflicts or rebase. Newer main behavior preserved.
+- Restricted recent-failure stage output to five known resolver codes; regression tests cover sensitive suffix removal, exact allowed keys, and CONNECTED with seven failed jobs.
+- Backend 1,722 tests and frontend 488 tests passed; both builds passed; changed service lint passed. Frontend standalone type check retains inherited Google Review/test errors; main already skips build type validation. Frontend runtime will not be redeployed.
+- Next: repository-backed backend deployment and read-only production smoke. No jobs, worker behavior, maintenance variables, profiles, APK assets, or main modifications authorized by this reconciliation.

@@ -63,7 +63,11 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
         { lineOfficialAccountId: "oa-1", status: LineChatNicknameSyncJobStatus.SUCCESS, _count: { id: 10 } },
         { lineOfficialAccountId: "oa-2", status: LineChatNicknameSyncJobStatus.FAILED_AUTH, _count: { id: 3 } },
       ] : mockQueueCounts,
-      findMany: async () => [],
+      findMany: async () => ["RESOLVE_NO_MATCH", "RESOLVE_TRANSPORT cookie=secret /profiles/private customer message"].map((lastError) => ({
+        id: "job-1", status: "FAILED", lastError, attemptCount: 1,
+        createdAt: new Date(), updatedAt: new Date(),
+        lineOfficialAccount: { id: "oa-1", name: "OA", lineChatSessionId: "sess-1" },
+      })),
     },
     lineChatProfileOperationLease: { findMany: async () => [] },
   };
@@ -80,6 +84,10 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.sessions[1].consecutiveAuthFailures, 2);
   assert.equal(health.sessions[0].healthStatus, "CONNECTED");
   assert.equal(health.sessions[0].jobs.success, 10);
+  assert.deepEqual(Object.keys(health.sessions[0].recentFailures[0]).sort(), ["attemptCount", "createdAt", "failureCategory", "failureStage", "jobId", "oaId", "oaName", "updatedAt"]);
+  assert.equal(health.sessions[0].recentFailures[0].failureStage, "RESOLVE_NO_MATCH");
+  assert.equal(health.sessions[0].recentFailures[1].failureStage, null);
+  assert.doesNotMatch(JSON.stringify(health), /cookie=secret|profiles\/private|customer message/);
 
   assert.equal(health.queue.pending, 5);
   assert.equal(health.queue.processing, 1);
