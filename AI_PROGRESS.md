@@ -8,18 +8,20 @@
   - Authentication boundary preserved: protected under `@UseGuards(AuthGuard)` with full role compatibility.
   - Week 1 historical verified invariant strictly preserved (274 qualified reviews, CLOSED).
   - Week 2 live data strictly preserved (OPEN).
+  - Future/uncollected dates in an OPEN week export as blank cells in Excel and empty strings in CSV (never fabricated zeros), while genuine recorded zeros are strictly preserved.
 - **Completed Actions**:
   - `backend/`:
-    - Installed `xlsx` library.
+    - Replaced `xlsx` with `exceljs` library for robust spreadsheet formatting.
     - Added `ExportWeeklyLeaderboardDto` in `src/google-review-kpi/google-review-kpi.dto.ts`.
     - Added `exportWeeklyLeaderboard` in `src/google-review-kpi/google-review-kpi.service.ts`:
       - Reuses `getWeeklyLeaderboard` as source of truth for all 65 stores and deterministic ranking.
       - Calculates 7 daily date columns dynamically from Bangkok start date.
-      - Generates Excel workbook (`.xlsx`) with "Weekly KPI" sheet, bold headers, auto column widths, and autofilter.
+      - Daily KPI mapping: genuine recorded daily records preserve their `qualifiedReviews` count (including 0); future/uncollected dates are set to `null` (blank cell in Excel, empty in CSV).
+      - Generates Excel workbook (`.xlsx`) using `exceljs` with "Weekly KPI" sheet, frozen row 1 (`views: [{ state: "frozen", ySplit: 1 }]`), bold header row (`row.font = { bold: true }`), auto-fit column widths, autofilter, and numeric ratio formatted percentage for Achievement % (`numFmt = "0.0%"`).
       - Generates UTF-8 CSV (`.csv`) with BOM (`\uFEFF`) and proper RFC4180 escaping for Windows Excel compatibility with Thai characters.
       - Deterministic filename format: `google-review-kpi-week-${weekNumber}_${startRange}_to_${endRange}.${format}`.
     - Added `GET /google-review-kpi/weekly/export` route in `src/google-review-kpi/google-review-kpi.controller.ts`.
-    - Added unit test suite `src/google-review-kpi/google-review-weekly-export.spec.ts`.
+    - Added unit test suite `src/google-review-kpi/google-review-weekly-export.spec.ts` testing freeze, bold headers, numeric percentages, blank future dates, recorded zeros, and UTF-8 BOM.
   - `frontend/`:
     - Added `downloadGoogleReviewWeeklyExport` in `src/lib/api.ts` using existing `download()` blob utility.
     - Updated `src/app/google-review-kpi/google-review-kpi-view.tsx` with:
@@ -30,7 +32,7 @@
     - Added UI and API integration test assertions in `frontend/test/google-review-kpi.test.mts`.
 - **Verification Results**:
   - Backend tests: 1,727 / 1,727 passing (`npm --prefix backend test`).
-  - Frontend tests: 496 / 496 passing (`npm --prefix frontend test`).
+  - Frontend tests: 495 / 495 passing (`npm --prefix frontend test`).
   - Backend production build: `npm --prefix backend run build` succeeded (0 errors).
   - Frontend production build: `npm --prefix frontend run build` succeeded (0 errors).
 

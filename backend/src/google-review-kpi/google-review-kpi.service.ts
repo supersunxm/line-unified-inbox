@@ -25,7 +25,7 @@ import {
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
 } from "./google-review-kpi.dto";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
   generateWeeklyPeriods,
   getBangkokDateParts,
@@ -1728,18 +1728,22 @@ export class GoogleReviewKpiService {
         "Store Name": store.storeName,
         "Region": store.region ?? "",
         "Province": store.province ?? "",
-        "Store Rating": store.storeRating !== null ? Number(store.storeRating.toFixed(1)) : "",
+        "Store Rating": store.storeRating !== null ? Number(store.storeRating.toFixed(1)) : null,
       };
 
-      // 7 Daily Columns
+      // 7 Daily Columns:
+      // If Daily KPI record exists, export real qualifiedReviews (including 0).
+      // If missing/future/uncollected date, leave as null (blank in Excel, empty in CSV).
       for (const day of weekDays) {
         const dRecord = store.dailyBreakdown.find((d) => d.date === day.dateStr);
-        row[day.label] = dRecord ? dRecord.qualifiedReviews : 0;
+        row[day.label] = dRecord !== undefined ? dRecord.qualifiedReviews : null;
       }
 
       row["Weekly Total"] = store.qualifiedReviews;
       row["Target"] = target;
-      row["Achievement %"] = format === "xlsx" ? Number((achievement * 100).toFixed(1)) : `${Math.round(achievement * 100)}%`;
+      // In Excel: numeric ratio (e.g. 0.3 for 30%) with percentage format
+      // In CSV: formatted percentage string e.g. "30%"
+      row["Achievement %"] = format === "xlsx" ? achievement : `${Math.round(achievement * 100)}%`;
       row["Status"] = isPassed ? "PASSED" : "NOT_PASSED";
       row["Week Number"] = weekNumber;
       row["Week Label"] = period.label;
@@ -1788,35 +1792,54 @@ export class GoogleReviewKpiService {
       };
     }
 
-    // XLSX format
-    const worksheet = XLSX.utils.json_to_sheet(rows);
+    // XLSX format using ExcelJS
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Weekly KPI", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
 
-    // Auto column widths
     const headers = Object.keys(rows[0] ?? {});
-    const colWidths = headers.map((key) => {
+    worksheet.columns = headers.map((key) => {
       let maxLen = key.length;
       for (const row of rows) {
         const val = row[key];
         const len = val !== null && val !== undefined ? String(val).length : 0;
         if (len > maxLen) maxLen = len;
       }
-      return { wch: Math.max(maxLen + 3, 10) };
+      return {
+        header: key,
+        key,
+        width: Math.max(maxLen + 3, 10),
+      };
     });
-    worksheet["!cols"] = colWidths;
 
-    // Enable autofilter
-    if (rows.length > 0) {
-      const endColLetter = XLSX.utils.encode_col(headers.length - 1);
-      worksheet["!autofilter"] = { ref: `A1:${endColLetter}${rows.length + 1}` };
+    // Format header row (Row 1): bold font
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+
+    // Add data rows
+    for (const rowData of rows) {
+      const addedRow = worksheet.addRow(rowData);
+      // Format Achievement % cell as percentage (0.0%)
+      const achievementCell = addedRow.getCell("Achievement %");
+      if (achievementCell && typeof achievementCell.value === "number") {
+        achievementCell.numFmt = "0.0%";
+      }
     }
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Weekly KPI");
+    // Enable autofilter across all columns
+    if (rows.length > 0) {
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: rows.length + 1, column: headers.length },
+      };
+    }
 
-    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    const excelBuffer = Buffer.from(arrayBuffer);
 
     return {
-      buffer: excelBuffer as Buffer,
+      buffer: excelBuffer,
       filename,
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };

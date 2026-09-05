@@ -67,18 +67,19 @@
     "@prisma/client": "^6.19.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "exceljs": "^4.4.0",
     "firebase-admin": "^14.2.0",
     "image-size": "^2.0.2",
     "playwright": "^1.50.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "sharp": "^0.35.3",
-    "xlsx": "^0.18.5"
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.2.3",
+    "@types/exceljs": "^0.5.3",
     "@types/express": "^5.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.0.0",
