@@ -14,6 +14,8 @@ function makeFixture(options: {
   oaId?: string | null;
   sessionOutcome?: "RECORDED" | "SKIPPED_BUSY";
   oaOutcome?: "RECORDED" | "SKIPPED_BUSY";
+  recoveryCandidateId?: string | null;
+  authRecovery?: any;
 } = {}) {
   const calls: string[] = [];
   const updates: Array<{ entity: "SESSION" | "OA"; id: string; data: Record<string, unknown> }> = [];
@@ -24,8 +26,18 @@ function makeFixture(options: {
         return options.nicknameBacklog ?? 0;
       },
     },
+    lineChatProfileOperationLease: {
+      count: async () => {
+        calls.push("lease-count");
+        return 0;
+      },
+    },
     lineChatSession: {
-      findFirst: async () => {
+      findFirst: async (args?: any) => {
+        if (args?.where?.healthStatus === "AUTH_REQUIRED") {
+          calls.push("recovery-find");
+          return options.recoveryCandidateId ? { id: options.recoveryCandidateId } : null;
+        }
         calls.push("session-find");
         return options.sessionId === undefined ? null : options.sessionId ? { id: options.sessionId } : null;
       },
@@ -82,7 +94,12 @@ function makeFixture(options: {
     },
   };
   return {
-    service: new LineChatHealthSchedulerService(prisma as never, sessionProbe as never, oaProbe as never),
+    service: new LineChatHealthSchedulerService(
+      prisma as never,
+      sessionProbe as never,
+      oaProbe as never,
+      options.authRecovery,
+    ),
     calls,
     updates,
   };
@@ -179,3 +196,73 @@ test("maintenance and disabled worker gates stop a tick before DB work", async (
     else process.env.DISABLE_NICKNAME_WORKER = previousDisabled;
   }
 });
+
+test("kill switch OFF: scheduler never queries or attempts auth recovery, proceeds to routine probes", async () => {
+  const previous = process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+  try {
+    delete process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+
+    let recoveryInvoked = false;
+    const fixture = makeFixture({
+      sessionId: "session-1",
+      recoveryCandidateId: "session-auth-req",
+      authRecovery: {
+        isRecoveryInProgress: () => false,
+        getCooldownRemainingMs: () => 0,
+        recoverSession: async () => {
+          recoveryInvoked = true;
+          return { outcome: "RECOVERED_REMEMBERED_ACCOUNT" };
+        },
+      },
+    });
+
+    const result = await fixture.service.runTick(new Date("2026-09-04T00:00:00.000Z"));
+    // With kill switch OFF, scheduler should NOT query recovery candidates or call recoverSession
+    assert.equal(recoveryInvoked, false);
+    assert.equal(fixture.calls.includes("recovery-find"), false);
+    // It proceeds to normal session probe
+    assert.equal(result, "SESSION");
+    assert.equal(fixture.calls.includes("session-find"), true);
+    assert.equal(fixture.calls.includes("session-probe:session-1:SCHEDULED"), true);
+  } finally {
+    if (previous === undefined) delete process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+    else process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = previous;
+  }
+});
+
+test("kill switch ON: scheduler executes automatic recovery for eligible session", async () => {
+  const previous = process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+  try {
+    process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = "true";
+
+    let recoveredSessionId: string | null = null;
+    let recoveredTrigger: string | null = null;
+    const fixture = makeFixture({
+      sessionId: "session-1",
+      recoveryCandidateId: "session-auth-req",
+      authRecovery: {
+        isRecoveryInProgress: () => false,
+        getCooldownRemainingMs: () => 0,
+        recoverSession: async (id: string, trigger: string) => {
+          recoveredSessionId = id;
+          recoveredTrigger = trigger;
+          return { outcome: "RECOVERED_REMEMBERED_ACCOUNT" };
+        },
+      },
+    });
+
+    const result = await fixture.service.runTick(new Date("2026-09-04T00:00:00.000Z"));
+    assert.equal(result, "SESSION");
+    assert.equal(recoveredSessionId, "session-auth-req");
+    assert.equal(recoveredTrigger, "SCHEDULED");
+    assert.equal(fixture.calls.includes("recovery-find"), true);
+    assert.equal(fixture.updates.length, 1);
+    assert.equal(fixture.updates[0].entity, "SESSION");
+    assert.equal(fixture.updates[0].id, "session-auth-req");
+    assert.ok(fixture.updates[0].data.healthNextCheckAt instanceof Date);
+  } finally {
+    if (previous === undefined) delete process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+    else process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = previous;
+  }
+});
+

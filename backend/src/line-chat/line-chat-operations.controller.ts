@@ -63,4 +63,9 @@ export class LineChatOperationsController {
   ) {
     return this.operationsService.toggleOaNicknameSync(oaId, Boolean(body.enabled));
   }
+
+  @Post("sessions/:sessionKey/try-remembered-login")
+  async tryRememberedLogin(@Param("sessionKey") sessionKey: string) {
+    return this.operationsService.tryRememberedLogin(sessionKey.trim());
+  }
 }

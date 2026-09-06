@@ -1,6 +1,7 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
+import { LineChatAuthRecoveryService, type LineChatAuthRecoveryResult } from "./line-chat-auth-recovery.service";
 
 export interface LineChatSessionSummary {
   id: string;
@@ -19,6 +20,8 @@ export interface LineChatSessionSummary {
   healthLastHealthyAt: string | null;
   activeProfileLeases: number;
   activeLeaseOperation: string | null;
+  authRecoveryInProgress?: boolean;
+  authRecoveryCooldownRemainingMs?: number;
   jobs: LineChatQueueMetrics;
   recentFailures: LineChatSafeJobFailure[];
 }
@@ -139,7 +142,12 @@ function addJobCount(queue: LineChatQueueMetrics, status: LineChatNicknameSyncJo
 
 @Injectable()
 export class LineChatOperationsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(LineChatAuthRecoveryService)
+    private readonly authRecovery?: LineChatAuthRecoveryService,
+  ) {}
 
   public async getHealthSummary(): Promise<LineChatHealthReport> {
     const now = new Date();
@@ -232,6 +240,8 @@ export class LineChatOperationsService {
         healthLastHealthyAt: s.healthLastHealthyAt?.toISOString() ?? null,
         activeProfileLeases: leases.length,
         activeLeaseOperation: leases[0]?.operationKind ?? null,
+        authRecoveryInProgress: this.authRecovery?.isRecoveryInProgress(s.id) ?? false,
+        authRecoveryCooldownRemainingMs: this.authRecovery?.getCooldownRemainingMs(s.id) ?? 0,
         jobs,
         recentFailures: recentFailures
           .filter((job) => job.lineOfficialAccount.lineChatSessionId === s.id)
@@ -524,5 +534,19 @@ export class LineChatOperationsService {
       remainingFailed: allFailed.length - retryResult.retriedCount,
       retriedJobIds: retryResult.retriedJobIds,
     };
+  }
+
+  public async tryRememberedLogin(sessionKey: string): Promise<LineChatAuthRecoveryResult> {
+    const session = await this.prisma.lineChatSession.findUnique({
+      where: { sessionKey },
+      select: { id: true, sessionKey: true },
+    });
+    if (!session) {
+      throw new NotFoundException(`Line chat session with key "${sessionKey}" not found.`);
+    }
+    if (!this.authRecovery) {
+      throw new Error("LineChatAuthRecoveryService is not available.");
+    }
+    return this.authRecovery.recoverSession(session.id, "MANUAL", { bypassCooldown: true });
   }
 }

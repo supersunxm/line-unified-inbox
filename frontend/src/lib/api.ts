@@ -110,6 +110,7 @@ export type LineChatSafeJobFailure = {
 export type LineChatOperationsSession = {
   id: string; sessionKey: string; displayName: string; status: string; healthStatus: string; healthFailureStage: string | null;
   consecutiveAuthFailures: number; mappedOaCount: number; enabledOaCount: number; activeProfileLeases: number; activeLeaseOperation: string | null;
+  authRecoveryInProgress?: boolean; authRecoveryCooldownRemainingMs?: number;
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
   recentFailures: LineChatSafeJobFailure[];
@@ -248,6 +249,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ sessionKey }),
     }),
+  tryLineChatRememberedLogin: (sessionKey: string) =>
+    request<{ outcome: string; durationMs: number; message: string }>(
+      `/operations/line-chat-nickname/sessions/${encodeURIComponent(sessionKey)}/try-remembered-login`,
+      { method: "POST" },
+    ),
   resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
   pilotChecklist: (lineOaId: string) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`),
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),

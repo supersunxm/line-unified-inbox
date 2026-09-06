@@ -319,6 +319,28 @@ export function LineChatHealthView() {
     }
   };
 
+  const [recoveringKey, setRecoveringKey] = useState<string | null>(null);
+
+  const executeTryRememberedLogin = async (sessionKey: string) => {
+    setRecoveringKey(sessionKey);
+    setError(null);
+    try {
+      const result = await api.tryLineChatRememberedLogin(sessionKey);
+      if (result.outcome === "RECOVERED_REMEMBERED_ACCOUNT") {
+        setNotice(`Session ${sessionKey} successfully re-authenticated via remembered account.`);
+      } else if (result.outcome === "MANUAL_REAUTH_REQUIRED") {
+        setError(`Manual operator login required for ${sessionKey}: ${result.message}`);
+      } else {
+        setNotice(`Recovery attempt for ${sessionKey}: ${result.outcome} (${result.message})`);
+      }
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Failed to execute remembered login.");
+    } finally {
+      setRecoveringKey(null);
+    }
+  };
+
   const logout = async () => {
     await api.logout().catch(() => undefined);
     window.location.replace("/login");
@@ -415,6 +437,20 @@ export function LineChatHealthView() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
+                            {(session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") && (
+                              <Button
+                                size="sm"
+                                disabled={recoveringKey === session.sessionKey || session.authRecoveryInProgress}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void executeTryRememberedLogin(session.sessionKey);
+                                }}
+                              >
+                                {recoveringKey === session.sessionKey || session.authRecoveryInProgress
+                                  ? "Recovering..."
+                                  : "Try remembered login"}
+                              </Button>
+                            )}
                             {totalFailed > 0 && (
                               <Button
                                 size="sm"
@@ -429,11 +465,12 @@ export function LineChatHealthView() {
                             )}
                             <Button
                               size="sm"
+                              variant="outline"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setLegacyRetryTarget(session);
                               }}
-                              disabled={totalFailed === 0}
+                              disabled={totalFailed === 0 || session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED"}
                             >
                               Retry failed
                             </Button>
@@ -488,6 +525,25 @@ export function LineChatHealthView() {
                   </div>
                 </dl>
                 <JobSummary session={selected} onFailedClick={() => openDetailModal(selected)} />
+                {(selected.healthStatus === "AUTH_REQUIRED" || selected.status === "AUTH_REQUIRED") && (
+                  <div className="rounded-xl border border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] p-3 text-xs space-y-2">
+                    <div className="font-semibold text-[var(--app-warning)]">
+                      Authentication Degraded (MANAGER_AUTH)
+                    </div>
+                    <p className="text-[var(--app-text-secondary)]">
+                      The persistent profile may still hold remembered credentials. You can attempt lightweight automatic re-login. If verification challenges (QR/password/OTP) are required, an operator must run manual interactive login.
+                    </p>
+                    <Button
+                      size="sm"
+                      disabled={recoveringKey === selected.sessionKey || selected.authRecoveryInProgress}
+                      onClick={() => void executeTryRememberedLogin(selected.sessionKey)}
+                    >
+                      {recoveringKey === selected.sessionKey || selected.authRecoveryInProgress
+                        ? "Recovering..."
+                        : "Try remembered login"}
+                    </Button>
+                  </div>
+                )}
                 <p className="rounded-xl bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]">
                   <strong>Authentication failures</strong> may require re-login. Transport, execution, validation, and timeout failures can occur while the session remains connected.
                 </p>

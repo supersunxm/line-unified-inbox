@@ -124,7 +124,7 @@ export interface PageExecutor {
 
 @Injectable()
 export class LineChatSessionService {
-  private readonly defaultLauncher: ContextLauncher;
+  public readonly defaultLauncher: ContextLauncher;
 
   constructor(@Optional() customLauncher?: ContextLauncher) {
     this.defaultLauncher =
