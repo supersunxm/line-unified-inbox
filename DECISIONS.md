@@ -1,5 +1,29 @@
 # Architecture & Design Decisions
 
+## LINE Chat: Remembered-Account Re-authentication Recovery & Production Safety Gate (2026-09-06)
+
+- **Context & Problem**:
+  - LINE Manager browser sessions (`chat.line.biz` / LINE Business ID) periodically transition to `AUTH_REQUIRED` with `healthFailureStage = MANAGER_AUTH` when the web session expires, even though the persistent Chrome profile still retains the remembered LINE account identity.
+  - Previously, this state required an operator to manually connect via interactive browser session to click through the remembered login.
+- **Lightweight Continuation Architecture**:
+  - `LineChatAuthRecoveryService` launches the session's isolated persistent profile in headless Chromium and navigates to `chat.line.biz`.
+  - If the landing page presents a single remembered LINE account, the service clicks "LINE account" $\to$ single remembered account "Log in".
+  - Success requires three independent proofs:
+    1. `GET /api/v1/me` returns HTTP 200 with authenticated status `YES`.
+    2. `GET /api/v2/bots/:botId/chats?limit=1` returns HTTP 200 for mapped OAs.
+    3. The browser page URL does not remain on an authentication/login challenge destination.
+- **Strict Manual Boundary & Zero Credential Automation**:
+  - If the browser encounters any human verification challenge—passwords, email inputs, OTP codes, QR codes, CAPTCHAs, or multiple ambiguous remembered accounts—the automation immediately halts with outcome `MANUAL_REAUTH_REQUIRED`.
+  - Accidental form clicks are strictly prevented: generic submit buttons (`button[type="submit"]`) are forbidden; selectors require explicit login text (`"Log in"`, `"ログイン"`, `"เข้าสู่ระบบ"`), and any visible credential input field aborts the click.
+- **Session Isolation, Leases & Cooldown**:
+  - Operations are strictly session-scoped (`account-1` vs `profile-b`). Shared profile coordinator leases (`HEALTH_SESSION`) prevent concurrent browser operations.
+  - Cooldown logic (15 minutes in-memory) prevents looping on repeated failures.
+  - Historical failed nickname jobs are never retried by auth recovery.
+- **Production Safety Gate (Kill Switch)**:
+  - Automatic scheduler-triggered recovery is guarded by `LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED` (default: false/disabled).
+  - When the flag is absent or not `"true"`, `LineChatHealthSchedulerService` skips recovery queries and attempts, allowing routine health probes to continue undisturbed.
+  - Manual admin recovery via `POST /operations/line-chat-nickname/sessions/:sessionKey/try-remembered-login` and the operator CLI tool remain fully operational for controlled testing regardless of the flag state.
+
 ## LINE Chat: 20-Character Hard Limit Compaction & HTTP 400 Validation Error Classification (2026-09-05)
 
 - **Hard Boundary Context**:

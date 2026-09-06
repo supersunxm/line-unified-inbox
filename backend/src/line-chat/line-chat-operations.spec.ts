@@ -300,3 +300,54 @@ test("LineChatOperationsService: toggleOaNicknameSync toggles enabled flag", asy
   assert.equal(result.enabled, true);
   assert.equal(toggledData.lineChatNicknameSyncEnabled, true);
 });
+
+test("LineChatOperationsService: tryRememberedLogin works even when auto recovery kill switch is OFF", async () => {
+  const previous = process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+  try {
+    delete process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+
+    let recoveredSessionId: string | null = null;
+    let recoveredTrigger: string | null = null;
+    let recoveredOptions: any = null;
+
+    const mockPrisma: any = {
+      lineChatSession: {
+        findUnique: async (args: any) => {
+          if (args.where.sessionKey === "profile-b") {
+            return { id: "sess-b", sessionKey: "profile-b" };
+          }
+          return null;
+        },
+      },
+    };
+
+    const mockAuthRecovery: any = {
+      recoverSession: async (id: string, trigger: string, opts: any) => {
+        recoveredSessionId = id;
+        recoveredTrigger = trigger;
+        recoveredOptions = opts;
+        return {
+          outcome: "RECOVERED_REMEMBERED_ACCOUNT",
+          sessionId: id,
+          sessionKey: "profile-b",
+          status: "CONNECTED",
+          failureStage: null,
+          error: null,
+          durationMs: 120,
+        };
+      },
+    };
+
+    const ops = new LineChatOperationsService(mockPrisma, mockAuthRecovery);
+    const result = await ops.tryRememberedLogin("profile-b");
+
+    assert.equal(result.outcome, "RECOVERED_REMEMBERED_ACCOUNT");
+    assert.equal(recoveredSessionId, "sess-b");
+    assert.equal(recoveredTrigger, "MANUAL");
+    assert.deepEqual(recoveredOptions, { bypassCooldown: true });
+  } finally {
+    if (previous === undefined) delete process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED;
+    else process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = previous;
+  }
+});
+

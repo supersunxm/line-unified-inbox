@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
   LineChatNicknameSyncJobStatus,
   LineChatSessionHealthStatus,
@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_SESSION_HEALTH_GREEN_FRESHNESS_MS } from "./line-chat-health-freshness";
 import { LineChatOaHealthProbeService } from "./line-chat-oa-health-probe.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
+import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
 
 export const LINE_CHAT_HEALTH_SCHEDULER_TICK_MS = 30_000;
 export const LINE_CHAT_SESSION_HEALTH_TARGET_MS = 12 * 60_000;
@@ -51,6 +52,9 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
     private readonly sessionProbe: LineChatSessionHealthProbeService,
     @Inject(LineChatOaHealthProbeService)
     private readonly oaProbe: LineChatOaHealthProbeService,
+    @Optional()
+    @Inject(LineChatAuthRecoveryService)
+    private readonly authRecovery?: LineChatAuthRecoveryService,
   ) {}
 
   onModuleInit(): void {
@@ -116,6 +120,63 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
           count: nicknameBacklog,
         }));
         return "SKIPPED_NICKNAME";
+      }
+
+      // Prioritize automatic lightweight re-auth recovery for AUTH_REQUIRED sessions at MANAGER_AUTH
+      // Controlled via LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED kill switch (default SAFE/disabled)
+      const autoAuthRecoveryEnabled = process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED === "true";
+      if (this.authRecovery && autoAuthRecoveryEnabled) {
+        const recoveryCandidate = await this.prisma.lineChatSession.findFirst({
+          where: {
+            status: LineChatSessionStatus.ACTIVE,
+            healthStatus: LineChatSessionHealthStatus.AUTH_REQUIRED,
+            healthFailureStage: "MANAGER_AUTH",
+            lineOfficialAccounts: {
+              some: {
+                isActive: true,
+                archivedAt: null,
+                lineChatNicknameSyncEnabled: true,
+                chatBotId: { not: null },
+              },
+            },
+          },
+          orderBy: [
+            { healthLastFailureAt: "asc" },
+            { id: "asc" },
+          ],
+          select: { id: true },
+        });
+
+        if (
+          recoveryCandidate &&
+          !this.authRecovery.isRecoveryInProgress(recoveryCandidate.id) &&
+          this.authRecovery.getCooldownRemainingMs(recoveryCandidate.id) === 0
+        ) {
+          const activeLeases = await this.prisma.lineChatProfileOperationLease.count({
+            where: {
+              lineChatSessionId: recoveryCandidate.id,
+              leaseUntil: { gt: now },
+            },
+          });
+          if (activeLeases === 0) {
+            const recovery = await this.authRecovery.recoverSession(recoveryCandidate.id, "SCHEDULED");
+            const checkedAt = new Date();
+            await this.prisma.lineChatSession.update({
+              where: { id: recoveryCandidate.id },
+              data: {
+                healthNextCheckAt: recovery.outcome === "RECOVERED_REMEMBERED_ACCOUNT"
+                  ? nextScheduledAt("SESSION", recoveryCandidate.id, checkedAt)
+                  : new Date(checkedAt.getTime() + 15 * 60 * 1000),
+              },
+            });
+            this.logger.log(JSON.stringify({
+              event: "line_chat_health_scheduler_auth_recovery_attempted",
+              sessionId: recoveryCandidate.id,
+              outcome: recovery.outcome,
+            }));
+            return "SESSION";
+          }
+        }
       }
 
       const sessionDueBefore = new Date(now.getTime() - LINE_CHAT_SESSION_HEALTH_TARGET_MS);

@@ -48,6 +48,7 @@
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
+    "line-chat:recover-auth": "tsx src/line-chat/line-chat-auth-recovery.cli.ts",
     "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",
     "line-chat:diagnose": "tsx src/line-chat/line-chat-diagnose.cli.ts",
     "line-chat:mapping:discover": "tsx scripts/discover-line-chat-mappings.ts",
