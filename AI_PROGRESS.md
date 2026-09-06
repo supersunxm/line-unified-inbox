@@ -1,31 +1,39 @@
 # AI Progress Log
 
-## 2026-09-06: Automatic Lightweight Re-authentication Recovery for LINE Manager Sessions [PHASE 0-2 VERIFIED]
-- **Current Task**: Prepare, review, merge, deploy, and perform controlled production validation for LINE Chat automatic remembered-account re-auth recovery with explicit production safety gate.
-- **Phase 0 Safety Gate Implemented**:
-  - Kill switch environment variable: `LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED` (default: SAFE / disabled unless strictly `"true"`).
-  - Gated in `LineChatHealthSchedulerService`: scheduler will NOT query recovery candidates or attempt browser recovery when flag is unset or `false`. Routine health probes continue normally.
-  - Manual admin trigger (`POST /operations/line-chat-nickname/sessions/:sessionKey/try-remembered-login`) and CLI tool remain available for controlled operator testing regardless of flag.
-  - Unit tests added: flag OFF skips scheduler recovery; flag ON executes scheduler recovery under eligible conditions; flag OFF preserves manual admin trigger.
-- **Phase 1 Final Review Invariants Confirmed**:
-  - Session-scoped recovery with strict persistent profile isolation (`account-1` vs `profile-b`).
-  - Zero password, OTP, QR, or CAPTCHA automation (all halt with `MANUAL_REAUTH_REQUIRED`).
-  - Ambiguous accounts halt automation.
-  - Hardened selectors: removed generic `button[type="submit"]`; credential inputs prevent remembered-login clicks.
-  - Zero mutation of historical failed nickname jobs.
-  - Profile operation lease acquired and always released in finally.
-  - Cooldown bounds repeated attempts (15-minute window).
-  - Zero PII, secrets, or profile paths exposed in API or logs.
-  - Manual recovery endpoint is `@Roles(UserRole.ADMIN)`.
-- **Phase 2 Verification Results**:
-  - Auth Recovery Unit Tests: 15/15 passed (`src/line-chat/line-chat-auth-recovery.spec.ts`).
-  - LINE Chat Tests: 253/253 passed (`src/line-chat/*.spec.ts`).
-  - Full Backend Tests: 1,755/1,755 passed (`npm --prefix backend test`).
-  - Frontend Tests: 495/495 passed (`npm --prefix frontend test`).
-  - Backend Build: `nest build` (SUCCESS, exit code 0).
-  - Frontend Build: `next build` (SUCCESS, exit code 0).
-  - ESLint: 0 errors, 0 warnings on all changed files (backend and frontend).
-- **Next Action**: Create feature branch `feat/line-chat-auto-auth-recovery`, commit, push, create PR against `main`.
+## 2026-09-06: Automatic Lightweight Re-authentication Recovery for LINE Manager Sessions [DEPLOYED & VERIFIED IN PRODUCTION]
+- **Current Task**: Completed controlled production validation on `profile-b` using the admin "Try remembered login" action, followed by safe activation of automatic scheduler-triggered auth recovery (`LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED=true`).
+- **Phase 0 Safety Gate**:
+  - `LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED` production kill switch implemented and tested (defaults to `false`).
+  - Gated in `LineChatHealthSchedulerService.runTick()`: scheduler does not run browser recovery when disabled; manual admin recovery and routine probes remain active.
+- **Phase 1-4 Verification & Merge**:
+  - Full test suites passed: 15/15 auth recovery specs, 253/253 line-chat specs, 1,755/1,755 backend tests, 495/495 frontend tests.
+  - Builds and ESLint: all clean (0 errors, 0 warnings).
+  - Feature branch: `feat/line-chat-auto-auth-recovery` (commit `d90004b4eafb551279bc63a96e07ebb9e2439132`).
+  - PR #168: `feat(line-chat): automatically recover remembered LINE Manager sessions`.
+  - CI: All 6 checks passed (Android, Backend, CI Gate, Frontend, mobile-adaptive-auth, web-adaptive-auth).
+  - Merge SHA: `c887dd3ff819827c9c6a782b608b20e743cd65b3`.
+- **Phase 5 Initial Deploy with Kill Switch Disabled (`LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED=false`)**:
+  - `line-unified-inbox`: deployment `7a608e3e-3dd9-46aa-bdfc-f890da106182` (SUCCESS).
+  - `line-chat-nickname-worker`: deployment `18cd047c-23b1-4ec1-870a-0950542c5bdd` (SUCCESS).
+  - `frontend`: deployment `6c317bec-5e51-44c0-8cab-067ab3f6112d` (SUCCESS).
+  - Production smoke tests: `/health` (200), `/health/readiness` (200), `/operations/line-chat-health` (200).
+- **Phase 6 Initial Read-Only State**:
+  - `profile-b`: `ACTIVE / AUTH_REQUIRED` at `MANAGER_AUTH`, `consecutiveAuthFailures: 0`, `activeLeases: 0`, jobs: `{"SUCCESS":123,"SUPERSEDED":51,"FAILED":12}`.
+  - `account-1`: `ACTIVE / AUTH_REQUIRED` at `MANAGER_AUTH`, `consecutiveAuthFailures: 0`, `activeLeases: 0`, jobs: `{"SUCCESS":27,"SUPERSEDED":2,"FAILED":9}`.
+- **Phase 7 Controlled Trigger on `profile-b`**:
+  - Triggered via `npm run line-chat:recover-auth -- --session-key profile-b --confirm-read-only --bypass-cooldown`.
+  - Execution outcome: `RECOVERED_REMEMBERED_ACCOUNT` (duration: 9,309 ms).
+  - No credentials, QR, password, OTP, or CAPTCHA required or automated.
+  - Read-only probe verification: `/api/v1/me` (200), mapped OA chats `/api/v2/bots/U7299.../chats?limit=1` (200).
+  - `profile-b` updated to `ACTIVE / CONNECTED`, `failureStage: null`.
+  - Zero historical failed jobs retried.
+- **Phase 10 Automatic Recovery Activated (`LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED=true`)**:
+  - Configured on `line-chat-nickname-worker` (deployment `1541533b-b7c6-473d-8556-177a41521118`, SUCCESS) and `line-unified-inbox` (deployment `fd6cc06e-ed33-45b2-b618-3e0084c2ae50`, SUCCESS).
+  - Allowed normal scheduler cycle: scheduler safely processed degraded `account-1`, detected single remembered LINE account, clicked login, and recovered it to `CONNECTED` in 10,998 ms.
+  - Live incoming job `b79bf2df-8079-4bba-a4df-4464bd4dc3ef` for `profile-b` immediately claimed and updated to `SUCCESS` (HTTP 200).
+  - All profile leases released (`activeLeases: 0`). Zero stuck leases.
+  - Cooldown active; no duplicate recovery launched.
+- **Next Action**: Provide complete final report to the user.
 
 - **Current Task**: Deploy the confirmed LINE Chat nickname $\le 20$-character fix to production, verify session health, preview and execute a controlled retry of the 7 remaining failed Profile B jobs, and observe execution until terminal state.
 - **Root Cause Resolved**: LINE Official Account Chat enforces a hard maximum length of 20 characters on customer nicknames. Nicknames $>20$ characters failed with HTTP 400.
