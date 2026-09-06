@@ -270,6 +270,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byKey(const Key('inbox-search-button')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'latest MESSAGE');
     await tester.pump();
     expect(find.text('Customer A'), findsOneWidget);
@@ -284,6 +286,8 @@ void main() {
     expect(find.text('Customer A'), findsOneWidget);
     expect(find.byTooltip('Clear search'), findsNothing);
 
+    await tester.tap(find.byKey(const Key('inbox-search-back')));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilterChip, 'Completed'));
     await tester.pump();
     expect(find.text('No matching conversations'), findsOneWidget);
