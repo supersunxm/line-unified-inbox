@@ -27,7 +27,7 @@ class ConversationCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
           child: Stack(
             children: [
               hqLayout ? _buildHqLayout(context) : _buildStoreLayout(context),
@@ -130,70 +130,82 @@ class ConversationCard extends StatelessWidget {
           UserAvatar(
             displayName: conversation.customerName,
             imageUrl: conversation.customerPictureUrl,
-            radius: 19,
+            radius: 18,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        conversation.customerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
+                Text(
+                  conversation.customerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
                       ),
+                ),
+                if (showStoreContext)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: StoreBadge(
+                      name: conversation.storeName,
+                      compact: true,
                     ),
-                    if (conversation.sentAt != null) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        formatConversationTimestamp(
-                            conversation.sentAt!.toLocal()),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 1),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 1,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (showStoreContext)
-                      StoreBadge(name: conversation.storeName, compact: true),
-                    _OwnerSummary(
-                        owner: conversation.owner,
-                        ownerTracked: conversation.ownerTracked),
-                    _SalesSummary(summary: conversation.customerSalesSummary),
-                  ],
-                ),
+                  ),
+                _OwnerSummary(
+                    owner: conversation.owner,
+                    ownerTracked: conversation.ownerTracked),
                 const SizedBox(height: 1),
                 ConversationPreview(
                     preview: conversation.preview, showTimestamp: false),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    StatusBadge(
-                        status: conversation.bmReplyStatus, compact: true),
-                    const Spacer(),
-                    const Icon(Icons.chevron_right,
-                        size: 16, color: AppColors.textSecondary),
-                  ],
-                ),
+                _ProductSummary(summary: conversation.customerSalesSummary),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          _ConversationMeta(
+            sentAt: conversation.sentAt,
+            salesSummary: conversation.customerSalesSummary,
+            replyStatus: conversation.bmReplyStatus,
+          ),
+          const SizedBox(width: 2),
+          const Icon(Icons.chevron_right,
+              size: 16, color: AppColors.textSecondary),
+        ],
+      );
+}
+
+class _ConversationMeta extends StatelessWidget {
+  const _ConversationMeta({
+    required this.sentAt,
+    required this.salesSummary,
+    required this.replyStatus,
+  });
+
+  final DateTime? sentAt;
+  final CustomerSalesSummary? salesSummary;
+  final String replyStatus;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (sentAt != null)
+            Text(
+              formatConversationTimestamp(sentAt!.toLocal()),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          const SizedBox(height: 2),
+          _SalesStatusBadge(summary: salesSummary),
+          const SizedBox(height: 2),
+          StatusBadge(status: replyStatus, compact: true),
         ],
       );
 }
@@ -208,7 +220,7 @@ class _OwnerSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     if (owner == null && !ownerTracked) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.only(top: 1),
       child: Row(
         children: [
           const Icon(Icons.person_outline,
@@ -226,6 +238,67 @@ class _OwnerSummary extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SalesStatusBadge extends StatelessWidget {
+  const _SalesStatusBadge({required this.summary});
+
+  final CustomerSalesSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = switch (summary?.status) {
+      'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
+      'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
+      'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
+      _ => null,
+    };
+    if (status == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer.withAlpha(150),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 10.5,
+            ),
+      ),
+    );
+  }
+}
+
+class _ProductSummary extends StatelessWidget {
+  const _ProductSummary({required this.summary});
+
+  final CustomerSalesSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (summary == null || summary!.products.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final first = summary!.products.first;
+    final productLabel =
+        '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 1),
+      child: Text(
+        productLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }
