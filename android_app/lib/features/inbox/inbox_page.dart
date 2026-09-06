@@ -45,6 +45,7 @@ class _InboxPageState extends State<InboxPage> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
+  bool _searchMode = false;
   String? _error;
   StreamSubscription<Map<String, dynamic>>? _eventsSubscription;
   final Set<String> _handledRealtimeMessageIds = {};
@@ -73,9 +74,11 @@ class _InboxPageState extends State<InboxPage> {
   List<ConversationSummary> get _renderItems {
     final query = _searchQuery.trim().toLowerCase();
     final items = _items.where((item) {
+      final ownerName = item.owner?.displayName.toLowerCase() ?? '';
       final matchesQuery = query.isEmpty ||
           item.customerName.toLowerCase().contains(query) ||
           item.storeName.toLowerCase().contains(query) ||
+          ownerName.contains(query) ||
           (item.preview?.toLowerCase().contains(query) ?? false);
       final matchesFilter = switch (_selectedFilter) {
         InboxFilter.all => true,
@@ -100,6 +103,21 @@ class _InboxPageState extends State<InboxPage> {
     if (_searchQuery.isEmpty) return;
     _searchController.clear();
     _updateSearch('');
+  }
+
+  void _openSearch() {
+    if (_searchMode) return;
+    setState(() => _searchMode = true);
+  }
+
+  void _closeSearch() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {
+      _searchMode = false;
+      _searchQuery = '';
+    });
+    _load(reset: true);
   }
 
   Future<void> _loadStoreOptions() async {
@@ -455,33 +473,67 @@ class _InboxPageState extends State<InboxPage> {
   Widget build(BuildContext context) => Scaffold(
         body: SafeArea(
           top: true,
-          child: Column(
-            children: [
-              InboxHeader(
-                conversationCount: _total,
-                onProfile: widget.onProfile,
-                isHq: widget.isHq,
-                scopeName: _hqScopeName,
-                unreadCount: _unreadTotal,
-              ),
-              ConversationOverviewCard(conversations: _items),
-              InboxSearchField(
-                controller: _searchController,
-                query: _searchQuery,
-                onChanged: _updateSearch,
-                onClear: _clearSearch,
-              ),
-              InboxFilterBar(
-                selected: _selectedFilter,
-                hqMode: widget.isHq,
-                onChanged: _selectFilter,
-              ),
-              if (widget.showStoreFilter && _stores.isNotEmpty)
-                _buildStoreFilter(context),
-              Expanded(child: _buildConversationContent(context)),
-            ],
-          ),
+          child: _searchMode
+              ? _buildSearchContent(context)
+              : _buildInboxContent(context),
         ),
+      );
+
+  Widget _buildInboxContent(BuildContext context) => Column(
+        children: [
+          InboxHeader(
+            conversationCount: _total,
+            onProfile: widget.onProfile,
+            isHq: widget.isHq,
+            scopeName: _hqScopeName,
+            unreadCount: _unreadTotal,
+          ),
+          ConversationOverviewCard(conversations: _items),
+          InboxFilterBar(
+            selected: _selectedFilter,
+            hqMode: widget.isHq,
+            onChanged: _selectFilter,
+            onSearch: _openSearch,
+          ),
+          if (widget.showStoreFilter && _stores.isNotEmpty)
+            _buildStoreFilter(context),
+          Expanded(child: _buildConversationContent(context)),
+        ],
+      );
+
+  Widget _buildSearchContent(BuildContext context) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 16, 2),
+            child: Row(
+              children: [
+                IconButton(
+                  key: const Key('inbox-search-back'),
+                  onPressed: _closeSearch,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                Expanded(
+                  child: Text(
+                    appLocalizations(context).searchConversations,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InboxSearchField(
+            controller: _searchController,
+            query: _searchQuery,
+            onChanged: _updateSearch,
+            onClear: _clearSearch,
+            autofocus: true,
+          ),
+          Expanded(child: _buildConversationContent(context)),
+        ],
       );
 
   Widget _buildConversationContent(BuildContext context) {
@@ -542,7 +594,7 @@ class _InboxPageState extends State<InboxPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
         itemCount: renderItems.length + (_loadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        separatorBuilder: (_, __) => const SizedBox(height: 5),
         itemBuilder: (context, index) {
           if (index == renderItems.length) {
             return const Padding(
