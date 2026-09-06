@@ -217,6 +217,30 @@ void main() {
     expect(repository.lastReplyStatusGroup, 'NEED_REPLY');
   });
 
+  testWidgets('HQ inbox opens search as a full-screen mode', (tester) async {
+    final repository = _HqInboxRepository();
+    await tester.pumpWidget(localized(
+      SizedBox(
+        height: 900,
+        child: InboxPage(
+          repository: repository,
+          isHq: true,
+          showStoreFilter: true,
+          onOpen: (_) async {},
+          onProfile: () {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const Key('inbox-search-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byKey(const Key('inbox-search-back')), findsOneWidget);
+  });
+
   testWidgets('HQ preserves store/status/search filters after opening a chat',
       (tester) async {
     final repository = _HqInboxRepository();
@@ -239,6 +263,8 @@ void main() {
     await tester.tap(find.text('OPPO Siam Paragon').last);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilterChip, 'Completed'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inbox-search-button')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Kittiya');
     await tester.pump(const Duration(milliseconds: 350));
