@@ -78,15 +78,18 @@ class InboxFilterBar extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             SizedBox(
-              width: 42,
-              height: 40,
+              width: 36,
+              height: 36,
               child: OutlinedButton(
                 key: const Key('inbox-search-button'),
                 onPressed: onSearch,
                 style: OutlinedButton.styleFrom(
+                  minimumSize: Size.zero,
                   padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                   side: const BorderSide(color: AppColors.border),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -94,7 +97,7 @@ class InboxFilterBar extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.search,
-                  size: 20,
+                  size: 18,
                   color: AppColors.textPrimary,
                 ),
               ),
