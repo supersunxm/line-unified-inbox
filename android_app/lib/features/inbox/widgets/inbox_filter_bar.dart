@@ -9,13 +9,13 @@ class InboxFilterBar extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
-    required this.onSearch,
+    this.onSearch,
     this.hqMode = false,
   });
 
   final InboxFilter selected;
   final ValueChanged<InboxFilter> onChanged;
-  final VoidCallback onSearch;
+  final VoidCallback? onSearch;
   final bool hqMode;
 
   @override
