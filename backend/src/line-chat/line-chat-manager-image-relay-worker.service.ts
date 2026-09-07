@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { LineChatSessionStatus } from "@prisma/client";
-import { chromium, type BrowserContext, type Locator, type Page } from "playwright";
+import { chromium, type BrowserContext, type Locator, type Page, type Response } from "playwright";
 import * as fs from "node:fs";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
@@ -34,6 +34,46 @@ const ATTACHMENT_SURFACE_SELECTORS = [
   '[data-testid*="preview" i]',
   '[data-testid*="image" i]',
 ] as const;
+
+export type LineManagerSendResponseEvidence = {
+  method: string;
+  status: number;
+  hostname: string;
+  pathname: string;
+  botId?: string;
+  lineChatUserId?: string;
+};
+
+export function isSuccessfulLineManagerSendResponse(input: LineManagerSendResponseEvidence): boolean {
+  const method = input.method.toUpperCase();
+  if (!["POST", "PUT", "PATCH"].includes(method)) return false;
+  if (input.status < 200 || input.status >= 300) return false;
+
+  const hostname = input.hostname.toLowerCase();
+  if (hostname !== "chat.line.biz" && hostname !== "manager.line.biz") return false;
+
+  const pathname = input.pathname.toLowerCase();
+  if (!pathname.startsWith("/api/")) return false;
+  if (pathname.includes("/settings") || pathname.endsWith("/me")) return false;
+
+  const sendLikePath = pathname.includes("/chats")
+    || pathname.includes("/messages")
+    || pathname.includes("/send")
+    || pathname.includes("/media")
+    || pathname.includes("/upload")
+    || pathname.includes("/image");
+  if (!sendLikePath) return false;
+
+  const botId = input.botId?.trim().toLowerCase();
+  const lineChatUserId = input.lineChatUserId?.trim().toLowerCase();
+  if (botId && pathname.includes(botId)) return true;
+  if (lineChatUserId && pathname.includes(lineChatUserId)) return true;
+
+  // Some LINE Manager send endpoints identify the active chat in the request body
+  // rather than the URL. During the tightly bounded Send-click window, a 2xx
+  // mutating response on a chat/message/media endpoint is acceptable evidence.
+  return pathname.includes("/chats") || pathname.includes("/messages");
+}
 
 type RelayConversation = {
   id: string;
@@ -285,11 +325,35 @@ export class LineChatManagerImageRelayWorkerService {
       if (!sendButton) {
         throw new ServiceUnavailableException("ไม่พบปุ่มส่งรูปใน LINE OA Manager");
       }
-      await sendButton.click({ timeout: 5_000 });
 
-      const verified = await this.waitForDeliveryVerification(page, fileInput, beforeAttachmentSurfaces);
-      if (!verified) {
-        throw new ServiceUnavailableException("ยังยืนยันการส่งรูปจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกว่าส่งสำเร็จ");
+      const networkEvidence = this.observeSendNetworkResponses(page, input.botId, input.lineChatUserId);
+      try {
+        await sendButton.click({ timeout: 5_000 });
+
+        const verified = await this.waitForDeliveryVerification(
+          page,
+          fileInput,
+          beforeAttachmentSurfaces,
+          () => networkEvidence.success,
+        );
+        if (!verified) {
+          this.logger.warn(JSON.stringify({
+            event: "line_chat_manager_image_delivery_not_verified",
+            storeCode: input.storeCode,
+            observedResponses: networkEvidence.observed.slice(-12),
+          }));
+          throw new ServiceUnavailableException("ยังยืนยันการส่งรูปจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกว่าส่งสำเร็จ");
+        }
+
+        if (networkEvidence.success) {
+          this.logger.log(JSON.stringify({
+            event: "line_chat_manager_image_delivery_verified_network",
+            storeCode: input.storeCode,
+            evidence: networkEvidence.matched,
+          }));
+        }
+      } finally {
+        networkEvidence.dispose();
       }
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
@@ -302,6 +366,61 @@ export class LineChatManagerImageRelayWorkerService {
     } finally {
       if (context) await context.close().catch(() => {});
     }
+  }
+
+  private observeSendNetworkResponses(page: Page, botId: string, lineChatUserId: string): {
+    readonly success: boolean;
+    readonly matched: { method: string; status: number; hostname: string; pathname: string } | null;
+    readonly observed: Array<{ method: string; status: number; hostname: string; pathname: string }>;
+    dispose: () => void;
+  } {
+    let success = false;
+    let matched: { method: string; status: number; hostname: string; pathname: string } | null = null;
+    const observed: Array<{ method: string; status: number; hostname: string; pathname: string }> = [];
+
+    const onResponse = (response: Response) => {
+      try {
+        const request = response.request();
+        const url = new URL(response.url());
+        const evidence = {
+          method: request.method(),
+          status: response.status(),
+          hostname: url.hostname,
+          pathname: url.pathname,
+          botId,
+          lineChatUserId,
+        };
+        const isManagerHost = evidence.hostname === "chat.line.biz" || evidence.hostname === "manager.line.biz";
+        const isMutation = ["POST", "PUT", "PATCH"].includes(evidence.method.toUpperCase());
+        if (isManagerHost && isMutation && observed.length < 24) {
+          observed.push({
+            method: evidence.method,
+            status: evidence.status,
+            hostname: evidence.hostname,
+            pathname: evidence.pathname,
+          });
+        }
+        if (!success && isSuccessfulLineManagerSendResponse(evidence)) {
+          success = true;
+          matched = {
+            method: evidence.method,
+            status: evidence.status,
+            hostname: evidence.hostname,
+            pathname: evidence.pathname,
+          };
+        }
+      } catch {
+        // Ignore malformed URLs and keep verification fail-closed.
+      }
+    };
+
+    page.on("response", onResponse);
+    return {
+      get success() { return success; },
+      get matched() { return matched; },
+      observed,
+      dispose: () => page.off("response", onResponse),
+    };
   }
 
   private async findImageInput(page: Page): Promise<Locator | null> {
@@ -368,10 +487,17 @@ export class LineChatManagerImageRelayWorkerService {
     return false;
   }
 
-  private async waitForDeliveryVerification(page: Page, fileInput: Locator, beforeAttachmentSurfaces: number): Promise<boolean> {
+  private async waitForDeliveryVerification(
+    page: Page,
+    fileInput: Locator,
+    beforeAttachmentSurfaces: number,
+    hasNetworkSuccess: () => boolean = () => false,
+  ): Promise<boolean> {
     const deadline = Date.now() + 12_000;
     let consecutiveClearedPolls = 0;
     while (Date.now() < deadline) {
+      if (hasNetworkSuccess()) return true;
+
       const filesCount = await this.fileCount(fileInput);
       const currentAttachmentSurfaces = await this.countAttachmentSurfaces(page);
       if (filesCount === 0) {
@@ -382,7 +508,7 @@ export class LineChatManagerImageRelayWorkerService {
       }
       await page.waitForTimeout(300);
     }
-    return false;
+    return hasNetworkSuccess();
   }
 
   private async loadConversation(id: string): Promise<RelayConversation | null> {
