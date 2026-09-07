@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertExactTikTokPublicProfile,
+  calculateTikTokGrowth,
   getBangkokMetricDate,
 } from "./tiktok-public-analytics.service";
 import { TikTokPublicProfile } from "./tiktok-public-profile";
@@ -49,4 +50,19 @@ test("incomplete or invalid exact metrics are rejected", () => {
     () => assertExactTikTokPublicProfile(profile({ likesCount: -1 })),
     /incomplete or invalid/u,
   );
+});
+
+test("growth returns absolute and percentage change", () => {
+  assert.deepEqual(calculateTikTokGrowth(13820, 13751), {
+    absolute: 69,
+    percent: 0.5,
+  });
+  assert.deepEqual(calculateTikTokGrowth(100, null), {
+    absolute: null,
+    percent: null,
+  });
+  assert.deepEqual(calculateTikTokGrowth(10, 0), {
+    absolute: 10,
+    percent: null,
+  });
 });
