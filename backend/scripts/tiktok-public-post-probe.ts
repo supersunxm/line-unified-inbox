@@ -131,6 +131,26 @@ function findPostDeep(value: unknown, username: string, expectedId: string): Pos
   return walk(value, 0);
 }
 
+function collectVideoIdsFromText(text: string, username: string, output: string[]): void {
+  const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const patterns = [
+    new RegExp(`(?:https?:\\/\\/www\\.tiktok\\.com)?\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu"),
+    /\\\/video\\\/(\d{10,})/gu,
+    /"id"\s*:\s*"(\d{10,})"/gu,
+    /"aweme_id"\s*:\s*"(\d{10,})"/gu,
+  ];
+
+  const seen = new Set(output);
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const id = match[1];
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      output.push(id);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const username = normalizeUsername(process.argv[2] || "o_centralworld");
   const requestedLimit = Number(process.argv[3] || "3");
@@ -157,8 +177,8 @@ async function main(): Promise<void> {
     await profilePage.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight * 0.6, 1000)));
     await profilePage.waitForTimeout(1_500);
 
-    const urls = await profilePage.evaluate(({ targetUsername, max }) => {
-      const result: string[] = [];
+    const discovery = await profilePage.evaluate(({ targetUsername, scriptIds }) => {
+      const anchorUrls: string[] = [];
       const seen = new Set<string>();
       for (const anchor of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]'))) {
         const href = anchor.href;
@@ -166,12 +186,26 @@ async function main(): Promise<void> {
         const normalized = href.split("?")[0]?.split("#")[0] ?? href;
         if (seen.has(normalized)) continue;
         seen.add(normalized);
-        result.push(normalized);
-        if (result.length >= max) break;
+        anchorUrls.push(normalized);
       }
-      return result;
-    }, { targetUsername: username, max: limit });
 
+      return {
+        anchorUrls,
+        hydrationTexts: scriptIds.map((id) => document.getElementById(id)?.textContent ?? ""),
+        html: document.documentElement.outerHTML.slice(0, 2_000_000),
+      };
+    }, { targetUsername: username, scriptIds: HYDRATION_IDS });
+
+    const videoIds: string[] = [];
+    for (const url of discovery.anchorUrls) {
+      const match = url.match(/\/video\/(\d{10,})/u);
+      if (match?.[1] && !videoIds.includes(match[1])) videoIds.push(match[1]);
+    }
+    for (const text of discovery.hydrationTexts) collectVideoIdsFromText(text, username, videoIds);
+    collectVideoIdsFromText(discovery.html, username, videoIds);
+
+    const ids = videoIds.slice(0, limit);
+    const urls = ids.map((id) => `https://www.tiktok.com/@${username}/video/${id}`);
     const posts: PostMetrics[] = [];
     const diagnostics: Array<{ id: string; url: string; hydrationPayloadCount: number; found: boolean; blocked: boolean }> = [];
 
@@ -210,6 +244,11 @@ async function main(): Promise<void> {
 
     process.stdout.write(`${JSON.stringify({
       username,
+      discovery: {
+        anchorVideoUrls: discovery.anchorUrls.length,
+        hydrationScripts: discovery.hydrationTexts.filter(Boolean).length,
+        candidateVideoIds: videoIds.length,
+      },
       discoveredVideoUrls: urls.length,
       exactPostsFound: posts.length,
       posts,
