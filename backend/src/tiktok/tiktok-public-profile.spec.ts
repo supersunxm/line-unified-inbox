@@ -56,10 +56,12 @@ test("extractTikTokPublicProfile prefers exact statsV2 counts over rounded stats
     likesCount: 99808,
     videoCount: 368,
     profileUrl: "https://www.tiktok.com/@o_centralworld",
+    metricSource: "statsV2",
+    metricPrecision: "EXACT",
   });
 });
 
-test("extractTikTokPublicProfile supports legacy UserModule profile shapes", () => {
+test("extractTikTokPublicProfile marks legacy display stats as rounded", () => {
   const payload = {
     UserModule: {
       users: {
@@ -86,4 +88,6 @@ test("extractTikTokPublicProfile supports legacy UserModule profile shapes", () 
   assert.equal(profile?.followingCount, 50);
   assert.equal(profile?.likesCount, 20000);
   assert.equal(profile?.videoCount, 100);
+  assert.equal(profile?.metricSource, "stats");
+  assert.equal(profile?.metricPrecision, "DISPLAY_ROUNDED");
 });
