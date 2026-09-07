@@ -7,10 +7,8 @@ import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import {
-  LINE_CHAT_PILOT_BOT_ID,
-  LINE_CHAT_PILOT_OA_NAME,
-  LINE_CHAT_PILOT_SESSION_KEY,
-  LINE_CHAT_PILOT_STORE_CODE,
+  getLineChatManagerRelayStoreConfig,
+  isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
 
@@ -33,7 +31,7 @@ const COMPOSER_SELECTORS = [
   'textarea',
 ] as const;
 
-type PilotConversation = {
+type RelayConversation = {
   id: string;
   storeId: string | null;
   lineOfficialAccountId: string;
@@ -65,7 +63,7 @@ type ComposerCandidate = {
   score: number;
 };
 
-function storeCodeOf(conversation: PilotConversation): string {
+function storeCodeOf(conversation: RelayConversation): string {
   return conversation.store?.code?.trim()
     || conversation.store?.storeMaster?.externalStoreId?.trim()
     || "";
@@ -91,9 +89,11 @@ export class LineChatManagerMessageRelayWorkerService {
   }): Promise<ManagerRelayResult> {
     const conversation = await this.loadConversation(input.conversationId.trim());
     if (!conversation) return { handled: false };
-    if (storeCodeOf(conversation) !== LINE_CHAT_PILOT_STORE_CODE) return { handled: false };
 
-    this.assertPilotConfiguration(conversation);
+    const storeCode = storeCodeOf(conversation);
+    if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
+
+    this.assertRelayConfiguration(conversation, storeCode);
     this.pruneCompleted();
 
     const dedupeKey = `${conversation.id}:${input.idempotencyKey}`;
@@ -111,7 +111,7 @@ export class LineChatManagerMessageRelayWorkerService {
       return result.handled ? { ...result, duplicate: true } : result;
     }
 
-    const operation = this.executePilotRelay(conversation, input.text, dedupeKey);
+    const operation = this.executeRelay(conversation, storeCode, input.text, dedupeKey);
     this.inFlight.set(dedupeKey, operation);
     try {
       return await operation;
@@ -120,8 +120,9 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
-  private async executePilotRelay(
-    conversation: PilotConversation,
+  private async executeRelay(
+    conversation: RelayConversation,
+    storeCode: string,
     text: string,
     dedupeKey: string,
   ): Promise<ManagerRelayResult> {
@@ -158,7 +159,7 @@ export class LineChatManagerMessageRelayWorkerService {
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (operationContext) => {
         operationContext.assertOwnership();
-        await this.sendViaManager({ botId, lineChatUserId, profilePath, text });
+        await this.sendViaManager({ storeCode, botId, lineChatUserId, profilePath, text });
         operationContext.assertOwnership();
       },
     );
@@ -169,7 +170,7 @@ export class LineChatManagerMessageRelayWorkerService {
     this.completed.set(dedupeKey, Date.now());
     this.logger.log(JSON.stringify({
       event: "line_chat_manager_message_relay_success",
-      storeCode: LINE_CHAT_PILOT_STORE_CODE,
+      storeCode,
       conversationId: conversation.id,
       lineOfficialAccountId: oa.id,
       sessionKey: session.sessionKey,
@@ -178,7 +179,7 @@ export class LineChatManagerMessageRelayWorkerService {
     return { handled: true, duplicate: false, lineChatUserId };
   }
 
-  private async loadConversation(id: string): Promise<PilotConversation | null> {
+  private async loadConversation(id: string): Promise<RelayConversation | null> {
     return this.prisma.conversation.findUnique({
       where: { id },
       select: {
@@ -213,37 +214,41 @@ export class LineChatManagerMessageRelayWorkerService {
           },
         },
       },
-    }) as Promise<PilotConversation | null>;
+    }) as Promise<RelayConversation | null>;
   }
 
-  private assertPilotConfiguration(conversation: PilotConversation): void {
+  private assertRelayConfiguration(conversation: RelayConversation, storeCode: string): void {
     const oa = conversation.lineOfficialAccount;
     const session = oa.lineChatSession;
+    const config = getLineChatManagerRelayStoreConfig(storeCode);
     if (
-      conversation.storeId !== oa.storeId
+      !config
+      || conversation.storeId !== oa.storeId
       || oa.accountType !== "STORE"
       || !oa.isActive
       || oa.archivedAt !== null
-      || oa.name.trim() !== LINE_CHAT_PILOT_OA_NAME
-      || oa.chatBotId?.trim() !== LINE_CHAT_PILOT_BOT_ID
+      || oa.name.trim() !== config.storeName
+      || !oa.chatBotId?.trim()
+      || ("expectedBotId" in config && oa.chatBotId.trim() !== config.expectedBotId)
       || !session
-      || session.sessionKey.trim() !== LINE_CHAT_PILOT_SESSION_KEY
+      || session.sessionKey.trim() !== config.sessionKey
       || session.status !== LineChatSessionStatus.ACTIVE
     ) {
       throw new ServiceUnavailableException(
-        "การตั้งค่า LINE OA Manager ของร้านชลบุรีไม่พร้อมใช้งาน จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota",
+        `การตั้งค่า LINE OA Manager ของร้าน ${storeCode} ไม่พร้อมใช้งาน จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota`,
       );
     }
   }
 
   private async sendViaManager(input: {
+    storeCode: string;
     botId: string;
     lineChatUserId: string;
     profilePath: string;
     text: string;
   }): Promise<void> {
     if (!fs.existsSync(input.profilePath)) {
-      throw new ServiceUnavailableException("ไม่พบ session ของ LINE OA Manager ร้านชลบุรี กรุณา login ใหม่");
+      throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${input.storeCode} กรุณา login ใหม่`);
     }
 
     let context: BrowserContext | null = null;
@@ -260,18 +265,16 @@ export class LineChatManagerMessageRelayWorkerService {
       const page = context.pages()[0] || await context.newPage();
       const targetUrl = this.sessionService.buildChatRefererUrl(input.botId, input.lineChatUserId);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
-      // LINE OA Manager is a client-rendered application. domcontentloaded can
-      // complete before the selected chat and composer have mounted.
       await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
 
       const auth = await this.sessionService.probeApiAuthentication(context);
       if (auth.authenticated !== "YES") {
-        throw new ServiceUnavailableException("session ของ LINE OA Manager ร้านชลบุรีหมดอายุ กรุณา login ใหม่");
+        throw new ServiceUnavailableException(`session ของ LINE OA Manager ร้าน ${input.storeCode} หมดอายุ กรุณา login ใหม่`);
       }
 
       const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
       if (!composer) {
-        await this.logComposerDiagnostics(page, input.lineChatUserId);
+        await this.logComposerDiagnostics(page, input.storeCode, input.lineChatUserId);
         throw new ServiceUnavailableException("ไม่พบช่องพิมพ์ข้อความใน LINE OA Manager กรุณาตรวจสอบหน้า chat.line.biz");
       }
 
@@ -280,9 +283,6 @@ export class LineChatManagerMessageRelayWorkerService {
       try {
         await composer.fill(input.text);
       } catch {
-        // Some LINE editor builds expose a contenteditable surface that does
-        // not implement the same fill semantics as textarea. Insert text only
-        // after the candidate was positively identified as the lower composer.
         await composer.click();
         await page.keyboard.insertText(input.text);
       }
@@ -296,7 +296,7 @@ export class LineChatManagerMessageRelayWorkerService {
       if (error instanceof ServiceUnavailableException) throw error;
       this.logger.error(JSON.stringify({
         event: "line_chat_manager_message_relay_failed",
-        storeCode: LINE_CHAT_PILOT_STORE_CODE,
+        storeCode: input.storeCode,
         error: error instanceof Error ? error.message : String(error),
       }));
       throw new ServiceUnavailableException("ส่งผ่าน LINE OA Manager ไม่สำเร็จ กรุณาลองอีกครั้ง");
@@ -342,9 +342,6 @@ export class LineChatManagerMessageRelayWorkerService {
             if (/send|message|enter|ส่ง/u.test(hint)) score += 5;
             if (/search|ค้นหา/u.test(hint)) score -= 10;
 
-            // Avoid ever treating an unrelated top-of-page search/editor as a
-            // send box. A real composer must have either lower-pane geometry
-            // or strong send/message semantics plus an editable surface.
             const strongSemantic = /send|message|enter|ส่ง/u.test(hint)
               && (metadata.tag === "textarea" || metadata.role === "textbox" || metadata.contentEditable === "true");
             const lowerPane = Boolean(box && box.y + box.height / 2 >= viewportHeight * 0.55);
@@ -390,7 +387,7 @@ export class LineChatManagerMessageRelayWorkerService {
     return false;
   }
 
-  private async logComposerDiagnostics(page: Page, lineChatUserId: string): Promise<void> {
+  private async logComposerDiagnostics(page: Page, storeCode: string, lineChatUserId: string): Promise<void> {
     let pathname = "unknown";
     try { pathname = new URL(page.url()).pathname; } catch { /* safe fallback */ }
     const frameCounts = await Promise.all(page.frames().map(async (frame) => ({
@@ -401,7 +398,7 @@ export class LineChatManagerMessageRelayWorkerService {
     })));
     this.logger.warn(JSON.stringify({
       event: "line_chat_manager_composer_not_found",
-      storeCode: LINE_CHAT_PILOT_STORE_CODE,
+      storeCode,
       pathname,
       frameCount: page.frames().length,
       frameCounts,
