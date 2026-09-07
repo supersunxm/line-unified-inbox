@@ -1,6 +1,8 @@
 import { chromium } from "playwright";
 
 export type TikTokPublicProbeStatus = "OK" | "BLOCKED_OR_CHANGED";
+export type TikTokPublicMetricSource = "statsV2" | "stats";
+export type TikTokPublicMetricPrecision = "EXACT" | "DISPLAY_ROUNDED";
 
 export interface TikTokPublicProfile {
   username: string;
@@ -13,6 +15,8 @@ export interface TikTokPublicProfile {
   likesCount: number | null;
   videoCount: number | null;
   profileUrl: string;
+  metricSource: TikTokPublicMetricSource;
+  metricPrecision: TikTokPublicMetricPrecision;
 }
 
 export interface TikTokPublicProbeResult {
@@ -124,6 +128,7 @@ function buildProfile(
   user: JsonRecord,
   stats: JsonRecord,
   targetUsername: string,
+  metricSource: TikTokPublicMetricSource,
 ): TikTokPublicProfile | null {
   const uniqueId = firstString(user, ["uniqueId", "unique_id", "username"]);
   if (uniqueId && normalizeUsernameLoose(uniqueId) !== targetUsername) return null;
@@ -155,6 +160,8 @@ function buildProfile(
     likesCount,
     videoCount,
     profileUrl: `https://www.tiktok.com/@${resolvedUsername}`,
+    metricSource,
+    metricPrecision: metricSource === "statsV2" ? "EXACT" : "DISPLAY_ROUNDED",
   };
 }
 
@@ -162,25 +169,26 @@ function findProfileInRecord(record: JsonRecord, targetUsername: string): TikTok
   const userInfo = isRecord(record.userInfo) ? record.userInfo : null;
   if (userInfo) {
     const user = isRecord(userInfo.user) ? userInfo.user : null;
-    const stats = isRecord(userInfo.statsV2)
-      ? userInfo.statsV2
-      : isRecord(userInfo.stats)
-        ? userInfo.stats
-        : null;
+    const exactStats = isRecord(userInfo.statsV2) ? userInfo.statsV2 : null;
+    const displayStats = isRecord(userInfo.stats) ? userInfo.stats : null;
+    const stats = exactStats ?? displayStats;
     if (user && stats) {
-      const profile = buildProfile(user, stats, targetUsername);
+      const profile = buildProfile(user, stats, targetUsername, exactStats ? "statsV2" : "stats");
       if (profile) return profile;
     }
   }
 
   const directUser = isRecord(record.user) ? record.user : null;
-  const directStats = isRecord(record.statsV2)
-    ? record.statsV2
-    : isRecord(record.stats)
-      ? record.stats
-      : null;
+  const exactDirectStats = isRecord(record.statsV2) ? record.statsV2 : null;
+  const displayDirectStats = isRecord(record.stats) ? record.stats : null;
+  const directStats = exactDirectStats ?? displayDirectStats;
   if (directUser && directStats) {
-    const profile = buildProfile(directUser, directStats, targetUsername);
+    const profile = buildProfile(
+      directUser,
+      directStats,
+      targetUsername,
+      exactDirectStats ? "statsV2" : "stats",
+    );
     if (profile) return profile;
   }
 
@@ -193,7 +201,7 @@ function findProfileInRecord(record: JsonRecord, targetUsername: string): TikTok
       if (username && normalizeUsernameLoose(username) !== targetUsername) continue;
       const statsValue = statsMap[key];
       if (!isRecord(statsValue)) continue;
-      const profile = buildProfile(userValue, statsValue, targetUsername);
+      const profile = buildProfile(userValue, statsValue, targetUsername, "stats");
       if (profile) return profile;
     }
   }
