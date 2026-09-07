@@ -16,7 +16,7 @@ test("normalizeTikTokPublicUsername accepts username, @username, and profile URL
   assert.throws(() => normalizeTikTokPublicUsername("bad username"), /Invalid/u);
 });
 
-test("extractTikTokPublicData reads universal hydration userInfo and recent posts", () => {
+test("extractTikTokPublicData prefers exact statsV2 counts and reads recent posts", () => {
   const payload = {
     __DEFAULT_SCOPE__: {
       "webapp.user-detail": {
@@ -29,10 +29,16 @@ test("extractTikTokPublicData reads universal hydration userInfo and recent post
             verified: false,
           },
           stats: {
-            followerCount: 13751,
+            followerCount: 13800,
             followingCount: 290,
             heartCount: 99800,
-            videoCount: 368,
+            videoCount: 365,
+          },
+          statsV2: {
+            followerCount: "13751",
+            followingCount: "290",
+            heartCount: "99808",
+            videoCount: "368",
           },
         },
       },
@@ -66,7 +72,7 @@ test("extractTikTokPublicData reads universal hydration userInfo and recent post
     isVerified: false,
     followerCount: 13751,
     followingCount: 290,
-    likesCount: 99800,
+    likesCount: 99808,
     videoCount: 368,
     profileUrl: "https://www.tiktok.com/@o_centralworld",
   });
