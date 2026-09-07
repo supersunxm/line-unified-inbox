@@ -180,10 +180,10 @@ function findProfileInRecord(record: JsonRecord, targetUsername: string): TikTok
   const userInfo = isRecord(record.userInfo) ? record.userInfo : null;
   if (userInfo) {
     const user = isRecord(userInfo.user) ? userInfo.user : null;
-    const stats = isRecord(userInfo.stats)
-      ? userInfo.stats
-      : isRecord(userInfo.statsV2)
-        ? userInfo.statsV2
+    const stats = isRecord(userInfo.statsV2)
+      ? userInfo.statsV2
+      : isRecord(userInfo.stats)
+        ? userInfo.stats
         : null;
     if (user && stats) {
       const profile = buildProfile(user, stats, targetUsername);
@@ -192,10 +192,10 @@ function findProfileInRecord(record: JsonRecord, targetUsername: string): TikTok
   }
 
   const directUser = isRecord(record.user) ? record.user : null;
-  const directStats = isRecord(record.stats)
-    ? record.stats
-    : isRecord(record.statsV2)
-      ? record.statsV2
+  const directStats = isRecord(record.statsV2)
+    ? record.statsV2
+    : isRecord(record.stats)
+      ? record.stats
       : null;
   if (directUser && directStats) {
     const profile = buildProfile(directUser, directStats, targetUsername);
