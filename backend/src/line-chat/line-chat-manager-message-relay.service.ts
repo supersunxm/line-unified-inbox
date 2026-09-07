@@ -45,16 +45,40 @@ export class LineChatManagerMessageRelayService {
 
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  /**
-   * The API service never launches Chromium. Eligible stores are forwarded over
-   * Railway private networking to the dedicated line-chat worker that owns the
-   * persistent LINE OA Manager profiles. Stores outside the rollout allowlist
-   * return handled=false and keep the existing Messaging API path unchanged.
-   */
   public async relayText(input: {
     conversationId?: string;
     text: string;
     idempotencyKey: string;
+  }): Promise<ManagerRelayResult> {
+    return this.relay({
+      conversationId: input.conversationId,
+      idempotencyKey: input.idempotencyKey,
+      endpoint: "/internal/line-chat/send-text",
+      payload: { text: input.text },
+      mediaType: "TEXT",
+    });
+  }
+
+  public async relayImage(input: {
+    conversationId?: string;
+    imageUrl: string;
+    idempotencyKey: string;
+  }): Promise<ManagerRelayResult> {
+    return this.relay({
+      conversationId: input.conversationId,
+      idempotencyKey: input.idempotencyKey,
+      endpoint: "/internal/line-chat/send-image",
+      payload: { imageUrl: input.imageUrl },
+      mediaType: "IMAGE",
+    });
+  }
+
+  private async relay(input: {
+    conversationId?: string;
+    idempotencyKey: string;
+    endpoint: string;
+    payload: Record<string, string>;
+    mediaType: "TEXT" | "IMAGE";
   }): Promise<ManagerRelayResult> {
     const conversationId = input.conversationId?.trim();
     if (!conversationId) return { handled: false };
@@ -71,14 +95,14 @@ export class LineChatManagerMessageRelayService {
     const secret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
     if (!workerUrl || !secret) {
       throw new ServiceUnavailableException(
-        "ระบบส่งผ่าน LINE OA Manager ยังไม่ได้เชื่อมต่อกับ worker จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota",
+        `ระบบส่ง${input.mediaType === "IMAGE" ? "รูป" : "ข้อความ"}ผ่าน LINE OA Manager ยังไม่ได้เชื่อมต่อกับ worker จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota`,
       );
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
+    const timeout = setTimeout(() => controller.abort(), input.mediaType === "IMAGE" ? 60_000 : 45_000);
     try {
-      const response = await fetch(`${workerUrl}/internal/line-chat/send-text`, {
+      const response = await fetch(`${workerUrl}${input.endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,8 +110,8 @@ export class LineChatManagerMessageRelayService {
         },
         body: JSON.stringify({
           conversationId,
-          text: input.text,
           idempotencyKey: input.idempotencyKey,
+          ...input.payload,
         }),
         signal: controller.signal,
       });
@@ -113,7 +137,9 @@ export class LineChatManagerMessageRelayService {
         && body.lineChatUserId.trim()
       ) {
         this.logger.log(JSON.stringify({
-          event: "line_chat_manager_relay_api_success",
+          event: input.mediaType === "IMAGE"
+            ? "line_chat_manager_image_relay_api_success"
+            : "line_chat_manager_relay_api_success",
           conversationId,
           storeCode,
           lineOfficialAccountId: conversation.lineOfficialAccount.id,
@@ -128,7 +154,9 @@ export class LineChatManagerMessageRelayService {
       }
 
       this.logger.warn(JSON.stringify({
-        event: "line_chat_manager_relay_worker_rejected",
+        event: input.mediaType === "IMAGE"
+          ? "line_chat_manager_image_relay_worker_rejected"
+          : "line_chat_manager_relay_worker_rejected",
         conversationId,
         storeCode,
         statusCode: response.status,
@@ -137,13 +165,15 @@ export class LineChatManagerMessageRelayService {
       throw new ServiceUnavailableException(
         typeof body.error === "string" && body.error.trim()
           ? body.error.trim()
-          : "ส่งผ่าน LINE OA Manager ไม่สำเร็จ กรุณาลองอีกครั้ง",
+          : `ส่ง${input.mediaType === "IMAGE" ? "รูป" : "ข้อความ"}ผ่าน LINE OA Manager ไม่สำเร็จ กรุณาลองอีกครั้ง`,
       );
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
       const aborted = error instanceof Error && error.name === "AbortError";
       this.logger.error(JSON.stringify({
-        event: "line_chat_manager_relay_worker_unavailable",
+        event: input.mediaType === "IMAGE"
+          ? "line_chat_manager_image_relay_worker_unavailable"
+          : "line_chat_manager_relay_worker_unavailable",
         conversationId,
         storeCode,
         aborted,
@@ -151,7 +181,7 @@ export class LineChatManagerMessageRelayService {
       }));
       throw new ServiceUnavailableException(
         aborted
-          ? "LINE OA Manager ใช้เวลาส่งนานเกินกำหนด กรุณาลองอีกครั้ง"
+          ? `LINE OA Manager ใช้เวลาส่ง${input.mediaType === "IMAGE" ? "รูป" : "ข้อความ"}นานเกินกำหนด กรุณาลองอีกครั้ง`
           : "เชื่อมต่อ LINE OA Manager worker ไม่สำเร็จ กรุณาลองอีกครั้ง",
       );
     } finally {
