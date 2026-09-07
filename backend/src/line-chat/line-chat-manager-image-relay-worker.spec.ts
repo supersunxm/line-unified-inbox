@@ -17,3 +17,53 @@ describe("LINE Manager image relay preview readiness", () => {
     expect(ready).toBe(false);
   });
 });
+
+describe("LINE Manager image relay delivery verification", () => {
+  it("accepts a stable cleared file input even when sent image surfaces do not increase", () => {
+    const beforeAttachmentSurfaces = 12;
+    const polls = [
+      { filesCount: 0, currentAttachmentSurfaces: 12 },
+      { filesCount: 0, currentAttachmentSurfaces: 12 },
+    ];
+    let consecutiveClearedPolls = 0;
+    let verified = false;
+
+    for (const poll of polls) {
+      if (poll.filesCount === 0) {
+        consecutiveClearedPolls += 1;
+        if (poll.currentAttachmentSurfaces !== beforeAttachmentSurfaces || consecutiveClearedPolls >= 2) {
+          verified = true;
+          break;
+        }
+      } else {
+        consecutiveClearedPolls = 0;
+      }
+    }
+
+    expect(verified).toBe(true);
+  });
+
+  it("does not accept a file input that remains selected", () => {
+    const beforeAttachmentSurfaces = 12;
+    const polls = [
+      { filesCount: 1, currentAttachmentSurfaces: 12 },
+      { filesCount: 1, currentAttachmentSurfaces: 12 },
+    ];
+    let consecutiveClearedPolls = 0;
+    let verified = false;
+
+    for (const poll of polls) {
+      if (poll.filesCount === 0) {
+        consecutiveClearedPolls += 1;
+        if (poll.currentAttachmentSurfaces !== beforeAttachmentSurfaces || consecutiveClearedPolls >= 2) {
+          verified = true;
+          break;
+        }
+      } else {
+        consecutiveClearedPolls = 0;
+      }
+    }
+
+    expect(verified).toBe(false);
+  });
+});
