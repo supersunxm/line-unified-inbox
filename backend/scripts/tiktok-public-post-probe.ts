@@ -95,27 +95,16 @@ function looksLikePostRecord(record: JsonRecord, username: string): boolean {
 
   const stats = statsRecord(record);
   if (!stats) return false;
-  const hasPostStat = [
-    "playCount",
-    "play_count",
-    "viewCount",
-    "view_count",
-    "diggCount",
-    "digg_count",
-    "likeCount",
-    "like_count",
-    "commentCount",
-    "comment_count",
-    "shareCount",
-    "share_count",
+  return [
+    "playCount", "play_count", "viewCount", "view_count",
+    "diggCount", "digg_count", "likeCount", "like_count",
+    "commentCount", "comment_count", "shareCount", "share_count",
   ].some((key) => stats[key] !== undefined);
-
-  return hasPostStat;
 }
 
-function postFromRecord(record: JsonRecord, username: string, expectedId: string): PostMetrics | null {
+function postFromRecord(record: JsonRecord, username: string, expectedId?: string): PostMetrics | null {
   const id = firstString(record, ["id", "aweme_id", "itemId"]);
-  if (id !== expectedId) return null;
+  if (!id || (expectedId && id !== expectedId)) return null;
 
   const author = authorUsername(record);
   if (author && author.toLowerCase() !== username) return null;
@@ -136,17 +125,17 @@ function postFromRecord(record: JsonRecord, username: string, expectedId: string
   };
 }
 
-function findPostDeep(value: unknown, username: string, expectedId: string): PostMetrics | null {
+function findSecUidDeep(value: unknown, username: string): string | null {
   const seen = new WeakSet<object>();
-
-  const walk = (current: unknown, depth: number): PostMetrics | null => {
-    if (depth > 28 || current === null || typeof current !== "object") return null;
+  const walk = (current: unknown, depth: number): string | null => {
+    if (depth > 25 || current === null || typeof current !== "object") return null;
     if (seen.has(current)) return null;
     seen.add(current);
 
     if (isRecord(current)) {
-      const direct = postFromRecord(current, username, expectedId);
-      if (direct) return direct;
+      const uniqueId = firstString(current, ["uniqueId", "unique_id", "username"]);
+      const secUid = firstString(current, ["secUid", "sec_uid"]);
+      if (secUid && (!uniqueId || uniqueId.toLowerCase() === username)) return secUid;
       for (const nested of Object.values(current)) {
         const found = walk(nested, depth + 1);
         if (found) return found;
@@ -154,11 +143,9 @@ function findPostDeep(value: unknown, username: string, expectedId: string): Pos
       return null;
     }
 
-    if (Array.isArray(current)) {
-      for (const nested of current) {
-        const found = walk(nested, depth + 1);
-        if (found) return found;
-      }
+    for (const nested of current as unknown[]) {
+      const found = walk(nested, depth + 1);
+      if (found) return found;
     }
     return null;
   };
@@ -166,63 +153,31 @@ function findPostDeep(value: unknown, username: string, expectedId: string): Pos
   return walk(value, 0);
 }
 
-function collectStructuredPostIds(value: unknown, username: string, output: string[]): void {
-  const seenObjects = new WeakSet<object>();
-  const seenIds = new Set(output);
-
+function collectPostsDeep(value: unknown, username: string, output: Map<string, PostMetrics>): void {
+  const seen = new WeakSet<object>();
   const walk = (current: unknown, depth: number): void => {
     if (depth > 28 || current === null || typeof current !== "object") return;
-    if (seenObjects.has(current)) return;
-    seenObjects.add(current);
+    if (seen.has(current)) return;
+    seen.add(current);
 
     if (isRecord(current)) {
       if (looksLikePostRecord(current, username)) {
-        const id = firstString(current, ["id", "aweme_id", "itemId"]);
-        if (id && !seenIds.has(id)) {
-          seenIds.add(id);
-          output.push(id);
-        }
+        const post = postFromRecord(current, username);
+        if (post && !output.has(post.id)) output.set(post.id, post);
       }
       for (const nested of Object.values(current)) walk(nested, depth + 1);
       return;
     }
 
-    if (Array.isArray(current)) {
-      for (const nested of current) walk(nested, depth + 1);
-    }
+    for (const nested of current as unknown[]) walk(nested, depth + 1);
   };
-
   walk(value, 0);
-}
-
-function collectVideoIdsFromText(text: string, username: string, output: string[]): void {
-  const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const patterns = [
-    new RegExp(`(?:https?:\\/\\/www\\.tiktok\\.com)?\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu"),
-    new RegExp(`\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu"),
-  ];
-
-  const seen = new Set(output);
-  for (const pattern of patterns) {
-    for (const match of text.matchAll(pattern)) {
-      const id = match[1];
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      output.push(id);
-    }
-  }
-}
-
-function collectObservedPostIds(value: unknown, username: string): string[] {
-  const ids: string[] = [];
-  collectStructuredPostIds(value, username, ids);
-  return ids.slice(0, 10);
 }
 
 async function main(): Promise<void> {
   const username = normalizeUsername(process.argv[2] || "o_centralworld");
   const requestedLimit = Number(process.argv[3] || "3");
-  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 5) : 3;
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 10) : 3;
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -241,112 +196,83 @@ async function main(): Promise<void> {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
-    await profilePage.waitForTimeout(2_500);
-    await profilePage.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight * 0.6, 1000)));
-    await profilePage.waitForTimeout(1_500);
+    await profilePage.waitForTimeout(2_000);
 
-    const discovery = await profilePage.evaluate(({ targetUsername, scriptIds }) => {
-      const anchorUrls: string[] = [];
-      const seen = new Set<string>();
-      for (const anchor of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/video/"]'))) {
-        const href = anchor.href;
-        if (!href.includes(`/@${targetUsername}/video/`)) continue;
-        const normalized = href.split("?")[0]?.split("#")[0] ?? href;
-        if (seen.has(normalized)) continue;
-        seen.add(normalized);
-        anchorUrls.push(normalized);
-      }
+    const hydrationTexts = await profilePage.evaluate((scriptIds) =>
+      scriptIds.map((id) => document.getElementById(id)?.textContent ?? ""), HYDRATION_IDS);
+    const hydrationPayloads = hydrationTexts.map(parseJson).filter((value) => value !== null);
 
-      return {
-        anchorUrls,
-        hydrationTexts: scriptIds.map((id) => document.getElementById(id)?.textContent ?? ""),
-        html: document.documentElement.outerHTML.slice(0, 2_000_000),
-      };
-    }, { targetUsername: username, scriptIds: HYDRATION_IDS });
+    let secUid: string | null = null;
+    for (const payload of hydrationPayloads) secUid ??= findSecUidDeep(payload, username);
 
-    const structuredIds: string[] = [];
-    const urlIds: string[] = [];
-    for (const text of discovery.hydrationTexts) {
-      const payload = parseJson(text);
-      if (payload !== null) collectStructuredPostIds(payload, username, structuredIds);
-      collectVideoIdsFromText(text, username, urlIds);
-    }
-    for (const url of discovery.anchorUrls) {
-      const match = url.match(/\/video\/(\d{10,})/u);
-      if (match?.[1] && !urlIds.includes(match[1])) urlIds.push(match[1]);
-    }
-    collectVideoIdsFromText(discovery.html, username, urlIds);
+    let apiStatus: number | null = null;
+    let apiContentType: string | null = null;
+    let apiPayload: unknown = null;
+    let apiError: string | null = null;
 
-    const videoIds = [...structuredIds, ...urlIds.filter((id) => !structuredIds.includes(id))];
-    const ids = videoIds.slice(0, limit);
-    const urls = ids.map((id) => `https://www.tiktok.com/@${username}/video/${id}`);
-    const posts: PostMetrics[] = [];
-    const diagnostics: Array<{
-      id: string;
-      url: string;
-      hydrationPayloadCount: number;
-      found: boolean;
-      blocked: boolean;
-      observedPostIds: string[];
-    }> = [];
-
-    for (const url of urls) {
-      const idMatch = url.match(/\/video\/(\d+)/u);
-      const id = idMatch?.[1];
-      if (!id) continue;
-
-      const page = await context.newPage();
-      try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        await page.waitForTimeout(2_000);
-
-        const snapshot = await page.evaluate((scriptIds) => ({
-          scripts: scriptIds.map((scriptId) => document.getElementById(scriptId)?.textContent ?? null),
-          bodyText: (document.body?.innerText ?? "").slice(0, 4_000),
-        }), HYDRATION_IDS);
-
-        const payloads = snapshot.scripts.map(parseJson).filter((payload) => payload !== null);
-        let found: PostMetrics | null = null;
-        const observedPostIds: string[] = [];
-        for (const payload of payloads) {
-          found ??= findPostDeep(payload, username, id);
-          for (const observedId of collectObservedPostIds(payload, username)) {
-            if (!observedPostIds.includes(observedId)) observedPostIds.push(observedId);
-          }
-        }
-        if (found) posts.push(found);
-
-        const bodyLower = snapshot.bodyText.toLowerCase();
-        const blocked = ["captcha", "verify to continue", "security verification", "access denied"]
-          .some((marker) => bodyLower.includes(marker));
-        diagnostics.push({
-          id,
-          url,
-          hydrationPayloadCount: payloads.length,
-          found: Boolean(found),
-          blocked,
-          observedPostIds: observedPostIds.slice(0, 10),
+    if (secUid) {
+      const apiResult = await profilePage.evaluate(async ({ userSecUid, count }) => {
+        const params = new URLSearchParams({
+          aid: "1988",
+          count: String(count),
+          cursor: "0",
+          secUid: userSecUid,
         });
-      } catch {
-        diagnostics.push({ id, url, hydrationPayloadCount: 0, found: false, blocked: false, observedPostIds: [] });
-      } finally {
-        await page.close();
-      }
+        try {
+          const response = await fetch(`/api/post/item_list/?${params.toString()}`, {
+            credentials: "include",
+            headers: { accept: "application/json, text/plain, */*" },
+          });
+          const text = await response.text();
+          return {
+            ok: response.ok,
+            status: response.status,
+            contentType: response.headers.get("content-type"),
+            text: text.slice(0, 2_000_000),
+            error: null as string | null,
+          };
+        } catch (error: unknown) {
+          return {
+            ok: false,
+            status: 0,
+            contentType: null,
+            text: "",
+            error: error instanceof Error ? error.message : "fetch failed",
+          };
+        }
+      }, { userSecUid: secUid, count: Math.max(limit, 10) });
+
+      apiStatus = apiResult.status;
+      apiContentType = apiResult.contentType;
+      apiError = apiResult.error;
+      apiPayload = parseJson(apiResult.text);
     }
+
+    const postsById = new Map<string, PostMetrics>();
+    for (const payload of hydrationPayloads) collectPostsDeep(payload, username, postsById);
+    if (apiPayload !== null) collectPostsDeep(apiPayload, username, postsById);
+
+    const posts = Array.from(postsById.values())
+      .sort((a, b) => {
+        const left = a.createTime ? Date.parse(a.createTime) : 0;
+        const right = b.createTime ? Date.parse(b.createTime) : 0;
+        return right - left;
+      })
+      .slice(0, limit);
 
     process.stdout.write(`${JSON.stringify({
       username,
-      discovery: {
-        anchorVideoUrls: discovery.anchorUrls.length,
-        hydrationScripts: discovery.hydrationTexts.filter(Boolean).length,
-        structuredPostIds: structuredIds.length,
-        urlDerivedVideoIds: urlIds.length,
-        candidateVideoIds: videoIds.length,
+      profileHydrationPayloadCount: hydrationPayloads.length,
+      secUidFound: Boolean(secUid),
+      postListApi: {
+        attempted: Boolean(secUid),
+        status: apiStatus,
+        contentType: apiContentType,
+        parsedJson: apiPayload !== null,
+        error: apiError,
       },
-      discoveredVideoUrls: urls.length,
       exactPostsFound: posts.length,
       posts,
-      diagnostics,
       fetchedAt: new Date().toISOString(),
     }, null, 2)}\n`);
 
