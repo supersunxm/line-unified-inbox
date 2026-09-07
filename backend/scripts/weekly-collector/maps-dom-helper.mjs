@@ -16,7 +16,7 @@ export async function evaluatePlaceStatus(page) {
     const hasLimitedView =
       text.includes("มุมมองแบบจำกัด") ||
       text.includes("limited view") ||
-      Boolean(document.querySelector(".kyuRq, [aria-label*='มุมมองแบบจำกัด'], [aria-label*='limited view']"));
+      Boolean(document.querySelector("[aria-label*='มุมมองแบบจำกัด'], [aria-label*='limited view']"));
     const hasSignInPrompt =
       (text.includes("ลงชื่อเข้าใช้") || text.includes("Sign in")) && hasLimitedView;
 

@@ -258,15 +258,19 @@ export async function collectStoreContinuous(page, store, options = {}) {
         newQualifiedReviews++;
       }
 
-      await prisma.googleReviewFingerprint.create({
-        data: {
-          storeCode,
-          fingerprint: fp,
-          reviewDate: reviewDate || todayBangkok,
-          isQualified,
-          weekNumber: 2,
-        },
-      });
+      if (!options.dryRun) {
+        await prisma.googleReviewFingerprint.create({
+          data: {
+            storeCode,
+            fingerprint: fp,
+            reviewDate: reviewDate || todayBangkok,
+            isQualified,
+            weekNumber: 2,
+          },
+        });
+      } else {
+        console.log(`  [DRY RUN] Would record fingerprint ${fp.slice(0, 10)}... (qualified: ${isQualified})`);
+      }
 
       currentCardIndex++;
     }
