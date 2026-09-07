@@ -89,8 +89,8 @@ export async function openReviewsPane(page) {
     };
   }
 
-  // If cards or feed are already visible and active
-  if (status.cardsCount > 0 || (status.reviewTabSelected && status.hasFeed)) {
+  // If review tab is already selected and feed is visible
+  if (status.reviewTabSelected && (status.cardsCount > 0 || status.hasFeed)) {
     return { success: true, reason: "ALREADY_OPEN", status };
   }
 
@@ -114,6 +114,11 @@ export async function openReviewsPane(page) {
     if (postStatus.cardsCount > 0 || postStatus.hasFeed || postStatus.reviewTabSelected) {
       return { success: true, reason: "CLICKED_REVIEW_TAB", status: postStatus };
     }
+  }
+
+  // If cards or feed are already visible and active
+  if (status.cardsCount > 0 || status.hasFeed) {
+    return { success: true, reason: "ALREADY_OPEN", status };
   }
 
   // Strategy 2: Click review button or star rating trigger
