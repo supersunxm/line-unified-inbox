@@ -6,13 +6,16 @@ import {
   isTikTokDemoGrowthEnabled,
 } from "../src/app/tiktok/dashboard/tiktok-demo-growth.ts";
 
-test("Overview page.tsx concurrently fetches historical metrics and passes to TikTokOverviewView", () => {
+test("Overview page.tsx loads public analytics overview and store metrics concurrently", () => {
   const pageCode = readFileSync(new URL("../src/app/tiktok/page.tsx", import.meta.url), "utf8");
-  assert.match(pageCode, /fetchTikTokHistoricalMetricsFromBackend/);
+  assert.match(pageCode, /fetchTikTokPublicOverview/);
+  assert.match(pageCode, /fetchTikTokPublicStores/);
   assert.match(pageCode, /Promise\.all\(\[/);
-  assert.match(pageCode, /isTikTokDemoGrowthEnabled\(\)/);
-  assert.match(pageCode, /getTikTokDemoGrowthMetrics\(/);
-  assert.match(pageCode, /historicalMetrics=\{historicalMetrics\}/);
+  assert.match(pageCode, /TikTokPublicDashboard/);
+  assert.match(pageCode, /overview=\{overview\}/);
+  assert.match(pageCode, /stores=\{stores\}/);
+  assert.doesNotMatch(pageCode, /fetchTikTokHistoricalMetricsFromBackend/);
+  assert.doesNotMatch(pageCode, /isTikTokDemoGrowthEnabled\(\)/);
 });
 
 test("TikTokOverviewView implements locale-aware net follower growth UI for positive, negative, zero, and missing deltas", () => {
