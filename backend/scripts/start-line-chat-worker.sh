@@ -15,6 +15,24 @@ if [ "${LINE_CHAT_OA_FLEET_DISCOVERY_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_fleet_oa_network_discovery_bootstrap_finished\",\"exitCode\":${DISCOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_FLEET_MAPPING_ENABLED:-false}" = "true" ]; then
+  MAPPING_SESSIONS="${LINE_CHAT_FLEET_MAPPING_SESSIONS:-profile-b,account-1}"
+  MAPPING_APPLY="${LINE_CHAT_FLEET_MAPPING_APPLY:-false}"
+
+  echo "{\"event\":\"line_chat_fleet_exact_mapping_bootstrap_started\",\"sessions\":\"${MAPPING_SESSIONS}\",\"apply\":\"${MAPPING_APPLY}\"}"
+
+  set +e
+  if [ "$MAPPING_APPLY" = "true" ]; then
+    npx tsx scripts/line-chat-fleet-exact-mapping-apply.ts --sessions="$MAPPING_SESSIONS" --apply
+  else
+    npx tsx scripts/line-chat-fleet-exact-mapping-apply.ts --sessions="$MAPPING_SESSIONS"
+  fi
+  MAPPING_EXIT_CODE=$?
+  set -e
+
+  echo "{\"event\":\"line_chat_fleet_exact_mapping_bootstrap_finished\",\"exitCode\":${MAPPING_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_MANUAL_READINESS_DRY_RUN_ENABLED:-false}" = "true" ]; then
   STORES="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_STORES:-}"
   OUTPUT="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_OUTPUT:-/tmp/line-chat-manual-readiness.csv}"
