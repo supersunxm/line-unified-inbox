@@ -189,7 +189,9 @@ test("Frontend forwards WEB sessions to backend through the canonical oppo_sessi
   assert.match(apiClientSource, /Cookie:\s*`oppo_session=\$\{encodeURIComponent\(sessionToken\)\}`/);
   assert.doesNotMatch(apiClientSource, /Authorization:\s*`Bearer \$\{sessionToken\}`/);
   assert.match(callbackRouteSource, /request\.cookies\.get\("oppo_session"\)/);
-  assert.match(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
+  assert.match(overviewPageSource, /fetchTikTokPublicOverview/);
+  assert.match(overviewPageSource, /fetchTikTokPublicStores/);
+  assert.doesNotMatch(overviewPageSource, /fetchLatestTikTokAccountFromBackend/);
   assert.match(dashboardPageSource, /fetchTikTokAccountsListFromBackend/);
   const dynamicDashboardSource = readFileSync(new URL("../src/app/tiktok/dashboard/[accountId]/page.tsx", import.meta.url), "utf8");
   assert.match(dynamicDashboardSource, /fetchTikTokAccountByIdFromBackend/);
