@@ -13,6 +13,33 @@ export const LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES = [
   "3791",  // Phase 2: OPPO CentralKhonkaen
 ] as const;
 
+/**
+ * Manager relay is intentionally narrower than realtime resolver eligibility.
+ * Chonburi remains enabled by default. Additional stores are activated through
+ * LINE_CHAT_MANAGER_RELAY_STORE_CODES so rollout can happen without another
+ * code deployment and can be rolled back store-by-store.
+ */
+export function getLineChatManagerRelayEnabledStoreCodes(
+  raw = process.env.LINE_CHAT_MANAGER_RELAY_STORE_CODES,
+): ReadonlySet<string> {
+  const configured = (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const requested = configured.length > 0 ? configured : [LINE_CHAT_PILOT_STORE_CODE];
+  const allowed = new Set<string>(LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES);
+  return new Set(requested.filter((storeCode) => allowed.has(storeCode)));
+}
+
+export function isLineChatManagerRelayStoreEnabled(
+  storeCode: string | null | undefined,
+  raw = process.env.LINE_CHAT_MANAGER_RELAY_STORE_CODES,
+): boolean {
+  const cleanStoreCode = (storeCode ?? "").trim();
+  if (!cleanStoreCode) return false;
+  return getLineChatManagerRelayEnabledStoreCodes(raw).has(cleanStoreCode);
+}
+
 export interface LineChatRealtimeResolverEligibilityParams {
   storeCode: string | null | undefined;
   conversationStoreId: string | null | undefined;
