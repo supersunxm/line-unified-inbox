@@ -2,17 +2,15 @@ import { Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs
 import { LineChatSessionStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import {
-  LINE_CHAT_PILOT_BOT_ID,
-  LINE_CHAT_PILOT_OA_NAME,
-  LINE_CHAT_PILOT_SESSION_KEY,
-  LINE_CHAT_PILOT_STORE_CODE,
+  getLineChatManagerRelayStoreConfig,
+  isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 
 export type ManagerRelayResult =
   | { handled: false }
   | { handled: true; duplicate: boolean; lineChatUserId: string };
 
-type PilotConversation = {
+type RelayConversation = {
   id: string;
   storeId: string | null;
   lineChatUserId: string | null;
@@ -35,7 +33,7 @@ type PilotConversation = {
   };
 };
 
-function storeCodeOf(conversation: PilotConversation): string {
+function storeCodeOf(conversation: RelayConversation): string {
   return conversation.store?.code?.trim()
     || conversation.store?.storeMaster?.externalStoreId?.trim()
     || "";
@@ -48,11 +46,10 @@ export class LineChatManagerMessageRelayService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   /**
-   * The API service must never launch Chromium for this feature. The persistent
-   * LINE OA Manager profile exists only on the dedicated line-chat worker
-   * volume, so Chonburi requests are authenticated and forwarded over Railway
-   * private networking to that worker. Non-pilot conversations return
-   * handled=false and keep the existing Messaging API path unchanged.
+   * The API service never launches Chromium. Eligible stores are forwarded over
+   * Railway private networking to the dedicated line-chat worker that owns the
+   * persistent LINE OA Manager profiles. Stores outside the rollout allowlist
+   * return handled=false and keep the existing Messaging API path unchanged.
    */
   public async relayText(input: {
     conversationId?: string;
@@ -64,15 +61,17 @@ export class LineChatManagerMessageRelayService {
 
     const conversation = await this.loadConversation(conversationId);
     if (!conversation) return { handled: false };
-    if (storeCodeOf(conversation) !== LINE_CHAT_PILOT_STORE_CODE) return { handled: false };
 
-    this.assertPilotConfiguration(conversation);
+    const storeCode = storeCodeOf(conversation);
+    if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
+
+    this.assertRelayConfiguration(conversation, storeCode);
 
     const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\/+$/u, "");
     const secret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
     if (!workerUrl || !secret) {
       throw new ServiceUnavailableException(
-        "ระบบส่งผ่าน LINE OA Manager ร้านชลบุรียังไม่ได้เชื่อมต่อกับ worker จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota",
+        "ระบบส่งผ่าน LINE OA Manager ยังไม่ได้เชื่อมต่อกับ worker จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota",
       );
     }
 
@@ -113,6 +112,14 @@ export class LineChatManagerMessageRelayService {
         && typeof body.lineChatUserId === "string"
         && body.lineChatUserId.trim()
       ) {
+        this.logger.log(JSON.stringify({
+          event: "line_chat_manager_relay_api_success",
+          conversationId,
+          storeCode,
+          lineOfficialAccountId: conversation.lineOfficialAccount.id,
+          sessionKey: conversation.lineOfficialAccount.lineChatSession?.sessionKey ?? null,
+          duplicate: body.duplicate === true,
+        }));
         return {
           handled: true,
           duplicate: body.duplicate === true,
@@ -123,6 +130,7 @@ export class LineChatManagerMessageRelayService {
       this.logger.warn(JSON.stringify({
         event: "line_chat_manager_relay_worker_rejected",
         conversationId,
+        storeCode,
         statusCode: response.status,
         workerError: typeof body.error === "string" ? body.error.slice(0, 250) : null,
       }));
@@ -137,6 +145,7 @@ export class LineChatManagerMessageRelayService {
       this.logger.error(JSON.stringify({
         event: "line_chat_manager_relay_worker_unavailable",
         conversationId,
+        storeCode,
         aborted,
         error: error instanceof Error ? error.message : String(error),
       }));
@@ -150,7 +159,7 @@ export class LineChatManagerMessageRelayService {
     }
   }
 
-  private async loadConversation(id: string): Promise<PilotConversation | null> {
+  private async loadConversation(id: string): Promise<RelayConversation | null> {
     return this.prisma.conversation.findUnique({
       where: { id },
       select: {
@@ -181,25 +190,28 @@ export class LineChatManagerMessageRelayService {
           },
         },
       },
-    }) as Promise<PilotConversation | null>;
+    }) as Promise<RelayConversation | null>;
   }
 
-  private assertPilotConfiguration(conversation: PilotConversation): void {
+  private assertRelayConfiguration(conversation: RelayConversation, storeCode: string): void {
     const oa = conversation.lineOfficialAccount;
     const session = oa.lineChatSession;
+    const config = getLineChatManagerRelayStoreConfig(storeCode);
     if (
-      conversation.storeId !== oa.storeId
+      !config
+      || conversation.storeId !== oa.storeId
       || oa.accountType !== "STORE"
       || !oa.isActive
       || oa.archivedAt !== null
-      || oa.name.trim() !== LINE_CHAT_PILOT_OA_NAME
-      || oa.chatBotId?.trim() !== LINE_CHAT_PILOT_BOT_ID
+      || oa.name.trim() !== config.storeName
+      || !oa.chatBotId?.trim()
+      || ("expectedBotId" in config && oa.chatBotId.trim() !== config.expectedBotId)
       || !session
-      || session.sessionKey.trim() !== LINE_CHAT_PILOT_SESSION_KEY
+      || session.sessionKey.trim() !== config.sessionKey
       || session.status !== LineChatSessionStatus.ACTIVE
     ) {
       throw new ServiceUnavailableException(
-        "การตั้งค่า LINE OA Manager ของร้านชลบุรีไม่พร้อมใช้งาน จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota",
+        `การตั้งค่า LINE OA Manager ของร้าน ${storeCode} ไม่พร้อมใช้งาน จึงยกเลิกการส่งเพื่อป้องกันการใช้ Push quota`,
       );
     }
   }
