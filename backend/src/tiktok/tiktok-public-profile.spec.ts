@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  capturePageSnapshotWithSettling,
   classifyTikTokDiagnostics,
   extractTikTokPublicProfile,
   extractTikTokStatusCode,
@@ -196,4 +197,90 @@ test("classifyTikTokDiagnostics categorizes public profile outcomes correctly", 
     "PARSE_FAILED",
   );
 });
+
+test("capturePageSnapshotWithSettling waits for attached hydration element before evaluation", async () => {
+  const callOrder: string[] = [];
+  const fakePage = {
+    waitForSelector: async (selector: string, options?: { state?: string; timeout?: number }) => {
+      callOrder.push(`waitForSelector:${options?.state ?? "default"}`);
+      assert.equal(options?.state, "attached");
+      return null;
+    },
+    evaluate: async () => {
+      callOrder.push("evaluate");
+      return {
+        scripts: [{ id: "__UNIVERSAL_DATA_FOR_REHYDRATION__", text: '{"ok":true}' }],
+        title: "TikTok - Make Your Day",
+        bodyText: "",
+        finalUrl: "https://www.tiktok.com/@test",
+      };
+    },
+    waitForTimeout: async () => {},
+  };
+
+  const snapshot = await capturePageSnapshotWithSettling(
+    fakePage,
+    ["__UNIVERSAL_DATA_FOR_REHYDRATION__"],
+    { selectorTimeoutMs: 2000 },
+  );
+
+  assert.deepEqual(callOrder, ["waitForSelector:attached", "evaluate"]);
+  assert.equal(snapshot.title, "TikTok - Make Your Day");
+  assert.equal(snapshot.scripts[0]?.text, '{"ok":true}');
+});
+
+test("capturePageSnapshotWithSettling retries safely when execution context was destroyed", async () => {
+  let attempts = 0;
+  const fakePage = {
+    waitForSelector: async () => null,
+    evaluate: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("page.evaluate: Execution context was destroyed, most likely because of a navigation");
+      }
+      return {
+        scripts: [{ id: "__UNIVERSAL_DATA_FOR_REHYDRATION__", text: '{"recovered":true}' }],
+        title: "TikTok - Settled",
+        bodyText: "",
+        finalUrl: "https://www.tiktok.com/@test",
+      };
+    },
+    waitForTimeout: async () => {},
+  };
+
+  const snapshot = await capturePageSnapshotWithSettling(
+    fakePage,
+    ["__UNIVERSAL_DATA_FOR_REHYDRATION__"],
+    { selectorTimeoutMs: 2000, retryTimeoutMs: 1000 },
+  );
+
+  assert.equal(attempts, 2);
+  assert.equal(snapshot.title, "TikTok - Settled");
+  assert.equal(snapshot.scripts[0]?.text, '{"recovered":true}');
+});
+
+test("capturePageSnapshotWithSettling proceeds gracefully when selector times out", async () => {
+  const fakePage = {
+    waitForSelector: async () => {
+      throw new Error("Timeout 2000ms exceeded waiting for selector");
+    },
+    evaluate: async () => ({
+      scripts: [{ id: "__UNIVERSAL_DATA_FOR_REHYDRATION__", text: null }],
+      title: "TikTok - 404",
+      bodyText: "Couldn't find this account",
+      finalUrl: "https://www.tiktok.com/@missing",
+    }),
+    waitForTimeout: async () => {},
+  };
+
+  const snapshot = await capturePageSnapshotWithSettling(
+    fakePage,
+    ["__UNIVERSAL_DATA_FOR_REHYDRATION__"],
+    { selectorTimeoutMs: 2000 },
+  );
+
+  assert.equal(snapshot.title, "TikTok - 404");
+  assert.equal(snapshot.bodyText, "Couldn't find this account");
+});
+
 

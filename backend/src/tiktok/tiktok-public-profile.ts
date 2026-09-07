@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 
 export type TikTokPublicProbeStatus = "OK" | "BLOCKED_OR_CHANGED";
 export type TikTokPublicMetricSource = "statsV2" | "stats";
@@ -378,6 +378,77 @@ export function classifyTikTokDiagnostics(params: {
   };
 }
 
+export interface TikTokPageSnapshot {
+  scripts: Array<{ id: string; text: string | null }>;
+  title: string;
+  bodyText: string;
+  finalUrl: string;
+}
+
+export type TikTokPlaywrightPage = Pick<Page, "evaluate" | "waitForSelector" | "waitForTimeout">;
+
+export async function capturePageSnapshotWithSettling(
+  page: TikTokPlaywrightPage,
+  scriptIds: readonly string[],
+  options?: { selectorTimeoutMs?: number; retryTimeoutMs?: number },
+): Promise<TikTokPageSnapshot> {
+  const selector = scriptIds.map((id) => `#${id}`).join(", ");
+  const selectorTimeoutMs = options?.selectorTimeoutMs ?? 6_000;
+  const retryTimeoutMs = options?.retryTimeoutMs ?? 4_000;
+
+  try {
+    await page.waitForSelector(selector, { state: "attached", timeout: selectorTimeoutMs });
+  } catch {
+    // If selector doesn't attach (e.g. 404 or captcha page), continue to snapshot current DOM
+  }
+
+  const capture = (): Promise<TikTokPageSnapshot> =>
+    page.evaluate(
+      (ids) => ({
+        scripts: ids.map((id) => ({
+          id,
+          text: document.getElementById(id)?.textContent ?? null,
+        })),
+        title: document.title,
+        bodyText: (document.body?.innerText ?? "").slice(0, 8_000),
+        finalUrl: location.href,
+      }),
+      scriptIds,
+    );
+
+  let snapshot: TikTokPageSnapshot;
+  try {
+    snapshot = await capture();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    const isNavigationRace =
+      message.includes("Execution context was destroyed") || message.includes("navigation");
+
+    if (isNavigationRace) {
+      try {
+        await page.waitForSelector(selector, { state: "attached", timeout: retryTimeoutMs });
+      } catch {
+        // Fallback if selector still fails to attach
+      }
+      await page.waitForTimeout(500);
+      return await capture();
+    }
+
+    throw error;
+  }
+
+  if (snapshot.scripts.every((s) => !s.text) && !snapshot.title) {
+    try {
+      await page.waitForSelector(selector, { state: "attached", timeout: retryTimeoutMs });
+      snapshot = await capture();
+    } catch {
+      // Retain initial snapshot if retry timed out
+    }
+  }
+
+  return snapshot;
+}
+
 export async function probeTikTokPublicProfile(
   usernameInput: string,
   options?: { timeoutMs?: number; headless?: boolean },
@@ -425,18 +496,11 @@ export async function probeTikTokPublicProfile(
       navigationMessage = error instanceof Error ? error.message : "TikTok navigation failed";
     }
 
-    await page.waitForTimeout(2_500);
     await Promise.allSettled(Array.from(pendingResponses));
 
-    const pageSnapshot = await page.evaluate((scriptIds) => ({
-      scripts: scriptIds.map((id) => ({
-        id,
-        text: document.getElementById(id)?.textContent ?? null,
-      })),
-      title: document.title,
-      bodyText: (document.body?.innerText ?? "").slice(0, 8_000),
-      finalUrl: location.href,
-    }), PROFILE_SCRIPT_IDS);
+    const pageSnapshot = await capturePageSnapshotWithSettling(page, PROFILE_SCRIPT_IDS, {
+      selectorTimeoutMs: Math.min(timeoutMs, 8_000),
+    });
 
     const hydrationPayloads = pageSnapshot.scripts
       .map((script) => parseJsonPayload(script.text))
