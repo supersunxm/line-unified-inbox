@@ -102,9 +102,9 @@ function looksLikePostRecord(record: JsonRecord, username: string): boolean {
   ].some((key) => stats[key] !== undefined);
 }
 
-function postFromRecord(record: JsonRecord, username: string, expectedId?: string): PostMetrics | null {
+function postFromRecord(record: JsonRecord, username: string): PostMetrics | null {
   const id = firstString(record, ["id", "aweme_id", "itemId"]);
-  if (!id || (expectedId && id !== expectedId)) return null;
+  if (!id) return null;
 
   const author = authorUsername(record);
   if (author && author.toLowerCase() !== username) return null;
@@ -174,6 +174,10 @@ function collectPostsDeep(value: unknown, username: string, output: Map<string, 
   walk(value, 0);
 }
 
+function sanitizePrefix(text: string): string {
+  return text.slice(0, 240).replace(/[\r\n\t]+/gu, " ").replace(/\s{2,}/gu, " ").trim();
+}
+
 async function main(): Promise<void> {
   const username = normalizeUsername(process.argv[2] || "o_centralworld");
   const requestedLimit = Number(process.argv[3] || "3");
@@ -209,6 +213,8 @@ async function main(): Promise<void> {
     let apiContentType: string | null = null;
     let apiPayload: unknown = null;
     let apiError: string | null = null;
+    let apiBodyLength = 0;
+    let apiBodyPrefix = "";
 
     if (secUid) {
       const apiResult = await profilePage.evaluate(async ({ userSecUid, count }) => {
@@ -245,6 +251,8 @@ async function main(): Promise<void> {
       apiStatus = apiResult.status;
       apiContentType = apiResult.contentType;
       apiError = apiResult.error;
+      apiBodyLength = apiResult.text.length;
+      apiBodyPrefix = sanitizePrefix(apiResult.text);
       apiPayload = parseJson(apiResult.text);
     }
 
@@ -268,6 +276,8 @@ async function main(): Promise<void> {
         attempted: Boolean(secUid),
         status: apiStatus,
         contentType: apiContentType,
+        bodyLength: apiBodyLength,
+        bodyPrefix: apiBodyPrefix,
         parsedJson: apiPayload !== null,
         error: apiError,
       },
