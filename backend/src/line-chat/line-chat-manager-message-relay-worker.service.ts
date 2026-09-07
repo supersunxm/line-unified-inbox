@@ -15,12 +15,21 @@ import {
 import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
 
 const RELAY_DEDUPE_TTL_MS = 15 * 60_000;
+const COMPOSER_WAIT_MS = 12_000;
 const COMPOSER_SELECTORS = [
-  'textarea[placeholder*="Enter: Send message"]',
-  'textarea[placeholder*="Send message"]',
-  'textarea[placeholder*="ส่งข้อความ"]',
+  'textarea[placeholder*="Enter" i]',
+  'textarea[placeholder*="Send" i]',
+  'textarea[placeholder*="message" i]',
+  'textarea[placeholder*="ส่ง"]',
   '[contenteditable="true"][role="textbox"]',
+  '[role="textbox"][contenteditable]:not([contenteditable="false"])',
+  '.ProseMirror[contenteditable="true"]',
+  '[data-placeholder*="Send" i][contenteditable="true"]',
+  '[data-placeholder*="message" i][contenteditable="true"]',
+  '[aria-label*="Send" i][contenteditable="true"]',
+  '[aria-label*="message" i][contenteditable="true"]',
   '[contenteditable="true"]',
+  '[role="textbox"]',
   'textarea',
 ] as const;
 
@@ -49,6 +58,11 @@ type PilotConversation = {
       status: LineChatSessionStatus;
     } | null;
   };
+};
+
+type ComposerCandidate = {
+  locator: Locator;
+  score: number;
 };
 
 function storeCodeOf(conversation: PilotConversation): string {
@@ -246,24 +260,35 @@ export class LineChatManagerMessageRelayWorkerService {
       const page = context.pages()[0] || await context.newPage();
       const targetUrl = this.sessionService.buildChatRefererUrl(input.botId, input.lineChatUserId);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
-      await page.waitForTimeout(900);
+      // LINE OA Manager is a client-rendered application. domcontentloaded can
+      // complete before the selected chat and composer have mounted.
+      await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
 
       const auth = await this.sessionService.probeApiAuthentication(context);
       if (auth.authenticated !== "YES") {
         throw new ServiceUnavailableException("session ของ LINE OA Manager ร้านชลบุรีหมดอายุ กรุณา login ใหม่");
       }
 
-      const composer = await this.findComposer(page);
+      const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
       if (!composer) {
+        await this.logComposerDiagnostics(page, input.lineChatUserId);
         throw new ServiceUnavailableException("ไม่พบช่องพิมพ์ข้อความใน LINE OA Manager กรุณาตรวจสอบหน้า chat.line.biz");
       }
 
-      const exactText = page.getByText(input.text, { exact: true });
-      const beforeCount = await exactText.count().catch(() => 0);
-      await composer.fill(input.text);
+      const beforeCount = await this.countExactText(page, input.text);
+      await composer.click({ timeout: 3_000 }).catch(() => {});
+      try {
+        await composer.fill(input.text);
+      } catch {
+        // Some LINE editor builds expose a contenteditable surface that does
+        // not implement the same fill semantics as textarea. Insert text only
+        // after the candidate was positively identified as the lower composer.
+        await composer.click();
+        await page.keyboard.insertText(input.text);
+      }
       await composer.press("Enter");
 
-      const verified = await this.waitForDeliveryVerification(page, composer, exactText, beforeCount);
+      const verified = await this.waitForDeliveryVerification(page, composer, input.text, beforeCount);
       if (!verified) {
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
       }
@@ -280,31 +305,79 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
-  private async findComposer(page: Page): Promise<Locator | null> {
-    const viewportHeight = page.viewportSize()?.height ?? 800;
-    for (const selector of COMPOSER_SELECTORS) {
-      const matches = page.locator(selector);
-      const count = await matches.count().catch(() => 0);
-      for (let i = 0; i < count; i += 1) {
-        const candidate = matches.nth(i);
-        if (!(await candidate.isVisible().catch(() => false))) continue;
-        const box = await candidate.boundingBox().catch(() => null);
-        if (box && box.y + box.height / 2 < viewportHeight * 0.55) continue;
-        return candidate;
+  private async findComposer(page: Page, waitMs: number): Promise<Locator | null> {
+    const deadline = Date.now() + waitMs;
+    while (Date.now() < deadline) {
+      const candidates: ComposerCandidate[] = [];
+      for (const frame of page.frames()) {
+        const viewportHeight = page.viewportSize()?.height ?? 800;
+        for (const selector of COMPOSER_SELECTORS) {
+          const matches = frame.locator(selector);
+          const count = Math.min(await matches.count().catch(() => 0), 12);
+          for (let i = 0; i < count; i += 1) {
+            const candidate = matches.nth(i);
+            if (!(await candidate.isVisible().catch(() => false))) continue;
+            if (!(await candidate.isEnabled().catch(() => true))) continue;
+
+            const metadata = await candidate.evaluate((element) => ({
+              tag: element.tagName.toLowerCase(),
+              role: element.getAttribute("role")?.toLowerCase() ?? "",
+              placeholder: element.getAttribute("placeholder")?.toLowerCase() ?? "",
+              ariaLabel: element.getAttribute("aria-label")?.toLowerCase() ?? "",
+              dataPlaceholder: element.getAttribute("data-placeholder")?.toLowerCase() ?? "",
+              contentEditable: element.getAttribute("contenteditable")?.toLowerCase() ?? "",
+              className: typeof element.className === "string" ? element.className.toLowerCase() : "",
+            })).catch(() => null);
+            if (!metadata) continue;
+
+            const box = await candidate.boundingBox().catch(() => null);
+            let score = 0;
+            if (box && box.y + box.height / 2 >= viewportHeight * 0.55) score += 6;
+            if (box && box.y + box.height / 2 >= viewportHeight * 0.72) score += 3;
+            if (metadata.tag === "textarea") score += 2;
+            if (metadata.role === "textbox") score += 2;
+            if (metadata.contentEditable === "true") score += 2;
+            if (metadata.className.includes("prosemirror")) score += 3;
+            const hint = `${metadata.placeholder} ${metadata.ariaLabel} ${metadata.dataPlaceholder}`;
+            if (/send|message|enter|ส่ง/u.test(hint)) score += 5;
+            if (/search|ค้นหา/u.test(hint)) score -= 10;
+
+            // Avoid ever treating an unrelated top-of-page search/editor as a
+            // send box. A real composer must have either lower-pane geometry
+            // or strong send/message semantics plus an editable surface.
+            const strongSemantic = /send|message|enter|ส่ง/u.test(hint)
+              && (metadata.tag === "textarea" || metadata.role === "textbox" || metadata.contentEditable === "true");
+            const lowerPane = Boolean(box && box.y + box.height / 2 >= viewportHeight * 0.55);
+            if (!lowerPane && !strongSemantic) continue;
+            candidates.push({ locator: candidate, score });
+          }
+        }
       }
+
+      candidates.sort((a, b) => b.score - a.score);
+      if (candidates[0] && candidates[0].score >= 5) return candidates[0].locator;
+      await page.waitForTimeout(300);
     }
     return null;
+  }
+
+  private async countExactText(page: Page, text: string): Promise<number> {
+    let total = 0;
+    for (const frame of page.frames()) {
+      total += await frame.getByText(text, { exact: true }).count().catch(() => 0);
+    }
+    return total;
   }
 
   private async waitForDeliveryVerification(
     page: Page,
     composer: Locator,
-    exactText: Locator,
+    text: string,
     beforeCount: number,
   ): Promise<boolean> {
     const deadline = Date.now() + 8_000;
     while (Date.now() < deadline) {
-      const count = await exactText.count().catch(() => beforeCount);
+      const count = await this.countExactText(page, text);
       let composerCleared = false;
       try {
         composerCleared = (await composer.inputValue()) === "";
@@ -315,6 +388,25 @@ export class LineChatManagerMessageRelayWorkerService {
       await page.waitForTimeout(250);
     }
     return false;
+  }
+
+  private async logComposerDiagnostics(page: Page, lineChatUserId: string): Promise<void> {
+    let pathname = "unknown";
+    try { pathname = new URL(page.url()).pathname; } catch { /* safe fallback */ }
+    const frameCounts = await Promise.all(page.frames().map(async (frame) => ({
+      textareas: await frame.locator("textarea").count().catch(() => -1),
+      contenteditables: await frame.locator('[contenteditable="true"]').count().catch(() => -1),
+      roleTextboxes: await frame.locator('[role="textbox"]').count().catch(() => -1),
+      proseMirrors: await frame.locator(".ProseMirror").count().catch(() => -1),
+    })));
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_manager_composer_not_found",
+      storeCode: LINE_CHAT_PILOT_STORE_CODE,
+      pathname,
+      frameCount: page.frames().length,
+      frameCounts,
+      targetChatIdMasked: `${lineChatUserId.slice(0, 4)}...${lineChatUserId.slice(-4)}`,
+    }));
   }
 
   private pruneCompleted(): void {
