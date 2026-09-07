@@ -38,7 +38,7 @@ jobs:
       - name: Unit test public TikTok parser
         run: npx tsx --test src/tiktok/tiktok-public-profile.spec.ts
       - name: Lint TikTok public collector
-        run: npx eslint src/tiktok/tiktok-public-profile.ts src/tiktok/tiktok-public-profile.spec.ts
+        run: npx eslint src/tiktok/tiktok-public-profile.ts src/tiktok/tiktok-public-profile.spec.ts scripts/tiktok-public-profile-probe.ts
       - name: Build backend
         run: npm run build
 
