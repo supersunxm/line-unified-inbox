@@ -3,6 +3,12 @@ import { chromium } from "playwright";
 export type TikTokPublicProbeStatus = "OK" | "BLOCKED_OR_CHANGED";
 export type TikTokPublicMetricSource = "statsV2" | "stats";
 export type TikTokPublicMetricPrecision = "EXACT" | "DISPLAY_ROUNDED";
+export type TikTokPublicDiagnosticCategory =
+  | "OK_EXACT"
+  | "AUDIENCE_CONTROLLED"
+  | "ACCOUNT_NOT_FOUND"
+  | "BLOCKED_OR_CHANGED"
+  | "PARSE_FAILED";
 
 export interface TikTokPublicProfile {
   username: string;
@@ -29,6 +35,8 @@ export interface TikTokPublicProbeResult {
     hydrationPayloadCount: number;
     capturedApiPayloadCount: number;
     captchaOrBlockDetected: boolean;
+    category: TikTokPublicDiagnosticCategory;
+    statusCode: number | null;
     message: string | null;
   };
 }
@@ -268,6 +276,108 @@ function shouldCaptureTikTokProfileResponse(url: string, contentType: string | n
   );
 }
 
+export function extractTikTokStatusCode(payloads: readonly unknown[]): number | null {
+  const seen = new WeakSet<object>();
+
+  const walk = (current: unknown, depth: number): number | null => {
+    if (depth > 10 || current === null || typeof current !== "object") return null;
+    if (seen.has(current)) return null;
+    seen.add(current);
+
+    if (isRecord(current)) {
+      if (typeof current.statusCode === "number") {
+        return current.statusCode;
+      }
+      for (const nested of Object.values(current)) {
+        const found = walk(nested, depth + 1);
+        if (found !== null) return found;
+      }
+    } else if (Array.isArray(current)) {
+      for (const nested of current) {
+        const found = walk(nested, depth + 1);
+        if (found !== null) return found;
+      }
+    }
+    return null;
+  };
+
+  for (const payload of payloads) {
+    const code = walk(payload, 0);
+    if (code !== null) return code;
+  }
+  return null;
+}
+
+export function classifyTikTokDiagnostics(params: {
+  profile: TikTokPublicProfile | null;
+  statusCode: number | null;
+  bodyText: string;
+  pageTitle: string;
+  captchaOrBlockDetected: boolean;
+  hydrationCount: number;
+  navigationMessage: string | null;
+}): { category: TikTokPublicDiagnosticCategory; message: string | null } {
+  const {
+    profile,
+    statusCode,
+    bodyText,
+    pageTitle,
+    captchaOrBlockDetected,
+    hydrationCount,
+    navigationMessage,
+  } = params;
+
+  if (profile) {
+    return {
+      category: "OK_EXACT",
+      message: null,
+    };
+  }
+
+  const textLower = `${pageTitle} ${bodyText}`.toLowerCase();
+
+  if (
+    statusCode === 209002 ||
+    textLower.includes("audience controls") ||
+    textLower.includes("log in to make the most of your tiktok experience")
+  ) {
+    return {
+      category: "AUDIENCE_CONTROLLED",
+      message: "Audience controls enabled on TikTok creator profile; login required.",
+    };
+  }
+
+  if (
+    statusCode === 10221 ||
+    textLower.includes("couldn't find this account") ||
+    textLower.includes("could not find this account")
+  ) {
+    return {
+      category: "ACCOUNT_NOT_FOUND",
+      message: "TikTok account not found.",
+    };
+  }
+
+  if (captchaOrBlockDetected) {
+    return {
+      category: "BLOCKED_OR_CHANGED",
+      message: "TikTok presented a verification/block page to the collector.",
+    };
+  }
+
+  if (hydrationCount > 0) {
+    return {
+      category: "PARSE_FAILED",
+      message: "No recognized public profile payload was found in page hydration.",
+    };
+  }
+
+  return {
+    category: "BLOCKED_OR_CHANGED",
+    message: navigationMessage ?? "No recognized public profile payload was found; TikTok page structure may have changed.",
+  };
+}
+
 export async function probeTikTokPublicProfile(
   usernameInput: string,
   options?: { timeoutMs?: number; headless?: boolean },
@@ -331,10 +441,9 @@ export async function probeTikTokPublicProfile(
     const hydrationPayloads = pageSnapshot.scripts
       .map((script) => parseJsonPayload(script.text))
       .filter((payload) => payload !== null);
-    const profile = extractTikTokPublicProfile(
-      [...hydrationPayloads, ...capturedPayloads],
-      username,
-    );
+    const allPayloads = [...hydrationPayloads, ...capturedPayloads];
+    const profile = extractTikTokPublicProfile(allPayloads, username);
+    const statusCode = extractTikTokStatusCode(allPayloads);
 
     const bodyLower = pageSnapshot.bodyText.toLowerCase();
     const captchaOrBlockDetected = [
@@ -346,6 +455,16 @@ export async function probeTikTokPublicProfile(
       "something went wrong",
     ].some((marker) => bodyLower.includes(marker));
 
+    const classification = classifyTikTokDiagnostics({
+      profile,
+      statusCode,
+      bodyText: pageSnapshot.bodyText,
+      pageTitle: pageSnapshot.title,
+      captchaOrBlockDetected,
+      hydrationCount: hydrationPayloads.length,
+      navigationMessage,
+    });
+
     return {
       status: profile ? "OK" : "BLOCKED_OR_CHANGED",
       fetchedAt: new Date().toISOString(),
@@ -356,11 +475,9 @@ export async function probeTikTokPublicProfile(
         hydrationPayloadCount: hydrationPayloads.length,
         capturedApiPayloadCount: capturedPayloads.length,
         captchaOrBlockDetected,
-        message: profile
-          ? null
-          : captchaOrBlockDetected
-            ? "TikTok presented a verification/block page to the collector."
-            : navigationMessage ?? "No recognized public profile payload was found; TikTok page structure may have changed.",
+        category: classification.category,
+        statusCode,
+        message: classification.message,
       },
     };
   } finally {

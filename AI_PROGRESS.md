@@ -1,5 +1,97 @@
 # AI Progress Log
 
+## 2026-09-07: Manual TikTok Batch Collector 30-Store Dry Run [VERIFIED]
+- **Current Task**: Perform manual 30-store dry run (`--limit 30`, no `--apply`) of public TikTok profile batch collector (`backend/scripts/tiktok-public-batch.ts`) on branch `feat/tiktok-public-profile-poc`.
+- **Execution & Diagnostics**:
+  - Ran `npx tsx scripts/tiktok-public-batch.ts --limit 30` without `--apply`.
+  - Selected stores: 30 active `StoreMaster` records.
+  - Duration: ~164s (~2.7 min) with 2,500ms inter-store delays.
+  - Exact `statsV2` successful extractions: 21/30 stores (100% exact integer counts, 0 rounded counts).
+  - Captcha/Block challenges: 0. Rate limits: 0. Browser crashes: 0.
+  - Account-specific failures detected:
+    - 1 Audience-controlled account: `o_bigcaomyai` (login wall, statusCode `209002`).
+    - 1 Missing/non-existent account: `o_bigcbangphil1` (404, statusCode `10221`).
+    - 1 Invalid username format in StoreMaster: `O-bigcsuratthani` (contains hyphen `-`).
+    - Transient navigation race conditions on unattached DOM: 6 stores (re-probe confirmed valid `statsV2`).
+  - Safety invariants verified:
+    - 0 database mutations (`persistedCount: 0`).
+    - 0 OAuth/token paths used.
+    - 0 anti-bot bypass/stealth plugins or challenge solvers used.
+- **Next Action**: Report structured 30-store dry run results and stability assessment to user. Do not proceed to 150 stores automatically.
+
+## 2026-09-07: Manual TikTok Batch Collector 10-Store Dry Run [VERIFIED]
+- **Current Task**: Perform manual 10-store dry run (`--limit 10`, no `--apply`) of public TikTok profile batch collector (`backend/scripts/tiktok-public-batch.ts`) on branch `feat/tiktok-public-profile-poc`.
+- **Execution & Invariant Verification**:
+  - Ran `npx tsx scripts/tiktok-public-batch.ts --limit 10` without `--apply`.
+  - Total selected stores: 10 active `StoreMaster` records.
+  - Duration: ~63s (9 inter-store pauses of 2,500ms).
+  - Successful extractions: 8/10 (`status: "OK"`).
+  - Exact `statsV2` metrics: 8/8 successful stores had `metricSource: "statsV2"` and `metricPrecision: "EXACT"` with non-negative safe integers for followers, following, likes, and videos.
+  - Failed extractions: 2/10 (`status: "FAILED"`):
+    - `o_bigcaomyai` ("OBS Big C Aomyai FL.2 By Com7"): Creator enabled audience controls (statusCode `209002`), presenting an unauthenticated login gate.
+    - `o_bigcbangphil1` ("OBS Big C Bang Phli By OPPO"): Account does not exist on TikTok (statusCode `10221`, "Couldn't find this account").
+  - Safety invariants verified:
+    - 0 database mutations (`persistedCount: 0`).
+    - 0 OAuth/token code paths used.
+    - 0 anti-bot bypass/stealth plugins or challenge solvers used.
+- **Next Action**: Report structured 10-store dry run results to user and stop without proceeding to 30 stores.
+
+
+## 2026-09-07: Manual TikTok Batch Collector 1-Store Dry Run [VERIFIED]
+- **Current Task**: Perform manual 1-store dry run (`--limit 1`, no `--apply`) of public TikTok profile batch collector (`backend/scripts/tiktok-public-batch.ts`) on branch `feat/tiktok-public-profile-poc`.
+- **Completed Work**:
+  - Inspected `backend/scripts/tiktok-public-batch.ts`, `backend/src/tiktok/tiktok-public-profile.ts`, `backend/src/tiktok/tiktok-public-analytics.service.ts`, and migration `20260907153000_add_tiktok_public_analytics`.
+  - Confirmed eligible active `StoreMaster` records with TikTok usernames exist in local PostgreSQL.
+  - Executed manual dry run: `npx tsx scripts/tiktok-public-batch.ts --limit 1` without `--apply`.
+  - Selected store: `5c5e540e-84c7-4371-b60d-ceed04c74a21` ("OBS Asawann Nongkhai By OPPO", username `o_asawannnongkhai`).
+  - Successfully extracted exact `statsV2` public metrics: followers=1686, following=1219, likes=18772, videos=150.
+  - Verified 0 DB writes occurred (`persistedCount: 0`).
+  - Verified no OAuth or anti-bot bypass mechanisms were involved.
+- **Checks Run/Passed**:
+  - `tiktok-public-batch.ts --limit 1` PASSED with status `OK` and exit code 0.
+  - Confirmed 0 database mutations across tables.
+- **Next Action**: Report structured 1-store dry run results to user and await instruction before 10-store batch.
+
+
+
+## 2026-09-07: Google Review Weekly KPI Production Single Cycle & Post-Recovery Verification [COMPLETED & FULLY VERIFIED]
+- **Current Task**: Execute exactly ONE controlled live production cycle of Google Review Weekly KPI collector on Railway PostgreSQL following PR #174 merge, recover missing Sep 6 reviews, capture Sep 7 reviews, and verify all production invariants without mutating frozen dates or changing cron schedule.
+- **Pre-Execution Baseline Verification**:
+  - Week 1: CLOSED / 274 qualified reviews (455 daily rows, 65 weekly rows)
+  - Week 2: OPEN / 148 qualified reviews (Sep 2 = 25, Sep 3 = 34, Sep 4 = 38, Sep 5 = 51, Sep 6 = 0, Sep 7 = 0)
+  - Fingerprints: 271 total, 148 qualified
+  - Active Memberships: 65
+- **5-Store Dry Diagnostic on Production Config**:
+  - Ran `dry-diagnostic-5stores.mjs` against Railway production PostgreSQL config.
+  - Stores tested: 25610 (CentralWorld), 24365 (Rama 9), 25417 (Phuket), 27626 (Nong Khai), 26239 (Rama 3).
+  - Diagnostic result: 5/5 PASSED (Limited View = false, Pane = true, Sort = Newest, Cards = 20).
+  - Verified 0 DB mutations: FP = 271, Daily = 677, Weekly = 130 both before and after.
+- **Single Production Cycle Results (`run-single-cycle.mjs`)**:
+  - Total duration: 12.6 minutes.
+  - Stores Scanned: 65/65 (Successful: 65, Confirmed Zero-Review Places: 0, Scan Failures: 0).
+  - Fast-Stop Triggered (5 seen boundary): 15 stores.
+  - Chronology Stop Triggered (Sep 2 boundary): 50 stores.
+  - Stores with New Reviews: 64.
+  - Total New Reviews Discovered: 202.
+  - Total New Qualified Reviews Discovered: 96.
+  - Qualified written by Review Date: `2026-09-06`: 29, `2026-09-07`: 64.
+  - Qualified skipped on frozen dates: `2026-09-05`: 3.
+  - Errors: 0.
+- **Post-Execution Invariant Verification**:
+  - Week 1: CLOSED / 274 qualified reviews (STRICTLY FROZEN & INTACT).
+  - Week 2: OPEN / 241 qualified reviews:
+    - 2026-09-02: 25 (FROZEN / UNCHANGED)
+    - 2026-09-03: 34 (FROZEN / UNCHANGED)
+    - 2026-09-04: 38 (FROZEN / UNCHANGED)
+    - 2026-09-05: 51 (FROZEN / UNCHANGED)
+    - 2026-09-06: 29 (RECOVERED from 0 to 29)
+    - 2026-09-07: 64 (NEW TODAY)
+    - Total sum: 25 + 34 + 38 + 51 + 29 + 64 = 241 (EXACT MATCH).
+  - Fingerprints: 423 total (+152), 244 qualified (+96).
+  - Active Memberships: 65.
+  - Cron Schedule: Unchanged at `30 16 * * *` (23:30 Asia/Bangkok daily).
+- **Next Action**: Report production recovery results to user and stop. No second cycle or mutations.
+
 ## 2026-09-07: Google Review Weekly KPI Maps DOM Recovery & Collector Safeguards [IMPLEMENTED & FULLY VERIFIED]
 - **Current Task**: Diagnose and fix Google Review collector failure caused by Google Maps DOM layout shift and bot-defense Limited View, eliminate silent `ZERO_REVIEWS_PLACE` misclassification, implement resilient reviews discovery, and add fail-safe systemic failure guards.
 - **Root Cause Confirmed**:

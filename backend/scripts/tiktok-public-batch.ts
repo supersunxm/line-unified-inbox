@@ -16,7 +16,10 @@ interface BatchRow {
   storeMasterId: string;
   storeName: string;
   usernameInput: string;
+  finalUrl: string | null;
   status: "OK" | "FAILED";
+  diagnosticCategory: string;
+  statusCode: number | null;
   persisted: boolean;
   followerCount: number | null;
   followingCount: number | null;
@@ -114,7 +117,25 @@ async function main(): Promise<void> {
       try {
         const result = await probeTikTokPublicProfile(usernameInput);
         if (result.status !== "OK" || !result.profile) {
-          throw new Error(result.diagnostics.message ?? "TikTok public profile unavailable");
+          rows.push({
+            storeMasterId: store.id,
+            storeName: store.storeName,
+            usernameInput,
+            finalUrl: result.diagnostics.finalUrl,
+            status: "FAILED",
+            diagnosticCategory: result.diagnostics.category,
+            statusCode: result.diagnostics.statusCode,
+            persisted: false,
+            followerCount: null,
+            followingCount: null,
+            likesCount: null,
+            videoCount: null,
+            metricSource: null,
+            metricPrecision: null,
+            error: result.diagnostics.message ?? "TikTok public profile unavailable",
+          });
+          if (index < stores.length - 1) await sleep(options.delayMs);
+          continue;
         }
 
         assertExactTikTokPublicProfile(result.profile);
@@ -134,7 +155,10 @@ async function main(): Promise<void> {
           storeMasterId: store.id,
           storeName: store.storeName,
           usernameInput,
+          finalUrl: result.diagnostics.finalUrl,
           status: "OK",
+          diagnosticCategory: result.diagnostics.category,
+          statusCode: result.diagnostics.statusCode ?? 0,
           persisted: options.apply,
           followerCount: result.profile.followerCount,
           followingCount: result.profile.followingCount,
@@ -149,7 +173,10 @@ async function main(): Promise<void> {
           storeMasterId: store.id,
           storeName: store.storeName,
           usernameInput,
+          finalUrl: null,
           status: "FAILED",
+          diagnosticCategory: "PARSE_FAILED",
+          statusCode: null,
           persisted: false,
           followerCount: null,
           followingCount: null,
@@ -172,6 +199,13 @@ async function main(): Promise<void> {
       successCount: rows.filter((row) => row.status === "OK").length,
       failedCount: rows.filter((row) => row.status === "FAILED").length,
       persistedCount: rows.filter((row) => row.persisted).length,
+      categories: {
+        okExact: rows.filter((row) => row.diagnosticCategory === "OK_EXACT").length,
+        audienceControlled: rows.filter((row) => row.diagnosticCategory === "AUDIENCE_CONTROLLED").length,
+        accountNotFound: rows.filter((row) => row.diagnosticCategory === "ACCOUNT_NOT_FOUND").length,
+        blockedOrChanged: rows.filter((row) => row.diagnosticCategory === "BLOCKED_OR_CHANGED").length,
+        parseFailed: rows.filter((row) => row.diagnosticCategory === "PARSE_FAILED").length,
+      },
       rows,
     };
 

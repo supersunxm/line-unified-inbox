@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyTikTokDiagnostics,
   extractTikTokPublicProfile,
+  extractTikTokStatusCode,
   normalizeTikTokPublicUsername,
 } from "./tiktok-public-profile";
 
@@ -91,3 +93,107 @@ test("extractTikTokPublicProfile marks legacy display stats as rounded", () => {
   assert.equal(profile?.metricSource, "stats");
   assert.equal(profile?.metricPrecision, "DISPLAY_ROUNDED");
 });
+
+test("extractTikTokStatusCode extracts status codes from hydration scope", () => {
+  const audiencePayload = {
+    __DEFAULT_SCOPE__: {
+      "webapp.user-detail": {
+        statusCode: 209002,
+        statusMsg: "",
+      },
+    },
+  };
+  const notFoundPayload = {
+    __DEFAULT_SCOPE__: {
+      "webapp.user-detail": {
+        statusCode: 10221,
+        statusMsg: "",
+      },
+    },
+  };
+
+  assert.equal(extractTikTokStatusCode([audiencePayload]), 209002);
+  assert.equal(extractTikTokStatusCode([notFoundPayload]), 10221);
+  assert.equal(extractTikTokStatusCode([{ unrelated: true }]), null);
+});
+
+test("classifyTikTokDiagnostics categorizes public profile outcomes correctly", () => {
+  assert.equal(
+    classifyTikTokDiagnostics({
+      profile: {
+        username: "o_centralworld",
+        displayName: null,
+        avatarUrl: null,
+        bioDescription: null,
+        isVerified: null,
+        followerCount: 100,
+        followingCount: 10,
+        likesCount: 500,
+        videoCount: 20,
+        profileUrl: "https://www.tiktok.com/@o_centralworld",
+        metricSource: "statsV2",
+        metricPrecision: "EXACT",
+      },
+      statusCode: 0,
+      bodyText: "",
+      pageTitle: "TikTok",
+      captchaOrBlockDetected: false,
+      hydrationCount: 1,
+      navigationMessage: null,
+    }).category,
+    "OK_EXACT",
+  );
+
+  assert.equal(
+    classifyTikTokDiagnostics({
+      profile: null,
+      statusCode: 209002,
+      bodyText: "This creator turned on audience controls.",
+      pageTitle: "TikTok",
+      captchaOrBlockDetected: false,
+      hydrationCount: 1,
+      navigationMessage: null,
+    }).category,
+    "AUDIENCE_CONTROLLED",
+  );
+
+  assert.equal(
+    classifyTikTokDiagnostics({
+      profile: null,
+      statusCode: 10221,
+      bodyText: "Couldn't find this account",
+      pageTitle: "TikTok",
+      captchaOrBlockDetected: false,
+      hydrationCount: 1,
+      navigationMessage: null,
+    }).category,
+    "ACCOUNT_NOT_FOUND",
+  );
+
+  assert.equal(
+    classifyTikTokDiagnostics({
+      profile: null,
+      statusCode: null,
+      bodyText: "Security Verification: verify to continue",
+      pageTitle: "TikTok",
+      captchaOrBlockDetected: true,
+      hydrationCount: 0,
+      navigationMessage: null,
+    }).category,
+    "BLOCKED_OR_CHANGED",
+  );
+
+  assert.equal(
+    classifyTikTokDiagnostics({
+      profile: null,
+      statusCode: null,
+      bodyText: "some random text",
+      pageTitle: "TikTok",
+      captchaOrBlockDetected: false,
+      hydrationCount: 1,
+      navigationMessage: null,
+    }).category,
+    "PARSE_FAILED",
+  );
+});
+
