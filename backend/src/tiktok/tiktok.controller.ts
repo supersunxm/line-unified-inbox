@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGua
 import { UserRole } from "@prisma/client";
 import { Public, Roles } from "../auth/auth.decorators";
 import { TikTokService } from "./tiktok.service";
+import { TikTokPublicAnalyticsService } from "./tiktok-public-analytics.service";
 import { InternalTikTokSyncGuard } from "./internal-sync.guard";
 import {
   ReconcileStoreBindingsResponse,
@@ -13,7 +14,10 @@ import {
 
 @Controller("tiktok")
 export class TikTokController {
-  constructor(private readonly tiktokService: TikTokService) {}
+  constructor(
+    private readonly tiktokService: TikTokService,
+    private readonly tiktokPublicAnalyticsService?: TikTokPublicAnalyticsService,
+  ) {}
 
   /**
    * Internal server-to-server endpoint for OAuth callback account synchronization.
@@ -39,6 +43,59 @@ export class TikTokController {
     @Body() dto: SyncTikTokAccountDto
   ): Promise<SafeTikTokAccountOverviewResponse> {
     return this.tiktokService.upsertTikTokAccount(dto);
+  }
+
+  /**
+   * Public-profile analytics dashboard summary. Uses exact persisted statsV2 snapshots only.
+   */
+  @Get("public/overview")
+  async getPublicOverview() {
+    return this.tiktokPublicAnalyticsService!.getDashboardOverview();
+  }
+
+  /**
+   * Lists tracked stores with current public TikTok metrics and follower growth.
+   */
+  @Get("public/stores")
+  async listPublicStores() {
+    return this.tiktokPublicAnalyticsService!.listDashboardStores();
+  }
+
+  /**
+   * Ranking across public TikTok store profiles.
+   * metric: followers | likes | videos | growth7d
+   */
+  @Get("public/ranking")
+  async getPublicRanking(
+    @Query("metric") metric?: string,
+    @Query("limit") limit?: string,
+  ) {
+    const supported = new Set(["followers", "likes", "videos", "growth7d"]);
+    const safeMetric = supported.has(metric ?? "")
+      ? (metric as "followers" | "likes" | "videos" | "growth7d")
+      : "followers";
+    const safeLimit = limit ? parseInt(limit, 10) : 20;
+    return this.tiktokPublicAnalyticsService!.getRanking(safeMetric, safeLimit);
+  }
+
+  /**
+   * Retrieves one store's current public TikTok analytics.
+   */
+  @Get("public/stores/:storeMasterId")
+  async getPublicStore(@Param("storeMasterId") storeMasterId: string) {
+    return this.tiktokPublicAnalyticsService!.getStoreDashboard(storeMasterId);
+  }
+
+  /**
+   * Retrieves daily public TikTok metric history for one store.
+   */
+  @Get("public/stores/:storeMasterId/history")
+  async getPublicStoreHistory(
+    @Param("storeMasterId") storeMasterId: string,
+    @Query("days") days?: string,
+  ) {
+    const safeDays = days ? parseInt(days, 10) : 30;
+    return this.tiktokPublicAnalyticsService!.getStoreHistory(storeMasterId, safeDays);
   }
 
   /**
