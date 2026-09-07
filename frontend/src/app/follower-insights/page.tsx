@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { pickLanguageText, useAppLanguage } from "../language";
+import { DailyFollowerGrowthExportControl } from "./daily-follower-growth-export-control";
 import { MobileFollowerInsightsApp } from "./mobile-follower-insights-app";
 import styles from "./follower-insights-modern.module.css";
 import polish from "./follower-insights-polish.module.css";
@@ -33,6 +34,7 @@ export default function FollowerInsightsPage() {
     <AuthorizedSection section="follower-insights">
       <div className={`${styles.scope} ${polish.scope}`}>
         <AuthorizedWorkspace section="follower-insights" />
+        <DailyFollowerGrowthExportControl language={language} />
       </div>
     </AuthorizedSection>
   );
