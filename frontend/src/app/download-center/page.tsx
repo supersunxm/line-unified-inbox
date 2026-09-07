@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/shell";
 import { api, ApiError } from "@/lib/api";
 import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
@@ -36,7 +36,6 @@ const copy = {
     friendPurpose: "ใช้วิเคราะห์ attribution ของ campaign และสาขา",
     purpose: "เป้าหมายของข้อมูล",
     output: "รูปแบบไฟล์",
-    source: "หน้าต้นทาง",
     download: "ดาวน์โหลด",
     openSource: "เปิดหน้าต้นทาง",
     from: "วันที่เริ่มต้น",
@@ -72,7 +71,6 @@ const copy = {
     friendPurpose: "Use for campaign and store attribution analysis.",
     purpose: "Purpose",
     output: "File format",
-    source: "Source page",
     download: "Download",
     openSource: "Open source page",
     from: "From",
@@ -108,7 +106,6 @@ const copy = {
     friendPurpose: "用于活动与门店归因分析。",
     purpose: "数据用途",
     output: "文件格式",
-    source: "来源页面",
     download: "下载",
     openSource: "打开来源页面",
     from: "开始日期",
@@ -120,39 +117,16 @@ const copy = {
   },
 } as const;
 
-type DatasetCardProps = {
-  title: string;
-  description: string;
-  purpose: string;
-  output?: string;
-  href: string;
-  children?: React.ReactNode;
-  labels: typeof copy.th;
-};
+type DatasetLabels = { purpose: string; output: string; openSource: string };
+type DatasetCardProps = { title: string; description: string; purpose: string; output?: string; href: string; children?: ReactNode; labels: DatasetLabels };
 
 function DatasetCard({ title, description, purpose, output, href, children, labels }: DatasetCardProps) {
-  return (
-    <article className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-[var(--app-text-primary)]">{title}</h2>
-          <p className="mt-1.5 text-sm leading-6 text-[var(--app-text-secondary)]">{description}</p>
-        </div>
-        <span className="shrink-0 rounded-lg bg-[var(--app-accent-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-accent)]">Export</span>
-      </div>
-      <dl className="mt-4 space-y-3 text-sm">
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.purpose}</dt>
-          <dd className="mt-1 text-[var(--app-text-secondary)]">{purpose}</dd>
-        </div>
-        {output && <div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.output}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{output}</dd></div>}
-      </dl>
-      {children}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Link href={href} className="inline-flex h-9 items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-semibold text-[var(--app-text-primary)] transition-colors hover:bg-[var(--app-surface-hover)]">{labels.openSource} →</Link>
-      </div>
-    </article>
-  );
+  return <article className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
+    <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="text-base font-semibold text-[var(--app-text-primary)]">{title}</h2><p className="mt-1.5 text-sm leading-6 text-[var(--app-text-secondary)]">{description}</p></div><span className="shrink-0 rounded-lg bg-[var(--app-accent-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-accent)]">Export</span></div>
+    <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.purpose}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{purpose}</dd></div>{output && <div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.output}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{output}</dd></div>}</dl>
+    {children}
+    <div className="mt-5 flex flex-wrap items-center gap-2"><Link href={href} className="inline-flex h-9 items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-semibold text-[var(--app-text-primary)] transition-colors hover:bg-[var(--app-surface-hover)]">{labels.openSource} →</Link></div>
+  </article>;
 }
 
 export default function DownloadCenterPage() {
@@ -164,7 +138,6 @@ export default function DownloadCenterPage() {
   const [error, setError] = useState<string | null>(null);
   const [lineDownloading, setLineDownloading] = useState(false);
   const [storeDownloading, setStoreDownloading] = useState(false);
-
   const today = useMemo(() => new Date(), []);
   const initialFrom = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() - 6); return getBkkDateStr(d); }, [today]);
   const [dateFrom, setDateFrom] = useState(initialFrom);
@@ -175,91 +148,43 @@ export default function DownloadCenterPage() {
     api.me().then((raw) => {
       if (cancelled) return;
       const user = raw as AuthUser;
-      if (!canAccessPrimarySection(user, "follower-insights")) {
-        window.location.replace(defaultRouteForUser(user));
-        return;
-      }
+      if (!canAccessPrimarySection(user, "follower-insights")) { window.location.replace(defaultRouteForUser(user)); return; }
       setAuthUser(user);
     }).catch((reason) => {
       if (cancelled) return;
-      if (reason instanceof ApiError && reason.status === 401) window.location.replace("/login");
-      else setError(reason instanceof Error ? reason.message : t.error);
+      if (reason instanceof ApiError && reason.status === 401) window.location.replace("/login"); else setError(reason instanceof Error ? reason.message : t.error);
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [t.error]);
 
-  const logout = async () => {
-    await api.logout();
-    window.location.assign("/login");
-  };
-
+  const logout = async () => { await api.logout(); window.location.assign("/login"); };
   const downloadLine = async () => {
     setLineDownloading(true); setError(null);
     try { await downloadDailyFollowerGrowthWorkbook({ dateFrom, dateTo, selectedLineOaIds: [], language }); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t.error); }
     finally { setLineDownloading(false); }
   };
-
   const downloadStoreMaster = async () => {
     setStoreDownloading(true); setError(null);
     try {
       const { blob, filename } = await api.exportLineOfficialAccounts({});
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
     } catch (reason) { setError(reason instanceof Error ? reason.message : t.error); }
     finally { setStoreDownloading(false); }
   };
 
-  return (
-    <AppShell
-      currentSection="follower-insights"
-      authUser={authUser}
-      text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }}
-      language={language}
-      changeLanguage={setLanguage}
-      searchText={searchText}
-      setSearchText={setSearchText}
-      logout={logout}
-      isLoading={loading}
-      apiError={error}
-    >
-      <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--app-bg)] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex flex-col gap-2 border-b border-[var(--app-border-subtle)] pb-5">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--app-text-tertiary)]">OPPO LINE OA · Reports & Data Export</div>
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--app-text-primary)]">{t.title}</h1>
-            <p className="max-w-3xl text-sm leading-6 text-[var(--app-text-secondary)]">{t.description}</p>
-          </div>
-
-          {error && <div className="mt-4 rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">{error}</div>}
-
-          <section className="mt-6">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.catalog}</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}>
-                <div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-medium text-[var(--app-text-secondary)]"><span className="mb-1 block">{t.from}</span><input type="date" value={dateFrom} max={dateTo} onChange={(e) => setDateFrom(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm" /></label>
-                    <label className="text-xs font-medium text-[var(--app-text-secondary)]"><span className="mb-1 block">{t.to}</span><input type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm" /></label>
-                  </div>
-                  <p className="mt-2 text-[11px] text-[var(--app-text-tertiary)]">{t.allStoresNote}</p>
-                  <button type="button" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {lineDownloading ? t.preparing : t.download}</button>
-                </div>
-              </DatasetCard>
-
-              <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/stores" labels={t}>
-                <button type="button" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {storeDownloading ? t.exporting : t.download}</button>
-              </DatasetCard>
-
-              <DatasetCard title={t.followerTitle} description={t.followerDesc} purpose={t.followerPurpose} href="/follower-insights" labels={t} />
-              <DatasetCard title={t.purchaseTitle} description={t.purchaseDesc} purpose={t.purchasePurpose} href="/admin/purchase-analytics" labels={t} />
-              <DatasetCard title={t.reviewTitle} description={t.reviewDesc} purpose={t.reviewPurpose} href="/google-review-kpi" labels={t} />
-              <DatasetCard title={t.friendTitle} description={t.friendDesc} purpose={t.friendPurpose} href="/friend-source-links" labels={t} />
-            </div>
-          </section>
-        </div>
-      </main>
-    </AppShell>
-  );
+  return <AppShell currentSection="follower-insights" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} isLoading={loading} apiError={error}>
+    <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--app-bg)] px-4 py-6 sm:px-6 lg:px-8"><div className="mx-auto max-w-6xl">
+      <div className="flex flex-col gap-2 border-b border-[var(--app-border-subtle)] pb-5"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--app-text-tertiary)]">OPPO LINE OA · Reports & Data Export</div><h1 className="text-2xl font-bold tracking-tight text-[var(--app-text-primary)]">{t.title}</h1><p className="max-w-3xl text-sm leading-6 text-[var(--app-text-secondary)]">{t.description}</p></div>
+      {error && <div className="mt-4 rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">{error}</div>}
+      <section className="mt-6"><h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.catalog}</h2><div className="grid gap-4 lg:grid-cols-2">
+        <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}><div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-[var(--app-text-secondary)]"><span className="mb-1 block">{t.from}</span><input type="date" value={dateFrom} max={dateTo} onChange={(e) => setDateFrom(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm" /></label><label className="text-xs font-medium text-[var(--app-text-secondary)]"><span className="mb-1 block">{t.to}</span><input type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm" /></label></div><p className="mt-2 text-[11px] text-[var(--app-text-tertiary)]">{t.allStoresNote}</p><button type="button" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {lineDownloading ? t.preparing : t.download}</button></div></DatasetCard>
+        <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/stores" labels={t}><button type="button" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {storeDownloading ? t.exporting : t.download}</button></DatasetCard>
+        <DatasetCard title={t.followerTitle} description={t.followerDesc} purpose={t.followerPurpose} href="/follower-insights" labels={t} />
+        <DatasetCard title={t.purchaseTitle} description={t.purchaseDesc} purpose={t.purchasePurpose} href="/admin/purchase-analytics" labels={t} />
+        <DatasetCard title={t.reviewTitle} description={t.reviewDesc} purpose={t.reviewPurpose} href="/google-review-kpi" labels={t} />
+        <DatasetCard title={t.friendTitle} description={t.friendDesc} purpose={t.friendPurpose} href="/friend-source-links" labels={t} />
+      </div></section>
+    </div></main>
+  </AppShell>;
 }
