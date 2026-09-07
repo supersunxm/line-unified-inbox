@@ -69,23 +69,58 @@ function parseJson(text: string | null): unknown {
   }
 }
 
-function postFromRecord(record: JsonRecord, username: string, expectedId: string): PostMetrics | null {
-  const id = firstString(record, ["id", "aweme_id", "itemId"]);
-  if (id !== expectedId) return null;
-
-  const author = isRecord(record.author) ? record.author : null;
-  const authorUsername = author
-    ? firstString(author, ["uniqueId", "unique_id", "username"])
-    : firstString(record, ["authorUniqueId", "author_username"]);
-  if (authorUsername && authorUsername.toLowerCase() !== username) return null;
-
-  const stats = isRecord(record.statsV2)
+function statsRecord(record: JsonRecord): JsonRecord | null {
+  return isRecord(record.statsV2)
     ? record.statsV2
     : isRecord(record.stats)
       ? record.stats
       : isRecord(record.statistics)
         ? record.statistics
         : null;
+}
+
+function authorUsername(record: JsonRecord): string | null {
+  const author = isRecord(record.author) ? record.author : null;
+  return author
+    ? firstString(author, ["uniqueId", "unique_id", "username"])
+    : firstString(record, ["authorUniqueId", "author_username"]);
+}
+
+function looksLikePostRecord(record: JsonRecord, username: string): boolean {
+  const id = firstString(record, ["id", "aweme_id", "itemId"]);
+  if (!id || !/^\d{10,}$/u.test(id)) return false;
+
+  const author = authorUsername(record);
+  if (author && author.toLowerCase() !== username) return false;
+
+  const stats = statsRecord(record);
+  if (!stats) return false;
+  const hasPostStat = [
+    "playCount",
+    "play_count",
+    "viewCount",
+    "view_count",
+    "diggCount",
+    "digg_count",
+    "likeCount",
+    "like_count",
+    "commentCount",
+    "comment_count",
+    "shareCount",
+    "share_count",
+  ].some((key) => stats[key] !== undefined);
+
+  return hasPostStat;
+}
+
+function postFromRecord(record: JsonRecord, username: string, expectedId: string): PostMetrics | null {
+  const id = firstString(record, ["id", "aweme_id", "itemId"]);
+  if (id !== expectedId) return null;
+
+  const author = authorUsername(record);
+  if (author && author.toLowerCase() !== username) return null;
+
+  const stats = statsRecord(record);
   if (!stats) return null;
 
   const createTimeSeconds = firstNumber(record, ["createTime", "create_time"]);
@@ -131,13 +166,40 @@ function findPostDeep(value: unknown, username: string, expectedId: string): Pos
   return walk(value, 0);
 }
 
+function collectStructuredPostIds(value: unknown, username: string, output: string[]): void {
+  const seenObjects = new WeakSet<object>();
+  const seenIds = new Set(output);
+
+  const walk = (current: unknown, depth: number): void => {
+    if (depth > 28 || current === null || typeof current !== "object") return;
+    if (seenObjects.has(current)) return;
+    seenObjects.add(current);
+
+    if (isRecord(current)) {
+      if (looksLikePostRecord(current, username)) {
+        const id = firstString(current, ["id", "aweme_id", "itemId"]);
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          output.push(id);
+        }
+      }
+      for (const nested of Object.values(current)) walk(nested, depth + 1);
+      return;
+    }
+
+    if (Array.isArray(current)) {
+      for (const nested of current) walk(nested, depth + 1);
+    }
+  };
+
+  walk(value, 0);
+}
+
 function collectVideoIdsFromText(text: string, username: string, output: string[]): void {
   const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const patterns = [
     new RegExp(`(?:https?:\\/\\/www\\.tiktok\\.com)?\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu"),
-    /\\\/video\\\/(\d{10,})/gu,
-    /"id"\s*:\s*"(\d{10,})"/gu,
-    /"aweme_id"\s*:\s*"(\d{10,})"/gu,
+    new RegExp(`\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu"),
   ];
 
   const seen = new Set(output);
@@ -149,6 +211,12 @@ function collectVideoIdsFromText(text: string, username: string, output: string[
       output.push(id);
     }
   }
+}
+
+function collectObservedPostIds(value: unknown, username: string): string[] {
+  const ids: string[] = [];
+  collectStructuredPostIds(value, username, ids);
+  return ids.slice(0, 10);
 }
 
 async function main(): Promise<void> {
@@ -196,18 +264,31 @@ async function main(): Promise<void> {
       };
     }, { targetUsername: username, scriptIds: HYDRATION_IDS });
 
-    const videoIds: string[] = [];
+    const structuredIds: string[] = [];
+    const urlIds: string[] = [];
+    for (const text of discovery.hydrationTexts) {
+      const payload = parseJson(text);
+      if (payload !== null) collectStructuredPostIds(payload, username, structuredIds);
+      collectVideoIdsFromText(text, username, urlIds);
+    }
     for (const url of discovery.anchorUrls) {
       const match = url.match(/\/video\/(\d{10,})/u);
-      if (match?.[1] && !videoIds.includes(match[1])) videoIds.push(match[1]);
+      if (match?.[1] && !urlIds.includes(match[1])) urlIds.push(match[1]);
     }
-    for (const text of discovery.hydrationTexts) collectVideoIdsFromText(text, username, videoIds);
-    collectVideoIdsFromText(discovery.html, username, videoIds);
+    collectVideoIdsFromText(discovery.html, username, urlIds);
 
+    const videoIds = [...structuredIds, ...urlIds.filter((id) => !structuredIds.includes(id))];
     const ids = videoIds.slice(0, limit);
     const urls = ids.map((id) => `https://www.tiktok.com/@${username}/video/${id}`);
     const posts: PostMetrics[] = [];
-    const diagnostics: Array<{ id: string; url: string; hydrationPayloadCount: number; found: boolean; blocked: boolean }> = [];
+    const diagnostics: Array<{
+      id: string;
+      url: string;
+      hydrationPayloadCount: number;
+      found: boolean;
+      blocked: boolean;
+      observedPostIds: string[];
+    }> = [];
 
     for (const url of urls) {
       const idMatch = url.match(/\/video\/(\d+)/u);
@@ -226,17 +307,28 @@ async function main(): Promise<void> {
 
         const payloads = snapshot.scripts.map(parseJson).filter((payload) => payload !== null);
         let found: PostMetrics | null = null;
+        const observedPostIds: string[] = [];
         for (const payload of payloads) {
           found ??= findPostDeep(payload, username, id);
+          for (const observedId of collectObservedPostIds(payload, username)) {
+            if (!observedPostIds.includes(observedId)) observedPostIds.push(observedId);
+          }
         }
         if (found) posts.push(found);
 
         const bodyLower = snapshot.bodyText.toLowerCase();
         const blocked = ["captcha", "verify to continue", "security verification", "access denied"]
           .some((marker) => bodyLower.includes(marker));
-        diagnostics.push({ id, url, hydrationPayloadCount: payloads.length, found: Boolean(found), blocked });
+        diagnostics.push({
+          id,
+          url,
+          hydrationPayloadCount: payloads.length,
+          found: Boolean(found),
+          blocked,
+          observedPostIds: observedPostIds.slice(0, 10),
+        });
       } catch {
-        diagnostics.push({ id, url, hydrationPayloadCount: 0, found: false, blocked: false });
+        diagnostics.push({ id, url, hydrationPayloadCount: 0, found: false, blocked: false, observedPostIds: [] });
       } finally {
         await page.close();
       }
@@ -247,6 +339,8 @@ async function main(): Promise<void> {
       discovery: {
         anchorVideoUrls: discovery.anchorUrls.length,
         hydrationScripts: discovery.hydrationTexts.filter(Boolean).length,
+        structuredPostIds: structuredIds.length,
+        urlDerivedVideoIds: urlIds.length,
         candidateVideoIds: videoIds.length,
       },
       discoveredVideoUrls: urls.length,
