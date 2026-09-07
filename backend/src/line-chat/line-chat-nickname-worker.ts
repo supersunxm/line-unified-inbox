@@ -6,6 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import { LineChatNicknameWorkerModule } from "./line-chat-nickname-worker.module";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
+import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-image-relay-worker.service";
 
 const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
 
@@ -43,7 +44,8 @@ async function bootstrap() {
   });
 
   app.get(LineChatNicknameWorkerService);
-  const relay = app.get(LineChatManagerMessageRelayWorkerService);
+  const textRelay = app.get(LineChatManagerMessageRelayWorkerService);
+  const imageRelay = app.get(LineChatManagerImageRelayWorkerService);
   const internalSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim() || "";
   const internalPort = Number(process.env.LINE_CHAT_INTERNAL_PORT || "3002");
 
@@ -56,7 +58,9 @@ async function bootstrap() {
         return;
       }
 
-      if (request.method !== "POST" || requestUrl.pathname !== "/internal/line-chat/send-text") {
+      const isTextRelay = request.method === "POST" && requestUrl.pathname === "/internal/line-chat/send-text";
+      const isImageRelay = request.method === "POST" && requestUrl.pathname === "/internal/line-chat/send-image";
+      if (!isTextRelay && !isImageRelay) {
         writeJson(response, 404, { success: false, error: "NOT_FOUND" });
         return;
       }
@@ -69,27 +73,42 @@ async function bootstrap() {
       const body = await readJsonBody(request) as {
         conversationId?: unknown;
         text?: unknown;
+        imageUrl?: unknown;
         idempotencyKey?: unknown;
       };
-      if (
+      const commonInvalid =
         typeof body.conversationId !== "string"
         || !body.conversationId.trim()
-        || typeof body.text !== "string"
-        || !body.text.trim()
-        || body.text.length > 5000
         || typeof body.idempotencyKey !== "string"
         || !body.idempotencyKey.trim()
-        || body.idempotencyKey.length > 200
-      ) {
+        || body.idempotencyKey.length > 200;
+      const textInvalid = isTextRelay && (
+        typeof body.text !== "string"
+        || !body.text.trim()
+        || body.text.length > 5000
+      );
+      const imageInvalid = isImageRelay && (
+        typeof body.imageUrl !== "string"
+        || !body.imageUrl.trim()
+        || body.imageUrl.length > 4096
+      );
+      if (commonInvalid || textInvalid || imageInvalid) {
         writeJson(response, 400, { success: false, error: "INVALID_REQUEST" });
         return;
       }
 
-      const result = await relay.relayText({
-        conversationId: body.conversationId.trim(),
-        text: body.text,
-        idempotencyKey: body.idempotencyKey.trim(),
-      });
+      const result = isTextRelay
+        ? await textRelay.relayText({
+            conversationId: (body.conversationId as string).trim(),
+            text: body.text as string,
+            idempotencyKey: (body.idempotencyKey as string).trim(),
+          })
+        : await imageRelay.relayImage({
+            conversationId: (body.conversationId as string).trim(),
+            imageUrl: (body.imageUrl as string).trim(),
+            idempotencyKey: (body.idempotencyKey as string).trim(),
+          });
+
       if (!result.handled) {
         writeJson(response, 409, { success: false, handled: false, error: "NOT_PILOT_CONVERSATION" });
         return;
