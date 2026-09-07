@@ -1,108 +1,30 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  fetchLatestTikTokAccountFromBackend,
-  fetchTikTokAccountsListFromBackend,
-  fetchTikTokBulkMetricsSummaryFromBackend,
-  fetchTikTokHistoricalMetricsFromBackend,
-} from "./tiktok-api-client";
-import { TikTokOverviewResponsive } from "./tiktok-overview-responsive";
-import type { TikTokAccountListItem } from "./tiktok-types";
-import {
-  getTikTokDemoGrowthMetrics,
-  isTikTokDemoGrowthEnabled,
-} from "./dashboard/tiktok-demo-growth";
+import { TikTokPublicDashboard } from "./tiktok-public-dashboard";
+import { fetchTikTokPublicOverview, fetchTikTokPublicStores } from "./tiktok-public-api";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "TikTok Account Overview | OPPO Retail TikTok Monitor",
-  description: "Authorized TikTok store account profile, metrics, and module overview.",
-  robots: {
-    index: false,
-    follow: false,
-  },
+  title: "TikTok Analytics | OPPO Retail Operations",
+  description: "Public TikTok profile analytics for OPPO retail stores.",
+  robots: { index: false, follow: false },
 };
-
-function isTwoStorePreviewEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_TIKTOK_DEMO_MULTI_STORE === "true";
-}
-
-function createSecondStorePreview(source: TikTokAccountListItem): TikTokAccountListItem {
-  return {
-    ...source,
-    id: "demo-preview-mega-bangna",
-    openId: "demo-preview-mega-bangna",
-    unionId: null,
-    username: "o_megab a ngna".replaceAll(" ", ""),
-    displayName: "O-Mega Bangna · DEMO",
-    avatarUrl: null,
-    avatarUrl100: null,
-    avatarLargeUrl: null,
-    bioDescription: "Preview store used only to review the two-store overview layout.",
-    profileDeepLink: null,
-    profileWebLink: null,
-    isVerified: false,
-    followerCount: 12_317,
-    followingCount: 272,
-    likesCount: 86_047,
-    videoCount: 318,
-    videoCountRecorded: 20,
-    connectionStatus: "DEMO PREVIEW",
-    storeMasterId: "demo-preview-mega-bangna-store",
-    storeMaster: {
-      id: "demo-preview-mega-bangna-store",
-      storeName: "OBS Mega Bangna By OPPO",
-      accountName: "O-Mega Bangna",
-      province: "Samut Prakan",
-      region: "Central",
-    },
-  };
-}
 
 export default async function TikTokOverviewPage() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("oppo_session")?.value?.trim();
+  if (!sessionToken) redirect("/login");
 
-  if (!sessionToken) {
-    redirect("/login");
+  try {
+    const [overview, stores] = await Promise.all([
+      fetchTikTokPublicOverview({ sessionToken }),
+      fetchTikTokPublicStores({ sessionToken }),
+    ]);
+    return <TikTokPublicDashboard overview={overview} stores={stores} />;
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") redirect("/login");
+    throw error;
   }
-
-  const [accounts, bulkMetricsSummary] = await Promise.all([
-    fetchTikTokAccountsListFromBackend({ sessionToken }),
-    fetchTikTokBulkMetricsSummaryFromBackend(30, { sessionToken }),
-  ]);
-
-  const singleAccountId = accounts.length === 1 ? accounts[0].id : null;
-
-  const [singleAccountData, realHistoricalMetrics] =
-    accounts.length === 1
-      ? await Promise.all([
-          fetchLatestTikTokAccountFromBackend({ sessionToken }),
-          singleAccountId
-            ? fetchTikTokHistoricalMetricsFromBackend(singleAccountId, 30, {
-                sessionToken,
-              })
-            : Promise.resolve(null),
-        ])
-      : [null, null];
-
-  const historicalMetrics = isTikTokDemoGrowthEnabled()
-    ? getTikTokDemoGrowthMetrics(singleAccountId || "acc-central-world")
-    : realHistoricalMetrics;
-
-  const overviewAccounts =
-    isTwoStorePreviewEnabled() && accounts.length === 1
-      ? [accounts[0], createSecondStorePreview(accounts[0])]
-      : accounts;
-
-  return (
-    <TikTokOverviewResponsive
-      accounts={overviewAccounts}
-      singleAccountData={singleAccountData}
-      historicalMetrics={historicalMetrics}
-      bulkMetricsSummary={bulkMetricsSummary}
-    />
-  );
 }
