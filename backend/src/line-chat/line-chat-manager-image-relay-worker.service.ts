@@ -25,6 +25,16 @@ const SEND_BUTTON_SELECTORS = [
   'button:has-text("ส่ง")',
 ] as const;
 
+const ATTACHMENT_SURFACE_SELECTORS = [
+  "img",
+  "canvas",
+  '[style*="background-image"]',
+  '[class*="preview" i]',
+  '[class*="attachment" i]',
+  '[data-testid*="preview" i]',
+  '[data-testid*="image" i]',
+] as const;
+
 type RelayConversation = {
   id: string;
   storeId: string | null;
@@ -107,6 +117,7 @@ export class LineChatManagerImageRelayWorkerService {
         lineChatUserId: conversation.lineChatUserId?.trim() || "resolved-on-prior-attempt",
       };
     }
+
     const existing = this.inFlight.get(dedupeKey);
     if (existing) {
       const result = await existing;
@@ -162,13 +173,7 @@ export class LineChatManagerImageRelayWorkerService {
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (operationContext) => {
         operationContext.assertOwnership();
-        await this.sendViaManager({
-          storeCode,
-          botId,
-          lineChatUserId,
-          profilePath,
-          image,
-        });
+        await this.sendViaManager({ storeCode, botId, lineChatUserId, profilePath, image });
         operationContext.assertOwnership();
       },
     );
@@ -207,16 +212,11 @@ export class LineChatManagerImageRelayWorkerService {
       if (!response.ok) throw new Error(`IMAGE_FETCH_${response.status}`);
       const lengthHeader = Number(response.headers.get("content-length") || "0");
       if (lengthHeader > MAX_IMAGE_BYTES) throw new Error("IMAGE_TOO_LARGE");
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const buffer = Buffer.from(await response.arrayBuffer());
       if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) throw new Error("IMAGE_TOO_LARGE");
       const mimeType = detectMime(buffer);
       if (!mimeType || !SUPPORTED_MIME.has(mimeType)) throw new Error("UNSUPPORTED_IMAGE");
-      return {
-        buffer,
-        mimeType,
-        filename: `image-${Date.now()}.${extensionFor(mimeType)}`,
-      };
+      return { buffer, mimeType, filename: `image-${Date.now()}.${extensionFor(mimeType)}` };
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
       const code = error instanceof Error ? error.message : "IMAGE_FETCH_FAILED";
@@ -260,15 +260,24 @@ export class LineChatManagerImageRelayWorkerService {
         throw new ServiceUnavailableException("ไม่พบปุ่มแนบรูปใน LINE OA Manager กรุณาตรวจสอบหน้า chat.line.biz");
       }
 
-      const beforeImages = await this.countVisibleImages(page);
+      const beforeAttachmentSurfaces = await this.countAttachmentSurfaces(page);
       await fileInput.setInputFiles({
         name: input.image.filename,
         mimeType: input.image.mimeType,
         buffer: input.image.buffer,
       });
 
-      const previewReady = await this.waitForPreview(page, fileInput, beforeImages);
+      const previewReady = await this.waitForPreview(page, fileInput, beforeAttachmentSurfaces);
       if (!previewReady) {
+        const filesCount = await this.fileCount(fileInput);
+        const currentAttachmentSurfaces = await this.countAttachmentSurfaces(page);
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_image_preview_not_detected",
+          storeCode: input.storeCode,
+          filesCount,
+          beforeAttachmentSurfaces,
+          currentAttachmentSurfaces,
+        }));
         throw new ServiceUnavailableException("LINE OA Manager ไม่แสดงตัวอย่างรูปก่อนส่ง จึงยกเลิกเพื่อป้องกันการส่งผิดห้อง");
       }
 
@@ -278,7 +287,7 @@ export class LineChatManagerImageRelayWorkerService {
       }
       await sendButton.click({ timeout: 5_000 });
 
-      const verified = await this.waitForDeliveryVerification(page, fileInput, beforeImages);
+      const verified = await this.waitForDeliveryVerification(page, fileInput, beforeAttachmentSurfaces);
       if (!verified) {
         throw new ServiceUnavailableException("ยังยืนยันการส่งรูปจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกว่าส่งสำเร็จ");
       }
@@ -330,35 +339,41 @@ export class LineChatManagerImageRelayWorkerService {
     return null;
   }
 
-  private async countVisibleImages(page: Page): Promise<number> {
+  private async fileCount(fileInput: Locator): Promise<number> {
+    return fileInput.evaluate((element: HTMLInputElement) => element.files?.length ?? 0).catch(() => 0);
+  }
+
+  private async countAttachmentSurfaces(page: Page): Promise<number> {
     let total = 0;
     for (const frame of page.frames()) {
-      const images = frame.locator("img");
-      const count = Math.min(await images.count().catch(() => 0), 250);
-      for (let i = 0; i < count; i += 1) {
-        if (await images.nth(i).isVisible().catch(() => false)) total += 1;
+      for (const selector of ATTACHMENT_SURFACE_SELECTORS) {
+        const matches = frame.locator(selector);
+        const count = Math.min(await matches.count().catch(() => 0), 250);
+        for (let i = 0; i < count; i += 1) {
+          if (await matches.nth(i).isVisible().catch(() => false)) total += 1;
+        }
       }
     }
     return total;
   }
 
-  private async waitForPreview(page: Page, fileInput: Locator, beforeImages: number): Promise<boolean> {
+  private async waitForPreview(page: Page, fileInput: Locator, beforeAttachmentSurfaces: number): Promise<boolean> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const filesCount = await fileInput.evaluate((element: HTMLInputElement) => element.files?.length ?? 0).catch(() => 0);
-      const currentImages = await this.countVisibleImages(page);
-      if (filesCount > 0 && currentImages > beforeImages) return true;
+      const filesCount = await this.fileCount(fileInput);
+      const currentAttachmentSurfaces = await this.countAttachmentSurfaces(page);
+      if (filesCount > 0 || currentAttachmentSurfaces > beforeAttachmentSurfaces) return true;
       await page.waitForTimeout(250);
     }
     return false;
   }
 
-  private async waitForDeliveryVerification(page: Page, fileInput: Locator, beforeImages: number): Promise<boolean> {
+  private async waitForDeliveryVerification(page: Page, fileInput: Locator, beforeAttachmentSurfaces: number): Promise<boolean> {
     const deadline = Date.now() + 12_000;
     while (Date.now() < deadline) {
-      const filesCount = await fileInput.evaluate((element: HTMLInputElement) => element.files?.length ?? 0).catch(() => 0);
-      const currentImages = await this.countVisibleImages(page);
-      if (filesCount === 0 && currentImages > beforeImages) return true;
+      const filesCount = await this.fileCount(fileInput);
+      const currentAttachmentSurfaces = await this.countAttachmentSurfaces(page);
+      if (filesCount === 0 && currentAttachmentSurfaces > beforeAttachmentSurfaces) return true;
       await page.waitForTimeout(300);
     }
     return false;
