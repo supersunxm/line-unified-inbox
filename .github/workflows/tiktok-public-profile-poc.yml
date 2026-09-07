@@ -6,6 +6,7 @@ on:
       - "backend/src/tiktok/tiktok-public-profile.ts"
       - "backend/src/tiktok/tiktok-public-profile.spec.ts"
       - "backend/scripts/tiktok-public-profile-probe.ts"
+      - "backend/scripts/tiktok-public-post-probe.ts"
       - "backend/package.json"
       - ".github/workflows/tiktok-public-profile-poc.yml"
   workflow_dispatch:
@@ -78,11 +79,27 @@ jobs:
             echo "Public profile probe failed before producing a usable diagnostic." >> "$GITHUB_STEP_SUMMARY"
           fi
           exit 0
+      - name: Probe exact recent post metrics
+        shell: bash
+        run: |
+          set +e
+          npx tsx scripts/tiktok-public-post-probe.ts "$TIKTOK_PROBE_USERNAME" 3 | tee tiktok-public-post-probe.json
+          post_exit=${PIPESTATUS[0]}
+          if [ "$post_exit" -eq 0 ]; then
+            echo "Recent public post probe extracted exact post metrics." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$post_exit" -eq 2 ]; then
+            echo "No exact recent post metrics were extracted from public video pages on this runner." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Recent public post probe failed before producing a usable diagnostic." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
       - name: Upload sanitized diagnostic
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tiktok-public-profile-${{ env.TIKTOK_PROBE_USERNAME }}
-          path: backend/tiktok-public-profile-probe.json
+          path: |
+            backend/tiktok-public-profile-probe.json
+            backend/tiktok-public-post-probe.json
           if-no-files-found: warn
           retention-days: 7
