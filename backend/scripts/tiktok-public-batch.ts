@@ -8,6 +8,7 @@ import { probeTikTokPublicProfile } from "../src/tiktok/tiktok-public-profile";
 interface Options {
   apply: boolean;
   limit: number;
+  offset: number;
   delayMs: number;
   storeIds: string[];
 }
@@ -31,7 +32,8 @@ interface BatchRow {
 }
 
 const MAX_LIMIT = 30;
-const MIN_DELAY_MS = 1_000;
+const MIN_DELAY_MS = 4_000;
+const DEFAULT_DELAY_MS = 5_000;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -39,10 +41,17 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function parseArgs(argv: string[]): Options {
   let apply = false;
   let limit = 1;
-  let delayMs = 2_500;
+  let offset = 0;
+  let delayMs = DEFAULT_DELAY_MS;
   const storeIds: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -53,6 +62,11 @@ function parseArgs(argv: string[]): Options {
     }
     if (arg === "--limit") {
       limit = parsePositiveInt(argv[index + 1], limit);
+      index += 1;
+      continue;
+    }
+    if (arg === "--offset") {
+      offset = parseNonNegativeInt(argv[index + 1], offset);
       index += 1;
       continue;
     }
@@ -71,6 +85,7 @@ function parseArgs(argv: string[]): Options {
   return {
     apply,
     limit: Math.min(Math.max(limit, 1), MAX_LIMIT),
+    offset: Math.max(offset, 0),
     delayMs: Math.max(delayMs, MIN_DELAY_MS),
     storeIds: [...new Set(storeIds)],
   };
@@ -104,6 +119,7 @@ async function main(): Promise<void> {
         tiktokProfileUrl: true,
       },
       orderBy: [{ storeName: "asc" }, { id: "asc" }],
+      skip: options.offset,
       take: options.limit,
     });
 
@@ -169,13 +185,25 @@ async function main(): Promise<void> {
           error: null,
         });
       } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown collector failure";
+        let diagnosticCategory = "PARSE_FAILED";
+        if (
+          errorMsg.includes("Invalid TikTok username") ||
+          errorMsg.includes("username is required") ||
+          errorMsg.includes("profile username")
+        ) {
+          diagnosticCategory = "INVALID_USERNAME";
+        } else if (errorMsg.includes("navigation") || errorMsg.includes("net::")) {
+          diagnosticCategory = "NAVIGATION_FAILED";
+        }
+
         rows.push({
           storeMasterId: store.id,
           storeName: store.storeName,
           usernameInput,
           finalUrl: null,
           status: "FAILED",
-          diagnosticCategory: "PARSE_FAILED",
+          diagnosticCategory,
           statusCode: null,
           persisted: false,
           followerCount: null,
@@ -184,7 +212,7 @@ async function main(): Promise<void> {
           videoCount: null,
           metricSource: null,
           metricPrecision: null,
-          error: error instanceof Error ? error.message : "Unknown collector failure",
+          error: errorMsg,
         });
       }
 
@@ -194,6 +222,7 @@ async function main(): Promise<void> {
     const summary = {
       mode: options.apply ? "APPLY" : "DRY_RUN",
       requestedLimit: options.limit,
+      requestedOffset: options.offset,
       selectedStores: stores.length,
       delayMs: options.delayMs,
       successCount: rows.filter((row) => row.status === "OK").length,
@@ -203,8 +232,11 @@ async function main(): Promise<void> {
         okExact: rows.filter((row) => row.diagnosticCategory === "OK_EXACT").length,
         audienceControlled: rows.filter((row) => row.diagnosticCategory === "AUDIENCE_CONTROLLED").length,
         accountNotFound: rows.filter((row) => row.diagnosticCategory === "ACCOUNT_NOT_FOUND").length,
+        invalidUsername: rows.filter((row) => row.diagnosticCategory === "INVALID_USERNAME").length,
+        verificationRequired: rows.filter((row) => row.diagnosticCategory === "VERIFICATION_REQUIRED").length,
         blockedOrChanged: rows.filter((row) => row.diagnosticCategory === "BLOCKED_OR_CHANGED").length,
         parseFailed: rows.filter((row) => row.diagnosticCategory === "PARSE_FAILED").length,
+        navigationFailed: rows.filter((row) => row.diagnosticCategory === "NAVIGATION_FAILED").length,
       },
       rows,
     };

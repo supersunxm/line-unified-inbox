@@ -181,7 +181,7 @@ test("classifyTikTokDiagnostics categorizes public profile outcomes correctly", 
       hydrationCount: 0,
       navigationMessage: null,
     }).category,
-    "BLOCKED_OR_CHANGED",
+    "VERIFICATION_REQUIRED",
   );
 
   assert.equal(

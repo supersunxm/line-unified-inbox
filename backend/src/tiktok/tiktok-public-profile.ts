@@ -7,8 +7,11 @@ export type TikTokPublicDiagnosticCategory =
   | "OK_EXACT"
   | "AUDIENCE_CONTROLLED"
   | "ACCOUNT_NOT_FOUND"
+  | "INVALID_USERNAME"
   | "BLOCKED_OR_CHANGED"
-  | "PARSE_FAILED";
+  | "PARSE_FAILED"
+  | "NAVIGATION_FAILED"
+  | "VERIFICATION_REQUIRED";
 
 export interface TikTokPublicProfile {
   username: string;
@@ -360,7 +363,7 @@ export function classifyTikTokDiagnostics(params: {
 
   if (captchaOrBlockDetected) {
     return {
-      category: "BLOCKED_OR_CHANGED",
+      category: "VERIFICATION_REQUIRED",
       message: "TikTok presented a verification/block page to the collector.",
     };
   }
@@ -372,9 +375,16 @@ export function classifyTikTokDiagnostics(params: {
     };
   }
 
+  if (navigationMessage) {
+    return {
+      category: "NAVIGATION_FAILED",
+      message: navigationMessage,
+    };
+  }
+
   return {
     category: "BLOCKED_OR_CHANGED",
-    message: navigationMessage ?? "No recognized public profile payload was found; TikTok page structure may have changed.",
+    message: "No recognized public profile payload was found; TikTok page structure may have changed.",
   };
 }
 
