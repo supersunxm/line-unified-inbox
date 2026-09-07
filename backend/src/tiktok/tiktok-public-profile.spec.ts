@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  extractTikTokPublicData,
+  extractTikTokPublicProfile,
   normalizeTikTokPublicUsername,
 } from "./tiktok-public-profile";
 
@@ -16,7 +16,7 @@ test("normalizeTikTokPublicUsername accepts username, @username, and profile URL
   assert.throws(() => normalizeTikTokPublicUsername("bad username"), /Invalid/u);
 });
 
-test("extractTikTokPublicData prefers exact statsV2 counts and reads recent posts", () => {
+test("extractTikTokPublicProfile prefers exact statsV2 counts over rounded stats", () => {
   const payload = {
     __DEFAULT_SCOPE__: {
       "webapp.user-detail": {
@@ -42,29 +42,10 @@ test("extractTikTokPublicData prefers exact statsV2 counts and reads recent post
           },
         },
       },
-      "webapp.user-post": {
-        itemList: [
-          {
-            id: "7600000000000000001",
-            desc: "Reno launch",
-            createTime: 1788700000,
-            author: { uniqueId: "o_centralworld" },
-            video: { cover: "https://example.com/cover.jpg" },
-            stats: {
-              playCount: 4521,
-              diggCount: 325,
-              commentCount: 17,
-              shareCount: 24,
-            },
-          },
-        ],
-      },
     },
   };
 
-  const result = extractTikTokPublicData([payload], "@o_centralworld");
-
-  assert.deepEqual(result.profile, {
+  assert.deepEqual(extractTikTokPublicProfile([payload], "@o_centralworld"), {
     username: "o_centralworld",
     displayName: "OPPO Brand Shop CentralWorld",
     avatarUrl: "https://example.com/avatar.jpg",
@@ -76,14 +57,9 @@ test("extractTikTokPublicData prefers exact statsV2 counts and reads recent post
     videoCount: 368,
     profileUrl: "https://www.tiktok.com/@o_centralworld",
   });
-  assert.equal(result.posts.length, 1);
-  assert.equal(result.posts[0].viewCount, 4521);
-  assert.equal(result.posts[0].likeCount, 325);
-  assert.equal(result.posts[0].commentCount, 17);
-  assert.equal(result.posts[0].shareCount, 24);
 });
 
-test("extractTikTokPublicData supports legacy UserModule/ItemModule shapes and filters other authors", () => {
+test("extractTikTokPublicProfile supports legacy UserModule profile shapes", () => {
   const payload = {
     UserModule: {
       users: {
@@ -103,60 +79,11 @@ test("extractTikTokPublicData supports legacy UserModule/ItemModule shapes and f
         },
       },
     },
-    ItemModule: {
-      own: {
-        id: "own-video",
-        desc: "Own post",
-        createTime: 1788700100,
-        author: { uniqueId: "o_centralworld" },
-        stats: {
-          playCount: "900",
-          diggCount: "90",
-          commentCount: "9",
-          shareCount: "3",
-        },
-      },
-      other: {
-        id: "other-video",
-        desc: "Other post",
-        createTime: 1788700200,
-        author: { uniqueId: "another_store" },
-        stats: {
-          playCount: 999999,
-          diggCount: 999,
-          commentCount: 99,
-          shareCount: 9,
-        },
-      },
-    },
   };
 
-  const result = extractTikTokPublicData([payload], "o_centralworld");
-
-  assert.equal(result.profile?.followerCount, 1000);
-  assert.equal(result.profile?.likesCount, 20000);
-  assert.deepEqual(result.posts.map((post) => post.id), ["own-video"]);
-});
-
-test("extractTikTokPublicData deduplicates repeated network and hydration post payloads", () => {
-  const post = {
-    id: "same-video",
-    desc: "Repeated",
-    createTime: 1788700300,
-    author: { uniqueId: "o_centralworld" },
-    stats: {
-      playCount: 100,
-      diggCount: 10,
-      commentCount: 1,
-      shareCount: 2,
-    },
-  };
-
-  const result = extractTikTokPublicData(
-    [{ itemList: [post] }, { data: { itemList: [post] } }],
-    "o_centralworld",
-  );
-
-  assert.equal(result.posts.length, 1);
-  assert.equal(result.posts[0].id, "same-video");
+  const profile = extractTikTokPublicProfile([payload], "o_centralworld");
+  assert.equal(profile?.followerCount, 1000);
+  assert.equal(profile?.followingCount, 50);
+  assert.equal(profile?.likesCount, 20000);
+  assert.equal(profile?.videoCount, 100);
 });
