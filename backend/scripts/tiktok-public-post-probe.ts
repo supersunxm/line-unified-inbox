@@ -178,6 +178,21 @@ function sanitizePrefix(text: string): string {
   return text.slice(0, 240).replace(/[\r\n\t]+/gu, " ").replace(/\s{2,}/gu, " ").trim();
 }
 
+function extractVideoUrls(text: string, username: string, limit: number): string[] {
+  const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const pattern = new RegExp(`https?:\\/\\/(?:www\\.)?tiktok\\.com\\/@${escapedUsername}\\/video\\/(\\d{10,})`, "giu");
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(pattern)) {
+    const id = match[1];
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    urls.push(`https://www.tiktok.com/@${username}/video/${id}`);
+    if (urls.length >= limit) break;
+  }
+  return urls;
+}
+
 async function main(): Promise<void> {
   const username = normalizeUsername(process.argv[2] || "o_centralworld");
   const requestedLimit = Number(process.argv[3] || "3");
@@ -231,7 +246,6 @@ async function main(): Promise<void> {
           });
           const text = await response.text();
           return {
-            ok: response.ok,
             status: response.status,
             contentType: response.headers.get("content-type"),
             text: text.slice(0, 2_000_000),
@@ -239,7 +253,6 @@ async function main(): Promise<void> {
           };
         } catch (error: unknown) {
           return {
-            ok: false,
             status: 0,
             contentType: null,
             text: "",
@@ -256,9 +269,93 @@ async function main(): Promise<void> {
       apiPayload = parseJson(apiResult.text);
     }
 
+    let oembedStatus: number | null = null;
+    let oembedType: string | null = null;
+    let oembedHtmlLength = 0;
+    let oembedRenderedVideoUrls: string[] = [];
+    let oembedError: string | null = null;
+
+    try {
+      const profileUrl = `https://www.tiktok.com/@${username}`;
+      const oembedResponse = await context.request.get(
+        `https://www.tiktok.com/oembed?url=${encodeURIComponent(profileUrl)}`,
+        { headers: { accept: "application/json" } },
+      );
+      oembedStatus = oembedResponse.status();
+      const oembedText = await oembedResponse.text();
+      const oembedPayload = parseJson(oembedText);
+      const oembedRecord = isRecord(oembedPayload) ? oembedPayload : null;
+      oembedType = oembedRecord ? asString(oembedRecord.type) : null;
+      const oembedHtml = oembedRecord ? asString(oembedRecord.html) : null;
+      oembedHtmlLength = oembedHtml?.length ?? 0;
+
+      if (oembedHtml) {
+        const embedPage = await context.newPage();
+        try {
+          await embedPage.setContent(`<!doctype html><html><body>${oembedHtml}</body></html>`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          });
+          await embedPage.waitForTimeout(5_000);
+          const renderedHtml = await embedPage.content();
+          const renderedText = await embedPage.locator("body").innerText().catch(() => "");
+          oembedRenderedVideoUrls = extractVideoUrls(
+            `${renderedHtml}\n${renderedText}`,
+            username,
+            Math.max(limit, 10),
+          );
+        } finally {
+          await embedPage.close();
+        }
+      }
+    } catch (error: unknown) {
+      oembedError = error instanceof Error ? error.message : "oEmbed probe failed";
+    }
+
     const postsById = new Map<string, PostMetrics>();
     for (const payload of hydrationPayloads) collectPostsDeep(payload, username, postsById);
     if (apiPayload !== null) collectPostsDeep(apiPayload, username, postsById);
+
+    const videoPageDiagnostics: Array<{
+      url: string;
+      hydrationPayloadCount: number;
+      foundExactPost: boolean;
+      blocked: boolean;
+    }> = [];
+
+    for (const videoUrl of oembedRenderedVideoUrls.slice(0, limit)) {
+      if (postsById.size >= limit) break;
+      const page = await context.newPage();
+      try {
+        await page.goto(videoUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await page.waitForTimeout(2_000);
+        const snapshot = await page.evaluate((scriptIds) => ({
+          scripts: scriptIds.map((id) => document.getElementById(id)?.textContent ?? ""),
+          bodyText: (document.body?.innerText ?? "").slice(0, 4_000),
+        }), HYDRATION_IDS);
+        const payloads = snapshot.scripts.map(parseJson).filter((value) => value !== null);
+        const before = postsById.size;
+        for (const payload of payloads) collectPostsDeep(payload, username, postsById);
+        const bodyLower = snapshot.bodyText.toLowerCase();
+        const blocked = ["captcha", "verify to continue", "security verification", "access denied"]
+          .some((marker) => bodyLower.includes(marker));
+        videoPageDiagnostics.push({
+          url: videoUrl,
+          hydrationPayloadCount: payloads.length,
+          foundExactPost: postsById.size > before,
+          blocked,
+        });
+      } catch {
+        videoPageDiagnostics.push({
+          url: videoUrl,
+          hydrationPayloadCount: 0,
+          foundExactPost: false,
+          blocked: false,
+        });
+      } finally {
+        await page.close();
+      }
+    }
 
     const posts = Array.from(postsById.values())
       .sort((a, b) => {
@@ -281,12 +378,21 @@ async function main(): Promise<void> {
         parsedJson: apiPayload !== null,
         error: apiError,
       },
+      creatorOembed: {
+        attempted: true,
+        status: oembedStatus,
+        type: oembedType,
+        htmlLength: oembedHtmlLength,
+        renderedVideoUrls: oembedRenderedVideoUrls.length,
+        error: oembedError,
+      },
       exactPostsFound: posts.length,
       posts,
+      videoPageDiagnostics,
       fetchedAt: new Date().toISOString(),
     }, null, 2)}\n`);
 
-    if (posts.length === 0) process.exitCode = 2;
+    if (posts.length === 0 && oembedRenderedVideoUrls.length === 0) process.exitCode = 2;
   } finally {
     await browser.close();
   }
