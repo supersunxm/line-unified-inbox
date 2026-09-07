@@ -9,6 +9,8 @@ import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operati
 import { LineChatHealthService } from "./line-chat-health.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
 import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
+import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
+import { LineChatManagerMessageRelayService } from "./line-chat-manager-message-relay.service";
 
 @Global()
 @Module({
@@ -22,6 +24,8 @@ import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
     LineChatHealthService,
     LineChatSessionHealthProbeService,
     LineChatAuthRecoveryService,
+    LineChatRecentResolverService,
+    LineChatManagerMessageRelayService,
   ],
   exports: [
     LineChatSessionService,
@@ -31,6 +35,8 @@ import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
     LineChatHealthService,
     LineChatSessionHealthProbeService,
     LineChatAuthRecoveryService,
+    LineChatRecentResolverService,
+    LineChatManagerMessageRelayService,
   ],
 })
 export class LineChatModule {}
