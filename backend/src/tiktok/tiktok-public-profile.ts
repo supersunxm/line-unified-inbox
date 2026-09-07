@@ -362,7 +362,7 @@ export function extractTikTokPublicData(
   return { profile, posts };
 }
 
-function parseJsonPayload(text: string | null): unknown | null {
+function parseJsonPayload(text: string | null): unknown {
   if (!text?.trim()) return null;
   try {
     return JSON.parse(text) as unknown;
@@ -453,7 +453,7 @@ export async function probeTikTokPublicProfile(
 
     const hydrationPayloads = pageSnapshot.scripts
       .map((script) => parseJsonPayload(script.text))
-      .filter((payload): payload is unknown => payload !== null);
+      .filter((payload) => payload !== null);
     const allPayloads = [...hydrationPayloads, ...capturedPayloads];
     const extracted = extractTikTokPublicData(allPayloads, username);
 
