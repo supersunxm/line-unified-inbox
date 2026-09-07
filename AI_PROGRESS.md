@@ -1,5 +1,31 @@
 # AI Progress Log
 
+## 2026-09-07: Google Review Weekly KPI Maps DOM Recovery & Collector Safeguards [IMPLEMENTED & VERIFIED]
+- **Current Task**: Diagnose and fix Google Review collector failure caused by Google Maps DOM layout shift / Limited View, eliminate silent `ZERO_REVIEWS_PLACE` misclassification, implement resilient reviews discovery, and add fail-safe systemic failure guards.
+- **Root Cause Confirmed**:
+  - Google Maps has rolled out "Limited View" (`มุมมองแบบจำกัด`) for unauthenticated browser sessions, which omits the Reviews tab from the tablist and hides review cards while still displaying place ratings (e.g. 4.9).
+  - The previous collector code checked only `button[role='tab']` for `รีวิว`/`review`. When absent, it silently classified the store as `ZERO_REVIEWS_PLACE`, reporting `SUCCESS` with 0 new reviews and 0 errors across 65 stores.
+- **Changes Implemented**:
+  - Created [`maps-dom-helper.mjs`](file:///Users/chutisoa.nup/Projects/line-unified-inbox/backend/scripts/weekly-collector/maps-dom-helper.mjs):
+    - `evaluatePlaceStatus`: Detects Limited View (`มุมมองแบบจำกัด`), ratings, tabs, cards, and review triggers.
+    - `openReviewsPane`: Multi-layered fallback (checks already open, clicks review tab, clicks review triggers, distinguishes `CONFIRMED_ZERO_REVIEWS` from `ERROR_MAPS_LIMITED_VIEW_DETECTED`, `ERROR_REVIEW_CONTROL_NOT_FOUND`, `ERROR_REVIEW_PANEL_NOT_LOADED`).
+    - `ensureNewestSort`: Verifies and clicks "Newest" (`ใหม่ที่สุด`), returning `ALREADY_NEWEST`, `SORTED_TO_NEWEST`, or explicit errors (`ERROR_SORT_BUTTON_NOT_FOUND`, `ERROR_NEWEST_SORT_UNVERIFIED`).
+  - Updated [`continuous-collector.mjs`](file:///Users/chutisoa.nup/Projects/line-unified-inbox/backend/scripts/weekly-collector/continuous-collector.mjs):
+    - Replaced naive tab lookup with `openReviewsPane`, `ensureNewestSort`, and post-sort card verification.
+    - Returns structured error reasons instead of silently falling back to `ZERO_REVIEWS_PLACE`.
+  - Updated [`run-single-cycle.mjs`](file:///Users/chutisoa.nup/Projects/line-unified-inbox/backend/scripts/weekly-collector/run-single-cycle.mjs):
+    - Tracks granular outcome metrics: `successfulScans`, `confirmedZeroPlaces`, `scanFailures`, `limitedViewFailures`, `panelFailures`, `sortFailures`, `cardFailures`.
+    - Fail-safe systemic abort guard: Immediately terminates cycle with exit code 1 if 5 consecutive stores fail with the same error or if the failure rate reaches $\ge 20\%$ after $\ge 10$ stores.
+    - Untrusted outcomes skip writing KPI rows and mutate no daily or weekly records.
+  - Added test suite [`maps-dom-recovery.spec.ts`](file:///Users/chutisoa.nup/Projects/line-unified-inbox/backend/scripts/weekly-collector/maps-dom-recovery.spec.ts) (14 tests passed).
+- **Verification Results**:
+  - Unit tests: 14/14 passed in `maps-dom-recovery.spec.ts`.
+  - Full backend test suite: 1,755/1,755 passed.
+  - Backend build: `npm --prefix backend run build` SUCCESS.
+  - Diagnostic dry-run on CentralWorld: Correctly halted with `ERROR_MAPS_LIMITED_VIEW_DETECTED` instead of `ZERO_REVIEWS_PLACE`, writing 0 KPI rows.
+  - Database invariants verified: Week 1 = 274, Week 2 = 92, Sep 2 = 25, Sep 3 = 34, Sep 4 = 33, Fingerprints = 200.
+- **Next Action**: Review git diff and report status to the user.
+
 ## 2026-09-06: Automatic Lightweight Re-authentication Recovery for LINE Manager Sessions [DEPLOYED & VERIFIED IN PRODUCTION]
 - **Current Task**: Completed controlled production validation on `profile-b` using the admin "Try remembered login" action, followed by safe activation of automatic scheduler-triggered auth recovery (`LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED=true`).
 - **Phase 0 Safety Gate**:
