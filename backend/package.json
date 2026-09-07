@@ -21,6 +21,8 @@
     "google-review:weekly-collector": "node scripts/weekly-collector/run-single-cycle.mjs",
     "worker:rich-menu-publish": "tsx src/rich-menu/rich-menu-worker.ts",
     "worker:rich-menu-publish:prod": "node dist/rich-menu/rich-menu-worker.js",
+    "worker:follower-backfill": "tsx src/follower-insights/follower-insights-worker.ts",
+    "worker:follower-backfill:prod": "node dist/follower-insights/follower-insights-worker.js",
     "worker:line-chat-nickname": "tsx src/line-chat/line-chat-nickname-worker.ts",
     "worker:line-chat-nickname:prod": "node dist/line-chat/line-chat-nickname-worker.js",
     "line-chat:mapping:import": "tsx --env-file=.env scripts/import-line-chat-mappings.ts",
