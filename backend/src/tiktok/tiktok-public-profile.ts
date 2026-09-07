@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-export type TikTokPublicProbeStatus = "OK" | "PARTIAL" | "BLOCKED_OR_CHANGED";
+export type TikTokPublicProbeStatus = "OK" | "BLOCKED_OR_CHANGED";
 
 export interface TikTokPublicProfile {
   username: string;
@@ -15,23 +15,10 @@ export interface TikTokPublicProfile {
   profileUrl: string;
 }
 
-export interface TikTokPublicPost {
-  id: string;
-  description: string | null;
-  createTime: string | null;
-  coverImageUrl: string | null;
-  shareUrl: string | null;
-  viewCount: number | null;
-  likeCount: number | null;
-  commentCount: number | null;
-  shareCount: number | null;
-}
-
 export interface TikTokPublicProbeResult {
   status: TikTokPublicProbeStatus;
   fetchedAt: string;
   profile: TikTokPublicProfile | null;
-  recentPosts: TikTokPublicPost[];
   diagnostics: {
     finalUrl: string;
     pageTitle: string;
@@ -40,11 +27,6 @@ export interface TikTokPublicProbeResult {
     captchaOrBlockDetected: boolean;
     message: string | null;
   };
-}
-
-interface ExtractedPayloadData {
-  profile: TikTokPublicProfile | null;
-  posts: TikTokPublicPost[];
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -249,117 +231,16 @@ function findProfileDeep(value: unknown, targetUsername: string): TikTokPublicPr
   return walk(value, 0);
 }
 
-function extractUrlFromUnknown(value: unknown): string | null {
-  const direct = asString(value);
-  if (direct) return direct;
-  if (!isRecord(value)) return null;
-
-  for (const key of ["urlList", "url_list"]) {
-    const list = value[key];
-    if (!Array.isArray(list)) continue;
-    const first = list.map(asString).find((item): item is string => Boolean(item));
-    if (first) return first;
-  }
-  return firstString(value, ["url", "uri"]);
-}
-
-function buildPost(record: JsonRecord, targetUsername: string): TikTokPublicPost | null {
-  const id = firstString(record, ["id", "aweme_id", "itemId"]);
-  if (!id) return null;
-
-  const stats = isRecord(record.stats)
-    ? record.stats
-    : isRecord(record.statistics)
-      ? record.statistics
-      : null;
-  if (!stats) return null;
-
-  const author = isRecord(record.author) ? record.author : null;
-  const authorUsername = author
-    ? firstString(author, ["uniqueId", "unique_id", "username"])
-    : firstString(record, ["authorUniqueId", "author_username"]);
-  if (authorUsername && normalizeUsernameLoose(authorUsername) !== targetUsername) return null;
-
-  const viewCount = firstNumber(stats, ["playCount", "play_count", "viewCount", "view_count"]);
-  const likeCount = firstNumber(stats, ["diggCount", "digg_count", "likeCount", "like_count"]);
-  const commentCount = firstNumber(stats, ["commentCount", "comment_count"]);
-  const shareCount = firstNumber(stats, ["shareCount", "share_count"]);
-  if (viewCount === null && likeCount === null && commentCount === null && shareCount === null) {
-    return null;
-  }
-
-  const createTimeSeconds = firstNumber(record, ["createTime", "create_time"]);
-  const video = isRecord(record.video) ? record.video : null;
-  const shareInfo = isRecord(record.shareInfo) ? record.shareInfo : null;
-
-  return {
-    id,
-    description: firstString(record, ["desc", "description", "video_description", "title"]),
-    createTime:
-      createTimeSeconds !== null
-        ? new Date(createTimeSeconds * 1000).toISOString()
-        : null,
-    coverImageUrl: video
-      ? extractUrlFromUnknown(video.cover) ??
-        extractUrlFromUnknown(video.originCover) ??
-        extractUrlFromUnknown(video.dynamicCover)
-      : null,
-    shareUrl:
-      firstString(record, ["shareUrl", "share_url"]) ??
-      (shareInfo ? firstString(shareInfo, ["shareUrl", "share_url"]) : null) ??
-      `https://www.tiktok.com/@${targetUsername}/video/${id}`,
-    viewCount,
-    likeCount,
-    commentCount,
-    shareCount,
-  };
-}
-
-function collectPostsDeep(value: unknown, targetUsername: string, output: Map<string, TikTokPublicPost>): void {
-  const seen = new WeakSet<object>();
-
-  const walk = (current: unknown, depth: number): void => {
-    if (depth > 25 || current === null || typeof current !== "object") return;
-    if (seen.has(current)) return;
-    seen.add(current);
-
-    if (isRecord(current)) {
-      const post = buildPost(current, targetUsername);
-      if (post && !output.has(post.id)) output.set(post.id, post);
-      for (const nested of Object.values(current)) walk(nested, depth + 1);
-      return;
-    }
-
-    if (Array.isArray(current)) {
-      for (const nested of current) walk(nested, depth + 1);
-    }
-  };
-
-  walk(value, 0);
-}
-
-export function extractTikTokPublicData(
+export function extractTikTokPublicProfile(
   payloads: readonly unknown[],
   usernameInput: string,
-): ExtractedPayloadData {
+): TikTokPublicProfile | null {
   const username = normalizeTikTokPublicUsername(usernameInput);
-  let profile: TikTokPublicProfile | null = null;
-  const postsById = new Map<string, TikTokPublicPost>();
-
   for (const payload of payloads) {
-    profile ??= findProfileDeep(payload, username);
-    collectPostsDeep(payload, username, postsById);
+    const profile = findProfileDeep(payload, username);
+    if (profile) return profile;
   }
-
-  const posts = Array.from(postsById.values())
-    .sort((a, b) => {
-      const left = a.createTime ? Date.parse(a.createTime) : 0;
-      const right = b.createTime ? Date.parse(b.createTime) : 0;
-      return right - left;
-    })
-    .slice(0, 20);
-
-  return { profile, posts };
+  return null;
 }
 
 function parseJsonPayload(text: string | null): unknown {
@@ -371,15 +252,12 @@ function parseJsonPayload(text: string | null): unknown {
   }
 }
 
-function shouldCaptureTikTokApiResponse(url: string, contentType: string | null): boolean {
-  if (!contentType?.toLowerCase().includes("json")) return false;
-  if (!url.includes("tiktok.com")) return false;
-  return [
-    "/api/user/detail/",
-    "/api/post/item_list/",
-    "/api/item/detail/",
-    "/api/recommend/item_list/",
-  ].some((fragment) => url.includes(fragment));
+function shouldCaptureTikTokProfileResponse(url: string, contentType: string | null): boolean {
+  return Boolean(
+    contentType?.toLowerCase().includes("json") &&
+    url.includes("tiktok.com") &&
+    url.includes("/api/user/detail/"),
+  );
 }
 
 export async function probeTikTokPublicProfile(
@@ -409,14 +287,13 @@ export async function probeTikTokPublicProfile(
 
     page.on("response", (response) => {
       const contentType = response.headers()["content-type"] ?? null;
-      if (!shouldCaptureTikTokApiResponse(response.url(), contentType)) return;
+      if (!shouldCaptureTikTokProfileResponse(response.url(), contentType)) return;
 
       const task = (async (): Promise<void> => {
         try {
-          const payload = (await response.json()) as unknown;
-          capturedPayloads.push(payload);
+          capturedPayloads.push((await response.json()) as unknown);
         } catch {
-          // Ignore non-JSON/expired response bodies; hydration parsing remains available.
+          // Hydration parsing remains the primary profile source.
         }
       })();
       pendingResponses.add(task);
@@ -431,31 +308,25 @@ export async function probeTikTokPublicProfile(
     }
 
     await page.waitForTimeout(2_500);
-    await page.evaluate(() => window.scrollTo(0, Math.max(document.body.scrollHeight * 0.45, 900)));
-    await page.waitForTimeout(1_500);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1_500);
-
     await Promise.allSettled(Array.from(pendingResponses));
 
-    const pageSnapshot = await page.evaluate((scriptIds) => {
-      const scripts = scriptIds.map((id) => ({
+    const pageSnapshot = await page.evaluate((scriptIds) => ({
+      scripts: scriptIds.map((id) => ({
         id,
         text: document.getElementById(id)?.textContent ?? null,
-      }));
-      return {
-        scripts,
-        title: document.title,
-        bodyText: (document.body?.innerText ?? "").slice(0, 8_000),
-        finalUrl: location.href,
-      };
-    }, PROFILE_SCRIPT_IDS);
+      })),
+      title: document.title,
+      bodyText: (document.body?.innerText ?? "").slice(0, 8_000),
+      finalUrl: location.href,
+    }), PROFILE_SCRIPT_IDS);
 
     const hydrationPayloads = pageSnapshot.scripts
       .map((script) => parseJsonPayload(script.text))
       .filter((payload) => payload !== null);
-    const allPayloads = [...hydrationPayloads, ...capturedPayloads];
-    const extracted = extractTikTokPublicData(allPayloads, username);
+    const profile = extractTikTokPublicProfile(
+      [...hydrationPayloads, ...capturedPayloads],
+      username,
+    );
 
     const bodyLower = pageSnapshot.bodyText.toLowerCase();
     const captchaOrBlockDetected = [
@@ -467,30 +338,21 @@ export async function probeTikTokPublicProfile(
       "something went wrong",
     ].some((marker) => bodyLower.includes(marker));
 
-    let status: TikTokPublicProbeStatus = "BLOCKED_OR_CHANGED";
-    if (extracted.profile && extracted.posts.length > 0) status = "OK";
-    else if (extracted.profile) status = "PARTIAL";
-
-    const message = extracted.profile
-      ? extracted.posts.length > 0
-        ? null
-        : "Profile metrics were extracted, but recent post payloads were not available."
-      : captchaOrBlockDetected
-        ? "TikTok presented a verification/block page to the collector."
-        : navigationMessage ?? "No recognized public profile payload was found; TikTok page structure may have changed.";
-
     return {
-      status,
+      status: profile ? "OK" : "BLOCKED_OR_CHANGED",
       fetchedAt: new Date().toISOString(),
-      profile: extracted.profile,
-      recentPosts: extracted.posts,
+      profile,
       diagnostics: {
         finalUrl: pageSnapshot.finalUrl,
         pageTitle: pageSnapshot.title,
         hydrationPayloadCount: hydrationPayloads.length,
         capturedApiPayloadCount: capturedPayloads.length,
         captchaOrBlockDetected,
-        message,
+        message: profile
+          ? null
+          : captchaOrBlockDetected
+            ? "TikTok presented a verification/block page to the collector."
+            : navigationMessage ?? "No recognized public profile payload was found; TikTok page structure may have changed.",
       },
     };
   } finally {
