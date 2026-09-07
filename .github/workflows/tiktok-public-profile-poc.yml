@@ -1,0 +1,88 @@
+name: TikTok public profile PoC
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/tiktok/tiktok-public-profile.ts"
+      - "backend/src/tiktok/tiktok-public-profile.spec.ts"
+      - "backend/scripts/tiktok-public-profile-probe.ts"
+      - "backend/package.json"
+      - ".github/workflows/tiktok-public-profile-poc.yml"
+  workflow_dispatch:
+    inputs:
+      username:
+        description: Public TikTok username to probe
+        required: false
+        default: o_centralworld
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Unit, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Unit test public TikTok parser
+        run: npx tsx --test src/tiktok/tiktok-public-profile.spec.ts
+      - name: Lint TikTok public collector
+        run: npx eslint src/tiktok/tiktok-public-profile.ts src/tiktok/tiktok-public-profile.spec.ts
+      - name: Build backend
+        run: npm run build
+
+  live-probe:
+    name: Live public profile diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      TIKTOK_PROBE_USERNAME: ${{ inputs.username || 'o_centralworld' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Probe public TikTok profile
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          npx tsx scripts/tiktok-public-profile-probe.ts "$TIKTOK_PROBE_USERNAME" | tee tiktok-public-profile-probe.json
+          probe_exit=${PIPESTATUS[0]}
+          echo "exit_code=$probe_exit" >> "$GITHUB_OUTPUT"
+          if [ "$probe_exit" -eq 0 ]; then
+            echo "Public profile probe extracted usable data." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$probe_exit" -eq 2 ]; then
+            echo "TikTok blocked the runner or the public page structure was not recognized. Inspect the diagnostic artifact." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Public profile probe failed before producing a usable diagnostic." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+      - name: Upload sanitized diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-public-profile-${{ env.TIKTOK_PROBE_USERNAME }}
+          path: backend/tiktok-public-profile-probe.json
+          if-no-files-found: warn
+          retention-days: 7
