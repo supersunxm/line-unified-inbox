@@ -370,10 +370,16 @@ export class LineChatManagerImageRelayWorkerService {
 
   private async waitForDeliveryVerification(page: Page, fileInput: Locator, beforeAttachmentSurfaces: number): Promise<boolean> {
     const deadline = Date.now() + 12_000;
+    let consecutiveClearedPolls = 0;
     while (Date.now() < deadline) {
       const filesCount = await this.fileCount(fileInput);
       const currentAttachmentSurfaces = await this.countAttachmentSurfaces(page);
-      if (filesCount === 0 && currentAttachmentSurfaces > beforeAttachmentSurfaces) return true;
+      if (filesCount === 0) {
+        consecutiveClearedPolls += 1;
+        if (currentAttachmentSurfaces !== beforeAttachmentSurfaces || consecutiveClearedPolls >= 2) return true;
+      } else {
+        consecutiveClearedPolls = 0;
+      }
       await page.waitForTimeout(300);
     }
     return false;
