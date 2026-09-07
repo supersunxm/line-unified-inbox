@@ -40,5 +40,6 @@ ENV NODE_ENV=production
 ENV LINE_CHAT_PROFILE_ROOT=/data/line-chat-profiles
 ENV DISABLE_NICKNAME_WORKER=false
 
-# Start standalone worker without HTTP controllers or unused services
-CMD ["node", "dist/line-chat/line-chat-nickname-worker.js"]
+# Start through a controlled entrypoint so optional read-only readiness scans
+# can run before the long-lived worker without depending on Railway overrides.
+CMD ["sh", "scripts/start-line-chat-worker.sh"]
