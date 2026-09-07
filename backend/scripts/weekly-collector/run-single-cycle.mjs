@@ -160,6 +160,13 @@ async function main() {
   const summary = {
     totalStores: memberships.length,
     storesScanned: 0,
+    successfulScans: 0,
+    confirmedZeroPlaces: 0,
+    scanFailures: 0,
+    sortFailures: 0,
+    panelFailures: 0,
+    cardFailures: 0,
+    limitedViewFailures: 0,
     totalNewReviewsDiscovered: 0,
     totalNewQualifiedReviews: 0,
     qualifiedByReviewDate: {},
@@ -168,6 +175,8 @@ async function main() {
     fastStopTriggeredStores: 0,
     errors: [],
   };
+
+  let consecutiveSameError = { error: null, count: 0 };
 
   for (let i = 0; i < memberships.length; i++) {
     const membership = memberships[i];
@@ -192,6 +201,60 @@ async function main() {
     }, { todayBangkok });
 
     summary.storesScanned++;
+
+    const isError = res.stopReason.startsWith("ERROR");
+    if (isError) {
+      summary.scanFailures++;
+      summary.errors.push({ storeCode, error: res.stopReason });
+
+      if (res.stopReason.includes("LIMITED_VIEW")) {
+        summary.limitedViewFailures++;
+      } else if (res.stopReason.includes("SORT")) {
+        summary.sortFailures++;
+      } else if (res.stopReason.includes("CARD")) {
+        summary.cardFailures++;
+      } else {
+        summary.panelFailures++;
+      }
+
+      // Track consecutive identical error
+      if (consecutiveSameError.error === res.stopReason) {
+        consecutiveSameError.count++;
+      } else {
+        consecutiveSameError = { error: res.stopReason, count: 1 };
+      }
+
+      // Check Systemic Guard 1: 5 consecutive identical errors
+      if (consecutiveSameError.count >= 5) {
+        console.error(`\n[SYSTEMIC FAILURE] 5 consecutive stores failed with the same error: ${consecutiveSameError.error}`);
+        console.error(`Halting cycle immediately to protect data integrity.`);
+        await context.close();
+        process.exit(1);
+      }
+
+      // Check Systemic Guard 2: >= 20% overall failure rate after at least 10 stores
+      const failureRate = summary.scanFailures / summary.storesScanned;
+      if (summary.storesScanned >= 10 && failureRate >= 0.2) {
+        console.error(`\n[SYSTEMIC FAILURE] Failure rate reached ${(failureRate * 100).toFixed(1)}% (${summary.scanFailures}/${summary.storesScanned} stores failed). Threshold is 20%.`);
+        console.error(`Halting cycle immediately to protect data integrity.`);
+        await context.close();
+        process.exit(1);
+      }
+
+      // Untrusted outcome: skip writing KPI data for this store
+      console.warn(`  [UNTRUSTED OUTCOME] Store ${storeCode} failed with ${res.stopReason}. Skipping daily/weekly KPI mutations.`);
+      await page.waitForTimeout(500);
+      continue;
+    } else {
+      consecutiveSameError = { error: null, count: 0 };
+    }
+
+    if (res.stopReason === "CONFIRMED_ZERO_REVIEWS") {
+      summary.confirmedZeroPlaces++;
+    } else {
+      summary.successfulScans++;
+    }
+
     summary.totalNewReviewsDiscovered += res.newReviewsDiscovered;
     summary.totalNewQualifiedReviews += res.newQualifiedReviews;
 
@@ -200,9 +263,6 @@ async function main() {
     }
     if (res.stopReason === "CONSECUTIVE_SEEN_BOUNDARY_5") {
       summary.fastStopTriggeredStores++;
-    }
-    if (res.stopReason.startsWith("ERROR")) {
-      summary.errors.push({ storeCode, error: res.stopReason });
     }
 
     const dateEntries = Object.entries(res.newReviewStatsByDate || {});
@@ -273,6 +333,15 @@ async function main() {
   console.log(`\n================================================================================`);
   console.log(`CONTROLLED LIVE CYCLE COMPLETED IN ${totalDurationMin} MINUTES!`);
   console.log(`Total Stores Scanned: ${summary.storesScanned}/${summary.totalStores}`);
+  console.log(`  - Successful Scans: ${summary.successfulScans}`);
+  console.log(`  - Confirmed Zero-Review Places: ${summary.confirmedZeroPlaces}`);
+  console.log(`  - Scan Failures: ${summary.scanFailures}`);
+  if (summary.scanFailures > 0) {
+    console.log(`    * Limited View: ${summary.limitedViewFailures}`);
+    console.log(`    * Panel Failures: ${summary.panelFailures}`);
+    console.log(`    * Sort Failures: ${summary.sortFailures}`);
+    console.log(`    * Card Failures: ${summary.cardFailures}`);
+  }
   console.log(`Fast-Stop Triggered (5 seen boundary): ${summary.fastStopTriggeredStores} stores`);
   console.log(`Stores with New Reviews: ${summary.storesWithNewReviews}`);
   console.log(`Total New Reviews Discovered: ${summary.totalNewReviewsDiscovered}`);

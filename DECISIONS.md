@@ -1,5 +1,26 @@
 # Architecture & Design Decisions
 
+## Google Review: Maps DOM Recovery, Limited View Mitigation & Fail-Safe Collector Safeguards (2026-09-07)
+
+- **Context & Failure Mode**:
+  - In production, Google Maps periodically subjects unauthenticated or automated headless Chromium contexts to "Limited View" (`มุมมองแบบจำกัด`), hiding the Reviews tab and reviews stream while displaying overview ratings.
+  - The previous collector checked only `button[role='tab']` for `รีวิว`/`review`. When absent, it erroneously returned `ZERO_REVIEWS_PLACE`, causing a cycle across all 65 stores to falsely complete with `SUCCESS`, 0 reviews discovered, and 0 errors.
+  - Furthermore, DOM elements matching `button.w8nwRe.kyuRq` (the "More / เพิ่มเติม" expand button) generated false positive Limited View detections when using overbroad class selectors.
+- **Architectural Fixes & Safeguards**:
+  1. **Standard Desktop User-Agent Configuration**:
+     - `buildGoogleReviewLaunchOptions` in `browser-runtime-config.mjs` sets a standard desktop User-Agent and automation avoidance flags (`--disable-blink-features=AutomationControlled`).
+     - Eliminates Google Maps bot-defense Limited View in headless mode while preserving the dedicated `GoogleReviewKpiChromeProfile`.
+  2. **Resilient Reviews Discovery Contract (`maps-dom-helper.mjs`)**:
+     - `evaluatePlaceStatus`: Detects authentic Limited View text notices without false positives from `kyuRq` expand buttons, and validates ratings, review counts, tabs, and triggers.
+     - `openReviewsPane`: Multi-layered fallback (checks already open, clicks review tab, clicks review triggers, distinguishes `CONFIRMED_ZERO_REVIEWS` from `ERROR_MAPS_LIMITED_VIEW_DETECTED`, `ERROR_REVIEW_CONTROL_NOT_FOUND`, and `ERROR_REVIEW_PANEL_NOT_LOADED`).
+     - `ensureNewestSort`: Verifies and clicks "Newest" (`ใหม่ที่สุด`), confirming active sort before proceeding.
+  3. **Fail-Safe Systemic Abort & Safe Outcomes (`run-single-cycle.mjs`)**:
+     - Tracks granular metrics: `successfulScans`, `confirmedZeroPlaces`, `scanFailures`, `limitedViewFailures`, `panelFailures`, `sortFailures`, `cardFailures`.
+     - Systemic abort guard: Halts execution immediately with exit code 1 if 5 consecutive stores fail with the identical error OR if the failure rate reaches $\ge 20\%$ after scanning $\ge 10$ stores.
+     - Untrusted outcomes skip writing KPI rows and mutate no daily or weekly records.
+  4. **Non-Mutating Dry Run Support**:
+     - `collectStoreContinuous` supports `options.dryRun = true` to allow live end-to-end DOM discovery and boundary testing without mutating fingerprints or KPI rows.
+
 ## LINE Chat: Remembered-Account Re-authentication Recovery & Production Safety Gate (2026-09-06)
 
 - **Context & Problem**:

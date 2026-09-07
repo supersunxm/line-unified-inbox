@@ -6,6 +6,7 @@ import { segmentThaiWords } from "../../../tools/google-review-checker-extension
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
 import { classifyWeek2Date } from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
+import { openReviewsPane, ensureNewestSort } from "./maps-dom-helper.mjs";
 
 const prisma = new PrismaClient();
 export const PERSISTENT_PROFILE_DIR = resolveGoogleReviewProfileDir();
@@ -63,32 +64,29 @@ export async function collectStoreContinuous(page, store, options = {}) {
     await page.goto(googleMapsUrl, { waitUntil: "commit" });
     await page.waitForTimeout(3000);
 
-    const placeInfo = await page.evaluate(() => {
-      const title = document.querySelector("h1")?.textContent?.trim();
-      const ratingEl = document.querySelector(".F7nice, span.ceNzKf");
-      let rating = null;
-      if (ratingEl) {
-        const text = ratingEl.textContent?.trim() || ratingEl.getAttribute("aria-label") || "";
-        const m = text.match(/(\d+\.\d+)/);
-        if (m) rating = parseFloat(m[1]);
-      }
-      const reviewTab = Array.from(document.querySelectorAll("button[role='tab']")).find((t) => {
-        const l = (t.getAttribute("aria-label") || t.textContent || "").toLowerCase();
-        return l.includes("รีวิว") || l.includes("review");
-      });
-
-      return {
-        title,
-        rating,
-        hasReviewTab: Boolean(reviewTab),
-      };
-    });
-
-    storeRating = placeInfo.rating;
+    const openResult = await openReviewsPane(page);
+    storeRating = openResult.status?.rating ?? null;
     console.log(`  Store Rating: ${storeRating ?? "N/A"}`);
 
-    if (!placeInfo.hasReviewTab) {
-      console.log(`  No reviews tab found for store ${storeCode}.`);
+    if (!openResult.success) {
+      if (openResult.reason === "CONFIRMED_ZERO_REVIEWS") {
+        console.log(`  Store ${storeCode} confirmed zero reviews place.`);
+        return {
+          storeCode,
+          storeId,
+          storeRating,
+          reviewsChecked: 0,
+          reviewsWithPhoto: 0,
+          reviewsOver15ThaiWords: 0,
+          newReviewsDiscovered: 0,
+          newQualifiedReviews: 0,
+          newReviewStatsByDate: {},
+          stopReason: "CONFIRMED_ZERO_REVIEWS",
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      console.warn(`  [ERROR] Failed to open reviews pane for store ${storeCode}: ${openResult.reason}`);
       return {
         storeCode,
         storeId,
@@ -99,40 +97,47 @@ export async function collectStoreContinuous(page, store, options = {}) {
         newReviewsDiscovered: 0,
         newQualifiedReviews: 0,
         newReviewStatsByDate: {},
-        stopReason: "ZERO_REVIEWS_PLACE",
+        stopReason: openResult.reason || "ERROR_REVIEW_PANEL_NOT_LOADED",
         durationMs: Date.now() - startTime,
       };
     }
 
-    await page.evaluate(() => {
-      const reviewTab = Array.from(document.querySelectorAll("button[role='tab']")).find((t) => {
-        const l = (t.getAttribute("aria-label") || t.textContent || "").toLowerCase();
-        return l.includes("รีวิว") || l.includes("review");
-      });
-      if (reviewTab) reviewTab.click();
-    });
-    await page.waitForTimeout(2000);
+    const sortResult = await ensureNewestSort(page);
+    if (!sortResult.success) {
+      console.warn(`  [ERROR] Failed to verify Newest sort for store ${storeCode}: ${sortResult.reason}`);
+      return {
+        storeCode,
+        storeId,
+        storeRating,
+        reviewsChecked: 0,
+        reviewsWithPhoto: 0,
+        reviewsOver15ThaiWords: 0,
+        newReviewsDiscovered: 0,
+        newQualifiedReviews: 0,
+        newReviewStatsByDate: {},
+        stopReason: sortResult.reason || "ERROR_NEWEST_SORT_UNVERIFIED",
+        durationMs: Date.now() - startTime,
+      };
+    }
 
-    await page.evaluate(async () => {
-      const sortBtn = document.querySelector(
-        "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i]"
-      );
-      if (!sortBtn) return { success: false, reason: "NO_SORT_BTN" };
-      const textBefore = (sortBtn.textContent || "").trim();
-      if (!textBefore.includes("ใหม่ที่สุด") && !textBefore.includes("ล่าสุด") && !textBefore.includes("Newest")) {
-        sortBtn.click();
-        await new Promise((r) => setTimeout(r, 600));
-        const items = Array.from(document.querySelectorAll("[role='menuitemradio'], [role='menuitem']"));
-        const newest = items.find((el) => el.textContent.includes("ใหม่ที่สุด") || el.textContent.includes("Newest")) || items[1];
-        if (newest) newest.click();
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      const textAfter = document.querySelector(
-        "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='ใหม่ที่สุด' i]"
-      )?.textContent?.trim() || "";
-      const isNewest = textAfter.includes("ใหม่ที่สุด") || textAfter.includes("ล่าสุด") || textAfter.includes("Newest");
-      return { success: isNewest, textBefore, textAfter };
-    });
+    // Verify review cards or feed exist after opening and sorting
+    const initialCardsCount = await page.evaluate(() => document.querySelectorAll(".jftiEf, div[data-review-id]").length);
+    if (initialCardsCount === 0) {
+      console.warn(`  [ERROR] No review cards found after opening pane for store ${storeCode}.`);
+      return {
+        storeCode,
+        storeId,
+        storeRating,
+        reviewsChecked: 0,
+        reviewsWithPhoto: 0,
+        reviewsOver15ThaiWords: 0,
+        newReviewsDiscovered: 0,
+        newQualifiedReviews: 0,
+        newReviewStatsByDate: {},
+        stopReason: "ERROR_REVIEW_CARDS_NOT_FOUND",
+        durationMs: Date.now() - startTime,
+      };
+    }
 
     let currentCardIndex = 0;
     let stopTriggered = false;
@@ -253,15 +258,19 @@ export async function collectStoreContinuous(page, store, options = {}) {
         newQualifiedReviews++;
       }
 
-      await prisma.googleReviewFingerprint.create({
-        data: {
-          storeCode,
-          fingerprint: fp,
-          reviewDate: reviewDate || todayBangkok,
-          isQualified,
-          weekNumber: 2,
-        },
-      });
+      if (!options.dryRun) {
+        await prisma.googleReviewFingerprint.create({
+          data: {
+            storeCode,
+            fingerprint: fp,
+            reviewDate: reviewDate || todayBangkok,
+            isQualified,
+            weekNumber: 2,
+          },
+        });
+      } else {
+        console.log(`  [DRY RUN] Would record fingerprint ${fp.slice(0, 10)}... (qualified: ${isQualified})`);
+      }
 
       currentCardIndex++;
     }

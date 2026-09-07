@@ -78,8 +78,12 @@ export function buildGoogleReviewLaunchOptions(env = process.env, overrides = {}
 
   const extraArgs = Array.isArray(overrides.args) ? overrides.args : [];
 
+  const defaultUserAgent =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
   return {
     headless: overrides.headless !== undefined ? overrides.headless : headless,
+    userAgent: overrides.userAgent || env.GOOGLE_REVIEW_USER_AGENT || defaultUserAgent,
     args: Array.from(new Set([...baseArgs, ...extraArgs])),
     viewport: overrides.viewport || { width: 1440, height: 900 },
     ...overrides,
