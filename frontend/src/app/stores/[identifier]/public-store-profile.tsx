@@ -6,6 +6,7 @@ import {
   fetchPublicStoreByIdentifier,
   type PublicStoreDto,
 } from "@/lib/public-stores-api";
+import { formatPublicRegion } from "@/lib/public-regions";
 
 interface Props {
   identifier: string;
@@ -135,7 +136,7 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
                   )}
                   {store.region && (
                     <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--app-accent)]">
-                      {store.region}
+                      {formatPublicRegion(store.region)}
                     </span>
                   )}
                 </div>

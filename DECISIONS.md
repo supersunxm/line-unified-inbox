@@ -1,5 +1,17 @@
 # Architecture & Design Decisions
 
+## Public Region Normalization: Zero-Mutation Presentation Mapping (2026-09-08)
+
+- **Presentation-Only Normalization Layer**:
+  - StoreMaster records contain legacy raw region values from upstream imports, specifically duplicate representations for Central Thailand (`Central` with 57 active stores, and `Central Thailand` with 1 active store).
+  - Rather than running risky database migrations or mutating StoreMaster data, normalization is performed exclusively at the presentation layer (`frontend/src/lib/public-regions.ts`).
+  - Standard Thai regional labels are mapped: `Central` / `Central Thailand` -> `ภาคกลาง`, `Northern` -> `ภาคเหนือ`, `Northeastern` -> `ภาคตะวันออกเฉียงเหนือ`, `Southern` -> `ภาคใต้`, `Eastern` -> `ภาคตะวันออก`, and `Western` -> `ภาคตะวันตก`.
+- **Deduplicated Filter UI & Symmetric Filtering**:
+  - Filter button pills deduplicate raw regions into the 6 Thai canonical regions (`getDeduplicatedPublicRegions`), eliminating duplicate pills.
+  - `matchesPublicRegion` evaluates both canonical Thai labels and raw English legacy values symmetrically, ensuring URLs with `?region=Central`, `?region=Central%20Thailand`, or `?region=ภาคกลาง` all match all 58 central stores accurately.
+  - Search query evaluations match store names, provinces, raw English regions, and canonical Thai region names simultaneously.
+
+
 ## Pre-Visual Customer Cleanup: Store Code Concealment, Neutral Claims & Dynamic Count (2026-09-08)
 
 - **Store Code Concealment from Public Profiles**:

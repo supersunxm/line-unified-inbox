@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { fetchPublicStores } from "@/lib/public-stores-api";
 import {
-  fetchPublicStores,
+  normalizePublicRegion,
+  formatPublicRegion,
+  matchesPublicRegion,
+  getDeduplicatedPublicRegions,
+} from "@/lib/public-regions";
+import {
   type PublicStoreDto,
 } from "@/lib/public-stores-api";
 
@@ -64,17 +70,17 @@ export function PublicStoresDirectory() {
     };
   }, []);
 
+  // Deduplicate and order public region labels
+  const displayRegions = useMemo(() => getDeduplicatedPublicRegions(regions), [regions]);
+
   // Filter stores locally for instant responsiveness
   const filteredStores = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
     return stores.filter((store) => {
-      // Region match
+      // Region match (supports Thai canonical labels and raw English legacy values)
       if (selectedRegion !== "ALL") {
-        if (
-          !store.region ||
-          store.region.toLowerCase() !== selectedRegion.toLowerCase()
-        ) {
+        if (!matchesPublicRegion(store.region, selectedRegion)) {
           return false;
         }
       }
@@ -89,11 +95,13 @@ export function PublicStoresDirectory() {
         }
       }
 
-      // Search query match
+      // Search query match (supports name, province, raw region, Thai normalized region, ID)
       if (q) {
         const matchName = store.name.toLowerCase().includes(q);
         const matchProvince = (store.province ?? "").toLowerCase().includes(q);
-        const matchRegion = (store.region ?? "").toLowerCase().includes(q);
+        const matchRegion =
+          (store.region ?? "").toLowerCase().includes(q) ||
+          formatPublicRegion(store.region).toLowerCase().includes(q);
         const matchId = store.id.toLowerCase().includes(q);
 
         if (!matchName && !matchProvince && !matchRegion && !matchId) {
@@ -206,20 +214,26 @@ export function PublicStoresDirectory() {
             >
               ทุกภูมิภาค
             </button>
-            {regions.map((region) => (
-              <button
-                key={region}
-                type="button"
-                onClick={() => setSelectedRegion(region)}
-                className={`inline-flex items-center justify-center min-h-[38px] rounded-full px-4 py-2 font-medium transition ${
-                  selectedRegion === region
-                    ? "bg-[var(--app-accent)] text-white shadow-sm"
-                    : "bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
-                }`}
-              >
-                {region}
-              </button>
-            ))}
+            {displayRegions.map((region) => {
+              const isActive =
+                selectedRegion !== "ALL" &&
+                normalizePublicRegion(selectedRegion) === region;
+
+              return (
+                <button
+                  key={region}
+                  type="button"
+                  onClick={() => setSelectedRegion(region)}
+                  className={`inline-flex items-center justify-center min-h-[38px] rounded-full px-4 py-2 font-medium transition ${
+                    isActive
+                      ? "bg-[var(--app-accent)] text-white shadow-sm"
+                      : "bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
+                  }`}
+                >
+                  {region}
+                </button>
+              );
+            })}
 
             {/* Province Selector */}
             {provinces.length > 0 && (
@@ -331,7 +345,7 @@ export function PublicStoresDirectory() {
                         )}
                         {store.region && (
                           <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--app-accent)]">
-                            {store.region}
+                            {formatPublicRegion(store.region)}
                           </span>
                         )}
                       </div>

@@ -83,3 +83,13 @@ test("7. Public directory synchronizes search/filter state to URL and uses deter
 test("8. Store code is not visibly displayed on public store profile", () => {
   assert.doesNotMatch(profileViewCode, /รหัสสาขา/);
 });
+
+test("9. Public directory uses deduplicated region normalization layer", () => {
+  assert.match(directoryCode, /getDeduplicatedPublicRegions/);
+  assert.match(directoryCode, /matchesPublicRegion/);
+  assert.match(directoryCode, /formatPublicRegion/);
+});
+
+test("10. Public store profile formats region with formatPublicRegion", () => {
+  assert.match(profileViewCode, /formatPublicRegion/);
+});

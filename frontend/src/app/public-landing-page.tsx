@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchPublicStores, type PublicStoreDto } from "@/lib/public-stores-api";
+import { formatPublicRegion } from "@/lib/public-regions";
 
 export function PublicLandingPage() {
   const router = useRouter();
@@ -42,11 +43,12 @@ export function PublicLandingPage() {
 
   const quickRegions = [
     { label: "กรุงเทพมหานคร", query: "province=Bangkok" },
-    { label: "ภาคกลาง", query: "region=Central" },
-    { label: "ภาคเหนือ", query: "region=Northern" },
-    { label: "ภาคตะวันออกเฉียงเหนือ", query: "region=Northeastern" },
-    { label: "ภาคใต้", query: "region=Southern" },
-    { label: "ภาคตะวันออก", query: "region=Eastern" },
+    { label: "ภาคกลาง", query: "region=ภาคกลาง" },
+    { label: "ภาคเหนือ", query: "region=ภาคเหนือ" },
+    { label: "ภาคตะวันออกเฉียงเหนือ", query: "region=ภาคตะวันออกเฉียงเหนือ" },
+    { label: "ภาคใต้", query: "region=ภาคใต้" },
+    { label: "ภาคตะวันออก", query: "region=ภาคตะวันออก" },
+    { label: "ภาคตะวันตก", query: "region=ภาคตะวันตก" },
   ];
 
   return (
@@ -284,7 +286,7 @@ export function PublicLandingPage() {
                       )}
                       {store.region && (
                         <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--app-accent)]">
-                          {store.region}
+                          {formatPublicRegion(store.region)}
                         </span>
                       )}
                     </div>

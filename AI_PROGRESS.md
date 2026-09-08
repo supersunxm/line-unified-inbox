@@ -1,5 +1,44 @@
 # AI Progress Log
 
+## 2026-09-08: Public Store Directory (Final Production Readiness Review) [COMPLETED]
+- **Current Task**: Final Production Readiness Review for the Public Store Directory on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Phase 1 — Public Region Normalization:
+     - Implemented zero-mutation presentation normalization layer in `frontend/src/lib/public-regions.ts`.
+     - Mapped legacy StoreMaster regions into standard Thai labels: `Central` (57) and `Central Thailand` (1) -> `ภาคกลาง` (58 total), `Northern` -> `ภาคเหนือ`, `Northeastern` -> `ภาคตะวันออกเฉียงเหนือ`, `Southern` -> `ภาคใต้`, `Eastern` -> `ภาคตะวันออก`, `Western` -> `ภาคตะวันตก`.
+     - Deduplicated filter pills with standard ordering (`ORDERED_PUBLIC_REGIONS`), eliminating duplicate pills.
+     - Implemented symmetric query matching supporting raw English and canonical Thai region queries, matching 58 stores under "ภาคกลาง".
+     - Updated landing page quick discovery shortcuts to use Thai region queries matching all 6 regions.
+     - Added comprehensive unit tests in `frontend/test/public-regions.test.mts` (4/4 passed).
+  2. Phase 2 — Production Route Impact Audit:
+     - Verified `/welcome` remains intact.
+     - Verified `defaultRouteForUser` resolves to internal workspaces (`/home`, `/chats`, or `/main-oa`) and never `/`.
+     - Confirmed removal of legacy `proxy.ts` does not affect session auth cookies or internal redirects.
+     - Confirmed unauthenticated requests to `/home` and `/admin/stores` redirect to `/login`.
+  3. Phase 3 — Public API Production Safety:
+     - Verified `GET /public/stores` and `GET /public/stores/:identifier` are read-only with `@Public()`.
+     - Verified `UUID_REGEX` rejection throws HTTP 404 immediately, preventing internal database ID exposure.
+     - Verified `serializePublicStore` strict whitelist drops internal credentials, LINE manager URLs, BM names, and tokens.
+     - Verified active-only filtering (`where: { isActive: true }`) is enforced.
+     - Confirmed zero mutation routes exist under `/public/*`.
+  4. Phase 4 — SEO / Public Web Review:
+     - Confirmed descriptive `<title>` and metadata on root layout, `/stores`, and dynamic store profile `/stores/[identifier]`.
+     - Confirmed `robots: { index: false }` is strictly isolated to internal management tools and OAuth callbacks.
+     - Verified public routes (`/`, `/stores`, `/stores/[slug]`, `/privacy`, `/terms`) are indexable without unintentional `noindex` headers.
+  5. Phase 5 — Test Matrix & Verification:
+     - Frontend tests: `npm test` (511/511 passed, exit 0).
+     - Frontend production build: `npm run build` (Clean Turbopack compile, exit 0).
+     - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed, exit 0).
+     - Backend production build: `npm run build` (Clean NestJS/Prisma compile, exit 0).
+     - Playwright automated route verification: anonymous and unauthenticated redirects verified.
+- **Checks Run & Passed**:
+  - Frontend unit tests: 511/511 passed.
+  - Backend unit tests: 6/6 passed.
+  - Frontend build: Exit 0.
+  - Backend build: Exit 0.
+  - Live Playwright checks: All passed.
+- **Next Action**: Commit changes, push branch, open Pull Request against `main`, and present final report.
+
 ## 2026-09-08: Public Store Directory (Visual UX Review) [COMPLETED]
 - **Current Task**: Focused Visual UX Review of the public customer website on branch `feat/public-store-directory`.
 - **Completed Work**:
