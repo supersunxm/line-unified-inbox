@@ -70,7 +70,7 @@ export function LineChatNovncRecoveryAction() {
 
     try {
       const response = await fetch(
-        `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(PROFILE_B_SESSION_KEY)}/novnc/start`,
+        `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(PROFILE_B_SESSION_KEY)}/manual-recovery/start`,
         {
           method: "POST",
           credentials: "include",
