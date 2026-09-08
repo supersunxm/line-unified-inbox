@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  InternalServerErrorException,
   Param,
   Post,
   Query,
@@ -68,6 +69,17 @@ export class GoogleReviewKpiController {
     @Query() query: ExportWeeklyLeaderboardDto,
     @Res() res: Response,
   ) {
+    // Downloads must refresh their store membership from StoreMaster first.
+    // The weekly membership key (`storeCode`) is the business Store ID, never
+    // an internal Store UUID. Fail closed if StoreMaster cannot resolve every
+    // expected Store ID instead of exporting stale or guessed identities.
+    const sync = await this.kpiService.syncWeeklyStoreMemberships();
+    if (sync.unmatchedStoreCodes.length > 0 || sync.duplicateMappings > 0) {
+      throw new InternalServerErrorException(
+        `Canonical Store ID verification failed before Google Review export: unmatched=${sync.unmatchedStoreCodes.join(",") || "none"}; duplicateMappings=${sync.duplicateMappings}`,
+      );
+    }
+
     const { buffer, filename, contentType } = await this.kpiService.exportWeeklyLeaderboard(query);
     res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
