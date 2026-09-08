@@ -1,0 +1,290 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { rangeForPreset, type DashboardDateRange, type DashboardPeriod } from "./dashboard-date-range";
+
+type Store24hRow = {
+  storeId: string;
+  storeName: string;
+  total: number;
+  responded: number;
+  within24h: number;
+  over24h: number;
+  pending: number;
+  responseRate24h: number | null;
+};
+
+type Store24hResponse = {
+  dateFrom: string;
+  dateTo: string;
+  overview: {
+    storeCount: number;
+    total: number;
+    responded: number;
+    within24h: number;
+    over24h: number;
+    pending: number;
+    responseRate24h: number | null;
+  };
+  stores: Store24hRow[];
+};
+
+type Props = {
+  getStoreDisplayName: (name: string) => string;
+  onOpenStore: (storeId: string) => void;
+};
+
+type PeriodChoice = DashboardPeriod | "custom";
+
+const PERIOD_LABELS: Array<{ value: PeriodChoice; label: string }> = [
+  { value: "today", label: "วันนี้" },
+  { value: "7d", label: "7 วัน" },
+  { value: "30d", label: "30 วัน" },
+  { value: "custom", label: "กำหนดเอง" },
+];
+
+function rateLabel(value: number | null) {
+  return value === null ? "—" : `${value.toFixed(1)}%`;
+}
+
+function toneClass(value: number | null) {
+  if (value === null) return "text-[var(--dash-text-tertiary)]";
+  if (value >= 90) return "text-[var(--dash-green)]";
+  if (value >= 70) return "text-amber-600 dark:text-amber-400";
+  return "text-[var(--dash-red)]";
+}
+
+function isRangeValid(range: DashboardDateRange) {
+  const from = new Date(`${range.dateFrom}T00:00:00Z`).getTime();
+  const to = new Date(`${range.dateTo}T00:00:00Z`).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return false;
+  return Math.floor((to - from) / 86_400_000) + 1 <= 90;
+}
+
+export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Props) {
+  const [period, setPeriod] = useState<PeriodChoice>("7d");
+  const [range, setRange] = useState<DashboardDateRange>(() => rangeForPreset("7d"));
+  const [data, setData] = useState<Store24hResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const applyPeriod = (next: PeriodChoice) => {
+    setPeriod(next);
+    if (next !== "custom") setRange(rangeForPreset(next));
+  };
+
+  const load = useCallback(async () => {
+    if (!isRangeValid(range)) {
+      setError("ช่วงวันที่ต้องไม่เกิน 90 วัน และวันที่เริ่มต้องไม่เกินวันที่สิ้นสุด");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
+      const response = await fetch(`/api-backend/dashboard/store-24h-response-summary?${params.toString()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(`โหลดอัตราตอบกลับไม่สำเร็จ (${response.status})`);
+      setData((await response.json()) as Store24hResponse);
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }, [range.dateFrom, range.dateTo]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  const rows = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("th");
+    if (!query) return data?.stores ?? [];
+    return (data?.stores ?? []).filter((store) =>
+      getStoreDisplayName(store.storeName).toLocaleLowerCase("th").includes(query),
+    );
+  }, [data, getStoreDisplayName, search]);
+
+  const overview = data?.overview;
+
+  return (
+    <section className="mb-6 rounded-[18px] border border-[var(--dash-border)] bg-[var(--dash-card)] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <div className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-[var(--dash-text-tertiary)]">24H RESPONSE SLA</div>
+          <h2 className="mt-1 text-[17px] font-bold text-[var(--dash-text)]">อัตราตอบกลับภายใน 24 ชั่วโมง แยกตามร้าน</h2>
+          <p className="mt-1 text-xs text-[var(--dash-text-secondary)]">
+            ดูจำนวนและสัดส่วนบทสนทนาที่ร้านตอบลูกค้าภายใน 24 ชั่วโมง ในช่วงเวลาที่เลือก
+          </p>
+        </div>
+        {overview && (
+          <div className="rounded-xl bg-[var(--dash-accent-soft)] px-4 py-2.5 text-right">
+            <div className="text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">ภาพรวมทุกสาขา</div>
+            <div className={`mt-0.5 text-2xl font-bold tabular-nums ${toneClass(overview.responseRate24h)}`}>
+              {rateLabel(overview.responseRate24h)}
+            </div>
+            <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">
+              {overview.within24h.toLocaleString()} / {overview.total.toLocaleString()} บทสนทนา
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-[var(--dash-border)] bg-[var(--dash-bg)] p-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">ช่วงข้อมูล</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PERIOD_LABELS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => applyPeriod(item.value)}
+                className={`h-9 rounded-lg px-3 text-xs font-bold transition ${
+                  period === item.value
+                    ? "bg-[var(--dash-accent)] text-white"
+                    : "border border-[var(--dash-border)] bg-[var(--dash-card)] text-[var(--dash-text-secondary)] hover:text-[var(--dash-text)]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {period === "custom" && (
+          <div className="flex flex-wrap gap-2">
+            <label className="text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
+              <span className="mb-1 block">ตั้งแต่</span>
+              <input
+                type="date"
+                value={range.dateFrom}
+                onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))}
+                className="h-9 rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-2.5 text-xs text-[var(--dash-text)] outline-none focus:border-[var(--dash-accent)]"
+              />
+            </label>
+            <label className="text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
+              <span className="mb-1 block">ถึง</span>
+              <input
+                type="date"
+                value={range.dateTo}
+                onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))}
+                className="h-9 rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-2.5 text-xs text-[var(--dash-text)] outline-none focus:border-[var(--dash-accent)]"
+              />
+            </label>
+          </div>
+        )}
+
+        <label className="min-w-[200px] text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
+          <span className="mb-1 block">ค้นหาร้าน</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="ชื่อร้าน..."
+            className="h-9 w-full rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-3 text-xs text-[var(--dash-text)] outline-none placeholder:text-[var(--dash-text-tertiary)] focus:border-[var(--dash-accent)]"
+          />
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--dash-red)]/30 bg-[var(--dash-red-soft)] px-3.5 py-3 text-xs text-[var(--dash-red)]">
+          <span>{error}</span>
+          <button type="button" onClick={() => void load()} className="font-bold underline">ลองใหม่</button>
+        </div>
+      )}
+
+      {loading && !data ? (
+        <div className="mt-4 h-56 animate-pulse rounded-xl bg-[var(--dash-bg)]" />
+      ) : data ? (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl bg-[var(--dash-bg)] px-3 py-2.5">
+              <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">ตอบภายใน 24 ชม.</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums text-[var(--dash-green)]">{data.overview.within24h.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl bg-[var(--dash-bg)] px-3 py-2.5">
+              <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">ตอบเกิน 24 ชม.</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums text-[var(--dash-red)]">{data.overview.over24h.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl bg-[var(--dash-bg)] px-3 py-2.5">
+              <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">ยังไม่มีคำตอบ</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums">{data.overview.pending.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl bg-[var(--dash-bg)] px-3 py-2.5">
+              <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">ร้านทั้งหมด</div>
+              <div className="mt-0.5 text-lg font-bold tabular-nums">{data.overview.storeCount.toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto rounded-xl border border-[var(--dash-border)] md:block">
+            <table className="w-full min-w-[760px] border-collapse text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--dash-border)] bg-[var(--dash-bg)] text-[10px] uppercase text-[var(--dash-text-tertiary)]">
+                  <th className="px-3.5 py-2.5 text-left">ร้านค้า</th>
+                  <th className="px-2 py-2.5 text-right">ภายใน 24 ชม.</th>
+                  <th className="px-2 py-2.5 text-right">เกิน 24 ชม.</th>
+                  <th className="px-2 py-2.5 text-right">ยังไม่ตอบ</th>
+                  <th className="px-2 py-2.5 text-right">ทั้งหมด</th>
+                  <th className="px-3.5 py-2.5 text-right">อัตรา 24 ชม.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((store) => (
+                  <tr key={store.storeId} className="border-b border-[var(--dash-border)] last:border-b-0 hover:bg-[var(--dash-accent-soft)]">
+                    <td className="px-3.5 py-3">
+                      <button type="button" onClick={() => onOpenStore(store.storeId)} className="max-w-[300px] truncate text-left font-semibold text-[var(--dash-text)] hover:text-[var(--dash-accent)]">
+                        {getStoreDisplayName(store.storeName)}
+                      </button>
+                    </td>
+                    <td className="px-2 py-3 text-right font-semibold tabular-nums text-[var(--dash-green)]">{store.within24h.toLocaleString()}</td>
+                    <td className="px-2 py-3 text-right tabular-nums text-[var(--dash-red)]">{store.over24h.toLocaleString()}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">{store.pending.toLocaleString()}</td>
+                    <td className="px-2 py-3 text-right tabular-nums">{store.total.toLocaleString()}</td>
+                    <td className={`px-3.5 py-3 text-right text-sm font-bold tabular-nums ${toneClass(store.responseRate24h)}`}>{rateLabel(store.responseRate24h)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-2 md:hidden">
+            {rows.map((store) => (
+              <button
+                key={store.storeId}
+                type="button"
+                onClick={() => onOpenStore(store.storeId)}
+                className="rounded-xl border border-[var(--dash-border)] bg-[var(--dash-card)] p-3 text-left"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-[var(--dash-text)]">{getStoreDisplayName(store.storeName)}</div>
+                    <div className="mt-1 text-[10.5px] text-[var(--dash-text-tertiary)]">ภายใน 24 ชม. {store.within24h.toLocaleString()} / {store.total.toLocaleString()} บทสนทนา</div>
+                  </div>
+                  <div className={`shrink-0 text-xl font-bold tabular-nums ${toneClass(store.responseRate24h)}`}>{rateLabel(store.responseRate24h)}</div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10.5px]">
+                  <div className="rounded-lg bg-[var(--dash-bg)] px-2 py-1.5"><span className="text-[var(--dash-text-tertiary)]">≤24ชม.</span><div className="font-bold text-[var(--dash-green)]">{store.within24h}</div></div>
+                  <div className="rounded-lg bg-[var(--dash-bg)] px-2 py-1.5"><span className="text-[var(--dash-text-tertiary)]">&gt;24ชม.</span><div className="font-bold text-[var(--dash-red)]">{store.over24h}</div></div>
+                  <div className="rounded-lg bg-[var(--dash-bg)] px-2 py-1.5"><span className="text-[var(--dash-text-tertiary)]">ยังไม่ตอบ</span><div className="font-bold">{store.pending}</div></div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {rows.length === 0 && (
+            <div className="py-8 text-center text-xs text-[var(--dash-text-tertiary)]">ไม่พบร้านตามคำค้นหา</div>
+          )}
+          <div className="mt-3 text-[10.5px] text-[var(--dash-text-tertiary)]">
+            สูตร: จำนวนบทสนทนาที่มีคำตอบแรกภายใน 24 ชั่วโมง ÷ บทสนทนาทั้งหมดที่เริ่มในช่วงวันที่เลือก · ร้านที่ไม่มีข้อความจะแสดง “—”
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
