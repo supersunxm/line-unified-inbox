@@ -58,6 +58,14 @@ void test("resolveTemplateVariables handles missing values by replacing with emp
   assert.equal(resolveTemplateVariables(template, store), "Map: ");
 });
 
+void test("resolveTemplateVariables resolves the tiktokUrl alias from tiktokProfileUrl", () => {
+  const result = resolveTemplateVariables("{{store.tiktokUrl}}", {
+    tiktokProfileUrl: "https://www.tiktok.com/@test_store",
+  });
+
+  assert.equal(result, "https://www.tiktok.com/@test_store");
+});
+
 void test("validateTemplateVariables returns READY when googleMapsUrl exists and is valid HTTPS Google Maps URL", () => {
   const store = {
     storeName: "OPPO Store",

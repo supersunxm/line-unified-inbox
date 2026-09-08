@@ -496,6 +496,8 @@ export class RichMenuService {
       externalStoreId: targetOa.store.storeMaster?.externalStoreId ?? null,
       accountName: targetOa.name,
       googleMapsUrl: targetOa.store.storeMaster?.googleMapsUrl ?? null,
+      tiktokUsername: targetOa.store.storeMaster?.tiktokUsername ?? null,
+      tiktokProfileUrl: targetOa.store.storeMaster?.tiktokProfileUrl ?? null,
     };
 
     const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
@@ -900,6 +902,8 @@ export class RichMenuService {
       externalStoreId: storeMaster?.externalStoreId ?? null,
       accountName: targetOa.name,
       googleMapsUrl: storeMaster?.googleMapsUrl ?? null,
+      tiktokUsername: storeMaster?.tiktokUsername ?? null,
+      tiktokProfileUrl: storeMaster?.tiktokProfileUrl ?? null,
     };
 
     const resolvedAreas: Array<{

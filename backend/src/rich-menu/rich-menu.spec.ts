@@ -276,6 +276,67 @@ test("RichMenuService image parsing, storage put, and public URL generation", as
   );
 });
 
+test("RichMenuService.preview resolves TikTok URI variables from Store Master and blocks missing data", async () => {
+  const template = {
+    id: "tpl-tiktok",
+    name: "TikTok Menu",
+    canvasPreset: "LARGE_1",
+    width: 2500,
+    height: 1686,
+    chatBarText: "Menu",
+    imageUrl: null,
+    areasJson: [
+      {
+        id: "area-tiktok",
+        bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+        actionType: "URI",
+        actionData: "{{store.tiktokUrl}}",
+        label: "TikTok",
+      },
+    ],
+  };
+
+  let tiktokProfileUrl: string | null = "https://www.tiktok.com/@o_example";
+  const mockPrisma = {
+    richMenuTemplate: {
+      findUnique: async () => template,
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-tiktok",
+        name: "OPPO Example",
+        store: {
+          name: "OBS Example",
+          storeMaster: {
+            externalStoreId: "TH-TIKTOK",
+            googleMapsUrl: null,
+            tiktokUsername: tiktokProfileUrl ? "o_example" : null,
+            tiktokProfileUrl,
+          },
+        },
+      }),
+    },
+  } as any;
+
+  const service = new RichMenuService(mockPrisma, {} as any, {} as any);
+
+  const resolvedPreview = await service.preview("tpl-tiktok", {
+    lineOfficialAccountId: "oa-tiktok",
+  });
+  assert.equal(resolvedPreview.areas[0].resolvedActionData, "https://www.tiktok.com/@o_example");
+  assert.equal(resolvedPreview.areas[0].isValid, true);
+  assert.equal(resolvedPreview.areas[0].resolvedActionData.includes("{{store.tiktokUrl}}"), false);
+
+  tiktokProfileUrl = null;
+  const blockedPreview = await service.preview("tpl-tiktok", {
+    lineOfficialAccountId: "oa-tiktok",
+  });
+  assert.equal(blockedPreview.areas[0].resolvedActionData, "");
+  assert.equal(blockedPreview.areas[0].isValid, false);
+  assert.match(blockedPreview.areas[0].validationError ?? "", /Invalid URI schema/);
+  assert.equal(blockedPreview.readinessStatus, "BLOCKED");
+});
+
 test("RichMenuService refreshes signed URLs for saved templates on retrieval", async () => {
   const testKey = "line-media/outbound/rich-menu/saved-image-123.png";
   const oldUrl = createMediaPublicUrl(testKey, -100); // expired 100s ago
@@ -497,8 +558,9 @@ test("RichMenuService.publishCanary: Phase 2A single-store end-to-end publishing
       publishedLineCalls.push("validate");
       assert.equal(payload.selected, true);
       assert.equal(payload.name, "Summer Campaign");
-      assert.equal(payload.areas.length, 1);
+      assert.equal(payload.areas.length, 2);
       assert.equal(payload.areas[0].action.uri, "https://maps.app.goo.gl/central-bangna");
+      assert.equal(payload.areas[1].action.uri, "https://www.tiktok.com/@o_bangna");
       return { valid: true };
     },
     getDefaultRichMenu: async (_token: string) => {
@@ -548,10 +610,17 @@ test("RichMenuService.publishCanary: Phase 2A single-store end-to-end publishing
         areasJson: [
           {
             id: "area-1",
-            bounds: { x: 0, y: 0, width: 2500, height: 1686 },
+            bounds: { x: 0, y: 0, width: 1250, height: 1686 },
             actionType: "URI",
             actionData: "{{store.googleMapsUrl}}",
             label: "Open Maps",
+          },
+          {
+            id: "area-2",
+            bounds: { x: 1250, y: 0, width: 1250, height: 1686 },
+            actionType: "URI",
+            actionData: "{{store.tiktokUrl}}",
+            label: "Open TikTok",
           },
         ],
         assignments: [{ id: "assign-1", lineOfficialAccountId: "oa-bangna" }],
@@ -571,6 +640,8 @@ test("RichMenuService.publishCanary: Phase 2A single-store end-to-end publishing
           storeMaster: {
             externalStoreId: "TH001",
             googleMapsUrl: "https://maps.app.goo.gl/central-bangna",
+            tiktokUsername: "o_bangna",
+            tiktokProfileUrl: "https://www.tiktok.com/@o_bangna",
           },
         },
       }),
