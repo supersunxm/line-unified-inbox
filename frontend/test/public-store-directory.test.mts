@@ -56,6 +56,7 @@ test("5. Public store API client calls public unauthenticated endpoint", () => {
 
 test("6. Security Audit: No internal sensitive fields leak into public frontend templates", () => {
   const forbiddenKeywords = [
+    "accountName",
     "lineManagerUrl",
     "bmName",
     "dashboardTier",
@@ -71,4 +72,10 @@ test("6. Security Audit: No internal sensitive fields leak into public frontend 
     assert.doesNotMatch(profileViewCode, new RegExp(keyword), `Public profile must not contain ${keyword}`);
     assert.doesNotMatch(apiCode, new RegExp(keyword), `Public API client must not contain ${keyword}`);
   }
+});
+
+test("7. Public directory synchronizes search/filter state to URL and uses deterministic slugs", () => {
+  assert.match(directoryCode, /useSearchParams/);
+  assert.match(directoryCode, /replaceState/);
+  assert.match(directoryCode, /store\.slug\s*\|\|\s*store\.id/);
 });

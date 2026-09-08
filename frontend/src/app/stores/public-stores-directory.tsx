@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchPublicStores,
@@ -8,16 +9,36 @@ import {
 } from "@/lib/public-stores-api";
 
 export function PublicStoresDirectory() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [stores, setStores] = useState<PublicStoreDto[]>([]);
   const [provinces, setProvinces] = useState<string[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search and filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState("ALL");
-  const [selectedProvince, setSelectedProvince] = useState("ALL");
+  // Search and filter states initialized from URL params if present
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
+  const [selectedRegion, setSelectedRegion] = useState(() => searchParams.get("region") ?? "ALL");
+  const [selectedProvince, setSelectedProvince] = useState(() => searchParams.get("province") ?? "ALL");
+
+  // Sync URL search parameters when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) {
+      params.set("q", searchQuery.trim());
+    }
+    if (selectedRegion && selectedRegion !== "ALL") {
+      params.set("region", selectedRegion);
+    }
+    if (selectedProvince && selectedProvince !== "ALL") {
+      params.set("province", selectedProvince);
+    }
+    const qs = params.toString();
+    const newUrl = qs ? `${pathname}?${qs}` : pathname;
+    window.history.replaceState(null, "", newUrl);
+  }, [searchQuery, selectedRegion, selectedProvince, pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,12 +92,11 @@ export function PublicStoresDirectory() {
       // Search query match
       if (q) {
         const matchName = store.name.toLowerCase().includes(q);
-        const matchAccount = store.accountName.toLowerCase().includes(q);
         const matchProvince = (store.province ?? "").toLowerCase().includes(q);
         const matchRegion = (store.region ?? "").toLowerCase().includes(q);
         const matchId = store.id.toLowerCase().includes(q);
 
-        if (!matchName && !matchAccount && !matchProvince && !matchRegion && !matchId) {
+        if (!matchName && !matchProvince && !matchRegion && !matchId) {
           return false;
         }
       }
@@ -89,6 +109,7 @@ export function PublicStoresDirectory() {
     setSearchQuery("");
     setSelectedRegion("ALL");
     setSelectedProvince("ALL");
+    window.history.replaceState(null, "", pathname);
   };
 
   return (
@@ -97,9 +118,9 @@ export function PublicStoresDirectory() {
       <header className="sticky top-0 z-30 border-b border-[var(--app-border)] bg-[var(--app-surface)]/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
-            href="/stores"
+            href="/"
             className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
-            aria-label="OPPO Brand Shop Directory Home"
+            aria-label="OPPO Brand Shop Home"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white shadow-sm">
               O
@@ -109,12 +130,18 @@ export function PublicStoresDirectory() {
                 OPPO Brand Shop
               </span>
               <span className="text-[11px] font-medium text-[var(--app-text-secondary)]">
-                Store Directory · Thailand
+                ค้นหาสาขา & ช่องทางติดต่อ
               </span>
             </div>
           </Link>
 
           <nav className="flex items-center gap-2 sm:gap-3" aria-label="Main Navigation">
+            <Link
+              href="/"
+              className="hidden sm:inline-block text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
+            >
+              หน้าแรก
+            </Link>
             <Link
               href="/stores"
               className="inline-flex items-center rounded-lg bg-[var(--app-accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--app-accent)]"
@@ -125,7 +152,7 @@ export function PublicStoresDirectory() {
               href="/login"
               className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"
             >
-              เข้าสู่ระบบ
+              เข้าสู่ระบบสำหรับพนักงาน
             </Link>
           </nav>
         </div>
@@ -315,18 +342,11 @@ export function PublicStoresDirectory() {
                       </div>
 
                       {/* Store Name */}
-                      <h3 className="text-base font-bold text-[var(--app-text-primary)] line-clamp-2">
+                      <h3 className="text-base font-bold text-[var(--app-text-primary)] line-clamp-2 leading-snug">
                         <Link href={storeDetailUrl} className="hover:text-[var(--app-accent)] transition">
                           {store.name}
                         </Link>
                       </h3>
-
-                      {/* Account / Display Name */}
-                      {store.accountName && store.accountName !== store.name && (
-                        <p className="mt-1 text-xs text-[var(--app-text-secondary)] truncate">
-                          {store.accountName}
-                        </p>
-                      )}
 
                       {/* Address preview */}
                       <p className="mt-2 text-xs text-[var(--app-text-tertiary)] line-clamp-2 leading-relaxed">

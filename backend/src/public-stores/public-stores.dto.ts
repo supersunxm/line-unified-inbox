@@ -19,7 +19,6 @@ export interface PublicStoreDto {
   id: string;
   slug: string;
   name: string;
-  accountName: string;
   province: string | null;
   region: string | null;
   location: PublicStoreLocationInfo;
@@ -48,7 +47,7 @@ export function generatePublicStoreSlug(storeName: string, externalStoreId?: str
 }
 
 export function serializePublicStore(store: StoreMaster): PublicStoreDto {
-  const externalId = store.externalStoreId || store.id;
+  const externalId = store.externalStoreId ?? "";
   const slug = generatePublicStoreSlug(store.storeName, store.externalStoreId);
 
   const line: PublicStoreLineInfo | null = store.lineOaLink
@@ -81,7 +80,6 @@ export function serializePublicStore(store: StoreMaster): PublicStoreDto {
     id: externalId,
     slug,
     name: store.storeName,
-    accountName: store.accountName,
     province: store.province ?? null,
     region: store.region ?? null,
     location,

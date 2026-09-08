@@ -57,18 +57,33 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
       {/* Public Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border)] bg-[var(--app-surface)]/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <Link
-            href="/stores"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--app-accent)] hover:underline"
-          >
-            ← ค้นหาร้านทั้งหมด
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="flex items-center gap-2 transition hover:opacity-90"
+              aria-label="OPPO Brand Shop Home"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--app-accent)] text-xs font-bold text-white">
+                O
+              </span>
+              <span className="text-xs sm:text-sm font-bold tracking-tight">
+                OPPO Brand Shop
+              </span>
+            </Link>
+            <span className="text-[var(--app-border)]">|</span>
+            <Link
+              href="/stores"
+              className="text-xs font-semibold text-[var(--app-accent)] hover:underline"
+            >
+              ← สาขาทั้งหมด
+            </Link>
+          </div>
 
           <Link
             href="/login"
             className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"
           >
-            เข้าสู่ระบบ
+            เข้าสู่ระบบสำหรับพนักงาน
           </Link>
         </div>
       </header>
@@ -122,20 +137,16 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
                       {store.region}
                     </span>
                   )}
-                  <span className="inline-flex items-center rounded-md bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-tertiary)]">
-                    รหัสสาขา {store.id}
-                  </span>
+                  {store.id && (
+                    <span className="inline-flex items-center rounded-md bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-tertiary)]">
+                      รหัสสาขา {store.id}
+                    </span>
+                  )}
                 </div>
 
                 <h1 className="text-2xl font-black tracking-tight sm:text-3xl text-[var(--app-text-primary)]">
                   {store.name}
                 </h1>
-
-                {store.accountName && store.accountName !== store.name && (
-                  <p className="mt-1 text-sm text-[var(--app-text-secondary)]">
-                    {store.accountName}
-                  </p>
-                )}
 
                 <div className="mt-4 pt-4 border-t border-[var(--app-border-subtle)] text-xs text-[var(--app-text-secondary)] leading-relaxed">
                   <p>
@@ -288,6 +299,9 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
         <div className="mx-auto max-w-4xl px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · Thailand</p>
           <div className="flex items-center gap-4">
+            <Link href="/" className="hover:underline">
+              หน้าแรก
+            </Link>
             <Link href="/stores" className="hover:underline">
               หน้ารวมร้านค้า
             </Link>
@@ -296,6 +310,9 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
             </Link>
             <Link href="/terms" className="hover:underline">
               ข้อกำหนดการใช้งาน
+            </Link>
+            <Link href="/login" className="hover:underline">
+              สำหรับพนักงาน
             </Link>
           </div>
         </div>

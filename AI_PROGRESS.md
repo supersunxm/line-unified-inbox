@@ -1,5 +1,37 @@
 # AI Progress Log
 
+## 2026-09-08: Public Store Directory (Phase 2 Hardening & Customer Portal) [COMPLETED]
+- **Current Task**: Public Customer Experience & Contract Hardening on branch `feat/public-store-directory`.
+- **Completed Work**:
+  - Phase 1 Contract Hardening:
+    - Strictly rejected internal `StoreMaster.id` UUID lookups on public store endpoints (returns HTTP 404). Public lookups strictly resolve via `externalStoreId` (OPPO store code) or deterministic slug (`obs-*-{storeId}`).
+    - Audited and stripped `accountName` (internal LINE OA nickname) from backend DTO serializer and frontend interfaces.
+    - Updated backend unit tests to verify externalStoreId, slug, and explicit UUID rejection (`src/public-stores/public-stores.spec.ts`, 6/6 passed).
+  - Phase 2 Customer Landing Page & Routing:
+    - Removed legacy `proxy.ts` rewrite that previously directed root traffic to internal `/welcome`.
+    - Created customer-facing `PublicLandingPage` at root `/` with search bar (`/stores?q=`), quick region discovery chips, customer value props (why-use cards), featured store preview cards, and staff login link.
+    - Preserved `ApplicationWorkspace` and all internal authenticated features untouched.
+  - Phase 3 Store Directory Refinement:
+    - Updated `/stores` (`public-stores-directory.tsx`) with URL search sync (`?q=`, `?region=`, `?province=`) on mount and debounced/instant updates via `replaceState`.
+    - Wrapped directory in `<Suspense>` for safe Next.js static page generation.
+    - Refined card layout: prominent store title, subtle address preview, distinct action buttons (primary green LINE OA `#06C755`, TikTok, Google Maps, and profile view).
+    - Removed all `store.accountName` references.
+  - Phase 4 Store Profile Refinement:
+    - Refined `/stores/[identifier]` (`public-store-profile.tsx`): store code displayed as subtle reference, omitted internal account name, structured hierarchy for LINE contact CTA, basic ID copy, TikTok profile, and Google Maps.
+    - Added breadcrumbs / navigation back to `/stores` and home link to `/`.
+  - Phase 5 Verification & Tests:
+    - Frontend unit tests updated and passing (503/503 passed, 0 failures).
+    - Frontend production build succeeded (`npm run build`, exit 0).
+    - Backend production build succeeded (`npm run build`, exit 0).
+    - Live service verification: backend port 3001, frontend port 3000. Verified 200 responses on `/`, `/stores`, `/stores/29039`, `/stores/obs-big-c-angthong-by-oppo-29690`, `/login` and verified 404 on UUID lookups.
+- **Checks Run & Passed**:
+  - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Backend build: `npm run build` (Clean compile, exit 0)
+  - Frontend tests: `npm run test` (503/503 passed, exit 0)
+  - Frontend build: `npm run build` (Clean compile, exit 0)
+  - Live HTTP curl checks: Validated root landing page, directory, profile by slug and externalStoreId, and UUID 404 rejection.
+- **Next Action**: Commit cleanly to `feat/public-store-directory` and present final Phase 2 report.
+
 ## 2026-09-08: Public Store Directory (MVP) [COMPLETED]
 - **Current Task**: Implement Public Store Directory (`/stores` and `/stores/[identifier]`) on branch `feat/public-store-directory`.
 - **Completed Work**:

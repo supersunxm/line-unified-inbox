@@ -95,7 +95,12 @@ export class PublicStoresService {
       throw new NotFoundException("Store not found");
     }
 
-    // 1. Direct match on externalStoreId (OPPO store code)
+    // Explicit rejection: UUIDs must NOT resolve through the public API
+    if (UUID_REGEX.test(rawIdentifier)) {
+      throw new NotFoundException("Store not found");
+    }
+
+    // 1. Direct match on externalStoreId (OPPO store code, e.g. "29039")
     let store = await this.prisma.storeMaster.findFirst({
       where: {
         externalStoreId: rawIdentifier,
@@ -103,30 +108,26 @@ export class PublicStoresService {
       },
     });
 
-    // 2. If identifier is UUID, match on id
-    if (!store && UUID_REGEX.test(rawIdentifier)) {
-      store = await this.prisma.storeMaster.findFirst({
-        where: {
-          id: rawIdentifier,
-          isActive: true,
-        },
-      });
-    }
-
-    // 3. If identifier is a slug with trailing digits (e.g. "obs-central-phitsanulok-by-oppo-2-29039")
+    // 2. If identifier is a slug with trailing digits (e.g. "obs-central-phitsanulok-by-oppo-2-29039")
     if (!store) {
       const trailingCodeMatch = rawIdentifier.match(/-([a-zA-Z0-9]+)$/);
       if (trailingCodeMatch?.[1]) {
-        store = await this.prisma.storeMaster.findFirst({
+        const candidate = await this.prisma.storeMaster.findFirst({
           where: {
             externalStoreId: trailingCodeMatch[1],
             isActive: true,
           },
         });
+        if (
+          candidate &&
+          generatePublicStoreSlug(candidate.storeName, candidate.externalStoreId) === rawIdentifier
+        ) {
+          store = candidate;
+        }
       }
     }
 
-    // 4. Fallback: match computed slug against active stores
+    // 3. Fallback: match computed slug against active stores
     if (!store) {
       const allActive = await this.prisma.storeMaster.findMany({
         where: { isActive: true },

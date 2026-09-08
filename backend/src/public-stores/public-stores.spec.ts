@@ -8,14 +8,13 @@ import { PublicStoresService } from "./public-stores.service";
 import {
   generatePublicStoreSlug,
   serializePublicStore,
-  type PublicStoreDto,
 } from "./public-stores.dto";
 import { StoreMasterController } from "../store-master/store-master.controller";
 import { StoresController } from "../stores.controller";
 import type { PrismaService } from "../prisma.service";
 
 const sampleRawStore: any = {
-  id: "uuid-1234-5678",
+  id: "0063c803-f70a-4f95-9eff-88a63465ed1a",
   externalStoreId: "29039",
   storeName: "OBS Central Phitsanulok By OPPO 2",
   accountName: "OPPO CT Phitsanulok",
@@ -69,14 +68,13 @@ void test("2. Existing private store routes remain protected without @Public()",
   assert.deepEqual(syncRoles, ["ADMIN"], "POST /store-master/sync must require ADMIN role");
 });
 
-void test("3. serializePublicStore strictly includes whitelisted fields and excludes sensitive data", () => {
+void test("3. serializePublicStore strictly excludes internal fields and accountName", () => {
   const serialized = serializePublicStore(sampleRawStore);
 
   // Whitelisted public fields must be present
   assert.equal(serialized.id, "29039");
   assert.equal(serialized.slug, "obs-central-phitsanulok-by-oppo-2-29039");
   assert.equal(serialized.name, "OBS Central Phitsanulok By OPPO 2");
-  assert.equal(serialized.accountName, "OPPO CT Phitsanulok");
   assert.equal(serialized.province, "Phitsanulok");
   assert.equal(serialized.region, "Northern");
   assert.equal(serialized.location.mapsUrl, "https://maps.app.goo.gl/D4uyRDRAoFXu36P78");
@@ -84,6 +82,9 @@ void test("3. serializePublicStore strictly includes whitelisted fields and excl
   assert.equal(serialized.line?.basicId, "@959koqlp");
   assert.equal(serialized.tiktok?.username, "o_centralphitsanulok");
   assert.equal(serialized.tiktok?.profileUrl, "https://www.tiktok.com/@o_centralphitsanulok");
+
+  // accountName is internal OA nickname and must NOT be in public DTO
+  assert.equal("accountName" in (serialized as any), false, "accountName must not be in public DTO");
 
   // Sensitive StoreMaster internal fields MUST NOT exist in serialized output
   const forbiddenKeys = [
@@ -105,7 +106,6 @@ void test("3. serializePublicStore strictly includes whitelisted fields and excl
     "encryptedAccessToken",
   ];
 
-  const serializedKeys = Object.keys(serialized);
   for (const forbidden of forbiddenKeys) {
     assert.equal(
       forbidden in (serialized as any),
@@ -116,6 +116,7 @@ void test("3. serializePublicStore strictly includes whitelisted fields and excl
 
   // Check JSON stringified output as well
   const jsonString = JSON.stringify(serialized);
+  assert.doesNotMatch(jsonString, /accountName/);
   assert.doesNotMatch(jsonString, /manager\.line\.biz/);
   assert.doesNotMatch(jsonString, /Somchai/);
   assert.doesNotMatch(jsonString, /secret-token/);
@@ -142,7 +143,7 @@ void test("5. PublicStoresService.getStores filters correctly and returns metada
     sampleRawStore,
     {
       ...sampleRawStore,
-      id: "uuid-9999",
+      id: "051e4805-b774-4548-b4ab-50e8e8b88368",
       externalStoreId: "19704",
       storeName: "OBS The Mall Tha Phra FL.3 By OPPO",
       accountName: "OPPO ThemallThaphra",
@@ -186,12 +187,11 @@ void test("5. PublicStoresService.getStores filters correctly and returns metada
   assert.equal(resultSearch.stores[0].name, "OBS Central Phitsanulok By OPPO 2");
 });
 
-void test("6. PublicStoresService.getStoreByIdentifier resolves code, slug, UUID and throws 404 for missing", async () => {
+void test("6. PublicStoresService.getStoreByIdentifier resolves externalStoreId and slug, but strictly rejects UUID", async () => {
   const mockPrisma: any = {
     storeMaster: {
       findFirst: async ({ where }: any) => {
         if (where.externalStoreId === "29039") return sampleRawStore;
-        if (where.id === "0063c803-f70a-4f95-9eff-88a63465ed1a") return sampleRawStore;
         return null;
       },
       findMany: async () => [sampleRawStore],
@@ -200,19 +200,24 @@ void test("6. PublicStoresService.getStoreByIdentifier resolves code, slug, UUID
 
   const service = new PublicStoresService(mockPrisma as PrismaService);
 
-  // Lookup by externalStoreId
+  // 1. Lookup by externalStoreId works
   const byCode = await service.getStoreByIdentifier("29039");
   assert.equal(byCode.name, "OBS Central Phitsanulok By OPPO 2");
+  assert.equal(byCode.id, "29039");
 
-  // Lookup by slug with trailing code
+  // 2. Lookup by slug works
   const bySlug = await service.getStoreByIdentifier("obs-central-phitsanulok-by-oppo-2-29039");
   assert.equal(bySlug.name, "OBS Central Phitsanulok By OPPO 2");
+  assert.equal(bySlug.id, "29039");
 
-  // Lookup by UUID
-  const byUuid = await service.getStoreByIdentifier("0063c803-f70a-4f95-9eff-88a63465ed1a");
-  assert.equal(byUuid.name, "OBS Central Phitsanulok By OPPO 2");
+  // 3. StoreMaster.id UUID lookup is strictly REJECTED (returns 404)
+  await assert.rejects(
+    () => service.getStoreByIdentifier("0063c803-f70a-4f95-9eff-88a63465ed1a"),
+    (err: any) => err instanceof NotFoundException && err.message === "Store not found",
+    "UUID lookup must be rejected by public endpoint"
+  );
 
-  // Missing store throws NotFoundException (404)
+  // 4. Unknown identifier returns 404
   await assert.rejects(
     () => service.getStoreByIdentifier("non-existent-store-999999"),
     (err: any) => err instanceof NotFoundException && err.message === "Store not found"

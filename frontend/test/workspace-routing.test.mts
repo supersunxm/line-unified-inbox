@@ -30,7 +30,7 @@ test("dashboard links to filtered workspaces while root remains public", () => {
     page.indexOf("export default function Home"),
     page.indexOf("export function ApplicationWorkspace"),
   );
-  assert.match(home, /Understand your social content performance\./);
+  assert.match(home, /PublicLandingPage/);
   assert.doesNotMatch(home, /window\.location\.replace/);
 });
 

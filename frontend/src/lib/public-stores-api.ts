@@ -19,7 +19,6 @@ export interface PublicStoreDto {
   id: string;
   slug: string;
   name: string;
-  accountName: string;
   province: string | null;
   region: string | null;
   location: PublicStoreLocationInfo;

@@ -1,5 +1,23 @@
 # Architecture & Design Decisions
 
+## Public Customer Portal & Contract Hardening: UUID Rejection, AccountName Audit & Landing Page Architecture (2026-09-08)
+
+- **Strict UUID Rejection on Public Endpoints**:
+  - The public API previously resolved identifiers through `externalStoreId`, slug, or internal UUID `id`.
+  - Internal database UUIDs (`StoreMaster.id`) have been strictly barred from public resolution via an explicit regex check (`UUID_REGEX.test(rawIdentifier)`), which immediately raises HTTP 404 `NotFoundException("Store not found")`.
+  - Public routes resolve exclusively via official OPPO store codes (`externalStoreId`, e.g. `29039`) or SEO-friendly deterministic slugs (`obs-*-{storeId}`). Internal operations continue using UUIDs behind `AuthGuard`.
+- **accountName Field Audit & Elimination from Public Contract**:
+  - An audit of all 158 active `StoreMaster` records confirmed that `accountName` contains internal LINE OA nicknames (e.g. `O-LT Phetchabun`, `OPPO RBS SRISAMARN`, `OPPO ThemallThaphra`).
+  - `accountName` is not a customer-facing brand name and has been removed from `PublicStoreDto`, the backend serialization whitelist, and the public frontend interface. `storeName` (e.g. `OBS Central Phitsanulok By OPPO 2`) is the canonical public display name.
+- **Root Customer Portal vs Internal Welcome Page**:
+  - A legacy `proxy.ts` middleware had rewritten root `/` requests to `/welcome` (an internal retail operations overview page).
+  - `proxy.ts` was safely removed, restoring root `/` to `frontend/src/app/page.tsx` which renders `<PublicLandingPage />`.
+  - The landing page acts as a true customer portal: hero search bar linking to `/stores?q=`, quick-entry region pills, customer benefits, and featured store previews.
+  - The staff entry point is cleanly separated via explicit "เข้าสู่ระบบสำหรับพนักงาน" links directing to `/login`.
+- **Directory URL Synchronization**:
+  - `/stores` binds state to URL query parameters (`?q=`, `?region=`, `?province=`) on mount and synchronizes state transitions via `window.history.replaceState`.
+  - Wrapping `<PublicStoresDirectory />` in `<Suspense>` satisfies Next.js 16 requirements for dynamic query consumption during static builds.
+
 ## Public Store Directory: Read-Only Contract, Strict Whitelist & Safe Public Slugs (2026-09-08)
 
 - **Context & Business Need**:

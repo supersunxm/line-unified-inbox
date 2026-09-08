@@ -11,6 +11,7 @@ const homeSource = pageSource.slice(
   pageSource.indexOf("export default function Home"),
   pageSource.indexOf("export function ApplicationWorkspace"),
 );
+const landingSource = source("../src/app/public-landing-page.tsx");
 const loginSource = source("../src/app/login/page.tsx");
 const authorizedWorkspaceSource = source("../src/app/authorized-workspace.tsx");
 const dashboardSource = source("../src/app/dashboard/page.tsx");
@@ -20,21 +21,23 @@ const tiktokConnectSource = source("../src/app/tiktok/connect/route.ts");
 const privacySource = source("../src/app/privacy/page.tsx");
 const termsSource = source("../src/app/terms/page.tsx");
 
-test("public root renders OPPO Retail Insights without an auth redirect or admin shell", () => {
-  assert.match(homeSource, /OPPO Retail Insights/);
-  assert.match(homeSource, /Understand your social content performance\./);
-  assert.match(homeSource, /Connect your social account to view profile insights, audience statistics, and public content performance\./);
+test("public root renders customer-facing PublicLandingPage without an auth redirect or admin shell", () => {
+  assert.match(homeSource, /PublicLandingPage/);
+  assert.match(landingSource, /OPPO Brand Shop/);
+  assert.match(landingSource, /ค้นหา OPPO Brand Shop ใกล้คุณ/);
+  assert.match(landingSource, /ค้นหาสาขา ช่องทางติดต่อ LINE OA, TikTok/);
   assert.doesNotMatch(homeSource, /window\.location|redirect\(|api\.me|oppo_session|ApplicationWorkspace|AppShell/);
+  assert.doesNotMatch(landingSource, /window\.location|redirect\(|api\.me|oppo_session|ApplicationWorkspace|AppShell/);
 });
 
-test("public landing calls to action and policy links use canonical routes", () => {
-  assert.match(homeSource, /href="\/tiktok\/connect"[\s\S]*Connect Account/);
-  assert.match(homeSource, /href="\/login"[\s\S]*Administrator Sign in/);
-  assert.match(homeSource, /href="\/privacy"[\s\S]*Privacy Policy/);
-  assert.match(homeSource, /href="\/terms"[\s\S]*Terms of Service/);
-  assert.match(homeSource, /Connect your account/);
-  assert.match(homeSource, /Authorize access/);
-  assert.match(homeSource, /View your insights/);
+test("public landing calls to action, search, and policy links use canonical routes", () => {
+  assert.match(landingSource, /\/stores\?q=/);
+  assert.match(landingSource, /href="\/stores"/);
+  assert.match(landingSource, /href="\/login"[\s\S]*เข้าสู่ระบบสำหรับพนักงาน/);
+  assert.match(landingSource, /href="\/privacy"[\s\S]*Privacy Policy/);
+  assert.match(landingSource, /href="\/terms"[\s\S]*Terms/);
+  assert.match(landingSource, /ค้นหาสาขาใกล้คุณ/);
+  assert.match(landingSource, /ติดต่อร้านผ่าน LINE/);
 });
 
 test("administrator login remains available at /login", () => {
