@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
+import { chromium, type BrowserContext } from "playwright";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
@@ -100,6 +101,7 @@ export class LineChatNovncRecoveryWorkerService {
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (lease) => {
         const children: ChildProcess[] = [];
+        let browserContext: BrowserContext | null = null;
         let stopped = false;
         let stopResolve!: () => void;
         const stoppedPromise = new Promise<void>((resolve) => { stopResolve = resolve; });
@@ -118,6 +120,9 @@ export class LineChatNovncRecoveryWorkerService {
         const cleanup = async (reason: string) => {
           if (stopped) return;
           stopped = true;
+          const context = browserContext;
+          browserContext = null;
+          if (context) await context.close().catch(() => undefined);
           for (const child of [...children].reverse()) if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
           await Promise.all(children.map((child) => waitForExit(child)));
           for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
@@ -134,15 +139,20 @@ export class LineChatNovncRecoveryWorkerService {
           spawnManaged("x11vnc", ["-display", DISPLAY, "-localhost", "-forever", "-shared", "-nopw", "-rfbport", String(VNC_PORT)]);
           spawnManaged("websockify", [`127.0.0.1:${WEBSOCKIFY_PORT}`, `127.0.0.1:${VNC_PORT}`, "--web=/usr/share/novnc"]);
           await new Promise((resolve) => setTimeout(resolve, 750));
-          const chrome = spawnManaged("chromium", [
-            `--user-data-dir=${profilePath}`,
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--window-size=1440,900",
-            "https://chat.line.biz/",
-          ], { DISPLAY });
-          chrome.once("exit", () => void cleanup("browser_exit"));
+
+          browserContext = await chromium.launchPersistentContext(profilePath, {
+            headless: false,
+            viewport: { width: 1440, height: 900 },
+            env: { ...process.env, DISPLAY },
+            args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+          });
+          const contextForCloseHandler = browserContext;
+          contextForCloseHandler.once("close", () => {
+            if (!stopped && browserContext === contextForCloseHandler) void cleanup("browser_exit");
+          });
+          const page = contextForCloseHandler.pages()[0] || await contextForCloseHandler.newPage();
+          await page.goto("https://chat.line.biz/", { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => undefined);
+          lease.assertOwnership();
 
           this.active = { token, expiresAt, stop: cleanup };
           const timer = setTimeout(() => void cleanup("ttl_expired"), ttlMs);
