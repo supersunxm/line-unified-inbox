@@ -1,5 +1,14 @@
 # Architecture & Design Decisions
 
+## Post-Deployment Cleanup: /welcome Staff Boundary & SEO Title Deduplication (2026-09-08)
+
+- **/welcome Authentication Boundary**:
+  - An audit of `/welcome` determined that it contains internal retail operations content ("ระบบภายในสำหรับ OPPO Retail Operations", BM / HQ tooling descriptions, and internal Android APK download links).
+  - Rather than deleting the page (which may be bookmarked by staff), it has been placed behind the standard staff authentication boundary via `api.me()`. Unauthenticated requests redirect to `/login`.
+- **SEO Metadata Title Deduplication**:
+  - The root layout template `%s | OPPO Brand Shop` previously resulted in duplicate brand suffixes on child pages that already included "OPPO Brand Shop" in their titles (e.g. `<Store Name> | OPPO Brand Shop | OPPO Brand Shop`).
+  - Child pages now use `title: { absolute: "..." }` (for Directory, Privacy, Terms) or provide clean raw names (`title: store.name`) so Next.js applies the template cleanly without repetitive branding.
+
 ## Public Region Normalization: Zero-Mutation Presentation Mapping (2026-09-08)
 
 - **Presentation-Only Normalization Layer**:

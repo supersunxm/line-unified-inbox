@@ -12,7 +12,7 @@ test("Terms of Service page file exists at src/app/terms/page.tsx", () => {
 });
 
 test("Terms of Service has appropriate metadata and localized page content", () => {
-  assert.match(termsPageSource, /title:\s*"Terms of Service \| OPPO Retail TikTok Monitor"/);
+  assert.match(termsPageSource, /Terms of Service \| OPPO Brand Shop/);
   assert.match(termsPageSource, /description:\s*"Terms of Service for OPPO Retail TikTok Monitor/);
   assert.match(termsPageSource, /<TermsContent\s*\/>/);
   assert.match(termsContentSource, /documentLabel:\s*"Terms of Service"/);

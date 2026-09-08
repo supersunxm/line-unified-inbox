@@ -1,18 +1,49 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { LanguageControl, pickLanguageText, useAppLanguage } from "../language";
 
 export default function WelcomePage() {
+  const router = useRouter();
+  const [authenticated, setAuthenticated] = useState(false);
   const { language } = useAppLanguage();
   const text = pickLanguageText(language, {
     th: {
-      badge: "OPPO Retail Operations", title: "จัดการ LINE OA ทุกสาขาในที่เดียว", description: "ติดตามบทสนทนา ลูกค้า ผู้ติดตาม แคมเปญ และประสิทธิภาพของแต่ละสาขาจากระบบกลางของ OPPO", signIn: "เข้าสู่ระบบ", download: "ดาวน์โหลด Android App", chat: "LINE OA Chat Hub", chatDesc: "รวมบทสนทนาจากสาขาที่ได้รับสิทธิ์ พร้อมสถานะการตอบและเครื่องมือสำหรับ BM / HQ", insight: "Social Listening & Insights", insightDesc: "ติดตามผู้ติดตาม Message Traffic และข้อมูลสำคัญของแต่ละบัญชีในมุมมองเดียว", tiktok: "TikTok Monitor", tiktokDesc: "ติดตามบัญชี TikTok ของร้าน วิเคราะห์ performance และดูแนวโน้มจากข้อมูลจริง", privacy: "นโยบายความเป็นส่วนตัว", terms: "ข้อกำหนดการใช้งาน", internal: "ระบบภายในสำหรับ OPPO Retail Operations" },
+      checking: "กำลังตรวจสอบสิทธิ์การเข้าถึง...",
+      badge: "OPPO Retail Operations", title: "จัดการ LINE OA ทุกสาขาในที่เดียว", description: "ติดตามบทสนทนา ลูกค้า ผู้ติดตาม แคมเปญ และประสิทธิภาพของแต่ละสาขาจากระบบกลางของ OPPO", signIn: "ไปยังหน้าหลัก", download: "ดาวน์โหลด Android App", chat: "LINE OA Chat Hub", chatDesc: "รวมบทสนทนาจากสาขาที่ได้รับสิทธิ์ พร้อมสถานะการตอบและเครื่องมือสำหรับ BM / HQ", insight: "Social Listening & Insights", insightDesc: "ติดตามผู้ติดตาม Message Traffic และข้อมูลสำคัญของแต่ละบัญชีในมุมมองเดียว", tiktok: "TikTok Monitor", tiktokDesc: "ติดตามบัญชี TikTok ของร้าน วิเคราะห์ performance และดูแนวโน้มจากข้อมูลจริง", privacy: "นโยบายความเป็นส่วนตัว", terms: "ข้อกำหนดการใช้งาน", internal: "ระบบภายในสำหรับ OPPO Retail Operations" },
     en: {
-      badge: "OPPO Retail Operations", title: "Manage every LINE OA in one place", description: "Monitor conversations, customers, followers, campaigns, and store performance from OPPO's central operations workspace.", signIn: "Sign in", download: "Download Android App", chat: "LINE OA Chat Hub", chatDesc: "Bring authorized store conversations together with reply status and tools for BM / HQ teams.", insight: "Social Listening & Insights", insightDesc: "Track followers, Message Traffic, and key account signals in one consolidated view.", tiktok: "TikTok Monitor", tiktokDesc: "Monitor store TikTok accounts, analyze performance, and follow trends from real data.", privacy: "Privacy Policy", terms: "Terms of Use", internal: "Internal system for OPPO Retail Operations" },
+      checking: "Checking workspace access...",
+      badge: "OPPO Retail Operations", title: "Manage every LINE OA in one place", description: "Monitor conversations, customers, followers, campaigns, and store performance from OPPO's central operations workspace.", signIn: "Go to Main Workspace", download: "Download Android App", chat: "LINE OA Chat Hub", chatDesc: "Bring authorized store conversations together with reply status and tools for BM / HQ teams.", insight: "Social Listening & Insights", insightDesc: "Track followers, Message Traffic, and key account signals in one consolidated view.", tiktok: "TikTok Monitor", tiktokDesc: "Monitor store TikTok accounts, analyze performance, and follow trends from real data.", privacy: "Privacy Policy", terms: "Terms of Use", internal: "Internal system for OPPO Retail Operations" },
     zh: {
-      badge: "OPPO Retail Operations", title: "在一个平台管理所有 LINE OA", description: "通过 OPPO 中央运营工作区统一查看会话、客户、关注者、活动以及各门店表现。", signIn: "登录", download: "下载 Android 应用", chat: "LINE OA 聊天中心", chatDesc: "集中查看已授权门店会话、回复状态，以及 BM / HQ 团队所需的运营工具。", insight: "社交监听与数据洞察", insightDesc: "统一查看关注者、消息流量和各账户的重要指标。", tiktok: "TikTok 监控", tiktokDesc: "监控门店 TikTok 账户、分析表现，并从真实数据中了解趋势。", privacy: "隐私政策", terms: "使用条款", internal: "OPPO Retail Operations 内部系统" },
+      checking: "正在检查访问权限...",
+      badge: "OPPO Retail Operations", title: "在一个平台管理所有 LINE OA", description: "通过 OPPO 中央运营工作区统一查看会话、客户、关注者、活动以及各门店表现。", signIn: "前往主工作区", download: "下载 Android 应用", chat: "LINE OA 聊天中心", chatDesc: "集中查看已授权门店会话、回复状态，以及 BM / HQ 团队所需的运营工具。", insight: "社交监听与数据洞察", insightDesc: "统一查看关注者、消息流量和各账户的重要指标。", tiktok: "TikTok 监控", tiktokDesc: "监控门店 TikTok 账户、分析表现，并从真实数据中了解趋势。", privacy: "隐私政策", terms: "使用条款", internal: "OPPO Retail Operations 内部系统" },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.me()
+      .then(() => {
+        if (cancelled) return;
+        setAuthenticated(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        router.replace("/login");
+      });
+    return () => { cancelled = true; };
+  }, [router]);
+
+  if (!authenticated) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center bg-[var(--app-bg,#f8fafc)] text-sm text-[var(--app-text-secondary,#475569)]">
+        <LanguageControl className="absolute right-4 top-4" />
+        {text.checking}
+      </main>
+    );
+  }
 
   const features = [
     { title: text.chat, description: text.chatDesc, mark: "OA" },

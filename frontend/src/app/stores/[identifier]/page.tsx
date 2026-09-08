@@ -12,18 +12,22 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     const store = await fetchPublicStoreByIdentifier(identifier);
     if (!store) {
       return {
-        title: "OPPO Brand Shop Store Directory",
+        title: {
+          absolute: "ค้นหา OPPO Brand Shop | Store Directory",
+        },
         description: "ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop",
       };
     }
     const locationPart = store.province ? ` สาขา${store.province}` : "";
     return {
-      title: `${store.name} | OPPO Brand Shop`,
+      title: store.name,
       description: `ข้อมูลการติดต่อ แผนที่ LINE OA และ TikTok ทางการของ ${store.name}${locationPart}`,
     };
   } catch {
     return {
-      title: "OPPO Brand Shop",
+      title: {
+        absolute: "ค้นหา OPPO Brand Shop | Store Directory",
+      },
       description: "ค้นหา OPPO Brand Shop และช่องทางติดต่อของสาขา",
     };
   }
