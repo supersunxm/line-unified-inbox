@@ -11,6 +11,7 @@ import { LineChatHealthSchedulerService } from "./line-chat-health-scheduler.ser
 import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-image-relay-worker.service";
+import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -33,12 +34,14 @@ import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-imag
     LineChatAuthRecoveryService,
     LineChatManagerMessageRelayWorkerService,
     LineChatManagerImageRelayWorkerService,
+    LineChatNovncRecoveryWorkerService,
   ],
   exports: [
     LineChatNicknameWorkerService,
     LineChatAuthRecoveryService,
     LineChatManagerMessageRelayWorkerService,
     LineChatManagerImageRelayWorkerService,
+    LineChatNovncRecoveryWorkerService,
   ],
 })
 export class LineChatNicknameWorkerModule {}

@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright:v1.50.0-noble AS runner
 
 WORKDIR /app
 
-# Dormant operator tooling for localhost-only interactive login during maintenance.
+# Dormant operator tooling for token-gated, on-demand interactive login recovery.
 # No VNC/noVNC process or public listener is started by the image itself.
 RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
   && apt-get update \
@@ -12,6 +12,7 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
     novnc \
     websockify \
     x11vnc \
+    xvfb \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy root workspace and backend package definitions
