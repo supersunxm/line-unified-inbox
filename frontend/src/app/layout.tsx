@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./public-branding.css";
 import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
 
