@@ -11,6 +11,15 @@ export type StoreMasterSyncReport = {
   storeIdConflicts: number;
 };
 
+type StoreTarget = {
+  id: string;
+  code: string | null;
+  name: string;
+  region: string | null;
+  area: string | null;
+  storeMasterId: string | null;
+};
+
 async function uniqueMasterByExternalStoreId(
   prisma: PrismaClient,
   externalStoreId: string | null,
@@ -18,10 +27,7 @@ async function uniqueMasterByExternalStoreId(
   const storeId = externalStoreId?.trim();
   if (!storeId) return null;
   const matches = await prisma.storeMaster.findMany({
-    where: {
-      isActive: true,
-      externalStoreId: storeId,
-    },
+    where: { isActive: true, externalStoreId: storeId },
     orderBy: { updatedAt: "desc" },
     take: 2,
   });
@@ -35,10 +41,7 @@ async function uniqueMasterByLineIdentity(
   const lineId = basicId?.trim();
   if (!lineId) return null;
   const matches = await prisma.storeMaster.findMany({
-    where: {
-      isActive: true,
-      lineId: { equals: lineId, mode: "insensitive" },
-    },
+    where: { isActive: true, lineId: { equals: lineId, mode: "insensitive" } },
     orderBy: { updatedAt: "desc" },
     take: 2,
   });
@@ -59,14 +62,17 @@ async function uniqueMasterByAccountName(
   return matches.length === 1 ? matches[0] : null;
 }
 
-/**
- * Store ID is the canonical branch identity.
- *
- * This pass repairs Store metadata from the Store Master row already identified by
- * the branch's canonical Store ID / StoreMaster relation. LINE Basic ID and account
- * name are deliberately NOT used here, because they may change or be duplicated and
- * must never move a physical branch to another Store ID.
- */
+function toTarget(store: StoreTarget): StoreTarget {
+  return {
+    id: store.id,
+    code: store.code,
+    name: store.name,
+    region: store.region,
+    area: store.area,
+    storeMasterId: store.storeMasterId,
+  };
+}
+
 async function reconcileStoreMetadataByStoreId(
   prisma: PrismaClient,
   dryRun: boolean,
@@ -96,7 +102,8 @@ async function reconcileStoreMetadataByStoreId(
 
   for (const store of stores) {
     try {
-      let master = store.storeMaster?.isActive ? store.storeMaster : null;
+      let master: Pick<StoreMaster, "id" | "externalStoreId" | "storeName" | "region" | "province"> | null =
+        store.storeMaster?.isActive ? store.storeMaster : null;
       if (!master && store.code?.trim()) {
         master = await uniqueMasterByExternalStoreId(prisma, store.code);
       }
@@ -112,8 +119,6 @@ async function reconcileStoreMetadataByStoreId(
           select: { id: true },
         });
         if (occupied && occupied.id !== store.id) {
-          // Never silently swap/overwrite Store IDs. Surface the conflict and leave
-          // the identifier untouched for explicit investigation.
           report.storeIdConflicts++;
         } else {
           nextCode = canonicalStoreId;
@@ -126,8 +131,8 @@ async function reconcileStoreMetadataByStoreId(
         store.name !== master.storeName ||
         store.region !== master.region ||
         store.area !== master.province;
-
       if (!changed) continue;
+
       report.storeMetadataUpdated++;
       if (dryRun) continue;
 
@@ -163,16 +168,12 @@ export async function syncConnectedLineOaMetadata(
     storeIdConflicts: 0,
   };
 
-  // Repair every Store first so every downstream lookup/export that reads Store
-  // metadata sees the Store Master values for that exact Store ID.
+  // Store ID is canonical. Repair Store metadata first so all downstream lookups
+  // and exports see the Store Master values for that exact branch identifier.
   await reconcileStoreMetadataByStoreId(prisma, dryRun, report);
 
   const accounts = await prisma.lineOfficialAccount.findMany({
-    where: {
-      archivedAt: null,
-      accountType: "STORE",
-      storeId: { not: null },
-    },
+    where: { archivedAt: null, accountType: "STORE", storeId: { not: null } },
     select: {
       id: true,
       name: true,
@@ -185,9 +186,7 @@ export async function syncConnectedLineOaMetadata(
           region: true,
           area: true,
           storeMasterId: true,
-          storeMaster: {
-            select: { externalStoreId: true },
-          },
+          storeMaster: { select: { externalStoreId: true } },
         },
       },
     },
@@ -200,9 +199,10 @@ export async function syncConnectedLineOaMetadata(
     try {
       const currentCode = account.store.code?.trim() || null;
       const linkedMasterStoreId = account.store.storeMaster?.externalStoreId?.trim() || null;
+      const hasCanonicalStoreIdentity = Boolean(
+        account.store.storeMasterId || linkedMasterStoreId || currentCode,
+      );
 
-      // Store ID / existing StoreMaster relation is authoritative. LINE identity is
-      // only a recovery fallback for legacy records that have no Store ID at all.
       let master: StoreMaster | null = null;
       if (account.store.storeMasterId) {
         master = await prisma.storeMaster.findFirst({
@@ -216,35 +216,24 @@ export async function syncConnectedLineOaMetadata(
         master = await uniqueMasterByExternalStoreId(prisma, currentCode);
       }
 
-      const hasCanonicalStoreIdentity = Boolean(
-        account.store.storeMasterId || linkedMasterStoreId || currentCode,
-      );
-
+      // LINE identity is only a legacy recovery path when the Store has no Store ID.
+      // It can never move an already identified branch to a different Store ID.
       if (!master && !hasCanonicalStoreIdentity) {
         master = await uniqueMasterByLineIdentity(prisma, account.basicId);
         if (!master) master = await uniqueMasterByAccountName(prisma, account.name);
       }
-
       if (!master) {
         report.missingStoreMaster++;
         continue;
       }
 
       const masterCode = master.externalStoreId?.trim() || null;
-      const region = master.region;
-      const area = master.province;
-
-      // Once a Store ID exists, never move the OA to another branch based on LINE
-      // Basic ID or account name. Keep the current physical Store and refresh metadata.
-      let targetStore = account.store;
+      let targetStore: StoreTarget = toTarget(account.store);
       if (!hasCanonicalStoreIdentity && masterCode) {
-        const recoveredTarget = await prisma.store.findFirst({
+        const recovered = await prisma.store.findFirst({
           where: {
             archivedAt: null,
-            OR: [
-              { storeMasterId: master.id },
-              { code: masterCode },
-            ],
+            OR: [{ storeMasterId: master.id }, { code: masterCode }],
           },
           select: {
             id: true,
@@ -255,19 +244,19 @@ export async function syncConnectedLineOaMetadata(
             storeMasterId: true,
           },
         });
-        if (recoveredTarget) targetStore = recoveredTarget;
+        if (recovered) targetStore = recovered;
       }
 
       const targetCode = masterCode || targetStore.code?.trim() || null;
-      const storeMetadataChanged =
+      const metadataChanged =
         targetStore.storeMasterId !== master.id ||
         targetStore.code !== targetCode ||
         targetStore.name !== master.storeName ||
-        targetStore.region !== region ||
-        targetStore.area !== area;
+        targetStore.region !== master.region ||
+        targetStore.area !== master.province;
       const accountNeedsRebind = !hasCanonicalStoreIdentity && targetStore.id !== account.store.id;
 
-      if (!storeMetadataChanged && !accountNeedsRebind) {
+      if (!metadataChanged && !accountNeedsRebind) {
         report.unchanged++;
         continue;
       }
@@ -275,9 +264,7 @@ export async function syncConnectedLineOaMetadata(
       report.updated++;
       if (dryRun) continue;
 
-      if (storeMetadataChanged) {
-        // Guard against an accidental Store ID collision. The identifier must never
-        // be overwritten or swapped silently.
+      if (metadataChanged) {
         if (targetCode && targetCode !== targetStore.code) {
           const occupied = await prisma.store.findUnique({
             where: { code: targetCode },
@@ -295,10 +282,10 @@ export async function syncConnectedLineOaMetadata(
             storeMasterId: master.id,
             code: targetCode,
             name: master.storeName,
-            region,
-            area,
+            region: master.region,
+            area: master.province,
             provinceSource: "MASTER",
-            regionSource: region ? "MASTER" : "PROVINCE_MAPPING",
+            regionSource: master.region ? "MASTER" : "PROVINCE_MAPPING",
           },
         });
       }
