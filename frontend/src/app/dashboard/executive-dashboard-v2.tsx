@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ExecutiveDashboardV2 as ExecutiveDashboardBase } from "./executive-dashboard-base";
 import { ExecutiveStorePeerPanel } from "./executive-store-peer-panel";
-import { Store24hResponsePanel } from "./store-24h-response-panel";
 
 export { calcBucketPercent } from "./executive-dashboard-base";
 
@@ -60,16 +59,10 @@ function StorePeerPanelPortal({
 
   if (!mountNode) return null;
   return createPortal(
-    <>
-      <Store24hResponsePanel
-        getStoreDisplayName={getStoreDisplayName}
-        onOpenStore={onOpenStore}
-      />
-      <ExecutiveStorePeerPanel
-        getStoreDisplayName={getStoreDisplayName}
-        onOpenStore={onOpenStore}
-      />
-    </>,
+    <ExecutiveStorePeerPanel
+      getStoreDisplayName={getStoreDisplayName}
+      onOpenStore={onOpenStore}
+    />,
     mountNode,
   );
 }
