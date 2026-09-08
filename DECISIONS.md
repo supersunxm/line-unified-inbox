@@ -2110,3 +2110,11 @@ Leave operational backfill date fields, coupon schedule datetimes, and fixed Goo
 ## 2026-09-08: Rich Menu TikTok variables use the canonical Store Master URL
 
 Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Populate that field, together with `tiktokUsername`, in every Rich Menu `StoreVariableContext` used by preview/auto-response validation and per-store publishing. Keep `store.tiktokUrl` as a resolver alias/fallback for existing templates, so legacy templates resolve without adding a duplicate Prisma field. Missing TikTok data continues to fail closed through the existing URI validation before any LINE payload/API call is made.
+
+## 2026-09-08: Fail-closed feature gate for public TikTok review connection
+
+- Introduced `TIKTOK_PUBLIC_CONNECT_ENABLED` as a strictly server-side feature gate to safeguard production deployment while existing unverified TikTok credentials (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`) remain present on Railway.
+- Gate is enabled strictly when `TIKTOK_PUBLIC_CONNECT_ENABLED` trimmed case-insensitive value is exactly `"true"`. Default is `false` (disabled).
+- When disabled, `/connect/tiktok` renders the full informational layout, but the connection CTA button is disabled displaying neutral Thai copy (`"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"`) without disclosing technical or environment variable details.
+- Initiation endpoints (`/api/tiktok/authorize`, `/tiktok/connect`) and callback endpoint (`/tiktok/callback`) fail closed immediately with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled` without generating state, PKCE, cookies, or contacting TikTok.
+- Internal staff analytics dashboards (`/tiktok`, `/tiktok/dashboard`) and customer store directory (`/`, `/stores`) remain completely isolated and operational.

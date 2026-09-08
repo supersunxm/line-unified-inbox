@@ -1,44 +1,26 @@
 # AI Progress Log
 
-## 2026-09-08: TikTok Official API — Review-Ready Integration Preparation [COMPLETED]
-- **Current Task**: Prepare application for TikTok App Review using real TikTok account connection experience on branch `feat/tiktok-review-ready-integration`.
+## 2026-09-08: TikTok Official API — Fail-Closed Feature Gate Integration [COMPLETED]
+- **Current Task**: Introduce explicit fail-closed feature gate (`TIKTOK_PUBLIC_CONNECT_ENABLED`) on `feat/tiktok-review-ready-integration` (PR #205) to ensure safe production deployment without activating unverified pre-existing Railway TikTok credentials.
 - **Completed Work**:
-  1. Phase 2 — Minimum Scope Reduction:
-     - Enforced strictly `user.info.basic`, `user.info.profile`, and `user.info.stats`.
-     - Excluded `video.list`, `video.publish`, `video.upload`, Research API, and Content Posting API.
-     - Requested exact 11 user info fields from Login Kit v2.
-  2. Phase 3 — Public Connect Page:
-     - Implemented `/connect/tiktok` with customer/store owner explanation in Thai, 4 requested metric bullet points, read-only guarantees, and sandbox configuration guard when `TIKTOK_CLIENT_KEY` is not configured.
-  3. Phase 4 & 6 — Decoupled Store Association & Callback:
-     - Updated `/tiktok/callback` to allow sandbox reviewers and unlinked branch accounts to authenticate successfully without `store_not_found` error.
-     - Decoupled `TikTokAccount` (Official API) from `TikTokPublicProfile` (Public Collector).
-  4. Phase 5 & 7 — Success UI:
-     - Updated `/connect/tiktok/success` and `/tiktok/connect/success` displaying avatar, `@username`, all 4 metrics (Followers, Following, Likes, Videos), read-only reassurance badge, and clear revocation guidance.
-  5. Phase 8 — Public Explanation Page:
-     - Created `/tiktok-integration` explaining integration purpose, data accessed, strict non-posting boundaries, and security. Linked in footers across public landing page, store directory, and store profile.
-  6. Phase 9 & 10 — Privacy Policy & Terms of Service:
-     - Audited and updated `/privacy` and `/terms` (in TH, EN, ZH) reflecting read-only profile + metric collection without video downloads or personal message access.
-  7. Phase 11 & 12 — App Review Package & Demo Script:
-     - Created `TIKTOK_APP_REVIEW.md` (all 15 sections complete).
-     - Created `TIKTOK_REVIEW_DEMO_SCRIPT.md` (all 14 step-by-step recording steps complete).
-  8. Phase 13 & 14 — PR Cleanup, Scope Audit & Reversion of Unrelated Specs:
-     - Reverted unrelated backend test files (`backend/src/store-master/sync-connected-line-oa.spec.ts` and `backend/src/line-chat/line-chat-manager-image-relay-worker.spec.ts`) strictly to `origin/main`.
-     - Confirmed PR diff contains ZERO unrelated files (all 20 files are classified as `TIKTOK_REQUIRED`, `PUBLIC_DISCLOSURE_REQUIRED`, or `REVIEW_DOCUMENTATION`).
-     - Made `frontend/src/app/tiktok/callback/route.ts` degrade gracefully if internal backend sync fails, ensuring `TIKTOK_INTERNAL_SYNC_SECRET` is not a blocker for sandbox reviewer verification.
-     - Added dedicated "Developer Portal Configuration" section with exact non-secret values to `TIKTOK_APP_REVIEW.md`.
-  9. Phase 15 — Final Source-to-Review Alignment:
-     - Trimmed `TIKTOK_USER_INFO_FIELDS` to exactly 11 fields (removed `union_id`, `avatar_url_100`, `avatar_large_url`), matching minimal requested fields.
-     - Added test assertion proving exact 11 field list in `test/tiktok-token-exchange.test.mts`.
-     - Documented explicit `TIKTOK_REDIRECT_URI=https://lineoppo.click/tiktok/callback` to prevent environment drift.
-     - Documented Environment Variables Classification table and 14-step "TikTok Sandbox Setup" checklist in `TIKTOK_APP_REVIEW.md`.
-     - Verified review callback passes `videos = []` and never invokes legacy video retrieval functions.
+  1. Phase 16 — Fail-Closed Feature Gate Implementation:
+     - Implemented server-side `isTikTokPublicConnectEnabled()` in `frontend/src/app/tiktok/connect/tiktok-oauth.ts`. Requires exact case-insensitive trimmed value `"true"`. Missing, empty, `"false"`, `"0"`, or undefined default to `false`. Never exposed as `NEXT_PUBLIC_*`.
+     - Updated `/connect/tiktok/page.tsx`: When gate is disabled, page layout renders normally but the CTA button is disabled displaying neutral Thai copy: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"* without exposing configuration details or environment variable names.
+     - Protected `/api/tiktok/authorize` and `/tiktok/connect`: When gate is disabled, immediately fail closed with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled` without generating state, PKCE, cookies, or redirecting to TikTok.
+     - Protected `/tiktok/callback`: When gate is disabled, fails closed with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled` and expires state cookie.
+     - Enhanced `/tiktok/connect/error/error-content.tsx`: Added trilingual handling for `integration_disabled` (TH: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"*, EN: *"TikTok Connection is Currently Unavailable"*, ZH: *"TikTok 连接当前不可用"*).
+     - Updated `TIKTOK_APP_REVIEW.md`: Documented `TIKTOK_PUBLIC_CONNECT_ENABLED` in the Environment Variables Classification table and added dedicated section explaining the two-stage deployment safety strategy (Initial Prod: Gate DISABLED; Sandbox: Gate ENABLED).
+     - Added comprehensive automated unit tests covering the feature flag evaluation matrix, fail-closed route redirection, UI disabled state, and error handling.
+  2. Verified internal staff surfaces remain untouched:
+     - `/tiktok` (Overview) and `/tiktok/dashboard` (Performance) maintain existing session authorization boundary and operate independently.
 - **Checks Run & Passed**:
-  - All 533 frontend unit tests passed (including 67 TikTok-specific tests and exact 11-field test).
-  - All 8 TikTok backend unit tests passed.
-  - Complete backend suite: 1,795 passed, 2 pre-existing baseline failures on `origin/main` (reported as `PRE_EXISTING / OUT_OF_SCOPE`).
-  - Frontend production build: Turbopack compile passed.
-  - Backend production build: NestJS/Prisma compile passed.
-- **Next Action**: Push updates to PR #205 and present Final Report with decision `READY_TO_DEPLOY_FOR_SANDBOX`.
+  - All 537 frontend unit tests passed (`npm test`, exit 0).
+  - Clean ESLint check on modified files with 0 errors and 0 warnings.
+  - Frontend production build passed cleanly (`npm run build`, exit 0).
+  - All 167 backend CI regression tests passed cleanly (`npx tsx --test`, exit 0).
+  - Backend lint regression passed cleanly with 0 errors (`npx eslint`, exit 0).
+  - Backend production build passed cleanly (`prisma generate && nest build`, exit 0).
+- **Next Action**: Push commit to `origin/feat/tiktok-review-ready-integration` and monitor PR #205 GitHub Actions checks.
 
 ## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
 - **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.

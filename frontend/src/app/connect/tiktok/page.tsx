@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { isTikTokPublicConnectEnabled } from "../../tiktok/connect/tiktok-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function TikTokConnectPage() {
+  const isEnabled = isTikTokPublicConnectEnabled();
   const isConfigured = Boolean(process.env.TIKTOK_CLIENT_KEY?.trim());
 
   return (
@@ -112,7 +114,7 @@ export default function TikTokConnectPage() {
 
             {/* CTA Section */}
             <div className="mt-8 pt-6 border-t border-[var(--app-border,#1e2430)]">
-              {isConfigured ? (
+              {isEnabled && isConfigured ? (
                 <div className="flex flex-col sm:flex-row items-center gap-3">
                   <a
                     href="/api/tiktok/authorize"
@@ -129,6 +131,40 @@ export default function TikTokConnectPage() {
                   >
                     อ่านรายละเอียดการเชื่อมต่อ →
                   </Link>
+                </div>
+              ) : !isEnabled ? (
+                <div className="rounded-xl border border-[var(--app-border,#1e2430)] bg-[var(--app-surface-subtle,#0d1017)] p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-700/50 text-slate-400 text-sm font-bold">
+                      ℹ
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-[var(--app-text-primary,#f8fafc)]">
+                        การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้
+                      </h3>
+                      <p className="mt-1 text-xs text-[var(--app-text-secondary,#cbd5e1)] leading-relaxed">
+                        ระบบการเชื่อมต่อบัญชี TikTok สำหรับสาขาอยู่ในระหว่างการเตรียมความพร้อม หากต้องการสอบถามข้อมูลเพิ่มเติมสามารถติดต่อฝ่ายปฏิบัติการค้าปลีก
+                      </p>
+                      <div className="mt-4 flex flex-col sm:flex-row items-center gap-3">
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full sm:w-auto inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-800/80 px-5 py-3 text-xs font-semibold text-slate-400 border border-slate-700/60 shadow-none"
+                        >
+                          <svg className="h-4 w-4 opacity-50" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.88-2.88 2.89 2.89 0 0 1 2.88-2.88c.37 0 .72.07 1.05.2V9.08a6.37 6.37 0 0 0-1.05-.09A6.34 6.34 0 0 0 3 15.34 6.34 6.34 0 0 0 9.34 21.7a6.34 6.34 0 0 0 6.34-6.36V8.71a8.21 8.21 0 0 0 4.91 1.63v-3.45a4.85 4.85 0 0 1-1-.2z" />
+                          </svg>
+                          <span>การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้</span>
+                        </button>
+                        <Link
+                          href="/tiktok-integration"
+                          className="w-full sm:w-auto text-center px-4 py-2.5 text-xs font-medium text-[var(--app-text-secondary,#cbd5e1)] hover:text-white transition"
+                        >
+                          อ่านรายละเอียดการเชื่อมต่อ →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-5">

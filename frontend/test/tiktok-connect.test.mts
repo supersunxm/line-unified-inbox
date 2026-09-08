@@ -9,11 +9,14 @@ import {
   TIKTOK_STATE_COOKIE_OPTIONS,
   buildTikTokAuthUrl,
   generateOAuthState,
+  isTikTokPublicConnectEnabled,
 } from "../src/app/tiktok/connect/tiktok-oauth.ts";
 
 const publicConnectPageSource = readFileSync(new URL("../src/app/connect/tiktok/page.tsx", import.meta.url), "utf8");
 const publicSuccessPageSource = readFileSync(new URL("../src/app/connect/tiktok/success/page.tsx", import.meta.url), "utf8");
 const connectRouteSource = readFileSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url), "utf8");
+const authorizeRouteSource = readFileSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url), "utf8");
+const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
 const successPageSource = readFileSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url), "utf8");
 const successContentSource = readFileSync(new URL("../src/app/tiktok/connect/success/success-content.tsx", import.meta.url), "utf8");
 const errorPageSource = readFileSync(new URL("../src/app/tiktok/connect/error/page.tsx", import.meta.url), "utf8");
@@ -152,4 +155,73 @@ test("Security: Client Secret and tokens are strictly server-side and never expo
 test("Public store authorization routes are NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/connect"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
+});
+
+test("Feature Gate: isTikTokPublicConnectEnabled evaluates strict boolean and defaults to disabled", () => {
+  const originalEnv = process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+  try {
+    delete process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "false";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "0";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "disabled";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "undefined";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "true";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "TRUE";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "  True  ";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+  } finally {
+    if (originalEnv !== undefined) {
+      process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = originalEnv;
+    } else {
+      delete process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+    }
+  }
+});
+
+test("Feature Gate: Public connect UI renders neutral disabled copy when TIKTOK_PUBLIC_CONNECT_ENABLED != true", () => {
+  assert.match(publicConnectPageSource, /isTikTokPublicConnectEnabled/);
+  assert.match(publicConnectPageSource, /การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้/);
+  assert.doesNotMatch(publicConnectPageSource, /TIKTOK_PUBLIC_CONNECT_ENABLED/);
+  assert.doesNotMatch(publicConnectPageSource, /NEXT_PUBLIC_TIKTOK_PUBLIC_CONNECT_ENABLED/);
+});
+
+test("Feature Gate: OAuth start routes fail closed with integration_disabled when gate is disabled", () => {
+  // 1. /api/tiktok/authorize
+  assert.match(authorizeRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(authorizeRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(authorizeRouteSource, /reason.*integration_disabled/);
+
+  // 2. /tiktok/connect
+  assert.match(connectRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(connectRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(connectRouteSource, /reason.*integration_disabled/);
+
+  // 3. /tiktok/callback
+  assert.match(callbackRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(callbackRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(callbackRouteSource, /reason.*integration_disabled/);
+});
+
+test("Feature Gate: Error content includes trilingual support for integration_disabled", () => {
+  assert.match(errorPublicSource, /integration_disabled/);
+  assert.match(errorPublicSource, /การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้/);
+  assert.match(errorPublicSource, /TikTok Connection is Currently Unavailable/);
+  assert.match(errorPublicSource, /TikTok 连接当前不可用/);
 });

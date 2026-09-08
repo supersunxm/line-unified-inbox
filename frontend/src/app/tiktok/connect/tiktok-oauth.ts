@@ -20,6 +20,16 @@ export function getPublicAppUrl(): string {
   return DEFAULT_PUBLIC_APP_URL;
 }
 
+/**
+ * Fail-closed feature gate for the public TikTok account connection experience.
+ * Enabled strictly when TIKTOK_PUBLIC_CONNECT_ENABLED is exactly 'true' (case-insensitive).
+ * Defaults to false (disabled) for any other value, empty string, or undefined.
+ */
+export function isTikTokPublicConnectEnabled(): boolean {
+  const val = process.env.TIKTOK_PUBLIC_CONNECT_ENABLED?.trim().toLowerCase();
+  return val === "true";
+}
+
 export const TIKTOK_STATE_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",

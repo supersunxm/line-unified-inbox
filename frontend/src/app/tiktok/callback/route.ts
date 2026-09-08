@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   TIKTOK_OAUTH_STATE_COOKIE,
   getPublicAppUrl,
+  isTikTokPublicConnectEnabled,
 } from "../connect/tiktok-oauth";
 import {
   exchangeTikTokAuthorizationCode,
@@ -83,6 +84,13 @@ export async function GET(request: NextRequest) {
     });
     return response;
   };
+
+  // Fail-closed gate: if public connect is disabled, refuse to process callback
+  if (!isTikTokPublicConnectEnabled()) {
+    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
+    errorUrl.searchParams.set("reason", "integration_disabled");
+    return createRedirectResponse(errorUrl);
+  }
 
   // If user denied access or TikTok returned an OAuth authorization error
   if (error || validationResult.status === "ERROR") {

@@ -37,11 +37,40 @@ Exact configuration values for the TikTok Developer Portal:
 
 | Variable | Required for Sandbox OAuth Demo | Secret | Server-Side Only | Runtime Target | Production / Sandbox Value | Role & Safe Missing Behavior |
 |---|---|---|---|---|---|---|
+| `TIKTOK_PUBLIC_CONNECT_ENABLED` | **YES** | **NO** | **YES** (Never `NEXT_PUBLIC_*`) | Frontend Server | `false` (Prod initial) / `true` (Sandbox active) | Master fail-closed feature gate. Only activates when trimmed case-insensitive value is exactly `"true"`. When disabled (default), public connect CTA is disabled with neutral copy and OAuth start routes refuse initiation (`reason=integration_disabled`). |
 | `TIKTOK_CLIENT_KEY` | **YES** | **NO** | No | Frontend Server | From TikTok Sandbox Portal | Identifies application in TikTok OAuth URL. When missing, `/connect/tiktok` fail-closed renders disabled setup UI without broken redirects. |
 | `TIKTOK_CLIENT_SECRET` | **YES** | **YES** | **YES** (Never `NEXT_PUBLIC_*`) | Frontend Server | From TikTok Sandbox Portal | Exchanges authorization code for access/refresh tokens. Never logged or exposed. Server redirects cleanly to error page if missing. |
 | `TIKTOK_REDIRECT_URI` | **SHOULD CONFIGURE** | **NO** | No | Frontend Server | `https://lineoppo.click/tiktok/callback` | Explicit canonical redirect URI. Defaults to `https://lineoppo.click/tiktok/callback` if unset; configuring explicitly prevents environment drift. |
 | `NEXT_PUBLIC_APP_URL` | Optional | **NO** | No | Frontend / Client | `https://lineoppo.click` | Canonical public origin helper. Falls back to `https://lineoppo.click` automatically if unset. |
 | `TIKTOK_INTERNAL_SYNC_SECRET` | **NO** | **YES** | **YES** | Frontend & Backend | Internal Shared Secret | Required only for backend database persistence and StoreMaster linking. The OAuth callback flow degrades gracefully without it, successfully displaying verified profile & metrics on `/connect/tiktok/success`. |
+
+---
+
+## Public Connect Feature Gate & Fail-Closed Deployment Safety Strategy
+
+To protect production stability and prevent any unintended OAuth flows against unverified or pre-existing credentials, the new public TikTok account connection experience is governed by an explicit server-side feature gate: `TIKTOK_PUBLIC_CONNECT_ENABLED`.
+
+### Activation Rules
+- **Enabled Condition**: Strictly when `TIKTOK_PUBLIC_CONNECT_ENABLED` trimmed case-insensitive value is exactly `"true"`.
+- **Disabled Condition**: When missing/unset, `"false"`, `"0"`, empty string, or any other value.
+- **Default State**: **DISABLED (`false`)**.
+- **Scope**: Strictly server-side (never exposed to client bundles via `NEXT_PUBLIC_*`).
+
+### Deployment Environment Stages
+
+1. **Initial Production Deployment (Gate DISABLED)**:
+   - PR #205 merges and deploys to production with `TIKTOK_PUBLIC_CONNECT_ENABLED=false` (or unset).
+   - Any pre-existing `TIKTOK_CLIENT_KEY` or `TIKTOK_CLIENT_SECRET` present in production remain completely inert.
+   - `/connect/tiktok` renders the full informational layout explaining integration purpose, but the CTA button is disabled displaying neutral Thai copy: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"* without exposing configuration details or environment variable names.
+   - Direct navigation to `/api/tiktok/authorize` or `/tiktok/connect` fails closed immediately with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled`.
+   - The `/tiktok/callback` handler fails closed with `reason=integration_disabled` and expires state cookies.
+   - Internal staff routes (`/tiktok`, `/tiktok/dashboard`) and public store directory (`/`, `/stores`) operate normally without interruption.
+
+2. **Controlled Sandbox & Review Activation (Gate ENABLED)**:
+   - When verified Sandbox credentials (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`) are provisioned, set `TIKTOK_PUBLIC_CONNECT_ENABLED=true` on the target staging/demo instance.
+   - The CTA button on `/connect/tiktok` activates: **"เชื่อมต่อกับ TikTok"** (`<a href="/api/tiktok/authorize">`).
+   - Standard OAuth 2.0 flow proceeds with `user.info.basic,user.info.profile,user.info.stats`.
+   - Allows recording the submission demo video and conducting reviewer tests safely.
 
 ---
 

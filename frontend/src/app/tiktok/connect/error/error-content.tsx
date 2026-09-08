@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LanguageControl, useAppLanguage } from "../../../language";
 
-type ErrorReason = "authorization_denied" | "store_not_found" | "duplicate_store_mapping" | "invalid_state" | "oauth_failed";
+type ErrorReason = "authorization_denied" | "store_not_found" | "duplicate_store_mapping" | "invalid_state" | "oauth_failed" | "integration_disabled";
 
 type ErrorText = { badge: string; title: string; description: string };
 
@@ -17,6 +17,7 @@ const translations = {
       duplicate_store_mapping: { badge: "ข้อมูลร้านค้าซ้ำ", title: "พบข้อมูลร้านค้าซ้ำซ้อน", description: "พบข้อมูลร้านค้าหลายรายการที่ตรงกับบัญชี TikTok นี้ กรุณาติดต่อ Retail Operations เพื่อตรวจสอบการเชื่อมโยงร้านค้า" },
       invalid_state: { badge: "เซสชันหมดอายุ", title: "เซสชันหมดอายุหรือไม่ถูกต้อง", description: "เซสชันการเชื่อมต่อหมดอายุหรือไม่ถูกต้องเพื่อความปลอดภัย กรุณาเริ่มกระบวนการเชื่อมต่อใหม่อีกครั้ง" },
       oauth_failed: { badge: "เกิดข้อผิดพลาด", title: "ไม่สามารถเชื่อมต่อ TikTok ได้", description: "เกิดข้อผิดพลาดระหว่างเชื่อมต่อบัญชี TikTok กรุณาลองใหม่อีกครั้ง หรือติดต่อ Retail Operations" },
+      integration_disabled: { badge: "ยังไม่เปิดใช้งาน", title: "การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้", description: "ระบบการเชื่อมต่อบัญชี TikTok สำหรับสาขาอยู่ในระหว่างการเตรียมความพร้อม กรุณาติดต่อฝ่ายปฏิบัติการค้าปลีกหากต้องการสอบถามข้อมูลเพิ่มเติม" },
     } satisfies Record<ErrorReason, ErrorText>,
   },
   en: {
@@ -28,6 +29,7 @@ const translations = {
       duplicate_store_mapping: { badge: "Duplicate Mapping", title: "Duplicate Store Mapping", description: "Multiple store records match this TikTok account. Please contact Retail Operations to resolve the store mapping." },
       invalid_state: { badge: "Session Expired", title: "Invalid or Expired Session", description: "The authorization session expired or was invalid. Please restart the connection process." },
       oauth_failed: { badge: "Connection Error", title: "Unable to Connect TikTok", description: "An error occurred while connecting your TikTok account. Please try again later or contact Retail Operations." },
+      integration_disabled: { badge: "Unavailable", title: "TikTok Connection is Currently Unavailable", description: "TikTok account connection for retail stores is currently being prepared. Please contact Retail Operations for further assistance." },
     } satisfies Record<ErrorReason, ErrorText>,
   },
   zh: {
@@ -39,12 +41,13 @@ const translations = {
       duplicate_store_mapping: { badge: "门店映射重复", title: "发现重复的门店映射", description: "有多个门店记录与此 TikTok 账户匹配。请联系 Retail Operations 处理门店映射。" },
       invalid_state: { badge: "会话已过期", title: "会话无效或已过期", description: "为确保安全，授权会话已过期或无效。请重新开始连接流程。" },
       oauth_failed: { badge: "连接错误", title: "无法连接 TikTok", description: "连接 TikTok 账户时发生错误。请稍后重试或联系 Retail Operations。" },
+      integration_disabled: { badge: "未开启连接", title: "TikTok 连接当前不可用", description: "门店 TikTok 账户连接系统目前正在准备中。如需帮助，请联系 Retail Operations。" },
     } satisfies Record<ErrorReason, ErrorText>,
   },
 };
 
 function normalizeReason(reason?: string): ErrorReason {
-  if (reason === "authorization_denied" || reason === "store_not_found" || reason === "duplicate_store_mapping" || reason === "invalid_state") return reason;
+  if (reason === "authorization_denied" || reason === "store_not_found" || reason === "duplicate_store_mapping" || reason === "invalid_state" || reason === "integration_disabled") return reason;
   return "oauth_failed";
 }
 
