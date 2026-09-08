@@ -1,5 +1,23 @@
 # AI Progress Log
 
+## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
+- **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.
+- **Completed Work**:
+  1. Audited `/welcome`: Classified content as internal retail operations summary and app download portal ("ระบบภายในสำหรับ OPPO Retail Operations", BM/HQ tools, APK download).
+  2. Protected `/welcome` behind staff authentication boundary (`api.me()`). Anonymous requests now redirect immediately to `/login`.
+  3. Fixed SEO title duplication across public pages:
+     - Homepage: `OPPO Brand Shop · ค้นหาสาขา & ช่องทางติดต่อ` (layout default)
+     - Directory: `ค้นหา OPPO Brand Shop | Store Directory` (absolute title)
+     - Store profile: `<Store Name> | OPPO Brand Shop` (via `%s | OPPO Brand Shop` layout template)
+     - Privacy: `Privacy Policy | OPPO Brand Shop` (absolute title)
+     - Terms: `Terms of Service | OPPO Brand Shop` (absolute title)
+  4. Updated unit tests: `public-store-directory.test.mts`, `privacy-policy.test.mts`, `terms-of-service.test.mts`, and added `/welcome` auth boundary assertion in `route-tree-integration.test.mts`.
+- **Checks Run & Passed**:
+  - Frontend unit tests: 523/523 passed (`npm test`, exit 0)
+  - Frontend build: Clean Turbopack compile (`npm run build`, exit 0)
+  - HTML title validation: All static and dynamic outputs match target titles.
+- **Next Action**: Commit changes, push branch, open PR against main, merge, and verify on production.
+
 ## 2026-09-08: Public Store Directory (Final Production Readiness Review) [COMPLETED]
 - **Current Task**: Final Production Readiness Review for the Public Store Directory on branch `feat/public-store-directory`.
 - **Completed Work**:

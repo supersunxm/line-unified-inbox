@@ -8,7 +8,7 @@ const profileViewCode = readFileSync(new URL("../src/app/stores/[identifier]/pub
 const apiCode = readFileSync(new URL("../src/lib/public-stores-api.ts", import.meta.url), "utf8");
 
 test("1. /stores page is public and sets external SEO metadata", () => {
-  assert.match(storesPageCode, /title:\s*"OPPO Brand Shop Store Directory"/);
+  assert.match(storesPageCode, /ค้นหา OPPO Brand Shop \| Store Directory/);
   assert.match(storesPageCode, /description:\s*"ค้นหา OPPO Brand Shop และช่องทางติดต่อของสาขา"/);
   assert.match(storesPageCode, /PublicStoresDirectory/);
   // Guarantee no internal authorization wrapper is used
@@ -19,7 +19,7 @@ test("1. /stores page is public and sets external SEO metadata", () => {
 
 test("2. /stores/[identifier] page sets dynamic SEO metadata with store name", () => {
   assert.match(profilePageCode, /generateMetadata/);
-  assert.match(profilePageCode, /\$\{store\.name\}\s*\|\s*OPPO Brand Shop/);
+  assert.match(profilePageCode, /title:\s*store\.name/);
   assert.match(profilePageCode, /PublicStoreProfile/);
   assert.doesNotMatch(profilePageCode, /AuthorizedSection/);
   assert.doesNotMatch(profilePageCode, /AuthorizedWorkspace/);

@@ -12,7 +12,7 @@ test("Privacy Policy page file exists at src/app/privacy/page.tsx", () => {
 });
 
 test("Privacy Policy has appropriate metadata and localized page content", () => {
-  assert.match(privacyPageSource, /title:\s*"Privacy Policy \| OPPO Retail TikTok Monitor"/);
+  assert.match(privacyPageSource, /Privacy Policy \| OPPO Brand Shop/);
   assert.match(privacyPageSource, /description:\s*"Privacy Policy for OPPO Retail TikTok Monitor/);
   assert.match(privacyPageSource, /<PrivacyContent\s*\/>/);
   assert.match(privacyContentSource, /documentLabel:\s*"Privacy Policy"/);

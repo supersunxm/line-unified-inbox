@@ -12,6 +12,7 @@ const friendSourceLinksPageCode = readFileSync(new URL("../src/app/friend-source
 const authorizedWorkspaceCode = readFileSync(new URL("../src/app/authorized-workspace.tsx", import.meta.url), "utf8");
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+const welcomePageCode = readFileSync(new URL("../src/app/welcome/page.tsx", import.meta.url), "utf8");
 
 test("all workspace route entrypoints delegate through normalized authorization with matching section key", () => {
   assert.match(dashboardPageCode, /AuthorizedWorkspace section="dashboard"/);
@@ -68,4 +69,10 @@ test("TopNavigation consolidates account, theme, language, and logout controls",
   assert.match(topNavCode, /logout/);
   assert.match(topNavCode, /authUser\.displayName/);
   assert.doesNotMatch(topNavCode, /Notifications|12 unread|🔔/);
+});
+
+test("/welcome page is protected behind staff authentication boundary", () => {
+  assert.match(welcomePageCode, /api\.me\(\)/);
+  assert.match(welcomePageCode, /router\.replace\("\/login"\)/);
+  assert.match(welcomePageCode, /!authenticated/);
 });
