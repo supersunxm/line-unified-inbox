@@ -49,6 +49,7 @@ export type StoreVariableContext = {
   lineManagerUrl?: string | null;
   tiktokUsername?: string | null;
   tiktokProfileUrl?: string | null;
+  tiktokUrl?: string | null;
   googleMapsUrl?: string | null;
   user?: { displayName?: string | null; name?: string | null } | null;
   account?: { name?: string | null } | null;
@@ -162,6 +163,8 @@ export function getStoreVariableValue(
       return store.tiktokUsername?.trim() || null;
     case "tiktokProfileUrl":
       return store.tiktokProfileUrl?.trim() || null;
+    case "tiktokUrl":
+      return store.tiktokUrl?.trim() || store.tiktokProfileUrl?.trim() || null;
     default: {
       const val = store[prop];
       return typeof val === "string" && val.trim() ? val.trim() : null;
