@@ -18,8 +18,35 @@ import { getStoreGoogleMapsReadiness } from "./template-variable-resolver";
 export class StoreMasterService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private duplicateCount(values: Array<string | null>) {
+    const counts = new Map<string, number>();
+    for (const raw of values) {
+      const value = raw?.trim();
+      if (!value) continue;
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return [...counts.values()]
+      .filter((count) => count > 1)
+      .reduce((sum, count) => sum + count, 0);
+  }
+
+  private assertUniqueStoreIds(items: ReturnType<typeof parseStoreMasterCsv>) {
+    const duplicateExternalStoreIds = this.duplicateCount(
+      items.map((item) => item.externalStoreId),
+    );
+    if (duplicateExternalStoreIds > 0) {
+      throw new Error(
+        `Store ID integrity check failed: ${duplicateExternalStoreIds} duplicate Store ID row(s); no data was changed`,
+      );
+    }
+  }
+
   async importCsv(csv: string, source = "GOOGLE_SHEET") {
     const parsed = parseStoreMasterCsv(csv);
+    // Store ID is the canonical cross-system key. Never import a source that can
+    // resolve one Store ID to more than one master row.
+    this.assertUniqueStoreIds(parsed);
+
     const existingMasters = await this.prisma.storeMaster.findMany({
       where: { isActive: true },
       orderBy: { createdAt: "asc" },
@@ -175,6 +202,10 @@ export class StoreMasterService {
     const validation = this.validationForRows(parsed);
     if (validation.total === 0)
       throw new Error("Google Sheet returned no Store Master rows; no data was changed");
+    if (validation.duplicateExternalStoreIds > 0)
+      throw new Error(
+        `Store ID integrity check failed: ${validation.duplicateExternalStoreIds} duplicate Store ID row(s); no data was changed`
+      );
     if (validation.invalidManagerUrls > 0)
       throw new Error(
         `Google Sheet validation failed: ${validation.invalidManagerUrls} invalid manager URL(s); no data was changed`
@@ -195,14 +226,7 @@ export class StoreMasterService {
   }
 
   private validationForRows(items: ReturnType<typeof parseStoreMasterCsv>) {
-    const duplicate = (values: Array<string | null>) => {
-      const counts = new Map<string, number>();
-      for (const value of values.filter((v): v is string => Boolean(v)))
-        counts.set(value, (counts.get(value) ?? 0) + 1);
-      return [...counts.values()]
-        .filter((count) => count > 1)
-        .reduce((sum, count) => sum + count, 0);
-    };
+    const duplicate = (values: Array<string | null>) => this.duplicateCount(values);
     const complete = items.filter(
       (item) =>
         item.storeName &&
@@ -323,14 +347,7 @@ export class StoreMasterService {
 
   async validate() {
     const items = await this.prisma.storeMaster.findMany({ where: { isActive: true } });
-    const duplicate = (values: Array<string | null>) => {
-      const counts = new Map<string, number>();
-      for (const value of values.filter((v): v is string => Boolean(v)))
-        counts.set(value, (counts.get(value) ?? 0) + 1);
-      return [...counts.values()]
-        .filter((count) => count > 1)
-        .reduce((sum, count) => sum + count, 0);
-    };
+    const duplicate = (values: Array<string | null>) => this.duplicateCount(values);
     const byStatus = (status: StoreMasterDataQualityStatus) =>
       items.filter((item) => item.dataQualityStatus === status).length;
 
