@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ExportLineOfficialAccountsDto } from "./line-official-account.dto";
