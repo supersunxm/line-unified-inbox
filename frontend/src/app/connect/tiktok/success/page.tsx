@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { TikTokConnectSuccessContent } from "./success-content";
+import { TikTokConnectSuccessContent } from "@/app/tiktok/connect/success/success-content";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "TikTok Connected Successfully | OPPO Retail Operations",
-  description: "Your TikTok account has been successfully connected to OPPO Retail Operations.",
+  title: "TikTok Connected Successfully | OPPO Brand Shop",
+  description: "Your TikTok account has been successfully connected to OPPO Brand Shop.",
   robots: { index: false, follow: false },
 };
 
@@ -35,7 +35,7 @@ async function getVerifiedConnectResult(): Promise<VerifiedConnectResult | null>
   }
 }
 
-export default async function TikTokConnectSuccessPage() {
+export default async function PublicTikTokConnectSuccessPage() {
   const verifiedResult = await getVerifiedConnectResult();
   return (
     <TikTokConnectSuccessContent

@@ -1,0 +1,210 @@
+# TikTok Login Kit App Review Submission Guide
+
+**Product**: TikTok Login Kit (Web OAuth 2.0)  
+**Application**: OPPO Brand Shop Social Directory (`lineoppo.click`)  
+**Target Environment**: Production (`https://lineoppo.click`) / Sandbox Staging  
+**Status**: REVIEW_PACKAGE_READY_WITH_CONFIGURATION  
+
+## Developer Portal Configuration
+
+Exact configuration values for the TikTok Developer Portal:
+
+| Setting | Exact Value |
+|---|---|
+| **Website** | `https://lineoppo.click` |
+| **Platform** | `Web` |
+| **Login Kit** | `Enabled` (Login Kit v2 / Web OAuth 2.0) |
+| **Redirect URI** | `https://lineoppo.click/tiktok/callback` |
+| **Public Landing Page** | `https://lineoppo.click/` |
+| **Store Directory** | `https://lineoppo.click/stores` |
+| **TikTok Integration Page** | `https://lineoppo.click/tiktok-integration` |
+| **Public Connect Page** | `https://lineoppo.click/connect/tiktok` |
+| **Privacy Policy** | `https://lineoppo.click/privacy` |
+| **Terms of Service** | `https://lineoppo.click/terms` |
+| **Scopes Requested** | `user.info.basic`<br>`user.info.profile`<br>`user.info.stats` |
+
+> [!IMPORTANT]
+> **Strictly Excluded Scopes & APIs**:
+> - `video.list` (NOT requested)
+> - `video.upload` (NOT requested)
+> - `video.publish` (NOT requested)
+> - **Content Posting API** (NOT requested)
+> - **Research API** (NOT requested)
+
+---
+
+## Environment Variables Classification
+
+| Variable | Required for Sandbox OAuth Demo | Secret | Server-Side Only | Runtime Target | Production / Sandbox Value | Role & Safe Missing Behavior |
+|---|---|---|---|---|---|---|
+| `TIKTOK_PUBLIC_CONNECT_ENABLED` | **YES** | **NO** | **YES** (Never `NEXT_PUBLIC_*`) | Frontend Server | `false` (Prod initial) / `true` (Sandbox active) | Master fail-closed feature gate. Only activates when trimmed case-insensitive value is exactly `"true"`. When disabled (default), public connect CTA is disabled with neutral copy and OAuth start routes refuse initiation (`reason=integration_disabled`). |
+| `TIKTOK_CLIENT_KEY` | **YES** | **NO** | No | Frontend Server | From TikTok Sandbox Portal | Identifies application in TikTok OAuth URL. When missing, `/connect/tiktok` fail-closed renders disabled setup UI without broken redirects. |
+| `TIKTOK_CLIENT_SECRET` | **YES** | **YES** | **YES** (Never `NEXT_PUBLIC_*`) | Frontend Server | From TikTok Sandbox Portal | Exchanges authorization code for access/refresh tokens. Never logged or exposed. Server redirects cleanly to error page if missing. |
+| `TIKTOK_REDIRECT_URI` | **SHOULD CONFIGURE** | **NO** | No | Frontend Server | `https://lineoppo.click/tiktok/callback` | Explicit canonical redirect URI. Defaults to `https://lineoppo.click/tiktok/callback` if unset; configuring explicitly prevents environment drift. |
+| `NEXT_PUBLIC_APP_URL` | Optional | **NO** | No | Frontend / Client | `https://lineoppo.click` | Canonical public origin helper. Falls back to `https://lineoppo.click` automatically if unset. |
+| `TIKTOK_INTERNAL_SYNC_SECRET` | **NO** | **YES** | **YES** | Frontend & Backend | Internal Shared Secret | Required only for backend database persistence and StoreMaster linking. The OAuth callback flow degrades gracefully without it, successfully displaying verified profile & metrics on `/connect/tiktok/success`. |
+
+---
+
+## Public Connect Feature Gate & Fail-Closed Deployment Safety Strategy
+
+To protect production stability and prevent any unintended OAuth flows against unverified or pre-existing credentials, the new public TikTok account connection experience is governed by an explicit server-side feature gate: `TIKTOK_PUBLIC_CONNECT_ENABLED`.
+
+### Activation Rules
+- **Enabled Condition**: Strictly when `TIKTOK_PUBLIC_CONNECT_ENABLED` trimmed case-insensitive value is exactly `"true"`.
+- **Disabled Condition**: When missing/unset, `"false"`, `"0"`, empty string, or any other value.
+- **Default State**: **DISABLED (`false`)**.
+- **Scope**: Strictly server-side (never exposed to client bundles via `NEXT_PUBLIC_*`).
+
+### Deployment Environment Stages
+
+1. **Initial Production Deployment (Gate DISABLED)**:
+   - PR #205 merges and deploys to production with `TIKTOK_PUBLIC_CONNECT_ENABLED=false` (or unset).
+   - Any pre-existing `TIKTOK_CLIENT_KEY` or `TIKTOK_CLIENT_SECRET` present in production remain completely inert.
+   - `/connect/tiktok` renders the full informational layout explaining integration purpose, but the CTA button is disabled displaying neutral Thai copy: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"* without exposing configuration details or environment variable names.
+   - Direct navigation to `/api/tiktok/authorize` or `/tiktok/connect` fails closed immediately with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled`.
+   - The `/tiktok/callback` handler fails closed with `reason=integration_disabled` and expires state cookies.
+   - Internal staff routes (`/tiktok`, `/tiktok/dashboard`) and public store directory (`/`, `/stores`) operate normally without interruption.
+
+2. **Controlled Sandbox & Review Activation (Gate ENABLED)**:
+   - When verified Sandbox credentials (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`) are provisioned, set `TIKTOK_PUBLIC_CONNECT_ENABLED=true` on the target staging/demo instance.
+   - The CTA button on `/connect/tiktok` activates: **"เชื่อมต่อกับ TikTok"** (`<a href="/api/tiktok/authorize">`).
+   - Standard OAuth 2.0 flow proceeds with `user.info.basic,user.info.profile,user.info.stats`.
+   - Allows recording the submission demo video and conducting reviewer tests safely.
+
+---
+
+## TikTok Sandbox Setup
+
+Manual step-by-step setup in TikTok Developer Portal:
+
+1. Open the TikTok Developer app in [TikTok for Developers](https://developers.tiktok.com/).
+2. Switch to **Sandbox** mode via the top environment toggle.
+3. Create a Sandbox environment if none exists.
+4. Add **Web** platform to the app configuration.
+5. Add **Login Kit** product.
+6. Register the redirect URI:  
+   `https://lineoppo.click/tiktok/callback`
+7. Configure the three required read-only scopes:
+   - `user.info.basic`
+   - `user.info.profile`
+   - `user.info.stats`
+8. Apply and save the Sandbox configuration.
+9. Add one owned TikTok account as a **Target User** (Sandbox User).
+10. Wait until Target User is active/visible in the portal.
+11. Obtain the **Sandbox Client Key**.
+12. Obtain the **Sandbox Client Secret** (keep strictly private).
+13. Configure runtime environment variables securely on deployment environment (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI=https://lineoppo.click/tiktok/callback`).
+14. Test `/connect/tiktok` end-to-end with the Target User account.
+
+## 1. App Name Recommendation
+- **Recommended English Name**: `OPPO Brand Shop Social Directory`
+- **Recommended Thai Name**: `OPPO Brand Shop ค้นหาสาขาและช่องทางติดต่อ`
+- **Rationale**: Clearly describes the dual customer-facing directory and verified retailer channel connection without using generic or misleading terminology.
+
+## 2. App Description
+> OPPO Brand Shop Social Directory (`lineoppo.click`) is the official public directory platform for OPPO retail brand shops in Thailand. It enables retail customers nationwide to discover nearby branches, verify branch identity, and access official communication channels (LINE Official Account, TikTok, Google Maps). Authorized store account operators and retail staff connect their official branch TikTok accounts through TikTok Login Kit to display authenticated social profiles, official usernames, and audience reach metrics on their public store profile and staff operational analytics dashboard.
+
+## 3. Website URL
+- **Production URL**: `https://lineoppo.click`
+- **Public Store Directory**: `https://lineoppo.click/stores`
+- **Integration Overview**: `https://lineoppo.click/tiktok-integration`
+- **Public Connection Entry**: `https://lineoppo.click/connect/tiktok`
+
+## 4. Redirect URI
+- **Canonical Callback URI**: `https://lineoppo.click/tiktok/callback`
+- **Local / Sandbox Callback URI**: `http://localhost:3000/tiktok/callback` (for local development only)
+
+## 5. Products Requested
+- **TikTok Login Kit (Web)** — Version 2
+
+## 6. Scopes Requested
+The integration requests strictly the **3 minimum read-only scopes**:
+1. `user.info.basic`
+2. `user.info.profile`
+3. `user.info.stats`
+
+> [!IMPORTANT]
+> **Strictly Excluded Scopes**:
+> - `video.list` is NOT requested.
+> - `video.publish` and `video.upload` are NOT requested.
+> - Direct Message / Chat API scopes are NOT requested.
+> - Research API scopes are NOT requested.
+> - Content Posting API scopes are NOT requested.
+
+## 7. Exact Scope Justification
+
+| Requested Scope | User Info Fields Returned | Business Justification & Usage in Application |
+|---|---|---|
+| `user.info.basic` | `open_id`, `avatar_url`, `display_name` | **Authentication & Identity Display**: Verifies user identity via unique `open_id` and displays the store account's official display name and profile avatar on the connected store confirmation screen and staff dashboard. |
+| `user.info.profile` | `username`, `profile_deep_link`, `bio_description`, `is_verified` | **Public Store Profile Channel**: Displays the verified `@username` and deep link to the TikTok profile on the branch's public store page (`/stores/[identifier]`) so customers can follow and interact with the authentic store channel. |
+| `user.info.stats` | `follower_count`, `following_count`, `likes_count`, `video_count` | **Audience Reach & Transparency**: Displays total followers, likes, and public video counts on the confirmation page and provides retail management with aggregate store reach metrics. |
+
+## 8. Complete Reviewer Testing Flow
+1. **Discover Directory**: Navigate to `https://lineoppo.click` and browse `/stores`. Inspect active OPPO Brand Shop branches across Thailand with LINE, TikTok, and Map buttons.
+2. **Review Explanation**: Visit `https://lineoppo.click/tiktok-integration` to review the official integration boundaries, accessed fields, and security commitments.
+3. **Initiate Connection**: Navigate to `https://lineoppo.click/connect/tiktok`. Click the primary call-to-action button **"เชื่อมต่อกับ TikTok"**.
+4. **Consent Dialog**: The browser redirects to TikTok standard OAuth dialog (`https://www.tiktok.com/v2/auth/authorize/`). Verify that TikTok prompts ONLY for profile information and statistics (`user.info.basic`, `user.info.profile`, `user.info.stats`).
+5. **Authorization**: Reviewer logs in with an authorized Sandbox test account and clicks **Authorize**.
+6. **Callback & Server-Side Exchange**: TikTok redirects back to `https://lineoppo.click/tiktok/callback?code=...&state=...`. The server securely exchanges the authorization code for tokens, encrypts tokens with AES-256-GCM, and queries `/v2/user/info/`.
+7. **Confirmation Display**: Reviewer lands on `/connect/tiktok/success` displaying:
+   - Profile avatar and display name
+   - Official `@username`
+   - Real-time statistics: Followers, Following, Total Likes, Videos
+   - Confirmation badge: *"ข้อมูลนี้ได้รับอนุญาตจากบัญชี TikTok ที่เชื่อมต่อ"*
+   - Clear read-only reassurance: *"ระบบจะไม่โพสต์ แก้ไข หรือลบคอนเทนต์ใดๆ บน TikTok"*
+   - Disconnection guidance: How to revoke access via TikTok mobile app or support email.
+8. **Verify Zero Write Capability**: Confirm there are no video creation, posting, editing, or message sending controls anywhere on the website.
+
+## 9. Sandbox Test Flow
+For TikTok App Reviewers testing in Developer Sandbox:
+1. Ensure the tester account is added as a **Sandbox User** in the TikTok Developer Portal under the App's Sandbox settings.
+2. Configure `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in application environment.
+3. Initiate authorization via `https://lineoppo.click/connect/tiktok`.
+4. Log into TikTok with the Sandbox tester credentials.
+5. Grant consent.
+6. Verify successful redirect to `/connect/tiktok/success` showing test account metrics.
+7. Account shows as verified and unassigned (`ยังไม่ได้ผูกกับสาขาในระบบ`) without crashing or requiring existing StoreMaster pre-mapping.
+
+## 10. Demo Video Shot List
+A 2-to-3 minute video recording following `TIKTOK_REVIEW_DEMO_SCRIPT.md`:
+- **Shot 1**: Homepage overview at `https://lineoppo.click`.
+- **Shot 2**: Navigating the public Store Directory (`/stores`) showing real OPPO branch profiles.
+- **Shot 3**: Viewing a store profile with TikTok channel link.
+- **Shot 4**: Visiting `/tiktok-integration` showing permissions disclosure and non-posting commitment.
+- **Shot 5**: Opening `/connect/tiktok` showing Thai connection explanation and CTA.
+- **Shot 6**: Clicking "เชื่อมต่อกับ TikTok", redirecting to TikTok OAuth consent page.
+- **Shot 7**: Close-up of requested scopes on TikTok dialog (`user.info.basic`, `user.info.profile`, `user.info.stats`).
+- **Shot 8**: Authorizing the connection with Sandbox credentials.
+- **Shot 9**: Redirect to `/connect/tiktok/success` showing avatar, `@username`, and 4 live stats.
+- **Shot 10**: Highlighting the read-only notice and revocation instructions.
+- **Shot 11**: Showing Privacy Policy at `/privacy` and Terms of Service at `/terms`.
+
+## 11. Privacy Policy URL
+- **URL**: `https://lineoppo.click/privacy`
+- **Languages**: Thai, English, Chinese
+- **Sections**: Identifies collected fields, lawful basis, zero sale/monetization of data, token encryption (AES-256-GCM), 30-day retention/caching rules, and revocation/deletion contact (`obsthailand@gmail.com`).
+
+## 12. Terms of Service URL
+- **URL**: `https://lineoppo.click/terms`
+- **Languages**: Thai, English, Chinese
+- **Sections**: Authorized usage, scoped OAuth 2.0 access, customer directory display, and operator responsibilities.
+
+## 13. Domain Verification Status & Checklist
+- [x] Domain is live with TLS 1.3 certificate: `https://lineoppo.click`
+- [x] Canonical root `/` serves public customer experience
+- [x] Webhook / OAuth callback endpoints respond on same origin (`https://lineoppo.click/tiktok/callback`)
+- [ ] TikTok Developer Portal domain verification file or DNS TXT record (must be completed by portal administrator in TikTok Developer Portal when submitting).
+
+## 14. App Icon Requirements & Check
+- App icon should feature the OPPO green brand circle or unified retail mark (512x512 PNG, square, transparent or solid background).
+- File asset: `frontend/public/icon.png` or `frontend/public/apple-icon.png`.
+
+## 15. Submission Readiness & Remaining Steps
+- **Code Readiness**: **COMPLETE**. Minimal scopes enforced, store binding decoupled, explanation and connection pages live, privacy/terms updated.
+- **Configuration Required**: Operator must input `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in environment when conducting live review or recording the demo video.
+- **Action Required Before Submission**:
+  1. Record demo video per `TIKTOK_REVIEW_DEMO_SCRIPT.md`.
+  2. Upload demo video to YouTube (unlisted) or Vimeo.
+  3. Enter URLs and scope justifications into TikTok Developer Portal.
+  4. Submit for review.

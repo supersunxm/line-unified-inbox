@@ -9,9 +9,14 @@ import {
   TIKTOK_STATE_COOKIE_OPTIONS,
   buildTikTokAuthUrl,
   generateOAuthState,
+  isTikTokPublicConnectEnabled,
 } from "../src/app/tiktok/connect/tiktok-oauth.ts";
 
+const publicConnectPageSource = readFileSync(new URL("../src/app/connect/tiktok/page.tsx", import.meta.url), "utf8");
+const publicSuccessPageSource = readFileSync(new URL("../src/app/connect/tiktok/success/page.tsx", import.meta.url), "utf8");
 const connectRouteSource = readFileSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url), "utf8");
+const authorizeRouteSource = readFileSync(new URL("../src/app/api/tiktok/authorize/route.ts", import.meta.url), "utf8");
+const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
 const successPageSource = readFileSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url), "utf8");
 const successContentSource = readFileSync(new URL("../src/app/tiktok/connect/success/success-content.tsx", import.meta.url), "utf8");
 const errorPageSource = readFileSync(new URL("../src/app/tiktok/connect/error/page.tsx", import.meta.url), "utf8");
@@ -22,6 +27,8 @@ const successPublicSource = `${successPageSource}\n${successContentSource}`;
 const errorPublicSource = `${errorPageSource}\n${errorContentSource}`;
 
 test("Public TikTok store authorization route files exist", () => {
+  assert.ok(existsSync(new URL("../src/app/connect/tiktok/page.tsx", import.meta.url)));
+  assert.ok(existsSync(new URL("../src/app/connect/tiktok/success/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/success/page.tsx", import.meta.url)));
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/success/success-content.tsx", import.meta.url)));
@@ -30,30 +37,46 @@ test("Public TikTok store authorization route files exist", () => {
   assert.ok(existsSync(new URL("../src/app/tiktok/connect/tiktok-oauth.ts", import.meta.url)));
 });
 
+test("Public /connect/tiktok page renders genuine customer/store owner explanation with Thai copy and config guard", () => {
+  assert.match(publicConnectPageSource, /เชื่อมต่อ TikTok กับ OPPO Brand Shop/);
+  assert.match(publicConnectPageSource, /ผู้ติดตาม/);
+  assert.match(publicConnectPageSource, /กำลังติดตาม/);
+  assert.match(publicConnectPageSource, /ยอดถูกใจทั้งหมด/);
+  assert.match(publicConnectPageSource, /จำนวนวิดีโอ/);
+  assert.match(publicConnectPageSource, /จะไม่โพสต์ แก้ไข หรือลบคอนเทนต์/);
+  assert.match(publicConnectPageSource, /ไม่มีการเข้าถึงข้อความส่วนตัว/);
+  assert.match(publicConnectPageSource, /ยกเลิกการเชื่อมต่อหรือเพิกถอนสิทธิ์ได้ตลอดเวลา/);
+  assert.match(publicConnectPageSource, /เชื่อมต่อกับ TikTok/);
+  assert.match(publicConnectPageSource, /รอการกำหนดค่าการเชื่อมต่อ \(TikTok Sandbox Configuration Required\)/);
+});
+
 test("Public success and error pages have appropriate metadata and noindex robots directive", () => {
   assert.match(successPageSource, /title:\s*"TikTok Connected Successfully \| OPPO Retail Operations"/);
   assert.match(successPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
+  assert.match(publicSuccessPageSource, /title:\s*"TikTok Connected Successfully \| OPPO Brand Shop"/);
+  assert.match(publicSuccessPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
   assert.match(errorPageSource, /title:\s*"Unable to Connect TikTok \| OPPO Retail Operations"/);
   assert.match(errorPageSource, /robots:\s*\{[^}]*index:\s*false[^}]*follow:\s*false[^}]*\}/s);
 });
 
-test("TikTok OAuth requests all 4 required read-only scopes", () => {
-  const expectedScopes = ["user.info.basic", "user.info.profile", "user.info.stats", "video.list"];
+test("TikTok OAuth requests strictly the 3 minimum read-only scopes (video.list is omitted)", () => {
+  const expectedScopes = ["user.info.basic", "user.info.profile", "user.info.stats"];
   assert.deepEqual(Array.from(TIKTOK_OAUTH_SCOPES), expectedScopes);
   assert.match(oauthSource, /user\.info\.basic/);
   assert.match(oauthSource, /user\.info\.profile/);
   assert.match(oauthSource, /user\.info\.stats/);
-  assert.match(oauthSource, /video\.list/);
+  assert.doesNotMatch(oauthSource, /video\.list/);
 });
 
-test("buildTikTokAuthUrl constructs valid TikTok authorization URL with exact matching state", () => {
+test("buildTikTokAuthUrl constructs valid TikTok authorization URL with exact matching state and minimal scopes", () => {
   const state = generateOAuthState();
   const clientKey = "test_client_key_abc";
   const urlString = buildTikTokAuthUrl({ clientKey, state, redirectUri: "https://lineoppo.click/tiktok/callback" });
   const url = new URL(urlString);
   assert.equal(url.origin + url.pathname, TIKTOK_AUTH_BASE_URL);
   assert.equal(url.searchParams.get("client_key"), "test_client_key_abc");
-  assert.equal(url.searchParams.get("scope"), "user.info.basic,user.info.profile,user.info.stats,video.list");
+  assert.equal(url.searchParams.get("scope"), "user.info.basic,user.info.profile,user.info.stats");
+  assert.doesNotMatch(url.searchParams.get("scope") || "", /video\.list/);
   assert.equal(url.searchParams.get("response_type"), "code");
   assert.equal(url.searchParams.get("redirect_uri"), "https://lineoppo.click/tiktok/callback");
   assert.equal(url.searchParams.get("state"), state);
@@ -91,11 +114,18 @@ test("Public /tiktok/connect route handler sets cookie on 302 redirect response 
   assert.doesNotMatch(connectRouteSource, /redirect\(["']\/login["']\)/);
 });
 
-test("Public success page renders standalone layout with Thai, English, and Chinese confirmation", () => {
-  assert.match(successPublicSource, /เชื่อมต่อ TikTok สำเร็จ/);
+test("Public success page renders connected profile, statistics grid, and read-only reassurance", () => {
+  assert.match(successPublicSource, /TikTok เชื่อมต่อสำเร็จ/);
   assert.match(successPublicSource, /TikTok Account Connected/);
   assert.match(successPublicSource, /TikTok 连接成功/);
-  assert.match(successPublicSource, /คุณสามารถปิดหน้านี้ได้/);
+  assert.match(successPublicSource, /ข้อมูลนี้ได้รับอนุญาตจากบัญชี TikTok ที่เชื่อมต่อ/);
+  assert.match(successPublicSource, /การเชื่อมต่อนี้เป็นแบบอ่านอย่างเดียว \(Read-only\)/);
+  assert.match(successPublicSource, /ผู้ติดตาม/);
+  assert.match(successPublicSource, /กำลังติดตาม/);
+  assert.match(successPublicSource, /ยอดถูกใจทั้งหมด/);
+  assert.match(successPublicSource, /วิดีโอ/);
+  assert.match(successPublicSource, /ดูข้อมูลร้าน/);
+  assert.match(successPublicSource, /การยกเลิกการเชื่อมต่อ/);
   assert.doesNotMatch(successPublicSource, /TopNavigation/);
   assert.doesNotMatch(successPublicSource, /sidebar/i);
 });
@@ -111,14 +141,87 @@ test("Public error page handles authorization denied, invalid state, store not f
   assert.doesNotMatch(errorPublicSource, /TopNavigation/);
 });
 
-test("Security: Client Secret is strictly server-side and never exposed to frontend code", () => {
+test("Security: Client Secret and tokens are strictly server-side and never exposed to frontend code", () => {
+  assert.doesNotMatch(publicConnectPageSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(connectRouteSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(successPublicSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(errorPublicSource, /TIKTOK_CLIENT_SECRET/);
   assert.doesNotMatch(oauthSource, /TIKTOK_CLIENT_SECRET/);
+  assert.doesNotMatch(successPublicSource, /access_token/);
+  assert.doesNotMatch(successPublicSource, /refresh_token/);
+  assert.doesNotMatch(successPublicSource, /open_id/);
 });
 
 test("Public store authorization routes are NOT linked from existing TopNavigation", () => {
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/connect"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
+});
+
+test("Feature Gate: isTikTokPublicConnectEnabled evaluates strict boolean and defaults to disabled", () => {
+  const originalEnv = process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+  try {
+    delete process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "false";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "0";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "disabled";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "undefined";
+    assert.equal(isTikTokPublicConnectEnabled(), false);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "true";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "TRUE";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+
+    process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = "  True  ";
+    assert.equal(isTikTokPublicConnectEnabled(), true);
+  } finally {
+    if (originalEnv !== undefined) {
+      process.env.TIKTOK_PUBLIC_CONNECT_ENABLED = originalEnv;
+    } else {
+      delete process.env.TIKTOK_PUBLIC_CONNECT_ENABLED;
+    }
+  }
+});
+
+test("Feature Gate: Public connect UI renders neutral disabled copy when TIKTOK_PUBLIC_CONNECT_ENABLED != true", () => {
+  assert.match(publicConnectPageSource, /isTikTokPublicConnectEnabled/);
+  assert.match(publicConnectPageSource, /การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้/);
+  assert.doesNotMatch(publicConnectPageSource, /TIKTOK_PUBLIC_CONNECT_ENABLED/);
+  assert.doesNotMatch(publicConnectPageSource, /NEXT_PUBLIC_TIKTOK_PUBLIC_CONNECT_ENABLED/);
+});
+
+test("Feature Gate: OAuth start routes fail closed with integration_disabled when gate is disabled", () => {
+  // 1. /api/tiktok/authorize
+  assert.match(authorizeRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(authorizeRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(authorizeRouteSource, /reason.*integration_disabled/);
+
+  // 2. /tiktok/connect
+  assert.match(connectRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(connectRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(connectRouteSource, /reason.*integration_disabled/);
+
+  // 3. /tiktok/callback
+  assert.match(callbackRouteSource, /isTikTokPublicConnectEnabled/);
+  assert.match(callbackRouteSource, /!isTikTokPublicConnectEnabled\(\)/);
+  assert.match(callbackRouteSource, /reason.*integration_disabled/);
+});
+
+test("Feature Gate: Error content includes trilingual support for integration_disabled", () => {
+  assert.match(errorPublicSource, /integration_disabled/);
+  assert.match(errorPublicSource, /การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้/);
+  assert.match(errorPublicSource, /TikTok Connection is Currently Unavailable/);
+  assert.match(errorPublicSource, /TikTok 连接当前不可用/);
 });

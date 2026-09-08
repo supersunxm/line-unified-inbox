@@ -428,6 +428,9 @@ export function PublicStoresDirectory() {
         <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · Thailand</p>
           <div className="flex items-center gap-4">
+            <Link href="/tiktok-integration" className="hover:underline">
+              การเชื่อมต่อ TikTok
+            </Link>
             <Link href="/privacy" className="hover:underline">
               นโยบายความเป็นส่วนตัว
             </Link>

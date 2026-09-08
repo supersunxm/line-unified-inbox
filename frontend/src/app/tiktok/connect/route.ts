@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
   DEFAULT_TIKTOK_REDIRECT_URI,
   TIKTOK_OAUTH_STATE_COOKIE,
@@ -6,6 +6,7 @@ import {
   buildTikTokAuthUrl,
   generateOAuthState,
   getPublicAppUrl,
+  isTikTokPublicConnectEnabled,
 } from "./tiktok-oauth";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +16,17 @@ export const dynamic = "force-dynamic";
  * Generates a secure OAuth state, stores in HttpOnly cookie, and immediately 302 redirects to TikTok OAuth.
  * Accessible publicly by store staff without requiring prior login.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
+  const publicOrigin = getPublicAppUrl();
+
+  if (!isTikTokPublicConnectEnabled()) {
+    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
+    errorUrl.searchParams.set("reason", "integration_disabled");
+    return NextResponse.redirect(errorUrl, 302);
+  }
+
   const clientKey = process.env.TIKTOK_CLIENT_KEY?.trim();
   const redirectUri = process.env.TIKTOK_REDIRECT_URI?.trim() || DEFAULT_TIKTOK_REDIRECT_URI;
-  const publicOrigin = getPublicAppUrl();
 
   if (!clientKey) {
     const errorUrl = new URL("/tiktok/connect/error", publicOrigin);

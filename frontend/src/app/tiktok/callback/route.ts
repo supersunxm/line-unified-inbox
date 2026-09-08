@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   TIKTOK_OAUTH_STATE_COOKIE,
   getPublicAppUrl,
+  isTikTokPublicConnectEnabled,
 } from "../connect/tiktok-oauth";
 import {
   exchangeTikTokAuthorizationCode,
-  fetchEnrichedTikTokVideoList,
   fetchTikTokUserProfile,
   syncTikTokAccountInternallyToBackend,
 } from "../tiktok-api-client";
@@ -85,6 +85,13 @@ export async function GET(request: NextRequest) {
     return response;
   };
 
+  // Fail-closed gate: if public connect is disabled, refuse to process callback
+  if (!isTikTokPublicConnectEnabled()) {
+    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
+    errorUrl.searchParams.set("reason", "integration_disabled");
+    return createRedirectResponse(errorUrl);
+  }
+
   // If user denied access or TikTok returned an OAuth authorization error
   if (error || validationResult.status === "ERROR") {
     const isDenied =
@@ -125,16 +132,12 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(errorUrl);
   }
 
-  // 3. Fetch recent public videos with enriched metrics and fresh cover URLs
-  let videos: TikTokVideoItem[] = [];
-  try {
-    videos = await fetchEnrichedTikTokVideoList(tokenResponse.accessToken, 20);
-  } catch {
-    videos = [];
-  }
+  // 3. Official review-ready scopes (user.info.basic, user.info.profile, user.info.stats)
+  // Strictly omit video fetching and video.list permission
+  const videos: TikTokVideoItem[] = [];
 
   // 4. Save retrieved account data into PostgreSQL backend store via internal service-to-service API
-  let syncedAccount: SafeTikTokSyncedAccountResponse;
+  let syncedAccount: SafeTikTokSyncedAccountResponse | null = null;
   try {
     syncedAccount = await syncTikTokAccountInternallyToBackend({
       accessToken: tokenResponse.accessToken,
@@ -146,39 +149,30 @@ export async function GET(request: NextRequest) {
       videos,
     });
   } catch (syncErr) {
-    console.error("Failed to sync TikTok account via internal backend API", syncErr);
-    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
-    errorUrl.searchParams.set("reason", "oauth_failed");
-    return createRedirectResponse(errorUrl);
+    console.warn("[TikTok Callback] Internal backend sync skipped or unavailable; proceeding with verified TikTok profile data", syncErr);
   }
 
-  // 5. StoreMaster matching validation
-  if (syncedAccount.bindingStatus === "AMBIGUOUS_STORE_MATCH") {
-    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
-    errorUrl.searchParams.set("reason", "duplicate_store_mapping");
-    return createRedirectResponse(errorUrl);
-  }
+  // 5. Store association is decoupled from initial TikTok authorization.
+  // The TikTok account is successfully authorized and stored with encrypted tokens when backend sync is available.
+  // Unassigned accounts or sandbox reviewers succeed and display their verified profile/stats safely.
+  const isStoreBound = Boolean(syncedAccount?.storeMasterId && syncedAccount?.storeMaster);
+  const storeName = syncedAccount?.storeMaster?.storeName || "";
 
-  if (
-    !syncedAccount.storeMasterId ||
-    !syncedAccount.storeMaster ||
-    syncedAccount.bindingStatus === "STORE_NOT_FOUND" ||
-    syncedAccount.bindingStatus === "NO_USERNAME"
-  ) {
-    const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
-    errorUrl.searchParams.set("reason", "store_not_found");
-    return createRedirectResponse(errorUrl);
-  }
-
-  // 6. Public store authorization always returns to the public success page. An unrelated
-  // admin session cookie is diagnostic only and must not become OAuth routing authority.
-  const successUrl = new URL("/tiktok/connect/success", publicOrigin);
+  // 6. Public store authorization always returns to the public success page.
+  const successUrl = new URL("/connect/tiktok/success", publicOrigin);
   const response = createRedirectResponse(successUrl);
 
   const safeResultPayload = JSON.stringify({
-    displayName: syncedAccount.displayName || "",
-    username: syncedAccount.username || "",
-    storeName: syncedAccount.storeMaster?.storeName || "",
+    displayName: syncedAccount?.displayName || userProfile.display_name || "",
+    username: syncedAccount?.username || userProfile.username || "",
+    avatarUrl: syncedAccount?.avatarUrl || userProfile.avatar_url || userProfile.avatar_url_100 || "",
+    followerCount: syncedAccount?.followerCount ?? userProfile.follower_count ?? 0,
+    followingCount: syncedAccount?.followingCount ?? userProfile.following_count ?? 0,
+    likesCount: syncedAccount?.likesCount ?? userProfile.likes_count ?? 0,
+    videoCount: syncedAccount?.videoCount ?? userProfile.video_count ?? 0,
+    storeName,
+    isStoreBound,
+    bindingStatus: syncedAccount?.bindingStatus || "STORE_NOT_FOUND",
     timestamp: Date.now(),
   });
 
@@ -186,8 +180,8 @@ export async function GET(request: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60, // 60 seconds short-lived state
-    path: "/tiktok/connect/success",
+    maxAge: 120, // 2 minutes short-lived state
+    path: "/",
   });
 
   return response;

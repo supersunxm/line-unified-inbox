@@ -1,5 +1,27 @@
 # AI Progress Log
 
+## 2026-09-08: TikTok Official API — Fail-Closed Feature Gate Integration [COMPLETED]
+- **Current Task**: Introduce explicit fail-closed feature gate (`TIKTOK_PUBLIC_CONNECT_ENABLED`) on `feat/tiktok-review-ready-integration` (PR #205) to ensure safe production deployment without activating unverified pre-existing Railway TikTok credentials.
+- **Completed Work**:
+  1. Phase 16 — Fail-Closed Feature Gate Implementation:
+     - Implemented server-side `isTikTokPublicConnectEnabled()` in `frontend/src/app/tiktok/connect/tiktok-oauth.ts`. Requires exact case-insensitive trimmed value `"true"`. Missing, empty, `"false"`, `"0"`, or undefined default to `false`. Never exposed as `NEXT_PUBLIC_*`.
+     - Updated `/connect/tiktok/page.tsx`: When gate is disabled, page layout renders normally but the CTA button is disabled displaying neutral Thai copy: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"* without exposing configuration details or environment variable names.
+     - Protected `/api/tiktok/authorize` and `/tiktok/connect`: When gate is disabled, immediately fail closed with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled` without generating state, PKCE, cookies, or redirecting to TikTok.
+     - Protected `/tiktok/callback`: When gate is disabled, fails closed with HTTP 302 redirect to `/tiktok/connect/error?reason=integration_disabled` and expires state cookie.
+     - Enhanced `/tiktok/connect/error/error-content.tsx`: Added trilingual handling for `integration_disabled` (TH: *"การเชื่อมต่อ TikTok ยังไม่เปิดใช้งานในขณะนี้"*, EN: *"TikTok Connection is Currently Unavailable"*, ZH: *"TikTok 连接当前不可用"*).
+     - Updated `TIKTOK_APP_REVIEW.md`: Documented `TIKTOK_PUBLIC_CONNECT_ENABLED` in the Environment Variables Classification table and added dedicated section explaining the two-stage deployment safety strategy (Initial Prod: Gate DISABLED; Sandbox: Gate ENABLED).
+     - Added comprehensive automated unit tests covering the feature flag evaluation matrix, fail-closed route redirection, UI disabled state, and error handling.
+  2. Verified internal staff surfaces remain untouched:
+     - `/tiktok` (Overview) and `/tiktok/dashboard` (Performance) maintain existing session authorization boundary and operate independently.
+- **Checks Run & Passed**:
+  - All 537 frontend unit tests passed (`npm test`, exit 0).
+  - Clean ESLint check on modified files with 0 errors and 0 warnings.
+  - Frontend production build passed cleanly (`npm run build`, exit 0).
+  - All 167 backend CI regression tests passed cleanly (`npx tsx --test`, exit 0).
+  - Backend lint regression passed cleanly with 0 errors (`npx eslint`, exit 0).
+  - Backend production build passed cleanly (`prisma generate && nest build`, exit 0).
+- **Next Action**: Push commit to `origin/feat/tiktok-review-ready-integration` and monitor PR #205 GitHub Actions checks.
+
 ## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
 - **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.
 - **Completed Work**:
@@ -4234,3 +4256,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Started the rebuilt production frontend on inspected port 3000. `/api/health` and `/replymessage` return HTTP 200 with no startup errors. Source and tests confirm dashboard authorization, responsive desktop/mobile store views, search preservation, chat navigation, sidebar active-state matching, no native date input, and the unchanged authenticated `store-24h-response-summary?dateFrom=...&dateTo=...` request.
 - Remaining limitation: browser discovery reports zero connected browsers, preventing authenticated Apply/Cancel, mobile/dark-mode visual, console, keyboard, and live API interaction sign-off. Existing full-repository lint/typecheck failures remain pre-existing blockers.
 - Next action: review the updated draft PR and complete authenticated desktop/mobile browser verification when a browser is connected. Do not merge or deploy.
+
+# Current task: Rich Menu TikTok variable resolution (2026-09-08)
+
+- Added `tiktokUsername` and `tiktokProfileUrl` to both `StoreVariableContext` constructions in `backend/src/rich-menu/rich-menu.service.ts`: preview/auto-response validation and `publishOneStore`/auto-response publishing.
+- Preserved the canonical resolver behavior: `store.tiktokProfileUrl` reads the canonical Store Master field, and `store.tiktokUrl` aliases/falls back to it. No Prisma schema changes were made.
+- Added resolver coverage for `{{store.tiktokUrl}}` and Rich Menu preview coverage for successful URL resolution plus fail-closed missing-data behavior. Extended the existing publish pipeline test to assert LINE receives a real TikTok URL while retaining the Google Maps assertion.
+- Checks passed: focused Rich Menu/resolver tests 38/38; full backend runtime tests 1,795/1,797 (the 2 failures are unrelated pre-existing failures: missing `vitest` dependency in `line-chat-manager-image-relay-worker.spec.ts`, and duplicate writes observed by `sync-connected-line-oa.spec.ts`); production TypeScript check via `tsconfig.build.json`; backend build; localhost `/health` and `/health/readiness` both HTTP 200.
+- Changed-file ESLint reports the service/spec baseline violations already present in those files; no new lint violation is reported at the added TikTok lines. Full-project TypeScript checking likewise retains unrelated existing spec errors.
+- No database migration, deployment, LINE API call, or commit was performed. Existing unrelated TikTok frontend worktree changes were preserved.
+- Next action: review the scoped diff and commit only with explicit authorization.
