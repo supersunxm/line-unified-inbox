@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from "@
 import type { Response } from "express";
 import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto, UpdateLineOaStatusDto } from "./line-official-account.dto";
 import { LineOfficialAccountsService } from "./line-official-accounts.service";
+import { buildCanonicalLineOaCsv } from "./line-official-account-canonical-export";
 import { Roles } from "../auth/auth.decorators";
 
 @Controller("line-official-accounts")
@@ -10,7 +11,8 @@ export class LineOfficialAccountsController {
   @Get() list(@Query("showArchived") showArchived?: string) { return this.service.list(showArchived === "true"); }
   @Roles("ADMIN")
   @Get("export.csv") async exportCsv(@Query() query: ExportLineOfficialAccountsDto, @Res() response: Response) {
-    const result = await this.service.exportCsv(query);
+    const items = await this.service.list(query.showArchived === "true");
+    const result = buildCanonicalLineOaCsv(items, query);
     response.setHeader("Content-Type", "text/csv; charset=utf-8");
     response.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     response.setHeader("X-Export-Row-Count", String(result.rowCount));

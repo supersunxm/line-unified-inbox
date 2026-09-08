@@ -4,6 +4,7 @@ import type { Language } from "./follower-insights-translations";
 
 export type DailyGrowthStoreRow = {
   lineOaId: string;
+  storeId: string;
   storeLabel: string;
   storeName: string;
   accountName: string;
@@ -40,9 +41,29 @@ export function enumerateIsoDates(dateFrom: string, dateTo: string) {
   return result;
 }
 
+/**
+ * Business Store ID is canonical. Internal Store.id is a database UUID and must
+ * never be substituted into a report as Store ID.
+ */
+export function requireCanonicalStoreId(row: ByStoreAccountRow) {
+  const masterStoreId = row.masterStoreId?.trim() || null;
+  const externalStoreId = row.externalStoreId?.trim() || null;
+  if (masterStoreId && externalStoreId && masterStoreId !== externalStoreId) {
+    throw new Error(
+      `Store ID conflict for ${row.storeName || row.accountName || row.lineOaId}: ${masterStoreId} != ${externalStoreId}`,
+    );
+  }
+  const canonicalStoreId = masterStoreId ?? externalStoreId;
+  if (!canonicalStoreId) {
+    throw new Error(
+      `Missing canonical Store ID for ${row.storeName || row.accountName || row.lineOaId}. Export stopped to avoid using an internal UUID.`,
+    );
+  }
+  return canonicalStoreId;
+}
+
 function storeLabel(row: ByStoreAccountRow) {
-  const id = row.masterStoreId || row.externalStoreId || row.storeId || "";
-  return [id, row.storeName].filter(Boolean).join(" ").trim();
+  return [requireCanonicalStoreId(row), row.storeName].filter(Boolean).join(" ").trim();
 }
 
 export function buildDailyGrowthMatrix(
@@ -64,13 +85,19 @@ export function buildDailyGrowthMatrix(
     }
   }
 
-  const stores = Array.from(metadata.values())
-    .sort((a, b) => {
-      const aId = a.masterStoreId || a.externalStoreId || a.storeId || "";
-      const bId = b.masterStoreId || b.externalStoreId || b.storeId || "";
-      return aId.localeCompare(bId, undefined, { numeric: true }) || a.storeName.localeCompare(b.storeName);
-    })
-    .map<DailyGrowthStoreRow>((meta) => {
+  // Resolve canonical Store IDs before sorting or writing anything. Any missing
+  // or conflicting identity fails the whole export rather than silently guessing.
+  const canonicalMetadata = Array.from(metadata.values()).map((row) => ({
+    row,
+    canonicalStoreId: requireCanonicalStoreId(row),
+  }));
+
+  const stores = canonicalMetadata
+    .sort((a, b) =>
+      a.canonicalStoreId.localeCompare(b.canonicalStoreId, undefined, { numeric: true }) ||
+      a.row.storeName.localeCompare(b.row.storeName),
+    )
+    .map<DailyGrowthStoreRow>(({ row: meta, canonicalStoreId }) => {
       const values: Record<string, number | null> = {};
       for (const date of dates) {
         const previousDate = date === dateFrom ? baselineDate : addIsoDays(date, -1);
@@ -85,6 +112,7 @@ export function buildDailyGrowthMatrix(
       }
       return {
         lineOaId: meta.lineOaId,
+        storeId: canonicalStoreId,
         storeLabel: storeLabel(meta),
         storeName: meta.storeName,
         accountName: meta.accountName,
@@ -178,7 +206,7 @@ export async function downloadDailyFollowerGrowthWorkbook(options: {
 
   matrix.stores.forEach((store, rowIndex) => {
     const row = rowIndex + 3;
-    sheet.getCell(row, 1).value = store.storeLabel || store.storeName;
+    sheet.getCell(row, 1).value = store.storeLabel;
     sheet.getCell(row, 1).alignment = { vertical: "middle", horizontal: "left" };
     matrix.dates.forEach((date, dateIndex) => {
       const cell = sheet.getCell(row, dateIndex + 2);
