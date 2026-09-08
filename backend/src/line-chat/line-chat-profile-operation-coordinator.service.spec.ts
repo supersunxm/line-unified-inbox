@@ -131,7 +131,7 @@ test("coordinator blocks concurrent operations for the same session", async () =
 
   await new Promise((resolve) => setImmediate(resolve));
   const second = await coordinator.withProfileOperation(
-    { sessionId: "session-a", operationKind: "RECENT_RESOLUTION" },
+    { sessionId: "session-a", operationKind: "HEALTH_SESSION" },
     async () => "not-run",
   );
   assert.equal(second.acquired, false);

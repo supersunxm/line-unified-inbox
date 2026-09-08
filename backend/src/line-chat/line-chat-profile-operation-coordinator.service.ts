@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma.service";
 export const PROFILE_OPERATION_LEASE_DURATION_MS = 90_000;
 export const PROFILE_OPERATION_HEARTBEAT_INTERVAL_MS = 20_000;
 export const PROFILE_OPERATION_RETRY_AFTER_MS = 5_000;
+export const PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS = 15_000;
 
 export type LineChatProfileOperationKind =
   | "NICKNAME_UPDATE"
@@ -50,29 +51,49 @@ interface LocalLock {
   release: () => void;
 }
 
+interface LocalWaiter {
+  id: string;
+  operationKind: LineChatProfileOperationKind;
+  priority: number;
+  sequence: number;
+  resolve: (lock: LocalLock | null) => void;
+  timer: NodeJS.Timeout | null;
+}
+
 interface DatabaseLease {
   id: string;
   ownerToken: string;
   leaseUntil: Date;
 }
 
+const OPERATION_PRIORITY: Record<LineChatProfileOperationKind, number> = {
+  MANUAL_DIAGNOSTIC: 400,
+  RECENT_RESOLUTION: 300,
+  NICKNAME_UPDATE: 100,
+  HEALTH_SESSION: 50,
+  HEALTH_OA: 50,
+};
+
 @Injectable()
 export class LineChatProfileOperationCoordinator {
   private readonly logger = new Logger(LineChatProfileOperationCoordinator.name);
   private readonly localLocks = new Map<string, LocalLock>();
+  private readonly localWaiters = new Map<string, LocalWaiter[]>();
+  private waiterSequence = 0;
 
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   /**
    * Runs one browser-dependent operation while holding both the process-local
-   * and database-backed profile lease. The callback must pass the returned
-   * context to lower-level browser helpers instead of acquiring a nested lock.
+   * and database-backed profile lease. Customer-facing relay work waits briefly
+   * behind an already-running maintenance job and is always selected before the
+   * next nickname/health job. Background operations remain non-blocking.
    */
   public async withProfileOperation<T>(input: {
     sessionId: string;
     operationKind: LineChatProfileOperationKind;
   }, callback: (context: LineChatProfileOperationContext) => Promise<T>): Promise<ProfileOperationResult<T>> {
-    const localLock = this.tryAcquireLocalLock(input.sessionId);
+    const localLock = await this.acquireLocalLock(input.sessionId, input.operationKind);
     if (!localLock) return this.busy(input);
 
     const ownerToken = randomUUID();
@@ -105,8 +126,6 @@ export class LineChatProfileOperationCoordinator {
       heartbeatTimer.unref?.();
 
       const value = await callback(context);
-      // Verify ownership before reporting success. A callback that completed
-      // after losing its lease must fail closed.
       if (!(await this.renewDatabaseLease(input.sessionId, ownerToken))) {
         ownershipLost = true;
       }
@@ -147,19 +166,98 @@ export class LineChatProfileOperationCoordinator {
     };
   }
 
+  private waitBudgetMs(operationKind: LineChatProfileOperationKind): number {
+    return operationKind === "MANUAL_DIAGNOSTIC" || operationKind === "RECENT_RESOLUTION"
+      ? PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS
+      : 0;
+  }
+
+  private async acquireLocalLock(
+    sessionId: string,
+    operationKind: LineChatProfileOperationKind,
+  ): Promise<LocalLock | null> {
+    const immediate = this.tryAcquireLocalLock(sessionId);
+    if (immediate) return immediate;
+
+    const waitMs = this.waitBudgetMs(operationKind);
+    if (waitMs <= 0) return null;
+
+    return new Promise<LocalLock | null>((resolve) => {
+      const waiter: LocalWaiter = {
+        id: randomUUID(),
+        operationKind,
+        priority: OPERATION_PRIORITY[operationKind],
+        sequence: this.waiterSequence++,
+        resolve,
+        timer: null,
+      };
+      const waiters = this.localWaiters.get(sessionId) ?? [];
+      waiters.push(waiter);
+      this.localWaiters.set(sessionId, waiters);
+
+      waiter.timer = setTimeout(() => {
+        const current = this.localWaiters.get(sessionId);
+        if (current) {
+          const index = current.findIndex((candidate) => candidate.id === waiter.id);
+          if (index >= 0) current.splice(index, 1);
+          if (current.length === 0) this.localWaiters.delete(sessionId);
+        }
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_profile_operation_priority_wait_timeout",
+          sessionId,
+          operationKind,
+          waitMs,
+        }));
+        resolve(null);
+      }, waitMs);
+
+      this.logger.log(JSON.stringify({
+        event: "line_chat_profile_operation_priority_waiting",
+        sessionId,
+        operationKind,
+        waitMs,
+      }));
+    });
+  }
+
   private tryAcquireLocalLock(sessionId: string): LocalLock | null {
     if (this.localLocks.has(sessionId)) return null;
+    return this.createLocalLock(sessionId);
+  }
 
+  private createLocalLock(sessionId: string): LocalLock {
     let released = false;
     const lock: LocalLock = {
       release: () => {
         if (released) return;
         released = true;
         if (this.localLocks.get(sessionId) === lock) this.localLocks.delete(sessionId);
+        this.grantNextLocalWaiter(sessionId);
       },
     };
     this.localLocks.set(sessionId, lock);
     return lock;
+  }
+
+  private grantNextLocalWaiter(sessionId: string): void {
+    if (this.localLocks.has(sessionId)) return;
+    const waiters = this.localWaiters.get(sessionId);
+    if (!waiters?.length) return;
+
+    waiters.sort((a, b) => b.priority - a.priority || a.sequence - b.sequence);
+    const next = waiters.shift();
+    if (!next) return;
+    if (waiters.length === 0) this.localWaiters.delete(sessionId);
+    if (next.timer) clearTimeout(next.timer);
+
+    const lock = this.createLocalLock(sessionId);
+    this.logger.log(JSON.stringify({
+      event: "line_chat_profile_operation_priority_granted",
+      sessionId,
+      operationKind: next.operationKind,
+      remainingWaiters: waiters.length,
+    }));
+    next.resolve(lock);
   }
 
   private async acquireDatabaseLease(
