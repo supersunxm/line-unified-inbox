@@ -4,8 +4,11 @@ import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
 
 export const metadata: Metadata = {
-  title: "OPPO LINE OA Monitor",
-  description: "Monitor and follow up LINE OA customer conversations",
+  title: {
+    default: "OPPO Brand Shop · ค้นหาสาขา & ช่องทางติดต่อ",
+    template: "%s | OPPO Brand Shop",
+  },
+  description: "ค้นหาข้อมูลสาขาและช่องทางติดต่อ LINE Official Account, TikTok ของ OPPO Brand Shop ทั่วประเทศไทย",
 };
 
 const themeInitializationScript = `

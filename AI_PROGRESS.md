@@ -1,6 +1,143 @@
 # AI Progress Log
 
-## 2026-09-07: StoreMaster TikTok Public Profile 100-Store Chunked Dry Run [VERIFIED]
+## 2026-09-08: Public Store Directory (Final Production Readiness Review) [COMPLETED]
+- **Current Task**: Final Production Readiness Review for the Public Store Directory on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Phase 1 — Public Region Normalization:
+     - Implemented zero-mutation presentation normalization layer in `frontend/src/lib/public-regions.ts`.
+     - Mapped legacy StoreMaster regions into standard Thai labels: `Central` (57) and `Central Thailand` (1) -> `ภาคกลาง` (58 total), `Northern` -> `ภาคเหนือ`, `Northeastern` -> `ภาคตะวันออกเฉียงเหนือ`, `Southern` -> `ภาคใต้`, `Eastern` -> `ภาคตะวันออก`, `Western` -> `ภาคตะวันตก`.
+     - Deduplicated filter pills with standard ordering (`ORDERED_PUBLIC_REGIONS`), eliminating duplicate pills.
+     - Implemented symmetric query matching supporting raw English and canonical Thai region queries, matching 58 stores under "ภาคกลาง".
+     - Updated landing page quick discovery shortcuts to use Thai region queries matching all 6 regions.
+     - Added comprehensive unit tests in `frontend/test/public-regions.test.mts` (4/4 passed).
+  2. Phase 2 — Production Route Impact Audit:
+     - Verified `/welcome` remains intact.
+     - Verified `defaultRouteForUser` resolves to internal workspaces (`/home`, `/chats`, or `/main-oa`) and never `/`.
+     - Confirmed removal of legacy `proxy.ts` does not affect session auth cookies or internal redirects.
+     - Confirmed unauthenticated requests to `/home` and `/admin/stores` redirect to `/login`.
+  3. Phase 3 — Public API Production Safety:
+     - Verified `GET /public/stores` and `GET /public/stores/:identifier` are read-only with `@Public()`.
+     - Verified `UUID_REGEX` rejection throws HTTP 404 immediately, preventing internal database ID exposure.
+     - Verified `serializePublicStore` strict whitelist drops internal credentials, LINE manager URLs, BM names, and tokens.
+     - Verified active-only filtering (`where: { isActive: true }`) is enforced.
+     - Confirmed zero mutation routes exist under `/public/*`.
+  4. Phase 4 — SEO / Public Web Review:
+     - Confirmed descriptive `<title>` and metadata on root layout, `/stores`, and dynamic store profile `/stores/[identifier]`.
+     - Confirmed `robots: { index: false }` is strictly isolated to internal management tools and OAuth callbacks.
+     - Verified public routes (`/`, `/stores`, `/stores/[slug]`, `/privacy`, `/terms`) are indexable without unintentional `noindex` headers.
+  5. Phase 5 — Test Matrix & Verification:
+     - Frontend tests: `npm test` (511/511 passed, exit 0).
+     - Frontend production build: `npm run build` (Clean Turbopack compile, exit 0).
+     - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed, exit 0).
+     - Backend production build: `npm run build` (Clean NestJS/Prisma compile, exit 0).
+     - Playwright automated route verification: anonymous and unauthenticated redirects verified.
+- **Checks Run & Passed**:
+  - Frontend unit tests: 511/511 passed.
+  - Backend unit tests: 6/6 passed.
+  - Frontend build: Exit 0.
+  - Backend build: Exit 0.
+  - Live Playwright checks: All passed.
+- **Next Action**: Commit changes, push branch, open Pull Request against `main`, and present final report.
+
+## 2026-09-08: Public Store Directory (Visual UX Review) [COMPLETED]
+- **Current Task**: Focused Visual UX Review of the public customer website on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Captured and analyzed desktop (1440px) and mobile (390px) screenshots across all key customer views:
+     - Desktop Homepage (`desktop-homepage.png`)
+     - Desktop Store Directory (`desktop-stores-directory.png`)
+     - Desktop Full-channel Store Detail (`desktop-store-full-channel.png`)
+     - Desktop Missing-channel Store Detail (`desktop-store-missing-channel.png`)
+     - Mobile Homepage (`mobile-homepage-top.png`, `mobile-homepage-full.png`)
+     - Mobile Store Directory (`mobile-stores-directory.png`, `mobile-stores-directory-full.png`)
+     - Mobile Store Detail (`mobile-store-detail.png`, `mobile-store-detail-full.png`)
+  2. Identified and repaired visual/copy defects:
+     - Removed redundant `ติดต่อสาขา` link in desktop homepage header which duplicated `ค้นหาร้าน` (both pointed to `/stores`).
+     - Fixed mobile header text wrapping on 390px viewports: simplified "เข้าสู่ระบบสำหรับพนักงาน" on mobile to "สำหรับพนักงาน" with `whitespace-nowrap`, eliminating awkward 2-line wraps and right-margin crowding.
+     - Removed redundant active-page link to "ค้นหาร้าน" in `/stores` header nav on mobile, providing clean "หน้าแรก" and "สำหรับพนักงาน" actions instead.
+     - Updated site metadata in `frontend/src/app/layout.tsx` from operational "OPPO LINE OA Monitor" to customer-facing "OPPO Brand Shop · ค้นหาสาขา & ช่องทางติดต่อ".
+     - Enhanced region and province filter pills with `min-h-[38px] inline-flex items-center justify-center` for thumb-friendly mobile touch targets.
+  3. Executed automated customer journeys via Playwright:
+     - Journey A (Search): Navigated from `/` to `/stores?q=Central` (81 matches found), selected store profile, verified LINE, TikTok, and Google Maps CTAs.
+     - Journey B (Filters & Back Navigation): Filtered Northern region (26 stores), navigated to store profile, clicked "← สาขาทั้งหมด" back button, verified clean return to `/stores`.
+- **Checks Run & Passed**:
+  - Frontend unit tests: `npm test` (505/505 passed, exit 0)
+  - Frontend production build: `npm run build` (Turbopack, exit 0)
+  - Backend public-stores tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed, exit 0)
+  - Live journey verification via Playwright: Journeys A & B passed.
+- **Next Action**: Commit changes locally to `feat/public-store-directory`.
+
+## 2026-09-08: Public Store Directory (Pre-Visual Cleanup) [COMPLETED]
+- **Current Task**: Final customer-facing copy and presentation cleanup on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Removed visible "รหัสสาขา {store.id}" badge from public store profile (`/stores/[identifier]`). `externalStoreId` remains available internally in routes and APIs without exposing store codes to customers.
+  2. Removed unsupported "ยอดนิยม / popular" claims from featured store section on landing page (`/`). Renamed to neutral "สำรวจ OPPO Brand Shop" with supporting copy "ดูข้อมูลสาขาและช่องทางติดต่อ".
+  3. Removed unsupported official-site claims:
+     - Replaced "บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ" with "ค้นหาข้อมูลสาขาและช่องทางติดต่อ".
+     - Replaced footer copy "ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการสำหรับผู้ใช้บริการในประเทศไทย" with "ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop ทั่วประเทศไทย".
+     - Verified genuine official tags like "LINE Official Account" remain preserved.
+  4. Made store count dynamic: Replaced hardcoded "158 สาขา" with dynamic total from `GET /public/stores` (`ดูสาขาทั้งหมด {total} สาขา →`), gracefully falling back to "ดูสาขาทั้งหมด →" while loading with no flash of 0.
+  5. Added regression test coverage in `frontend/test/public-landing-page.test.mts` and `frontend/test/public-store-directory.test.mts`.
+- **Checks Run & Passed**:
+  - Frontend tests: `npm test` (505/505 passed, exit 0)
+  - Frontend build: `npm run build` (Exit 0)
+  - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Live HTTP status checks: `/`, `/stores`, `/stores/[slug]`, `/login` all return 200 OK.
+  - Public profile verified: Zero occurrences of "รหัสสาขา".
+  - Landing page verified: Zero occurrences of "ยอดนิยม" or "บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ".
+
+## 2026-09-08: Public Store Directory (Phase 2 Hardening & Customer Portal) [COMPLETED]
+- **Current Task**: Public Customer Experience & Contract Hardening on branch `feat/public-store-directory`.
+- **Completed Work**:
+  - Phase 1 Contract Hardening:
+    - Strictly rejected internal `StoreMaster.id` UUID lookups on public store endpoints (returns HTTP 404). Public lookups strictly resolve via `externalStoreId` (OPPO store code) or deterministic slug (`obs-*-{storeId}`).
+    - Audited and stripped `accountName` (internal LINE OA nickname) from backend DTO serializer and frontend interfaces.
+    - Updated backend unit tests to verify externalStoreId, slug, and explicit UUID rejection (`src/public-stores/public-stores.spec.ts`, 6/6 passed).
+  - Phase 2 Customer Landing Page & Routing:
+    - Removed legacy `proxy.ts` rewrite that previously directed root traffic to internal `/welcome`.
+    - Created customer-facing `PublicLandingPage` at root `/` with search bar (`/stores?q=`), quick region discovery chips, customer value props (why-use cards), featured store preview cards, and staff login link.
+    - Preserved `ApplicationWorkspace` and all internal authenticated features untouched.
+  - Phase 3 Store Directory Refinement:
+    - Updated `/stores` (`public-stores-directory.tsx`) with URL search sync (`?q=`, `?region=`, `?province=`) on mount and debounced/instant updates via `replaceState`.
+    - Wrapped directory in `<Suspense>` for safe Next.js static page generation.
+    - Refined card layout: prominent store title, subtle address preview, distinct action buttons (primary green LINE OA `#06C755`, TikTok, Google Maps, and profile view).
+    - Removed all `store.accountName` references.
+  - Phase 4 Store Profile Refinement:
+    - Refined `/stores/[identifier]` (`public-store-profile.tsx`): store code displayed as subtle reference, omitted internal account name, structured hierarchy for LINE contact CTA, basic ID copy, TikTok profile, and Google Maps.
+    - Added breadcrumbs / navigation back to `/stores` and home link to `/`.
+  - Phase 5 Verification & Tests:
+    - Frontend unit tests updated and passing (503/503 passed, 0 failures).
+    - Frontend production build succeeded (`npm run build`, exit 0).
+    - Backend production build succeeded (`npm run build`, exit 0).
+    - Live service verification: backend port 3001, frontend port 3000. Verified 200 responses on `/`, `/stores`, `/stores/29039`, `/stores/obs-big-c-angthong-by-oppo-29690`, `/login` and verified 404 on UUID lookups.
+- **Checks Run & Passed**:
+  - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Backend build: `npm run build` (Clean compile, exit 0)
+  - Frontend tests: `npm run test` (503/503 passed, exit 0)
+  - Frontend build: `npm run build` (Clean compile, exit 0)
+  - Live HTTP curl checks: Validated root landing page, directory, profile by slug and externalStoreId, and UUID 404 rejection.
+- **Next Action**: Commit cleanly to `feat/public-store-directory` and present final Phase 2 report.
+
+## 2026-09-08: Public Store Directory (MVP) [COMPLETED]
+- **Current Task**: Implement Public Store Directory (`/stores` and `/stores/[identifier]`) on branch `feat/public-store-directory`.
+- **Completed Work**:
+  - Phase 1: Repository and architecture audit of 158 StoreMaster records, classifying public-safe vs strictly internal fields (zero leaks).
+  - Phase 2: Dedicated public read-only endpoints `GET /public/stores` and `GET /public/stores/:identifier` with explicit DTO serializer whitelist and deterministic slug resolution (`obs-*-{storeId}`).
+  - Phase 3: Public store directory at `/stores` with search (store name, province), quick region filters, dynamic province selector, responsive store cards, and direct LINE OA / TikTok buttons.
+  - Phase 4: Public store profile at `/stores/[identifier]` with store identity, LINE OA contact CTA, official TikTok profile link, Google Maps navigation, and 404 error states.
+  - Phase 5: Clear public vs private separation. Unauthenticated visitors browse `/stores` and `/stores/[identifier]` without login redirect. Internal store workspace preserved at `/admin/stores`.
+  - Phase 6 & 7: Empty, loading, error, and missing data states handled gracefully. Basic SEO metadata (titles and descriptions) generated cleanly.
+  - Phase 8: Unit tests added for backend (`src/public-stores/public-stores.spec.ts`) and frontend (`test/public-store-directory.test.mts`).
+  - Phase 9 & 10: Functional and security verification on running services (port 3000 and port 3001). Confirmed zero credential or internal field leaks.
+- **Checks Run & Passed**:
+  - Backend build: `npm run build` (Clean compile, exit 0)
+  - Backend tests: `node --import tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Frontend build: `npm run build` (Clean Turbopack compile with static & dynamic routes, exit 0)
+  - Frontend tests: `npm run test` (502/502 passed, 0 failures)
+  - Live API security scan: Zero sensitive patterns in JSON payload.
+  - Live routing: `/stores`, `/stores/29039`, `/stores/obs-central-phitsanulok-by-oppo-2-29039`, `/admin/stores`, `/home`, `/login` all respond 200 OK.
+- **Next Action**: Commit changes to `feat/public-store-directory` and present final MVP report.
+
+
 - **Current Task**: Perform controlled chunked dry run of TikTok public profile batch collector on eligible active StoreMaster stores using 20-store chunks, >=5,000ms delay, and >=60s inter-chunk pauses without `--apply`.
 - **Target Population Analysis**:
   - Total active stores in StoreMaster: 158

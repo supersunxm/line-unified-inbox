@@ -1,6 +1,62 @@
 # Architecture & Design Decisions
 
-## Google Review: Maps DOM Recovery, Limited View Mitigation & Fail-Safe Collector Safeguards (2026-09-07)
+## Public Region Normalization: Zero-Mutation Presentation Mapping (2026-09-08)
+
+- **Presentation-Only Normalization Layer**:
+  - StoreMaster records contain legacy raw region values from upstream imports, specifically duplicate representations for Central Thailand (`Central` with 57 active stores, and `Central Thailand` with 1 active store).
+  - Rather than running risky database migrations or mutating StoreMaster data, normalization is performed exclusively at the presentation layer (`frontend/src/lib/public-regions.ts`).
+  - Standard Thai regional labels are mapped: `Central` / `Central Thailand` -> `ภาคกลาง`, `Northern` -> `ภาคเหนือ`, `Northeastern` -> `ภาคตะวันออกเฉียงเหนือ`, `Southern` -> `ภาคใต้`, `Eastern` -> `ภาคตะวันออก`, and `Western` -> `ภาคตะวันตก`.
+- **Deduplicated Filter UI & Symmetric Filtering**:
+  - Filter button pills deduplicate raw regions into the 6 Thai canonical regions (`getDeduplicatedPublicRegions`), eliminating duplicate pills.
+  - `matchesPublicRegion` evaluates both canonical Thai labels and raw English legacy values symmetrically, ensuring URLs with `?region=Central`, `?region=Central%20Thailand`, or `?region=ภาคกลาง` all match all 58 central stores accurately.
+  - Search query evaluations match store names, provinces, raw English regions, and canonical Thai region names simultaneously.
+
+
+## Pre-Visual Customer Cleanup: Store Code Concealment, Neutral Claims & Dynamic Count (2026-09-08)
+
+- **Store Code Concealment from Public Profiles**:
+  - `externalStoreId` remains part of public URL slug/code resolution and backend serialization, but the visible customer badge `"รหัสสาขา {store.id}"` was removed from `/stores/[identifier]`.
+  - Customers do not require internal or retail codes to contact or navigate to stores. Internal database UUIDs continue to be blocked with 404.
+- **Brand Authorization Neutrality & Claims Removal**:
+  - Removed promotional popularity assertions ("ยอดนิยม", "popular", "recommended") from the landing page preview section; renamed to neutral "สำรวจ OPPO Brand Shop" with copy "ดูข้อมูลสาขาและช่องทางติดต่อ".
+  - Removed formal official authorization claims ("บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ", "ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการสำหรับผู้ใช้บริการในประเทศไทย") and replaced with neutral directory statements.
+  - Preserved authentic platform account types such as "LINE Official Account".
+- **Dynamic Store Count**:
+  - Replaced hardcoded "158 สาขา" text with dynamic count derived from `GET /public/stores` (`totalStores`).
+  - Added loading-safe fallback ("ดูสาขาทั้งหมด →") to prevent flashing 0 stores before API hydration.
+
+## Public Customer Portal & Contract Hardening: UUID Rejection, AccountName Audit & Landing Page Architecture (2026-09-08)
+
+- **Strict UUID Rejection on Public Endpoints**:
+  - The public API previously resolved identifiers through `externalStoreId`, slug, or internal UUID `id`.
+  - Internal database UUIDs (`StoreMaster.id`) have been strictly barred from public resolution via an explicit regex check (`UUID_REGEX.test(rawIdentifier)`), which immediately raises HTTP 404 `NotFoundException("Store not found")`.
+  - Public routes resolve exclusively via official OPPO store codes (`externalStoreId`, e.g. `29039`) or SEO-friendly deterministic slugs (`obs-*-{storeId}`). Internal operations continue using UUIDs behind `AuthGuard`.
+- **accountName Field Audit & Elimination from Public Contract**:
+  - An audit of all 158 active `StoreMaster` records confirmed that `accountName` contains internal LINE OA nicknames (e.g. `O-LT Phetchabun`, `OPPO RBS SRISAMARN`, `OPPO ThemallThaphra`).
+  - `accountName` is not a customer-facing brand name and has been removed from `PublicStoreDto`, the backend serialization whitelist, and the public frontend interface. `storeName` (e.g. `OBS Central Phitsanulok By OPPO 2`) is the canonical public display name.
+- **Root Customer Portal vs Internal Welcome Page**:
+  - A legacy `proxy.ts` middleware had rewritten root `/` requests to `/welcome` (an internal retail operations overview page).
+  - `proxy.ts` was safely removed, restoring root `/` to `frontend/src/app/page.tsx` which renders `<PublicLandingPage />`.
+  - The landing page acts as a true customer portal: hero search bar linking to `/stores?q=`, quick-entry region pills, customer benefits, and featured store previews.
+  - The staff entry point is cleanly separated via explicit "เข้าสู่ระบบสำหรับพนักงาน" links directing to `/login`.
+- **Directory URL Synchronization**:
+  - `/stores` binds state to URL query parameters (`?q=`, `?region=`, `?province=`) on mount and synchronizes state transitions via `window.history.replaceState`.
+  - Wrapping `<PublicStoresDirectory />` in `<Suspense>` satisfies Next.js 16 requirements for dynamic query consumption during static builds.
+
+## Public Store Directory: Read-Only Contract, Strict Whitelist & Safe Public Slugs (2026-09-08)
+
+- **Context & Business Need**:
+  - Transform `lineoppo.click` from an internal-only operations dashboard into an external-facing website allowing consumers in Thailand to discover OPPO Brand Shop locations, search by province/region, and connect directly via LINE OA, TikTok, and Google Maps.
+- **Architectural Separation**:
+  - Dedicated public endpoints (`GET /public/stores` and `GET /public/stores/:identifier`) marked with `@Public()`, completely bypassing auth session requirements.
+  - Strict serialization whitelist: `StoreMaster` entity is never returned raw. Sensitive fields (`lineManagerUrl`, `bmName`, `dashboardTier`, `kpiPlan`, internal relations, tokens) are completely stripped out at the service layer.
+- **Slug & Identifier Stability Without Migrations**:
+  - All 158 active `StoreMaster` records already possess unique non-null `externalStoreId` values (OPPO store codes).
+  - Identifier resolution handles `externalStoreId` (e.g. `29039`), deterministic slug (e.g. `obs-central-phitsanulok-29039`), and UUID `id` without requiring database schema changes or migrations.
+- **Internal System Preservation**:
+  - Internal authenticated store management workspace is cleanly preserved at `/admin/stores`, keeping operational workflows intact.
+  - Existing authenticated routes retain strict `AuthGuard` protection.
+
 
 - **Context & Failure Mode**:
   - In production, Google Maps periodically subjects unauthenticated or automated headless Chromium contexts to "Limited View" (`มุมมองแบบจำกัด`), hiding the Reviews tab and reviews stream while displaying overview ratings.
