@@ -1,5 +1,22 @@
 # Architecture & Design Decisions
 
+## TikTok Official API: Review-Ready Integration Preparation (2026-09-08)
+
+- **Minimum Scope Enforcement**:
+  - TikTok OAuth requested scopes were strictly reduced to the minimal 3 read-only scopes: `user.info.basic`, `user.info.profile`, and `user.info.stats`.
+  - `video.list`, `video.publish`, `video.upload`, Research API, and Content Posting API are strictly excluded.
+  - Required User Info fields requested from TikTok Login Kit v2: `open_id`, `avatar_url`, `display_name`, `username`, `profile_deep_link`, `bio_description`, `is_verified`, `follower_count`, `following_count`, `likes_count`, `video_count`.
+- **Decoupled Store Association from OAuth Authorization**:
+  - Store association has been decoupled from the initial TikTok OAuth callback.
+  - Previously, unassociated accounts failed with `store_not_found`. In this review-ready architecture, sandbox reviewer accounts and unlinked branch accounts successfully authorize, have their tokens securely encrypted (AES-256-GCM), and display verified profile metrics on `/connect/tiktok/success` with pending association badges.
+- **Architectural Separation of Data Models**:
+  - Official API data models (`TikTokAccount` / `TikTokAccountDailyMetric`) remain strictly decoupled from the Public Collector data models (`TikTokPublicProfile` / `TikTokPublicDailyMetric`).
+  - The public collector remains intact and operational for the public store directory, avoiding any regression during TikTok App Review.
+- **Fail-Closed Public Connect Surface & Educational Transparency**:
+  - `/connect/tiktok` provides clear Thai guidance and a configuration guard that renders a disabled setup state with configuration instructions when sandbox credentials (`TIKTOK_CLIENT_KEY`) are not provided, preventing invalid redirects.
+  - `/tiktok-integration` provides full public transparency on data accessed, business purpose, security, and explicit non-posting boundaries.
+
+
 ## Post-Deployment Cleanup: /welcome Staff Boundary & SEO Title Deduplication (2026-09-08)
 
 - **/welcome Authentication Boundary**:
@@ -2089,3 +2106,7 @@ Refactor the Follower Insights calendar into `components/date-range/unified-peri
 Render the existing popover through a portal, anchored to the trigger and clamped to the viewport, so table/card/export-modal overflow cannot clip it. Use app theme tokens, two calendar months on desktop, one on mobile, and visible next-month navigation at either size. Reject a draft end date beyond 90 inclusive days before it can be committed. Cancel/Escape/outside dismissal preserve the committed range.
 
 Leave operational backfill date fields, coupon schedule datetimes, and fixed Google Review business-period selectors intact because they are not arbitrary reporting date ranges. After rebasing onto the main revision that introduced `/replymessage`, use the same shared picker in `Store24hResponsePanel`; preserve its search, authorization, chat navigation, responsive table/cards, and existing 24-hour response endpoint and business logic.
+
+## 2026-09-08: Rich Menu TikTok variables use the canonical Store Master URL
+
+Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Populate that field, together with `tiktokUsername`, in every Rich Menu `StoreVariableContext` used by preview/auto-response validation and per-store publishing. Keep `store.tiktokUrl` as a resolver alias/fallback for existing templates, so legacy templates resolve without adding a duplicate Prisma field. Missing TikTok data continues to fail closed through the existing URI validation before any LINE payload/API call is made.

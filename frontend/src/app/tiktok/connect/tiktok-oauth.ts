@@ -6,7 +6,6 @@ export const TIKTOK_OAUTH_SCOPES = [
   "user.info.basic",
   "user.info.profile",
   "user.info.stats",
-  "video.list",
 ] as const;
 
 export const DEFAULT_PUBLIC_APP_URL = "https://lineoppo.click";

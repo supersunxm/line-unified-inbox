@@ -353,6 +353,9 @@ export function PublicLandingPage() {
               <Link href="/stores" className="hover:text-[var(--app-accent)] transition">
                 ค้นหาร้าน
               </Link>
+              <Link href="/tiktok-integration" className="hover:text-[var(--app-accent)] transition">
+                TikTok Integration
+              </Link>
               <Link href="/privacy" className="hover:text-[var(--app-accent)] transition">
                 Privacy Policy
               </Link>

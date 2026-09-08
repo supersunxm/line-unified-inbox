@@ -23,8 +23,8 @@ const content: Record<AppLanguage, PolicyContent> = {
       {
         title: "1. วัตถุประสงค์ของบริการ",
         paragraphs: [
-          "OPPO Retail TikTok Monitor (ต่อไปนี้เรียกว่า “บริการ”) เป็นเครื่องมือภายในสำหรับการบริหารงานและวิเคราะห์ข้อมูล ซึ่งพัฒนาขึ้นเพื่อทีมปฏิบัติการค้าปลีกของ OPPO ผู้ดูแลระดับภูมิภาค และผู้ดูแลร้านค้าที่ได้รับอนุญาตเท่านั้น",
-          "วัตถุประสงค์หลักของบริการคือช่วยให้ผู้มีสิทธิ์สามารถติดตามตัวชี้วัดผลการดำเนินงาน แนวโน้มการเติบโตของผู้ติดตาม วิเคราะห์ข้อมูลการมีส่วนร่วม และกำกับดูแลกระบวนการตอบข้อสอบถามของลูกค้าในบัญชี TikTok ร้านค้าอย่างเป็นทางการที่เชื่อมต่ออยู่ ผ่านหน้าจอปฏิบัติการแบบรวมศูนย์",
+          "OPPO Retail TikTok Monitor (ต่อไปนี้เรียกว่า “บริการ”) เป็นเครื่องมือสำหรับการบริหารงาน วิเคราะห์ข้อมูล และบริการค้นหาสาขา ซึ่งพัฒนาขึ้นเพื่อทีมปฏิบัติการค้าปลีกของ OPPO ผู้ดูแลระดับภูมิภาค ผู้ดูแลร้านค้าที่ได้รับอนุญาต และผู้ใช้บริการทั่วไป",
+          "วัตถุประสงค์หลักของบริการคือช่วยให้ผู้มีสิทธิ์สามารถติดตามตัวชี้วัดผลการดำเนินงาน แนวโน้มการเติบโตของผู้ติดตาม และกำกับดูแลกระบวนการตอบข้อสอบถามของลูกค้าในบัญชี TikTok ร้านค้าอย่างเป็นทางการที่เชื่อมต่ออยู่ รวมถึงแสดงข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการบนหน้าค้นหาสาขา (Public Store Directory)",
         ],
       },
       {
@@ -42,6 +42,7 @@ const content: Record<AppLanguage, PolicyContent> = {
         bullets: [
           { label: "ความยินยอมโดยชัดแจ้ง", text: "เฉพาะผู้ดูแลบัญชีร้านค้าที่ได้รับอนุญาตเท่านั้นที่สามารถเชื่อมต่อบัญชี TikTok ร้านค้าอย่างเป็นทางการ โดยดำเนินการผ่านขั้นตอน TikTok OAuth อย่างเป็นทางการ" },
           { label: "สิทธิ์เท่าที่จำเป็น", text: "บริการจะขอเฉพาะสิทธิ์ API ขั้นต่ำที่จำเป็นต่อการดึงข้อมูลการดำเนินงาน เช่น ข้อมูลโปรไฟล์บัญชี สถิติผู้ติดตาม และตัวชี้วัดปริมาณการมีส่วนร่วม" },
+          { label: "การแสดงผลและการใช้งาน", text: "ข้อมูลโปรไฟล์และสถิติพื้นฐานที่ได้รับอนุญาตจะถูกนำมาแสดงผลบนหน้ารายละเอียดสาขาเพื่อประโยชน์ของผู้ใช้บริการในการติดต่อสาขา และในแดชบอร์ดการดำเนินงานของบุคลากรที่ได้รับสิทธิ์" },
           { label: "การเพิกถอนสิทธิ์", text: "ผู้ดูแลร้านค้าสามารถยกเลิกการเชื่อมต่อบัญชีหรือเพิกถอนสิทธิ์ API ได้ทุกเมื่อผ่านการตั้งค่าบัญชี TikTok หรือหน้าจอจัดการของบริการ" },
         ],
       },
@@ -107,8 +108,8 @@ const content: Record<AppLanguage, PolicyContent> = {
       {
         title: "1. Purpose of Service",
         paragraphs: [
-          "OPPO Retail TikTok Monitor (the “Service”) is an internal operational management and analytics tool developed exclusively for OPPO retail operations teams, regional supervisors, and authorized store administrators.",
-          "The primary purpose of the Service is to enable authorized personnel to monitor operational performance metrics, track follower growth trends, analyze engagement insights, and oversee customer inquiry response workflows across connected official retail store TikTok accounts in a unified operational interface.",
+          "OPPO Retail TikTok Monitor (the “Service”) is an operational management, analytics, and store directory platform developed for OPPO retail operations teams, regional supervisors, authorized store administrators, and public customers.",
+          "The primary purpose of the Service is to enable authorized personnel to monitor operational performance metrics and engagement insights, while displaying verified official store social channels on the Public Store Directory (lineoppo.click) to help customers discover genuine branch accounts.",
         ],
       },
       {
@@ -126,6 +127,7 @@ const content: Record<AppLanguage, PolicyContent> = {
         bullets: [
           { label: "Explicit Consent", text: "Only authorized store account administrators may connect official TikTok store accounts to the Service by completing the official TikTok OAuth authorization flow." },
           { label: "Scoped Access", text: "The Service requests only the minimal API permissions necessary to retrieve operational metrics, such as account profile information, follower analytics, and interaction volume statistics." },
+          { label: "Display and Utilization", text: "Authorized basic profile information and metrics are displayed on public store profiles for customer convenience and utilized within operational dashboards for authorized retail staff." },
           { label: "Revocation", text: "Store administrators can disconnect their accounts or revoke API authorization at any time via TikTok account settings or within the Service management console." },
         ],
       },
@@ -191,8 +193,8 @@ const content: Record<AppLanguage, PolicyContent> = {
       {
         title: "1. 服务目的",
         paragraphs: [
-          "OPPO Retail TikTok Monitor（以下简称“本服务”）是一款内部运营管理与数据分析工具，仅供 OPPO 零售运营团队、区域主管及经授权的门店管理员使用。",
-          "本服务的主要目的是让获授权人员能够在统一运营界面中监控运营绩效指标、跟踪关注者增长趋势、分析互动数据，并管理已连接的官方零售门店 TikTok 账户中的客户咨询回复流程。",
+          "OPPO Retail TikTok Monitor（以下简称“本服务”）是一款用于运营管理、数据分析与门店名录服务的平台，面向 OPPO 零售运营团队、区域主管、经授权的门店管理员及广大顾客。",
+          "本服务的主要目的是让获授权人员能够在统一运营界面中监控运营绩效指标并跟踪互动数据，同时在公开门店名录（Public Store Directory - lineoppo.click）中展示官方 TikTok 门店账户，帮助顾客发现真实可靠的官方渠道。",
         ],
       },
       {
@@ -210,6 +212,7 @@ const content: Record<AppLanguage, PolicyContent> = {
         bullets: [
           { label: "明确同意", text: "只有经授权的门店账户管理员才能通过官方 TikTok OAuth 授权流程，将官方 TikTok 门店账户连接到本服务。" },
           { label: "最小权限范围", text: "本服务仅请求获取运营指标所必需的最小 API 权限，例如账户资料、关注者分析及互动量统计。" },
+          { label: "展示与使用", text: "经授权的基础资料及指标将展示于公开门店主页以便顾客联系，并在经授权员工的运营仪表板中用于分析。" },
           { label: "撤销授权", text: "门店管理员可随时通过 TikTok 账户设置或本服务的管理界面断开账户连接或撤销 API 授权。" },
         ],
       },

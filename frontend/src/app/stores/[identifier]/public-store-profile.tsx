@@ -302,6 +302,9 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
             <Link href="/stores" className="hover:underline">
               หน้ารวมร้านค้า
             </Link>
+            <Link href="/tiktok-integration" className="hover:underline">
+              การเชื่อมต่อ TikTok
+            </Link>
             <Link href="/privacy" className="hover:underline">
               นโยบายความเป็นส่วนตัว
             </Link>

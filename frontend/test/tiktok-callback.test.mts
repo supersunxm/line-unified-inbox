@@ -152,7 +152,7 @@ test("Callback route handler constructs result redirects with public application
 });
 
 test("Public TikTok callback always redirects to success without using admin session routing", () => {
-  assert.match(routeSource, /new\s+URL\("\/tiktok\/connect\/success",\s*publicOrigin\)/);
+  assert.match(routeSource, /new\s+URL\("\/connect\/tiktok\/success",\s*publicOrigin\)/);
   assert.doesNotMatch(routeSource, /if\s*\(requestHasOppoSession\)/);
   assert.doesNotMatch(routeSource, /\/tiktok\/dashboard\/\$\{encodeURIComponent\(syncedAccount\.id\)\}/);
   assert.match(routeSource, /requestHasOppoSession/);

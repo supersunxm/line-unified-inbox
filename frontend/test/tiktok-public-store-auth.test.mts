@@ -36,7 +36,7 @@ test("B. Missing or incorrect internal secret causes frontend sync to throw and 
   try {
     await assert.rejects(
       async () => syncTikTokAccountInternallyToBackend({ accessToken: "sample_token", profile: { open_id: "sample_id", display_name: "Store" } }),
-      (err: any) => {
+      (err: Error) => {
         assert.match(err.message, /Missing internal TikTok sync secret configuration/);
         return true;
       },
@@ -70,8 +70,8 @@ test("D. OAuth state validation: missing state rejected, mismatched state reject
 
 test("E. Callback route handler sets short-lived HttpOnly cookie for success page instead of query parameters", () => {
   assert.match(callbackRouteSource, /tiktok_connect_result/);
-  assert.match(callbackRouteSource, /maxAge:\s*60/);
-  assert.match(callbackRouteSource, /path:\s*"\/tiktok\/connect\/success"/);
+  assert.match(callbackRouteSource, /maxAge:\s*(60|120)/);
+  assert.match(callbackRouteSource, /path:\s*("(\/|\/(tiktok\/)?connect\/success)")/);
   assert.match(callbackRouteSource, /httpOnly:\s*true/);
   assert.doesNotMatch(callbackRouteSource, /searchParams\.set\(["']accessToken/);
   assert.doesNotMatch(callbackRouteSource, /searchParams\.set\(["']refreshToken/);

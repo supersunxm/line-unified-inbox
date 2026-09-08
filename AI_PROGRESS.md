@@ -1,5 +1,39 @@
 # AI Progress Log
 
+## 2026-09-08: TikTok Official API — Review-Ready Integration Preparation [COMPLETED]
+- **Current Task**: Prepare application for TikTok App Review using real TikTok account connection experience on branch `feat/tiktok-review-ready-integration`.
+- **Completed Work**:
+  1. Phase 2 — Minimum Scope Reduction:
+     - Enforced strictly `user.info.basic`, `user.info.profile`, and `user.info.stats`.
+     - Excluded `video.list`, `video.publish`, `video.upload`, Research API, and Content Posting API.
+     - Requested exact 11 user info fields from Login Kit v2.
+  2. Phase 3 — Public Connect Page:
+     - Implemented `/connect/tiktok` with customer/store owner explanation in Thai, 4 requested metric bullet points, read-only guarantees, and sandbox configuration guard when `TIKTOK_CLIENT_KEY` is not configured.
+  3. Phase 4 & 6 — Decoupled Store Association & Callback:
+     - Updated `/tiktok/callback` to allow sandbox reviewers and unlinked branch accounts to authenticate successfully without `store_not_found` error.
+     - Decoupled `TikTokAccount` (Official API) from `TikTokPublicProfile` (Public Collector).
+  4. Phase 5 & 7 — Success UI:
+     - Updated `/connect/tiktok/success` and `/tiktok/connect/success` displaying avatar, `@username`, all 4 metrics (Followers, Following, Likes, Videos), read-only reassurance badge, and clear revocation guidance.
+  5. Phase 8 — Public Explanation Page:
+     - Created `/tiktok-integration` explaining integration purpose, data accessed, strict non-posting boundaries, and security. Linked in footers across public landing page, store directory, and store profile.
+  6. Phase 9 & 10 — Privacy Policy & Terms of Service:
+     - Audited and updated `/privacy` and `/terms` (in TH, EN, ZH) reflecting read-only profile + metric collection without video downloads or personal message access.
+  7. Phase 11 & 12 — App Review Package & Demo Script:
+     - Created `TIKTOK_APP_REVIEW.md` (all 15 sections complete).
+     - Created `TIKTOK_REVIEW_DEMO_SCRIPT.md` (all 14 step-by-step recording steps complete).
+  8. Phase 13 — Tests & Builds:
+     - Frontend unit tests: 533/533 passed (`npm test`).
+     - Backend unit tests: 1,805/1,805 passed (`npm test`).
+     - Frontend production build: Turbopack compile passed (`npm run build`).
+     - Backend production build: NestJS/Prisma compile passed (`npm run build`).
+- **Checks Run & Passed**:
+  - All 533 frontend unit tests passed.
+  - All 1,805 backend unit tests passed.
+  - Total 2,338 tests passing across repository.
+  - Frontend production build passed.
+  - Backend production build passed.
+- **Next Action**: Commit changes to `feat/tiktok-review-ready-integration`, push branch, open Pull Request against `main`, and present structured final report with decision `REVIEW_PACKAGE_READY_WITH_CONFIGURATION`.
+
 ## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
 - **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.
 - **Completed Work**:
@@ -4234,3 +4268,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Started the rebuilt production frontend on inspected port 3000. `/api/health` and `/replymessage` return HTTP 200 with no startup errors. Source and tests confirm dashboard authorization, responsive desktop/mobile store views, search preservation, chat navigation, sidebar active-state matching, no native date input, and the unchanged authenticated `store-24h-response-summary?dateFrom=...&dateTo=...` request.
 - Remaining limitation: browser discovery reports zero connected browsers, preventing authenticated Apply/Cancel, mobile/dark-mode visual, console, keyboard, and live API interaction sign-off. Existing full-repository lint/typecheck failures remain pre-existing blockers.
 - Next action: review the updated draft PR and complete authenticated desktop/mobile browser verification when a browser is connected. Do not merge or deploy.
+
+# Current task: Rich Menu TikTok variable resolution (2026-09-08)
+
+- Added `tiktokUsername` and `tiktokProfileUrl` to both `StoreVariableContext` constructions in `backend/src/rich-menu/rich-menu.service.ts`: preview/auto-response validation and `publishOneStore`/auto-response publishing.
+- Preserved the canonical resolver behavior: `store.tiktokProfileUrl` reads the canonical Store Master field, and `store.tiktokUrl` aliases/falls back to it. No Prisma schema changes were made.
+- Added resolver coverage for `{{store.tiktokUrl}}` and Rich Menu preview coverage for successful URL resolution plus fail-closed missing-data behavior. Extended the existing publish pipeline test to assert LINE receives a real TikTok URL while retaining the Google Maps assertion.
+- Checks passed: focused Rich Menu/resolver tests 38/38; full backend runtime tests 1,795/1,797 (the 2 failures are unrelated pre-existing failures: missing `vitest` dependency in `line-chat-manager-image-relay-worker.spec.ts`, and duplicate writes observed by `sync-connected-line-oa.spec.ts`); production TypeScript check via `tsconfig.build.json`; backend build; localhost `/health` and `/health/readiness` both HTTP 200.
+- Changed-file ESLint reports the service/spec baseline violations already present in those files; no new lint violation is reported at the added TikTok lines. Full-project TypeScript checking likewise retains unrelated existing spec errors.
+- No database migration, deployment, LINE API call, or commit was performed. Existing unrelated TikTok frontend worktree changes were preserved.
+- Next action: review the scoped diff and commit only with explicit authorization.

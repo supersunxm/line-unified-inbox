@@ -164,11 +164,28 @@ function fixture() {
         ),
       update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         storeWrites.push({ id: where.id, data });
+        const store = stores.find((s) => s.id === where.id);
+        if (store) Object.assign(store, data);
         return Promise.resolve({});
       },
     },
     lineOfficialAccount: {
-      findMany: () => Promise.resolve(accounts),
+      findMany: () =>
+        Promise.resolve(
+          accounts.map((account) => {
+            const currentStore = stores.find((s) => s.id === account.store?.id);
+            return {
+              ...account,
+              store: currentStore
+                ? {
+                    ...account.store,
+                    ...currentStore,
+                    storeMaster: currentStore.storeMaster,
+                  }
+                : account.store,
+            };
+          }),
+        ),
       update: ({ data }: { data: Record<string, unknown> }) => {
         accountWrites.push(data);
         return Promise.resolve({});

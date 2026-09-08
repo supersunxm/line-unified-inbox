@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import { isSuccessfulLineManagerSendResponse } from "./line-chat-manager-image-relay-worker.service";
 
 describe("LINE Manager image relay preview readiness", () => {
@@ -7,7 +8,7 @@ describe("LINE Manager image relay preview readiness", () => {
     const currentAttachmentSurfaces = 12;
     const beforeAttachmentSurfaces = 12;
     const ready = filesCount > 0 || currentAttachmentSurfaces > beforeAttachmentSurfaces;
-    expect(ready).toBe(true);
+    assert.equal(ready, true);
   });
 
   it("rejects when there is no selected file and no new attachment surface", () => {
@@ -15,68 +16,86 @@ describe("LINE Manager image relay preview readiness", () => {
     const currentAttachmentSurfaces = 12;
     const beforeAttachmentSurfaces = 12;
     const ready = filesCount > 0 || currentAttachmentSurfaces > beforeAttachmentSurfaces;
-    expect(ready).toBe(false);
+    assert.equal(ready, false);
   });
 });
 
 describe("LINE Manager image relay network delivery verification", () => {
   it("accepts a successful chat mutation response during Send", () => {
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "POST",
-      status: 200,
-      hostname: "chat.line.biz",
-      pathname: "/api/v2/bots/U123/chats/C456/messages",
-      botId: "U123",
-      lineChatUserId: "C456",
-    })).toBe(true);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "POST",
+        status: 200,
+        hostname: "chat.line.biz",
+        pathname: "/api/v2/bots/U123/chats/C456/messages",
+        botId: "U123",
+        lineChatUserId: "C456",
+      }),
+      true,
+    );
   });
 
   it("accepts a successful chat mutation when chat identity is carried outside the URL", () => {
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "POST",
-      status: 201,
-      hostname: "chat.line.biz",
-      pathname: "/api/v2/chats/messages",
-      botId: "U123",
-      lineChatUserId: "C456",
-    })).toBe(true);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "POST",
+        status: 201,
+        hostname: "chat.line.biz",
+        pathname: "/api/v2/chats/messages",
+        botId: "U123",
+        lineChatUserId: "C456",
+      }),
+      true,
+    );
   });
 
   it("rejects GET responses and failed mutations", () => {
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "GET",
-      status: 200,
-      hostname: "chat.line.biz",
-      pathname: "/api/v2/bots/U123/chats/C456/messages",
-    })).toBe(false);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "GET",
+        status: 200,
+        hostname: "chat.line.biz",
+        pathname: "/api/v2/bots/U123/chats/C456/messages",
+      }),
+      false,
+    );
 
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "POST",
-      status: 500,
-      hostname: "chat.line.biz",
-      pathname: "/api/v2/bots/U123/chats/C456/messages",
-    })).toBe(false);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "POST",
+        status: 500,
+        hostname: "chat.line.biz",
+        pathname: "/api/v2/bots/U123/chats/C456/messages",
+      }),
+      false,
+    );
   });
 
   it("rejects unrelated Manager settings mutations", () => {
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "PATCH",
-      status: 200,
-      hostname: "chat.line.biz",
-      pathname: "/api/v4/bots/U123/settings/chatMode",
-      botId: "U123",
-    })).toBe(false);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "PATCH",
+        status: 200,
+        hostname: "chat.line.biz",
+        pathname: "/api/v4/bots/U123/settings/chatMode",
+        botId: "U123",
+      }),
+      false,
+    );
   });
 
   it("rejects other hosts even when the path looks like a chat send", () => {
-    expect(isSuccessfulLineManagerSendResponse({
-      method: "POST",
-      status: 200,
-      hostname: "example.com",
-      pathname: "/api/v2/bots/U123/chats/C456/messages",
-      botId: "U123",
-      lineChatUserId: "C456",
-    })).toBe(false);
+    assert.equal(
+      isSuccessfulLineManagerSendResponse({
+        method: "POST",
+        status: 200,
+        hostname: "example.com",
+        pathname: "/api/v2/bots/U123/chats/C456/messages",
+        botId: "U123",
+        lineChatUserId: "C456",
+      }),
+      false,
+    );
   });
 });
 
@@ -102,7 +121,7 @@ describe("LINE Manager image relay DOM fallback verification", () => {
       }
     }
 
-    expect(verified).toBe(true);
+    assert.equal(verified, true);
   });
 
   it("does not accept a file input that remains selected", () => {
@@ -126,6 +145,6 @@ describe("LINE Manager image relay DOM fallback verification", () => {
       }
     }
 
-    expect(verified).toBe(false);
+    assert.equal(verified, false);
   });
 });
