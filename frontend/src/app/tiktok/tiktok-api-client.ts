@@ -21,14 +21,11 @@ export const TIKTOK_VIDEO_QUERY_ENDPOINT = "https://open.tiktokapis.com/v2/video
 
 export const TIKTOK_USER_INFO_FIELDS = [
   "open_id",
-  "union_id",
   "avatar_url",
-  "avatar_url_100",
-  "avatar_large_url",
   "display_name",
   "username",
-  "bio_description",
   "profile_deep_link",
+  "bio_description",
   "is_verified",
   "follower_count",
   "following_count",

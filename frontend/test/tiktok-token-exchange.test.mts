@@ -54,14 +54,25 @@ test("TikTok API endpoints adhere to official TikTok Login Kit v2 specification"
   assert.equal(TIKTOK_VIDEO_QUERY_ENDPOINT, "https://open.tiktokapis.com/v2/video/query/");
 });
 
-test("TikTok user info and video list fields request required metrics and profile fields", () => {
-  assert.match(TIKTOK_USER_INFO_FIELDS, /open_id/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /display_name/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /username/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /follower_count/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /following_count/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /likes_count/);
-  assert.match(TIKTOK_USER_INFO_FIELDS, /video_count/);
+test("TikTok user info fields request exactly the minimal 11 fields without extra basic scopes", () => {
+  const fields = TIKTOK_USER_INFO_FIELDS.split(",");
+  assert.equal(fields.length, 11, "Must contain exactly 11 requested User Info fields");
+  assert.deepEqual(fields, [
+    "open_id",
+    "avatar_url",
+    "display_name",
+    "username",
+    "profile_deep_link",
+    "bio_description",
+    "is_verified",
+    "follower_count",
+    "following_count",
+    "likes_count",
+    "video_count",
+  ]);
+  assert.equal(fields.includes("union_id"), false, "union_id must be excluded from requested fields");
+  assert.equal(fields.includes("avatar_url_100"), false, "avatar_url_100 must be excluded");
+  assert.equal(fields.includes("avatar_large_url"), false, "avatar_large_url must be excluded");
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /id/);
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /create_time/);
   assert.match(TIKTOK_VIDEO_LIST_FIELDS, /cover_image_url/);

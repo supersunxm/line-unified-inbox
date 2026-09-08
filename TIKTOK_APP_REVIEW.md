@@ -7,29 +7,66 @@
 
 ## Developer Portal Configuration
 
-Exact non-secret configuration values to input into the TikTok Developer Portal:
+Exact configuration values for the TikTok Developer Portal:
 
-| Configuration Field | Exact Value |
+| Setting | Exact Value |
 |---|---|
-| **Website URL** | `https://lineoppo.click` |
-| **Terms of Service URL** | `https://lineoppo.click/terms` |
-| **Privacy Policy URL** | `https://lineoppo.click/privacy` |
-| **TikTok Integration Explanation URL** | `https://lineoppo.click/tiktok-integration` |
-| **Connect Page URL** | `https://lineoppo.click/connect/tiktok` |
+| **Website** | `https://lineoppo.click` |
+| **Platform** | `Web` |
+| **Login Kit** | `Enabled` (Login Kit v2 / Web OAuth 2.0) |
 | **Redirect URI** | `https://lineoppo.click/tiktok/callback` |
-| **Product** | **Login Kit** (Web OAuth 2.0 / Login Kit v2) |
-| **Requested Scopes** | `user.info.basic`<br>`user.info.profile`<br>`user.info.stats` |
+| **Public Landing Page** | `https://lineoppo.click/` |
+| **Store Directory** | `https://lineoppo.click/stores` |
+| **TikTok Integration Page** | `https://lineoppo.click/tiktok-integration` |
+| **Public Connect Page** | `https://lineoppo.click/connect/tiktok` |
+| **Privacy Policy** | `https://lineoppo.click/privacy` |
+| **Terms of Service** | `https://lineoppo.click/terms` |
+| **Scopes Requested** | `user.info.basic`<br>`user.info.profile`<br>`user.info.stats` |
 
 > [!IMPORTANT]
-> **Strictly Excluded Products & Scopes**:
-> - Do NOT select `video.list`
-> - Do NOT select `video.upload`
-> - Do NOT select `video.publish`
-> - Do NOT select **Content Posting API**
-> - Do NOT select **Research API**
-> - Client Secret must NEVER be committed, shared, or entered into documentation.
+> **Strictly Excluded Scopes & APIs**:
+> - `video.list` (NOT requested)
+> - `video.upload` (NOT requested)
+> - `video.publish` (NOT requested)
+> - **Content Posting API** (NOT requested)
+> - **Research API** (NOT requested)
 
 ---
+
+## Environment Variables Classification
+
+| Variable | Required for Sandbox OAuth Demo | Secret | Server-Side Only | Runtime Target | Production / Sandbox Value | Role & Safe Missing Behavior |
+|---|---|---|---|---|---|---|
+| `TIKTOK_CLIENT_KEY` | **YES** | **NO** | No | Frontend Server | From TikTok Sandbox Portal | Identifies application in TikTok OAuth URL. When missing, `/connect/tiktok` fail-closed renders disabled setup UI without broken redirects. |
+| `TIKTOK_CLIENT_SECRET` | **YES** | **YES** | **YES** (Never `NEXT_PUBLIC_*`) | Frontend Server | From TikTok Sandbox Portal | Exchanges authorization code for access/refresh tokens. Never logged or exposed. Server redirects cleanly to error page if missing. |
+| `TIKTOK_REDIRECT_URI` | **SHOULD CONFIGURE** | **NO** | No | Frontend Server | `https://lineoppo.click/tiktok/callback` | Explicit canonical redirect URI. Defaults to `https://lineoppo.click/tiktok/callback` if unset; configuring explicitly prevents environment drift. |
+| `NEXT_PUBLIC_APP_URL` | Optional | **NO** | No | Frontend / Client | `https://lineoppo.click` | Canonical public origin helper. Falls back to `https://lineoppo.click` automatically if unset. |
+| `TIKTOK_INTERNAL_SYNC_SECRET` | **NO** | **YES** | **YES** | Frontend & Backend | Internal Shared Secret | Required only for backend database persistence and StoreMaster linking. The OAuth callback flow degrades gracefully without it, successfully displaying verified profile & metrics on `/connect/tiktok/success`. |
+
+---
+
+## TikTok Sandbox Setup
+
+Manual step-by-step setup in TikTok Developer Portal:
+
+1. Open the TikTok Developer app in [TikTok for Developers](https://developers.tiktok.com/).
+2. Switch to **Sandbox** mode via the top environment toggle.
+3. Create a Sandbox environment if none exists.
+4. Add **Web** platform to the app configuration.
+5. Add **Login Kit** product.
+6. Register the redirect URI:  
+   `https://lineoppo.click/tiktok/callback`
+7. Configure the three required read-only scopes:
+   - `user.info.basic`
+   - `user.info.profile`
+   - `user.info.stats`
+8. Apply and save the Sandbox configuration.
+9. Add one owned TikTok account as a **Target User** (Sandbox User).
+10. Wait until Target User is active/visible in the portal.
+11. Obtain the **Sandbox Client Key**.
+12. Obtain the **Sandbox Client Secret** (keep strictly private).
+13. Configure runtime environment variables securely on deployment environment (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI=https://lineoppo.click/tiktok/callback`).
+14. Test `/connect/tiktok` end-to-end with the Target User account.
 
 ## 1. App Name Recommendation
 - **Recommended English Name**: `OPPO Brand Shop Social Directory`

@@ -26,14 +26,19 @@
      - Confirmed PR diff contains ZERO unrelated files (all 20 files are classified as `TIKTOK_REQUIRED`, `PUBLIC_DISCLOSURE_REQUIRED`, or `REVIEW_DOCUMENTATION`).
      - Made `frontend/src/app/tiktok/callback/route.ts` degrade gracefully if internal backend sync fails, ensuring `TIKTOK_INTERNAL_SYNC_SECRET` is not a blocker for sandbox reviewer verification.
      - Added dedicated "Developer Portal Configuration" section with exact non-secret values to `TIKTOK_APP_REVIEW.md`.
+  9. Phase 15 — Final Source-to-Review Alignment:
+     - Trimmed `TIKTOK_USER_INFO_FIELDS` to exactly 11 fields (removed `union_id`, `avatar_url_100`, `avatar_large_url`), matching minimal requested fields.
+     - Added test assertion proving exact 11 field list in `test/tiktok-token-exchange.test.mts`.
+     - Documented explicit `TIKTOK_REDIRECT_URI=https://lineoppo.click/tiktok/callback` to prevent environment drift.
+     - Documented Environment Variables Classification table and 14-step "TikTok Sandbox Setup" checklist in `TIKTOK_APP_REVIEW.md`.
+     - Verified review callback passes `videos = []` and never invokes legacy video retrieval functions.
 - **Checks Run & Passed**:
-  - All 533 frontend unit tests passed (including 67 TikTok-specific tests).
+  - All 533 frontend unit tests passed (including 67 TikTok-specific tests and exact 11-field test).
   - All 8 TikTok backend unit tests passed.
   - Complete backend suite: 1,795 passed, 2 pre-existing baseline failures on `origin/main` (reported as `PRE_EXISTING / OUT_OF_SCOPE`).
   - Frontend production build: Turbopack compile passed.
   - Backend production build: NestJS/Prisma compile passed.
-  - GitHub Actions CI (PR #205): 6/6 jobs passed (Frontend, Backend, Android, web-adaptive-auth, mobile-adaptive-auth, CI Gate).
-- **Next Action**: Await user instructions for sandbox testing or review recording. Do NOT merge, do NOT deploy, do NOT submit review.
+- **Next Action**: Push updates to PR #205 and present Final Report with decision `READY_TO_DEPLOY_FOR_SANDBOX`.
 
 ## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
 - **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.
