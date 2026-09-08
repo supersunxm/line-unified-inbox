@@ -5,6 +5,30 @@
 **Target Environment**: Production (`https://lineoppo.click`) / Sandbox Staging  
 **Status**: REVIEW_PACKAGE_READY_WITH_CONFIGURATION  
 
+## Developer Portal Configuration
+
+Exact non-secret configuration values to input into the TikTok Developer Portal:
+
+| Configuration Field | Exact Value |
+|---|---|
+| **Website URL** | `https://lineoppo.click` |
+| **Terms of Service URL** | `https://lineoppo.click/terms` |
+| **Privacy Policy URL** | `https://lineoppo.click/privacy` |
+| **TikTok Integration Explanation URL** | `https://lineoppo.click/tiktok-integration` |
+| **Connect Page URL** | `https://lineoppo.click/connect/tiktok` |
+| **Redirect URI** | `https://lineoppo.click/tiktok/callback` |
+| **Product** | **Login Kit** (Web OAuth 2.0 / Login Kit v2) |
+| **Requested Scopes** | `user.info.basic`<br>`user.info.profile`<br>`user.info.stats` |
+
+> [!IMPORTANT]
+> **Strictly Excluded Products & Scopes**:
+> - Do NOT select `video.list`
+> - Do NOT select `video.upload`
+> - Do NOT select `video.publish`
+> - Do NOT select **Content Posting API**
+> - Do NOT select **Research API**
+> - Client Secret must NEVER be committed, shared, or entered into documentation.
+
 ---
 
 ## 1. App Name Recommendation

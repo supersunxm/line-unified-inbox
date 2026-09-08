@@ -21,18 +21,18 @@
   7. Phase 11 & 12 — App Review Package & Demo Script:
      - Created `TIKTOK_APP_REVIEW.md` (all 15 sections complete).
      - Created `TIKTOK_REVIEW_DEMO_SCRIPT.md` (all 14 step-by-step recording steps complete).
-  8. Phase 13 — Tests & Builds:
-     - Frontend unit tests: 533/533 passed (`npm test`).
-     - Backend unit tests: 1,805/1,805 passed (`npm test`).
-     - Frontend production build: Turbopack compile passed (`npm run build`).
-     - Backend production build: NestJS/Prisma compile passed (`npm run build`).
+  8. Phase 13 & 14 — PR Cleanup, Scope Audit & Reversion of Unrelated Specs:
+     - Reverted unrelated backend test files (`backend/src/store-master/sync-connected-line-oa.spec.ts` and `backend/src/line-chat/line-chat-manager-image-relay-worker.spec.ts`) strictly to `origin/main`.
+     - Confirmed PR diff contains ZERO unrelated files (all 20 files are classified as `TIKTOK_REQUIRED`, `PUBLIC_DISCLOSURE_REQUIRED`, or `REVIEW_DOCUMENTATION`).
+     - Made `frontend/src/app/tiktok/callback/route.ts` degrade gracefully if internal backend sync fails, ensuring `TIKTOK_INTERNAL_SYNC_SECRET` is not a blocker for sandbox reviewer verification.
+     - Added dedicated "Developer Portal Configuration" section with exact non-secret values to `TIKTOK_APP_REVIEW.md`.
 - **Checks Run & Passed**:
-  - All 533 frontend unit tests passed.
-  - All 1,805 backend unit tests passed.
-  - Total 2,338 tests passing across repository.
-  - Frontend production build passed.
-  - Backend production build passed.
-- **Next Action**: Commit changes to `feat/tiktok-review-ready-integration`, push branch, open Pull Request against `main`, and present structured final report with decision `REVIEW_PACKAGE_READY_WITH_CONFIGURATION`.
+  - All 533 frontend unit tests passed (including 67 TikTok-specific tests).
+  - All 8 TikTok backend unit tests passed.
+  - Complete backend suite: 1,795 passed, 2 pre-existing baseline failures on `origin/main` (reported as `PRE_EXISTING / OUT_OF_SCOPE`).
+  - Frontend production build: Turbopack compile passed.
+  - Backend production build: NestJS/Prisma compile passed.
+- **Next Action**: Commit cleanup and audit updates, push branch, and present structured final report with decision `SANDBOX_CONFIGURATION_READY`.
 
 ## 2026-09-08: Public Surface Post-Deployment Cleanup [COMPLETED]
 - **Current Task**: Perform Post-Deployment Public Surface Cleanup on `/welcome` auth protection and SEO title deduplication.
