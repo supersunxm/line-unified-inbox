@@ -82,6 +82,9 @@ jobs:
       - name: Executive dashboard regression tests
         run: npx tsx --test src/dashboard-executive.service.spec.ts
 
+      - name: Canonical Store ID export regression tests
+        run: npx tsx --test src/line-official-accounts/line-official-account-canonical-export.spec.ts
+
       - name: Build
         run: npm run build
 
@@ -158,6 +161,9 @@ jobs:
 
       - name: Executive dashboard UI regression tests
         run: node --test --experimental-strip-types test/dashboard-executive-v2.test.mts
+
+      - name: Canonical Store ID export regression tests
+        run: node --test --experimental-strip-types test/canonical-store-id-export.test.mts
 
       - name: Build
         run: npm run build
