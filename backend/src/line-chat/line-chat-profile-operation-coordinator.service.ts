@@ -210,7 +210,6 @@ export class LineChatProfileOperationCoordinator {
         }));
         resolve(null);
       }, waitMs);
-      waiter.timer.unref?.();
 
       this.logger.log(JSON.stringify({
         event: "line_chat_profile_operation_priority_waiting",
