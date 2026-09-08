@@ -6,6 +6,7 @@ const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "
 const dashboardPageCode = readFileSync(new URL("../src/app/dashboard/page.tsx", import.meta.url), "utf8");
 const chatsPageCode = readFileSync(new URL("../src/app/chats/page.tsx", import.meta.url), "utf8");
 const storesPageCode = readFileSync(new URL("../src/app/stores/page.tsx", import.meta.url), "utf8");
+const adminStoresPageCode = readFileSync(new URL("../src/app/admin/stores/page.tsx", import.meta.url), "utf8");
 const followerInsightsPageCode = readFileSync(new URL("../src/app/follower-insights/page.tsx", import.meta.url), "utf8");
 const friendSourceLinksPageCode = readFileSync(new URL("../src/app/friend-source-links/page.tsx", import.meta.url), "utf8");
 const authorizedWorkspaceCode = readFileSync(new URL("../src/app/authorized-workspace.tsx", import.meta.url), "utf8");
@@ -15,12 +16,18 @@ const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.ts
 test("all workspace route entrypoints delegate through normalized authorization with matching section key", () => {
   assert.match(dashboardPageCode, /AuthorizedWorkspace section="dashboard"/);
   assert.match(chatsPageCode, /AuthorizedWorkspace section="chats"/);
-  assert.match(storesPageCode, /AuthorizedWorkspace section="stores"/);
+  assert.match(adminStoresPageCode, /AuthorizedWorkspace section="stores"/);
   assert.match(followerInsightsPageCode, /AuthorizedWorkspace section="follower-insights"/);
   assert.match(friendSourceLinksPageCode, /AuthorizedWorkspace section="friend-source-links"/);
   assert.match(authorizedWorkspaceCode, /canAccessPrimarySection\(user, section\)/);
   assert.match(authorizedWorkspaceCode, /defaultRouteForUser\(user\)/);
   assert.match(authorizedWorkspaceCode, /ApplicationWorkspace initialSection=\{section\}/);
+});
+
+test("public store directory is accessible without AuthorizedWorkspace or login gate", () => {
+  assert.match(storesPageCode, /PublicStoresDirectory/);
+  assert.doesNotMatch(storesPageCode, /AuthorizedWorkspace/);
+  assert.doesNotMatch(storesPageCode, /AuthorizedSection/);
 });
 
 test("production route tree renders AppShell and TopNavigation as the single global navigation landmark", () => {

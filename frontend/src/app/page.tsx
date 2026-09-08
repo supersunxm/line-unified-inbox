@@ -1401,9 +1401,14 @@ export default function Home() {
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white shadow-sm">O</span>
               <span className="text-sm font-semibold tracking-tight sm:text-base">OPPO Retail Insights</span>
             </Link>
-            <Link href="/login" className="rounded-full border border-slate-300 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-600 hover:text-emerald-700 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-emerald-400 dark:hover:text-emerald-300">
-              Administrator Sign in
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/stores" className="text-sm font-medium text-slate-700 transition hover:text-emerald-700 dark:text-slate-200 dark:hover:text-emerald-300">
+                ค้นหา OPPO Brand Shop
+              </Link>
+              <Link href="/login" className="rounded-full border border-slate-300 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-600 hover:text-emerald-700 dark:border-white/20 dark:bg-white/5 dark:text-slate-200 dark:hover:border-emerald-400 dark:hover:text-emerald-300">
+                Administrator Sign in
+              </Link>
+            </div>
           </div>
         </header>
 
@@ -1414,7 +1419,10 @@ export default function Home() {
               <h1 className="max-w-3xl text-4xl font-bold leading-[1.05] tracking-[-0.04em] text-slate-950 sm:text-6xl dark:text-white">Understand your social content performance.</h1>
               <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8 dark:text-slate-300">Connect your social account to view profile insights, audience statistics, and public content performance.</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link href="/tiktok/connect" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-700/15 transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                <Link href="/stores" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-700/15 transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                  ค้นหา OPPO Brand Shop
+                </Link>
+                <Link href="/tiktok/connect" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white/75 px-6 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
                   Connect Account
                 </Link>
                 <Link href="/login" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white/75 px-6 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
