@@ -1,6 +1,26 @@
 # AI Progress Log
 
-## 2026-09-07: StoreMaster TikTok Public Profile 100-Store Chunked Dry Run [VERIFIED]
+## 2026-09-08: Public Store Directory (MVP) [COMPLETED]
+- **Current Task**: Implement Public Store Directory (`/stores` and `/stores/[identifier]`) on branch `feat/public-store-directory`.
+- **Completed Work**:
+  - Phase 1: Repository and architecture audit of 158 StoreMaster records, classifying public-safe vs strictly internal fields (zero leaks).
+  - Phase 2: Dedicated public read-only endpoints `GET /public/stores` and `GET /public/stores/:identifier` with explicit DTO serializer whitelist and deterministic slug resolution (`obs-*-{storeId}`).
+  - Phase 3: Public store directory at `/stores` with search (store name, province), quick region filters, dynamic province selector, responsive store cards, and direct LINE OA / TikTok buttons.
+  - Phase 4: Public store profile at `/stores/[identifier]` with store identity, LINE OA contact CTA, official TikTok profile link, Google Maps navigation, and 404 error states.
+  - Phase 5: Clear public vs private separation. Unauthenticated visitors browse `/stores` and `/stores/[identifier]` without login redirect. Internal store workspace preserved at `/admin/stores`.
+  - Phase 6 & 7: Empty, loading, error, and missing data states handled gracefully. Basic SEO metadata (titles and descriptions) generated cleanly.
+  - Phase 8: Unit tests added for backend (`src/public-stores/public-stores.spec.ts`) and frontend (`test/public-store-directory.test.mts`).
+  - Phase 9 & 10: Functional and security verification on running services (port 3000 and port 3001). Confirmed zero credential or internal field leaks.
+- **Checks Run & Passed**:
+  - Backend build: `npm run build` (Clean compile, exit 0)
+  - Backend tests: `node --import tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Frontend build: `npm run build` (Clean Turbopack compile with static & dynamic routes, exit 0)
+  - Frontend tests: `npm run test` (502/502 passed, 0 failures)
+  - Live API security scan: Zero sensitive patterns in JSON payload.
+  - Live routing: `/stores`, `/stores/29039`, `/stores/obs-central-phitsanulok-by-oppo-2-29039`, `/admin/stores`, `/home`, `/login` all respond 200 OK.
+- **Next Action**: Commit changes to `feat/public-store-directory` and present final MVP report.
+
+
 - **Current Task**: Perform controlled chunked dry run of TikTok public profile batch collector on eligible active StoreMaster stores using 20-store chunks, >=5,000ms delay, and >=60s inter-chunk pauses without `--apply`.
 - **Target Population Analysis**:
   - Total active stores in StoreMaster: 158

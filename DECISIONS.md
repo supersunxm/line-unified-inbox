@@ -1,6 +1,19 @@
 # Architecture & Design Decisions
 
-## Google Review: Maps DOM Recovery, Limited View Mitigation & Fail-Safe Collector Safeguards (2026-09-07)
+## Public Store Directory: Read-Only Contract, Strict Whitelist & Safe Public Slugs (2026-09-08)
+
+- **Context & Business Need**:
+  - Transform `lineoppo.click` from an internal-only operations dashboard into an external-facing website allowing consumers in Thailand to discover OPPO Brand Shop locations, search by province/region, and connect directly via LINE OA, TikTok, and Google Maps.
+- **Architectural Separation**:
+  - Dedicated public endpoints (`GET /public/stores` and `GET /public/stores/:identifier`) marked with `@Public()`, completely bypassing auth session requirements.
+  - Strict serialization whitelist: `StoreMaster` entity is never returned raw. Sensitive fields (`lineManagerUrl`, `bmName`, `dashboardTier`, `kpiPlan`, internal relations, tokens) are completely stripped out at the service layer.
+- **Slug & Identifier Stability Without Migrations**:
+  - All 158 active `StoreMaster` records already possess unique non-null `externalStoreId` values (OPPO store codes).
+  - Identifier resolution handles `externalStoreId` (e.g. `29039`), deterministic slug (e.g. `obs-central-phitsanulok-29039`), and UUID `id` without requiring database schema changes or migrations.
+- **Internal System Preservation**:
+  - Internal authenticated store management workspace is cleanly preserved at `/admin/stores`, keeping operational workflows intact.
+  - Existing authenticated routes retain strict `AuthGuard` protection.
+
 
 - **Context & Failure Mode**:
   - In production, Google Maps periodically subjects unauthenticated or automated headless Chromium contexts to "Limited View" (`มุมมองแบบจำกัด`), hiding the Reviews tab and reviews stream while displaying overview ratings.
