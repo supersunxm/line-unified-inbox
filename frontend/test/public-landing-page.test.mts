@@ -59,3 +59,18 @@ test("TikTok authorization entry and policy pages remain public", () => {
   assert.doesNotMatch(privacySource, /redirect\("\/login"\)|oppo_session|api\.me/);
   assert.doesNotMatch(termsSource, /redirect\("\/login"\)|oppo_session|api\.me/);
 });
+
+test("public landing removes popularity claims and official site claims, and uses dynamic store count", () => {
+  // No hardcoded count
+  assert.doesNotMatch(landingSource, /158 สาขา/);
+  assert.match(landingSource, /totalStores/);
+  // No unsupported popularity claims
+  assert.doesNotMatch(landingSource, /ยอดนิยม/);
+  assert.doesNotMatch(landingSource, /popular/i);
+  // No unsupported official-site claims
+  assert.doesNotMatch(landingSource, /บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ/);
+  assert.doesNotMatch(landingSource, /ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการ/);
+  // Neutral claims present
+  assert.match(landingSource, /ค้นหาข้อมูลสาขาและช่องทางติดต่อ/);
+  assert.match(landingSource, /สำรวจ OPPO Brand Shop/);
+});

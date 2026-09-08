@@ -79,3 +79,7 @@ test("7. Public directory synchronizes search/filter state to URL and uses deter
   assert.match(directoryCode, /replaceState/);
   assert.match(directoryCode, /store\.slug\s*\|\|\s*store\.id/);
 });
+
+test("8. Store code is not visibly displayed on public store profile", () => {
+  assert.doesNotMatch(profileViewCode, /รหัสสาขา/);
+});

@@ -1,5 +1,24 @@
 # AI Progress Log
 
+## 2026-09-08: Public Store Directory (Pre-Visual Cleanup) [COMPLETED]
+- **Current Task**: Final customer-facing copy and presentation cleanup on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Removed visible "รหัสสาขา {store.id}" badge from public store profile (`/stores/[identifier]`). `externalStoreId` remains available internally in routes and APIs without exposing store codes to customers.
+  2. Removed unsupported "ยอดนิยม / popular" claims from featured store section on landing page (`/`). Renamed to neutral "สำรวจ OPPO Brand Shop" with supporting copy "ดูข้อมูลสาขาและช่องทางติดต่อ".
+  3. Removed unsupported official-site claims:
+     - Replaced "บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ" with "ค้นหาข้อมูลสาขาและช่องทางติดต่อ".
+     - Replaced footer copy "ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการสำหรับผู้ใช้บริการในประเทศไทย" with "ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop ทั่วประเทศไทย".
+     - Verified genuine official tags like "LINE Official Account" remain preserved.
+  4. Made store count dynamic: Replaced hardcoded "158 สาขา" with dynamic total from `GET /public/stores` (`ดูสาขาทั้งหมด {total} สาขา →`), gracefully falling back to "ดูสาขาทั้งหมด →" while loading with no flash of 0.
+  5. Added regression test coverage in `frontend/test/public-landing-page.test.mts` and `frontend/test/public-store-directory.test.mts`.
+- **Checks Run & Passed**:
+  - Frontend tests: `npm test` (505/505 passed, exit 0)
+  - Frontend build: `npm run build` (Exit 0)
+  - Backend tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed)
+  - Live HTTP status checks: `/`, `/stores`, `/stores/[slug]`, `/login` all return 200 OK.
+  - Public profile verified: Zero occurrences of "รหัสสาขา".
+  - Landing page verified: Zero occurrences of "ยอดนิยม" or "บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ".
+
 ## 2026-09-08: Public Store Directory (Phase 2 Hardening & Customer Portal) [COMPLETED]
 - **Current Task**: Public Customer Experience & Contract Hardening on branch `feat/public-store-directory`.
 - **Completed Work**:

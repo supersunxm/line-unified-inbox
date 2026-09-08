@@ -1,5 +1,18 @@
 # Architecture & Design Decisions
 
+## Pre-Visual Customer Cleanup: Store Code Concealment, Neutral Claims & Dynamic Count (2026-09-08)
+
+- **Store Code Concealment from Public Profiles**:
+  - `externalStoreId` remains part of public URL slug/code resolution and backend serialization, but the visible customer badge `"รหัสสาขา {store.id}"` was removed from `/stores/[identifier]`.
+  - Customers do not require internal or retail codes to contact or navigate to stores. Internal database UUIDs continue to be blocked with 404.
+- **Brand Authorization Neutrality & Claims Removal**:
+  - Removed promotional popularity assertions ("ยอดนิยม", "popular", "recommended") from the landing page preview section; renamed to neutral "สำรวจ OPPO Brand Shop" with copy "ดูข้อมูลสาขาและช่องทางติดต่อ".
+  - Removed formal official authorization claims ("บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ", "ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการสำหรับผู้ใช้บริการในประเทศไทย") and replaced with neutral directory statements.
+  - Preserved authentic platform account types such as "LINE Official Account".
+- **Dynamic Store Count**:
+  - Replaced hardcoded "158 สาขา" text with dynamic count derived from `GET /public/stores` (`totalStores`).
+  - Added loading-safe fallback ("ดูสาขาทั้งหมด →") to prevent flashing 0 stores before API hydration.
+
 ## Public Customer Portal & Contract Hardening: UUID Rejection, AccountName Audit & Landing Page Architecture (2026-09-08)
 
 - **Strict UUID Rejection on Public Endpoints**:

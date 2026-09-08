@@ -137,11 +137,6 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
                       {store.region}
                     </span>
                   )}
-                  {store.id && (
-                    <span className="inline-flex items-center rounded-md bg-[var(--app-surface-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--app-text-tertiary)]">
-                      รหัสสาขา {store.id}
-                    </span>
-                  )}
                 </div>
 
                 <h1 className="text-2xl font-black tracking-tight sm:text-3xl text-[var(--app-text-primary)]">

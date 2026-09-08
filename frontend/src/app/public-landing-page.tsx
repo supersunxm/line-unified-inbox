@@ -9,6 +9,7 @@ export function PublicLandingPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredStores, setFeaturedStores] = useState<PublicStoreDto[]>([]);
+  const [totalStores, setTotalStores] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,6 +18,7 @@ export function PublicLandingPage() {
       .then((res) => {
         if (cancelled) return;
         setFeaturedStores(res.stores);
+        setTotalStores(res.total);
         setLoading(false);
       })
       .catch(() => {
@@ -103,7 +105,7 @@ export function PublicLandingPage() {
 
         <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--app-accent-soft)] px-3.5 py-1 text-xs font-semibold text-[var(--app-accent)] mb-4">
-            <span>✨</span> บริการค้นหาข้อมูลร้านค้าอย่างเป็นทางการ
+            <span>📍</span> ค้นหาข้อมูลสาขาและช่องทางติดต่อ
           </span>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl text-[var(--app-text-primary)] leading-tight">
             ค้นหา OPPO Brand Shop ใกล้คุณ
@@ -153,7 +155,9 @@ export function PublicLandingPage() {
               href="/stores"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--app-accent)] hover:underline"
             >
-              ดูสาขาทั้งหมด 158 สาขา →
+              {totalStores != null && totalStores > 0
+                ? `ดูสาขาทั้งหมด ${totalStores.toLocaleString()} สาขา →`
+                : "ดูสาขาทั้งหมด →"}
             </Link>
           </div>
 
@@ -242,10 +246,10 @@ export function PublicLandingPage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-xl font-bold sm:text-2xl text-[var(--app-text-primary)]">
-                สาขา OPPO Brand Shop แนะนำ
+                สำรวจ OPPO Brand Shop
               </h2>
               <p className="mt-1 text-xs sm:text-sm text-[var(--app-text-secondary)]">
-                สำรวจสาขายอดนิยมพร้อมช่องทางติดต่อ
+                ดูข้อมูลสาขาและช่องทางติดต่อ
               </p>
             </div>
             <Link
@@ -365,7 +369,7 @@ export function PublicLandingPage() {
           </div>
           <div className="mt-4 pt-4 border-t border-[var(--app-border)] text-center sm:text-left text-[11px] text-[var(--app-text-tertiary)] flex flex-col sm:flex-row justify-between items-center gap-2">
             <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · lineoppo.click</p>
-            <p>ข้อมูลสาขาและช่องทางติดต่ออย่างเป็นทางการสำหรับผู้ใช้บริการในประเทศไทย</p>
+            <p>ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop ทั่วประเทศไทย</p>
           </div>
         </div>
       </footer>
