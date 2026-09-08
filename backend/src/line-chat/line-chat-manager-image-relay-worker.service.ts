@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import { confirmLineManagerAuthentication } from "./line-chat-manager-auth-confirmation";
 import {
   getLineChatManagerRelayStoreConfig,
   isLineChatManagerRelayStoreEnabled,
@@ -290,9 +291,21 @@ export class LineChatManagerImageRelayWorkerService {
       await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
       await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
 
-      const auth = await this.sessionService.probeApiAuthentication(context);
-      if (auth.authenticated !== "YES") {
+      const auth = await confirmLineManagerAuthentication(
+        () => this.sessionService.probeApiAuthentication(context!),
+        (ms) => page.waitForTimeout(ms),
+      );
+      if (auth.outcome === "AUTH_EXPIRED") {
         throw new ServiceUnavailableException(`session ของ LINE OA Manager ร้าน ${input.storeCode} หมดอายุ กรุณา login ใหม่`);
+      }
+      if (auth.outcome === "INCONCLUSIVE") {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_image_auth_inconclusive",
+          storeCode: input.storeCode,
+          attempts: auth.attempts,
+          observations: auth.observations,
+        }));
+        throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้ กรุณาลองส่งรูปอีกครั้ง");
       }
 
       const fileInput = await this.findImageInput(page);
