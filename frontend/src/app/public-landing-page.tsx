@@ -80,16 +80,11 @@ export function PublicLandingPage() {
               ค้นหาร้าน
             </Link>
             <Link
-              href="/stores"
-              className="hidden sm:inline-block text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
-            >
-              ติดต่อสาขา
-            </Link>
-            <Link
               href="/login"
-              className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3.5 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-accent)]"
+              className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3.5 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] whitespace-nowrap"
             >
-              เข้าสู่ระบบสำหรับพนักงาน
+              <span className="sm:hidden">สำหรับพนักงาน</span>
+              <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
             </Link>
           </nav>
         </div>

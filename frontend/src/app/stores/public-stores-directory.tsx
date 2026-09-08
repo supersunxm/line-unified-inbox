@@ -138,21 +138,16 @@ export function PublicStoresDirectory() {
           <nav className="flex items-center gap-2 sm:gap-3" aria-label="Main Navigation">
             <Link
               href="/"
-              className="hidden sm:inline-block text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
+              className="text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
             >
               หน้าแรก
             </Link>
             <Link
-              href="/stores"
-              className="inline-flex items-center rounded-lg bg-[var(--app-accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--app-accent)]"
-            >
-              ค้นหาร้าน
-            </Link>
-            <Link
               href="/login"
-              className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"
+              className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] whitespace-nowrap"
             >
-              เข้าสู่ระบบสำหรับพนักงาน
+              <span className="sm:hidden">สำหรับพนักงาน</span>
+              <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
             </Link>
           </nav>
         </div>
@@ -203,7 +198,7 @@ export function PublicStoresDirectory() {
             <button
               type="button"
               onClick={() => setSelectedRegion("ALL")}
-              className={`rounded-full px-3.5 py-1.5 font-medium transition ${
+              className={`inline-flex items-center justify-center min-h-[38px] rounded-full px-4 py-2 font-medium transition ${
                 selectedRegion === "ALL"
                   ? "bg-[var(--app-accent)] text-white shadow-sm"
                   : "bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
@@ -216,7 +211,7 @@ export function PublicStoresDirectory() {
                 key={region}
                 type="button"
                 onClick={() => setSelectedRegion(region)}
-                className={`rounded-full px-3.5 py-1.5 font-medium transition ${
+                className={`inline-flex items-center justify-center min-h-[38px] rounded-full px-4 py-2 font-medium transition ${
                   selectedRegion === region
                     ? "bg-[var(--app-accent)] text-white shadow-sm"
                     : "bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
@@ -231,7 +226,7 @@ export function PublicStoresDirectory() {
               <select
                 value={selectedProvince}
                 onChange={(e) => setSelectedProvince(e.target.value)}
-                className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-1.5 text-xs text-[var(--app-text-primary)] font-medium focus:border-[var(--app-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--app-accent)]"
+                className="min-h-[38px] rounded-full border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2 text-xs text-[var(--app-text-primary)] font-medium focus:border-[var(--app-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--app-accent)]"
                 aria-label="เลือกจังหวัด"
               >
                 <option value="ALL">เลือกจังหวัด (ทั้งหมด)</option>

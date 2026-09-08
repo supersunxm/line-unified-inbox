@@ -81,9 +81,10 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
 
           <Link
             href="/login"
-            className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]"
+            className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] whitespace-nowrap"
           >
-            เข้าสู่ระบบสำหรับพนักงาน
+            <span className="sm:hidden">สำหรับพนักงาน</span>
+            <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
           </Link>
         </div>
       </header>

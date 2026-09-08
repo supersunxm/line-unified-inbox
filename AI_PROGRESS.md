@@ -1,5 +1,32 @@
 # AI Progress Log
 
+## 2026-09-08: Public Store Directory (Visual UX Review) [COMPLETED]
+- **Current Task**: Focused Visual UX Review of the public customer website on branch `feat/public-store-directory`.
+- **Completed Work**:
+  1. Captured and analyzed desktop (1440px) and mobile (390px) screenshots across all key customer views:
+     - Desktop Homepage (`desktop-homepage.png`)
+     - Desktop Store Directory (`desktop-stores-directory.png`)
+     - Desktop Full-channel Store Detail (`desktop-store-full-channel.png`)
+     - Desktop Missing-channel Store Detail (`desktop-store-missing-channel.png`)
+     - Mobile Homepage (`mobile-homepage-top.png`, `mobile-homepage-full.png`)
+     - Mobile Store Directory (`mobile-stores-directory.png`, `mobile-stores-directory-full.png`)
+     - Mobile Store Detail (`mobile-store-detail.png`, `mobile-store-detail-full.png`)
+  2. Identified and repaired visual/copy defects:
+     - Removed redundant `ติดต่อสาขา` link in desktop homepage header which duplicated `ค้นหาร้าน` (both pointed to `/stores`).
+     - Fixed mobile header text wrapping on 390px viewports: simplified "เข้าสู่ระบบสำหรับพนักงาน" on mobile to "สำหรับพนักงาน" with `whitespace-nowrap`, eliminating awkward 2-line wraps and right-margin crowding.
+     - Removed redundant active-page link to "ค้นหาร้าน" in `/stores` header nav on mobile, providing clean "หน้าแรก" and "สำหรับพนักงาน" actions instead.
+     - Updated site metadata in `frontend/src/app/layout.tsx` from operational "OPPO LINE OA Monitor" to customer-facing "OPPO Brand Shop · ค้นหาสาขา & ช่องทางติดต่อ".
+     - Enhanced region and province filter pills with `min-h-[38px] inline-flex items-center justify-center` for thumb-friendly mobile touch targets.
+  3. Executed automated customer journeys via Playwright:
+     - Journey A (Search): Navigated from `/` to `/stores?q=Central` (81 matches found), selected store profile, verified LINE, TikTok, and Google Maps CTAs.
+     - Journey B (Filters & Back Navigation): Filtered Northern region (26 stores), navigated to store profile, clicked "← สาขาทั้งหมด" back button, verified clean return to `/stores`.
+- **Checks Run & Passed**:
+  - Frontend unit tests: `npm test` (505/505 passed, exit 0)
+  - Frontend production build: `npm run build` (Turbopack, exit 0)
+  - Backend public-stores tests: `npx tsx --test src/public-stores/public-stores.spec.ts` (6/6 passed, exit 0)
+  - Live journey verification via Playwright: Journeys A & B passed.
+- **Next Action**: Commit changes locally to `feat/public-store-directory`.
+
 ## 2026-09-08: Public Store Directory (Pre-Visual Cleanup) [COMPLETED]
 - **Current Task**: Final customer-facing copy and presentation cleanup on branch `feat/public-store-directory`.
 - **Completed Work**:
