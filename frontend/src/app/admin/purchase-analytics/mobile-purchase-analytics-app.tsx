@@ -1,5 +1,7 @@
 "use client";
 
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MobileBottomNav,
@@ -331,8 +333,7 @@ export function MobilePurchaseAnalyticsApp() {
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--app-border)]" />
             <div className="flex items-center justify-between"><div><h2 className="text-base font-bold">ตัวกรอง</h2><p className="mt-0.5 text-[11px] text-[var(--app-text-secondary)]">ช่วงวันที่และร้านค้า</p></div><button type="button" onClick={() => setFilterOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg">×</button></div>
             <div className="mt-4 space-y-3">
-              <label><span className="mb-1 block text-[11px] font-semibold text-[var(--app-text-secondary)]">จากวันที่</span><input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={inputClass} /></label>
-              <label><span className="mb-1 block text-[11px] font-semibold text-[var(--app-text-secondary)]">ถึงวันที่</span><input type="date" value={to} onChange={(event) => setTo(event.target.value)} className={inputClass} /></label>
+              <UnifiedPeriodPicker dateFrom={from} dateTo={to} language={"th"} onApply={(start, end) => { setFrom(start); setTo(end); }} />
               {user.role === "ADMIN" && <label><span className="mb-1 block text-[11px] font-semibold text-[var(--app-text-secondary)]">ร้านค้า</span><select value={storeId} onChange={(event) => setStoreId(event.target.value)} className={inputClass}><option value="">ทุกร้านที่มีสิทธิ์</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}</select></label>}
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => { setFrom(""); setTo(""); setStoreId(""); }} className="min-h-12 rounded-xl border border-[var(--app-border)] text-sm font-bold">ล้าง</button><button type="button" onClick={() => void applyFilters()} className="min-h-12 rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white">นำไปใช้</button></div>

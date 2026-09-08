@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { DateRangePicker } from "../../follower-insights/date-range-picker";
+import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
 import { getBkkDateStr } from "../../follower-insights/follower-insights-utils";
 import { pickLanguageText, useAppLanguage, type AppLanguage } from "../../language";
 import {
@@ -124,7 +124,6 @@ export function MobileMessageTrafficApp() {
   const [authChecked, setAuthChecked] = useState(false);
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
-  const [quickDays, setQuickDays] = useState<number | null>(30);
   const [data, setData] = useState<MessageTrafficResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,15 +162,7 @@ export function MobileMessageTrafficApp() {
 
   useEffect(() => { if (user) void loadRange(dateFrom, dateTo); }, [dateFrom, dateTo, loadRange, user]);
 
-  const applyQuickRange = useCallback((days: number) => {
-    const range = quickRange(days);
-    setQuickDays(days);
-    setDateFrom(range.from);
-    setDateTo(range.to);
-  }, []);
-
   const applyCalendarRange = useCallback((start: string, end: string) => {
-    setQuickDays(null);
     setDateFrom(start);
     setDateTo(end);
   }, []);
@@ -197,11 +188,8 @@ export function MobileMessageTrafficApp() {
       <MobilePageHeader eyebrow={text.eyebrow} title={text.title} description={text.description} action={<button type="button" disabled={loading} onClick={() => void loadRange(dateFrom, dateTo)} className="min-h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-semibold disabled:opacity-50">{text.refresh}</button>} />
 
       <div className="space-y-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3">
-        <div className="grid grid-cols-3 rounded-xl bg-[var(--app-surface-subtle)] p-1">
-          {[7, 14, 30].map((days) => <button key={days} type="button" disabled={loading} onClick={() => applyQuickRange(days)} className={`min-h-10 rounded-lg text-xs font-bold ${quickDays === days ? "bg-[var(--app-accent)] text-white shadow-sm" : "text-[var(--app-text-secondary)]"}`}>{days}D</button>)}
-        </div>
         <div className="[&>div]:block [&>div>button]:w-full [&>div>button]:justify-between">
-          <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={applyCalendarRange} onQuickRange={applyQuickRange} />
+          <DateRangePicker disabled={loading} dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={applyCalendarRange} />
         </div>
       </div>
 

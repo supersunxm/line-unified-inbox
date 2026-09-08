@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { ByStoreAccountRow, SummaryDailyRow, SyncBatchResult } from "@/types/api";
-import { DateRangePicker } from "./date-range-picker";
+import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
 import { DailySummaryTable } from "./daily-summary-table";
 import { StoreBreakdownTable } from "./store-breakdown-table";
 import { TrendChart } from "./trend-chart";
@@ -241,16 +241,6 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
     }
   };
 
-  const applyQuickRange = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - (days - 1));
-    const sStr = getBkkDateStr(start);
-    const eStr = getBkkDateStr(end);
-    setDateFrom(sStr);
-    setDateTo(eStr);
-  };
-
   const { readyDates, partialDates, missingDates } = useMemo(() => {
     const ready = new Set<string>();
     const partial = new Set<string>();
@@ -417,37 +407,6 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
 
           {/* Date Controls & Sync Button */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Quick Range Pills */}
-            <div className="flex items-center rounded-xl bg-[var(--input-background)] border border-[var(--border)] p-1">
-              <button
-                type="button"
-                onClick={() => applyQuickRange(7)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 7 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
-                }`}
-              >
-                7D
-              </button>
-              <button
-                type="button"
-                onClick={() => applyQuickRange(14)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 14 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
-                }`}
-              >
-                14D
-              </button>
-              <button
-                type="button"
-                onClick={() => applyQuickRange(30)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  totalCalendarDays === 30 ? "bg-blue-600 text-white shadow-sm" : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--hover)]"
-                }`}
-              >
-                30D
-              </button>
-            </div>
-
             {/* Custom Date Range Picker Component */}
             <DateRangePicker
               dateFrom={dateFrom}
@@ -460,7 +419,6 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
                 setDateFrom(start);
                 setDateTo(end);
               }}
-              onQuickRange={applyQuickRange}
             />
 
             {hasMissingDates ? (

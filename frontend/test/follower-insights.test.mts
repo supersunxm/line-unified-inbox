@@ -189,7 +189,7 @@ test("Every locale (en, th, zh) exposes the exact same complete set of translati
 
 test("Live locale switching updates rendered UI elements instantly across en, th, and zh without reload", () => {
   const viewCode = readFileSync(new URL("../src/app/follower-insights/follower-insights-view.tsx", import.meta.url), "utf8");
-  const pickerCode = readFileSync(new URL("../src/app/follower-insights/date-range-picker.tsx", import.meta.url), "utf8");
+  const pickerCode = readFileSync(new URL("../src/components/date-range/unified-period-picker.tsx", import.meta.url), "utf8");
   const tableCode = readFileSync(new URL("../src/app/follower-insights/store-breakdown-table.tsx", import.meta.url), "utf8");
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 

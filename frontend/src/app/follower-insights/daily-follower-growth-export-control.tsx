@@ -1,5 +1,7 @@
 "use client";
 
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { ByStoreAccountRow } from "@/types/api";
@@ -124,15 +126,8 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--hover)]">×</button>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <label className="text-sm text-[var(--foreground)]">
-                <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{text.from}</span>
-                <input type="date" value={dateFrom} max={dateTo} onChange={(e) => setDateFrom(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-background)] px-3 py-2" />
-              </label>
-              <label className="text-sm text-[var(--foreground)]">
-                <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{text.to}</span>
-                <input type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} className="w-full rounded-xl border border-[var(--border)] bg-[var(--input-background)] px-3 py-2" />
-              </label>
+            <div className="mt-5">
+              <UnifiedPeriodPicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={(start, end) => { setDateFrom(start); setDateTo(end); }} />
             </div>
 
             <div className="mt-4">

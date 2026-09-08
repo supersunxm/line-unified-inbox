@@ -22,7 +22,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
-import { DateRangePicker } from "../../follower-insights/date-range-picker";
+import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
 import { getBkkDateStr } from "../../follower-insights/follower-insights-utils";
 import { pickLanguageText, useAppLanguage, type AppLanguage } from "../../language";
 
@@ -128,7 +128,6 @@ export function MessageTrafficView() {
   const [authChecked, setAuthChecked] = useState(false);
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
-  const [quickDays, setQuickDays] = useState<number | null>(30);
   const [data, setData] = useState<MessageTrafficResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,18 +140,9 @@ export function MessageTrafficView() {
     finally { setLoading(false); }
   }, [text.apiError, text.loadError]);
 
-  const applyQuickRange = useCallback((days: number) => {
-    const range = quickRange(days);
-    setDateFrom(range.from);
-    setDateTo(range.to);
-    setQuickDays(days);
-    void loadRange(range.from, range.to);
-  }, [loadRange]);
-
   const applyCalendarRange = useCallback((start: string, end: string) => {
     setDateFrom(start);
     setDateTo(end);
-    setQuickDays(null);
     void loadRange(start, end);
   }, [loadRange]);
 
@@ -203,10 +193,7 @@ export function MessageTrafficView() {
 
           <FilterBar>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-sm">
-                {[7, 14, 30].map((days) => <button key={days} type="button" onClick={() => applyQuickRange(days)} disabled={loading} className={`min-w-14 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${quickDays === days ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"}`}>{days}D</button>)}
-              </div>
-              <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={applyCalendarRange} onQuickRange={applyQuickRange} />
+              <DateRangePicker disabled={loading} dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={applyCalendarRange} />
             </div>
           </FilterBar>
 
