@@ -10,6 +10,7 @@ const RECOVERY_SESSION_KEY = "profile-b";
 const DEFAULT_TTL_MS = 12 * 60 * 1000;
 const DISPLAY = ":99";
 const VNC_PORT = 5900;
+const WEBSOCKIFY_PORT = 6080;
 
 export interface LineChatNovncRecoverySnapshot {
   active: boolean;
@@ -61,33 +62,21 @@ export class LineChatNovncRecoveryWorkerService {
   }
 
   public authorize(token: string): boolean {
-    return Boolean(
-      this.active
-      && this.active.token === token
-      && this.active.expiresAt.getTime() > Date.now(),
-    );
+    return Boolean(this.active && this.active.token === token && this.active.expiresAt.getTime() > Date.now());
   }
 
   public async start(sessionKey: string): Promise<LineChatNovncRecoverySnapshot> {
-    if (sessionKey !== RECOVERY_SESSION_KEY) {
-      throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
-    }
+    if (sessionKey !== RECOVERY_SESSION_KEY) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
     const current = this.snapshot();
     if (current.active) return current;
     if (this.startPromise) return this.startPromise;
-
-    this.startPromise = this.startInternal().finally(() => {
-      this.startPromise = null;
-    });
+    this.startPromise = this.startInternal().finally(() => { this.startPromise = null; });
     return this.startPromise;
   }
 
   public async stop(sessionKey: string, reason = "operator_stop"): Promise<LineChatNovncRecoverySnapshot> {
-    if (sessionKey !== RECOVERY_SESSION_KEY) {
-      throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
-    }
-    const active = this.active;
-    if (active) await active.stop(reason);
+    if (sessionKey !== RECOVERY_SESSION_KEY) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (this.active) await this.active.stop(reason);
     return this.snapshot();
   }
 
@@ -97,7 +86,6 @@ export class LineChatNovncRecoveryWorkerService {
       select: { id: true, sessionKey: true, profileStorageKey: true, profilePath: true },
     });
     if (!session) throw new Error("RECOVERY_SESSION_NOT_FOUND");
-
     const profilePath = this.sessionService.resolveProfilePath(session);
     if (!fs.existsSync(profilePath)) throw new Error("RECOVERY_PROFILE_MISSING");
 
@@ -116,14 +104,12 @@ export class LineChatNovncRecoveryWorkerService {
         let stopResolve!: () => void;
         const stoppedPromise = new Promise<void>((resolve) => { stopResolve = resolve; });
         const token = randomBytes(32).toString("base64url");
-        const ttlMs = Math.min(15 * 60 * 1000, Math.max(5 * 60 * 1000, Number(process.env.LINE_CHAT_NOVNC_TTL_MS || DEFAULT_TTL_MS)));
+        const requestedTtl = Number(process.env.LINE_CHAT_NOVNC_TTL_MS || DEFAULT_TTL_MS);
+        const ttlMs = Math.min(15 * 60 * 1000, Math.max(5 * 60 * 1000, Number.isFinite(requestedTtl) ? requestedTtl : DEFAULT_TTL_MS));
         const expiresAt = new Date(Date.now() + ttlMs);
 
         const spawnManaged = (command: string, args: string[], env?: NodeJS.ProcessEnv) => {
-          const child = spawn(command, args, {
-            env: { ...process.env, ...env },
-            stdio: ["ignore", "ignore", "pipe"],
-          });
+          const child = spawn(command, args, { env: { ...process.env, ...env }, stdio: ["ignore", "ignore", "pipe"] });
           children.push(child);
           child.stderr?.on("data", () => undefined);
           return child;
@@ -132,19 +118,11 @@ export class LineChatNovncRecoveryWorkerService {
         const cleanup = async (reason: string) => {
           if (stopped) return;
           stopped = true;
-          for (const child of [...children].reverse()) {
-            if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
-          }
+          for (const child of [...children].reverse()) if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
           await Promise.all(children.map((child) => waitForExit(child)));
-          for (const child of children) {
-            if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
-          }
+          for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
           if (this.active?.token === token) this.active = null;
-          this.logger.log(JSON.stringify({
-            event: "line_chat_novnc_recovery_stopped",
-            sessionKey: RECOVERY_SESSION_KEY,
-            reason,
-          }));
+          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_stopped", sessionKey: RECOVERY_SESSION_KEY, reason }));
           stopResolve();
         };
 
@@ -154,7 +132,8 @@ export class LineChatNovncRecoveryWorkerService {
           await new Promise((resolve) => setTimeout(resolve, 500));
           spawnManaged("fluxbox", [], { DISPLAY });
           spawnManaged("x11vnc", ["-display", DISPLAY, "-localhost", "-forever", "-shared", "-nopw", "-rfbport", String(VNC_PORT)]);
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          spawnManaged("websockify", [`127.0.0.1:${WEBSOCKIFY_PORT}`, `127.0.0.1:${VNC_PORT}`, "--web=/usr/share/novnc"]);
+          await new Promise((resolve) => setTimeout(resolve, 750));
           const chrome = spawnManaged("chromium", [
             `--user-data-dir=${profilePath}`,
             "--no-sandbox",
@@ -165,19 +144,10 @@ export class LineChatNovncRecoveryWorkerService {
           ], { DISPLAY });
           chrome.once("exit", () => void cleanup("browser_exit"));
 
-          this.active = {
-            token,
-            expiresAt,
-            stop: cleanup,
-          };
+          this.active = { token, expiresAt, stop: cleanup };
           const timer = setTimeout(() => void cleanup("ttl_expired"), ttlMs);
           timer.unref?.();
-
-          this.logger.log(JSON.stringify({
-            event: "line_chat_novnc_recovery_started",
-            sessionKey: RECOVERY_SESSION_KEY,
-            expiresAt: expiresAt.toISOString(),
-          }));
+          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_started", sessionKey: RECOVERY_SESSION_KEY, expiresAt: expiresAt.toISOString() }));
           resolveStarted(this.snapshot());
           await stoppedPromise;
           clearTimeout(timer);
@@ -189,9 +159,7 @@ export class LineChatNovncRecoveryWorkerService {
       },
     ).then((result) => {
       if (!result.acquired) rejectStarted(new Error("PROFILE_OPERATION_BUSY"));
-    }).catch((error: unknown) => {
-      rejectStarted(error instanceof Error ? error : new Error(String(error)));
-    });
+    }).catch((error: unknown) => rejectStarted(error instanceof Error ? error : new Error(String(error))));
 
     return started;
   }
