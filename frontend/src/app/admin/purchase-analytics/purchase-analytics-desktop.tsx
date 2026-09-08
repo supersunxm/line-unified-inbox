@@ -1,5 +1,7 @@
 "use client";
 
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageContainer, PageHeader, FilterBar } from "@/components/shell";
@@ -382,24 +384,7 @@ export default function PurchaseAnalyticsPage() {
 
           <FilterBar>
             <div className="flex flex-wrap items-center gap-3">
-              <label className="text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
-                <span>From</span>
-                <input
-                  type="date"
-                  value={from}
-                  onChange={(event) => setFrom(event.target.value)}
-                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                />
-              </label>
-              <label className="text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
-                <span>To</span>
-                <input
-                  type="date"
-                  value={to}
-                  onChange={(event) => setTo(event.target.value)}
-                  className="h-8 rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
-                />
-              </label>
+              <UnifiedPeriodPicker dateFrom={from} dateTo={to} language={"en"} onApply={(start, end) => { setFrom(start); setTo(end); }} />
               {authUser.role === "ADMIN" && (
                 <label className="min-w-48 text-xs font-medium text-[var(--app-text-secondary)] flex items-center gap-1.5">
                   <span>Store</span>

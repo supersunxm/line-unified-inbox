@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { ByStoreAccountRow, SummaryDailyRow } from "@/types/api";
 import { pickLanguageText, useAppLanguage, type AppLanguage } from "../language";
-import { DateRangePicker } from "./date-range-picker";
+import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
 import { formatDateDisplay, getBkkDateStr } from "./follower-insights-utils";
 
 type AuthUser = {
@@ -189,14 +189,6 @@ export function MobileFollowerInsightsApp() {
 
   useEffect(() => { if (user) void loadData(dateFrom, dateTo); }, [dateFrom, dateTo, loadData, user]);
 
-  const applyQuickRange = useCallback((days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - (days - 1));
-    setDateFrom(getBkkDateStr(start));
-    setDateTo(getBkkDateStr(end));
-  }, []);
-
   const readyDates = useMemo(() => new Set(summary.filter((row) => row.accountsExpected > 0 && row.accountsReady === row.accountsExpected && row.followers !== null).map((row) => row.date)), [summary]);
   const partialDates = useMemo(() => new Set(summary.filter((row) => (row.accountsWithData ?? 0) > 0 && row.accountsReady !== row.accountsExpected).map((row) => row.date)), [summary]);
   const missingDates = useMemo(() => new Set(summary.filter((row) => (row.accountsWithData ?? 0) === 0 || row.followers === null).map((row) => row.date)), [summary]);
@@ -260,11 +252,8 @@ export function MobileFollowerInsightsApp() {
           <button type="button" onClick={() => void loadData(dateFrom, dateTo)} aria-label={text.refresh} title={text.refresh} className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-lg">↻</button>
         </div>
         <div className="mt-3 flex gap-2">
-          <div className="grid shrink-0 grid-cols-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-1">
-            {[7, 14, 30].map((days) => <button key={days} type="button" onClick={() => applyQuickRange(days)} className="min-h-9 rounded-lg px-3 text-xs font-bold active:bg-[var(--app-surface-hover)]">{days}D</button>)}
-          </div>
           <div className="min-w-0 flex-1 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-between [&>div>button]:px-3">
-            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} readyDates={readyDates} partialDates={partialDates} missingDates={missingDates} language={language} onApply={(from, to) => { setDateFrom(from); setDateTo(to); }} onQuickRange={applyQuickRange} />
+            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} readyDates={readyDates} partialDates={partialDates} missingDates={missingDates} language={language} onApply={(from, to) => { setDateFrom(from); setDateTo(to); }} />
           </div>
         </div>
       </header>

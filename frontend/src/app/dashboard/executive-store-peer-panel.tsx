@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Period = "today" | "7d" | "30d";
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+import { periodForRange, rangeForPreset } from "./dashboard-date-range";
 type WatchIssue = "reach" | "block" | "inactive";
 
 type StoreHealthRow = {
@@ -45,6 +46,7 @@ type ExecutiveStoreHealth = {
 };
 
 type Props = {
+  language: "th" | "en" | "zh";
   getStoreDisplayName: (name: string) => string;
   onOpenStore: (storeId: string) => void;
 };
@@ -83,8 +85,8 @@ function SelectFilter({
   );
 }
 
-export function ExecutiveStorePeerPanel({ getStoreDisplayName, onOpenStore }: Props) {
-  const [period, setPeriod] = useState<Period>("7d");
+export function ExecutiveStorePeerPanel({ language, getStoreDisplayName, onOpenStore }: Props) {
+  const [dateRange, setDateRange] = useState(() => rangeForPreset("7d"));
   const [tier, setTier] = useState("");
   const [kpiPlan, setKpiPlan] = useState("");
   const [area, setArea] = useState("");
@@ -96,7 +98,7 @@ export function ExecutiveStorePeerPanel({ getStoreDisplayName, onOpenStore }: Pr
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ period });
+      const params = new URLSearchParams({ period: periodForRange(dateRange), ...dateRange });
       if (tier) params.set("tier", tier);
       if (kpiPlan) params.set("kpiPlan", kpiPlan);
       if (area) params.set("area", area);
@@ -113,7 +115,7 @@ export function ExecutiveStorePeerPanel({ getStoreDisplayName, onOpenStore }: Pr
     } finally {
       setLoading(false);
     }
-  }, [area, bm, kpiPlan, period, tier]);
+  }, [area, bm, kpiPlan, dateRange, tier]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -171,15 +173,10 @@ export function ExecutiveStorePeerPanel({ getStoreDisplayName, onOpenStore }: Pr
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        <label className="min-w-0 text-[11px] font-semibold text-[var(--dash-text-secondary)]">
-          <span className="mb-1 block">ช่วงข้อมูล</span>
-          <select value={period} onChange={(event) => setPeriod(event.target.value as Period)} className="h-10 w-full rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-3 text-sm font-medium text-[var(--dash-text)] outline-none focus:border-[var(--dash-accent)]">
-            <option value="today">วันนี้</option>
-            <option value="7d">7 วัน</option>
-            <option value="30d">30 วัน</option>
-          </select>
-        </label>
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 sm:col-span-2 xl:col-span-4">
+          <UnifiedPeriodPicker dateFrom={dateRange.dateFrom} dateTo={dateRange.dateTo} language={language} onApply={(dateFrom, dateTo) => setDateRange({ dateFrom, dateTo })} />
+        </div>
         <SelectFilter label="Tier" value={tier} options={data?.filterOptions.tiers ?? []} onChange={setTier} />
         <SelectFilter label="KPI Plan" value={kpiPlan} options={data?.filterOptions.kpiPlans ?? []} onChange={setKpiPlan} />
         <SelectFilter label="Area" value={area} options={data?.filterOptions.areas ?? []} onChange={setArea} />

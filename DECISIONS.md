@@ -2016,3 +2016,11 @@ Production session cookies are opaque random tokens stored hashed in PostgreSQL 
 # Dashboard backend reconciliation — 2026-09-05
 
 Merge current main into a new branch descended from exact commit 360e55d, preserving both production histories. Deploy only the backend; keep the existing frontend branch. Failure stages use an explicit allowlist because a RESOLVE_ prefix alone does not guarantee safe output.
+
+## 2026-09-08: Share the existing analytics calendar and centralize preset selection
+
+Refactor the Follower Insights calendar into `components/date-range/unified-period-picker.tsx` and retain its existing coverage indicators and en/th/zh translation source. Preserve the existing `dateFrom`, `dateTo`, and `onApply(start, end)` contract so consumers keep their current API adapters. Presets are computed centrally with UTC calendar arithmetic relative to Bangkok today; active state compares both committed endpoints, avoiding false preset activation for historical ranges. Dashboard period hints are derived from the committed range while exact ISO dates remain authoritative.
+
+Render the existing popover through a portal, anchored to the trigger and clamped to the viewport, so table/card/export-modal overflow cannot clip it. Use app theme tokens, two calendar months on desktop, one on mobile, and visible next-month navigation at either size. Reject a draft end date beyond 90 inclusive days before it can be committed. Cancel/Escape/outside dismissal preserve the committed range.
+
+Leave operational backfill date fields, coupon schedule datetimes, and fixed Google Review business-period selectors intact because they are not arbitrary reporting date ranges. After rebasing onto the main revision that introduced `/replymessage`, use the same shared picker in `Store24hResponsePanel`; preserve its search, authorization, chat navigation, responsive table/cards, and existing 24-hour response endpoint and business logic.

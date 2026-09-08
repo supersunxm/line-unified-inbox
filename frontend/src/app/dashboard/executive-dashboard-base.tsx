@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardAnalyticsResponse } from "@/types/api";
-import { DateRangePicker } from "@/app/follower-insights/date-range-picker";
-import { getBangkokIsoDate, rangeForPreset, shiftIsoDate, type DashboardDateRange } from "./dashboard-date-range";
+import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
+import { periodForRange, rangeForPreset, type DashboardDateRange } from "./dashboard-date-range";
 
 type Language = "th" | "en" | "zh";
 type Period = "today" | "7d" | "30d";
@@ -179,7 +179,6 @@ export function ExecutiveDashboardV2({
 }: ExecutiveDashboardV2Props) {
   const [period, setPeriod] = useState<Period>("7d");
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => rangeForPreset("7d"));
-  const [customRangeActive, setCustomRangeActive] = useState(false);
   const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null);
   const [health, setHealth] = useState<ExecutiveStoreHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,31 +221,9 @@ export function ExecutiveDashboardV2({
     };
   }, [load, period, dateRange]);
 
-  const applyPreset = useCallback((nextPeriod: Period) => {
-    setPeriod(nextPeriod);
-    setDateRange(rangeForPreset(nextPeriod));
-    setCustomRangeActive(false);
-  }, []);
-
   const applyCustomRange = useCallback((dateFrom: string, dateTo: string) => {
     setDateRange({ dateFrom, dateTo });
-    setCustomRangeActive(true);
-  }, []);
-
-  const applyQuickDays = useCallback((days: number) => {
-    const today = getBangkokIsoDate();
-    const nextRange = { dateFrom: shiftIsoDate(today, -(days - 1)), dateTo: today };
-    setDateRange(nextRange);
-    if (days === 7) {
-      setPeriod("7d");
-      setCustomRangeActive(false);
-    } else if (days === 30) {
-      setPeriod("30d");
-      setCustomRangeActive(false);
-    } else {
-      setPeriod("30d");
-      setCustomRangeActive(true);
-    }
+    setPeriod(periodForRange({ dateFrom, dateTo }));
   }, []);
 
   const replyBuckets = useMemo<ReplyBucket[]>(() => {
@@ -340,24 +317,11 @@ export function ExecutiveDashboardV2({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <span className="text-xs text-[var(--dash-text-tertiary)]">อัปเดตล่าสุด {formatUpdatedAt(updatedAt)}</span>
-            <div className="flex gap-0.5 rounded-[10px] border border-[var(--dash-border)] bg-[var(--dash-card)] p-[3px]">
-              {(["today", "7d", "30d"] as Period[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => applyPreset(item)}
-                  className={`rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium transition ${period === item && !customRangeActive ? "bg-[var(--dash-accent)] font-semibold text-white" : "text-[var(--dash-text-secondary)] hover:bg-[var(--dash-accent-soft)]"}`}
-                >
-                  {item === "today" ? "วันนี้" : item === "7d" ? "7 วัน" : "30 วัน"}
-                </button>
-              ))}
-            </div>
             <DateRangePicker
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
               language={language}
               onApply={applyCustomRange}
-              onQuickRange={applyQuickDays}
             />
           </div>
         </header>

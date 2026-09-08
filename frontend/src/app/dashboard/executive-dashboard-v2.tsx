@@ -21,10 +21,12 @@ interface ExecutiveDashboardV2Props {
 }
 
 function StorePeerPanelPortal({
+  language,
   rootRef,
   getStoreDisplayName,
   onOpenStore,
 }: {
+  language: Language;
   rootRef: RefObject<HTMLDivElement | null>;
   getStoreDisplayName: (name: string) => string;
   onOpenStore: (storeId: string) => void;
@@ -60,6 +62,7 @@ function StorePeerPanelPortal({
   if (!mountNode) return null;
   return createPortal(
     <ExecutiveStorePeerPanel
+      language={language}
       getStoreDisplayName={getStoreDisplayName}
       onOpenStore={onOpenStore}
     />,
@@ -84,6 +87,7 @@ export function ExecutiveDashboardV2({
         lastUpdatedAt={lastUpdatedAt}
       />
       <StorePeerPanelPortal
+        language={language}
         rootRef={rootRef}
         getStoreDisplayName={getStoreDisplayName}
         onOpenStore={onOpenStore}

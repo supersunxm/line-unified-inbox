@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { rangeForPreset, type DashboardDateRange, type DashboardPeriod } from "./dashboard-date-range";
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+import { rangeForPreset, type DashboardDateRange } from "./dashboard-date-range";
 
 type Store24hRow = {
   storeId: string;
@@ -34,15 +35,6 @@ type Props = {
   onOpenStore: (storeId: string) => void;
 };
 
-type PeriodChoice = DashboardPeriod | "custom";
-
-const PERIOD_LABELS: Array<{ value: PeriodChoice; label: string }> = [
-  { value: "today", label: "วันนี้" },
-  { value: "7d", label: "7 วัน" },
-  { value: "30d", label: "30 วัน" },
-  { value: "custom", label: "กำหนดเอง" },
-];
-
 function rateLabel(value: number | null) {
   return value === null ? "—" : `${value.toFixed(1)}%`;
 }
@@ -54,33 +46,14 @@ function toneClass(value: number | null) {
   return "text-[var(--dash-red)]";
 }
 
-function isRangeValid(range: DashboardDateRange) {
-  const from = new Date(`${range.dateFrom}T00:00:00Z`).getTime();
-  const to = new Date(`${range.dateTo}T00:00:00Z`).getTime();
-  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return false;
-  return Math.floor((to - from) / 86_400_000) + 1 <= 90;
-}
-
 export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Props) {
-  const [period, setPeriod] = useState<PeriodChoice>("7d");
   const [range, setRange] = useState<DashboardDateRange>(() => rangeForPreset("7d"));
   const [data, setData] = useState<Store24hResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const applyPeriod = (next: PeriodChoice) => {
-    setPeriod(next);
-    if (next !== "custom") setRange(rangeForPreset(next));
-  };
-
   const load = useCallback(async () => {
-    if (!isRangeValid(range)) {
-      setError("ช่วงวันที่ต้องไม่เกิน 90 วัน และวันที่เริ่มต้องไม่เกินวันที่สิ้นสุด");
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     try {
       const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
@@ -139,46 +112,13 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
       <div className="mt-4 flex flex-col gap-3 rounded-xl border border-[var(--dash-border)] bg-[var(--dash-bg)] p-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="min-w-0 flex-1">
           <div className="mb-1 text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">ช่วงข้อมูล</div>
-          <div className="flex flex-wrap gap-1.5">
-            {PERIOD_LABELS.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => applyPeriod(item.value)}
-                className={`h-9 rounded-lg px-3 text-xs font-bold transition ${
-                  period === item.value
-                    ? "bg-[var(--dash-accent)] text-white"
-                    : "border border-[var(--dash-border)] bg-[var(--dash-card)] text-[var(--dash-text-secondary)] hover:text-[var(--dash-text)]"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <UnifiedPeriodPicker
+            dateFrom={range.dateFrom}
+            dateTo={range.dateTo}
+            language="th"
+            onApply={(dateFrom, dateTo) => setRange({ dateFrom, dateTo })}
+          />
         </div>
-
-        {period === "custom" && (
-          <div className="flex flex-wrap gap-2">
-            <label className="text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
-              <span className="mb-1 block">ตั้งแต่</span>
-              <input
-                type="date"
-                value={range.dateFrom}
-                onChange={(event) => setRange((current) => ({ ...current, dateFrom: event.target.value }))}
-                className="h-9 rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-2.5 text-xs text-[var(--dash-text)] outline-none focus:border-[var(--dash-accent)]"
-              />
-            </label>
-            <label className="text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
-              <span className="mb-1 block">ถึง</span>
-              <input
-                type="date"
-                value={range.dateTo}
-                onChange={(event) => setRange((current) => ({ ...current, dateTo: event.target.value }))}
-                className="h-9 rounded-lg border border-[var(--dash-border)] bg-[var(--dash-card)] px-2.5 text-xs text-[var(--dash-text)] outline-none focus:border-[var(--dash-accent)]"
-              />
-            </label>
-          </div>
-        )}
 
         <label className="min-w-[200px] text-[10.5px] font-semibold text-[var(--dash-text-secondary)]">
           <span className="mb-1 block">ค้นหาร้าน</span>
