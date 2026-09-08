@@ -73,6 +73,13 @@ function toTarget(store: StoreTarget): StoreTarget {
   };
 }
 
+/**
+ * Reconcile Store metadata using Store.code as the canonical Store ID.
+ *
+ * If Store.code exists, it always wins over an existing StoreMaster relation.
+ * The relation may be stale; the Store ID must never be rewritten to match it.
+ * Only legacy Stores without a Store ID may recover identity from StoreMaster.
+ */
 async function reconcileStoreMetadataByStoreId(
   prisma: PrismaClient,
   dryRun: boolean,
@@ -102,27 +109,37 @@ async function reconcileStoreMetadataByStoreId(
 
   for (const store of stores) {
     try {
-      let master: Pick<StoreMaster, "id" | "externalStoreId" | "storeName" | "region" | "province"> | null =
-        store.storeMaster?.isActive ? store.storeMaster : null;
-      if (!master && store.code?.trim()) {
-        master = await uniqueMasterByExternalStoreId(prisma, store.code);
+      const currentStoreId = store.code?.trim() || null;
+      let master: Pick<StoreMaster, "id" | "externalStoreId" | "storeName" | "region" | "province"> | null = null;
+
+      // Canonical rule: an existing Store ID wins over every other identifier.
+      if (currentStoreId) {
+        master = await uniqueMasterByExternalStoreId(prisma, currentStoreId);
+        if (!master) {
+          report.missingStoreMaster++;
+          continue;
+        }
+      } else if (store.storeMaster?.isActive) {
+        master = store.storeMaster;
       }
       if (!master) continue;
 
       const canonicalStoreId = master.externalStoreId?.trim() || null;
       if (!canonicalStoreId) continue;
 
-      let nextCode = store.code?.trim() || null;
-      if (nextCode !== canonicalStoreId) {
+      // Never alter an established Store ID to follow a stale relation.
+      // Filling an empty legacy Store.code is allowed only when the canonical ID is free.
+      let nextCode = currentStoreId;
+      if (!nextCode) {
         const occupied = await prisma.store.findUnique({
           where: { code: canonicalStoreId },
           select: { id: true },
         });
         if (occupied && occupied.id !== store.id) {
           report.storeIdConflicts++;
-        } else {
-          nextCode = canonicalStoreId;
+          continue;
         }
+        nextCode = canonicalStoreId;
       }
 
       const changed =
@@ -168,8 +185,6 @@ export async function syncConnectedLineOaMetadata(
     storeIdConflicts: 0,
   };
 
-  // Store ID is canonical. Repair Store metadata first so all downstream lookups
-  // and exports see the Store Master values for that exact branch identifier.
   await reconcileStoreMetadataByStoreId(prisma, dryRun, report);
 
   const accounts = await prisma.lineOfficialAccount.findMany({
@@ -197,27 +212,25 @@ export async function syncConnectedLineOaMetadata(
     report.processed++;
 
     try {
-      const currentCode = account.store.code?.trim() || null;
+      const currentStoreId = account.store.code?.trim() || null;
       const linkedMasterStoreId = account.store.storeMaster?.externalStoreId?.trim() || null;
-      const hasCanonicalStoreIdentity = Boolean(
-        account.store.storeMasterId || linkedMasterStoreId || currentCode,
-      );
+      const hasCanonicalStoreIdentity = Boolean(currentStoreId);
 
       let master: StoreMaster | null = null;
-      if (account.store.storeMasterId) {
+
+      // Same invariant as Store reconciliation: Store ID wins over stale relation.
+      if (currentStoreId) {
+        master = await uniqueMasterByExternalStoreId(prisma, currentStoreId);
+      } else if (account.store.storeMasterId) {
         master = await prisma.storeMaster.findFirst({
           where: { id: account.store.storeMasterId, isActive: true },
         });
       }
-      if (!master && linkedMasterStoreId) {
+      if (!master && !currentStoreId && linkedMasterStoreId) {
         master = await uniqueMasterByExternalStoreId(prisma, linkedMasterStoreId);
       }
-      if (!master && currentCode) {
-        master = await uniqueMasterByExternalStoreId(prisma, currentCode);
-      }
 
-      // LINE identity is only a legacy recovery path when the Store has no Store ID.
-      // It can never move an already identified branch to a different Store ID.
+      // LINE identity is a final legacy recovery path only when Store ID is absent.
       if (!master && !hasCanonicalStoreIdentity) {
         master = await uniqueMasterByLineIdentity(prisma, account.basicId);
         if (!master) master = await uniqueMasterByAccountName(prisma, account.name);
@@ -247,7 +260,8 @@ export async function syncConnectedLineOaMetadata(
         if (recovered) targetStore = recovered;
       }
 
-      const targetCode = masterCode || targetStore.code?.trim() || null;
+      // Established Store ID never changes. Empty legacy code may be filled.
+      const targetCode = targetStore.code?.trim() || masterCode;
       const metadataChanged =
         targetStore.storeMasterId !== master.id ||
         targetStore.code !== targetCode ||
@@ -265,7 +279,7 @@ export async function syncConnectedLineOaMetadata(
       if (dryRun) continue;
 
       if (metadataChanged) {
-        if (targetCode && targetCode !== targetStore.code) {
+        if (!targetStore.code && targetCode) {
           const occupied = await prisma.store.findUnique({
             where: { code: targetCode },
             select: { id: true },
