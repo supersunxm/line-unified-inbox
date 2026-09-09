@@ -28,6 +28,13 @@ export class FixRetryableJobsDto {
   sessionKey!: string;
 }
 
+export class RunProgressDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  jobIds!: string[];
+}
+
 @Controller("operations/line-chat-nickname")
 @UseGuards(AuthGuard)
 @Roles(UserRole.ADMIN)
@@ -88,6 +95,11 @@ export class LineChatOperationsController {
   @Post("sessions/:sessionKey/pending-control/resume")
   async resumePending(@Param("sessionKey") sessionKey: string) {
     return this.pendingControl.resume(sessionKey.trim());
+  }
+
+  @Post("sessions/:sessionKey/pending-control/run-progress")
+  async getRunProgress(@Param("sessionKey") sessionKey: string, @Body() body: RunProgressDto) {
+    return this.pendingControl.runProgress(sessionKey.trim(), body.jobIds);
   }
 
   @Get("sessions/:sessionKey/manual-recovery")
