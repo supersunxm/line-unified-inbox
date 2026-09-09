@@ -2,7 +2,7 @@ import playwright from "playwright";
 const { chromium } = playwright;
 import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { collectStoreContinuous, getTodayBangkokDate } from "./continuous-collector.mjs";
-import { offsetBangkokDate } from "./date-classifier.mjs";
+import { offsetBangkokDate, resolveWeekNumberFromDate } from "./date-classifier.mjs";
 
 import {
   buildGoogleReviewLaunchOptions,
@@ -17,6 +17,7 @@ async function upsertDailyByReviewDate({
   storeId,
   storeRating,
   weekPeriodId,
+  weekNumber,
   reviewDate,
   stats,
 }) {
@@ -49,7 +50,7 @@ async function upsertDailyByReviewDate({
       storeId,
       date: reviewDate,
       weekPeriodId,
-      weekNumber: 2,
+      weekNumber,
       storeRating,
       reviewsChecked: stats.reviewsChecked,
       reviewsWithPhoto: stats.reviewsWithPhoto,
@@ -61,18 +62,18 @@ async function upsertDailyByReviewDate({
   });
 }
 
-async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPeriodId }) {
+async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPeriodId, weekNumber }) {
   const allDailiesForStore = await prisma.googleReviewDailyKpi.findMany({
     where: {
       storeCode,
-      weekNumber: 2,
+      weekPeriodId,
     },
   });
 
-  const totalStoreQualifiedWeek2 = allDailiesForStore.reduce((acc, d) => acc + d.qualifiedReviews, 0);
-  const totalStoreCheckedWeek2 = allDailiesForStore.reduce((acc, d) => acc + d.reviewsChecked, 0);
-  const totalStorePhotoWeek2 = allDailiesForStore.reduce((acc, d) => acc + d.reviewsWithPhoto, 0);
-  const totalStoreWordsWeek2 = allDailiesForStore.reduce((acc, d) => acc + d.reviewsOver15ThaiWords, 0);
+  const totalStoreQualified = allDailiesForStore.reduce((acc, d) => acc + d.qualifiedReviews, 0);
+  const totalStoreChecked = allDailiesForStore.reduce((acc, d) => acc + d.reviewsChecked, 0);
+  const totalStorePhoto = allDailiesForStore.reduce((acc, d) => acc + d.reviewsWithPhoto, 0);
+  const totalStoreWords = allDailiesForStore.reduce((acc, d) => acc + d.reviewsOver15ThaiWords, 0);
 
   await prisma.googleReviewWeeklyKpi.upsert({
     where: {
@@ -83,55 +84,66 @@ async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPe
     },
     create: {
       weekPeriodId,
-      weekNumber: 2,
+      weekNumber,
       storeCode,
       storeId,
       storeRating,
-      reviewsChecked: totalStoreCheckedWeek2,
-      reviewsWithPhoto: totalStorePhotoWeek2,
-      reviewsOver15ThaiWords: totalStoreWordsWeek2,
-      qualifiedReviews: totalStoreQualifiedWeek2,
+      reviewsChecked: totalStoreChecked,
+      reviewsWithPhoto: totalStorePhoto,
+      reviewsOver15ThaiWords: totalStoreWords,
+      qualifiedReviews: totalStoreQualified,
       status: GoogleReviewPeriodStatus.OPEN,
       frozenAt: null,
     },
     update: {
       storeRating: storeRating ?? undefined,
-      reviewsChecked: totalStoreCheckedWeek2,
-      reviewsWithPhoto: totalStorePhotoWeek2,
-      reviewsOver15ThaiWords: totalStoreWordsWeek2,
-      qualifiedReviews: totalStoreQualifiedWeek2,
+      reviewsChecked: totalStoreChecked,
+      reviewsWithPhoto: totalStorePhoto,
+      reviewsOver15ThaiWords: totalStoreWords,
+      qualifiedReviews: totalStoreQualified,
       status: GoogleReviewPeriodStatus.OPEN,
     },
   });
 
-  return totalStoreQualifiedWeek2;
+  return totalStoreQualified;
 }
 
 async function main() {
+  const targetReviewDateOverride = process.env.GOOGLE_REVIEW_WRITE_DATE?.trim() || null;
   const todayBangkok = getTodayBangkokDate();
+  const targetWeekNumber = targetReviewDateOverride
+    ? resolveWeekNumberFromDate(targetReviewDateOverride)
+    : resolveWeekNumberFromDate(todayBangkok);
+
   const previousBangkokDate = offsetBangkokDate(todayBangkok, -1);
-  const writableReviewDates = new Set([todayBangkok, previousBangkokDate]);
+  const writableReviewDates = targetReviewDateOverride
+    ? new Set([targetReviewDateOverride])
+    : new Set([todayBangkok, previousBangkokDate]);
 
   console.log("================================================================================");
-  console.log(" DAILY CONTINUOUS TRACKING - WEEKLY GOOGLE REVIEW KPI (65 FOCUS STORES)");
+  console.log(` DAILY CONTINUOUS TRACKING - WEEKLY GOOGLE REVIEW KPI (65 FOCUS STORES) - WEEK ${targetWeekNumber}`);
   console.log(` Target Bangkok Date (Today): ${todayBangkok}`);
-  console.log(` Previous Bangkok Date (late-arrival catch-up): ${previousBangkokDate}`);
+  if (targetReviewDateOverride) {
+    console.log(` [TARGET DATE RECOVERY MODE ACTIVE]: Writing ONLY review date: ${targetReviewDateOverride}`);
+  } else {
+    console.log(` Previous Bangkok Date (late-arrival catch-up): ${previousBangkokDate}`);
+  }
   console.log(` Chrome Profile Directory: ${persistentProfileDir}`);
   console.log(" Fast Stop Rule: 5 consecutive previously-seen reviews stops store scan");
-  console.log(" Review-date attribution: unseen Week 2 reviews are written to their resolved Bangkok review date.");
+  console.log(` Review-date attribution: unseen Week ${targetWeekNumber} reviews are written to their resolved Bangkok review date.`);
   console.log(" Write window: current Bangkok date + previous Bangkok date only; older historical days stay frozen.");
   console.log(" Invariant: Week 1 remains CLOSED (274). Existing fingerprints are never double-counted.");
   console.log(" Single Controlled Cycle: Executes 1 cycle across 65 stores, then halts.");
   console.log("================================================================================\n");
 
-  const week2Period = await prisma.googleReviewWeeklyPeriod.findUnique({
-    where: { weekNumber: 2 },
+  const targetWeekPeriod = await prisma.googleReviewWeeklyPeriod.findUnique({
+    where: { weekNumber: targetWeekNumber },
   });
-  if (!week2Period) {
-    throw new Error("Week 2 Period record not found in database!");
+  if (!targetWeekPeriod) {
+    throw new Error(`Week ${targetWeekNumber} Period record not found in database!`);
   }
-  if (week2Period.status !== GoogleReviewPeriodStatus.OPEN) {
-    throw new Error(`Week 2 Period status is ${week2Period.status}, expected OPEN!`);
+  if (!targetReviewDateOverride && targetWeekPeriod.status !== GoogleReviewPeriodStatus.OPEN) {
+    throw new Error(`Week ${targetWeekNumber} Period status is ${targetWeekPeriod.status}, expected OPEN!`);
   }
 
   const memberships = await prisma.googleReviewWeeklyStoreMembership.findMany({
@@ -173,6 +185,7 @@ async function main() {
     skippedFrozenQualifiedByReviewDate: {},
     storesWithNewReviews: 0,
     fastStopTriggeredStores: 0,
+    skippedFutureDateReviews: 0,
     errors: [],
   };
 
@@ -198,7 +211,11 @@ async function main() {
       storeId: store?.id || null,
       storeName,
       googleMapsUrl,
-    }, { todayBangkok });
+    }, {
+      todayBangkok,
+      targetWeekNumber,
+      targetReviewDateOnly: targetReviewDateOverride,
+    });
 
     summary.storesScanned++;
 
@@ -257,6 +274,7 @@ async function main() {
 
     summary.totalNewReviewsDiscovered += res.newReviewsDiscovered;
     summary.totalNewQualifiedReviews += res.newQualifiedReviews;
+    summary.skippedFutureDateReviews += (res.skippedFutureDateReviews || 0);
 
     if (res.newReviewsDiscovered > 0) {
       summary.storesWithNewReviews++;
@@ -280,12 +298,23 @@ async function main() {
         continue;
       }
 
-      console.log(`  Updating daily record for ${storeCode} REVIEW DATE ${reviewDate} (+${stats.newQualifiedReviews} qualified)...`);
+      const reviewWeekNumber = resolveWeekNumberFromDate(reviewDate);
+      const periodForDate = reviewWeekNumber === targetWeekNumber
+        ? targetWeekPeriod
+        : await prisma.googleReviewWeeklyPeriod.findUnique({ where: { weekNumber: reviewWeekNumber } });
+
+      if (!periodForDate) {
+        console.warn(`  [WARN] No period found for week ${reviewWeekNumber}. Skipping KPI write for date ${reviewDate}.`);
+        continue;
+      }
+
+      console.log(`  Updating daily record for ${storeCode} REVIEW DATE ${reviewDate} (Week ${reviewWeekNumber}) (+${stats.newQualifiedReviews} qualified)...`);
       await upsertDailyByReviewDate({
         storeCode,
         storeId: store?.id || null,
         storeRating: res.storeRating,
-        weekPeriodId: week2Period.id,
+        weekPeriodId: periodForDate.id,
+        weekNumber: reviewWeekNumber,
         reviewDate,
         stats,
       });
@@ -295,24 +324,25 @@ async function main() {
     }
 
     if (wroteQualifiedForStore) {
-      const totalStoreQualifiedWeek2 = await refreshWeeklyStoreTotal({
+      const totalStoreQualified = await refreshWeeklyStoreTotal({
         storeCode,
         storeId: store?.id || null,
         storeRating: res.storeRating,
-        weekPeriodId: week2Period.id,
+        weekPeriodId: targetWeekPeriod.id,
+        weekNumber: targetWeekNumber,
       });
-      console.log(`  Updated Week 2 total for ${storeCode} -> ${totalStoreQualifiedWeek2} qualified reviews.`);
+      console.log(`  Updated Week ${targetWeekNumber} total for ${storeCode} -> ${totalStoreQualified} qualified reviews.`);
     }
 
     await page.waitForTimeout(500);
   }
 
-  console.log("\nRe-ranking all Week 2 stores...");
-  const allWeekly2 = await prisma.googleReviewWeeklyKpi.findMany({
-    where: { weekPeriodId: week2Period.id },
+  console.log(`\nRe-ranking all Week ${targetWeekNumber} stores...`);
+  const allWeekly = await prisma.googleReviewWeeklyKpi.findMany({
+    where: { weekPeriodId: targetWeekPeriod.id },
   });
 
-  allWeekly2.sort((a, b) => {
+  allWeekly.sort((a, b) => {
     const aEligible = a.storeRating !== null ? a.storeRating > 4.8 : false;
     const bEligible = b.storeRating !== null ? b.storeRating > 4.8 : false;
     if (aEligible !== bEligible) return aEligible ? -1 : 1;
@@ -320,9 +350,9 @@ async function main() {
     return a.storeCode.localeCompare(b.storeCode);
   });
 
-  for (let rank = 1; rank <= allWeekly2.length; rank++) {
+  for (let rank = 1; rank <= allWeekly.length; rank++) {
     await prisma.googleReviewWeeklyKpi.update({
-      where: { id: allWeekly2[rank - 1].id },
+      where: { id: allWeekly[rank - 1].id },
       data: { rank, status: GoogleReviewPeriodStatus.OPEN },
     });
   }
@@ -346,6 +376,7 @@ async function main() {
   console.log(`Stores with New Reviews: ${summary.storesWithNewReviews}`);
   console.log(`Total New Reviews Discovered: ${summary.totalNewReviewsDiscovered}`);
   console.log(`Total New Qualified Reviews Discovered: ${summary.totalNewQualifiedReviews}`);
+  console.log(`Total Skipped Future Date Reviews (e.g. Sep 9): ${summary.skippedFutureDateReviews}`);
   console.log(`Qualified written by Review Date: ${JSON.stringify(summary.qualifiedByReviewDate)}`);
   console.log(`Qualified skipped on frozen dates: ${JSON.stringify(summary.skippedFrozenQualifiedByReviewDate)}`);
   console.log(`Errors: ${summary.errors.length}`);

@@ -83,8 +83,8 @@ async function runDryDiagnostic() {
       console.log(`\n[${i + 1}/5] Testing Store ${store.storeCode}: ${store.storeName}...`);
       const storeStart = Date.now();
 
-      await page.goto(store.googleMapsUrl, { waitUntil: "commit" });
-      await page.waitForTimeout(3500);
+      await page.goto(store.googleMapsUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
+      await page.waitForTimeout(3000);
 
       const status = await evaluatePlaceStatus(page);
       console.log(`  Place Status: LimitedView=${status.hasLimitedView}, Rating=${status.rating}, TotalReviews=${status.totalReviewsCount}`);
@@ -135,7 +135,7 @@ async function runDryDiagnostic() {
     const cwStore = STORES_TO_TEST[0];
     const cwResult = await collectStoreContinuous(page, cwStore, {
       dryRun: true,
-      todayBangkok: "2026-09-07",
+      todayBangkok: "2026-09-09",
     });
 
     console.log("\nCentralWorld Continuous Collector Result:", JSON.stringify(cwResult, null, 2));

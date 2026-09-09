@@ -4,7 +4,7 @@ import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyWeek2Date } from "./date-classifier.mjs";
+import { classifyDateForWeek, resolveWeekNumberFromDate } from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 import { openReviewsPane, ensureNewestSort } from "./maps-dom-helper.mjs";
 
@@ -37,16 +37,18 @@ function ensureDateStats(statsByDate, reviewDate) {
 /**
  * Runs a single continuous discovery cycle on a single store.
  * Stops immediately if 5 consecutive already-seen review fingerprints are encountered.
- * New Week 2 reviews are attributed to the review's resolved Bangkok calendar date,
+ * New reviews are attributed to the review's resolved Bangkok calendar date,
  * not the date on which the collector happens to run.
  */
 export async function collectStoreContinuous(page, store, options = {}) {
   const { storeCode, storeId, storeName, googleMapsUrl } = store;
   const todayBangkok = options.todayBangkok || getTodayBangkokDate();
+  const targetWeekNumber = options.targetWeekNumber || resolveWeekNumberFromDate(todayBangkok);
+  const targetReviewDateOnly = options.targetReviewDateOnly || process.env.GOOGLE_REVIEW_WRITE_DATE?.trim() || null;
   const startTime = Date.now();
 
   console.log(`\n================================================================================`);
-  console.log(`[Collector Store ${storeCode}] ${storeName} (Today: ${todayBangkok})`);
+  console.log(`[Collector Store ${storeCode}] ${storeName} (Today: ${todayBangkok}, Week: ${targetWeekNumber}${targetReviewDateOnly ? `, TargetDateOnly: ${targetReviewDateOnly}` : ""})`);
   console.log(`Maps URL: ${googleMapsUrl}`);
   console.log(`================================================================================`);
 
@@ -55,6 +57,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
   let reviewsOver15ThaiWords = 0;
   let newReviewsDiscovered = 0;
   let newQualifiedReviews = 0;
+  let skippedFutureDateReviews = 0;
   const newReviewStatsByDate = {};
   let storeRating = null;
   let stopReason = "END_OF_AVAILABLE_REVIEWS";
@@ -228,10 +231,10 @@ export async function collectStoreContinuous(page, store, options = {}) {
       consecutiveSeenCount = 0;
       newReviewsDiscovered++;
 
-      const dateClass = classifyWeek2Date(cardData.dateText, todayBangkok);
-      if (dateClass.type === "OLDER_THAN_WEEK2") {
-        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week 2 start (Sep 2). Halting store scan immediately.`);
-        stopReason = "STOP_CHRONOLOGY_OLDER_THAN_WEEK2";
+      const dateClass = classifyDateForWeek(cardData.dateText, targetWeekNumber, new Date());
+      if (dateClass.type === "OLDER_THAN_TARGET_WEEK") {
+        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week ${targetWeekNumber} start. Halting store scan immediately.`);
+        stopReason = `STOP_CHRONOLOGY_OLDER_THAN_WEEK_${targetWeekNumber}`;
         stopTriggered = true;
         break;
       }
@@ -239,8 +242,19 @@ export async function collectStoreContinuous(page, store, options = {}) {
       if (cardData.hasPhoto) reviewsWithPhoto++;
       if (wordCount >= 15) reviewsOver15ThaiWords++;
 
-      const isCandidate = dateClass.type === "WEEK2_CANDIDATE";
+      const isCandidate = dateClass.type === "TARGET_WEEK_CANDIDATE";
       const reviewDate = isCandidate ? (dateClass.exactDate || todayBangkok) : null;
+
+      // In targeted date recovery mode (e.g. recovering 2026-09-08 only):
+      // If a review resolves to any other date (e.g. 2026-09-09 or dateClass FUTURE_OR_NEWER),
+      // we must NOT write fingerprints or mutate KPI stats for that date, so tonight's real cron can process them fresh.
+      if (targetReviewDateOnly && reviewDate !== targetReviewDateOnly) {
+        skippedFutureDateReviews++;
+        console.log(`  [TARGET DATE SKIP] Card #${currentCardIndex + 1}: Date "${cardData.dateText}" -> ${reviewDate ?? dateClass.type} does not match target date ${targetReviewDateOnly}. Skipping fingerprint & KPI.`);
+        currentCardIndex++;
+        continue;
+      }
+
       const isQualified = isCandidate && !isEdited && cardData.hasPhoto && wordCount >= 15;
 
       console.log(`  [NEW REVIEW #${newReviewsDiscovered}] Date: "${cardData.dateText}" -> ${reviewDate ?? dateClass.type} | Candidate: ${isCandidate} | Photo: ${cardData.hasPhoto ? "YES" : "NO"} | Words: ${wordCount} | Edited: ${isEdited} | Qualified: ${isQualified}`);
@@ -258,6 +272,8 @@ export async function collectStoreContinuous(page, store, options = {}) {
         newQualifiedReviews++;
       }
 
+      const resolvedWeekForFp = reviewDate ? resolveWeekNumberFromDate(reviewDate) : targetWeekNumber;
+
       if (!options.dryRun) {
         await prisma.googleReviewFingerprint.create({
           data: {
@@ -265,11 +281,11 @@ export async function collectStoreContinuous(page, store, options = {}) {
             fingerprint: fp,
             reviewDate: reviewDate || todayBangkok,
             isQualified,
-            weekNumber: 2,
+            weekNumber: resolvedWeekForFp,
           },
         });
       } else {
-        console.log(`  [DRY RUN] Would record fingerprint ${fp.slice(0, 10)}... (qualified: ${isQualified})`);
+        console.log(`  [DRY RUN] Would record fingerprint ${fp.slice(0, 10)}... (qualified: ${isQualified}, week: ${resolvedWeekForFp})`);
       }
 
       currentCardIndex++;
@@ -291,6 +307,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
     reviewsOver15ThaiWords,
     newReviewsDiscovered,
     newQualifiedReviews,
+    skippedFutureDateReviews,
     newReviewStatsByDate,
     stopReason,
     durationMs,

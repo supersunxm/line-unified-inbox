@@ -8,69 +8,84 @@
  * Resolves place title, rating, whether Limited View is present, whether reviews controls exist,
  * or whether the place is confirmed to have zero reviews.
  */
-export async function evaluatePlaceStatus(page) {
-  return await page.evaluate(() => {
-    const text = document.body.innerText || "";
+export async function evaluatePlaceStatus(page, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await page.evaluate(() => {
+        const text = document.body?.innerText || "";
 
-    // 1. Check Limited View / Auth Wall
-    const hasLimitedView =
-      text.includes("มุมมองแบบจำกัด") ||
-      text.includes("limited view") ||
-      Boolean(document.querySelector("[aria-label*='มุมมองแบบจำกัด'], [aria-label*='limited view']"));
-    const hasSignInPrompt =
-      (text.includes("ลงชื่อเข้าใช้") || text.includes("Sign in")) && hasLimitedView;
+        // 1. Check Limited View / Auth Wall
+        const hasLimitedView =
+          text.includes("มุมมองแบบจำกัด") ||
+          text.includes("limited view") ||
+          Boolean(document.querySelector("[aria-label*='มุมมองแบบจำกัด'], [aria-label*='limited view']"));
+        const hasSignInPrompt =
+          (text.includes("ลงชื่อเข้าใช้") || text.includes("Sign in")) && hasLimitedView;
 
-    // 2. Title
-    const title = document.querySelector("h1")?.textContent?.trim() || null;
+        // 2. Title
+        const title = document.querySelector("h1")?.textContent?.trim() || null;
 
-    // 3. Rating & Total Review Count
-    const ratingEl = document.querySelector(".F7nice, span.ceNzKf");
-    let rating = null;
-    let reviewCountText = null;
-    if (ratingEl) {
-      const rText = ratingEl.textContent?.trim() || ratingEl.getAttribute("aria-label") || "";
-      const m = rText.match(/(\d+\.\d+)/);
-      if (m) rating = parseFloat(m[1]);
-      const parent = ratingEl.closest(".LBgpqf, .skqShb, div");
-      const cMatch = parent?.textContent?.match(/\(([\d,]+)\)/);
-      if (cMatch) reviewCountText = cMatch[1];
+        // 3. Rating & Total Review Count
+        const ratingEl = document.querySelector(".F7nice, span.ceNzKf");
+        let rating = null;
+        let reviewCountText = null;
+        if (ratingEl) {
+          const rText = ratingEl.textContent?.trim() || ratingEl.getAttribute("aria-label") || "";
+          const m = rText.match(/(\d+\.\d+)/);
+          if (m) rating = parseFloat(m[1]);
+          const parent = ratingEl.closest(".LBgpqf, .skqShb, div");
+          const cMatch = parent?.textContent?.match(/\(([\d,]+)\)/);
+          if (cMatch) reviewCountText = cMatch[1];
+        }
+
+        // 4. Look for Review Tab
+        const tabs = Array.from(document.querySelectorAll("[role='tab']"));
+        const reviewTab = tabs.find((t) => {
+          const l = ((t.getAttribute("aria-label") || "") + " " + (t.textContent || "")).toLowerCase();
+          return l.includes("รีวิว") || l.includes("review");
+        });
+
+        // 5. Look for alternative review triggers
+        const reviewTriggerBtn = document.querySelector(
+          "button[aria-label*='รีวิว' i], button[aria-label*='review' i], button[jsaction*='pane.rating' i], [aria-label*='รีวิว' i][role='button']"
+        );
+
+        // 6. Look for Write a review button
+        const writeReviewBtn = document.querySelector(
+          "button[aria-label*='เขียนรีวิว' i], button[aria-label*='Write a review' i], [jsaction*='pane.review.write' i]"
+        );
+
+        // 7. Cards & Feed
+        const cardsCount = document.querySelectorAll(".jftiEf, div[data-review-id]").length;
+        const feed = document.querySelector("div[role='feed']");
+
+        return {
+          title,
+          rating,
+          reviewCountText,
+          hasLimitedView,
+          hasSignInPrompt,
+          hasReviewTab: Boolean(reviewTab),
+          reviewTabSelected: reviewTab ? reviewTab.getAttribute("aria-selected") === "true" : false,
+          hasReviewTriggerBtn: Boolean(reviewTriggerBtn),
+          hasWriteReviewBtn: Boolean(writeReviewBtn),
+          cardsCount,
+          hasFeed: Boolean(feed),
+        };
+      });
+    } catch (err) {
+      const isContextError =
+        err.message.includes("Execution context was destroyed") ||
+        err.message.includes("Cannot find context with specified id") ||
+        err.message.includes("navigating");
+
+      if (isContextError && attempt < maxRetries) {
+        await page.waitForTimeout(1500);
+        continue;
+      }
+      throw err;
     }
-
-    // 4. Look for Review Tab
-    const tabs = Array.from(document.querySelectorAll("[role='tab']"));
-    const reviewTab = tabs.find((t) => {
-      const l = ((t.getAttribute("aria-label") || "") + " " + (t.textContent || "")).toLowerCase();
-      return l.includes("รีวิว") || l.includes("review");
-    });
-
-    // 5. Look for alternative review triggers
-    const reviewTriggerBtn = document.querySelector(
-      "button[aria-label*='รีวิว' i], button[aria-label*='review' i], button[jsaction*='pane.rating' i], [aria-label*='รีวิว' i][role='button']"
-    );
-
-    // 6. Look for Write a review button
-    const writeReviewBtn = document.querySelector(
-      "button[aria-label*='เขียนรีวิว' i], button[aria-label*='Write a review' i], [jsaction*='pane.review.write' i]"
-    );
-
-    // 7. Cards & Feed
-    const cardsCount = document.querySelectorAll(".jftiEf, div[data-review-id]").length;
-    const feed = document.querySelector("div[role='feed']");
-
-    return {
-      title,
-      rating,
-      reviewCountText,
-      hasLimitedView,
-      hasSignInPrompt,
-      hasReviewTab: Boolean(reviewTab),
-      reviewTabSelected: reviewTab ? reviewTab.getAttribute("aria-selected") === "true" : false,
-      hasReviewTriggerBtn: Boolean(reviewTriggerBtn),
-      hasWriteReviewBtn: Boolean(writeReviewBtn),
-      cardsCount,
-      hasFeed: Boolean(feed),
-    };
-  });
+  }
 }
 
 /**
