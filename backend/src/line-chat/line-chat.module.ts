@@ -13,6 +13,7 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 import { LineChatManagerMessageRelayService } from "./line-chat-manager-message-relay.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
 import { LineChatPendingControlService } from "./line-chat-pending-control.service";
+import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
 
 @Global()
 @Module({
@@ -30,6 +31,7 @@ import { LineChatPendingControlService } from "./line-chat-pending-control.servi
     LineChatManagerMessageRelayService,
     LineChatNovncRecoveryService,
     LineChatPendingControlService,
+    LineChatHealthReconciliationService,
   ],
   exports: [
     LineChatSessionService,
@@ -43,6 +45,7 @@ import { LineChatPendingControlService } from "./line-chat-pending-control.servi
     LineChatManagerMessageRelayService,
     LineChatNovncRecoveryService,
     LineChatPendingControlService,
+    LineChatHealthReconciliationService,
   ],
 })
 export class LineChatModule {}
