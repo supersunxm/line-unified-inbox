@@ -16,6 +16,11 @@ import type {
   TikTokVideoItem,
 } from "../tiktok-types";
 import {
+  TIKTOK_STORE_BINDING_SESSION_COOKIE,
+  TIKTOK_STORE_BINDING_SESSION_MAX_AGE,
+  createTikTokStoreBindingSession,
+} from "../store-binding-session";
+import {
   logTikTokCallbackDiagnostic,
   processTikTokCallbackParams,
   timingSafeStringEqual,
@@ -26,8 +31,8 @@ export const dynamic = "force-dynamic";
 /**
  * Public OAuth callback route handler.
  * Consumes and validates HttpOnly OAuth state cookie, exchanges authorization code,
- * fetches profile/video data, binds StoreMaster via normalized username, and routes
- * to public success/error pages independently of any unrelated admin session cookie.
+ * fetches profile data, persists the authorized account, and routes to the public
+ * success/store-association flow independently of any unrelated admin session cookie.
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -72,7 +77,7 @@ export async function GET(request: NextRequest) {
 
   const publicOrigin = getPublicAppUrl();
 
-  // Helper to create redirect response with atomic cookie consumption
+  // Helper to create redirect response with atomic OAuth-state cookie consumption.
   const createRedirectResponse = (destinationUrl: URL): NextResponse => {
     const response = NextResponse.redirect(destinationUrl, 302);
     response.cookies.set(TIKTOK_OAUTH_STATE_COOKIE, "", {
@@ -93,14 +98,14 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(connectUrl);
   }
 
-  // Fail-closed gate: if public connect is disabled, refuse to process callback
+  // Fail-closed gate: if public connect is disabled, refuse to process callback.
   if (!isTikTokPublicConnectEnabled()) {
     const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
     errorUrl.searchParams.set("reason", "integration_disabled");
     return createRedirectResponse(errorUrl);
   }
 
-  // If user denied access or TikTok returned an OAuth authorization error
+  // If user denied access or TikTok returned an OAuth authorization error.
   if (error || validationResult.status === "ERROR") {
     const isDenied =
       error?.toLowerCase().includes("denied") ||
@@ -113,14 +118,14 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(errorUrl);
   }
 
-  // If state validation failed, expired, or code is missing
+  // If state validation failed, expired, or code is missing.
   if (validationResult.status !== "SUCCESS" || !code) {
     const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
     errorUrl.searchParams.set("reason", "invalid_state");
     return createRedirectResponse(errorUrl);
   }
 
-  // 1. Exchange authorization code for tokens (server-side only)
+  // 1. Exchange authorization code for tokens (server-side only).
   let tokenResponse: TikTokTokenResponse;
   try {
     tokenResponse = await exchangeTikTokAuthorizationCode(code);
@@ -130,7 +135,7 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(errorUrl);
   }
 
-  // 2. Fetch TikTok user profile & statistics
+  // 2. Fetch TikTok user profile & statistics.
   let userProfile: TikTokUserProfile;
   try {
     userProfile = await fetchTikTokUserProfile(tokenResponse.accessToken);
@@ -140,11 +145,11 @@ export async function GET(request: NextRequest) {
     return createRedirectResponse(errorUrl);
   }
 
-  // 3. Official review-ready scopes (user.info.basic, user.info.profile, user.info.stats)
-  // Strictly omit video fetching and video.list permission
+  // 3. Official review-ready scopes (user.info.basic, user.info.profile, user.info.stats).
+  // Strictly omit video fetching and video.list permission.
   const videos: TikTokVideoItem[] = [];
 
-  // 4. Save retrieved account data into PostgreSQL backend store via internal service-to-service API
+  // 4. Save retrieved account data into PostgreSQL backend store via internal service-to-service API.
   let syncedAccount: SafeTikTokSyncedAccountResponse | null = null;
   try {
     syncedAccount = await syncTikTokAccountInternallyToBackend({
@@ -157,12 +162,15 @@ export async function GET(request: NextRequest) {
       videos,
     });
   } catch (syncErr) {
-    console.warn("[TikTok Callback] Internal backend sync skipped or unavailable; proceeding with verified TikTok profile data", syncErr);
+    console.warn(
+      "[TikTok Callback] Internal backend sync skipped or unavailable; proceeding with verified TikTok profile data",
+      syncErr,
+    );
   }
 
-  // 5. Store association is decoupled from initial TikTok authorization.
-  // The TikTok account is successfully authorized and stored with encrypted tokens when backend sync is available.
-  // Unassigned accounts or sandbox reviewers succeed and display their verified profile/stats safely.
+  // 5. Initial authorization and store association are separate user-facing steps.
+  // Existing exact StoreMaster mappings remain safe, while the success page can confirm,
+  // choose another store, or submit a pending HQ review request.
   const isStoreBound = Boolean(syncedAccount?.storeMasterId && syncedAccount?.storeMaster);
   const storeName = syncedAccount?.storeMaster?.storeName || "";
 
@@ -184,13 +192,33 @@ export async function GET(request: NextRequest) {
     timestamp: Date.now(),
   });
 
-  response.cookies.set("tiktok_connect_result", Buffer.from(safeResultPayload, "utf8").toString("base64url"), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 120, // 2 minutes short-lived state
-    path: "/",
-  });
+  response.cookies.set(
+    "tiktok_connect_result",
+    Buffer.from(safeResultPayload, "utf8").toString("base64url"),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 120,
+      path: "/",
+    },
+  );
+
+  // Signed short-lived session proves that this browser just completed OAuth for the
+  // synchronized TikTok account. Public binding APIs never accept an arbitrary accountId.
+  if (syncedAccount?.id) {
+    response.cookies.set(
+      TIKTOK_STORE_BINDING_SESSION_COOKIE,
+      createTikTokStoreBindingSession(syncedAccount.id),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: TIKTOK_STORE_BINDING_SESSION_MAX_AGE,
+        path: "/",
+      },
+    );
+  }
 
   return response;
 }
