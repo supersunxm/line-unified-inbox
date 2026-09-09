@@ -1,5 +1,24 @@
 # Architecture & Design Decisions
 
+## Google Review Weekly KPI: 7-Calendar-Day True Cadence & Invariant-Preserving Migration (2026-09-09)
+
+- **7-Calendar-Day Cadence Starting from Week 2**:
+  - Historical Week 1 remains frozen as-is: `2026-08-26T00:00:00+07:00` to `2026-09-03T00:00:00+07:00` exclusive (Display: `26.08-02.09.2026`), status: `CLOSED`, historical total strictly fixed at **274**.
+  - Week 2 and subsequent weeks follow a true 7-calendar-day cadence:
+    - Week 2: `2026-09-03` to `2026-09-10` exclusive (Display: `03-09.09.2026`).
+    - Week 3: `2026-09-10` to `2026-09-17` exclusive (Display: `10-16.09.2026`).
+    - Weeks 4–10: continuing every 7 calendar days up to Week 10 (`29.10-04.11.2026`).
+- **Half-Open Intervals with Inclusive Display Formatting**:
+  - `endDate` in `GoogleReviewWeeklyPeriod` is defined as the half-open exclusive upper boundary midnight (`00:00:00+07:00` of day $N+1$).
+  - `formatWeekDateRangeLabel` subtracts 1 second to derive the inclusive calendar day, formatting `endExclusive - 1 calendar day` consistently across UI labels, exports, and weekly status queries.
+- **Sep 2 Reassignment & Week 1 Total Freezing**:
+  - `2026-09-02` Daily KPI records were reassigned from Week 2 to Week 1 (`weekNumber: 1`, `weekPeriodId: week1Period.id`), but Week 1 Weekly KPI was strictly frozen at **274** (Sep 2's 25 was not added to Week 1 total).
+  - Week 2 Weekly KPI was recomputed strictly from daily rows `date >= 2026-09-03 AND date <= 2026-09-09`.
+- **Collector Generalization**:
+  - Hardcoded Week 2 assumptions were removed from `continuous-collector.mjs`, `date-classifier.mjs`, and `run-single-cycle.mjs`.
+  - Date classifier dynamically resolves candidates against target week boundaries via `classifyDateForWeek` and `resolveWeekNumberFromDate`.
+  - Collector supports dynamic `targetWeekNumber`, links daily and weekly records to the resolved weekly period, and re-ranks the active week dynamically.
+
 ## TikTok Official API: Review-Ready Integration Preparation (2026-09-08)
 
 - **Minimum Scope Enforcement**:

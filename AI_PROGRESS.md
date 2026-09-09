@@ -1,5 +1,82 @@
 # AI Progress Log
 
+## 2026-09-09: Google Review Weekly KPI 7-Day Calendar Transition & Live Sep 9 Collection [COMPLETED & VERIFIED]
+- **Current Task**: Change Google Review Weekly KPI calendar from hardcoded/irregular intervals to true 7-calendar-day periods starting from Week 2, migrate production PostgreSQL database records, generalize the collector, verify all invariants, run a dry diagnostic on 5 stores, run exactly ONE live collection cycle for today (`2026-09-09`), verify post-run production state, and open a PR to `main`.
+- **Completed Work**:
+  1. Period Model & Boundaries:
+     - Updated `backend/src/google-review-kpi/weekly-period.util.ts`:
+       - Week 1: `2026-08-26T00:00:00+07:00` to `2026-09-03T00:00:00+07:00` exclusive (`26.08-02.09.2026`), status `CLOSED`.
+       - Week 2: `2026-09-03T00:00:00+07:00` to `2026-09-10T00:00:00+07:00` exclusive (`03-09.09.2026`), status `OPEN` on Sep 9.
+       - Week 3: `2026-09-10T00:00:00+07:00` to `2026-09-17T00:00:00+07:00` exclusive (`10-16.09.2026`), status `OPEN`.
+       - Weeks 4–10: continuing every 7 calendar days up to Week 10 (`29.10-04.11.2026`).
+       - Formatter uses `endExclusive - 1 calendar day` to display inclusive range labels.
+       - `resolveWeekNumber`: resolves < Sep 3 as Week 1, and 7-day intervals from Sep 3 onward.
+     - Updated `weekly-period.util.spec.ts`: All 8 tests passing.
+  2. Collector Generalization:
+     - Updated `date-classifier.mjs` and `date-classifier.spec.ts`: Added `classifyDateForWeek`, `resolveWeekNumberFromDate`, and `getWeekDateBoundaries`. Tested all boundary cases (22 tests passing).
+     - Updated `continuous-collector.mjs`: Supports dynamic `targetWeekNumber`, generalized chronology stop condition, dynamic week assignment on fingerprints.
+     - Updated `run-single-cycle.mjs`: Resolves target week dynamically, attributes daily and weekly records to resolved weekly period, and dynamically re-ranks the active week.
+     - Updated `maps-dom-helper.mjs`: Added resilient retry loop in `evaluatePlaceStatus` against mid-navigation destroyed execution contexts.
+  3. Production Database Migration:
+     - Executed `migrate-production-calendar.ts` against Railway production PostgreSQL via proxy.
+     - Upserted all 10 weekly periods with approved 7-day boundaries and labels.
+     - Reassigned 65 `2026-09-02` Daily KPI records to Week 1 (`weekNumber: 1`, `weekPeriodId: week1Period.id`).
+     - Week 1 historical total strictly preserved at **274** (Sep 2's 25 was NOT added).
+     - Recomputed Week 2 Weekly KPI for all 65 stores from daily records `2026-09-03` to `2026-09-09` (dropped from 302 to 277).
+     - Re-ranked Week 2 stores. Verified all invariants.
+  4. Dry Diagnostic:
+     - Ran `dry-diagnostic-5stores.mjs` against production DB: 5/5 stores passed (0 limited view, 20 cards detected, Newest sort verified).
+     - CentralWorld non-mutating continuous scan triggered fast-stop at boundary.
+     - Verified zero DB mutations (FP=510, Daily=767, Weekly=130).
+  5. Single Live Cycle for Today (2026-09-09):
+     - Executed single live cycle with `GOOGLE_REVIEW_WRITE_DATE=2026-09-09` across 65 focus stores in 10.9 minutes.
+     - Total stores scanned: 65/65 (64 successful scans, 45 fast stops, 28 stores with new reviews).
+     - Discovered 33 new reviews; 10 new qualified reviews for `2026-09-09`.
+     - Re-ranked all 65 stores in Week 2.
+  6. Post-Run Production State Audit:
+     - Week 1: strictly **274** (`CLOSED`).
+     - Week 2: strictly **287** (`OPEN`) (277 + 10 for Sep 9).
+     - Daily Sep 2: **25** (weekNumber: 1).
+     - Daily Sep 3..8: **34, 38, 51, 29, 65, 60** (100% unchanged).
+     - Daily Sep 9: **10** (freshly qualified reviews across 7 stores).
+     - Fingerprints: Total 523, Qualified 315 (+13 total, +10 qualified).
+- **Checks Run & Passed**:
+  - `weekly-period.util.spec.ts`: 8/8 passed (`npx tsx --test`, exit 0).
+  - `date-classifier.spec.ts`: 22/22 passed (`npx tsx --test`, exit 0).
+  - `google-review-kpi.service.spec.ts` & exports: 13/13 passed (`npx tsx --test`, exit 0).
+  - Backend production build: passed cleanly (`npm run build`, exit 0).
+  - Frontend production build: passed cleanly (`npm run build`, exit 0).
+- **Next Action**: Review git diff, push branch, open PR to `main`, and verify CI.
+
+## 2026-09-09: Google Review KPI Sep 8 Recovery [COMPLETED & VERIFIED]
+- **Current Task**: Recover missing Google Review KPI data for yesterday only (`2026-09-08`) following the scheduled Railway cron failure, while strictly preserving all historical days, isolating `2026-09-09` from mutations, and verifying production invariants against PostgreSQL via Railway proxy.
+- **Completed Work**:
+  1. Root Cause & Solution:
+     - The scheduled Railway cron crashed due to Maps bot detection (`ERROR_MAPS_LIMITED_VIEW_DETECTED` and `ERROR_NEWEST_SORT_UNVERIFIED`) because it lacked the proven desktop user agent and flags available in the local persistent profile.
+     - Refined `classifyWeek2Date` in `backend/scripts/weekly-collector/date-classifier.mjs` to calculate accurate relative hour/minute offsets across midnight so reviews posted yesterday evening (10-24 hours ago) correctly resolve to `2026-09-08` instead of today `2026-09-09`.
+     - Added targeted date mode in `continuous-collector.mjs` and `run-single-cycle.mjs`: when `GOOGLE_REVIEW_WRITE_DATE=2026-09-08` is set, reviews belonging to any other date (e.g. `2026-09-09`) are skipped without recording fingerprints or mutating daily/weekly records, leaving them clean for tonight's scheduled cycle.
+  2. Diagnostic & Single Controlled Production Cycle:
+     - Ran 5-store dry diagnostic with 100% pass rate (5/5) and verified zero DB mutations.
+     - Executed exactly ONE controlled live cycle across all 65 stores using the dedicated Chrome profile connected to production PostgreSQL via `DATABASE_PUBLIC_URL`.
+     - Completed in 12.4 minutes: 63 successful scans, 0 limited view errors, 40 fast stops at previously processed boundary, 45 stores with new reviews.
+     - Total new reviews discovered: 77; total new qualified reviews recovered: +37.
+     - Skipped future date reviews (Sep 9): 0.
+     - Re-ranked all 65 Week 2 stores deterministically.
+  3. Post-Execution Production Database Audit:
+     - Week 1: `CLOSED` / 274 qualified reviews (100% preserved).
+     - Sep 2 - Sep 7 daily totals: 25, 34, 38, 51, 29, 65 (100% unchanged).
+     - Sep 8 daily total: increased from 23 to 60 (+37 recovered qualified reviews across 34 stores).
+     - Sep 9 daily total: exactly 0 (0 reviews, 0 stores).
+     - Sep 9 fingerprints: exactly 0.
+     - Total fingerprints: 510 (before: 456; +54 unseen reviews fingerprinted).
+     - Qualified fingerprints: 305 (before: 268; +37 qualified).
+     - Week 2 Total: exactly 302 (before: 265; sum of dailies 25+34+38+51+29+65+60 = 302).
+- **Checks Run & Passed**:
+  - `date-classifier.spec.ts`: 19/19 tests passed (`npx tsx --test`, exit 0).
+  - Backend build: `npm run build` passed cleanly (`prisma generate && nest build`, exit 0).
+  - Post-recovery DB audit script: All 7 invariant checks PASSED with 0 discrepancies.
+- **Next Action**: Report comprehensive results to user. No further cycles or database mutations needed.
+
 ## 2026-09-08: TikTok Official API — Fail-Closed Feature Gate Integration [COMPLETED]
 - **Current Task**: Introduce explicit fail-closed feature gate (`TIKTOK_PUBLIC_CONNECT_ENABLED`) on `feat/tiktok-review-ready-integration` (PR #205) to ensure safe production deployment without activating unverified pre-existing Railway TikTok credentials.
 - **Completed Work**:
@@ -4266,3 +4343,21 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Changed-file ESLint reports the service/spec baseline violations already present in those files; no new lint violation is reported at the added TikTok lines. Full-project TypeScript checking likewise retains unrelated existing spec errors.
 - No database migration, deployment, LINE API call, or commit was performed. Existing unrelated TikTok frontend worktree changes were preserved.
 - Next action: review the scoped diff and commit only with explicit authorization.
+
+# Current task: LINE nickname backlog mapping isolation (2026-09-09)
+
+- Started `feat/line-chat-nickname-mapping-isolation` from the existing worktree, preserving unrelated weekly-collector changes. The design uses an in-process per-session/OA/bot recent-chat snapshot with a 60-second ready TTL, a 30-second failure TTL, and in-flight single-flight refreshes; no schema migration is required.
+- The nickname worker now checks durable `Conversation.lineChatUserId` before any browser operation, batches unresolved jobs by OA/session into one bounded recent-chat refresh, persists only unique safe mappings, and defers no-match/ambiguous/conflict jobs instead of repeatedly scanning or holding a profile lease.
+- Mapping refreshes use `RECENT_RESOLUTION` with fail-fast background contention, retain the existing resolver eligibility boundary, and release the profile before DB batch persistence. Nickname PUTs remain `NICKNAME_UPDATE`; customer text/image relay remains `MANUAL_DIAGNOSTIC` and keeps its existing fail-closed/no-Push behavior. Pause/Resume controls are unchanged.
+- Temporary Postgres connectivity errors are sanitized and retryable: the worker stops claiming when reads fail and requeues a claimed job after a bounded DB backoff. Health output now includes mapped-ready pending, waiting-for-mapping, and oldest-pending metrics; the frontend API type is additive.
+- Focused LINE resolver/worker/coordinator/priority/operations tests pass 65/65; production backend build passes; changed LINE-file ESLint passes; frontend tests pass 537/537 and frontend production build plus changed-file ESLint pass. Full backend runtime tests pass 1,800/1,802 with two unrelated baseline failures (missing `vitest` and duplicate store-master test writes); repository-wide backend/frontend lint remains unrelated baseline failures.
+- Local backend started successfully with `DISABLE_NICKNAME_WORKER=true`; read-only `/health` returned 200 and unauthenticated operations health returned 401. No migration, production backlog resume, customer message, LINE browser access, or production data mutation was performed.
+- Next action: final diff review and separately authorized commit/push/PR workflow. Rollout remains paused: deploy with the worker paused, observe health metrics, then resume only a 5–10-job profile-b canary after approval.
+
+# Current task: Public OPPO Brand Shop app icon alignment (2026-09-09)
+
+- Reused the exact tracked `frontend/public/images/LOGO_OBS.png` source (1024×1024); the new Next.js `icon.png` and `apple-icon.png` copies are byte-for-byte identical.
+- Added root metadata icon links, a minimal `manifest.webmanifest`, and a reusable decorative 24px/28px public header icon across `/`, `/stores`, `/stores/[identifier]`, `/tiktok-integration`, and `/connect/tiktok`. Existing green header branding markup and copy remain unchanged.
+- Removed the stale App Router `favicon.ico` so the browser tab cannot continue serving the previous icon. No backend, database, TikTok OAuth, LINE OA, authentication, StoreMaster, or internal staff UI changes were made.
+- Frontend tests pass 537/537 and the production build passes. Local HTTP checks returned 200 for all requested public routes and icon/manifest assets. Changed-file lint is clean except for two pre-existing `setState`-in-effect errors in the touched public store components; repository-wide lint retains unrelated baseline errors. Browser discovery was unavailable, so visual screenshots and browser-console inspection remain pending.
+- Branch: `fix/public-app-icon-branding`. No commit, PR, merge, or deployment performed yet. Next action: final diff review, then commit only the focused files if repository write access is available.
