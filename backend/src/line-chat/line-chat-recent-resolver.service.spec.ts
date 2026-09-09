@@ -378,3 +378,113 @@ test("cross-OA or mismatched invocation parameters fail closed with RESOLVE_CONF
   });
 });
 
+test("one in-flight mapping refresh is reused to persist multiple safe mappings", async () => {
+  const chatOne = `U${"c".repeat(32)}`;
+  const chatTwo = `U${"d".repeat(32)}`;
+  let discoveryCalls = 0;
+  const writes: Array<Record<string, unknown>> = [];
+  const rows = [
+    { id: "conversation-1", storeId: "store-28375", lineOfficialAccountId: "oa-1", lineChatUserId: null, customer: { displayName: "สมชาย Oppo" }, store: { code: "28375", storeMaster: null } },
+    { id: "conversation-2", storeId: "store-28375", lineOfficialAccountId: "oa-1", lineChatUserId: null, customer: { displayName: "สุดา Oppo" }, store: { code: "28375", storeMaster: null } },
+  ];
+  const tx = {
+    conversation: {
+      findFirst: async () => null,
+      updateMany: async (args: Record<string, unknown>) => {
+        writes.push(args);
+        return { count: 1 };
+      },
+      findUnique: async () => ({ lineOfficialAccountId: "oa-1", lineChatUserId: null }),
+    },
+  };
+  const prisma = {
+    conversation: {
+      findMany: async (args: { where?: { id?: { in?: string[] } } }) => args.where?.id?.in ? rows : [],
+      findUnique: async () => null,
+    },
+    $transaction: async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const session = {
+    discoverRecentChats: async () => {
+      discoveryCalls++;
+      await new Promise((resolve) => setImmediate(resolve));
+      return {
+        status: "READY" as const,
+        chats: [
+          chat(chatOne, "สมชาย Oppo"),
+          chat(chatTwo, "สุดา Oppo"),
+        ],
+        pagesFetched: 1,
+        totalRawRecords: 2,
+      };
+    },
+  };
+  const service = new LineChatRecentResolverService(prisma as never, session as never);
+  const refreshInput = {
+    lineOfficialAccountId: "oa-1",
+    botId: input.botId,
+    sessionKey: input.sessionKey,
+    profilePath: input.profilePath,
+  };
+  const [first, second] = await Promise.all([
+    service.refreshSnapshot(refreshInput),
+    service.refreshSnapshot(refreshInput),
+  ]);
+  assert.equal(first, second);
+  assert.equal(discoveryCalls, 1);
+
+  const result = await service.applySnapshotMappings({
+    lineOfficialAccountId: "oa-1",
+    conversationIds: ["conversation-1", "conversation-2"],
+    snapshot: first,
+    eligibility: {
+      oaStoreId: "store-28375",
+      oaAccountType: "STORE",
+      oaIsActive: true,
+      oaArchivedAt: null,
+      oaChatBotId: input.botId,
+      oaSessionKey: input.sessionKey,
+      oaSessionStatus: "ACTIVE",
+      expectedBotId: input.botId,
+      expectedSessionKey: input.sessionKey,
+    },
+  });
+  assert.deepEqual(result, {
+    status: "REFRESHED",
+    conversationCount: 2,
+    candidateCount: 2,
+    mappedCount: 2,
+    noMatchCount: 0,
+    ambiguousCount: 0,
+    conflictCount: 0,
+    unresolvedReasons: new Map(),
+  });
+  assert.deepEqual(writes.map((write) => write.data), [
+    { lineChatUserId: chatOne },
+    { lineChatUserId: chatTwo },
+  ]);
+
+  const rejected = await service.applySnapshotMappings({
+    lineOfficialAccountId: "oa-1",
+    conversationIds: ["conversation-1", "conversation-2"],
+    snapshot: first,
+    eligibility: {
+      oaStoreId: "store-other",
+      oaAccountType: "STORE",
+      oaIsActive: true,
+      oaArchivedAt: null,
+      oaChatBotId: input.botId,
+      oaSessionKey: input.sessionKey,
+      oaSessionStatus: "ACTIVE",
+      expectedBotId: input.botId,
+      expectedSessionKey: input.sessionKey,
+    },
+  });
+  assert.equal(rejected.conflictCount, 2);
+  assert.equal(rejected.candidateCount, 0);
+  assert.deepEqual([...rejected.unresolvedReasons.entries()], [
+    ["conversation-1", "RESOLVE_CONFLICT"],
+    ["conversation-2", "RESOLVE_CONFLICT"],
+  ]);
+  assert.equal(writes.length, 2);
+});

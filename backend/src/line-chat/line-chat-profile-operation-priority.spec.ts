@@ -122,3 +122,64 @@ test("recent resolution is treated as customer-facing priority work", async () =
   assert.equal(resolution.acquired, true);
   if (resolution.acquired) assert.equal(resolution.value, "resolved");
 });
+
+test("background mapping defers immediately when a customer relay is active", async () => {
+  const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
+  let releaseRelay!: () => void;
+  const relayHold = new Promise<void>((resolve) => { releaseRelay = resolve; });
+  let backgroundRan = false;
+
+  const relay = coordinator.withProfileOperation(
+    { sessionId: "profile-b", operationKind: "MANUAL_DIAGNOSTIC" },
+    async () => relayHold,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const startedAt = Date.now();
+  const background = await coordinator.withProfileOperation(
+    { sessionId: "profile-b", operationKind: "RECENT_RESOLUTION" },
+    async () => {
+      backgroundRan = true;
+      return "must-not-run";
+    },
+    { waitForLock: false },
+  );
+  assert.equal(background.acquired, false);
+  assert.equal(backgroundRan, false);
+  assert.ok(Date.now() - startedAt < 1_000);
+
+  releaseRelay();
+  assert.equal((await relay).acquired, true);
+});
+
+test("text and image relay operations receive the same priority over background work", async () => {
+  for (const relayType of ["text", "image"] as const) {
+    const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
+    let releaseBackground!: () => void;
+    const backgroundHold = new Promise<void>((resolve) => { releaseBackground = resolve; });
+    const order: string[] = [];
+
+    const background = coordinator.withProfileOperation(
+      { sessionId: "profile-b", operationKind: "NICKNAME_UPDATE" },
+      async () => {
+        order.push("background-start");
+        await backgroundHold;
+        order.push("background-end");
+      },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    const relay = coordinator.withProfileOperation(
+      { sessionId: "profile-b", operationKind: "MANUAL_DIAGNOSTIC" },
+      async () => {
+        order.push(`${relayType}-relay`);
+        return "sent";
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    releaseBackground();
+    await background;
+    const result = await relay;
+    assert.equal(result.acquired, true);
+    assert.deepEqual(order, ["background-start", "background-end", `${relayType}-relay`]);
+  }
+});
