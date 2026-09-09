@@ -180,7 +180,8 @@ export function StoreBindingSuccess({
   }, []);
 
   useEffect(() => {
-    void loadContext();
+    const timer = window.setTimeout(() => void loadContext(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadContext]);
 
   useEffect(() => {
@@ -310,7 +311,7 @@ export function StoreBindingSuccess({
                   <StoreCard store={context.currentStore} />
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Link href={`/tiktok/stores/${context.currentStore.id}`} className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">{t.viewAnalytics}</Link>
+                  <Link href="/connect/tiktok/analytics" className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">{t.viewAnalytics}</Link>
                   <button type="button" onClick={() => setChooserOpen(true)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t.changeStore}</button>
                 </div>
               </div>

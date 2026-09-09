@@ -165,6 +165,60 @@ export interface TikTokHistoricalMetricsData {
   history: TikTokDailyMetricItem[];
 }
 
+export type TikTokStoreOwnerAnalyticsStatus =
+  | "CONNECTED"
+  | "PENDING"
+  | "NEEDS_STORE_CONFIRMATION"
+  | "RECONNECT_REQUIRED";
+
+export interface TikTokStoreOwnerStore {
+  externalStoreId: string | null;
+  storeName: string;
+  province: string | null;
+  region: string | null;
+}
+
+export interface TikTokStoreOwnerAnalyticsData {
+  status: TikTokStoreOwnerAnalyticsStatus;
+  account?: {
+    displayName: string;
+    username: string | null;
+    avatarUrl: string | null;
+    avatarUrl100: string | null;
+    avatarLargeUrl: string | null;
+    bioDescription: string | null;
+    isVerified: boolean;
+    followerCount: number;
+    followingCount: number;
+    likesCount: number;
+    videoCount: number;
+    connectedAt: string;
+    lastSyncedAt: string;
+    store: TikTokStoreOwnerStore;
+    videos: Array<{
+      id: string;
+      tikTokVideoId: string;
+      title?: string | null;
+      videoDescription?: string | null;
+      createTime?: string | null;
+      coverImageUrl?: string | null;
+      shareUrl?: string | null;
+      duration?: number | null;
+      viewCount: number;
+      likeCount: number;
+      commentCount: number;
+      shareCount: number;
+      lastSyncedAt: string;
+    }>;
+  };
+  store?: TikTokStoreOwnerStore;
+  pendingStore?: TikTokStoreOwnerStore;
+  metrics?: {
+    summary: TikTokGrowthSummary;
+    history: TikTokDailyMetricItem[];
+  };
+}
+
 export type TikTokGrowthPeriod = "today" | "sevenDays" | "thirtyDays";
 
 export interface TikTokAccountMetricsGrowthSummary {
@@ -192,4 +246,3 @@ export interface TikTokAccountBulkMetricSummaryItem {
 export interface TikTokBulkMetricsSummaryResponse {
   accounts: TikTokAccountBulkMetricSummaryItem[];
 }
-

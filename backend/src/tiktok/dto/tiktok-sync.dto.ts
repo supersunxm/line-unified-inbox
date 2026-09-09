@@ -140,6 +140,48 @@ export interface TikTokHistoricalMetricsResponse {
   history: TikTokDailyMetricDto[];
 }
 
+export type TikTokStoreOwnerAnalyticsStatus =
+  | "CONNECTED"
+  | "PENDING"
+  | "NEEDS_STORE_CONFIRMATION"
+  | "RECONNECT_REQUIRED";
+
+export interface TikTokStoreOwnerStoreResponse {
+  externalStoreId: string | null;
+  storeName: string;
+  province: string | null;
+  region: string | null;
+}
+
+export interface TikTokStoreOwnerAccountResponse {
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  avatarUrl100: string | null;
+  avatarLargeUrl: string | null;
+  bioDescription: string | null;
+  isVerified: boolean;
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  connectedAt: string;
+  lastSyncedAt: string;
+  store: TikTokStoreOwnerStoreResponse;
+  videos: SafeTikTokVideoResponse[];
+}
+
+export interface TikTokStoreOwnerAnalyticsResponse {
+  status: TikTokStoreOwnerAnalyticsStatus;
+  account?: TikTokStoreOwnerAccountResponse;
+  store?: TikTokStoreOwnerStoreResponse;
+  pendingStore?: TikTokStoreOwnerStoreResponse;
+  metrics?: {
+    summary: TikTokGrowthSummaryDto;
+    history: TikTokDailyMetricDto[];
+  };
+}
+
 export interface TikTokAccountSyncResult {
   accountId: string;
   openId: string;

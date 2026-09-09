@@ -1,5 +1,15 @@
 # Architecture & Design Decisions
 
+## TikTok Store-Owner Analytics: Signed Session Boundary and Official Data Source (2026-09-09)
+
+- **Dedicated public-integration route**: Store-owner analytics lives at `/connect/tiktok/analytics`; the existing staff routes remain unchanged and continue to require the staff session.
+- **Two-sided signed authorization**: After the binding flow confirms a store, the frontend issues a one-hour HttpOnly, SameSite, Secure-in-production HMAC session containing only the authorized TikTok account ID, Store Master ID, and expiry. The frontend page verifies it before calling the backend, and the backend verifies the same cookie again. Missing, malformed, tampered, expired, mismatched, or disconnected sessions fail closed.
+- **No browser-selected account**: The analytics endpoint is `/tiktok/internal/store-owner/me` with no account or store identifier in the URL. The backend derives both identifiers from the verified session and checks the persisted `TikTokAccount.storeMasterId` before reading data.
+- **Official-only analytics**: The service reads the persisted `TikTokAccount`, official `TikTokAccountDailyMetric` history, and official OAuth video records. It does not query or merge `TikTokPublicProfile` collector data.
+- **Safe response contract**: The store-owner DTO exposes only customer-facing profile counts, timestamps, selected store display data, daily metrics, and safe video metrics. Encrypted access/refresh tokens, internal account/store IDs, account names, and staff controls are excluded.
+- **Binding-state behavior**: Only a confirmed binding can return analytics. Pending requests return a neutral selected-store review state; unconfirmed sessions return to the association flow; no historical/video data is fabricated when snapshots or official video scope are unavailable.
+- **Review transparency**: The connected view explicitly states that the integration is read-only and will not post, edit, or delete TikTok content.
+
 ## Google Review Weekly KPI: 7-Calendar-Day True Cadence & Invariant-Preserving Migration (2026-09-09)
 
 - **7-Calendar-Day Cadence Starting from Week 2**:
