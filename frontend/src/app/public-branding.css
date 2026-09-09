@@ -1,15 +1,15 @@
-/* Public-facing OPPO wordmark treatment.
+/* Public-facing OPPO logo treatment.
    Scoped to customer/public headers so internal staff branding is untouched. */
 
 /* Main public directory surfaces: /, /stores, /stores/[identifier] */
 a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   display: block;
-  width: 64px !important;
-  height: 22px !important;
+  width: 72px !important;
+  height: 24px !important;
   flex: 0 0 auto;
   border-radius: 0 !important;
   background-color: transparent !important;
-  background-image: url("/images/oppo-logo.svg") !important;
+  background-image: url("/images/oppo-logo.png") !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
   background-size: contain !important;
@@ -18,27 +18,60 @@ a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   box-shadow: none !important;
 }
 
+/* Visually keep only "Brand Shop" beside the OPPO logo on public directory headers. */
+a[aria-label="OPPO Brand Shop Home"] > div > span:first-child {
+  font-size: 0 !important;
+}
+
+a[aria-label="OPPO Brand Shop Home"] > div > span:first-child::after {
+  content: "Brand Shop";
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
 /* TikTok public disclosure/connect headers use a div placeholder instead. */
 header a.group[href="/"] > div:first-child {
   display: block;
-  width: 64px !important;
+  width: 72px !important;
   height: 24px !important;
   flex: 0 0 auto;
-  border-radius: 6px !important;
-  border: 1px solid rgba(148, 163, 184, 0.22) !important;
-  background-color: #ffffff !important;
-  background-image: url("/images/oppo-logo.svg") !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  background-color: transparent !important;
+  background-image: url("/images/oppo-logo.png") !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
-  background-size: calc(100% - 10px) auto !important;
+  background-size: contain !important;
   color: transparent !important;
   font-size: 0 !important;
   box-shadow: none !important;
+  filter: invert(1);
+}
+
+header a.group[href="/"] > div:nth-child(2) > span:first-child {
+  font-size: 0 !important;
+}
+
+header a.group[href="/"] > div:nth-child(2) > span:first-child::after {
+  content: "Brand Shop";
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+@media (min-width: 640px) {
+  a[aria-label="OPPO Brand Shop Home"] > div > span:first-child::after,
+  header a.group[href="/"] > div:nth-child(2) > span:first-child::after {
+    font-size: 1rem;
+  }
 }
 
 @media (max-width: 420px) {
   a[aria-label="OPPO Brand Shop Home"] > span:first-child,
   header a.group[href="/"] > div:first-child {
-    width: 56px !important;
+    width: 64px !important;
   }
 }
