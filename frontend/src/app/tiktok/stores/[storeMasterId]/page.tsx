@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { fetchTikTokAccountsListFromBackend } from "../../tiktok-api-client";
 import { TikTokPublicStoreDetail } from "../../tiktok-public-store-detail";
-import { fetchTikTokPublicHistory, fetchTikTokPublicStore } from "../../tiktok-public-api";
+import { fetchTikTokPublicHistory, fetchTikTokPublicStores } from "../../tiktok-public-api";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,23 @@ export default async function TikTokPublicStorePage({ params }: Props) {
   const sessionToken = cookieStore.get("oppo_session")?.value?.trim();
   if (!sessionToken) redirect("/login");
 
+  // A store that has completed official TikTok OAuth should use the persisted
+  // official-account dashboard. Keep public-profile collector analytics as a
+  // separate fallback data source when there is no linked OAuth account.
+  const accounts = await fetchTikTokAccountsListFromBackend({ sessionToken });
+  const linkedAccount = accounts.find(
+    (account) => account.storeMasterId === storeMasterId && account.id,
+  );
+  if (linkedAccount?.id) {
+    redirect(`/tiktok/dashboard/${encodeURIComponent(linkedAccount.id)}`);
+  }
+
   try {
-    const [store, history] = await Promise.all([
-      fetchTikTokPublicStore(storeMasterId, { sessionToken }),
+    const [stores, history] = await Promise.all([
+      fetchTikTokPublicStores({ sessionToken }),
       fetchTikTokPublicHistory(storeMasterId, 30, { sessionToken }),
     ]);
+    const store = stores.find((candidate) => candidate.storeMasterId === storeMasterId) ?? null;
     if (!store) notFound();
     return <TikTokPublicStoreDetail store={store} history={history} />;
   } catch (error) {
