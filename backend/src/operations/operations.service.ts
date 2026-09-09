@@ -7,8 +7,12 @@ export class OperationsService {
 
   async getLatestResetAt(): Promise<Date | null> {
     type OpSession = { resetAt?: Date | null } | null;
+    // Keep the general operations baseline isolated from feature-specific reset records.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const latest = (await this.prisma.operationalSession.findFirst({ orderBy: { resetAt: "desc" } })) as unknown as OpSession;
+    const latest = (await this.prisma.operationalSession.findFirst({
+      where: { type: "GLOBAL" },
+      orderBy: { resetAt: "desc" },
+    })) as unknown as OpSession;
     return latest?.resetAt ?? null;
   }
 

@@ -1,9 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { LineChatNicknameSyncJobStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
-import type { LineChatHealthReport } from "./line-chat-operations.service";
+import type { LineChatHealthReport, LineChatQueueMetrics } from "./line-chat-operations.service";
 
-type ActiveJob = {
+const LINE_CHAT_HEALTH_RESET_TYPE = "LINE_CHAT_NICKNAME_HEALTH";
+
+type FreshJob = {
   id: string;
   conversationId: string;
   lineOfficialAccountId: string;
@@ -13,32 +15,66 @@ type ActiveJob = {
   conversation: { lineChatUserId: string | null };
 };
 
-type LatestJob = {
-  id: string;
-  conversationId: string;
-  createdAt: Date;
-};
+function emptyQueue(): LineChatQueueMetrics {
+  return { pending: 0, processing: 0, success: 0, failed: 0, failedAuth: 0, superseded: 0, total: 0 };
+}
+
+function addStatus(queue: LineChatQueueMetrics, status: LineChatNicknameSyncJobStatus) {
+  switch (status) {
+    case LineChatNicknameSyncJobStatus.PENDING:
+      queue.pending += 1;
+      break;
+    case LineChatNicknameSyncJobStatus.PROCESSING:
+      queue.processing += 1;
+      break;
+    case LineChatNicknameSyncJobStatus.SUCCESS:
+      queue.success += 1;
+      break;
+    case LineChatNicknameSyncJobStatus.FAILED:
+      queue.failed += 1;
+      break;
+    case LineChatNicknameSyncJobStatus.FAILED_AUTH:
+      queue.failedAuth += 1;
+      break;
+    case LineChatNicknameSyncJobStatus.SUPERSEDED:
+      queue.superseded += 1;
+      break;
+  }
+  queue.total += 1;
+}
 
 /**
- * Makes the operations health view reflect the actionable/latest nickname job
- * for each conversation without mutating queue history.
+ * Presents LINE Chat nickname health from an isolated operational baseline.
+ * Historical jobs remain untouched in the database, but the health page only
+ * counts jobs created at/after the latest LINE_CHAT_NICKNAME_HEALTH reset.
  *
- * The worker already enforces Latest-Wins. A deferred PENDING predecessor can
- * therefore remain stored until its next eligibility window even after a newer
- * job for the same conversation has succeeded. Health reporting must not show
- * that predecessor as actionable backlog.
+ * This intentionally keeps WAITING/DEFERRED work out of the Failed metric:
+ * Failed only comes from terminal FAILED / FAILED_AUTH job states.
  */
 @Injectable()
 export class LineChatHealthReconciliationService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
+  private async getOrCreateResetAt(): Promise<Date> {
+    const existing = await this.prisma.operationalSession.findFirst({
+      where: { type: LINE_CHAT_HEALTH_RESET_TYPE },
+      orderBy: { resetAt: "desc" },
+      select: { resetAt: true },
+    });
+    if (existing?.resetAt) return existing.resetAt;
+
+    const created = await this.prisma.operationalSession.create({
+      data: { type: LINE_CHAT_HEALTH_RESET_TYPE },
+      select: { resetAt: true },
+    });
+    return created.resetAt;
+  }
+
   async reconcile(report: LineChatHealthReport): Promise<LineChatHealthReport> {
-    const activeJobs = await this.prisma.lineChatNicknameSyncJob.findMany({
-      where: {
-        status: {
-          in: [LineChatNicknameSyncJobStatus.PENDING, LineChatNicknameSyncJobStatus.PROCESSING],
-        },
-      },
+    const resetAt = await this.getOrCreateResetAt();
+
+    const freshJobs = await this.prisma.lineChatNicknameSyncJob.findMany({
+      where: { createdAt: { gte: resetAt } },
       select: {
         id: true,
         conversationId: true,
@@ -48,64 +84,43 @@ export class LineChatHealthReconciliationService {
         createdAt: true,
         conversation: { select: { lineChatUserId: true } },
       },
-    }) as ActiveJob[];
+      orderBy: { createdAt: "asc" },
+    }) as FreshJob[];
 
-    if (activeJobs.length === 0) return report;
+    const freshQueue = emptyQueue();
+    for (const job of freshJobs) addStatus(freshQueue, job.status);
+    report.queue = freshQueue;
 
-    const conversationIds = [...new Set(activeJobs.map((job) => job.conversationId))];
-    const candidateJobs = await this.prisma.lineChatNicknameSyncJob.findMany({
-      where: { conversationId: { in: conversationIds } },
-      select: { id: true, conversationId: true, createdAt: true },
-      orderBy: [{ conversationId: "asc" }, { createdAt: "desc" }],
-    }) as LatestJob[];
+    const oaIds = [...new Set(freshJobs.map((job) => job.lineOfficialAccountId))];
+    const oas = oaIds.length > 0
+      ? await this.prisma.lineOfficialAccount.findMany({
+          where: { id: { in: oaIds } },
+          select: { id: true, lineChatSessionId: true },
+        })
+      : [];
+    const sessionIdByOa = new Map(
+      oas.flatMap((oa) => oa.lineChatSessionId ? [[oa.id, oa.lineChatSessionId] as const] : []),
+    );
 
-    const latestByConversation = new Map<string, LatestJob>();
-    for (const job of candidateJobs) {
-      if (!latestByConversation.has(job.conversationId)) {
-        latestByConversation.set(job.conversationId, job);
-      }
-    }
-
-    const staleActiveJobs = activeJobs.filter((job) => {
-      const latest = latestByConversation.get(job.conversationId);
-      return Boolean(latest && latest.createdAt.getTime() > job.createdAt.getTime());
-    });
-    const staleIds = new Set(staleActiveJobs.map((job) => job.id));
-    const effectiveActiveJobs = activeJobs.filter((job) => !staleIds.has(job.id));
-
-    if (staleActiveJobs.length > 0) {
-      const staleOaIds = [...new Set(staleActiveJobs.map((job) => job.lineOfficialAccountId))];
-      const oas = await this.prisma.lineOfficialAccount.findMany({
-        where: { id: { in: staleOaIds } },
-        select: { id: true, lineChatSessionId: true },
+    for (const session of report.sessions) {
+      session.jobs = emptyQueue();
+      session.recentFailures = session.recentFailures.filter((failure) => {
+        const createdAt = new Date(failure.createdAt);
+        return Number.isFinite(createdAt.getTime()) && createdAt >= resetAt;
       });
-      const sessionIdByOa = new Map(
-        oas.flatMap((oa) => oa.lineChatSessionId ? [[oa.id, oa.lineChatSessionId] as const] : []),
-      );
-
-      for (const stale of staleActiveJobs) {
-        if (stale.status === LineChatNicknameSyncJobStatus.PENDING && report.queue.pending > 0) {
-          report.queue.pending -= 1;
-        } else if (stale.status === LineChatNicknameSyncJobStatus.PROCESSING && report.queue.processing > 0) {
-          report.queue.processing -= 1;
-        }
-        report.queue.superseded += 1;
-
-        const sessionId = sessionIdByOa.get(stale.lineOfficialAccountId);
-        const session = sessionId ? report.sessions.find((item) => item.id === sessionId) : undefined;
-        if (session) {
-          if (stale.status === LineChatNicknameSyncJobStatus.PENDING && session.jobs.pending > 0) {
-            session.jobs.pending -= 1;
-          } else if (stale.status === LineChatNicknameSyncJobStatus.PROCESSING && session.jobs.processing > 0) {
-            session.jobs.processing -= 1;
-          }
-          session.jobs.superseded += 1;
-        }
-      }
     }
 
-    const pending = effectiveActiveJobs.filter((job) => job.status === LineChatNicknameSyncJobStatus.PENDING);
-    const mappedReadyPending = pending.filter((job) => Boolean(job.lineChatUserId?.trim() || job.conversation.lineChatUserId?.trim())).length;
+    for (const job of freshJobs) {
+      const sessionId = sessionIdByOa.get(job.lineOfficialAccountId);
+      if (!sessionId) continue;
+      const session = report.sessions.find((item) => item.id === sessionId);
+      if (session) addStatus(session.jobs, job.status);
+    }
+
+    const pending = freshJobs.filter((job) => job.status === LineChatNicknameSyncJobStatus.PENDING);
+    const mappedReadyPending = pending.filter((job) =>
+      Boolean(job.lineChatUserId?.trim() || job.conversation.lineChatUserId?.trim()),
+    ).length;
     const waitingForMapping = pending.length - mappedReadyPending;
     const oldestPending = pending.reduce<Date | null>((oldest, job) => {
       if (!oldest || job.createdAt < oldest) return job.createdAt;

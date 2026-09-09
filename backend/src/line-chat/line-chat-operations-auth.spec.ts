@@ -116,7 +116,12 @@ test("Operations Security: Health summary output never exposes sensitive credent
   };
 
   const ops = new LineChatOperationsService(mockPrisma as never);
-  const controller = new LineChatOperationsController(ops);
+  const controller = new LineChatOperationsController(
+    ops,
+    undefined as never,
+    undefined as never,
+    { reconcile: async (report: unknown) => report } as never,
+  );
   const report = await controller.getHealth();
 
   const serialized = JSON.stringify(report);
