@@ -52,6 +52,13 @@ function readRequestMetadata(value: unknown): BindingRequestMetadata | null {
   };
 }
 
+function readSimpleBindingMetadata(value: unknown): { accountId: string; storeMasterId: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.accountId !== "string" || typeof raw.storeMasterId !== "string") return null;
+  return { accountId: raw.accountId, storeMasterId: raw.storeMasterId };
+}
+
 @Injectable()
 export class TikTokStoreBindingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -84,6 +91,19 @@ export class TikTokStoreBindingService {
         return metadata?.accountId === accountId && metadata.status === "PENDING";
       }) || null
     );
+  }
+
+  private async isStoreBindingConfirmed(accountId: string, storeMasterId: string): Promise<boolean> {
+    const logs = await this.prisma.auditLog.findMany({
+      where: { action: { in: [CONFIRMED_ACTION, APPROVED_ACTION] } },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    });
+
+    return logs.some((log) => {
+      const metadata = readSimpleBindingMetadata(log.metadata);
+      return metadata?.accountId === accountId && metadata.storeMasterId === storeMasterId;
+    });
   }
 
   private async findExactStoreByUsername(username?: string | null): Promise<TikTokBindingStoreSummary | null> {
@@ -120,8 +140,19 @@ export class TikTokStoreBindingService {
     });
     if (!account) throw new NotFoundException("TikTok account not found");
 
+    const hasConfirmedCurrentStore = Boolean(
+      account.storeMaster &&
+      (await this.isStoreBindingConfirmed(account.id, account.storeMaster.id)),
+    );
+
+    // Existing TikTok sync logic may already have auto-matched storeMasterId by username.
+    // Until the user explicitly confirms that match (or HQ approves a manual request),
+    // present it as a suggestion rather than a completed store association.
+    const currentStore = hasConfirmedCurrentStore ? account.storeMaster : null;
     const suggestedStore = account.storeMaster
-      ? account.storeMaster
+      ? hasConfirmedCurrentStore
+        ? null
+        : account.storeMaster
       : await this.findExactStoreByUsername(account.username);
 
     const pendingLog = await this.findPendingRequestForAccount(account.id);
@@ -170,7 +201,7 @@ export class TikTokStoreBindingService {
     return {
       accountId: account.id,
       username: account.username,
-      currentStore: account.storeMaster,
+      currentStore,
       suggestedStore,
       pendingRequest,
       options,
@@ -238,7 +269,11 @@ export class TikTokStoreBindingService {
     if (!store) throw new NotFoundException("Store not found");
 
     if (account.storeMasterId === store.id) {
-      return { status: "CONNECTED" as const, store };
+      const confirmed = await this.isStoreBindingConfirmed(account.id, store.id);
+      if (confirmed) {
+        return { status: "CONNECTED" as const, store };
+      }
+      return this.confirmSuggestedBinding(account.id, store.id);
     }
 
     const logs = await this.getRecentRequestLogs();
