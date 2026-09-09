@@ -1,18 +1,6 @@
 /* Public-facing OPPO wordmark treatment.
    Scoped to customer/public headers so internal staff branding is untouched. */
 
-/* Supporting Brand Shop icon. The existing first child remains the wordmark. */
-a[aria-label="OPPO Brand Shop Home"]::before,
-header a.group[href="/"]::before {
-  content: "";
-  display: block;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border-radius: 6px;
-  background: #211b1d url("/images/LOGO_OBS.png") center / contain no-repeat;
-}
-
 /* Main public directory surfaces: /, /stores, /stores/[identifier] */
 a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   display: block;
@@ -49,12 +37,6 @@ header a.group[href="/"] > div:first-child {
 }
 
 @media (max-width: 420px) {
-  a[aria-label="OPPO Brand Shop Home"]::before,
-  header a.group[href="/"]::before {
-    width: 24px;
-    height: 24px;
-  }
-
   a[aria-label="OPPO Brand Shop Home"] > span:first-child,
   header a.group[href="/"] > div:first-child {
     width: 56px !important;
