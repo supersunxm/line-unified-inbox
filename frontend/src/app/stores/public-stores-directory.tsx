@@ -13,6 +13,7 @@ import {
 import {
   type PublicStoreDto,
 } from "@/lib/public-stores-api";
+import { PublicBrandIcon } from "@/components/public-brand-icon";
 
 export function PublicStoresDirectory() {
   const searchParams = useSearchParams();
@@ -130,6 +131,7 @@ export function PublicStoresDirectory() {
             className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
             aria-label="OPPO Brand Shop Home"
           >
+            <PublicBrandIcon />
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white shadow-sm">
               O
             </span>

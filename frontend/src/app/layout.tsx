@@ -9,6 +9,10 @@ export const metadata: Metadata = {
     template: "%s | OPPO Brand Shop",
   },
   description: "ค้นหาข้อมูลสาขาและช่องทางติดต่อ LINE Official Account, TikTok ของ OPPO Brand Shop ทั่วประเทศไทย",
+  icons: {
+    icon: [{ url: "/images/LOGO_OBS.png", type: "image/png", sizes: "1024x1024" }],
+    apple: [{ url: "/images/LOGO_OBS.png", type: "image/png", sizes: "1024x1024" }],
+  },
 };
 
 const themeInitializationScript = `

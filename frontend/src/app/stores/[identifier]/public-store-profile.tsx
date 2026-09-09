@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PublicBrandIcon } from "@/components/public-brand-icon";
 import { useEffect, useState } from "react";
 import {
   fetchPublicStoreByIdentifier,
@@ -64,6 +65,7 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
               className="flex items-center gap-2 transition hover:opacity-90"
               aria-label="OPPO Brand Shop Home"
             >
+              <PublicBrandIcon />
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--app-accent)] text-xs font-bold text-white">
                 O
               </span>

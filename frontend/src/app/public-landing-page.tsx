@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchPublicStores, type PublicStoreDto } from "@/lib/public-stores-api";
 import { formatPublicRegion } from "@/lib/public-regions";
+import { PublicBrandIcon } from "@/components/public-brand-icon";
 
 export function PublicLandingPage() {
   const router = useRouter();
@@ -61,6 +62,7 @@ export function PublicLandingPage() {
             className="flex items-center gap-3 transition hover:opacity-90"
             aria-label="OPPO Brand Shop Home"
           >
+            <PublicBrandIcon />
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white shadow-sm">
               O
             </span>

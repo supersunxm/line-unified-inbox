@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PublicBrandIcon } from "@/components/public-brand-icon";
 
 export const metadata: Metadata = {
   title: {
@@ -15,6 +16,7 @@ export default function TikTokIntegrationPage() {
       <header className="sticky top-0 z-30 border-b border-[var(--app-border,#1e2430)] bg-[var(--app-surface,#12151c)]/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
+            <PublicBrandIcon />
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#00ba7c)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
               O
             </div>

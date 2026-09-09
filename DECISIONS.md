@@ -2126,3 +2126,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Reapply the existing normalized exact-name and resolver eligibility boundaries for every batch conversation. Persist only unique same-OA candidates with the existing serializable/null-guarded writes; ambiguous, conflicting, or unresolved jobs remain pending with long backoff. Mapping persistence happens after the profile scan lease is released.
 - Keep the nickname worker’s durable mapping-first path separate from mapping discovery: mapped jobs go directly to nickname PUT, missing mappings do not open a browser, and DB connectivity errors stop new claims with sanitized bounded retry. The existing Pause/Resume controls, auth false-positive protection, fail-closed relay behavior, and no-Push policy remain unchanged.
 - Add only additive health metrics (`mappedReadyPending`, `waitingForMapping`, `oldestPendingAt`); no Prisma migration, production backlog resume, customer message, profile access, or production data mutation is part of this implementation.
+
+## 2026-09-09: Use the exact OPPO Brand Shop image for web app identity
+
+- Treat `frontend/public/images/LOGO_OBS.png` as the single source of truth for browser, Apple-touch, manifest, and public-header icon usage. Native App Router icon files are exact binary copies; no redraw, recolor, crop, or trace is introduced.
+- Remove the previous App Router favicon and emit explicit root metadata links so browsers and Apple devices receive the same source identity. The manifest references the same full-square PNG and does not introduce a separate generated icon asset.
+- Keep the existing public green `O`/wordmark and text unchanged. A shared decorative `<Image>` is added beside the existing branding at a restrained 24px mobile / 28px desktop size; empty alt text avoids duplicate accessible brand names.
+- This is a frontend-only branding change. It intentionally excludes backend, database, OAuth, authentication, LINE OA, StoreMaster, and internal UI behavior.
