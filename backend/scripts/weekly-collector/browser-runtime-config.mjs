@@ -61,9 +61,11 @@ export function resolveGoogleReviewHeadless(env = process.env) {
 export function buildGoogleReviewLaunchOptions(env = process.env, overrides = {}) {
   const headless = resolveGoogleReviewHeadless(env);
   const isLinux = process.platform === "linux" || Boolean(env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID);
+  const browserLocale = overrides.locale || env.GOOGLE_REVIEW_LOCALE || "en-US";
 
   const baseArgs = [
     "--disable-blink-features=AutomationControlled",
+    `--lang=${browserLocale}`,
   ];
 
   // In Linux / containerized environments, sandbox and dev-shm flags are critical
@@ -84,6 +86,7 @@ export function buildGoogleReviewLaunchOptions(env = process.env, overrides = {}
   return {
     headless: overrides.headless !== undefined ? overrides.headless : headless,
     userAgent: overrides.userAgent || env.GOOGLE_REVIEW_USER_AGENT || defaultUserAgent,
+    locale: browserLocale,
     args: Array.from(new Set([...baseArgs, ...extraArgs])),
     viewport: overrides.viewport || { width: 1440, height: 900 },
     ...overrides,
