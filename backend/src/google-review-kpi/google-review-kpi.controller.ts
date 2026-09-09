@@ -19,6 +19,7 @@ import {
   CompleteStoreAuditDto,
   ExportWeeklyLeaderboardDto,
   FailStoreAuditDto,
+  LOCKED_WEEKLY_KPI_STORE_CODES,
   QueryGoogleReviewKpiDto,
   QueryWeeklyLeaderboardDto,
   RecordDailyKpiDto,
@@ -69,14 +70,32 @@ export class GoogleReviewKpiController {
     @Query() query: ExportWeeklyLeaderboardDto,
     @Res() res: Response,
   ) {
-    // Downloads must refresh their store membership from StoreMaster first.
-    // The weekly membership key (`storeCode`) is the business Store ID, never
-    // an internal Store UUID. Fail closed if StoreMaster cannot resolve every
-    // expected Store ID instead of exporting stale or guessed identities.
-    const sync = await this.kpiService.syncWeeklyStoreMemberships();
-    if (sync.unmatchedStoreCodes.length > 0 || sync.duplicateMappings > 0) {
+    // A download is a read operation. Verify the already-synchronized weekly
+    // memberships by their business Store ID without mutating Store/StoreMaster
+    // relationships on the GET request. This keeps Store ID fail-closed while
+    // avoiding sync-side database writes from breaking file generation.
+    const weeklyStores = await this.kpiService.getWeeklyStores();
+    const expected = new Set(LOCKED_WEEKLY_KPI_STORE_CODES);
+    const seen = new Set<string>();
+    const duplicateStoreCodes = new Set<string>();
+
+    for (const store of weeklyStores) {
+      const code = store.storeCode?.trim();
+      if (!code) continue;
+      if (seen.has(code)) duplicateStoreCodes.add(code);
+      seen.add(code);
+    }
+
+    const missingStoreCodes = LOCKED_WEEKLY_KPI_STORE_CODES.filter((code) => !seen.has(code));
+    const unexpectedStoreCodes = [...seen].filter((code) => !expected.has(code));
+
+    if (
+      missingStoreCodes.length > 0 ||
+      unexpectedStoreCodes.length > 0 ||
+      duplicateStoreCodes.size > 0
+    ) {
       throw new InternalServerErrorException(
-        `Canonical Store ID verification failed before Google Review export: unmatched=${sync.unmatchedStoreCodes.join(",") || "none"}; duplicateMappings=${sync.duplicateMappings}`,
+        `Canonical Store ID verification failed before Google Review export: missing=${missingStoreCodes.join(",") || "none"}; unexpected=${unexpectedStoreCodes.join(",") || "none"}; duplicates=${[...duplicateStoreCodes].join(",") || "none"}`,
       );
     }
 

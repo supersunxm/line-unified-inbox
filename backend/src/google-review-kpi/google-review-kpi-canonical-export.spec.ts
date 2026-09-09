@@ -2,6 +2,7 @@ import "reflect-metadata";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GoogleReviewKpiController } from "./google-review-kpi.controller";
+import { LOCKED_WEEKLY_KPI_STORE_CODES } from "./google-review-kpi.dto";
 import type { GoogleReviewKpiService } from "./google-review-kpi.service";
 
 type FakeResponse = {
@@ -24,19 +25,32 @@ function response(): FakeResponse {
   };
 }
 
-test("Google Review download synchronizes StoreMaster identity before generating the export", async () => {
+function canonicalWeeklyStores() {
+  return LOCKED_WEEKLY_KPI_STORE_CODES.map((storeCode, index) => ({
+    id: `membership-${index}`,
+    storeCode,
+    storeId: `internal-${index}`,
+    storeName: `Store ${storeCode}`,
+    region: "Central",
+    province: "Bangkok",
+    googleMapsUrl: `https://maps.example/${storeCode}`,
+    hasGoogleMaps: true,
+    isActive: true,
+    effectiveFrom: "2026-08-26T00:00:00.000Z",
+    effectiveTo: null,
+  }));
+}
+
+test("Google Review download verifies canonical Store IDs without running a mutating sync", async () => {
   const calls: string[] = [];
   const service = {
+    getWeeklyStores: async () => {
+      calls.push("verify");
+      return canonicalWeeklyStores();
+    },
     syncWeeklyStoreMemberships: async () => {
       calls.push("sync");
-      return {
-        expectedStoreCount: 65,
-        matchedStoreMasterCount: 65,
-        unmatchedStoreCodes: [],
-        duplicateMappings: 0,
-        storesMissingGoogleMapsUrl: [],
-        syncedMembershipsCount: 65,
-      };
+      throw new Error("download must not mutate weekly membership state");
     },
     exportWeeklyLeaderboard: async () => {
       calls.push("export");
@@ -52,21 +66,15 @@ test("Google Review download synchronizes StoreMaster identity before generating
   const res = response();
   await controller.exportWeeklyLeaderboard({ format: "csv" }, res as any);
 
-  assert.deepEqual(calls, ["sync", "export"]);
+  assert.deepEqual(calls, ["verify", "export"]);
   assert.equal(res.endedWith?.toString("utf8"), "canonical");
 });
 
-test("Google Review download fails closed when a Store ID is missing from StoreMaster", async () => {
+test("Google Review download fails closed when a canonical Store ID is missing", async () => {
   let exportCalled = false;
+  const missingCode = LOCKED_WEEKLY_KPI_STORE_CODES[0];
   const service = {
-    syncWeeklyStoreMemberships: async () => ({
-      expectedStoreCount: 65,
-      matchedStoreMasterCount: 64,
-      unmatchedStoreCodes: ["12140"],
-      duplicateMappings: 0,
-      storesMissingGoogleMapsUrl: [],
-      syncedMembershipsCount: 65,
-    }),
+    getWeeklyStores: async () => canonicalWeeklyStores().filter((store) => store.storeCode !== missingCode),
     exportWeeklyLeaderboard: async () => {
       exportCalled = true;
       return {
@@ -80,21 +88,18 @@ test("Google Review download fails closed when a Store ID is missing from StoreM
   const controller = new GoogleReviewKpiController(service);
   await assert.rejects(
     controller.exportWeeklyLeaderboard({ format: "csv" }, response() as any),
-    /Canonical Store ID verification failed.*12140/,
+    new RegExp(`Canonical Store ID verification failed.*missing=${missingCode}`),
   );
   assert.equal(exportCalled, false);
 });
 
-test("Google Review download fails closed on duplicate Store ID mappings", async () => {
+test("Google Review download fails closed on duplicate or unexpected Store IDs", async () => {
+  const stores = canonicalWeeklyStores();
+  stores.push({ ...stores[0], id: "duplicate-membership" });
+  stores.push({ ...stores[0], id: "unexpected-membership", storeCode: "999999" });
+
   const service = {
-    syncWeeklyStoreMemberships: async () => ({
-      expectedStoreCount: 65,
-      matchedStoreMasterCount: 65,
-      unmatchedStoreCodes: [],
-      duplicateMappings: 1,
-      storesMissingGoogleMapsUrl: [],
-      syncedMembershipsCount: 65,
-    }),
+    getWeeklyStores: async () => stores,
     exportWeeklyLeaderboard: async () => {
       throw new Error("export should not run");
     },
@@ -103,6 +108,6 @@ test("Google Review download fails closed on duplicate Store ID mappings", async
   const controller = new GoogleReviewKpiController(service);
   await assert.rejects(
     controller.exportWeeklyLeaderboard({ format: "xlsx" }, response() as any),
-    /duplicateMappings=1/,
+    /unexpected=999999.*duplicates=/,
   );
 });
