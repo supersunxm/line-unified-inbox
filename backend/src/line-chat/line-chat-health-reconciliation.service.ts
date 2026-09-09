@@ -74,6 +74,15 @@ export class LineChatHealthReconciliationService {
     const effectiveActiveJobs = activeJobs.filter((job) => !staleIds.has(job.id));
 
     if (staleActiveJobs.length > 0) {
+      const staleOaIds = [...new Set(staleActiveJobs.map((job) => job.lineOfficialAccountId))];
+      const oas = await this.prisma.lineOfficialAccount.findMany({
+        where: { id: { in: staleOaIds } },
+        select: { id: true, lineChatSessionId: true },
+      });
+      const sessionIdByOa = new Map(
+        oas.flatMap((oa) => oa.lineChatSessionId ? [[oa.id, oa.lineChatSessionId] as const] : []),
+      );
+
       for (const stale of staleActiveJobs) {
         if (stale.status === LineChatNicknameSyncJobStatus.PENDING && report.queue.pending > 0) {
           report.queue.pending -= 1;
@@ -82,9 +91,8 @@ export class LineChatHealthReconciliationService {
         }
         report.queue.superseded += 1;
 
-        const session = report.sessions.find((item) =>
-          item.jobs && item.id && this.sessionOwnsOa(item.id, stale.lineOfficialAccountId, report),
-        );
+        const sessionId = sessionIdByOa.get(stale.lineOfficialAccountId);
+        const session = sessionId ? report.sessions.find((item) => item.id === sessionId) : undefined;
         if (session) {
           if (stale.status === LineChatNicknameSyncJobStatus.PENDING && session.jobs.pending > 0) {
             session.jobs.pending -= 1;
@@ -111,25 +119,5 @@ export class LineChatHealthReconciliationService {
     };
 
     return report;
-  }
-
-  /**
-   * Session ownership is inferred from the raw per-session counts only when an
-   * OA lookup is available. This helper is intentionally overridden below by
-   * a cached OA/session map created on demand.
-   */
-  private oaSessionMap: Map<string, string> | null = null;
-
-  private sessionOwnsOa(sessionId: string, oaId: string, _report: LineChatHealthReport): boolean {
-    return this.oaSessionMap?.get(oaId) === sessionId;
-  }
-
-  private async ensureOaSessionMap() {
-    if (this.oaSessionMap) return;
-    const oas = await this.prisma.lineOfficialAccount.findMany({
-      where: { lineChatSessionId: { not: null } },
-      select: { id: true, lineChatSessionId: true },
-    });
-    this.oaSessionMap = new Map(oas.flatMap((oa) => oa.lineChatSessionId ? [[oa.id, oa.lineChatSessionId] as const] : []));
   }
 }
