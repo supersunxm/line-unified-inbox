@@ -150,7 +150,7 @@ export class GoogleReviewKpiController {
     @Param("sessionId") sessionId: string,
     @Body() dto: UpdateAuditSessionStatusDto,
   ) {
-    return this.kpiService.updateBatchAuditStatus(sessionId, dto);
+    return this.kpiService.updateAuditSessionStatus(sessionId, dto);
   }
 
   @Get("audit-session/:sessionId/next-store")
