@@ -60,11 +60,18 @@ export function resolveGoogleReviewHeadless(env = process.env) {
  */
 export function buildGoogleReviewLaunchOptions(env = process.env, overrides = {}) {
   const headless = resolveGoogleReviewHeadless(env);
-  const isLinux = process.platform === "linux" || Boolean(env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID);
+  const isRailway = Boolean(env.RAILWAY_ENVIRONMENT || env.RAILWAY_PROJECT_ID);
+  const isLinux = process.platform === "linux" || isRailway;
+  const browserLocale = overrides.locale || env.GOOGLE_REVIEW_LOCALE || (isRailway ? "en-US" : null);
 
   const baseArgs = [
     "--disable-blink-features=AutomationControlled",
   ];
+
+  // Normalize Railway's accessible labels while leaving the proven local Mac profile unchanged.
+  if (browserLocale) {
+    baseArgs.push(`--lang=${browserLocale}`);
+  }
 
   // In Linux / containerized environments, sandbox and dev-shm flags are critical
   if (isLinux) {
@@ -81,11 +88,17 @@ export function buildGoogleReviewLaunchOptions(env = process.env, overrides = {}
   const defaultUserAgent =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
-  return {
+  const options = {
     headless: overrides.headless !== undefined ? overrides.headless : headless,
     userAgent: overrides.userAgent || env.GOOGLE_REVIEW_USER_AGENT || defaultUserAgent,
     args: Array.from(new Set([...baseArgs, ...extraArgs])),
     viewport: overrides.viewport || { width: 1440, height: 900 },
     ...overrides,
   };
+
+  if (browserLocale && !options.locale) {
+    options.locale = browserLocale;
+  }
+
+  return options;
 }

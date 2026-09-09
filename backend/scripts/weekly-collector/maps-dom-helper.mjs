@@ -183,84 +183,205 @@ export async function openReviewsPane(page) {
 
 /**
  * Ensures the reviews pane is sorted by "Newest" / "ใหม่ที่สุด".
- * Returns { success: boolean, reason?: string, currentSort?: string }
+ *
+ * Railway occasionally receives a slightly different Google Maps DOM where the generic
+ * .HQzyZ class can match a non-sort button and the menu renders more slowly than local Chrome.
+ * This implementation therefore:
+ * - chooses the sort control semantically (accessible label/text), never by class alone;
+ * - waits/polls for the menu for up to ~4 seconds;
+ * - clicks ONLY an option whose text/aria explicitly means Newest;
+ * - re-opens the menu and verifies aria-checked/aria-selected when the button label does not update;
+ * - returns compact diagnostics on failure while preserving fail-safe behavior.
  */
 export async function ensureNewestSort(page) {
   return await page.evaluate(async () => {
-    const sortBtn = document.querySelector(
-      "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i]"
-    );
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const isNewestText = (value) => {
+      const text = normalize(value);
+      return (
+        text.includes("newest") ||
+        text.includes("most recent") ||
+        text.includes("ใหม่ที่สุด") ||
+        text.includes("ใหม่ล่าสุด") ||
+        text.includes("ล่าสุด")
+      );
+    };
+    const isSortControlText = (value) => {
+      const text = normalize(value);
+      return (
+        text.includes("sort") ||
+        text.includes("เรียง") ||
+        text.includes("จัดเรียง") ||
+        text.includes("most relevant") ||
+        text.includes("relevant") ||
+        text.includes("เกี่ยวข้องที่สุด") ||
+        isNewestText(text)
+      );
+    };
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+    };
+    const accessibleText = (el) => {
+      if (!el) return "";
+      return [
+        el.getAttribute?.("aria-label") || "",
+        el.getAttribute?.("data-value") || "",
+        el.getAttribute?.("title") || "",
+        el.textContent || "",
+      ].join(" ");
+    };
+
+    const findSortButton = () => {
+      const buttons = Array.from(document.querySelectorAll("button, [role='button']"));
+      const semantic = buttons.find((el) => isVisible(el) && isSortControlText(accessibleText(el)));
+      if (semantic) return semantic;
+
+      // Conservative fallback: only accept HQzyZ when its own accessible text also looks sort-related.
+      return buttons.find(
+        (el) =>
+          isVisible(el) &&
+          el.matches?.("button.HQzyZ") &&
+          isSortControlText(accessibleText(el)),
+      ) || null;
+    };
+
+    const collectMenuCandidates = () => {
+      const selectors = [
+        "[role='menuitemradio']",
+        "[role='menuitem']",
+        "[role='option']",
+        "[role='radio']",
+        "[aria-checked]",
+      ].join(",");
+
+      const seen = new Set();
+      const items = [];
+      for (const el of Array.from(document.querySelectorAll(selectors))) {
+        if (!isVisible(el)) continue;
+        if (seen.has(el)) continue;
+        seen.add(el);
+        const label = accessibleText(el);
+        const normalized = normalize(label);
+        if (!normalized) continue;
+        items.push({
+          el,
+          label: label.replace(/\s+/g, " ").trim().slice(0, 160),
+          checked: el.getAttribute?.("aria-checked"),
+          selected: el.getAttribute?.("aria-selected"),
+        });
+      }
+      return items;
+    };
+
+    const getSortLabel = () => {
+      const button = findSortButton();
+      return button ? accessibleText(button).replace(/\s+/g, " ").trim().slice(0, 200) : "";
+    };
+
+    let sortBtn = findSortButton();
     if (!sortBtn) {
-      // If there are only a few cards (e.g. <= 3), sort button might not be rendered
       const cards = document.querySelectorAll(".jftiEf, div[data-review-id]").length;
       if (cards > 0 && cards <= 3) {
-        return { success: true, reason: "FEW_CARDS_NO_SORT_BTN" };
+        return { success: true, reason: "FEW_CARDS_NO_SORT_BTN", diagnostic: { cards } };
       }
-      return { success: false, reason: "ERROR_SORT_BUTTON_NOT_FOUND" };
+      return {
+        success: false,
+        reason: "ERROR_SORT_BUTTON_NOT_FOUND",
+        diagnostic: { cards },
+      };
     }
 
-    const textBefore = (sortBtn.textContent || "").trim();
-    const ariaBefore = (sortBtn.getAttribute("aria-label") || "").trim();
-    const isAlreadyNewest =
-      textBefore.includes("ใหม่ที่สุด") ||
-      textBefore.includes("ล่าสุด") ||
-      textBefore.includes("Newest") ||
-      ariaBefore.includes("ใหม่ที่สุด") ||
-      ariaBefore.includes("ล่าสุด") ||
-      ariaBefore.includes("Newest");
-
-    if (isAlreadyNewest) {
-      return { success: true, reason: "ALREADY_NEWEST", currentSort: textBefore || ariaBefore };
+    const beforeLabel = accessibleText(sortBtn).replace(/\s+/g, " ").trim().slice(0, 200);
+    if (isNewestText(beforeLabel)) {
+      return { success: true, reason: "ALREADY_NEWEST", currentSort: beforeLabel };
     }
 
-    sortBtn.click();
-    await new Promise((r) => setTimeout(r, 600));
+    // Retry opening the menu because Railway/headless DOM rendering can lag behind click dispatch.
+    let lastCandidates = [];
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      sortBtn = findSortButton();
+      if (!sortBtn) break;
 
-    const items = Array.from(
-      document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio'], [role='option']")
-    );
-    const newestOption =
-      items.find((el) => {
-        const t = (el.textContent || "").toLowerCase();
-        const a = (el.getAttribute("aria-label") || "").toLowerCase();
-        return (
-          t.includes("ใหม่ที่สุด") ||
-          t.includes("ล่าสุด") ||
-          t.includes("newest") ||
-          a.includes("ใหม่ที่สุด") ||
-          a.includes("ล่าสุด") ||
-          a.includes("newest")
-        );
-      }) || items[1];
+      sortBtn.scrollIntoView?.({ block: "center", inline: "center" });
+      sortBtn.click();
 
-    if (!newestOption) {
-      return { success: false, reason: "ERROR_NEWEST_OPTION_NOT_FOUND" };
-    }
+      let newestItem = null;
+      for (let poll = 0; poll < 16; poll++) {
+        await sleep(250);
+        const candidates = collectMenuCandidates();
+        lastCandidates = candidates.map((item) => item.label).slice(0, 12);
+        newestItem = candidates.find((item) => isNewestText(item.label)) || null;
+        if (newestItem) break;
+      }
 
-    newestOption.click();
-    await new Promise((r) => setTimeout(r, 1500));
+      if (!newestItem) {
+        // A stale/incorrect control may have been clicked. Close any popup and try again.
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await sleep(350);
+        continue;
+      }
 
-    const sortBtnAfter = document.querySelector(
-      "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='ใหม่ที่สุด' i]"
-    );
-    const textAfter = (sortBtnAfter?.textContent || "").trim();
-    const ariaAfter = (sortBtnAfter?.getAttribute("aria-label") || "").trim();
-    const isNowNewest =
-      textAfter.includes("ใหม่ที่สุด") ||
-      textAfter.includes("ล่าสุด") ||
-      textAfter.includes("Newest") ||
-      ariaAfter.includes("ใหม่ที่สุด") ||
-      ariaAfter.includes("ล่าสุด") ||
-      ariaAfter.includes("Newest");
+      newestItem.el.click();
+      await sleep(1400);
 
-    if (isNowNewest) {
-      return { success: true, reason: "SORTED_TO_NEWEST", currentSort: textAfter || ariaAfter };
+      const afterLabel = getSortLabel();
+      if (isNewestText(afterLabel)) {
+        return {
+          success: true,
+          reason: "SORTED_TO_NEWEST",
+          currentSort: afterLabel,
+          diagnostic: { attempt },
+        };
+      }
+
+      // Some Google Maps variants leave the button label as "Sort reviews" even after selection.
+      // Re-open and verify the Newest option itself is selected instead of guessing by position.
+      const verifyBtn = findSortButton();
+      if (verifyBtn) {
+        verifyBtn.click();
+        let selectedNewest = null;
+        for (let poll = 0; poll < 12; poll++) {
+          await sleep(250);
+          const candidates = collectMenuCandidates();
+          lastCandidates = candidates.map((item) => item.label).slice(0, 12);
+          selectedNewest = candidates.find(
+            (item) =>
+              isNewestText(item.label) &&
+              (item.checked === "true" || item.selected === "true"),
+          ) || null;
+          if (selectedNewest) break;
+        }
+
+        if (selectedNewest) {
+          verifyBtn.click();
+          await sleep(250);
+          return {
+            success: true,
+            reason: "SORTED_TO_NEWEST_MENU_STATE",
+            currentSort: selectedNewest.label,
+            diagnostic: { attempt },
+          };
+        }
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        await sleep(350);
+      }
     }
 
     return {
       success: false,
-      reason: "ERROR_NEWEST_SORT_UNVERIFIED",
-      currentSort: textAfter || ariaAfter,
+      reason: lastCandidates.length > 0 ? "ERROR_NEWEST_OPTION_NOT_FOUND" : "ERROR_NEWEST_MENU_NOT_RENDERED",
+      currentSort: getSortLabel(),
+      diagnostic: {
+        beforeLabel,
+        menuCandidates: lastCandidates,
+        reviewCards: document.querySelectorAll(".jftiEf, div[data-review-id]").length,
+      },
     };
   });
 }
