@@ -5,6 +5,7 @@ import { AuthGuard } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
 import { LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
+import { LineChatPendingControlService } from "./line-chat-pending-control.service";
 
 export class RetrySelectedJobsDto {
   @IsString()
@@ -34,6 +35,7 @@ export class LineChatOperationsController {
   constructor(
     private readonly operationsService: LineChatOperationsService,
     private readonly novncRecovery: LineChatNovncRecoveryService,
+    private readonly pendingControl: LineChatPendingControlService,
   ) {}
 
   @Get("health")
@@ -71,6 +73,21 @@ export class LineChatOperationsController {
   @Post("sessions/:sessionKey/try-remembered-login")
   async tryRememberedLogin(@Param("sessionKey") sessionKey: string) {
     return this.operationsService.tryRememberedLogin(sessionKey.trim());
+  }
+
+  @Get("sessions/:sessionKey/pending-control")
+  async getPendingControl(@Param("sessionKey") sessionKey: string) {
+    return this.pendingControl.status(sessionKey.trim());
+  }
+
+  @Post("sessions/:sessionKey/pending-control/pause")
+  async pausePending(@Param("sessionKey") sessionKey: string) {
+    return this.pendingControl.pause(sessionKey.trim());
+  }
+
+  @Post("sessions/:sessionKey/pending-control/resume")
+  async resumePending(@Param("sessionKey") sessionKey: string) {
+    return this.pendingControl.resume(sessionKey.trim());
   }
 
   @Get("sessions/:sessionKey/manual-recovery")
