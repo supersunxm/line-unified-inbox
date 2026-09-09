@@ -1,10 +1,19 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { LineChatNicknameSyncJobStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 
 const PROFILE_B_SESSION_KEY = "profile-b";
 const PAUSE_MARKER = "OPERATOR_PAUSED_PENDING";
 const PAUSE_UNTIL = new Date("2099-12-31T23:59:59.000Z");
+const MAX_RUN_JOBS = 500;
+
+function sanitizeRunError(value: string | null): string | null {
+  if (!value) return null;
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [REDACTED]")
+    .replace(/(token|authorization|cookie|secret)=?[:\s]+[^\s,;]+/gi, "$1=[REDACTED]")
+    .slice(0, 240);
+}
 
 @Injectable()
 export class LineChatPendingControlService {
@@ -68,23 +77,126 @@ export class LineChatPendingControlService {
 
   public async resume(sessionKey: string) {
     const oaIds = await this.resolveOaIds(sessionKey);
-    const result = await this.prisma.lineChatNicknameSyncJob.updateMany({
+    const candidates = await this.prisma.lineChatNicknameSyncJob.findMany({
       where: {
         lineOfficialAccountId: { in: oaIds },
         status: LineChatNicknameSyncJobStatus.PENDING,
         lastError: PAUSE_MARKER,
         scheduledAt: PAUSE_UNTIL,
       },
-      data: {
-        scheduledAt: new Date(),
-        lastError: null,
-      },
+      orderBy: { createdAt: "asc" },
+      take: MAX_RUN_JOBS,
+      select: { id: true },
     });
+    const jobIds = candidates.map((job) => job.id);
+    const resumedAt = new Date();
+
+    const result = jobIds.length
+      ? await this.prisma.lineChatNicknameSyncJob.updateMany({
+          where: {
+            id: { in: jobIds },
+            lineOfficialAccountId: { in: oaIds },
+            status: LineChatNicknameSyncJobStatus.PENDING,
+            lastError: PAUSE_MARKER,
+            scheduledAt: PAUSE_UNTIL,
+          },
+          data: {
+            scheduledAt: resumedAt,
+            lastError: null,
+          },
+        })
+      : { count: 0 };
 
     return {
       sessionKey,
       paused: false,
       resumedPending: result.count,
+      resumedAt: resumedAt.toISOString(),
+      jobIds,
+    };
+  }
+
+  public async runProgress(sessionKey: string, requestedJobIds: string[]) {
+    const oaIds = await this.resolveOaIds(sessionKey);
+    const jobIds = [...new Set(requestedJobIds.map((value) => value.trim()).filter(Boolean))];
+    if (jobIds.length === 0) throw new BadRequestException("At least one run job ID is required.");
+    if (jobIds.length > MAX_RUN_JOBS) throw new BadRequestException(`A run can contain at most ${MAX_RUN_JOBS} jobs.`);
+
+    const jobs = await this.prisma.lineChatNicknameSyncJob.findMany({
+      where: {
+        id: { in: jobIds },
+        lineOfficialAccountId: { in: oaIds },
+      },
+      select: {
+        id: true,
+        status: true,
+        lineChatUserId: true,
+        lastError: true,
+        updatedAt: true,
+        conversationId: true,
+      },
+    });
+
+    let success = 0;
+    let processing = 0;
+    let waitingForMapping = 0;
+    let mappedReady = 0;
+    let failed = 0;
+    let superseded = 0;
+
+    for (const job of jobs) {
+      switch (job.status) {
+        case LineChatNicknameSyncJobStatus.SUCCESS:
+          success += 1;
+          break;
+        case LineChatNicknameSyncJobStatus.PROCESSING:
+          processing += 1;
+          break;
+        case LineChatNicknameSyncJobStatus.FAILED:
+        case LineChatNicknameSyncJobStatus.FAILED_AUTH:
+          failed += 1;
+          break;
+        case LineChatNicknameSyncJobStatus.SUPERSEDED:
+          superseded += 1;
+          break;
+        case LineChatNicknameSyncJobStatus.PENDING:
+          if (job.lineChatUserId?.trim()) mappedReady += 1;
+          else waitingForMapping += 1;
+          break;
+      }
+    }
+
+    const total = jobIds.length;
+    const completed = success + failed + superseded;
+    const remaining = Math.max(0, total - completed);
+    const missing = Math.max(0, total - jobs.length);
+
+    return {
+      sessionKey,
+      total,
+      success,
+      processing,
+      waitingForMapping,
+      mappedReady,
+      failed,
+      superseded,
+      missing,
+      completed,
+      remaining,
+      progressPercent: total > 0 ? Math.round((completed / total) * 1000) / 10 : 0,
+      finished: remaining === 0,
+      checkedAt: new Date().toISOString(),
+      failures: jobs
+        .filter((job) => job.status === LineChatNicknameSyncJobStatus.FAILED || job.status === LineChatNicknameSyncJobStatus.FAILED_AUTH)
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .slice(0, 20)
+        .map((job) => ({
+          jobId: job.id,
+          conversationId: job.conversationId,
+          status: job.status,
+          error: sanitizeRunError(job.lastError),
+          updatedAt: job.updatedAt.toISOString(),
+        })),
     };
   }
 
