@@ -122,7 +122,7 @@ export class LineChatPendingControlService {
     if (jobIds.length === 0) throw new BadRequestException("At least one run job ID is required.");
     if (jobIds.length > MAX_RUN_JOBS) throw new BadRequestException(`A run can contain at most ${MAX_RUN_JOBS} jobs.`);
 
-    const jobs = await this.prisma.lineChatNicknameSyncJob.findMany({
+    const trackedJobs = await this.prisma.lineChatNicknameSyncJob.findMany({
       where: {
         id: { in: jobIds },
         lineOfficialAccountId: { in: oaIds },
@@ -133,9 +133,39 @@ export class LineChatPendingControlService {
         lineChatUserId: true,
         lastError: true,
         updatedAt: true,
+        createdAt: true,
         conversationId: true,
       },
     });
+
+    // A tracked job can remain deferred in PENDING while a newer job for the same
+    // conversation becomes the authoritative Latest-Wins job and succeeds. Read
+    // the newest job per conversation so the progress UI reflects the real outcome
+    // instead of leaving the older deferred job stuck in "Waiting map".
+    const conversationIds = [...new Set(trackedJobs.map((job) => job.conversationId))];
+    const conversationJobs = conversationIds.length
+      ? await this.prisma.lineChatNicknameSyncJob.findMany({
+          where: {
+            conversationId: { in: conversationIds },
+            lineOfficialAccountId: { in: oaIds },
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            lineChatUserId: true,
+            lastError: true,
+            updatedAt: true,
+            createdAt: true,
+            conversationId: true,
+          },
+        })
+      : [];
+
+    const latestByConversation = new Map<string, (typeof conversationJobs)[number]>();
+    for (const job of conversationJobs) {
+      if (!latestByConversation.has(job.conversationId)) latestByConversation.set(job.conversationId, job);
+    }
 
     let success = 0;
     let processing = 0;
@@ -143,8 +173,15 @@ export class LineChatPendingControlService {
     let mappedReady = 0;
     let failed = 0;
     let superseded = 0;
+    let reconciledWithNewerJob = 0;
+    const effectiveJobs: typeof trackedJobs = [];
 
-    for (const job of jobs) {
+    for (const trackedJob of trackedJobs) {
+      const latestJob = latestByConversation.get(trackedJob.conversationId);
+      const job = latestJob && latestJob.createdAt >= trackedJob.createdAt ? latestJob : trackedJob;
+      effectiveJobs.push(job);
+      if (job.id !== trackedJob.id) reconciledWithNewerJob += 1;
+
       switch (job.status) {
         case LineChatNicknameSyncJobStatus.SUCCESS:
           success += 1;
@@ -169,7 +206,7 @@ export class LineChatPendingControlService {
     const total = jobIds.length;
     const completed = success + failed + superseded;
     const remaining = Math.max(0, total - completed);
-    const missing = Math.max(0, total - jobs.length);
+    const missing = Math.max(0, total - trackedJobs.length);
 
     return {
       sessionKey,
@@ -180,13 +217,14 @@ export class LineChatPendingControlService {
       mappedReady,
       failed,
       superseded,
+      reconciledWithNewerJob,
       missing,
       completed,
       remaining,
       progressPercent: total > 0 ? Math.round((completed / total) * 1000) / 10 : 0,
       finished: remaining === 0,
       checkedAt: new Date().toISOString(),
-      failures: jobs
+      failures: effectiveJobs
         .filter((job) => job.status === LineChatNicknameSyncJobStatus.FAILED || job.status === LineChatNicknameSyncJobStatus.FAILED_AUTH)
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .slice(0, 20)
