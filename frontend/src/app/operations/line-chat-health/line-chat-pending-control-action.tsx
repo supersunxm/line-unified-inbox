@@ -42,6 +42,7 @@ type RunProgress = {
   mappedReady: number;
   failed: number;
   superseded: number;
+  reconciledWithNewerJob: number;
   missing: number;
   completed: number;
   remaining: number;
@@ -271,12 +272,18 @@ export function LineChatPendingControlAction() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-2xl font-semibold">{runProgress.success} / {runProgress.total}</div>
-              <div className="text-xs text-[var(--app-text-secondary)]">nicknames changed successfully</div>
+              <div className="text-xs text-[var(--app-text-secondary)]">conversations handled successfully</div>
             </div>
             <div className={`rounded-full px-2.5 py-1 text-xs font-medium ${runProgress.finished ? "bg-[var(--app-success-soft)] text-[var(--app-success)]" : "bg-[var(--app-info-soft)] text-[var(--app-info)]"}`}>
               {runProgress.finished ? "Finished" : "Running"}
             </div>
           </div>
+
+          {runProgress.reconciledWithNewerJob > 0 ? (
+            <div className="rounded-lg bg-[var(--app-info-soft)] px-3 py-2 text-xs text-[var(--app-info)]">
+              {runProgress.reconciledWithNewerJob} tracked jobs were reconciled with a newer job for the same conversation, so this view reflects the latest real outcome.
+            </div>
+          ) : null}
 
           <div>
             <div className="mb-1 flex justify-between text-xs text-[var(--app-text-secondary)]">
