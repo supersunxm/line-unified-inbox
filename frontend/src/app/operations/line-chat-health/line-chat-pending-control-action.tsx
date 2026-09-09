@@ -217,8 +217,8 @@ export function LineChatPendingControlAction() {
   };
 
   const title = paused
-    ? `Pending queue paused${pausedPending ? ` (${pausedPending})` : ""}. Click to resume.`
-    : "Pause profile-b pending nickname jobs. A currently running job is allowed to finish.";
+    ? `Start a tracked nickname-change run for ${pausedPending} paused jobs. Chat work keeps higher priority.`
+    : "Pause background nickname jobs. A currently running job is allowed to finish.";
 
   const actionPortal = target ? createPortal(
     <>
@@ -233,11 +233,16 @@ export function LineChatPendingControlAction() {
           void toggle();
         }}
       >
-        {loading ? "Working..." : paused ? `Resume Pending${pausedPending ? ` (${pausedPending})` : ""}` : "Pause Pending"}
+        {loading ? "Working..." : paused ? `Start Nickname Run${pausedPending ? ` (${pausedPending})` : ""}` : "Pause Nickname Run"}
       </Button>
       {paused && running > 0 ? (
         <span className="max-w-44 text-xs text-[var(--app-warning)]" title="The current running job will finish; no paused pending job is eligible to start.">
           {running} running will finish
+        </span>
+      ) : null}
+      {activeRun ? (
+        <span className="max-w-52 text-xs text-[var(--app-success)]" title={`Tracked run started ${formatTime(activeRun.startedAt)}`}>
+          Tracking {activeRun.jobIds.length} jobs
         </span>
       ) : null}
       {error ? (
