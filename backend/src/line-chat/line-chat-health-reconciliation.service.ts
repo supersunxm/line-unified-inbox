@@ -43,13 +43,28 @@ function addStatus(queue: LineChatQueueMetrics, status: LineChatNicknameSyncJobS
   queue.total += 1;
 }
 
+function recalculateTotal(queue: LineChatQueueMetrics) {
+  queue.total =
+    queue.pending +
+    queue.processing +
+    queue.success +
+    queue.failed +
+    queue.failedAuth +
+    queue.superseded;
+}
+
 /**
  * Presents LINE Chat nickname health from an isolated operational baseline.
- * Historical jobs remain untouched in the database, but the health page only
- * counts jobs created at/after the latest LINE_CHAT_NICKNAME_HEALTH reset.
+ * Historical jobs remain untouched in the database.
  *
- * This intentionally keeps WAITING/DEFERRED work out of the Failed metric:
- * Failed only comes from terminal FAILED / FAILED_AUTH job states.
+ * Success is intentionally cumulative across resets so the health page keeps
+ * the historical number of nickname changes that really completed. Operational
+ * counters (pending, processing, failed, failedAuth, superseded and mapping
+ * backlog) are reset-scoped and only count jobs created at/after the latest
+ * LINE_CHAT_NICKNAME_HEALTH reset.
+ *
+ * WAITING/DEFERRED work is never counted as Failed. Failed only comes from
+ * terminal FAILED / FAILED_AUTH job states created after the reset baseline.
  */
 @Injectable()
 export class LineChatHealthReconciliationService {
@@ -73,6 +88,13 @@ export class LineChatHealthReconciliationService {
   async reconcile(report: LineChatHealthReport): Promise<LineChatHealthReport> {
     const resetAt = await this.getOrCreateResetAt();
 
+    // The raw report is all-time. Keep only its successful totals before
+    // rebuilding the operational counters from the reset baseline.
+    const cumulativeSuccess = report.queue.success;
+    const cumulativeSessionSuccess = new Map(
+      report.sessions.map((session) => [session.id, session.jobs.success] as const),
+    );
+
     const freshJobs = await this.prisma.lineChatNicknameSyncJob.findMany({
       where: { createdAt: { gte: resetAt } },
       select: {
@@ -89,6 +111,8 @@ export class LineChatHealthReconciliationService {
 
     const freshQueue = emptyQueue();
     for (const job of freshJobs) addStatus(freshQueue, job.status);
+    freshQueue.success = cumulativeSuccess;
+    recalculateTotal(freshQueue);
     report.queue = freshQueue;
 
     const oaIds = [...new Set(freshJobs.map((job) => job.lineOfficialAccountId))];
@@ -103,7 +127,10 @@ export class LineChatHealthReconciliationService {
     );
 
     for (const session of report.sessions) {
+      const cumulativeSessionCount = cumulativeSessionSuccess.get(session.id) ?? 0;
       session.jobs = emptyQueue();
+      session.jobs.success = cumulativeSessionCount;
+      recalculateTotal(session.jobs);
       session.recentFailures = session.recentFailures.filter((failure) => {
         const createdAt = new Date(failure.createdAt);
         return Number.isFinite(createdAt.getTime()) && createdAt >= resetAt;
@@ -114,8 +141,16 @@ export class LineChatHealthReconciliationService {
       const sessionId = sessionIdByOa.get(job.lineOfficialAccountId);
       if (!sessionId) continue;
       const session = report.sessions.find((item) => item.id === sessionId);
-      if (session) addStatus(session.jobs, job.status);
+      if (!session) continue;
+
+      // Success is already represented by the all-time cumulative count above;
+      // only baseline-scoped operational states are added here.
+      if (job.status !== LineChatNicknameSyncJobStatus.SUCCESS) {
+        addStatus(session.jobs, job.status);
+      }
     }
+
+    for (const session of report.sessions) recalculateTotal(session.jobs);
 
     const pending = freshJobs.filter((job) => job.status === LineChatNicknameSyncJobStatus.PENDING);
     const mappedReadyPending = pending.filter((job) =>
