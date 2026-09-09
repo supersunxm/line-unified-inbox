@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { TikTokConnectSuccessContent } from "@/app/tiktok/connect/success/success-content";
+import { StoreBindingSuccess } from "./store-binding-success";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ async function getVerifiedConnectResult(): Promise<VerifiedConnectResult | null>
 export default async function PublicTikTokConnectSuccessPage() {
   const verifiedResult = await getVerifiedConnectResult();
   return (
-    <TikTokConnectSuccessContent
+    <StoreBindingSuccess
       displayName={verifiedResult?.displayName?.trim() || ""}
       username={verifiedResult?.username?.trim().replace(/^@+/, "") || ""}
       avatarUrl={verifiedResult?.avatarUrl?.trim() || ""}
@@ -46,8 +46,6 @@ export default async function PublicTikTokConnectSuccessPage() {
       followingCount={verifiedResult?.followingCount ?? 0}
       likesCount={verifiedResult?.likesCount ?? 0}
       videoCount={verifiedResult?.videoCount ?? 0}
-      storeName={verifiedResult?.storeName?.trim() || ""}
-      isStoreBound={Boolean(verifiedResult?.isStoreBound)}
     />
   );
 }
