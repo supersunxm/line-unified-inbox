@@ -72,7 +72,14 @@ export interface LineChatHealthReport {
   timestamp: string;
   sessions: LineChatSessionSummary[];
   queue: LineChatQueueMetrics;
+  mapping: LineChatMappingQueueMetrics;
   rollout: LineChatRolloutSummary;
+}
+
+export interface LineChatMappingQueueMetrics {
+  mappedReadyPending: number;
+  waitingForMapping: number;
+  oldestPendingAt: string | null;
 }
 
 export function classifyLineChatJobFailure(status: string, lastError?: string | null): LineChatFailureCategory {
@@ -151,7 +158,7 @@ export class LineChatOperationsService {
 
   public async getHealthSummary(): Promise<LineChatHealthReport> {
     const now = new Date();
-    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures] = await Promise.all([
+    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures, mapping] = await Promise.all([
       this.prisma.lineChatSession.findMany({
         include: {
           lineOfficialAccounts: {
@@ -199,6 +206,7 @@ export class LineChatOperationsService {
           lineOfficialAccount: { select: { id: true, name: true, lineChatSessionId: true } },
         },
       }),
+      this.getMappingQueueMetrics(),
     ]);
 
     const queueMap: Record<LineChatNicknameSyncJobStatus, number> = {
@@ -294,6 +302,7 @@ export class LineChatOperationsService {
         superseded: queueMap.SUPERSEDED,
         total: totalJobs,
       },
+      mapping,
       rollout: {
         totalOas: oas.length,
         enabledOas: enabledCount,
@@ -301,6 +310,47 @@ export class LineChatOperationsService {
         missingChatBotId: missingBotIdCount,
         missingSession: missingSessionCount,
       },
+    };
+  }
+
+  private async getMappingQueueMetrics(): Promise<LineChatMappingQueueMetrics> {
+    const jobs = this.prisma.lineChatNicknameSyncJob as unknown as {
+      count?: (args: unknown) => Promise<number>;
+      findFirst?: (args: unknown) => Promise<{ createdAt: Date } | null>;
+    };
+    const conversations = this.prisma.conversation as unknown as object | undefined;
+    const hasConversationTable = conversations !== null && typeof conversations === "object";
+    if (!hasConversationTable || typeof jobs.count !== "function" || typeof jobs.findFirst !== "function") {
+      return { mappedReadyPending: 0, waitingForMapping: 0, oldestPendingAt: null };
+    }
+
+    const [mappedReadyPending, waitingForMapping, oldestPending] = await Promise.all([
+      jobs.count({
+        where: {
+          status: LineChatNicknameSyncJobStatus.PENDING,
+          OR: [
+            { lineChatUserId: { not: null } },
+            { conversation: { lineChatUserId: { not: null } } },
+          ],
+        },
+      }),
+      jobs.count({
+        where: {
+          status: LineChatNicknameSyncJobStatus.PENDING,
+          lineChatUserId: null,
+          conversation: { lineChatUserId: null },
+        },
+      }),
+      jobs.findFirst({
+        where: { status: LineChatNicknameSyncJobStatus.PENDING },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+    ]);
+    return {
+      mappedReadyPending,
+      waitingForMapping,
+      oldestPendingAt: oldestPending?.createdAt.toISOString() ?? null,
     };
   }
 

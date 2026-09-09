@@ -92,8 +92,10 @@ export class LineChatProfileOperationCoordinator {
   public async withProfileOperation<T>(input: {
     sessionId: string;
     operationKind: LineChatProfileOperationKind;
-  }, callback: (context: LineChatProfileOperationContext) => Promise<T>): Promise<ProfileOperationResult<T>> {
-    const localLock = await this.acquireLocalLock(input.sessionId, input.operationKind);
+  }, callback: (context: LineChatProfileOperationContext) => Promise<T>, options: {
+    waitForLock?: boolean;
+  } = {}): Promise<ProfileOperationResult<T>> {
+    const localLock = await this.acquireLocalLock(input.sessionId, input.operationKind, options.waitForLock !== false);
     if (!localLock) return this.busy(input);
 
     const ownerToken = randomUUID();
@@ -175,11 +177,12 @@ export class LineChatProfileOperationCoordinator {
   private async acquireLocalLock(
     sessionId: string,
     operationKind: LineChatProfileOperationKind,
+    waitForLock: boolean,
   ): Promise<LocalLock | null> {
     const immediate = this.tryAcquireLocalLock(sessionId);
     if (immediate) return immediate;
 
-    const waitMs = this.waitBudgetMs(operationKind);
+    const waitMs = waitForLock ? this.waitBudgetMs(operationKind) : 0;
     if (waitMs <= 0) return null;
 
     return new Promise<LocalLock | null>((resolve) => {
