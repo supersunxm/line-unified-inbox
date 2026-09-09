@@ -1,8 +1,8 @@
 /* Public-facing OPPO logo treatment.
    Scoped to customer/public headers so internal staff branding is untouched. */
 
-/* Keep the uploaded OPPO wordmark at its native ~4.2:1 aspect ratio.
-   The previous 72x24 box was too tall for this artwork and made the mark look compressed. */
+/* Use the clean vector traced from the uploaded OPPO artwork.
+   Keep the mark at its native ~4.2:1 aspect ratio and let the browser preserve it. */
 a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   display: block;
   width: 84px !important;
@@ -10,10 +10,10 @@ a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   flex: 0 0 auto;
   border-radius: 0 !important;
   background-color: transparent !important;
-  background-image: url("/images/oppo-logo.png") !important;
+  background-image: url("/images/oppo-logo-clean.svg") !important;
   background-position: left center !important;
   background-repeat: no-repeat !important;
-  background-size: 100% 100% !important;
+  background-size: contain !important;
   color: transparent !important;
   font-size: 0 !important;
   box-shadow: none !important;
@@ -41,10 +41,10 @@ header a.group[href="/"] > div:first-child {
   border-radius: 0 !important;
   border: 0 !important;
   background-color: transparent !important;
-  background-image: url("/images/oppo-logo.png") !important;
+  background-image: url("/images/oppo-logo-clean.svg") !important;
   background-position: left center !important;
   background-repeat: no-repeat !important;
-  background-size: 100% 100% !important;
+  background-size: contain !important;
   color: transparent !important;
   font-size: 0 !important;
   box-shadow: none !important;
