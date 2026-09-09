@@ -12,6 +12,7 @@ import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-image-relay-worker.service";
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
+import { LineChatWebhookIdentityMapperService } from "./line-chat-webhook-identity-mapper.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -30,6 +31,7 @@ import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-w
     LineChatSessionHealthProbeService,
     LineChatOaHealthProbeService,
     LineChatHealthSchedulerService,
+    LineChatWebhookIdentityMapperService,
     LineChatNicknameWorkerService,
     LineChatAuthRecoveryService,
     LineChatManagerMessageRelayWorkerService,
