@@ -329,8 +329,7 @@ test("heartbeat renews ownership and profile-lock errors fail closed without fil
   assert.equal(prisma.leases.size, 0);
 });
 
-test("nickname resolution and PUT share one coordinator context without deadlock", async () => {
-  let resolverContext: unknown;
+test("persisted mapping and nickname PUT share one coordinator context without resolution", async () => {
   let updateContext: unknown;
   let updatedJob: Record<string, unknown> | undefined;
   const prisma = {
@@ -363,6 +362,12 @@ test("nickname resolution and PUT share one coordinator context without deadlock
         },
       }),
     },
+    conversation: {
+      findUnique: async () => ({
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat",
+      }),
+    },
     lineChatSession: { update: async () => ({}) },
   };
   const sessionService = {
@@ -370,12 +375,6 @@ test("nickname resolution and PUT share one coordinator context without deadlock
     updateNickname: async (input: { operationContext?: unknown }) => {
       updateContext = input.operationContext;
       return { success: true, status: 200 };
-    },
-  };
-  const resolver = {
-    resolve: async (input: { operationContext?: unknown }) => {
-      resolverContext = input.operationContext;
-      return { status: "RESOLVED", lineChatUserId: "Uchat" } as const;
     },
   };
   const context = { sessionId: "session-1", ownerToken: "owner-1", operationKind: "NICKNAME_UPDATE", assertOwnership() {} };
@@ -391,11 +390,10 @@ test("nickname resolution and PUT share one coordinator context without deadlock
   const worker = new LineChatNicknameWorkerService(
     prisma as never,
     sessionService as never,
-    resolver as never,
+    undefined,
     coordinator as never,
   );
   await worker.processSingleJob("job-1");
-  assert.equal(resolverContext, context);
   assert.equal(updateContext, context);
   assert.equal(updatedJob?.status, LineChatNicknameSyncJobStatus.SUCCESS);
 });

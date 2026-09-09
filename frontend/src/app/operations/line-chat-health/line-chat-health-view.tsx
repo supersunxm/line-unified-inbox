@@ -378,6 +378,31 @@ export function LineChatHealthView() {
           </div>
         )}
 
+        {report && (
+          <Card>
+            <CardContent className="space-y-3 p-5">
+              <div>
+                <h2 className="text-lg font-semibold">Nickname mapping backlog</h2>
+                <p className="text-sm text-[var(--app-text-secondary)]">Pending jobs are separated by whether a durable LINE chat mapping is ready.</p>
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Mapped and ready</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.mapping.mappedReadyPending}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Waiting for mapping</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.mapping.waitingForMapping}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Oldest pending</dt>
+                  <dd className="mt-1 text-sm font-semibold">{formatDate(report.mapping.oldestPendingAt)}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardContent className="p-0">
             <TableContainer>

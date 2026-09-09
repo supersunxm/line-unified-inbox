@@ -115,7 +115,8 @@ export type LineChatOperationsSession = {
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
   recentFailures: LineChatSafeJobFailure[];
 };
-export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number } };
+export type LineChatMappingQueueMetrics = { mappedReadyPending: number; waitingForMapping: number; oldestPendingAt: string | null };
+export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number } };
 
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {

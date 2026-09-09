@@ -207,7 +207,7 @@ void test("worker supersedes stale job when newer job exists for same conversati
   assert.equal(updateNicknameCalled, false);
 });
 
-void test("worker skips and marks FAILED when lineChatUserId is missing/null without calling updateNickname", async () => {
+void test("worker defers a missing mapping without opening the profile", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
   let updateNicknameCalled = false;
 
@@ -229,6 +229,10 @@ void test("worker skips and marks FAILED when lineChatUserId is missing/null wit
       update: async (args: { data: Record<string, unknown> }) => {
         updatedJobData = args.data;
         return {};
+      },
+      updateMany: async (args: { data: Record<string, unknown> }) => {
+        updatedJobData = args.data;
+        return { count: 1 };
       },
     },
     lineOfficialAccount: {
@@ -257,11 +261,14 @@ void test("worker skips and marks FAILED when lineChatUserId is missing/null wit
   await worker.processSingleJob("job-missing-chat-id");
 
   assert.equal(updateNicknameCalled, false, "updateNickname must NOT be called when lineChatUserId is missing");
-  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.FAILED);
-  assert.match(String(updatedJobData?.lastError), /Missing LINE OA Manager chat user ID \(lineChatUserId\)/);
+  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.PENDING);
+  assert.equal(updatedJobData?.lastError, "RESOLVE_NO_MATCH");
+  const scheduledAt = updatedJobData?.scheduledAt;
+  assert.ok(scheduledAt instanceof Date);
+  assert.ok(scheduledAt.getTime() > Date.now());
 });
 
-void test("worker resolves an unmapped job once and continues the same nickname execution", async () => {
+void test("worker uses a persisted Conversation mapping and never invokes the resolver", async () => {
   const resolvedId = `U${"a".repeat(32)}`;
   const jobUpdates: Array<Record<string, unknown>> = [];
   let resolverCalls = 0;
@@ -285,6 +292,12 @@ void test("worker resolves an unmapped job once and continues the same nickname 
         jobUpdates.push(args.data);
         return {};
       },
+    },
+    conversation: {
+      findUnique: async () => ({
+        lineOfficialAccountId: "oa-pilot",
+        lineChatUserId: resolvedId,
+      }),
     },
     lineOfficialAccount: { findUnique: async () => ({
       id: "oa-pilot",
@@ -310,7 +323,7 @@ void test("worker resolves an unmapped job once and continues the same nickname 
   await new LineChatNicknameWorkerService(prisma as never, session as never, resolver as never)
     .processSingleJob("job-resolve");
 
-  assert.equal(resolverCalls, 1);
+  assert.equal(resolverCalls, 0);
   assert.equal(dispatchedId, resolvedId);
   assert.deepEqual(
     jobUpdates.find((update) => update.lineChatUserId === resolvedId),
@@ -319,7 +332,7 @@ void test("worker resolves an unmapped job once and continues the same nickname 
   assert.equal(jobUpdates.at(-1)?.status, LineChatNicknameSyncJobStatus.SUCCESS);
 });
 
-void test("latest save wins when a newer job appears during resolution", async () => {
+void test("latest save wins before a mapped nickname dispatch", async () => {
   let newerChecks = 0;
   let nicknameCalls = 0;
   let finalStatus: unknown;
@@ -327,7 +340,7 @@ void test("latest save wins when a newer job appears during resolution", async (
     lineChatNicknameSyncJob: {
       findUnique: async () => ({
         id: "job-old", conversationId: "conversation-1", lineOfficialAccountId: "oa-pilot",
-        lineChatUserId: null, lineUserId: null, nickname: "Online",
+        lineChatUserId: CHAT_ID_FOR_TEST, lineUserId: null, nickname: "Online",
         status: LineChatNicknameSyncJobStatus.PROCESSING, attemptCount: 0, maxAttempts: 3,
         createdAt: new Date("2026-09-01T05:00:00Z"),
       }),
@@ -343,13 +356,12 @@ void test("latest save wins when a newer job appears during resolution", async (
     resolveProfilePath: () => "/safe/profile",
     updateNickname: async () => { nicknameCalls += 1; return { success: true }; },
   };
-  const resolver = { resolve: async () => ({ status: "RESOLVED", lineChatUserId: CHAT_ID_FOR_TEST } as const) };
-  await new LineChatNicknameWorkerService(prisma as never, session as never, resolver as never).processSingleJob("job-old");
+  await new LineChatNicknameWorkerService(prisma as never, session as never).processSingleJob("job-old");
   assert.equal(nicknameCalls, 0);
   assert.equal(finalStatus, LineChatNicknameSyncJobStatus.SUPERSEDED);
 });
 
-void test("worker keeps resolver failure inside the job and never calls nickname update", async () => {
+void test("worker keeps an unmapped job pending and never calls nickname update", async () => {
   let nicknameCalls = 0;
   let finalUpdate: Record<string, unknown> | undefined;
   const prisma = {
@@ -362,6 +374,7 @@ void test("worker keeps resolver failure inside the job and never calls nickname
       }),
       findFirst: async () => null,
       update: async (args: { data: Record<string, unknown> }) => { finalUpdate = args.data; return {}; },
+      updateMany: async (args: { data: Record<string, unknown> }) => { finalUpdate = args.data; return { count: 1 }; },
     },
     lineOfficialAccount: { findUnique: async () => ({
       chatBotId: "U729972869a565723cb7fcf7ea28bbc43",
@@ -372,11 +385,10 @@ void test("worker keeps resolver failure inside the job and never calls nickname
     resolveProfilePath: () => "/safe/profile",
     updateNickname: async () => { nicknameCalls += 1; return { success: true }; },
   };
-  const resolver = { resolve: async () => ({ status: "RESOLVE_NO_MATCH" as const }) };
-  await new LineChatNicknameWorkerService(prisma as never, session as never, resolver as never)
+  await new LineChatNicknameWorkerService(prisma as never, session as never)
     .processSingleJob("job-no-match");
   assert.equal(nicknameCalls, 0);
-  assert.equal(finalUpdate?.status, LineChatNicknameSyncJobStatus.FAILED);
+  assert.equal(finalUpdate?.status, LineChatNicknameSyncJobStatus.PENDING);
   assert.equal(finalUpdate?.lastError, "RESOLVE_NO_MATCH");
 });
 
@@ -736,4 +748,132 @@ void test("LineChatNicknameWorkerModule initializes cleanly without MobileAuthSe
   const sessionService = moduleRef.get(LineChatSessionService);
   assert.ok(workerService);
   assert.ok(sessionService);
+});
+
+void test("worker performs one mapping refresh for multiple waiting jobs before nickname updates", async () => {
+  const chatOne = `U${"b".repeat(32)}`;
+  const chatTwo = `U${"c".repeat(32)}`;
+  const jobs = new Map([
+    ["job-1", {
+      id: "job-1", conversationId: "conversation-1", lineOfficialAccountId: "oa-b",
+      lineChatUserId: null, lineUserId: null, nickname: "Online",
+      status: LineChatNicknameSyncJobStatus.PENDING, attemptCount: 0, maxAttempts: 3,
+      createdAt: new Date("2026-09-01T05:00:00Z"), scheduledAt: new Date(0),
+    }],
+    ["job-2", {
+      id: "job-2", conversationId: "conversation-2", lineOfficialAccountId: "oa-b",
+      lineChatUserId: null, lineUserId: null, nickname: "Find X9 สด 08/26",
+      status: LineChatNicknameSyncJobStatus.PENDING, attemptCount: 0, maxAttempts: 3,
+      createdAt: new Date("2026-09-01T05:01:00Z"), scheduledAt: new Date(0),
+    }],
+  ]);
+  const conversationMappings = new Map<string, string>();
+  const operationKinds: string[] = [];
+  let refreshCalls = 0;
+  let appliedConversationIds: string[] = [];
+  let nicknameCalls = 0;
+  const oa = {
+    id: "oa-b",
+    chatBotId: "U729972869a565723cb7fcf7ea28bbc43",
+    lineChatSession: { id: "session-b", sessionKey: "profile-b", status: LineChatSessionStatus.ACTIVE },
+  };
+  const mockPrisma: any = {
+    lineChatNicknameSyncJob: {
+      findMany: async (args: any) => args.where.status === LineChatNicknameSyncJobStatus.PROCESSING
+        ? []
+        : [...jobs.values()],
+      findUnique: async (args: any) => jobs.get(args.where.id),
+      findFirst: async () => null,
+      updateMany: async (args: any) => {
+        const id = typeof args.where.id === "string" ? args.where.id : null;
+        const job = id ? jobs.get(id) : null;
+        if (job && job.status === LineChatNicknameSyncJobStatus.PENDING) {
+          Object.assign(job, args.data);
+          return { count: 1 };
+        }
+        return { count: jobs.size };
+      },
+      update: async (args: any) => {
+        const job = jobs.get(args.where.id);
+        if (job) Object.assign(job, args.data);
+        return job;
+      },
+    },
+    lineOfficialAccount: {
+      findMany: async () => [oa],
+      findUnique: async () => oa,
+    },
+    lineChatSession: { update: async () => ({}) },
+    conversation: {
+      findUnique: async (args: any) => ({
+        lineOfficialAccountId: "oa-b",
+        lineChatUserId: conversationMappings.get(args.where.id) ?? null,
+      }),
+    },
+  };
+  const session = {
+    resolveProfilePath: () => "/safe/profile-b",
+    updateNickname: async () => {
+      nicknameCalls++;
+      return { success: true, status: 200 };
+    },
+  };
+  const resolver = {
+    findExistingMappings: async () => new Map<string, string>(),
+    refreshSnapshot: async () => {
+      refreshCalls++;
+      return {
+        key: "profile-b::oa-b::bot-b",
+        status: "READY" as const,
+        chats: [
+          { chatUserId: chatOne, displayName: "Customer One", lastMessageAt: null, lastMessageText: null, lastMessageDirection: null },
+          { chatUserId: chatTwo, displayName: "Customer Two", lastMessageAt: null, lastMessageText: null, lastMessageDirection: null },
+        ],
+        refreshedAt: new Date(), expiresAt: new Date(Date.now() + 60_000), pagesFetched: 1, totalRawRecords: 2,
+      };
+    },
+    applySnapshotMappings: async (args: any) => {
+      appliedConversationIds = args.conversationIds;
+      conversationMappings.set("conversation-1", chatOne);
+      conversationMappings.set("conversation-2", chatTwo);
+      return { status: "REFRESHED", conversationCount: 2, candidateCount: 2, mappedCount: 2, noMatchCount: 0, ambiguousCount: 0, conflictCount: 0 };
+    },
+  };
+  const coordinator = {
+    withProfileOperation: async (input: any, callback: (context: any) => Promise<unknown>) => {
+      operationKinds.push(input.operationKind);
+      const context = { sessionId: input.sessionId, ownerToken: "owner", operationKind: input.operationKind, assertOwnership() {} };
+      return { acquired: true, value: await callback(context), sessionId: input.sessionId, operationKind: input.operationKind };
+    },
+  };
+
+  const worker = new LineChatNicknameWorkerService(mockPrisma, session as never, resolver as never, coordinator as never);
+  const processed = await worker.processQueueCycle(10);
+  assert.equal(processed, 2);
+  assert.equal(refreshCalls, 1);
+  assert.deepEqual(appliedConversationIds.sort(), ["conversation-1", "conversation-2"]);
+  assert.deepEqual(operationKinds, ["RECENT_RESOLUTION", "NICKNAME_UPDATE", "NICKNAME_UPDATE"]);
+  assert.equal(nicknameCalls, 2);
+});
+
+test("worker does not claim new jobs when Postgres is unavailable", async () => {
+  let claimCalls = 0;
+  let profileOperations = 0;
+  const databaseError = Object.assign(new Error("Can't reach database server at postgres.internal:5432"), { code: "P1001" });
+  const prisma: any = {
+    lineChatNicknameSyncJob: {
+      findMany: async () => { throw databaseError; },
+      updateMany: async () => { claimCalls++; return { count: 1 }; },
+    },
+  };
+  const coordinator = {
+    withProfileOperation: async () => {
+      profileOperations++;
+      return { acquired: false, reason: "PROFILE_OPERATION_BUSY", retryAfterMs: 5_000, sessionId: "session-b", operationKind: "NICKNAME_UPDATE" };
+    },
+  };
+  const worker = new LineChatNicknameWorkerService(prisma, {} as never, undefined, coordinator as never);
+  assert.equal(await worker.processQueueCycle(), 0);
+  assert.equal(claimCalls, 0);
+  assert.equal(profileOperations, 0);
 });
