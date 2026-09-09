@@ -85,6 +85,14 @@ export async function GET(request: NextRequest) {
     return response;
   };
 
+  // A bare/revisited callback URL is not an OAuth failure. This can happen when a user
+  // refreshes or reopens the callback after a successful flow. Recover by clearing any
+  // stale state cookie and sending the user back to the public connection page.
+  if (!code && !state && !error && !errorDescription) {
+    const connectUrl = new URL("/connect/tiktok", publicOrigin);
+    return createRedirectResponse(connectUrl);
+  }
+
   // Fail-closed gate: if public connect is disabled, refuse to process callback
   if (!isTikTokPublicConnectEnabled()) {
     const errorUrl = new URL("/tiktok/connect/error", publicOrigin);
