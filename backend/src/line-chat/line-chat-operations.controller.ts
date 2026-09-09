@@ -6,6 +6,7 @@ import { Roles } from "../auth/auth.decorators";
 import { LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
 import { LineChatPendingControlService } from "./line-chat-pending-control.service";
+import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
 
 export class RetrySelectedJobsDto {
   @IsString()
@@ -43,11 +44,13 @@ export class LineChatOperationsController {
     private readonly operationsService: LineChatOperationsService,
     private readonly novncRecovery: LineChatNovncRecoveryService,
     private readonly pendingControl: LineChatPendingControlService,
+    private readonly healthReconciliation: LineChatHealthReconciliationService,
   ) {}
 
   @Get("health")
   async getHealth() {
-    return this.operationsService.getHealthSummary();
+    const report = await this.operationsService.getHealthSummary();
+    return this.healthReconciliation.reconcile(report);
   }
 
   @Post("retry-failed")
