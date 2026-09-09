@@ -1,15 +1,15 @@
-/* Public-facing OPPO wordmark treatment.
+/* Public-facing OPPO Brand Shop icon treatment.
    Scoped to customer/public headers so internal staff branding is untouched. */
 
 /* Main public directory surfaces: /, /stores, /stores/[identifier] */
 a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   display: block;
-  width: 64px !important;
-  height: 22px !important;
+  width: 40px !important;
+  height: 40px !important;
   flex: 0 0 auto;
-  border-radius: 0 !important;
+  border-radius: 8px !important;
   background-color: transparent !important;
-  background-image: url("/images/oppo-logo.svg") !important;
+  background-image: url("/images/LOGO_OBS.png") !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
   background-size: contain !important;
@@ -21,16 +21,16 @@ a[aria-label="OPPO Brand Shop Home"] > span:first-child {
 /* TikTok public disclosure/connect headers use a div placeholder instead. */
 header a.group[href="/"] > div:first-child {
   display: block;
-  width: 64px !important;
-  height: 24px !important;
+  width: 40px !important;
+  height: 40px !important;
   flex: 0 0 auto;
-  border-radius: 6px !important;
-  border: 1px solid rgba(148, 163, 184, 0.22) !important;
-  background-color: #ffffff !important;
-  background-image: url("/images/oppo-logo.svg") !important;
+  border-radius: 8px !important;
+  border: 0 !important;
+  background-color: transparent !important;
+  background-image: url("/images/LOGO_OBS.png") !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
-  background-size: calc(100% - 10px) auto !important;
+  background-size: contain !important;
   color: transparent !important;
   font-size: 0 !important;
   box-shadow: none !important;
@@ -39,6 +39,7 @@ header a.group[href="/"] > div:first-child {
 @media (max-width: 420px) {
   a[aria-label="OPPO Brand Shop Home"] > span:first-child,
   header a.group[href="/"] > div:first-child {
-    width: 56px !important;
+    width: 34px !important;
+    height: 34px !important;
   }
 }
