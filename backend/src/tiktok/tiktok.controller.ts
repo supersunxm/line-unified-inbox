@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { Public, Roles } from "../auth/auth.decorators";
 import { TikTokService } from "./tiktok.service";
 import { TikTokPublicAnalyticsService } from "./tiktok-public-analytics.service";
 import { InternalTikTokSyncGuard } from "./internal-sync.guard";
+import { TikTokStoreBindingService, TikTokStoreBindingRequestState } from "./tiktok-store-binding.service";
 import {
   ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
@@ -17,6 +18,7 @@ export class TikTokController {
   constructor(
     private readonly tiktokService: TikTokService,
     private readonly tiktokPublicAnalyticsService?: TikTokPublicAnalyticsService,
+    private readonly tiktokStoreBindingService?: TikTokStoreBindingService,
   ) {}
 
   /**
@@ -32,6 +34,59 @@ export class TikTokController {
     @Body() dto: SyncTikTokAccountDto
   ): Promise<SafeTikTokAccountOverviewResponse> {
     return this.tiktokService.upsertTikTokAccount(dto);
+  }
+
+  /**
+   * Internal store-binding context endpoint for the public OAuth completion flow.
+   * The frontend verifies its short-lived signed binding session and then calls this endpoint
+   * with the same internal shared secret used by the OAuth sync path.
+   */
+  @Public()
+  @UseGuards(InternalTikTokSyncGuard)
+  @Get("internal/store-binding/:accountId")
+  async getInternalStoreBindingContext(
+    @Param("accountId") accountId: string,
+    @Query("query") query?: string,
+  ) {
+    return this.tiktokStoreBindingService!.getBindingContext(accountId, query);
+  }
+
+  /**
+   * Confirms a suggested store. This is allowed only when the TikTok username matches
+   * StoreMaster.tiktokUsername exactly (or the account is already bound to that store).
+   */
+  @Public()
+  @UseGuards(InternalTikTokSyncGuard)
+  @Post("internal/store-binding/:accountId/confirm")
+  @HttpCode(HttpStatus.OK)
+  async confirmInternalStoreBinding(
+    @Param("accountId") accountId: string,
+    @Body() body: { storeMasterId?: string },
+  ) {
+    const storeMasterId = body?.storeMasterId?.trim();
+    if (!storeMasterId) {
+      return { status: "INVALID_REQUEST", message: "storeMasterId is required" };
+    }
+    return this.tiktokStoreBindingService!.confirmSuggestedBinding(accountId, storeMasterId);
+  }
+
+  /**
+   * Creates a pending HQ review request when a user selects a different store.
+   * This endpoint never changes TikTokAccount.storeMasterId directly.
+   */
+  @Public()
+  @UseGuards(InternalTikTokSyncGuard)
+  @Post("internal/store-binding/:accountId/request")
+  @HttpCode(HttpStatus.OK)
+  async requestInternalStoreBinding(
+    @Param("accountId") accountId: string,
+    @Body() body: { storeMasterId?: string },
+  ) {
+    const storeMasterId = body?.storeMasterId?.trim();
+    if (!storeMasterId) {
+      return { status: "INVALID_REQUEST", message: "storeMasterId is required" };
+    }
+    return this.tiktokStoreBindingService!.requestStoreBinding(accountId, storeMasterId);
   }
 
   /**
@@ -96,6 +151,46 @@ export class TikTokController {
   ) {
     const safeDays = days ? parseInt(days, 10) : 30;
     return this.tiktokPublicAnalyticsService!.getStoreHistory(storeMasterId, safeDays);
+  }
+
+  /**
+   * HQ review queue for manually selected store associations.
+   */
+  @Get("binding-requests")
+  @Roles(UserRole.ADMIN)
+  async listBindingRequests(@Query("status") status?: string) {
+    const allowed = new Set<TikTokStoreBindingRequestState>([
+      "PENDING",
+      "APPROVED",
+      "REJECTED",
+      "CANCELLED",
+    ]);
+    const normalized = (status || "PENDING").toUpperCase() as TikTokStoreBindingRequestState;
+    return this.tiktokStoreBindingService!.listBindingRequests(
+      allowed.has(normalized) ? normalized : "PENDING",
+    );
+  }
+
+  @Post("binding-requests/:id/approve")
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async approveBindingRequest(@Param("id") id: string, @Req() request: any) {
+    return this.tiktokStoreBindingService!.reviewBindingRequest(
+      id,
+      "APPROVED",
+      request?.user?.id || null,
+    );
+  }
+
+  @Post("binding-requests/:id/reject")
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async rejectBindingRequest(@Param("id") id: string, @Req() request: any) {
+    return this.tiktokStoreBindingService!.reviewBindingRequest(
+      id,
+      "REJECTED",
+      request?.user?.id || null,
+    );
   }
 
   /**
