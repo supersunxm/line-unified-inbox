@@ -10,6 +10,11 @@ import {
   validateTikTokOAuthState,
 } from "../src/app/tiktok/callback/tiktok-callback-validator.ts";
 import { syncTikTokAccountInternallyToBackend } from "../src/app/tiktok/tiktok-api-client.ts";
+import {
+  TIKTOK_STORE_OWNER_ANALYTICS_SESSION_COOKIE,
+  createTikTokStoreOwnerAnalyticsSession,
+  verifyTikTokStoreOwnerAnalyticsSession,
+} from "../src/app/tiktok/store-binding-session.ts";
 
 const connectRouteSource = readFileSync(new URL("../src/app/tiktok/connect/route.ts", import.meta.url), "utf8");
 const callbackRouteSource = readFileSync(new URL("../src/app/tiktok/callback/route.ts", import.meta.url), "utf8");
@@ -20,6 +25,16 @@ const errorPageSource = readFileSync(new URL("../src/app/tiktok/connect/error/pa
 const errorContentSource = readFileSync(new URL("../src/app/tiktok/connect/error/error-content.tsx", import.meta.url), "utf8");
 const overviewPageSource = readFileSync(new URL("../src/app/tiktok/page.tsx", import.meta.url), "utf8");
 const dashboardPageSource = readFileSync(new URL("../src/app/tiktok/dashboard/page.tsx", import.meta.url), "utf8");
+const analyticsPageSource = readFileSync(new URL("../src/app/connect/tiktok/analytics/page.tsx", import.meta.url), "utf8");
+const analyticsViewSource = readFileSync(new URL("../src/app/connect/tiktok/analytics/store-owner-analytics.tsx", import.meta.url), "utf8");
+const storeBindingSuccessSource = readFileSync(new URL("../src/app/connect/tiktok/success/store-binding-success.tsx", import.meta.url), "utf8");
+const backendDtoSource = readFileSync(new URL("../../backend/src/tiktok/dto/tiktok-sync.dto.ts", import.meta.url), "utf8");
+const backendControllerSource = readFileSync(new URL("../../backend/src/tiktok/tiktok.controller.ts", import.meta.url), "utf8");
+const backendBindingSource = readFileSync(new URL("../../backend/src/tiktok/tiktok-store-binding.service.ts", import.meta.url), "utf8");
+const backendTikTokServiceSource = readFileSync(new URL("../../backend/src/tiktok/tiktok.service.ts", import.meta.url), "utf8");
+const ownerAccountContractSource = backendDtoSource
+  .split("export interface TikTokStoreOwnerAccountResponse")[1]
+  ?.split("export interface TikTokStoreOwnerAnalyticsResponse")[0] || "";
 const successPublicSource = `${successPageSource}\n${successContentSource}`;
 const errorPublicSource = `${errorPageSource}\n${errorContentSource}`;
 
@@ -35,7 +50,7 @@ test("B. Missing or incorrect internal secret causes frontend sync to throw and 
   delete process.env.TIKTOK_INTERNAL_SYNC_SECRET;
   try {
     await assert.rejects(
-      async () => syncTikTokAccountInternallyToBackend({ accessToken: "sample_token", profile: { open_id: "sample_id", display_name: "Store" } }),
+      async () => syncTikTokAccountInternallyToBackend({ accessToken: "sample_token", profile: { open_id: "sample_id", display_name: "Store" }, videos: [] }),
       (err: Error) => {
         assert.match(err.message, /Missing internal TikTok sync secret configuration/);
         return true;
@@ -121,4 +136,64 @@ test("J. Internal secret value never appears in client templates or exposed fron
   assert.doesNotMatch(errorPublicSource, /TIKTOK_INTERNAL_SYNC_SECRET/);
   assert.doesNotMatch(overviewPageSource, /TIKTOK_INTERNAL_SYNC_SECRET/);
   assert.doesNotMatch(dashboardPageSource, /TIKTOK_INTERNAL_SYNC_SECRET/);
+});
+
+test("K. Confirmed public TikTok flow uses a separate store-owner analytics route and session", () => {
+  assert.match(storeBindingSuccessSource, /href="\/connect\/tiktok\/analytics"/);
+  assert.doesNotMatch(storeBindingSuccessSource, /\/tiktok\/dashboard/);
+  assert.doesNotMatch(storeBindingSuccessSource, /\/tiktok\/stores\//);
+  assert.match(analyticsPageSource, /robots:\s*\{\s*index:\s*false,\s*follow:\s*false\s*\}/);
+  assert.match(analyticsPageSource, /TIKTOK_STORE_OWNER_ANALYTICS_SESSION_COOKIE/);
+  assert.match(analyticsPageSource, /\/tiktok\/internal\/store-owner\/me/);
+  assert.doesNotMatch(analyticsPageSource, /oppo_session/);
+  assert.doesNotMatch(analyticsPageSource, /params/);
+  assert.match(analyticsViewSource, /Followers/);
+  assert.match(analyticsViewSource, /Following/);
+  assert.match(analyticsViewSource, /Total Likes/);
+  assert.match(analyticsViewSource, /Video Count/);
+  assert.match(analyticsViewSource, /อ่านอย่างเดียว/);
+  assert.match(analyticsViewSource, /รอ HQ ตรวจสอบ/);
+  assert.match(analyticsViewSource, /pendingStore/);
+  assert.match(analyticsViewSource, /เซสชันหมดอายุ/);
+  assert.doesNotMatch(analyticsViewSource, /recentVideos|account\.videos|coverImageUrl|viewCount|likeCount|commentCount|shareCount|engagement/i);
+  assert.doesNotMatch(ownerAccountContractSource, /\bvideos\b/);
+  assert.match(backendControllerSource, /Get\("internal\/store-owner\/me"\)/);
+  assert.match(backendControllerSource, /verifyTikTokStoreOwnerSession/);
+  assert.match(backendBindingSource, /tikTokAccount\.findUnique/);
+  assert.match(backendBindingSource, /getTikTokAccountForStoreOwner/);
+  assert.doesNotMatch(backendBindingSource, /getTikTokAccountById/);
+  assert.match(backendBindingSource, /getAccountHistoricalMetrics/);
+  assert.doesNotMatch(backendBindingSource, /videos:\s*overview\.videos/);
+  assert.doesNotMatch(backendBindingSource, /TikTokPublicProfile/);
+
+  const ownerSnapshotMethod = backendTikTokServiceSource.match(
+    /async getTikTokAccountForStoreOwner[\s\S]*?(?=\n  \/\*\*)/
+  )?.[0] || "";
+  const internalAccountMethod = backendTikTokServiceSource.match(
+    /async getTikTokAccountById[\s\S]*?(?=\n  \/\*\*)/
+  )?.[0] || "";
+  assert.doesNotMatch(ownerSnapshotMethod, /\bvideos\b/);
+  assert.match(internalAccountMethod, /include:\s*\{\s*videos:/s);
+});
+
+test("L. Store-owner session is signed, scoped to account and store, and expires", () => {
+  const originalSecret = process.env.TIKTOK_INTERNAL_SYNC_SECRET;
+  const originalNow = Date.now;
+  process.env.TIKTOK_INTERNAL_SYNC_SECRET = "test-store-owner-session-secret";
+  try {
+    const token = createTikTokStoreOwnerAnalyticsSession("account-1", "store-1");
+    assert.equal(TIKTOK_STORE_OWNER_ANALYTICS_SESSION_COOKIE, "tiktok_store_owner_analytics_session");
+    assert.deepEqual(verifyTikTokStoreOwnerAnalyticsSession(token), {
+      accountId: "account-1",
+      storeMasterId: "store-1",
+      expiresAt: verifyTikTokStoreOwnerAnalyticsSession(token)?.expiresAt,
+    });
+    assert.equal(verifyTikTokStoreOwnerAnalyticsSession(`${token}tampered`), null);
+    Date.now = () => originalNow() + 60 * 60 * 1000 + 1;
+    assert.equal(verifyTikTokStoreOwnerAnalyticsSession(token), null);
+  } finally {
+    Date.now = originalNow;
+    if (originalSecret === undefined) delete process.env.TIKTOK_INTERNAL_SYNC_SECRET;
+    else process.env.TIKTOK_INTERNAL_SYNC_SECRET = originalSecret;
+  }
 });

@@ -70,6 +70,32 @@ export interface ResolveStoreResult {
   matchedCount: number;
 }
 
+export interface TikTokStoreOwnerAccountSnapshot {
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  avatarUrl100: string | null;
+  avatarLargeUrl: string | null;
+  bioDescription: string | null;
+  isVerified: boolean;
+  followerCount: number;
+  followingCount: number;
+  likesCount: number;
+  videoCount: number;
+  connectedAt: string;
+  lastSyncedAt: string;
+  storeMasterId: string | null;
+  storeMaster: {
+    id: string;
+    externalStoreId: string | null;
+    storeName: string;
+    accountName: string;
+    province: string | null;
+    region: string | null;
+    tiktokUsername: string | null;
+  } | null;
+}
+
 /**
  * Error classes for classifying TikTok OAuth and API errors
  */
@@ -515,6 +541,59 @@ export class TikTokService {
 
     if (!raw) return null;
     return this.mapToSafeAccountOverview(raw);
+  }
+
+  /**
+   * Retrieves only the account-level fields needed by the public store-owner
+   * analytics flow. This deliberately selects fields only; internal HQ callers
+   * should continue using getTikTokAccountById.
+   */
+  async getTikTokAccountForStoreOwner(identifier: string): Promise<TikTokStoreOwnerAccountSnapshot | null> {
+    const raw = await this.prisma.tikTokAccount.findUnique({
+      where: { id: identifier },
+      select: {
+        displayName: true,
+        username: true,
+        avatarUrl: true,
+        avatarUrl100: true,
+        avatarLargeUrl: true,
+        bioDescription: true,
+        isVerified: true,
+        followerCount: true,
+        followingCount: true,
+        likesCount: true,
+        videoCount: true,
+        connectedAt: true,
+        lastSyncedAt: true,
+        storeMasterId: true,
+        storeMaster: {
+          select: {
+            id: true,
+            externalStoreId: true,
+            storeName: true,
+            accountName: true,
+            province: true,
+            region: true,
+            tiktokUsername: true,
+          },
+        },
+      },
+    });
+
+    if (!raw) return null;
+
+    return {
+      ...raw,
+      username: raw.username ?? null,
+      avatarUrl: raw.avatarUrl ?? null,
+      avatarUrl100: raw.avatarUrl100 ?? null,
+      avatarLargeUrl: raw.avatarLargeUrl ?? null,
+      bioDescription: raw.bioDescription ?? null,
+      storeMasterId: raw.storeMasterId ?? null,
+      connectedAt: raw.connectedAt.toISOString(),
+      lastSyncedAt: raw.lastSyncedAt.toISOString(),
+      storeMaster: raw.storeMaster,
+    };
   }
 
   /**

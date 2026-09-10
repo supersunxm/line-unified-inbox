@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
 import { UserRole } from "@prisma/client";
 import { Public, Roles } from "../auth/auth.decorators";
 import { TikTokService } from "./tiktok.service";
 import { TikTokPublicAnalyticsService } from "./tiktok-public-analytics.service";
 import { InternalTikTokSyncGuard } from "./internal-sync.guard";
 import { TikTokStoreBindingService, TikTokStoreBindingRequestState } from "./tiktok-store-binding.service";
+import { verifyTikTokStoreOwnerSession } from "./tiktok-store-owner-session";
 import {
   ReconcileStoreBindingsResponse,
   SafeTikTokAccountOverviewResponse,
@@ -12,6 +14,8 @@ import {
   TikTokBulkMetricsSummaryResponse,
   TikTokHistoricalMetricsResponse,
 } from "./dto/tiktok-sync.dto";
+
+type AuthenticatedRequest = Request & { user?: { id?: string | null } };
 
 @Controller("tiktok")
 export class TikTokController {
@@ -34,6 +38,25 @@ export class TikTokController {
     @Body() dto: SyncTikTokAccountDto
   ): Promise<SafeTikTokAccountOverviewResponse> {
     return this.tiktokService.upsertTikTokAccount(dto);
+  }
+
+  /**
+   * Public store-owner analytics endpoint. The account and store are derived
+   * from the signed HttpOnly session cookie; no browser-supplied identifier is
+   * accepted. The internal secret only permits the frontend server to call it.
+   */
+  @Public()
+  @UseGuards(InternalTikTokSyncGuard)
+  @Get("internal/store-owner/me")
+  async getStoreOwnerAnalytics(@Req() request: Request) {
+    const session = verifyTikTokStoreOwnerSession(request.headers.cookie);
+    if (!session) {
+      throw new UnauthorizedException("TikTok store-owner session is invalid or expired");
+    }
+    return this.tiktokStoreBindingService!.getStoreOwnerAnalytics(
+      session.accountId,
+      session.storeMasterId,
+    );
   }
 
   /**
@@ -174,7 +197,7 @@ export class TikTokController {
   @Post("binding-requests/:id/approve")
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async approveBindingRequest(@Param("id") id: string, @Req() request: any) {
+  async approveBindingRequest(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.tiktokStoreBindingService!.reviewBindingRequest(
       id,
       "APPROVED",
@@ -185,7 +208,7 @@ export class TikTokController {
   @Post("binding-requests/:id/reject")
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async rejectBindingRequest(@Param("id") id: string, @Req() request: any) {
+  async rejectBindingRequest(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
     return this.tiktokStoreBindingService!.reviewBindingRequest(
       id,
       "REJECTED",

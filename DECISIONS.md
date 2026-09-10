@@ -1,5 +1,23 @@
 # Architecture & Design Decisions
 
+## TikTok Public Owner Scope Alignment: Account-Level Analytics Only (2026-09-10)
+
+- **Scope-consistent public contract**: The public store-owner response contains only the authorized account profile, account-level counts, follower growth summary, and official daily account snapshots. `TikTokStoreOwnerAccountResponse` intentionally has no `videos` field.
+- **Internal video preservation**: Existing `TikTokVideo` persistence, internal service methods, HQ dashboards, and internal APIs remain available and unchanged. Removing video records from the public response is a presentation/API boundary decision, not a data deletion.
+- **Public query isolation**: `getStoreOwnerAnalytics()` calls a dedicated account-level snapshot method that selects only the required `TikTokAccount` and `StoreMaster` fields, with no `TikTokVideo` relation. The internal `getTikTokAccountById()` lookup remains unchanged for HQ consumers.
+- **App Review consistency**: The public owner page no longer renders individual videos or per-video views, likes, comments, shares, covers, captions, or engagement. This matches the limited `user.info.basic`, `user.info.profile`, and `user.info.stats` OAuth scope set and the privacy-policy statement that `video.list` and per-video analytics are not requested.
+- **Source isolation retained**: Public owner analytics continues to read only the OAuth-connected `TikTokAccount` and `TikTokAccountDailyMetric` data; `TikTokPublicProfile` remains excluded.
+
+## TikTok Store-Owner Analytics: Signed Session Boundary and Official Data Source (2026-09-09)
+
+- **Dedicated public-integration route**: Store-owner analytics lives at `/connect/tiktok/analytics`; the existing staff routes remain unchanged and continue to require the staff session.
+- **Two-sided signed authorization**: After the binding flow confirms a store, the frontend issues a one-hour HttpOnly, SameSite, Secure-in-production HMAC session containing only the authorized TikTok account ID, Store Master ID, and expiry. The frontend page verifies it before calling the backend, and the backend verifies the same cookie again. Missing, malformed, tampered, expired, mismatched, or disconnected sessions fail closed.
+- **No browser-selected account**: The analytics endpoint is `/tiktok/internal/store-owner/me` with no account or store identifier in the URL. The backend derives both identifiers from the verified session and checks the persisted `TikTokAccount.storeMasterId` before reading data.
+- **Official-only analytics**: The service reads the persisted `TikTokAccount` and official `TikTokAccountDailyMetric` history for the store-owner response. Existing official OAuth video records remain internal-only and are not returned to this public flow. It does not query or merge `TikTokPublicProfile` collector data.
+- **Safe response contract**: The store-owner DTO exposes only customer-facing profile counts, timestamps, selected store display data, and daily account-level metrics. Encrypted access/refresh tokens, internal account/store IDs, account names, video records, and staff controls are excluded.
+- **Binding-state behavior**: Only a confirmed binding can return analytics. Pending requests return a neutral selected-store review state; unconfirmed sessions return to the association flow; no analytics data is fabricated when daily snapshots are unavailable.
+- **Review transparency**: The connected view explicitly states that the integration is read-only and will not post, edit, or delete TikTok content.
+
 ## Google Review Weekly KPI: 7-Calendar-Day True Cadence & Invariant-Preserving Migration (2026-09-09)
 
 - **7-Calendar-Day Cadence Starting from Week 2**:

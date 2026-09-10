@@ -1,5 +1,46 @@
 # AI Progress Log
 
+## 2026-09-10: Remove Per-Video Analytics from Public TikTok Owner Flow [COMPLETED & VERIFIED]
+- **Current Task**: Align the public store-owner analytics surface with the approved read-only OAuth scopes and privacy policy by removing all per-video analytics while preserving internal HQ video capabilities.
+- **Completed Work**:
+  1. Removed `videos` from `TikTokStoreOwnerAccountResponse` and stopped `getStoreOwnerAnalytics()` from returning `overview.videos`.
+  2. Removed the public Recent Videos section and all video covers, captions, views, likes, comments, shares, and engagement UI. Account-level Video Count remains visible.
+  3. Added `getTikTokAccountForStoreOwner()` with a field-only Prisma selection for the required `TikTokAccount` and `StoreMaster` fields; it does not load `TikTokVideo`. Kept `getTikTokAccountById()`, `TikTokVideo` storage, existing internal TikTok service behavior, HQ dashboards, and their APIs unchanged.
+  4. Added focused backend service coverage proving the public path never calls the video-including lookup or requests the video relation, official account metrics still return, and stored video records are omitted, plus frontend/source assertions for the public contract and security/state boundaries.
+- **Checks Run**:
+  - Frontend TikTok authorization/session tests: **12/12 passed**.
+  - Backend TikTok/store-owner tests: **30/30 passed**.
+  - Frontend production build: **passed**.
+  - Backend production build: **passed**.
+  - Prisma schema validation: **passed**.
+  - Focused lint on changed owner-flow files: **passed**. The touched legacy `tiktok.service.ts` file retains pre-existing repository lint errors outside the new method; none are in the added method.
+  - `git diff --check`: **passed**.
+- **Scope Confirmed**: No OAuth credentials/scopes, Railway variables, LINE OA, Google Review, database schema, migrations, internal HQ dashboards, or TikTok video records were changed.
+- **Next Action**: Commit and push this fix to the existing PR #232; do not merge or deploy.
+
+## 2026-09-09: Public TikTok Store-Owner Analytics Flow [IMPLEMENTED & VERIFIED]
+- **Current Task**: Fix the post-OAuth store-owner TikTok CTA so a confirmed BM/PC/store operator can view only the authorized account's official analytics without staff login, while preserving HQ dashboards.
+- **Completed Work**:
+  1. Added `/connect/tiktok/analytics` as a dynamic, `noindex`/`nofollow` public-authorized page with Thai, English, and Chinese customer-facing states.
+  2. Added a dedicated one-hour signed HttpOnly store-owner session scoped to both `TikTokAccount.id` and `StoreMaster.id`; it is issued only from the confirmed store-binding flow and verified by both frontend and backend.
+  3. Added narrowly scoped `GET /tiktok/internal/store-owner/me`. It accepts no account/store path parameters, derives identity from the signed cookie, requires the existing internal server-to-server guard, and returns only safe official account, store, and daily-metric fields.
+  4. Added confirmed, pending, unconfirmed, expired, disconnected, and no-history UI states. The page includes the read-only disclosure required for the TikTok App Review use case and does not expose per-video analytics.
+  5. Updated `/connect/tiktok/success` to link to the new route. Existing `/tiktok`, `/tiktok/dashboard`, `/tiktok/dashboard/[accountId]`, and public collector routes were left unchanged.
+- **Checks Run**:
+  - Focused TikTok auth/session test: **12/12 passed**.
+  - Focused backend TikTok/store-owner tests: **28/28 passed**, including the server-side signed-cookie verifier.
+  - Full frontend tests: **539/539 passed**.
+  - Focused frontend and backend ESLint checks: **passed**.
+  - Prisma schema validation: **passed**.
+  - Frontend production build: **passed**; `/connect/tiktok/analytics` is registered as a dynamic route.
+  - Backend production build: **passed**.
+  - Frontend `tsc --noEmit`: repository baseline remains failing in unrelated Google Review KPI, Line Chat, and test fixtures; no errors remain in the changed analytics/session files.
+  - Full frontend lint: repository baseline remains failing in unrelated files (**68 errors, 77 warnings**).
+  - Full backend tests: **1809 passed, 4 pre-existing failures** in Line Chat health/image relay and Store Master sync tests; no TikTok failure.
+  - Live local check: frontend analytics and success routes returned **200**; unauthenticated binding context returned **401**. Backend startup compiled and registered the new route but could not remain live because local PostgreSQL/Docker was unavailable.
+- **Blockers**: Docker/PostgreSQL is unavailable in the environment, so a DB-backed signed-session analytics response and full backend health check could not be exercised. Browser visual QA was also unavailable because no in-app browser instance was provisioned.
+- **Next Action**: Commit the scoped branch and open the review PR; do not merge or deploy.
+
 ## 2026-09-09: Google Review Weekly KPI 7-Day Calendar Transition & Live Sep 9 Collection [COMPLETED & VERIFIED]
 - **Current Task**: Change Google Review Weekly KPI calendar from hardcoded/irregular intervals to true 7-calendar-day periods starting from Week 2, migrate production PostgreSQL database records, generalize the collector, verify all invariants, run a dry diagnostic on 5 stores, run exactly ONE live collection cycle for today (`2026-09-09`), verify post-run production state, and open a PR to `main`.
 - **Completed Work**:

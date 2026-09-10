@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
-import { normalizeTikTokUsernameForMatching } from "./tiktok.service";
+import { TikTokService, normalizeTikTokUsernameForMatching } from "./tiktok.service";
+import type {
+  TikTokStoreOwnerAnalyticsResponse,
+  TikTokStoreOwnerStoreResponse,
+} from "./dto/tiktok-sync.dto";
 
 const REQUEST_ACTION = "TIKTOK_STORE_BINDING_REQUEST";
 const CONFIRMED_ACTION = "TIKTOK_STORE_BINDING_CONFIRMED";
@@ -61,7 +65,10 @@ function readSimpleBindingMetadata(value: unknown): { accountId: string; storeMa
 
 @Injectable()
 export class TikTokStoreBindingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tiktokService: TikTokService,
+  ) {}
 
   private storeSelect() {
     return {
@@ -317,6 +324,103 @@ export class TikTokStoreBindingService {
     });
 
     return { status: "PENDING" as const, requestId: request.id, store };
+  }
+
+  /**
+   * Returns the exact OAuth-connected account represented by the validated
+   * store-owner session. The expected store ID is checked against the current
+   * database binding and every non-connected state fails closed without
+   * returning analytics.
+   */
+  async getStoreOwnerAnalytics(
+    accountId: string,
+    expectedStoreMasterId: string,
+  ): Promise<TikTokStoreOwnerAnalyticsResponse> {
+    const account = await this.prisma.tikTokAccount.findUnique({
+      where: { id: accountId },
+      select: {
+        id: true,
+        storeMasterId: true,
+        connectionStatus: true,
+        storeMaster: { select: this.storeSelect() },
+      },
+    });
+
+    if (!account || account.storeMasterId !== expectedStoreMasterId || !account.storeMaster) {
+      return { status: "RECONNECT_REQUIRED" };
+    }
+
+    if (account.connectionStatus !== "CONNECTED") {
+      return { status: "RECONNECT_REQUIRED" };
+    }
+
+    const pendingLog = await this.findPendingRequestForAccount(account.id);
+    if (pendingLog) {
+      const metadata = readRequestMetadata(pendingLog.metadata);
+      if (metadata) {
+        const pendingStore = await this.prisma.storeMaster.findUnique({
+          where: { id: metadata.storeMasterId },
+          select: this.storeSelect(),
+        });
+        return {
+          status: "PENDING",
+          pendingStore: pendingStore ? this.toStoreOwnerStore(pendingStore) : undefined,
+        };
+      }
+    }
+
+    const isConfirmed = await this.isStoreBindingConfirmed(account.id, account.storeMaster.id);
+    const store = this.toStoreOwnerStore(account.storeMaster);
+    if (!isConfirmed) {
+      return { status: "NEEDS_STORE_CONFIRMATION", store };
+    }
+
+    const [accountSnapshot, historicalMetrics] = await Promise.all([
+      this.tiktokService.getTikTokAccountForStoreOwner(account.id),
+      this.tiktokService.getAccountHistoricalMetrics(account.id, 30),
+    ]);
+
+    if (
+      !accountSnapshot ||
+      !accountSnapshot.storeMaster ||
+      !historicalMetrics ||
+      accountSnapshot.storeMasterId !== account.storeMaster.id
+    ) {
+      return { status: "RECONNECT_REQUIRED" };
+    }
+
+    return {
+      status: "CONNECTED",
+      account: {
+        displayName: accountSnapshot.displayName,
+        username: accountSnapshot.username,
+        avatarUrl: accountSnapshot.avatarUrl,
+        avatarUrl100: accountSnapshot.avatarUrl100,
+        avatarLargeUrl: accountSnapshot.avatarLargeUrl,
+        bioDescription: accountSnapshot.bioDescription,
+        isVerified: accountSnapshot.isVerified,
+        followerCount: accountSnapshot.followerCount,
+        followingCount: accountSnapshot.followingCount,
+        likesCount: accountSnapshot.likesCount,
+        videoCount: accountSnapshot.videoCount,
+        connectedAt: accountSnapshot.connectedAt,
+        lastSyncedAt: accountSnapshot.lastSyncedAt,
+        store: this.toStoreOwnerStore(accountSnapshot.storeMaster),
+      },
+      metrics: {
+        summary: historicalMetrics.summary,
+        history: historicalMetrics.history,
+      },
+    };
+  }
+
+  private toStoreOwnerStore(store: TikTokBindingStoreSummary): TikTokStoreOwnerStoreResponse {
+    return {
+      externalStoreId: store.externalStoreId,
+      storeName: store.storeName,
+      province: store.province,
+      region: store.region,
+    };
   }
 
   async listBindingRequests(status: TikTokStoreBindingRequestState = "PENDING") {

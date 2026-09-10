@@ -2,11 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { callTikTokStoreBindingBackend } from "@/app/tiktok/store-binding-backend";
 import {
+  TIKTOK_STORE_OWNER_ANALYTICS_SESSION_COOKIE,
+  TIKTOK_STORE_OWNER_ANALYTICS_SESSION_MAX_AGE,
   TIKTOK_STORE_BINDING_SESSION_COOKIE,
+  createTikTokStoreOwnerAnalyticsSession,
   verifyTikTokStoreBindingSession,
 } from "@/app/tiktok/store-binding-session";
 
 export const dynamic = "force-dynamic";
+
+function getConnectedStoreId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const raw = payload as { status?: unknown; store?: unknown };
+  if (raw.status !== "CONNECTED" || !raw.store || typeof raw.store !== "object" || Array.isArray(raw.store)) {
+    return null;
+  }
+  const id = (raw.store as { id?: unknown }).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -32,7 +45,22 @@ export async function POST(request: NextRequest) {
       },
     );
     const payload = await response.json().catch(() => ({ error: "invalid_backend_response" }));
-    return NextResponse.json(payload, { status: response.status });
+    const nextResponse = NextResponse.json(payload, { status: response.status });
+    const connectedStoreId = response.ok ? getConnectedStoreId(payload) : null;
+    if (connectedStoreId) {
+      nextResponse.cookies.set(
+        TIKTOK_STORE_OWNER_ANALYTICS_SESSION_COOKIE,
+        createTikTokStoreOwnerAnalyticsSession(session.accountId, connectedStoreId),
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: TIKTOK_STORE_OWNER_ANALYTICS_SESSION_MAX_AGE,
+          path: "/",
+        },
+      );
+    }
+    return nextResponse;
   } catch {
     return NextResponse.json({ error: "store_binding_backend_unavailable" }, { status: 502 });
   }
