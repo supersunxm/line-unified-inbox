@@ -1,3 +1,25 @@
+# 2026-09-10: Store 360 Phase 1 Production Readiness [COMPLETED & VERIFIED]
+- **Current Task**: Validate and refine the Store 360 Phase 1 implementation against the existing data model without starting Phase 2 AI features.
+- **Audit Completed**:
+  - Store identity comes from `Store` + `StoreMaster`.
+  - LINE OA identity/status comes from `LineOfficialAccount`; followers come from `LineOaFollowerSnapshot`.
+  - Customer/message activity comes from `Conversation` + `Message`.
+  - Human reply attribution requires `OUTBOUND` + non-null `Message.senderUserId` and excludes `Auto Reply Bot`, `SYSTEM`, and ambiguous outbound rows. Current operator text/image and mobile video write paths persist the sender; persisted auto-response delivery is separately marked.
+  - Sales/product/payment tagging comes from existing conversation sales fields, `ConversationSalesProduct`, and manual `ConversationProduct` records.
+  - Follow-up attribution comes from `ActivityHistory.createdByUserId`.
+  - Authorization comes from `StoreAccessService`; chat drill-through remains `/chats?conversationId=...`.
+- **Completed Work**: Extended response lookup only through the bounded 24-hour look-ahead after the exclusive report end; kept inbound/customer counts inside the selected Bangkok-calendar range; documented one conversation-level response case; added text/image/video, bot/system/ambiguous attribution coverage; added no-data and unique-customer sales denominator coverage; exposed persisted `ConversationTopic`/`Topic` names read-only with compact multi-topic formatting; preserved existing Store Chats navigation; no Phase 2 AI or migration was added.
+- **Definitions**:
+  - Customers are unique `Conversation.customerId` values among selected non-QA conversations with selected-period inbound activity.
+  - A response case is one conversation: the first selected-period inbound opens it, and the first later qualifying human outbound closes it. Repeated inbound bubbles before that reply do not create extra SLA cases.
+  - `Replied Within 24h` uses the first qualifying human reply duration; replies after 24 hours are late (not in the 24h bucket) but remain replied if observed within the bounded report-end-plus-24h lookup horizon.
+  - Unanswered means no qualifying human reply was observed within that bounded response lookup horizon; automated, system, and ambiguous outbound rows never satisfy it.
+  - `Sales Tagged / Customers` uses unique tagged `customerId` values over unique selected-period inbound `customerId` values. Conversation/product counts remain available in the Sales section.
+  - Topics are persisted `ConversationTopic`/`Topic` names only; Store 360 does not generate or infer topics.
+- **Checks Run**: Store 360 backend and neighboring monthly analytics tests passed (44/44); frontend test suite passed (549/549); Store 360/backend/frontend scoped ESLint passed; backend and frontend production builds passed; Prisma schema validation passed. Docker/PostgreSQL was unavailable, so no authenticated DB-backed Store 360 metric values were observed or cross-checked locally. No migration was required.
+- **Known Repository Baseline**: Full backend lint, full frontend lint, frontend `tsc --noEmit`, and the full backend suite retain the unrelated pre-existing failures recorded below; no new Store 360 failure was found. Host-local startup smoke checks from the initial Store 360 implementation remain valid (`/health` 200, protected Store 360 endpoints 401 without auth, unknown route 404, `/store-360` 200), but this continuation could not perform DB-backed authenticated checks because Docker/PostgreSQL remains unavailable.
+- **Next Action**: Safe to review/commit the scoped Store 360 changes after the documented runtime limitation is accepted; no commit or push was performed.
+
 # AI Progress Log
 
 ## 2026-09-10: Store Locator Production-Readiness Polish [COMPLETED & VERIFIED]

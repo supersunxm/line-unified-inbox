@@ -19,6 +19,8 @@ export type ApiCustomerSalesInformation = {
   recordedAt: string | null;
 };
 
+
+
 export type UpdateCustomerSalesInfoInput = {
   status?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
   interestLevel?: "HOT" | "WARM" | "COLD" | null;
@@ -392,6 +394,78 @@ export type GoogleMapsReadinessStatus = "CONFIGURED" | "MISSING" | "INVALID";
 export type GoogleMapsReadiness = { status: GoogleMapsReadinessStatus; ready: boolean; reason: string | null };
 
 export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
+export type StoreInsightsMetric = { count: number; percentage: number | null };
+export type StoreInsightsResponsePerformance = {
+  totalConversations: number;
+  repliedWithin15Minutes: StoreInsightsMetric;
+  repliedWithin1Hour: StoreInsightsMetric;
+  repliedWithin24Hours: StoreInsightsMetric;
+  unanswered: StoreInsightsMetric;
+  medianFirstResponseSeconds: number | null;
+  volumeByHour: number[];
+  totalInboundMessages: number;
+  available: boolean;
+  dataQuality: { ambiguousOutboundCount: number; automatedOutboundCount: number };
+};
+export type StoreInsightsResponder = {
+  id: string;
+  displayName: string;
+  conversationsHandled: number;
+  repliedWithin24HoursPercentage: number | null;
+  medianResponseSeconds: number | null;
+  followUpCount: number | null;
+  salesTaggedCount: number | null;
+};
+export type StoreInsightsSales = {
+  totalCustomers: number;
+  salesTaggedCustomers: number;
+  salesTaggedCustomerPercentage: number | null;
+  totalConversations: number;
+  salesTaggedConversations: number;
+  productModels: Array<{ name: string; count: number }>;
+  paymentMethods: Array<{ name: string; count: number }>;
+  missingSalesInformation: number;
+};
+export type StoreInsightsStore = {
+  id: string;
+  name: string;
+  code: string | null;
+  externalStoreId: string | null;
+  province: string | null;
+  region: string | null;
+  lineOas: Array<{ id: string; name: string; basicId: string | null; connectionStatus: string; lastWebhookReceivedAt: string | null }>;
+};
+export type StoreInsightsSummary = {
+  store: StoreInsightsStore;
+  period: { from: string; to: string; timezone: string };
+  followers: { current: number | null; growth: number | null; historicalAvailable: boolean; snapshotCoverage: "available" | "partial" | "unavailable" };
+  customers: number;
+  response: StoreInsightsResponsePerformance;
+  sales: StoreInsightsSales;
+  responders: StoreInsightsResponder[];
+  limitations: string[];
+  comparison: StoreInsightsComparison | null;
+};
+export type StoreInsightsComparison = Pick<StoreInsightsSummary, "period" | "followers" | "customers" | "response" | "sales" | "limitations">;
+export type StoreInsightsConversation = {
+  id: string;
+  customer: { id: string; displayName: string };
+  topic: string | null;
+  responseStatus: "REPLIED" | "UNANSWERED";
+  responder: { id: string; displayName: string } | null;
+  firstResponseSeconds: number | null;
+  salesProduct: string | null;
+  salesTagged: boolean;
+  lastActivity: string;
+};
+export type StoreInsightsConversationResponse = {
+  storeId: string;
+  period: { from: string; to: string; timezone: string };
+  items: StoreInsightsConversation[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
 export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
 export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };
 export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };
@@ -1865,5 +1939,3 @@ export type GoogleReviewWeeklyCollectorStatusResponse = {
     newReviewsDiscoveredToday: number;
   };
 };
-
-
