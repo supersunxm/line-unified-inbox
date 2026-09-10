@@ -7,6 +7,10 @@ const source = readFileSync(
   join(process.cwd(), "src/line-chat/line-chat-manager-message-relay-worker.service.ts"),
   "utf8",
 );
+const fallbackSource = readFileSync(
+  join(process.cwd(), "src/line-chat/line-chat-composer-fallback.ts"),
+  "utf8",
+);
 
 test("manager relay only accepts a real outbound bubble as delivery evidence", () => {
   assert.match(source, /countOutboundExactText/);
@@ -16,13 +20,19 @@ test("manager relay only accepts a real outbound bubble as delivery evidence", (
   assert.doesNotMatch(source, /composerCleared && count > beforeCount/);
 });
 
-test("manager relay keeps composer selection safe while accepting the single Manager textarea", () => {
-  assert.match(source, /const semanticComposer =/);
-  assert.match(source, /metadata\.className\.includes\("prosemirror"\)/);
-  assert.match(source, /const isSearchField = \/search\|ค้นหา\/u\.test\(hint\)/);
-  assert.match(source, /const singleTextareaFallback = metadata\.tag === "textarea" && count === 1/);
-  assert.match(source, /\(!lowerPane && !singleTextareaFallback\)/);
-  assert.match(source, /if \(singleTextareaFallback\) score \+= 6/);
+test("all phase2 manager layouts prefer the same sole textarea primitive as Central World", () => {
+  assert.match(source, /findSoleManagerTextarea/);
+  assert.match(source, /if \(soleTextarea\) return soleTextarea/);
+  assert.match(fallbackSource, /count !== 1/);
+  assert.match(fallbackSource, /search\|ค้นหา/);
+  assert.match(fallbackSource, /return textarea/);
+});
+
+test("manager relay can focus and populate a transient manager textarea", () => {
+  assert.match(source, /private async focusComposer/);
+  assert.match(source, /element as HTMLElement\)\.focus/);
+  assert.match(source, /element\.value = value/);
+  assert.match(source, /new InputEvent\("input"/);
 });
 
 test("manager relay prefers the real Manager send control before keyboard fallback", () => {
