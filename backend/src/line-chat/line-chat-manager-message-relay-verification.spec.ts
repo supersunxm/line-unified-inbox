@@ -25,6 +25,7 @@ test("all phase2 manager layouts prefer the same sole textarea primitive as Cent
   assert.match(source, /if \(soleTextarea\) return soleTextarea/);
   assert.match(fallbackSource, /count !== 1/);
   assert.match(fallbackSource, /search\|ค้นหา/);
+  assert.match(fallbackSource, /metadata\.disabled/);
   assert.match(fallbackSource, /return textarea/);
 });
 
