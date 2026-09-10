@@ -49,8 +49,7 @@ void test("1. Public stores endpoints are explicitly marked @Public()", () => {
   assert.equal(listPublic, true, "GET /public/stores must have @Public() metadata");
 
   const getByIdentifierPublic = reflector.get<boolean>(
-    IS_PUBLIC,
-    PublicStoresController.prototype.getByIdentifier
+    IS_PUBLIC, PublicStoresController.prototype.getByIdentifier
   );
   assert.equal(getByIdentifierPublic, true, "GET /public/stores/:identifier must have @Public() metadata");
 });
@@ -68,25 +67,23 @@ void test("2. Existing private store routes remain protected without @Public()",
   assert.deepEqual(syncRoles, ["ADMIN"], "POST /store-master/sync must require ADMIN role");
 });
 
-void test("3. serializePublicStore strictly excludes internal fields and accountName", () => {
+void test("3. serializePublicStore strictly excludes internal fields and localizes province", () => {
   const serialized = serializePublicStore(sampleRawStore);
 
-  // Whitelisted public fields must be present
   assert.equal(serialized.id, "29039");
   assert.equal(serialized.slug, "obs-central-phitsanulok-by-oppo-2-29039");
   assert.equal(serialized.name, "OBS Central Phitsanulok By OPPO 2");
-  assert.equal(serialized.province, "Phitsanulok");
+  assert.equal(serialized.province, "พิษณุโลก");
   assert.equal(serialized.region, "Northern");
   assert.equal(serialized.location.mapsUrl, "https://maps.app.goo.gl/D4uyRDRAoFXu36P78");
+  assert.match(serialized.location.addressPreview, /พิษณุโลก/);
   assert.equal(serialized.line?.url, "https://lin.ee/KubnJU1");
   assert.equal(serialized.line?.basicId, "@959koqlp");
   assert.equal(serialized.tiktok?.username, "o_centralphitsanulok");
   assert.equal(serialized.tiktok?.profileUrl, "https://www.tiktok.com/@o_centralphitsanulok");
 
-  // accountName is internal OA nickname and must NOT be in public DTO
   assert.equal("accountName" in (serialized as any), false, "accountName must not be in public DTO");
 
-  // Sensitive StoreMaster internal fields MUST NOT exist in serialized output
   const forbiddenKeys = [
     "lineManagerUrl",
     "bmName",
@@ -114,7 +111,6 @@ void test("3. serializePublicStore strictly excludes internal fields and account
     );
   }
 
-  // Check JSON stringified output as well
   const jsonString = JSON.stringify(serialized);
   assert.doesNotMatch(jsonString, /accountName/);
   assert.doesNotMatch(jsonString, /manager\.line\.biz/);
@@ -147,7 +143,7 @@ void test("4. generatePublicStoreSlug produces clean, deterministic slugs", () =
   );
 });
 
-void test("5. PublicStoresService.getStores filters correctly and returns metadata", async () => {
+void test("5. PublicStoresService.getStores filters correctly and returns Thai province metadata", async () => {
   const mockStores = [
     sampleRawStore,
     {
@@ -173,27 +169,31 @@ void test("5. PublicStoresService.getStores filters correctly and returns metada
 
   const service = new PublicStoresService(mockPrisma as PrismaService);
 
-  // All stores
   const resultAll = await service.getStores({});
   assert.equal(resultAll.total, 2);
   assert.equal(resultAll.stores.length, 2);
   assert.deepEqual(resultAll.filters.regions, ["Central", "Northern"]);
-  assert.deepEqual(resultAll.filters.provinces, ["Bangkok", "Phitsanulok"]);
+  assert.deepEqual(resultAll.filters.provinces, ["กรุงเทพมหานคร", "พิษณุโลก"]);
 
-  // Filter by region
   const resultNorth = await service.getStores({ region: "Northern" });
   assert.equal(resultNorth.total, 1);
   assert.equal(resultNorth.stores[0].id, "29039");
 
-  // Filter by province
-  const resultBkk = await service.getStores({ province: "Bangkok" });
-  assert.equal(resultBkk.total, 1);
-  assert.equal(resultBkk.stores[0].id, "19704");
+  const resultBkkEnglish = await service.getStores({ province: "Bangkok" });
+  assert.equal(resultBkkEnglish.total, 1);
+  assert.equal(resultBkkEnglish.stores[0].id, "19704");
 
-  // Search by text query
-  const resultSearch = await service.getStores({ q: "Phitsanulok" });
-  assert.equal(resultSearch.total, 1);
-  assert.equal(resultSearch.stores[0].name, "OBS Central Phitsanulok By OPPO 2");
+  const resultBkkThai = await service.getStores({ province: "กรุงเทพมหานคร" });
+  assert.equal(resultBkkThai.total, 1);
+  assert.equal(resultBkkThai.stores[0].id, "19704");
+
+  const resultSearchEnglish = await service.getStores({ q: "Phitsanulok" });
+  assert.equal(resultSearchEnglish.total, 1);
+  assert.equal(resultSearchEnglish.stores[0].name, "OBS Central Phitsanulok By OPPO 2");
+
+  const resultSearchThai = await service.getStores({ q: "พิษณุโลก" });
+  assert.equal(resultSearchThai.total, 1);
+  assert.equal(resultSearchThai.stores[0].name, "OBS Central Phitsanulok By OPPO 2");
 });
 
 void test("6. PublicStoresService.getStoreByIdentifier resolves externalStoreId and slug, but strictly rejects UUID", async () => {
@@ -209,24 +209,21 @@ void test("6. PublicStoresService.getStoreByIdentifier resolves externalStoreId 
 
   const service = new PublicStoresService(mockPrisma as PrismaService);
 
-  // 1. Lookup by externalStoreId works
   const byCode = await service.getStoreByIdentifier("29039");
   assert.equal(byCode.name, "OBS Central Phitsanulok By OPPO 2");
   assert.equal(byCode.id, "29039");
+  assert.equal(byCode.province, "พิษณุโลก");
 
-  // 2. Lookup by slug works
   const bySlug = await service.getStoreByIdentifier("obs-central-phitsanulok-by-oppo-2-29039");
   assert.equal(bySlug.name, "OBS Central Phitsanulok By OPPO 2");
   assert.equal(bySlug.id, "29039");
 
-  // 3. StoreMaster.id UUID lookup is strictly REJECTED (returns 404)
   await assert.rejects(
     () => service.getStoreByIdentifier("0063c803-f70a-4f95-9eff-88a63465ed1a"),
     (err: any) => err instanceof NotFoundException && err.message === "Store not found",
     "UUID lookup must be rejected by public endpoint"
   );
 
-  // 4. Unknown identifier returns 404
   await assert.rejects(
     () => service.getStoreByIdentifier("non-existent-store-999999"),
     (err: any) => err instanceof NotFoundException && err.message === "Store not found"
