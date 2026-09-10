@@ -23,6 +23,15 @@ test("manager relay does not select arbitrary lower-pane editable fields as the 
   assert.match(source, /if \(!semanticComposer \|\| !lowerPane\) continue/);
 });
 
+test("manager relay prefers the real Manager send control before keyboard fallback", () => {
+  assert.match(source, /SEND_BUTTON_SELECTORS/);
+  assert.match(source, /findSendButton\(page, composer\)/);
+  assert.match(source, /action: "SEND_BUTTON"/);
+  assert.match(source, /await sendButton\.click/);
+  assert.match(source, /action: "KEYBOARD_ENTER"/);
+  assert.match(source, /await page\.keyboard\.press\("Enter"\)/);
+});
+
 test("unverified manager sends fail closed instead of being persisted as sent", () => {
   assert.match(source, /line_chat_manager_message_delivery_not_verified/);
   assert.match(source, /ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ/);
