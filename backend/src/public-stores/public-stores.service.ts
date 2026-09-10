@@ -4,6 +4,7 @@ import {
   type PublicStoreDto,
   type PublicStoreListResponse,
   generatePublicStoreSlug,
+  localizePublicProvince,
   serializePublicStore,
 } from "./public-stores.dto";
 import { normalizeSearchText } from "../store-master/store-master.utils";
@@ -31,11 +32,12 @@ export class PublicStoresService {
     const regionsSet = new Set<string>();
 
     for (const store of allActiveStores) {
-      if (store.province?.trim()) provincesSet.add(store.province.trim());
+      const localizedProvince = localizePublicProvince(store.province);
+      if (localizedProvince) provincesSet.add(localizedProvince);
       if (store.region?.trim()) regionsSet.add(store.region.trim());
     }
 
-    const availableProvinces = Array.from(provincesSet).sort((a, b) => a.localeCompare(b));
+    const availableProvinces = Array.from(provincesSet).sort((a, b) => a.localeCompare(b, "th"));
     const availableRegions = Array.from(regionsSet).sort((a, b) => a.localeCompare(b));
 
     let filtered = allActiveStores;
@@ -48,27 +50,31 @@ export class PublicStoresService {
     }
 
     if (params.province?.trim()) {
-      const targetProvince = params.province.trim().toLowerCase();
-      filtered = filtered.filter(
-        (s) => s.province && s.province.trim().toLowerCase() === targetProvince
-      );
+      const targetProvince = params.province.trim().toLocaleLowerCase();
+      filtered = filtered.filter((s) => {
+        const rawProvince = s.province?.trim().toLocaleLowerCase();
+        const localizedProvince = localizePublicProvince(s.province)?.toLocaleLowerCase();
+        return rawProvince === targetProvince || localizedProvince === targetProvince;
+      });
     }
 
     if (params.q?.trim()) {
-      const rawQuery = params.q.trim().toLowerCase();
+      const rawQuery = params.q.trim().toLocaleLowerCase();
       const normalizedQuery = normalizeSearchText(params.q);
 
       filtered = filtered.filter((store) => {
-        const nameLower = store.storeName.toLowerCase();
-        const accountLower = store.accountName.toLowerCase();
-        const provinceLower = (store.province ?? "").toLowerCase();
-        const regionLower = (store.region ?? "").toLowerCase();
-        const externalIdLower = (store.externalStoreId ?? "").toLowerCase();
+        const nameLower = store.storeName.toLocaleLowerCase();
+        const accountLower = store.accountName.toLocaleLowerCase();
+        const provinceLower = (store.province ?? "").toLocaleLowerCase();
+        const localizedProvinceLower = (localizePublicProvince(store.province) ?? "").toLocaleLowerCase();
+        const regionLower = (store.region ?? "").toLocaleLowerCase();
+        const externalIdLower = (store.externalStoreId ?? "").toLocaleLowerCase();
 
         return (
           nameLower.includes(rawQuery) ||
           accountLower.includes(rawQuery) ||
           provinceLower.includes(rawQuery) ||
+          localizedProvinceLower.includes(rawQuery) ||
           regionLower.includes(rawQuery) ||
           externalIdLower.includes(rawQuery) ||
           store.normalizedAccountName.includes(normalizedQuery)
@@ -95,12 +101,10 @@ export class PublicStoresService {
       throw new NotFoundException("Store not found");
     }
 
-    // Explicit rejection: UUIDs must NOT resolve through the public API
     if (UUID_REGEX.test(rawIdentifier)) {
       throw new NotFoundException("Store not found");
     }
 
-    // 1. Direct match on externalStoreId (OPPO store code, e.g. "29039")
     let store = await this.prisma.storeMaster.findFirst({
       where: {
         externalStoreId: rawIdentifier,
@@ -108,7 +112,6 @@ export class PublicStoresService {
       },
     });
 
-    // 2. If identifier is a slug with trailing digits (e.g. "obs-central-phitsanulok-by-oppo-2-29039")
     if (!store) {
       const trailingCodeMatch = rawIdentifier.match(/-([a-zA-Z0-9]+)$/);
       if (trailingCodeMatch?.[1]) {
@@ -127,7 +130,6 @@ export class PublicStoresService {
       }
     }
 
-    // 3. Fallback: match computed slug against active stores
     if (!store) {
       const allActive = await this.prisma.storeMaster.findMany({
         where: { isActive: true },
