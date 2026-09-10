@@ -2183,8 +2183,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Conversation Explorer topics are read-only names from existing `ConversationTopic` → `Topic` relations. Names are deduplicated, sorted, and compacted for multiple topics; no topic generation or Phase 2 AI inference is introduced.
 - Follow-up responder counts use existing `ActivityHistory` rows constrained to the requested store, non-QA conversations, and STORE LINE OAs. Store, LINE OA type, active/archive state, and authorization filters remain server-side; Store 360 never relies on client filtering for isolation.
 
-## Store 360 compact filter controls (2026-09-10)
+## Store 360 control refinements (2026-09-10)
 
 - Keep the Store 360 store picker single-select and scoped to the already authorized `api.stores()` payload. Follow the existing Follower Insights searchable-list interaction and semantic-token styling, but keep it local to Store 360 because the existing reusable picker is multi-select and has a different value contract.
-- Keep compact custom dates as the application's established native date-input pattern. The shared analytics calendar owns its own preset set and range-apply workflow, which would duplicate or alter Store 360's existing `Last 7 Days`, `Last 30 Days`, `This Month`, and `Custom` behavior.
-- Preserve ISO `YYYY-MM-DD` values as URL/API state and Bangkok today as the future-date boundary. UI changes must not reinterpret analytics dates, comparison periods, authorization, or KPI definitions.
+- Reuse the shared Follower Insights `UnifiedPeriodPicker` for Store 360 Custom dates. Store 360 keeps its four-way range selector, while the calendar's existing two-month view, draft range selection, quick presets, Cancel/Apply flow, and 90-day validation provide the Custom interaction.
+- Preserve ISO `YYYY-MM-DD` values as URL/API state and Bangkok today as the future-date boundary. Custom calendar clicks do not fetch or update Store 360 until Apply; UI changes must not reinterpret analytics dates, comparison periods, authorization, or KPI definitions.
+- Keep active-option visibility inside the Store 360 result list by changing only that container's `scrollTop`; combine bounded overflow with overscroll containment so the page behind the anchored popup does not move.

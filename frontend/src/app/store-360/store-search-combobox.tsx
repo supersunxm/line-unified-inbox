@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { ApiStore } from "@/types/api";
-import { filterStoreSearchOptions, storeSearchIdentifier } from "./store-search";
+import { filterStoreSearchOptions, getActiveOptionScrollTop, storeSearchIdentifier } from "./store-search";
 
 interface StoreSearchComboboxProps {
   stores: ApiStore[];
@@ -16,6 +16,7 @@ export function StoreSearchCombobox({ stores, selectedStoreId, onSelect }: Store
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
@@ -26,7 +27,7 @@ export function StoreSearchCombobox({ stores, selectedStoreId, onSelect }: Store
     setIsOpen(false);
     setQuery("");
     setActiveIndex(0);
-    if (restoreFocus) triggerRef.current?.focus();
+    if (restoreFocus) triggerRef.current?.focus({ preventScroll: true });
   };
 
   const open = () => {
@@ -53,7 +54,18 @@ export function StoreSearchCombobox({ stores, selectedStoreId, onSelect }: Store
 
   useEffect(() => {
     if (!isOpen || filteredStores.length === 0) return;
-    document.getElementById(`${listboxId}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+    const results = resultsRef.current;
+    const activeOption = document.getElementById(`${listboxId}-option-${activeIndex}`);
+    if (!results || !activeOption) return;
+    const resultsRect = results.getBoundingClientRect();
+    const optionRect = activeOption.getBoundingClientRect();
+    results.scrollTop = getActiveOptionScrollTop(
+      results.scrollTop,
+      resultsRect.top,
+      resultsRect.bottom,
+      optionRect.top,
+      optionRect.bottom,
+    );
   }, [activeIndex, filteredStores.length, isOpen, listboxId]);
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -150,7 +162,7 @@ export function StoreSearchCombobox({ stores, selectedStoreId, onSelect }: Store
             )}
           </div>
 
-          <div id={listboxId} role="listbox" aria-label="Authorized stores" className="mt-2 max-h-72 overflow-y-auto overscroll-contain rounded-xl">
+          <div ref={resultsRef} id={listboxId} role="listbox" aria-label="Authorized stores" onWheel={(event) => event.stopPropagation()} className="mt-2 max-h-72 overflow-y-auto overscroll-contain rounded-xl">
             {filteredStores.length === 0 ? (
               <p className="px-3 py-8 text-center text-xs text-[var(--app-text-tertiary)]">No stores found</p>
             ) : filteredStores.map((store, index) => {

@@ -20,6 +20,9 @@ interface UnifiedPeriodPickerProps {
   onApply: (start: string, end: string) => void;
   disabled?: boolean;
   className?: string;
+  defaultOpen?: boolean;
+  deferQuickRanges?: boolean;
+  showOutsideQuickRanges?: boolean;
 }
 
 export function UnifiedPeriodPicker({
@@ -32,9 +35,12 @@ export function UnifiedPeriodPicker({
   onApply,
   disabled = false,
   className = "",
+  defaultOpen = false,
+  deferQuickRanges = false,
+  showOutsideQuickRanges = true,
 }: UnifiedPeriodPickerProps) {
   const t = getFollowerInsightsText(language);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [draftStart, setDraftStart] = useState<string | null>(dateFrom);
   const [draftEnd, setDraftEnd] = useState<string | null>(dateTo);
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -47,13 +53,24 @@ export function UnifiedPeriodPicker({
   const todayIso = getBkkDateStr(new Date());
   const onQuickRange = (days: number) => {
     const range = presetRange(days, todayIso);
+    if (deferQuickRanges) {
+      setDraftStart(range.dateFrom);
+      setDraftEnd(range.dateTo);
+      setPickerError(null);
+      return;
+    }
     onApply(range.dateFrom, range.dateTo);
     setIsOpen(false);
   };
+  const presetRangeForButton = (draft: boolean) => (
+    deferQuickRanges && draft && draftStart && draftEnd
+      ? { dateFrom: draftStart, dateTo: draftEnd }
+      : { dateFrom, dateTo }
+  );
   const presetButtons = (draft = false) => PERIOD_PRESETS.map((days) => (
-    <button key={days} type="button" disabled={disabled} aria-pressed={matchesPreset({ dateFrom, dateTo }, days, todayIso)}
-      onClick={() => { onQuickRange(days); if (draft) triggerRef.current?.focus(); }}
-      className={`rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-[var(--app-accent)] disabled:opacity-40 ${matchesPreset({ dateFrom, dateTo }, days, todayIso) ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"}`}>{days}D</button>
+    <button key={days} type="button" disabled={disabled} aria-pressed={matchesPreset(presetRangeForButton(draft), days, todayIso)}
+      onClick={() => { onQuickRange(days); if (draft && !deferQuickRanges) triggerRef.current?.focus(); }}
+      className={`rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-[var(--app-accent)] disabled:opacity-40 ${matchesPreset(presetRangeForButton(draft), days, todayIso) ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"}`}>{days}D</button>
   ));
 
   const handleOpenPopover = () => {
@@ -217,7 +234,7 @@ export function UnifiedPeriodPicker({
 
   return (
     <div className={`flex min-w-0 flex-wrap items-center gap-2 text-left ${className}`}>
-      <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1">{presetButtons()}</div>
+      {showOutsideQuickRanges && <div className="inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1">{presetButtons()}</div>}
       {/* Trigger Button */}
       <button
         data-date-from={dateFrom}

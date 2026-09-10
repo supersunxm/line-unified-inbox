@@ -7,6 +7,7 @@ import { AppShell, PageContainer } from "@/components/shell";
 import { api } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import type { ApiStore, StoreInsightsConversation, StoreInsightsResponder, StoreInsightsSummary } from "@/types/api";
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 import { useAppLanguage } from "../language";
 import { StoreSearchCombobox } from "./store-search-combobox";
 
@@ -162,6 +163,7 @@ export function Store360View() {
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
   const [preset, setPreset] = useState<Preset>(initialRange.preset);
+  const [customPickerOpen, setCustomPickerOpen] = useState(false);
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("previous");
   const [summary, setSummary] = useState<StoreInsightsSummary | null>(null);
   const [conversations, setConversations] = useState<StoreInsightsConversation[]>([]);
@@ -272,13 +274,18 @@ export function Store360View() {
   };
   const selectPreset = (next: Preset) => {
     setPreset(next);
+    if (next === "custom") {
+      setCustomPickerOpen(true);
+      return;
+    }
+    setCustomPickerOpen(false);
     if (next !== "custom") {
       const range = rangeForPreset(next);
       invalidateInsights();
       setFrom(range.from); setTo(range.to); updateUrl(activeStoreId, range.from, range.to);
     }
   };
-  const updateCustomRange = (nextFrom: string, nextTo: string) => {
+  const applyCustomRange = (nextFrom: string, nextTo: string) => {
     if (!nextFrom || !nextTo || nextFrom > nextTo || nextTo > todayInBangkok()) return;
     invalidateInsights();
     setFrom(nextFrom);
@@ -305,7 +312,7 @@ export function Store360View() {
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--app-border-subtle)] pt-4">
               <label className="flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]">Date range <select value={preset} onChange={(event) => selectPreset(event.target.value as Preset)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="month">This Month</option><option value="custom">Custom</option></select></label>
-              {preset === "custom" && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Custom date range"><input aria-label="Custom start date" type="date" value={from} max={to} onChange={(event) => updateCustomRange(event.target.value, to)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/30" /><span className="text-xs text-[var(--app-text-tertiary)]">to</span><input aria-label="Custom end date" type="date" value={to} min={from} max={todayInBangkok()} onChange={(event) => updateCustomRange(from, event.target.value)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/30" /></div>}
+              {preset === "custom" && <UnifiedPeriodPicker dateFrom={from} dateTo={to} language={language} defaultOpen={customPickerOpen} deferQuickRanges showOutsideQuickRanges={false} onApply={applyCustomRange} />}
               <label className="flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]">Compare <select value={comparisonMode} onChange={(event) => { invalidateInsights(); setComparisonMode(event.target.value as ComparisonMode); }} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="previous">Previous Period</option><option value="none">None</option></select></label>
             </div><span className="text-xs text-[var(--app-text-tertiary)]">{comparisonMode === "previous" ? "Previous period comparison" : "Comparison disabled"} · {summary.period.from} → {summary.period.to}</span>
           </section>

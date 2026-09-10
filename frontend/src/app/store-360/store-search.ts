@@ -14,3 +14,15 @@ export function filterStoreSearchOptions(stores: readonly ApiStore[], query: str
     ),
   );
 }
+
+export function getActiveOptionScrollTop(
+  currentScrollTop: number,
+  containerTop: number,
+  containerBottom: number,
+  optionTop: number,
+  optionBottom: number,
+) {
+  if (optionTop < containerTop) return currentScrollTop - (containerTop - optionTop);
+  if (optionBottom > containerBottom) return currentScrollTop + (optionBottom - containerBottom);
+  return currentScrollTop;
+}
