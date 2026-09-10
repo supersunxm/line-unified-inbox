@@ -386,17 +386,19 @@ export class LineChatManagerMessageRelayWorkerService {
               || metadata.className.includes("prosemirror")
               || metadata.tag === "textarea";
             const lowerPane = Boolean(box && box.y + box.height / 2 >= viewportHeight * 0.55);
-            if (!semanticComposer || !lowerPane) continue;
+            const isSearchField = /search|ค้นหา/u.test(hint);
+            const singleTextareaFallback = metadata.tag === "textarea" && count === 1;
+            if (isSearchField || !semanticComposer || (!lowerPane && !singleTextareaFallback)) continue;
 
             let score = 0;
             if (box && box.y + box.height / 2 >= viewportHeight * 0.55) score += 6;
             if (box && box.y + box.height / 2 >= viewportHeight * 0.72) score += 3;
             if (metadata.tag === "textarea") score += 2;
+            if (singleTextareaFallback) score += 6;
             if (metadata.role === "textbox") score += 2;
             if (metadata.contentEditable === "true") score += 2;
             if (metadata.className.includes("prosemirror")) score += 5;
             if (/send|message|enter|ส่ง/u.test(hint)) score += 5;
-            if (/search|ค้นหา/u.test(hint)) score -= 10;
             candidates.push({ locator: candidate, score });
           }
         }
