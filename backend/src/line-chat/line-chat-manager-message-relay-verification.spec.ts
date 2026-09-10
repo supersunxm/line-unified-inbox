@@ -16,11 +16,13 @@ test("manager relay only accepts a real outbound bubble as delivery evidence", (
   assert.doesNotMatch(source, /composerCleared && count > beforeCount/);
 });
 
-test("manager relay does not select arbitrary lower-pane editable fields as the composer", () => {
+test("manager relay keeps composer selection safe while accepting the single Manager textarea", () => {
   assert.match(source, /const semanticComposer =/);
   assert.match(source, /metadata\.className\.includes\("prosemirror"\)/);
-  assert.match(source, /metadata\.tag === "textarea"/);
-  assert.match(source, /if \(!semanticComposer \|\| !lowerPane\) continue/);
+  assert.match(source, /const isSearchField = \/search\|ค้นหา\/u\.test\(hint\)/);
+  assert.match(source, /const singleTextareaFallback = metadata\.tag === "textarea" && count === 1/);
+  assert.match(source, /\(!lowerPane && !singleTextareaFallback\)/);
+  assert.match(source, /if \(singleTextareaFallback\) score \+= 6/);
 });
 
 test("manager relay prefers the real Manager send control before keyboard fallback", () => {
