@@ -4447,6 +4447,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Frontend tests pass 537/537 and the production build passes. Local HTTP checks returned 200 for all requested public routes and icon/manifest assets. Changed-file lint is clean except for two pre-existing `setState`-in-effect errors in the touched public store components; repository-wide lint retains unrelated baseline errors. Browser discovery was unavailable, so visual screenshots and browser-console inspection remain pending.
 - Branch: `fix/public-app-icon-branding`. No commit, PR, merge, or deployment performed yet. Next action: final diff review, then commit only the focused files if repository write access is available.
 
+# Current task: Prisma TikTok public models reconciliation (2026-09-10)
+
+- Started `fix/prisma-tiktok-public-models` from clean `origin/main` (`954ac65`), keeping Phase 2A on its separate branch.
+- Verified `20260907153000_add_tiktok_public_analytics` against the production catalog: both tables, exact columns/defaults/nullability, eight indexes, ten migration-defined constraints, cascade foreign keys, and live aggregate counts are present.
+- Restored `TikTokPublicProfile` and `TikTokPublicDailyMetric` in `backend/prisma/schema.prisma` with existing table names, StoreMaster relations, DATE mapping, unique constraints, and indexes. No TikTok migration was created or executed.
+- The current-repository production diff no longer proposes TikTok table or foreign-key drops; unrelated CustomerSignal/Coupon/default/index drift remains intentionally unchanged. Prisma generate/validate, focused public TikTok tests (13/13), scoped ESLint, backend build, Prisma Client clone read, and diff checks passed.
+- No production database write, deployment, Customer Voice migration/backfill, Phase 2A merge, or Phase 2B work was performed. Next action: review, commit, and push this isolated reconciliation branch only.
+
 # Current task: Store 360 selector and custom-date refinement (2026-09-10)
 
 - Replaced the Store 360 native store dropdown with a single-select searchable combobox over the existing authorized `api.stores()` result. Search covers store name, external Store ID, code, and internal fallback ID; the selected store and Store ID remain visible.
