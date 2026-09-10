@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import type { ApiStore, StoreInsightsConversation, StoreInsightsResponder, StoreInsightsSummary } from "@/types/api";
 import { useAppLanguage } from "../language";
+import { StoreSearchCombobox } from "./store-search-combobox";
 
 type Preset = "7d" | "30d" | "month" | "custom";
 type ComparisonMode = "previous" | "none";
@@ -173,6 +174,8 @@ export function Store360View() {
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const bootstrapped = useRef(false);
+  const summaryRequestId = useRef(0);
+  const conversationsRequestId = useRef(0);
 
   const activeStoreId = storeId || stores[0]?.id || "";
   const updateUrl = useCallback((nextStoreId: string, nextFrom: string, nextTo: string) => {
@@ -205,22 +208,24 @@ export function Store360View() {
 
   const loadSummary = useCallback(async () => {
     if (!activeStoreId) { setLoading(false); return; }
+    const requestId = ++summaryRequestId.current;
     setLoading(true);
     setError(null);
     setSummary(null);
     try {
       const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {};
       const value = await api.storeInsightsSummary(activeStoreId, { from, to, ...compare });
-      setSummary(value);
+      if (requestId === summaryRequestId.current) setSummary(value);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load Store 360");
+      if (requestId === summaryRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load Store 360");
     } finally {
-      setLoading(false);
+      if (requestId === summaryRequestId.current) setLoading(false);
     }
   }, [activeStoreId, comparisonMode, from, to]);
 
   const loadConversations = useCallback(async () => {
     if (!activeStoreId) return;
+    const requestId = ++conversationsRequestId.current;
     setConversationLoading(true);
     setConversations([]);
     setConversationTotal(0);
@@ -232,12 +237,14 @@ export function Store360View() {
         responderId: responderFilter === "ALL" ? undefined : responderFilter,
         salesTagged: salesFilter === "ALL" ? undefined : salesFilter === "TAGGED",
       });
-      setConversations(value.items);
-      setConversationTotal(value.total);
+      if (requestId === conversationsRequestId.current) {
+        setConversations(value.items);
+        setConversationTotal(value.total);
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load conversations");
+      if (requestId === conversationsRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load conversations");
     } finally {
-      setConversationLoading(false);
+      if (requestId === conversationsRequestId.current) setConversationLoading(false);
     }
   }, [activeStoreId, from, responseFilter, responderFilter, salesFilter, to]);
 
@@ -250,13 +257,33 @@ export function Store360View() {
     return () => window.clearTimeout(timer);
   }, [loadConversations]);
 
-  const selectStore = (next: string) => { setStoreId(next); updateUrl(next, from, to); };
+  const invalidateInsights = () => {
+    summaryRequestId.current += 1;
+    conversationsRequestId.current += 1;
+    setSummary(null);
+    setConversations([]);
+    setConversationTotal(0);
+  };
+  const selectStore = (next: string) => {
+    if (next === activeStoreId) return;
+    invalidateInsights();
+    setStoreId(next);
+    updateUrl(next, from, to);
+  };
   const selectPreset = (next: Preset) => {
     setPreset(next);
     if (next !== "custom") {
       const range = rangeForPreset(next);
+      invalidateInsights();
       setFrom(range.from); setTo(range.to); updateUrl(activeStoreId, range.from, range.to);
     }
+  };
+  const updateCustomRange = (nextFrom: string, nextTo: string) => {
+    if (!nextFrom || !nextTo || nextFrom > nextTo || nextTo > todayInBangkok()) return;
+    invalidateInsights();
+    setFrom(nextFrom);
+    setTo(nextTo);
+    updateUrl(activeStoreId, nextFrom, nextTo);
   };
   const logout = async () => { await api.logout().catch(() => undefined); router.replace("/login"); };
   const responders = summary?.responders ?? [];
@@ -274,9 +301,13 @@ export function Store360View() {
           <section className={`${surfaceClass()} overflow-hidden p-5 sm:p-6`}>
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div className="min-w-0"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--app-accent)]">Store 360</div><h1 className="mt-1 truncate text-2xl font-bold tracking-[-0.03em] text-[var(--app-text-primary)]">{summary.store.name}</h1><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-secondary)]"><span>Store ID: {summary.store.externalStoreId || summary.store.code || summary.store.id}</span>{summary.store.province && <span>{summary.store.province}</span>}<span>{summary.store.lineOas.length ? `${summary.store.lineOas.length} LINE OA${summary.store.lineOas.length === 1 ? "" : "s"}` : "No LINE OA data"}</span></div></div>
-              <div className="flex flex-wrap items-center justify-end gap-2"><span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success-soft)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--app-success)]"><span className="h-1.5 w-1.5 rounded-full bg-current" />{summary.store.lineOas.some((oa) => oa.connectionStatus === "CONNECTED" || oa.connectionStatus === "READY") ? "Connected" : "No data available"}</span><select value={activeStoreId} onChange={(event) => selectStore(event.target.value)} aria-label="Select store" className="h-10 max-w-[260px] rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-sm font-semibold text-[var(--app-text-primary)]">{stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select></div>
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto"><span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success-soft)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--app-success)]"><span className="h-1.5 w-1.5 rounded-full bg-current" />{summary.store.lineOas.some((oa) => oa.connectionStatus === "CONNECTED" || oa.connectionStatus === "READY") ? "Connected" : "No data available"}</span><StoreSearchCombobox stores={stores} selectedStoreId={activeStoreId} onSelect={selectStore} /></div>
             </div>
-            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--app-border-subtle)] pt-4"><label className="text-xs font-medium text-[var(--app-text-secondary)]">Date range <select value={preset} onChange={(event) => selectPreset(event.target.value as Preset)} className="ml-2 h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="month">This Month</option><option value="custom">Custom</option></select></label>{preset === "custom" && <><input type="date" value={from} max={to} onChange={(event) => { setFrom(event.target.value); updateUrl(activeStoreId, event.target.value, to); }} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs" /><span className="text-xs text-[var(--app-text-tertiary)]">to</span><input type="date" value={to} min={from} max={todayInBangkok()} onChange={(event) => { setTo(event.target.value); updateUrl(activeStoreId, from, event.target.value); }} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs" /></>}<label className="text-xs font-medium text-[var(--app-text-secondary)]">Compare <select value={comparisonMode} onChange={(event) => setComparisonMode(event.target.value as ComparisonMode)} className="ml-2 h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="previous">Previous Period</option><option value="none">None</option></select></label></div><span className="text-xs text-[var(--app-text-tertiary)]">{comparisonMode === "previous" ? "Previous period comparison" : "Comparison disabled"} · {summary.period.from} → {summary.period.to}</span>
+            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--app-border-subtle)] pt-4">
+              <label className="flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]">Date range <select value={preset} onChange={(event) => selectPreset(event.target.value as Preset)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="month">This Month</option><option value="custom">Custom</option></select></label>
+              {preset === "custom" && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Custom date range"><input aria-label="Custom start date" type="date" value={from} max={to} onChange={(event) => updateCustomRange(event.target.value, to)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/30" /><span className="text-xs text-[var(--app-text-tertiary)]">to</span><input aria-label="Custom end date" type="date" value={to} min={from} max={todayInBangkok()} onChange={(event) => updateCustomRange(from, event.target.value)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--input-background)] px-2.5 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/30" /></div>}
+              <label className="flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]">Compare <select value={comparisonMode} onChange={(event) => { invalidateInsights(); setComparisonMode(event.target.value as ComparisonMode); }} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="previous">Previous Period</option><option value="none">None</option></select></label>
+            </div><span className="text-xs text-[var(--app-text-tertiary)]">{comparisonMode === "previous" ? "Previous period comparison" : "Comparison disabled"} · {summary.period.from} → {summary.period.to}</span>
           </section>
 
           <section><SectionTitle title="Store performance" description="Real data from the selected store and Bangkok-calendar period." /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><MetricCard label="Followers" value={formatNumber(summary.followers.current)} helper={summary.followers.growth === null ? "Historical follower data not available" : `${summary.followers.growth >= 0 ? "+" : ""}${summary.followers.growth.toLocaleString()} in period`} comparison={comparisonDelta(summary.followers.current, summary.comparison?.followers.current, formatNumber)} accent="var(--app-info)" /><MetricCard label="Customers" value={formatNumber(summary.customers)} helper="Unique customers with inbound activity" comparison={comparisonDelta(summary.customers, summary.comparison?.customers, formatNumber)} /><MetricCard label="Replied within 24h" value={summary.response.available ? formatPercentage(summary.response.repliedWithin24Hours.percentage) : "No data available"} helper={summary.response.available ? `${summary.response.repliedWithin24Hours.count.toLocaleString()} conversations` : "Human/bot attribution incomplete"} comparison={comparisonPercentagePoints(summary.response.repliedWithin24Hours.percentage, summary.comparison?.response.repliedWithin24Hours.percentage)} accent="var(--app-success)" /><MetricCard label="Median first response" value={summary.response.available ? formatDuration(summary.response.medianFirstResponseSeconds) : "No data available"} helper="First valid human response" comparison={comparisonDelta(summary.response.medianFirstResponseSeconds, summary.comparison?.response.medianFirstResponseSeconds, formatDuration)} accent="var(--app-info)" /><MetricCard label="Sales tagged" value={formatPercentage(summary.sales.salesTaggedCustomerPercentage)} helper={`${summary.sales.salesTaggedCustomers.toLocaleString()} / ${summary.sales.totalCustomers.toLocaleString()} customers`} comparison={comparisonPercentagePoints(summary.sales.salesTaggedCustomerPercentage, summary.comparison?.sales.salesTaggedCustomerPercentage)} accent="var(--app-warning)" /><MetricCard label="Unanswered" value={summary.response.available ? formatNumber(summary.response.unanswered.count) : "No data available"} helper="Inbound conversation with no valid human response" comparison={comparisonDelta(summary.response.unanswered.count, summary.comparison?.response.unanswered.count, formatNumber)} accent="var(--app-danger)" /></div></section>

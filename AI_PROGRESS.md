@@ -4446,3 +4446,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Removed the stale App Router `favicon.ico` so the browser tab cannot continue serving the previous icon. No backend, database, TikTok OAuth, LINE OA, authentication, StoreMaster, or internal staff UI changes were made.
 - Frontend tests pass 537/537 and the production build passes. Local HTTP checks returned 200 for all requested public routes and icon/manifest assets. Changed-file lint is clean except for two pre-existing `setState`-in-effect errors in the touched public store components; repository-wide lint retains unrelated baseline errors. Browser discovery was unavailable, so visual screenshots and browser-console inspection remain pending.
 - Branch: `fix/public-app-icon-branding`. No commit, PR, merge, or deployment performed yet. Next action: final diff review, then commit only the focused files if repository write access is available.
+
+# Current task: Store 360 selector and custom-date refinement (2026-09-10)
+
+- Replaced the Store 360 native store dropdown with a single-select searchable combobox over the existing authorized `api.stores()` result. Search covers store name, external Store ID, code, and internal fallback ID; the selected store and Store ID remain visible.
+- Added focus-on-open, Arrow Up/Down, Enter, Escape, clear-search, no-results, active-option scrolling, and bounded-list behavior. Store selection retains the existing internal ID URL/API contract and server-authorized scope.
+- Kept Store 360 preset, Bangkok-calendar, comparison, and API date logic unchanged. Custom mode now uses the app's compact native date-input styling with explicit start/end labels and rejects empty, reversed, or future ranges before updating URL/API state.
+- Added request-generation invalidation so older summary/conversation responses cannot overwrite a rapidly changed store, date, or comparison selection. No backend, KPI, analytics definition, database, authorization, or Phase 2 AI change was made.
+- Verification passed: Store 360 controls tests 3/3, full frontend tests 552/552, scoped ESLint, frontend production build, and whitespace checks. Local frontend/backend startup and health checks returned 200; `/store-360` returned 200. Browser discovery had no connected browser and local dev auth bypass was unavailable, so authenticated visual click-through remains the only limitation.
+- No commit, push, deployment, or production mutation was performed.
