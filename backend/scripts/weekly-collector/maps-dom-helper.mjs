@@ -197,35 +197,35 @@ export async function ensureNewestSort(page) {
   return await page.evaluate(async () => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
-    const isNewestText = (value) => {
+    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+    // STRICT MATCHING: Only exact "Newest" or exact "ใหม่ที่สุด"
+    const isExactNewestText = (value) => {
       const text = normalize(value);
-      return (
-        text.includes("newest") ||
-        text.includes("most recent") ||
-        text.includes("ใหม่ที่สุด") ||
-        text.includes("ใหม่ล่าสุด") ||
-        text.includes("ล่าสุด")
-      );
+      return text === "Newest" || text === "ใหม่ที่สุด";
     };
+
     const isSortControlText = (value) => {
-      const text = normalize(value);
+      const text = normalize(value).toLowerCase();
       return (
+        text === "newest" ||
+        text === "ใหม่ที่สุด" ||
         text.includes("sort") ||
         text.includes("เรียง") ||
         text.includes("จัดเรียง") ||
         text.includes("most relevant") ||
         text.includes("relevant") ||
-        text.includes("เกี่ยวข้องที่สุด") ||
-        isNewestText(text)
+        text.includes("เกี่ยวข้องที่สุด")
       );
     };
+
     const isVisible = (el) => {
       if (!el) return false;
       const style = window.getComputedStyle(el);
       const rect = el.getBoundingClientRect();
       return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
     };
+
     const accessibleText = (el) => {
       if (!el) return "";
       return [
@@ -236,18 +236,25 @@ export async function ensureNewestSort(page) {
       ].join(" ");
     };
 
+    // Scoped sort button discovery inside reviews panel / tabpanel
     const findSortButton = () => {
-      const buttons = Array.from(document.querySelectorAll("button, [role='button']"));
-      const semantic = buttons.find((el) => isVisible(el) && isSortControlText(accessibleText(el)));
+      const panel = document.querySelector(
+        "div[role='tabpanel'], div.m6QErb[aria-label*='รีวิว' i], div.m6QErb[aria-label*='Reviews' i], div.m6QErb.DxyBCb, div.w6VYqd"
+      );
+      const root = panel || document;
+      const buttons = Array.from(root.querySelectorAll("button, [role='button']"));
+
+      // Priority 1: Semantic button with sort-related label/aria inside the panel
+      const semantic = buttons.find(
+        (el) => isVisible(el) && isSortControlText(accessibleText(el))
+      );
       if (semantic) return semantic;
 
-      // Conservative fallback: only accept HQzyZ when its own accessible text also looks sort-related.
-      return buttons.find(
-        (el) =>
-          isVisible(el) &&
-          el.matches?.("button.HQzyZ") &&
-          isSortControlText(accessibleText(el)),
-      ) || null;
+      // Priority 2: button.HQzyZ inside the panel
+      const hqzyz = buttons.find((el) => isVisible(el) && el.matches?.("button.HQzyZ"));
+      if (hqzyz) return hqzyz;
+
+      return null;
     };
 
     const collectMenuCandidates = () => {
@@ -256,7 +263,9 @@ export async function ensureNewestSort(page) {
         "[role='menuitem']",
         "[role='option']",
         "[role='radio']",
-        "[aria-checked]",
+        "div.jftGQ",
+        ".gN8p4c",
+        ".nbfa1d",
       ].join(",");
 
       const seen = new Set();
@@ -265,11 +274,13 @@ export async function ensureNewestSort(page) {
         if (!isVisible(el)) continue;
         if (seen.has(el)) continue;
         seen.add(el);
+        const rawText = el.textContent?.trim() || "";
         const label = accessibleText(el);
-        const normalized = normalize(label);
+        const normalized = normalize(rawText || label);
         if (!normalized) continue;
         items.push({
           el,
+          rawText,
           label: label.replace(/\s+/g, " ").trim().slice(0, 160),
           checked: el.getAttribute?.("aria-checked"),
           selected: el.getAttribute?.("aria-selected"),
@@ -280,7 +291,7 @@ export async function ensureNewestSort(page) {
 
     const getSortLabel = () => {
       const button = findSortButton();
-      return button ? accessibleText(button).replace(/\s+/g, " ").trim().slice(0, 200) : "";
+      return button ? normalize(accessibleText(button)).slice(0, 200) : "";
     };
 
     let sortBtn = findSortButton();
@@ -296,12 +307,16 @@ export async function ensureNewestSort(page) {
       };
     }
 
-    const beforeLabel = accessibleText(sortBtn).replace(/\s+/g, " ").trim().slice(0, 200);
-    if (isNewestText(beforeLabel)) {
-      return { success: true, reason: "ALREADY_NEWEST", currentSort: beforeLabel };
+    const beforeLabel = normalize(accessibleText(sortBtn)).slice(0, 200);
+    // If the button text itself is already strictly "Newest" or "ใหม่ที่สุด"
+    if (isExactNewestText(beforeLabel) || beforeLabel.startsWith("ใหม่ที่สุด") || beforeLabel.startsWith("Newest")) {
+      return {
+        success: true,
+        reason: "ALREADY_NEWEST",
+        currentSort: beforeLabel,
+      };
     }
 
-    // Retry opening the menu because Railway/headless DOM rendering can lag behind click dispatch.
     let lastCandidates = [];
     for (let attempt = 1; attempt <= 3; attempt++) {
       sortBtn = findSortButton();
@@ -312,25 +327,24 @@ export async function ensureNewestSort(page) {
 
       let newestItem = null;
       for (let poll = 0; poll < 16; poll++) {
-        await sleep(250);
+        await sleep(200);
         const candidates = collectMenuCandidates();
-        lastCandidates = candidates.map((item) => item.label).slice(0, 12);
-        newestItem = candidates.find((item) => isNewestText(item.label)) || null;
+        lastCandidates = candidates.map((item) => item.rawText || item.label).slice(0, 12);
+        newestItem = candidates.find((item) => isExactNewestText(item.rawText) || isExactNewestText(item.label)) || null;
         if (newestItem) break;
       }
 
       if (!newestItem) {
-        // A stale/incorrect control may have been clicked. Close any popup and try again.
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-        await sleep(350);
+        await sleep(300);
         continue;
       }
 
       newestItem.el.click();
-      await sleep(1400);
+      await sleep(1500);
 
       const afterLabel = getSortLabel();
-      if (isNewestText(afterLabel)) {
+      if (isExactNewestText(afterLabel) || afterLabel.startsWith("ใหม่ที่สุด") || afterLabel.startsWith("Newest")) {
         return {
           success: true,
           reason: "SORTED_TO_NEWEST",
@@ -339,20 +353,19 @@ export async function ensureNewestSort(page) {
         };
       }
 
-      // Some Google Maps variants leave the button label as "Sort reviews" even after selection.
-      // Re-open and verify the Newest option itself is selected instead of guessing by position.
+      // Verification by re-opening menu if button label did not update
       const verifyBtn = findSortButton();
       if (verifyBtn) {
         verifyBtn.click();
         let selectedNewest = null;
         for (let poll = 0; poll < 12; poll++) {
-          await sleep(250);
+          await sleep(200);
           const candidates = collectMenuCandidates();
-          lastCandidates = candidates.map((item) => item.label).slice(0, 12);
+          lastCandidates = candidates.map((item) => item.rawText || item.label).slice(0, 12);
           selectedNewest = candidates.find(
             (item) =>
-              isNewestText(item.label) &&
-              (item.checked === "true" || item.selected === "true"),
+              (isExactNewestText(item.rawText) || isExactNewestText(item.label)) &&
+              (item.checked === "true" || item.selected === "true")
           ) || null;
           if (selectedNewest) break;
         }
@@ -363,13 +376,13 @@ export async function ensureNewestSort(page) {
           return {
             success: true,
             reason: "SORTED_TO_NEWEST_MENU_STATE",
-            currentSort: selectedNewest.label,
+            currentSort: selectedNewest.rawText || selectedNewest.label,
             diagnostic: { attempt },
           };
         }
 
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-        await sleep(350);
+        await sleep(300);
       }
     }
 

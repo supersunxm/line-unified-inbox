@@ -196,7 +196,7 @@ describe("Google Maps DOM Recovery Unit Tests", () => {
   });
 
   describe("ensureNewestSort", () => {
-    it("verifies ALREADY_NEWEST when sort button shows ใหม่ที่สุด", async () => {
+    it("verifies ALREADY_NEWEST when sort button shows exact ใหม่ที่สุด", async () => {
       const mockPage = {
         evaluate: async () => ({
           success: true,
@@ -208,6 +208,37 @@ describe("Google Maps DOM Recovery Unit Tests", () => {
       const res = await ensureNewestSort(mockPage as any);
       assert.strictEqual(res.success, true);
       assert.strictEqual(res.reason, "ALREADY_NEWEST");
+    });
+
+    it("verifies ALREADY_NEWEST when sort button shows exact Newest", async () => {
+      const mockPage = {
+        evaluate: async () => ({
+          success: true,
+          reason: "ALREADY_NEWEST",
+          currentSort: "Newest",
+        }),
+      };
+
+      const res = await ensureNewestSort(mockPage as any);
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(res.reason, "ALREADY_NEWEST");
+    });
+
+    it("rejects non-exact matches such as ล่าสุด or ใหม่ล่าสุด as proof of newest sort", () => {
+      const normalize = (v: string) => String(v || "").replace(/\s+/g, " ").trim();
+      const isExactNewestText = (v: string) => {
+        const text = normalize(v);
+        return text === "Newest" || text === "ใหม่ที่สุด";
+      };
+
+      assert.strictEqual(isExactNewestText("Newest"), true);
+      assert.strictEqual(isExactNewestText("ใหม่ที่สุด"), true);
+      assert.strictEqual(isExactNewestText("ล่าสุด"), false);
+      assert.strictEqual(isExactNewestText("ใหม่ล่าสุด"), false);
+      assert.strictEqual(isExactNewestText("Most recent"), false);
+      assert.strictEqual(isExactNewestText("เกี่ยวข้องที่สุด"), false);
+      assert.strictEqual(isExactNewestText("Most relevant"), false);
+      assert.strictEqual(isExactNewestText("ประชาสัมพันธ์เปิดตัว OPPO SPACE ใหม่"), false);
     });
 
     it("fails with ERROR_SORT_BUTTON_NOT_FOUND when button is missing on place with many reviews", async () => {

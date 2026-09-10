@@ -202,6 +202,17 @@ export async function collectStoreContinuous(page, store, options = {}) {
       const thaiSeg = segmentThaiWords(cardData.reviewText);
       const wordCount = thaiSeg.count;
 
+      const parsedDate = parseReviewDate(cardData.dateText, new Date());
+      const resolvedDate = parsedDate.exactDate;
+
+      // Chronology stop: when review is strictly older than target week
+      if (parsedDate.type === "OLDER_THAN_7_DAYS" || (resolvedDate && targetWeekNumber === 2 && resolvedDate < "2026-09-03")) {
+        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" -> ${resolvedDate || parsedDate.type} is older than Week ${targetWeekNumber} start. Halting store scan immediately.`);
+        stopReason = `STOP_CHRONOLOGY_OLDER_THAN_WEEK_${targetWeekNumber}`;
+        stopTriggered = true;
+        break;
+      }
+
       const fp = computeReviewFingerprint(storeCode, cardData.dataReviewId, {
         relativeDateText: cardData.dateText,
         wordCount,
@@ -217,7 +228,8 @@ export async function collectStoreContinuous(page, store, options = {}) {
         consecutiveSeenCount++;
         console.log(`  [SEEN ${consecutiveSeenCount}/5] Card #${currentCardIndex + 1}: previously processed (fp: ${fp.slice(0, 10)}...)`);
 
-        if (consecutiveSeenCount >= 5) {
+        // Only fast-stop if not in target date recovery mode, or if already past target date
+        if (!targetReviewDateOnly && consecutiveSeenCount >= 5) {
           console.log(`  [FAST STOP TRIGGERED] 5 consecutive previously-seen reviews reached. Store scan caught up to boundary!`);
           stopReason = "CONSECUTIVE_SEEN_BOUNDARY_5";
           stopTriggered = true;
@@ -232,13 +244,6 @@ export async function collectStoreContinuous(page, store, options = {}) {
       newReviewsDiscovered++;
 
       const dateClass = classifyDateForWeek(cardData.dateText, targetWeekNumber, new Date());
-      if (dateClass.type === "OLDER_THAN_TARGET_WEEK") {
-        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" is older than Week ${targetWeekNumber} start. Halting store scan immediately.`);
-        stopReason = `STOP_CHRONOLOGY_OLDER_THAN_WEEK_${targetWeekNumber}`;
-        stopTriggered = true;
-        break;
-      }
-
       if (cardData.hasPhoto) reviewsWithPhoto++;
       if (wordCount >= 15) reviewsOver15ThaiWords++;
 
