@@ -5,15 +5,15 @@
 - **Completed Work**:
   1. Removed `videos` from `TikTokStoreOwnerAccountResponse` and stopped `getStoreOwnerAnalytics()` from returning `overview.videos`.
   2. Removed the public Recent Videos section and all video covers, captions, views, likes, comments, shares, and engagement UI. Account-level Video Count remains visible.
-  3. Kept `TikTokVideo` storage, existing internal TikTok service behavior, HQ dashboards, and their APIs unchanged.
-  4. Added focused backend service coverage proving official account metrics are returned while stored video records are omitted, plus frontend/source assertions for the public contract and security/state boundaries.
+  3. Added `getTikTokAccountForStoreOwner()` with a field-only Prisma selection for the required `TikTokAccount` and `StoreMaster` fields; it does not load `TikTokVideo`. Kept `getTikTokAccountById()`, `TikTokVideo` storage, existing internal TikTok service behavior, HQ dashboards, and their APIs unchanged.
+  4. Added focused backend service coverage proving the public path never calls the video-including lookup or requests the video relation, official account metrics still return, and stored video records are omitted, plus frontend/source assertions for the public contract and security/state boundaries.
 - **Checks Run**:
   - Frontend TikTok authorization/session tests: **12/12 passed**.
-  - Backend TikTok/store-owner tests: **29/29 passed**.
+  - Backend TikTok/store-owner tests: **30/30 passed**.
   - Frontend production build: **passed**.
   - Backend production build: **passed**.
   - Prisma schema validation: **passed**.
-  - Focused frontend/backend ESLint checks: **passed**.
+  - Focused lint on changed owner-flow files: **passed**. The touched legacy `tiktok.service.ts` file retains pre-existing repository lint errors outside the new method; none are in the added method.
   - `git diff --check`: **passed**.
 - **Scope Confirmed**: No OAuth credentials/scopes, Railway variables, LINE OA, Google Review, database schema, migrations, internal HQ dashboards, or TikTok video records were changed.
 - **Next Action**: Commit and push this fix to the existing PR #232; do not merge or deploy.

@@ -31,6 +31,7 @@ const storeBindingSuccessSource = readFileSync(new URL("../src/app/connect/tikto
 const backendDtoSource = readFileSync(new URL("../../backend/src/tiktok/dto/tiktok-sync.dto.ts", import.meta.url), "utf8");
 const backendControllerSource = readFileSync(new URL("../../backend/src/tiktok/tiktok.controller.ts", import.meta.url), "utf8");
 const backendBindingSource = readFileSync(new URL("../../backend/src/tiktok/tiktok-store-binding.service.ts", import.meta.url), "utf8");
+const backendTikTokServiceSource = readFileSync(new URL("../../backend/src/tiktok/tiktok.service.ts", import.meta.url), "utf8");
 const ownerAccountContractSource = backendDtoSource
   .split("export interface TikTokStoreOwnerAccountResponse")[1]
   ?.split("export interface TikTokStoreOwnerAnalyticsResponse")[0] || "";
@@ -159,9 +160,20 @@ test("K. Confirmed public TikTok flow uses a separate store-owner analytics rout
   assert.match(backendControllerSource, /Get\("internal\/store-owner\/me"\)/);
   assert.match(backendControllerSource, /verifyTikTokStoreOwnerSession/);
   assert.match(backendBindingSource, /tikTokAccount\.findUnique/);
+  assert.match(backendBindingSource, /getTikTokAccountForStoreOwner/);
+  assert.doesNotMatch(backendBindingSource, /getTikTokAccountById/);
   assert.match(backendBindingSource, /getAccountHistoricalMetrics/);
   assert.doesNotMatch(backendBindingSource, /videos:\s*overview\.videos/);
   assert.doesNotMatch(backendBindingSource, /TikTokPublicProfile/);
+
+  const ownerSnapshotMethod = backendTikTokServiceSource.match(
+    /async getTikTokAccountForStoreOwner[\s\S]*?(?=\n  \/\*\*)/
+  )?.[0] || "";
+  const internalAccountMethod = backendTikTokServiceSource.match(
+    /async getTikTokAccountById[\s\S]*?(?=\n  \/\*\*)/
+  )?.[0] || "";
+  assert.doesNotMatch(ownerSnapshotMethod, /\bvideos\b/);
+  assert.match(internalAccountMethod, /include:\s*\{\s*videos:/s);
 });
 
 test("L. Store-owner session is signed, scoped to account and store, and expires", () => {

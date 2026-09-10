@@ -375,32 +375,37 @@ export class TikTokStoreBindingService {
       return { status: "NEEDS_STORE_CONFIRMATION", store };
     }
 
-    const [overview, historicalMetrics] = await Promise.all([
-      this.tiktokService.getTikTokAccountById(account.id),
+    const [accountSnapshot, historicalMetrics] = await Promise.all([
+      this.tiktokService.getTikTokAccountForStoreOwner(account.id),
       this.tiktokService.getAccountHistoricalMetrics(account.id, 30),
     ]);
 
-    if (!overview || !historicalMetrics || overview.storeMasterId !== account.storeMaster.id) {
+    if (
+      !accountSnapshot ||
+      !accountSnapshot.storeMaster ||
+      !historicalMetrics ||
+      accountSnapshot.storeMasterId !== account.storeMaster.id
+    ) {
       return { status: "RECONNECT_REQUIRED" };
     }
 
     return {
       status: "CONNECTED",
       account: {
-        displayName: overview.displayName,
-        username: overview.username ?? null,
-        avatarUrl: overview.avatarUrl ?? null,
-        avatarUrl100: overview.avatarUrl100 ?? null,
-        avatarLargeUrl: overview.avatarLargeUrl ?? null,
-        bioDescription: overview.bioDescription ?? null,
-        isVerified: overview.isVerified,
-        followerCount: overview.followerCount,
-        followingCount: overview.followingCount,
-        likesCount: overview.likesCount,
-        videoCount: overview.videoCount,
-        connectedAt: overview.connectedAt,
-        lastSyncedAt: overview.lastSyncedAt,
-        store,
+        displayName: accountSnapshot.displayName,
+        username: accountSnapshot.username,
+        avatarUrl: accountSnapshot.avatarUrl,
+        avatarUrl100: accountSnapshot.avatarUrl100,
+        avatarLargeUrl: accountSnapshot.avatarLargeUrl,
+        bioDescription: accountSnapshot.bioDescription,
+        isVerified: accountSnapshot.isVerified,
+        followerCount: accountSnapshot.followerCount,
+        followingCount: accountSnapshot.followingCount,
+        likesCount: accountSnapshot.likesCount,
+        videoCount: accountSnapshot.videoCount,
+        connectedAt: accountSnapshot.connectedAt,
+        lastSyncedAt: accountSnapshot.lastSyncedAt,
+        store: this.toStoreOwnerStore(accountSnapshot.storeMaster),
       },
       metrics: {
         summary: historicalMetrics.summary,
