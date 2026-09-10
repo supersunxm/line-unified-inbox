@@ -105,6 +105,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "dashboard":
       return auth.workspaces.hq;
     case "stores":
+    case "store-360":
     case "purchase-analytics":
       return auth.workspaces.hq || auth.workspaces.store;
     case "friend-source-links":
