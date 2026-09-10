@@ -2207,3 +2207,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the background worker disabled by default. The backfill command requires explicit store/date scope, caps the range and batch, supports dry-run and delay, and must not be used for a production-wide paid backfill.
 - The local database cannot apply the new migration until the pre-existing failed Google Review migration is recovered (`P3009`, duplicate `GoogleReviewPeriodStatus` enum). This unrelated migration is intentionally left unchanged; Customer Voice worker enablement and backfill remain blocked until migration verification succeeds.
 - Checkpoint the Phase 2A implementation on `feat/store-360-customer-voice` without treating it as approved for production integration. The historical Google Review migration still blocks `prisma migrate deploy`, so `ConversationAnalytics` is not applied; no production-wide backfill, AI provider, or Phase 2B response-analysis/Hot Lead/Store Health work is included.
+
+## 2026-09-10: Customer Voice integration candidate on latest main
+
+- Build the candidate from latest `main` after TikTok Prisma reconciliation, preserving both TikTok public analytics models and the additive Customer Voice migration. Do not regenerate or add a TikTok migration.
+- Treat production `20260910120000_add_customer_voice_analytics` as the only expected pending migration. Railway's existing pre-deploy `prisma migrate deploy` may apply it on a future authorized merge; this candidate does not run it against production.
+- Keep Customer Voice worker enablement opt-in and default-off. An empty `ConversationAnalytics` table is a valid initial state, and no automatic backfill or external AI provider is introduced by application startup.
+- The combined candidate was rehearsed against a disposable PostgreSQL 18.6 clone of the production schema and migration ledger. The clone reached 118 applied migrations with TikTok objects preserved; this validates the forward migration procedure without authorizing production execution.
