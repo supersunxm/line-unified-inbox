@@ -1,5 +1,13 @@
 # Architecture & Design Decisions
 
+## Store Locator Production-Readiness: provider-neutral events and fail-closed LINE CTAs (2026-09-10)
+
+- Keep `/store-locator` on the existing `GET /public/stores` contract and the active `StoreMaster` source. The existing `/stores` internal route and its authentication boundary remain untouched.
+- Emit the five requested customer interaction events through a small browser `CustomEvent` hook. If the host page already provides `gtag` or `dataLayer`, forward the same safe event payload; do not add a new analytics vendor, persistence table, or network endpoint for this lightweight requirement.
+- Treat a branch CTA as available only for an HTTPS URL whose host is `lin.ee`, `line.me`, or a `line.me` subdomain and which has no embedded credentials. The backend public serializer now omits invalid URLs, while the frontend repeats validation before rendering a clickable CTA.
+- Use same-tab navigation for the LINE CTA so the LINE in-app browser can hand the customer to the branch OA naturally. Map links remain separate and retain their existing new-tab behavior.
+- Keep source data literal: the current StoreMaster schema has no dedicated mall, district, or opening-hours fields. The two active rows with missing geography remain visible only through search/name context and are reported as source-quality issues rather than assigned an inferred province or region.
+
 ## TikTok Public Owner Scope Alignment: Account-Level Analytics Only (2026-09-10)
 
 - **Scope-consistent public contract**: The public store-owner response contains only the authorized account profile, account-level counts, follower growth summary, and official daily account snapshots. `TikTokStoreOwnerAccountResponse` intentionally has no `videos` field.

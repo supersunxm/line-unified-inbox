@@ -1,4 +1,5 @@
 import type { StoreMaster } from "@prisma/client";
+import { isValidLineOaUrl } from "../store-master/store-master.utils";
 
 export interface PublicStoreLineInfo {
   url: string;
@@ -50,9 +51,10 @@ export function serializePublicStore(store: StoreMaster): PublicStoreDto {
   const externalId = store.externalStoreId ?? "";
   const slug = generatePublicStoreSlug(store.storeName, store.externalStoreId);
 
-  const line: PublicStoreLineInfo | null = store.lineOaLink
+  const lineUrl = store.lineOaLink?.trim() ?? null;
+  const line: PublicStoreLineInfo | null = lineUrl && isValidLineOaUrl(lineUrl)
     ? {
-        url: store.lineOaLink,
+        url: lineUrl,
         basicId: store.lineId ?? null,
       }
     : null;

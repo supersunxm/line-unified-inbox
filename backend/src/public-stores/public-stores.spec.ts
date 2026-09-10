@@ -123,6 +123,15 @@ void test("3. serializePublicStore strictly excludes internal fields and account
   assert.doesNotMatch(jsonString, /Tier 1/);
 });
 
+void test("3b. serializePublicStore omits invalid LINE manager URLs from the public CTA mapping", () => {
+  const serialized = serializePublicStore({
+    ...sampleRawStore,
+    lineOaLink: "https://manager.line.biz/account/@959koqlp",
+  });
+
+  assert.equal(serialized.line, null);
+});
+
 void test("4. generatePublicStoreSlug produces clean, deterministic slugs", () => {
   assert.equal(
     generatePublicStoreSlug("OBS Central Phitsanulok By OPPO 2", "29039"),

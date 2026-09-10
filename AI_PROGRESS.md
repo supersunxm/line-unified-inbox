@@ -1,5 +1,27 @@
 # AI Progress Log
 
+## 2026-09-10: Store Locator Production-Readiness Polish [COMPLETED & VERIFIED]
+- **Current Task**: Harden the customer-facing `/store-locator` page for narrow mobile and LINE in-app use without changing the existing `/stores` behavior.
+- **Completed Work**:
+  1. Preserved the existing mobile-first region → province → store flow and added explicit loading, API error/retry, zero-store, no-province, and no-search-result states.
+  2. Added provider-neutral lightweight analytics events: `store_locator_open`, `region_selected`, `province_selected`, `store_selected`, and `line_oa_clicked`. Events are emitted as a browser `CustomEvent` and forwarded to an existing `gtag`/`dataLayer` only when configured; no analytics provider or backend schema was added.
+  3. Kept LINE navigation same-tab for LINE in-app browser use, added an accessible branch-specific CTA label, and fail-closed invalid/non-LINE URLs. The public DTO now omits invalid LINE URLs so manager links cannot become public CTAs.
+  4. Confirmed the locator uses the active `StoreMaster` source through `GET /public/stores`, and does not expose internal fields. No mall, district, or opening-hours data was invented; those fields are not present in the current StoreMaster model.
+- **Exact active StoreMaster data-quality issue**:
+  - `OBS Big C Loei FL.1 By OPPO` — external store ID `32983`, source `GOOGLE_SHEET`, source row `159`, `isActive: true`, `province: null`, `region: null`.
+  - `OBS Big C Mahachai 1 Fl.G  By OPPO` — external store ID `30679`, source `GOOGLE_SHEET`, source row `158`, `isActive: true`, `province: null`, `region: null`.
+  - The source rows have blank Province and Region fields. The locator intentionally does not infer geography from the store names.
+- **Checks Run**:
+  - Focused frontend locator tests: **5/5 passed**.
+  - Full frontend tests: **549/549 passed**.
+  - Focused frontend and backend ESLint checks: **passed**.
+  - Frontend production build: **passed**; `/store-locator` is registered.
+  - Backend production build: **passed**.
+  - Live runtime: `/health` 200, `/store-locator` 200, `/public/stores` 200 with 158 active rows, frontend proxy 200, protected `/stores` 401.
+  - Live public DTO audit: all 158 active rows had valid LINE URLs; no internal DTO keys were exposed.
+  - Browser visual/tap QA: unavailable because no browser instance was provisioned; responsive source review confirmed `max-w-xl`, mobile padding, 44px+ controls, wrapping cards, and no horizontal-layout dependency.
+- **Scope Confirmed**: Existing `/stores` and `/admin/stores` files and behavior were not changed. No migration or data mutation was performed.
+
 ## 2026-09-10: Remove Per-Video Analytics from Public TikTok Owner Flow [COMPLETED & VERIFIED]
 - **Current Task**: Align the public store-owner analytics surface with the approved read-only OAuth scopes and privacy policy by removing all per-video analytics while preserving internal HQ video capabilities.
 - **Completed Work**:
