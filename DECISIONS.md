@@ -2182,3 +2182,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Customers are deduplicated by `Conversation.customerId`. The top Sales Tagged KPI uses the same unique-customer key for its numerator: tagged customer IDs divided by selected-period inbound customer IDs. Conversation-level tagged counts and product/payment record counts remain secondary detail metrics.
 - Conversation Explorer topics are read-only names from existing `ConversationTopic` → `Topic` relations. Names are deduplicated, sorted, and compacted for multiple topics; no topic generation or Phase 2 AI inference is introduced.
 - Follow-up responder counts use existing `ActivityHistory` rows constrained to the requested store, non-QA conversations, and STORE LINE OAs. Store, LINE OA type, active/archive state, and authorization filters remain server-side; Store 360 never relies on client filtering for isolation.
+
+## Store 360 compact filter controls (2026-09-10)
+
+- Keep the Store 360 store picker single-select and scoped to the already authorized `api.stores()` payload. Follow the existing Follower Insights searchable-list interaction and semantic-token styling, but keep it local to Store 360 because the existing reusable picker is multi-select and has a different value contract.
+- Keep compact custom dates as the application's established native date-input pattern. The shared analytics calendar owns its own preset set and range-apply workflow, which would duplicate or alter Store 360's existing `Last 7 Days`, `Last 30 Days`, `This Month`, and `Custom` behavior.
+- Preserve ISO `YYYY-MM-DD` values as URL/API state and Bangkok today as the future-date boundary. UI changes must not reinterpret analytics dates, comparison periods, authorization, or KPI definitions.
