@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { LanguageControl, pickLanguageText, useAppLanguage } from "../../../language";
 import type { TikTokStoreOwnerAnalyticsData, TikTokStoreOwnerStore } from "../../../tiktok/tiktok-types";
+import { TikTokAvatar } from "./tiktok-avatar";
 
 type Props = {
   data: TikTokStoreOwnerAnalyticsData | null;
@@ -206,7 +207,6 @@ function ConnectedAnalytics({
   t: (typeof copy)["th"];
 }) {
   const { account, metrics } = data;
-  const avatar = account.avatarLargeUrl || account.avatarUrl100 || account.avatarUrl;
   const growthItems = [
     [t.today, metrics.summary.dailyFollowerGrowth],
     [t.sevenDays, metrics.summary.sevenDayFollowerGrowth],
@@ -218,7 +218,13 @@ function ConnectedAnalytics({
       <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white shadow-[0_22px_70px_rgba(15,23,42,0.14)] sm:p-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            {avatar ? <Image src={avatar} alt={account.displayName || "TikTok"} width={80} height={80} unoptimized className="h-20 w-20 shrink-0 rounded-3xl object-cover ring-2 ring-white/20" /> : <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-white/10 text-3xl font-black">T</div>}
+            <TikTokAvatar
+              avatarUrl={account.avatarUrl}
+              avatarUrl100={account.avatarUrl100}
+              avatarLargeUrl={account.avatarLargeUrl}
+              displayName={account.displayName}
+              className="h-20 w-20 shrink-0 rounded-3xl ring-2 ring-white/20"
+            />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">{account.displayName || "TikTok Account"}</h1>
