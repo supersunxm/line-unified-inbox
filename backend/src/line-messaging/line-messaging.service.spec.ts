@@ -192,6 +192,37 @@ void test("replyText sends messages to LINE reply endpoint and handles success",
   assert.equal(result.externalMessageId, "line-reply-msg-1");
 });
 
+void test("replyText skips a stale reply token so the caller can fall back to push", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    throw new Error("stale reply token must not hit LINE reply endpoint");
+  };
+
+  const result = await new LineMessagingService().replyText({
+    accessToken: "test-token",
+    replyToken: "stale-reply-tok",
+    text: "ข้อความ",
+    context: {
+      conversationId: "c-stale",
+      storeId: "s-stale",
+      storeName: "OBS Central World FL.4 By OPPO",
+      replyTokenAgeMs: 60_000,
+      replyTokenAgeBucket: "1-2 minutes",
+    },
+  });
+
+  assert.equal(fetchCalled, false);
+  assert.deepEqual(result, {
+    success: false,
+    invalidReplyToken: true,
+    requestId: null,
+    externalMessageId: null,
+  });
+});
+
 void test("replyText identifies invalid reply token from LINE 400 response", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
