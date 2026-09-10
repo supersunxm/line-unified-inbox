@@ -11,6 +11,7 @@ import {
   getLineChatManagerRelayStoreConfig,
   isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
+import { findSoleManagerTextarea } from "./line-chat-composer-fallback";
 import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
 
 const RELAY_DEDUPE_TTL_MS = 15 * 60_000;
@@ -302,7 +303,7 @@ export class LineChatManagerMessageRelayWorkerService {
       }
 
       const beforeOutboundCount = await this.countOutboundExactText(page, composer, input.text);
-      await composer.click({ timeout: 3_000 }).catch(() => {});
+      await this.focusComposer(composer);
       await this.fillComposer(composer, page, input.text);
 
       const sendButton = await this.findSendButton(page, composer);
@@ -319,7 +320,7 @@ export class LineChatManagerMessageRelayWorkerService {
           storeCode: input.storeCode,
           action: "KEYBOARD_ENTER",
         }));
-        await composer.focus();
+        await this.focusComposer(composer);
         await page.keyboard.press("Enter");
       }
 
@@ -346,18 +347,47 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
+  private async focusComposer(composer: Locator): Promise<void> {
+    try {
+      await composer.focus();
+    } catch {
+      await composer.evaluate((element) => (element as HTMLElement).focus()).catch(() => {});
+    }
+  }
+
   private async fillComposer(composer: Locator, page: Page, text: string): Promise<void> {
     try {
       await composer.fill(text);
+      return;
     } catch {
-      await composer.click();
-      await page.keyboard.insertText(text);
+      // Some LINE Manager OAs expose the real composer as a transient/hidden textarea.
     }
+
+    const populated = await composer.evaluate((element, value) => {
+      if (!(element instanceof HTMLTextAreaElement) && !(element instanceof HTMLInputElement)) return false;
+      element.focus();
+      element.value = value;
+      element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }, text).catch(() => false);
+    if (populated) return;
+
+    await this.focusComposer(composer);
+    await page.keyboard.insertText(text);
   }
 
   private async findComposer(page: Page, waitMs: number): Promise<Locator | null> {
     const deadline = Date.now() + waitMs;
     while (Date.now() < deadline) {
+      // All Phase 2 OAs use the same LINE Manager primitive as the working
+      // Central World path. Prefer the sole non-search textarea directly,
+      // regardless of headless geometry/visibility quirks.
+      for (const frame of page.frames()) {
+        const soleTextarea = await findSoleManagerTextarea(frame);
+        if (soleTextarea) return soleTextarea;
+      }
+
       const candidates: ComposerCandidate[] = [];
       for (const frame of page.frames()) {
         const viewportHeight = page.viewportSize()?.height ?? 800;
