@@ -34,6 +34,8 @@ export type LineReplyResult = {
   externalMessageId: string | null;
 };
 
+const MAX_SAFE_REPLY_TOKEN_AGE_MS = 55_000;
+
 function maskIdentifier(val?: string | null): string {
   if (!val) return "none";
   if (val.length <= 8) return "***";
@@ -76,6 +78,30 @@ export class LineMessagingService {
     messages: unknown[],
     context?: LinePushDiagnosticContext,
   ): Promise<LineReplyResult> {
+    if (typeof context?.replyTokenAgeMs === "number" && context.replyTokenAgeMs > MAX_SAFE_REPLY_TOKEN_AGE_MS) {
+      Logger.log(
+        JSON.stringify({
+          event: "line_reply_skipped_stale_token",
+          conversationId: context.conversationId ?? null,
+          userId: context.userId ?? null,
+          storeId: context.storeId ?? null,
+          storeName: context.storeName ?? null,
+          channelIdMasked: maskIdentifier(context.channelId),
+          messageType: context.messageType ?? "UNKNOWN",
+          replyTokenAgeMs: context.replyTokenAgeMs,
+          replyTokenAgeBucket: context.replyTokenAgeBucket ?? null,
+          fallbackTo: "PUSH",
+        }),
+        "LineMessagingService"
+      );
+      return {
+        success: false,
+        invalidReplyToken: true,
+        requestId: null,
+        externalMessageId: null,
+      };
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
     let response: Response;
