@@ -28,8 +28,12 @@ const dashboardPageSource = readFileSync(new URL("../src/app/tiktok/dashboard/pa
 const analyticsPageSource = readFileSync(new URL("../src/app/connect/tiktok/analytics/page.tsx", import.meta.url), "utf8");
 const analyticsViewSource = readFileSync(new URL("../src/app/connect/tiktok/analytics/store-owner-analytics.tsx", import.meta.url), "utf8");
 const storeBindingSuccessSource = readFileSync(new URL("../src/app/connect/tiktok/success/store-binding-success.tsx", import.meta.url), "utf8");
+const backendDtoSource = readFileSync(new URL("../../backend/src/tiktok/dto/tiktok-sync.dto.ts", import.meta.url), "utf8");
 const backendControllerSource = readFileSync(new URL("../../backend/src/tiktok/tiktok.controller.ts", import.meta.url), "utf8");
 const backendBindingSource = readFileSync(new URL("../../backend/src/tiktok/tiktok-store-binding.service.ts", import.meta.url), "utf8");
+const ownerAccountContractSource = backendDtoSource
+  .split("export interface TikTokStoreOwnerAccountResponse")[1]
+  ?.split("export interface TikTokStoreOwnerAnalyticsResponse")[0] || "";
 const successPublicSource = `${successPageSource}\n${successContentSource}`;
 const errorPublicSource = `${errorPageSource}\n${errorContentSource}`;
 
@@ -150,9 +154,13 @@ test("K. Confirmed public TikTok flow uses a separate store-owner analytics rout
   assert.match(analyticsViewSource, /รอ HQ ตรวจสอบ/);
   assert.match(analyticsViewSource, /pendingStore/);
   assert.match(analyticsViewSource, /เซสชันหมดอายุ/);
+  assert.doesNotMatch(analyticsViewSource, /recentVideos|account\.videos|coverImageUrl|viewCount|likeCount|commentCount|shareCount|engagement/i);
+  assert.doesNotMatch(ownerAccountContractSource, /\bvideos\b/);
   assert.match(backendControllerSource, /Get\("internal\/store-owner\/me"\)/);
   assert.match(backendControllerSource, /verifyTikTokStoreOwnerSession/);
   assert.match(backendBindingSource, /tikTokAccount\.findUnique/);
+  assert.match(backendBindingSource, /getAccountHistoricalMetrics/);
+  assert.doesNotMatch(backendBindingSource, /videos:\s*overview\.videos/);
   assert.doesNotMatch(backendBindingSource, /TikTokPublicProfile/);
 });
 

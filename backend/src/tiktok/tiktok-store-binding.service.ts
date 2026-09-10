@@ -401,7 +401,6 @@ export class TikTokStoreBindingService {
         connectedAt: overview.connectedAt,
         lastSyncedAt: overview.lastSyncedAt,
         store,
-        videos: overview.videos,
       },
       metrics: {
         summary: historicalMetrics.summary,

@@ -1,12 +1,30 @@
 # AI Progress Log
 
+## 2026-09-10: Remove Per-Video Analytics from Public TikTok Owner Flow [COMPLETED & VERIFIED]
+- **Current Task**: Align the public store-owner analytics surface with the approved read-only OAuth scopes and privacy policy by removing all per-video analytics while preserving internal HQ video capabilities.
+- **Completed Work**:
+  1. Removed `videos` from `TikTokStoreOwnerAccountResponse` and stopped `getStoreOwnerAnalytics()` from returning `overview.videos`.
+  2. Removed the public Recent Videos section and all video covers, captions, views, likes, comments, shares, and engagement UI. Account-level Video Count remains visible.
+  3. Kept `TikTokVideo` storage, existing internal TikTok service behavior, HQ dashboards, and their APIs unchanged.
+  4. Added focused backend service coverage proving official account metrics are returned while stored video records are omitted, plus frontend/source assertions for the public contract and security/state boundaries.
+- **Checks Run**:
+  - Frontend TikTok authorization/session tests: **12/12 passed**.
+  - Backend TikTok/store-owner tests: **29/29 passed**.
+  - Frontend production build: **passed**.
+  - Backend production build: **passed**.
+  - Prisma schema validation: **passed**.
+  - Focused frontend/backend ESLint checks: **passed**.
+  - `git diff --check`: **passed**.
+- **Scope Confirmed**: No OAuth credentials/scopes, Railway variables, LINE OA, Google Review, database schema, migrations, internal HQ dashboards, or TikTok video records were changed.
+- **Next Action**: Commit and push this fix to the existing PR #232; do not merge or deploy.
+
 ## 2026-09-09: Public TikTok Store-Owner Analytics Flow [IMPLEMENTED & VERIFIED]
 - **Current Task**: Fix the post-OAuth store-owner TikTok CTA so a confirmed BM/PC/store operator can view only the authorized account's official analytics without staff login, while preserving HQ dashboards.
 - **Completed Work**:
   1. Added `/connect/tiktok/analytics` as a dynamic, `noindex`/`nofollow` public-authorized page with Thai, English, and Chinese customer-facing states.
   2. Added a dedicated one-hour signed HttpOnly store-owner session scoped to both `TikTokAccount.id` and `StoreMaster.id`; it is issued only from the confirmed store-binding flow and verified by both frontend and backend.
-  3. Added narrowly scoped `GET /tiktok/internal/store-owner/me`. It accepts no account/store path parameters, derives identity from the signed cookie, requires the existing internal server-to-server guard, and returns only safe official account, store, daily-metric, and video fields.
-  4. Added confirmed, pending, unconfirmed, expired, disconnected, no-history, and no-video UI states. The page includes the read-only disclosure required for the TikTok App Review use case.
+  3. Added narrowly scoped `GET /tiktok/internal/store-owner/me`. It accepts no account/store path parameters, derives identity from the signed cookie, requires the existing internal server-to-server guard, and returns only safe official account, store, and daily-metric fields.
+  4. Added confirmed, pending, unconfirmed, expired, disconnected, and no-history UI states. The page includes the read-only disclosure required for the TikTok App Review use case and does not expose per-video analytics.
   5. Updated `/connect/tiktok/success` to link to the new route. Existing `/tiktok`, `/tiktok/dashboard`, `/tiktok/dashboard/[accountId]`, and public collector routes were left unchanged.
 - **Checks Run**:
   - Focused TikTok auth/session test: **12/12 passed**.

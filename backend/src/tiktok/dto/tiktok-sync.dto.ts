@@ -168,7 +168,6 @@ export interface TikTokStoreOwnerAccountResponse {
   connectedAt: string;
   lastSyncedAt: string;
   store: TikTokStoreOwnerStoreResponse;
-  videos: SafeTikTokVideoResponse[];
 }
 
 export interface TikTokStoreOwnerAnalyticsResponse {

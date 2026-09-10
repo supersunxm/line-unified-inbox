@@ -33,13 +33,6 @@ const copy = {
     growth: "การเติบโตของผู้ติดตาม",
     history: "ประวัติรายวัน",
     noHistory: "ยังไม่มีข้อมูลประวัติรายวัน ระบบจะแสดงข้อมูลเมื่อมีการบันทึกสถิติอย่างน้อย 2 วัน",
-    recentVideos: "วิดีโอล่าสุด",
-    views: "เข้าชม",
-    comments: "ความคิดเห็น",
-    shares: "แชร์",
-    engagement: "Engagement",
-    watch: "เปิดวิดีโอ",
-    noVideos: "ยังไม่มีข้อมูลวิดีโอจากสิทธิ์ที่เชื่อมต่อ",
     updated: "อัปเดตล่าสุด",
     storeId: "Store ID",
     province: "จังหวัด",
@@ -68,13 +61,6 @@ const copy = {
     growth: "Follower growth",
     history: "Daily history",
     noHistory: "Daily history will appear after at least two official snapshots are available.",
-    recentVideos: "Recent videos",
-    views: "Views",
-    comments: "Comments",
-    shares: "Shares",
-    engagement: "Engagement",
-    watch: "Open video",
-    noVideos: "No video data is available for the connected permissions.",
     updated: "Last updated",
     storeId: "Store ID",
     province: "Province",
@@ -103,13 +89,6 @@ const copy = {
     growth: "关注者增长",
     history: "每日历史",
     noHistory: "至少有两天官方快照后，这里才会显示每日历史数据。",
-    recentVideos: "最新视频",
-    views: "观看",
-    comments: "评论",
-    shares: "分享",
-    engagement: "互动",
-    watch: "打开视频",
-    noVideos: "当前连接权限没有可用的视频数据。",
     updated: "最后更新",
     storeId: "门店 ID",
     province: "省份",
@@ -286,18 +265,6 @@ function ConnectedAnalytics({
         {metrics.history.length < 2 ? <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-500 dark:bg-slate-950 dark:text-slate-400">{t.noHistory}</p> : <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950"><span className="text-[11px] text-slate-400">{t.followers}</span><strong className="mt-1 block text-sm">{formatNumber(metrics.history[metrics.history.length - 1].followerCount, locale)}</strong></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950"><span className="text-[11px] text-slate-400">{t.following}</span><strong className="mt-1 block text-sm">{formatNumber(metrics.history[metrics.history.length - 1].followingCount, locale)}</strong></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950"><span className="text-[11px] text-slate-400">{t.likes}</span><strong className="mt-1 block text-sm">{formatNumber(metrics.history[metrics.history.length - 1].likesCount, locale)}</strong></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950"><span className="text-[11px] text-slate-400">{t.videos}</span><strong className="mt-1 block text-sm">{formatNumber(metrics.history[metrics.history.length - 1].videoCount, locale)}</strong></div></div>}
       </section>
 
-      <section className="rounded-3xl border border-black/[0.06] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-slate-900 sm:p-6">
-        <div className="flex items-end justify-between gap-3"><div><h2 className="text-lg font-bold text-slate-950 dark:text-white">{t.recentVideos}</h2><p className="mt-1 text-xs text-slate-400">{account.videos.length} videos</p></div></div>
-        {account.videos.length === 0 ? <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-500 dark:bg-slate-950 dark:text-slate-400">{t.noVideos}</p> : <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {account.videos.map((video) => {
-            const engagement = video.likeCount + video.commentCount + video.shareCount;
-            return <article key={video.id} className="flex gap-3 rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
-              {video.coverImageUrl ? <Image src={video.coverImageUrl} alt={video.title || video.videoDescription || "TikTok video"} width={64} height={96} unoptimized className="h-24 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-24 w-16 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-800" />}
-              <div className="min-w-0 flex-1"><p className="line-clamp-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title || video.videoDescription || "TikTok video"}</p><div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400"><span>{t.views}: {formatNumber(video.viewCount, locale)}</span><span>{t.likes}: {formatNumber(video.likeCount, locale)}</span><span>{t.comments}: {formatNumber(video.commentCount, locale)}</span><span>{t.shares}: {formatNumber(video.shareCount, locale)}</span><span>{t.engagement}: {formatNumber(engagement, locale)}</span></div>{video.shareUrl && <a href={video.shareUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-bold text-emerald-700 hover:underline dark:text-emerald-400">{t.watch} →</a>}</div>
-            </article>;
-          })}
-        </div>}
-      </section>
     </>
   );
 }

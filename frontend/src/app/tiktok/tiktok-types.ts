@@ -195,21 +195,6 @@ export interface TikTokStoreOwnerAnalyticsData {
     connectedAt: string;
     lastSyncedAt: string;
     store: TikTokStoreOwnerStore;
-    videos: Array<{
-      id: string;
-      tikTokVideoId: string;
-      title?: string | null;
-      videoDescription?: string | null;
-      createTime?: string | null;
-      coverImageUrl?: string | null;
-      shareUrl?: string | null;
-      duration?: number | null;
-      viewCount: number;
-      likeCount: number;
-      commentCount: number;
-      shareCount: number;
-      lastSyncedAt: string;
-    }>;
   };
   store?: TikTokStoreOwnerStore;
   pendingStore?: TikTokStoreOwnerStore;
