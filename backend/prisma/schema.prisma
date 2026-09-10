@@ -598,6 +598,8 @@ model StoreMaster {
   updatedAt             DateTime                     @updatedAt
   stores                Store[]
   tikTokAccounts        TikTokAccount[]
+  tikTokPublicProfiles     TikTokPublicProfile[]
+  tikTokPublicDailyMetrics TikTokPublicDailyMetric[]
 
   @@unique([source, sourceRowNumber])
   @@index([normalizedAccountName])
@@ -1581,6 +1583,53 @@ model TikTokVideo {
   @@index([tikTokVideoId])
   @@index([createTime])
   @@index([viewCount])
+}
+
+model TikTokPublicProfile {
+  id              String   @id
+  storeMasterId   String
+  username        String
+  displayName     String?
+  avatarUrl       String?
+  bioDescription  String?
+  isVerified      Boolean?
+  followerCount   Int
+  followingCount  Int
+  likesCount      Int
+  videoCount      Int
+  profileUrl      String
+  metricSource    String
+  metricPrecision String
+  lastFetchedAt   DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  storeMaster StoreMaster @relation(fields: [storeMasterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([storeMasterId])
+  @@index([username])
+  @@index([lastFetchedAt])
+}
+
+model TikTokPublicDailyMetric {
+  id              String   @id
+  storeMasterId   String
+  metricDate      DateTime @db.Date
+  followerCount   Int
+  followingCount  Int
+  likesCount      Int
+  videoCount      Int
+  metricSource    String
+  metricPrecision String
+  fetchedAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  storeMaster StoreMaster @relation(fields: [storeMasterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([storeMasterId, metricDate])
+  @@index([metricDate])
+  @@index([storeMasterId])
 }
 
 enum AppPlatform {

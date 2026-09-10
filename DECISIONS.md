@@ -2189,3 +2189,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Reuse the shared Follower Insights `UnifiedPeriodPicker` for Store 360 Custom dates. Store 360 keeps its four-way range selector, while the calendar's existing two-month view, draft range selection, quick presets, Cancel/Apply flow, and 90-day validation provide the Custom interaction.
 - Preserve ISO `YYYY-MM-DD` values as URL/API state and Bangkok today as the future-date boundary. Custom calendar clicks do not fetch or update Store 360 until Apply; UI changes must not reinterpret analytics dates, comparison periods, authorization, or KPI definitions.
 - Keep active-option visibility inside the Store 360 result list by changing only that container's `scrollTop`; combine bounded overflow with overscroll containment so the page behind the anchored popup does not move.
+
+## 2026-09-10: Restore Prisma models for already-applied TikTok public analytics
+
+- Represent the existing `TikTokPublicProfile` and `TikTokPublicDailyMetric` tables directly in `schema.prisma`; do not create a second migration because `20260907153000_add_tiktok_public_analytics` is already applied and production contains live rows.
+- Preserve exact field types/defaults, unique/index semantics, `DATE` mapping, and StoreMaster cascade relations. The six PostgreSQL CHECK constraints remain database-owned because Prisma cannot express arbitrary PostgreSQL checks in the datamodel.
+- Keep the existing raw-SQL TikTok public analytics service unchanged. This is a datamodel reconciliation only; unrelated Prisma drift and Customer Voice remain outside scope.
