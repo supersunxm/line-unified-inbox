@@ -1,11 +1,12 @@
 import { Controller, Get, Param, Query, Req } from "@nestjs/common";
 import type { AuthRequest } from "../auth/auth.guard";
 import { StoreInsightsQueryDto } from "./store-insights.types";
+import { CustomerVoiceService } from "./customer-voice.service";
 import { StoreInsightsService } from "./store-insights.service";
 
 @Controller("store-insights")
 export class StoreInsightsController {
-  constructor(private readonly storeInsights: StoreInsightsService) {}
+  constructor(private readonly storeInsights: StoreInsightsService, private readonly customerVoice: CustomerVoiceService) {}
 
   @Get(":storeId/summary")
   summary(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsQueryDto) {
@@ -30,5 +31,10 @@ export class StoreInsightsController {
   @Get(":storeId/conversations")
   conversations(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsQueryDto) {
     return this.storeInsights.getConversations(request.user!, storeId, query);
+  }
+
+  @Get(":storeId/customer-voice")
+  customerVoiceSummary(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsQueryDto) {
+    return this.customerVoice.getCustomerVoice(request.user!, storeId, query);
   }
 }

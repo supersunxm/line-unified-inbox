@@ -426,6 +426,37 @@ export type StoreInsightsSales = {
   paymentMethods: Array<{ name: string; count: number }>;
   missingSalesInformation: number;
 };
+export type StoreInsightsCustomerVoiceTrend = "UP" | "DOWN" | "FLAT" | "NEW" | "NO_COMPARISON";
+export type StoreInsightsCustomerVoiceItem = {
+  label: string;
+  count: number;
+  percentage: number;
+  previousCount: number | null;
+  trend: StoreInsightsCustomerVoiceTrend;
+  changePercentage: number | null;
+};
+export type StoreInsightsCustomerVoiceCoverage = {
+  totalConversations: number;
+  analysisRows: number;
+  analyzedConversations: number;
+  classifiedConversations: number;
+  unclassifiedConversations: number;
+  persistedTopicConversations: number;
+  ruleEnrichedConversations: number;
+  aiEnrichedConversations: number;
+  lowConfidenceConversations: number;
+  analyzedPercentage: number | null;
+  classifiedPercentage: number | null;
+};
+export type StoreInsightsCustomerVoice = {
+  storeId: string;
+  period: { from: string; to: string; timezone: string };
+  comparisonPeriod: { from: string; to: string; timezone: string } | null;
+  coverage: StoreInsightsCustomerVoiceCoverage;
+  topTopics: StoreInsightsCustomerVoiceItem[];
+  topIntents: StoreInsightsCustomerVoiceItem[];
+  topProducts: StoreInsightsCustomerVoiceItem[];
+};
 export type StoreInsightsStore = {
   id: string;
   name: string;

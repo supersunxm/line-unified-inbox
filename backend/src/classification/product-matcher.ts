@@ -11,7 +11,6 @@ type MatchMethod = "NORMALIZED_PHRASE" | "COMPACT_VARIATION";
 type MatchSpan = { method: MatchMethod; endTokenIndex: number };
 
 const protectedModelSuffixes = new Set(["pro", "ultra", "lite", "air", "se", "neo", "max", "plus", "5g", "mini", "zoom", "zoom5g"]);
-const allowedModelContinuations = new Set(["price", "ราคา", "color", "colour", "stock", "available", "availability", "with", "for", "please", "f"]);
 const brandContextRequiredGroups = new Set(["TV", "SMART_HOME_AIOT"]);
 const thaiOppoTokens = new Set(["ออปโป้", "ออปโป"]);
 
@@ -89,6 +88,10 @@ export function toSemanticMethod(
 }
 
 export function matchProduct(messages: ProductMessage[], models: MatchableModel[]): ProductMatch | undefined {
+  return matchProducts(messages, models)[0];
+}
+
+export function matchProducts(messages: ProductMessage[], models: MatchableModel[]): ProductMatch[] {
   const candidates: Array<ProductMatch & { score: number; sentAt: number }> = [];
   for (const message of messages) {
     if (!message.text?.trim()) continue;
@@ -104,8 +107,17 @@ export function matchProduct(messages: ProductMessage[], models: MatchableModel[
     }
   }
   candidates.sort((a, b) => b.score - a.score || b.sentAt - a.sentAt || b.model.priority - a.model.priority);
-  const winner = candidates[0];
-  if (!winner) return undefined;
-  return { model: winner.model, confidence: winner.confidence, matchedPhrase: winner.matchedPhrase, detectionMethod: winner.detectionMethod, sourceMessageId: winner.sourceMessageId };
+  const winners = new Map<string, ProductMatch>();
+  for (const candidate of candidates) {
+    if (!winners.has(candidate.model.id)) {
+      winners.set(candidate.model.id, {
+        model: candidate.model,
+        confidence: candidate.confidence,
+        matchedPhrase: candidate.matchedPhrase,
+        detectionMethod: candidate.detectionMethod,
+        sourceMessageId: candidate.sourceMessageId,
+      });
+    }
+  }
+  return [...winners.values()];
 }
-

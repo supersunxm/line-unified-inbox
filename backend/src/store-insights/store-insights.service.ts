@@ -4,6 +4,7 @@ import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { getOffsetBangkokDateString, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { PrismaService } from "../prisma.service";
+import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "./customer-voice-taxonomy";
 import {
   StoreInsightsConversation,
   StoreInsightsFollowers,
@@ -315,6 +316,17 @@ export class StoreInsightsService {
         isQa: false,
         lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
         messages: { some: { direction: MessageDirection.INBOUND, sentAt: { gte: period.start, lt: period.end } } },
+        ...(query.customerVoiceTopic ? {
+          customerVoiceAnalyses: {
+            some: {
+              analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION,
+              OR: [
+                { primaryTopic: query.customerVoiceTopic },
+                { secondaryTopics: { has: query.customerVoiceTopic } },
+              ],
+            },
+          },
+        } : {}),
       },
       select: {
         ...conversationSelect,

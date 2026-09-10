@@ -6,10 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageContainer } from "@/components/shell";
 import { api } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
-import type { ApiStore, StoreInsightsConversation, StoreInsightsResponder, StoreInsightsSummary } from "@/types/api";
+import type { ApiStore, StoreInsightsConversation, StoreInsightsCustomerVoice, StoreInsightsResponder, StoreInsightsSummary } from "@/types/api";
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 import { useAppLanguage } from "../language";
 import { StoreSearchCombobox } from "./store-search-combobox";
+import { CustomerVoicePanel } from "./customer-voice-panel";
 
 type Preset = "7d" | "30d" | "month" | "custom";
 type ComparisonMode = "previous" | "none";
@@ -166,6 +167,9 @@ export function Store360View() {
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("previous");
   const [summary, setSummary] = useState<StoreInsightsSummary | null>(null);
+  const [customerVoice, setCustomerVoice] = useState<StoreInsightsCustomerVoice | null>(null);
+  const [customerVoiceLoading, setCustomerVoiceLoading] = useState(false);
+  const [customerVoiceTopic, setCustomerVoiceTopic] = useState<string | null>(null);
   const [conversations, setConversations] = useState<StoreInsightsConversation[]>([]);
   const [conversationTotal, setConversationTotal] = useState(0);
   const [responseFilter, setResponseFilter] = useState<ResponseFilter>("ALL");
@@ -177,6 +181,7 @@ export function Store360View() {
   const [searchText, setSearchText] = useState("");
   const bootstrapped = useRef(false);
   const summaryRequestId = useRef(0);
+  const customerVoiceRequestId = useRef(0);
   const conversationsRequestId = useRef(0);
 
   const activeStoreId = storeId || stores[0]?.id || "";
@@ -238,6 +243,7 @@ export function Store360View() {
         responseStatus: responseFilter === "ALL" ? undefined : responseFilter,
         responderId: responderFilter === "ALL" ? undefined : responderFilter,
         salesTagged: salesFilter === "ALL" ? undefined : salesFilter === "TAGGED",
+        customerVoiceTopic: customerVoiceTopic ?? undefined,
       });
       if (requestId === conversationsRequestId.current) {
         setConversations(value.items);
@@ -248,7 +254,23 @@ export function Store360View() {
     } finally {
       if (requestId === conversationsRequestId.current) setConversationLoading(false);
     }
-  }, [activeStoreId, from, responseFilter, responderFilter, salesFilter, to]);
+  }, [activeStoreId, customerVoiceTopic, from, responseFilter, responderFilter, salesFilter, to]);
+
+  const loadCustomerVoice = useCallback(async () => {
+    if (!activeStoreId) { setCustomerVoiceLoading(false); return; }
+    const requestId = ++customerVoiceRequestId.current;
+    setCustomerVoiceLoading(true);
+    setCustomerVoice(null);
+    try {
+      const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {};
+      const value = await api.storeInsightsCustomerVoice(activeStoreId, { from, to, ...compare });
+      if (requestId === customerVoiceRequestId.current) setCustomerVoice(value);
+    } catch (reason) {
+      if (requestId === customerVoiceRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load Customer Voice");
+    } finally {
+      if (requestId === customerVoiceRequestId.current) setCustomerVoiceLoading(false);
+    }
+  }, [activeStoreId, comparisonMode, from, to]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadSummary(); }, 0);
@@ -258,11 +280,18 @@ export function Store360View() {
     const timer = window.setTimeout(() => { void loadConversations(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadConversations]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadCustomerVoice(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCustomerVoice]);
 
   const invalidateInsights = () => {
     summaryRequestId.current += 1;
+    customerVoiceRequestId.current += 1;
     conversationsRequestId.current += 1;
     setSummary(null);
+    setCustomerVoice(null);
+    setCustomerVoiceTopic(null);
     setConversations([]);
     setConversationTotal(0);
   };
@@ -279,11 +308,9 @@ export function Store360View() {
       return;
     }
     setCustomPickerOpen(false);
-    if (next !== "custom") {
-      const range = rangeForPreset(next);
-      invalidateInsights();
-      setFrom(range.from); setTo(range.to); updateUrl(activeStoreId, range.from, range.to);
-    }
+    const range = rangeForPreset(next);
+    invalidateInsights();
+    setFrom(range.from); setTo(range.to); updateUrl(activeStoreId, range.from, range.to);
   };
   const applyCustomRange = (nextFrom: string, nextTo: string) => {
     if (!nextFrom || !nextTo || nextFrom > nextTo || nextTo > todayInBangkok()) return;
@@ -291,6 +318,13 @@ export function Store360View() {
     setFrom(nextFrom);
     setTo(nextTo);
     updateUrl(activeStoreId, nextFrom, nextTo);
+  };
+  const selectCustomerVoiceTopic = (topic: string) => {
+    const nextTopic = customerVoiceTopic === topic ? null : topic;
+    setCustomerVoiceTopic(nextTopic);
+    conversationsRequestId.current += 1;
+    setConversations([]);
+    setConversationTotal(0);
   };
   const logout = async () => { await api.logout().catch(() => undefined); router.replace("/login"); };
   const responders = summary?.responders ?? [];
@@ -302,7 +336,7 @@ export function Store360View() {
   if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>;
 
   return (
-    <AppShell currentSection="store-360" authUser={authUser} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} isLoading={loading} apiError={error} loadApplicationData={() => void loadSummary()} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }}>
+    <AppShell currentSection="store-360" authUser={authUser} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} isLoading={loading} apiError={error} loadApplicationData={() => { void loadSummary(); void loadCustomerVoice(); }} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }}>
       <PageContainer variant="wide">
         {!stores.length && !loading ? <div className={`${surfaceClass()} p-8 text-center text-sm text-[var(--app-text-secondary)]`}>No authorized stores available.</div> : loading && !summary ? <Store360Skeleton /> : summary ? <>
           <section className={`${surfaceClass()} overflow-hidden p-5 sm:p-6`}>
@@ -321,11 +355,13 @@ export function Store360View() {
 
           <section className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Response performance" description="SLA buckets use the same first-inbound → first-valid-human-response definition as the KPI row." /><ResponseBars summary={summary} /></section>
 
+          <CustomerVoicePanel data={customerVoice} loading={customerVoiceLoading} selectedTopic={customerVoiceTopic} onTopicSelect={selectCustomerVoiceTopic} />
+
           <section className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Who responded" description="Only staff identities connected to real outbound messages are included." /><ResponderTable responders={responders} />{responders.length === 0 && <p className="mt-3 text-xs text-[var(--app-text-tertiary)]">Unknown responders are retained in the conversation explorer; no attributable staff rows are available for this period.</p>}</section>
 
           <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]"><div className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Sales / tag overview" description="Existing structured sales and product records only." /><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[var(--app-surface-subtle)] p-3"><div className="text-[11px] text-[var(--app-text-tertiary)]">Sales tagged conversations</div><div className="mt-1 text-xl font-bold">{summary.sales.salesTaggedConversations.toLocaleString()}</div></div><div className="rounded-xl bg-[var(--app-surface-subtle)] p-3"><div className="text-[11px] text-[var(--app-text-tertiary)]">Missing sales information</div><div className="mt-1 text-xl font-bold">{summary.sales.missingSalesInformation.toLocaleString()}</div></div><div className="rounded-xl bg-[var(--app-surface-subtle)] p-3"><div className="text-[11px] text-[var(--app-text-tertiary)]">Payment tags</div><div className="mt-1 text-xl font-bold">{summary.sales.paymentMethods.reduce((sum, item) => sum + item.count, 0).toLocaleString()}</div></div></div><div className="mt-5 grid gap-5 sm:grid-cols-2"><div><h3 className="mb-2 text-xs font-semibold">Product / model tags</h3>{summary.sales.productModels.length ? <ul className="space-y-2">{summary.sales.productModels.slice(0, 8).map((item) => <li key={item.name} className="flex justify-between gap-3 text-xs"><span className="truncate text-[var(--app-text-secondary)]">{item.name}</span><span className="font-semibold tabular-nums">{item.count.toLocaleString()}</span></li>)}</ul> : <p className="text-xs text-[var(--app-text-tertiary)]">No data available</p>}</div><div><h3 className="mb-2 text-xs font-semibold">Payment-method tags</h3>{summary.sales.paymentMethods.length ? <ul className="space-y-2">{summary.sales.paymentMethods.map((item) => <li key={item.name} className="flex justify-between gap-3 text-xs"><span className="text-[var(--app-text-secondary)]">{item.name.replaceAll("_", " ")}</span><span className="font-semibold tabular-nums">{item.count.toLocaleString()}</span></li>)}</ul> : <p className="text-xs text-[var(--app-text-tertiary)]">No data available</p>}</div></div></div><div className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Data limitations" description="Visible provenance boundaries for this period." />{summary.limitations.length ? <ul className="space-y-3">{summary.limitations.map((item) => <li key={item} className="flex gap-2 text-xs leading-5 text-[var(--app-text-secondary)]"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-warning)]" />{item}</li>)}</ul> : <p className="text-xs text-[var(--app-success)]">No known data limitations for the selected period.</p>}</div></section>
 
-          <section className={`${surfaceClass()} overflow-hidden`}><div className="p-5 pb-3 sm:p-6 sm:pb-3"><SectionTitle title="Conversation explorer" description="Select a row to open the existing Store Chats detail flow." /><div className="flex flex-wrap gap-2"><select value={responseFilter} onChange={(event) => setResponseFilter(event.target.value as ResponseFilter)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All response statuses</option><option value="REPLIED">Replied</option><option value="UNANSWERED">Unanswered</option></select><select value={responderFilter} onChange={(event) => setResponderFilter(event.target.value)} className="h-9 max-w-[220px] rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All responders</option>{responders.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><select value={salesFilter} onChange={(event) => setSalesFilter(event.target.value as SalesFilter)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All sales tags</option><option value="TAGGED">Sales tagged</option><option value="UNTAGGED">Not sales tagged</option></select><span className="self-center text-xs text-[var(--app-text-tertiary)]">{conversationLoading ? "Loading…" : `${conversationTotal.toLocaleString()} conversations`}</span></div></div><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-xs"><thead><tr className="border-y border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[10px] uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]"><th className="px-5 py-3 font-semibold">Customer</th><th className="px-4 py-3 font-semibold">Topic</th><th className="px-4 py-3 font-semibold">Response status</th><th className="px-4 py-3 font-semibold">Responder</th><th className="px-4 py-3 font-semibold">First response</th><th className="px-4 py-3 font-semibold">Sales / product</th><th className="px-4 py-3 font-semibold">Last activity</th></tr></thead><tbody>{visibleConversations.length === 0 ? <tr><td colSpan={7} className="px-5 py-10 text-center text-[var(--app-text-tertiary)]">No data available</td></tr> : visibleConversations.map((item) => <tr key={item.id} onClick={() => router.push(`/chats?storeId=${encodeURIComponent(activeStoreId)}&conversationId=${encodeURIComponent(item.id)}`)} className="cursor-pointer border-b border-[var(--app-border-subtle)] transition-colors last:border-0 hover:bg-[var(--app-surface-hover)]"><td className="px-5 py-3 font-semibold text-[var(--app-text-primary)]">{item.customer.displayName}</td><td className="max-w-[180px] truncate px-4 py-3 text-[var(--app-text-tertiary)]" title={item.topic ?? "No persisted topic"}>{item.topic ?? "No data available"}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${item.responseStatus === "REPLIED" ? "bg-[var(--app-success-soft)] text-[var(--app-success)]" : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]"}`}>{item.responseStatus === "REPLIED" ? "Replied" : "Unanswered"}</span></td><td className="px-4 py-3">{item.responder?.displayName ?? "Unknown"}</td><td className="px-4 py-3 tabular-nums">{formatDuration(item.firstResponseSeconds)}</td><td className="max-w-[180px] truncate px-4 py-3">{item.salesProduct ?? (item.salesTagged ? "Tagged" : "Not tagged")}</td><td className="px-4 py-3 whitespace-nowrap text-[var(--app-text-secondary)]">{formatDateTime(item.lastActivity)}</td></tr>)}</tbody></table></div><div className="flex items-center justify-between gap-3 px-5 py-3 text-[11px] text-[var(--app-text-tertiary)]"><span>Showing {visibleConversations.length.toLocaleString()} of {conversationTotal.toLocaleString()}</span><Link href={`/chats?storeId=${encodeURIComponent(activeStoreId)}`} className="font-semibold text-[var(--app-accent)] hover:underline">Open Store Chats →</Link></div></section>
+          <section className={`${surfaceClass()} overflow-hidden`}><div className="p-5 pb-3 sm:p-6 sm:pb-3"><SectionTitle title="Conversation explorer" description="Select a row to open the existing Store Chats detail flow." /><div className="flex flex-wrap gap-2"><select value={responseFilter} onChange={(event) => setResponseFilter(event.target.value as ResponseFilter)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All response statuses</option><option value="REPLIED">Replied</option><option value="UNANSWERED">Unanswered</option></select><select value={responderFilter} onChange={(event) => setResponderFilter(event.target.value)} className="h-9 max-w-[220px] rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All responders</option>{responders.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><select value={salesFilter} onChange={(event) => setSalesFilter(event.target.value as SalesFilter)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2.5 text-xs"><option value="ALL">All sales tags</option><option value="TAGGED">Sales tagged</option><option value="UNTAGGED">Not sales tagged</option></select>{customerVoiceTopic && <button type="button" onClick={() => selectCustomerVoiceTopic(customerVoiceTopic)} className="rounded-lg border border-[var(--app-accent)] bg-[var(--app-accent-soft)] px-2.5 text-xs font-semibold text-[var(--app-accent)]">Topic: {customerVoiceTopic} ×</button>}<span className="self-center text-xs text-[var(--app-text-tertiary)]">{conversationLoading ? "Loading…" : `${conversationTotal.toLocaleString()} conversations`}</span></div></div><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-xs"><thead><tr className="border-y border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[10px] uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]"><th className="px-5 py-3 font-semibold">Customer</th><th className="px-4 py-3 font-semibold">Topic</th><th className="px-4 py-3 font-semibold">Response status</th><th className="px-4 py-3 font-semibold">Responder</th><th className="px-4 py-3 font-semibold">First response</th><th className="px-4 py-3 font-semibold">Sales / product</th><th className="px-4 py-3 font-semibold">Last activity</th></tr></thead><tbody>{visibleConversations.length === 0 ? <tr><td colSpan={7} className="px-5 py-10 text-center text-[var(--app-text-tertiary)]">No data available</td></tr> : visibleConversations.map((item) => <tr key={item.id} onClick={() => router.push(`/chats?storeId=${encodeURIComponent(activeStoreId)}&conversationId=${encodeURIComponent(item.id)}`)} className="cursor-pointer border-b border-[var(--app-border-subtle)] transition-colors last:border-0 hover:bg-[var(--app-surface-hover)]"><td className="px-5 py-3 font-semibold text-[var(--app-text-primary)]">{item.customer.displayName}</td><td className="max-w-[180px] truncate px-4 py-3 text-[var(--app-text-tertiary)]" title={item.topic ?? "No persisted topic"}>{item.topic ?? "No data available"}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${item.responseStatus === "REPLIED" ? "bg-[var(--app-success-soft)] text-[var(--app-success)]" : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]"}`}>{item.responseStatus === "REPLIED" ? "Replied" : "Unanswered"}</span></td><td className="px-4 py-3">{item.responder?.displayName ?? "Unknown"}</td><td className="px-4 py-3 tabular-nums">{formatDuration(item.firstResponseSeconds)}</td><td className="max-w-[180px] truncate px-4 py-3">{item.salesProduct ?? (item.salesTagged ? "Tagged" : "Not tagged")}</td><td className="px-4 py-3 whitespace-nowrap text-[var(--app-text-secondary)]">{formatDateTime(item.lastActivity)}</td></tr>)}</tbody></table></div><div className="flex items-center justify-between gap-3 px-5 py-3 text-[11px] text-[var(--app-text-tertiary)]"><span>Showing {visibleConversations.length.toLocaleString()} of {conversationTotal.toLocaleString()}</span><Link href={`/chats?storeId=${encodeURIComponent(activeStoreId)}`} className="font-semibold text-[var(--app-accent)] hover:underline">Open Store Chats →</Link></div></section>
         </> : <div className={`${surfaceClass()} p-8 text-center text-sm text-[var(--app-text-secondary)]`}>No data available</div>}
       </PageContainer>
     </AppShell>
