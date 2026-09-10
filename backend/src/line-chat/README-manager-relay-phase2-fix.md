@@ -1,1 +1,0 @@
-Phase 2 LINE Manager relay stores share the same single-textarea composer primitive. The worker now prefers that primitive directly (while rejecting search fields) before geometry-based fallbacks, matching the Central World path. Delivery remains fail-closed until a real outbound bubble is verified.
