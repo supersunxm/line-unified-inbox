@@ -7,9 +7,12 @@ const prisma = new PrismaClient();
 const sessionService = new LineChatSessionService();
 
 const DEFAULT_STORES = ["25610", "27627", "25391", "24804", "27789", "3791"];
+const MANAGER_ORIGIN = "https://manager.line.biz";
 
 type Args = { storeCodes: Set<string>; apply: boolean };
 type MethodState = "MANUAL_CHAT" | "MANUAL_CHAT_AUTO_RESPONSE" | "UNKNOWN";
+type ResponseUrlResolution = { url: string; source: "STORED" | "DISCOVERED" };
+type AccountLink = { href: string; text: string };
 
 type AccountRow = {
   id: string;
@@ -19,6 +22,7 @@ type AccountRow = {
     code: string | null;
     storeMaster: {
       externalStoreId: string | null;
+      accountName: string;
       lineId: string | null;
       lineManagerUrl: string | null;
     } | null;
@@ -48,46 +52,223 @@ function parseArgs(argv: string[]): Args {
   return { storeCodes, apply };
 }
 
+function normalizeName(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase("en-US")
+    .replace(/[\s\u200b\u200c\u200d\ufeff]+/gu, "")
+    .replace(/[.,'"`’‘“”()\[\]{}\-_/\\|:&+]/gu, "")
+    .trim();
+}
+
 function storeCodeOf(account: AccountRow): string {
   return account.store?.code?.trim()
     || account.store?.storeMaster?.externalStoreId?.trim()
     || "";
 }
 
-function buildResponseSettingsUrl(account: AccountRow): string | null {
+function responseUrlFromManagerHref(raw: string): string | null {
+  try {
+    const parsed = new URL(raw, MANAGER_ORIGIN);
+    if (parsed.origin !== MANAGER_ORIGIN) return null;
+    const match = parsed.pathname.match(/\/account\/([^/]+)/i);
+    if (!match?.[1]) return null;
+    return `${parsed.origin}/account/${match[1]}/setting/response`;
+  } catch {
+    return null;
+  }
+}
+
+function storedResponseSettingsUrl(account: AccountRow): string | null {
   const raw = account.store?.storeMaster?.lineManagerUrl?.trim();
   if (raw) {
-    try {
-      const parsed = new URL(raw);
-      if (parsed.hostname !== "manager.line.biz") return null;
-      const match = parsed.pathname.match(/\/account\/([^/]+)/i);
-      if (!match?.[1]) return null;
-      return `${parsed.origin}/account/${match[1]}/setting/response`;
-    } catch {
-      return null;
-    }
+    const resolved = responseUrlFromManagerHref(raw);
+    if (resolved) return resolved;
   }
 
   const lineId = account.store?.storeMaster?.lineId?.trim();
   if (lineId?.startsWith("@")) {
-    return `https://manager.line.biz/account/${lineId}/setting/response`;
+    return `${MANAGER_ORIGIN}/account/${lineId}/setting/response`;
   }
   return null;
+}
+
+function targetNames(account: AccountRow): string[] {
+  return [
+    account.store?.storeMaster?.accountName ?? "",
+    account.name,
+    account.store?.name ?? "",
+  ].map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+function candidateScore(link: AccountLink, account: AccountRow): number {
+  const href = responseUrlFromManagerHref(link.href);
+  if (!href) return -1;
+  const normalizedText = normalizeName(link.text);
+  const lineId = account.store?.storeMaster?.lineId?.trim();
+  let score = lineId && link.href.includes(lineId) ? 200 : 0;
+  for (const name of targetNames(account)) {
+    const normalizedTarget = normalizeName(name);
+    if (!normalizedTarget || !normalizedText) continue;
+    if (normalizedText === normalizedTarget) score = Math.max(score, 150);
+    else if (normalizedText.includes(normalizedTarget)) score = Math.max(score, 120);
+    else if (normalizedTarget.length >= 8 && normalizedTarget.includes(normalizedText)) score = Math.max(score, 90);
+  }
+  return score;
+}
+
+async function collectAccountLinks(page: Page): Promise<AccountLink[]> {
+  const links: AccountLink[] = [];
+  for (const frame of page.frames()) {
+    const rows = await frame.locator('a[href*="/account/"]').evaluateAll((anchors) => anchors.map((anchor) => ({
+      href: (anchor as HTMLAnchorElement).href,
+      text: (anchor.textContent || "").replace(/\s+/g, " ").trim().slice(0, 220),
+    }))).catch(() => [] as AccountLink[]);
+    links.push(...rows);
+  }
+  const deduped = new Map<string, AccountLink>();
+  for (const link of links) {
+    const responseUrl = responseUrlFromManagerHref(link.href);
+    if (!responseUrl) continue;
+    const key = `${responseUrl}|${normalizeName(link.text)}`;
+    if (!deduped.has(key)) deduped.set(key, link);
+  }
+  return [...deduped.values()];
+}
+
+function bestLink(links: AccountLink[], account: AccountRow): AccountLink | null {
+  const scored = links
+    .map((link) => ({ link, score: candidateScore(link, account) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return null;
+  if (scored.length > 1 && scored[0].score === scored[1].score) return null;
+  return scored[0].link;
+}
+
+async function visibleSearchInput(page: Page): Promise<Locator | null> {
+  const selectors = [
+    'input[type="search"]',
+    'input[placeholder*="search" i]',
+    'input[placeholder*="ค้นหา"]',
+    '[role="searchbox"]',
+  ];
+  for (const frame of page.frames()) {
+    for (const selector of selectors) {
+      const nodes = frame.locator(selector);
+      const count = Math.min(await nodes.count().catch(() => 0), 10);
+      for (let i = 0; i < count; i += 1) {
+        const node = nodes.nth(i);
+        if (await node.isVisible().catch(() => false)) return node;
+      }
+    }
+  }
+  return null;
+}
+
+async function openAccountSwitcher(page: Page): Promise<boolean> {
+  const before = (await collectAccountLinks(page)).length;
+  const selectors = [
+    'button[aria-haspopup="menu"]',
+    'button[aria-haspopup="listbox"]',
+    '[role="button"][aria-haspopup="menu"]',
+    '[role="button"][aria-haspopup="listbox"]',
+    '[role="button"]',
+    'button',
+  ];
+
+  for (const selector of selectors) {
+    const nodes = page.locator(selector);
+    const count = Math.min(await nodes.count().catch(() => 0), 35);
+    for (let i = 0; i < count; i += 1) {
+      const node = nodes.nth(i);
+      if (!(await node.isVisible().catch(() => false))) continue;
+      const box = await node.boundingBox().catch(() => null);
+      if (!box || box.y > 140 || box.x > 700) continue;
+
+      await node.click({ timeout: 2_000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      const search = await visibleSearchInput(page);
+      const after = (await collectAccountLinks(page)).length;
+      if (search || after > before) return true;
+      await page.keyboard.press("Escape").catch(() => {});
+    }
+  }
+  return false;
+}
+
+async function clickExactAccountName(page: Page, account: AccountRow): Promise<string | null> {
+  for (const name of targetNames(account)) {
+    const matches = page.getByText(name, { exact: true });
+    const count = Math.min(await matches.count().catch(() => 0), 10);
+    for (let i = 0; i < count; i += 1) {
+      const match = matches.nth(i);
+      if (!(await match.isVisible().catch(() => false))) continue;
+      await match.click({ timeout: 2_000 }).catch(() => {});
+      await page.waitForTimeout(800);
+      const responseUrl = responseUrlFromManagerHref(page.url());
+      if (responseUrl) return responseUrl;
+    }
+  }
+  return null;
+}
+
+async function discoverResponseSettingsUrl(page: Page, account: AccountRow): Promise<string | null> {
+  await page.goto(MANAGER_ORIGIN, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+
+  const currentUrl = responseUrlFromManagerHref(page.url());
+  if (currentUrl) {
+    const body = normalizeName(await page.locator("body").innerText().catch(() => ""));
+    if (targetNames(account).some((name) => body.includes(normalizeName(name)))) return currentUrl;
+  }
+
+  let links = await collectAccountLinks(page);
+  let match = bestLink(links, account);
+  if (match) return responseUrlFromManagerHref(match.href);
+
+  await openAccountSwitcher(page);
+  links = await collectAccountLinks(page);
+  match = bestLink(links, account);
+  if (match) return responseUrlFromManagerHref(match.href);
+
+  const search = await visibleSearchInput(page);
+  if (search) {
+    for (const name of targetNames(account)) {
+      await search.fill(name).catch(() => {});
+      await page.waitForTimeout(700);
+      links = await collectAccountLinks(page);
+      match = bestLink(links, account);
+      if (match) return responseUrlFromManagerHref(match.href);
+      const clicked = await clickExactAccountName(page, account);
+      if (clicked) return clicked;
+      await search.fill("").catch(() => {});
+    }
+  }
+
+  return clickExactAccountName(page, account);
+}
+
+async function resolveResponseSettingsUrl(page: Page, account: AccountRow): Promise<ResponseUrlResolution | null> {
+  const stored = storedResponseSettingsUrl(account);
+  if (stored) return { url: stored, source: "STORED" };
+  const discovered = await discoverResponseSettingsUrl(page, account);
+  return discovered ? { url: discovered, source: "DISCOVERED" } : null;
 }
 
 async function radioText(radio: Locator): Promise<string> {
   return radio.evaluate((element) => {
     const input = element as HTMLInputElement;
-    const chunks: string[] = [];
-    for (const label of Array.from(input.labels ?? [])) {
-      if (label.textContent) chunks.push(label.textContent);
-    }
-    let parent: HTMLElement | null = input.parentElement;
-    for (let depth = 0; parent && depth < 3; depth += 1) {
-      if (parent.innerText) chunks.push(parent.innerText);
-      parent = parent.parentElement;
-    }
-    return chunks.join(" ").replace(/\s+/g, " ").trim().toLowerCase();
+    const labels = Array.from(input.labels ?? [])
+      .map((label) => (label.textContent || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    if (labels.length > 0) return labels.join(" ").toLowerCase();
+
+    const closestLabel = input.closest("label");
+    if (closestLabel?.textContent) return closestLabel.textContent.replace(/\s+/g, " ").trim().toLowerCase();
+
+    const aria = input.getAttribute("aria-label") || "";
+    if (aria.trim()) return aria.replace(/\s+/g, " ").trim().toLowerCase();
+
+    return (input.parentElement?.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
   }).catch(() => "");
 }
 
@@ -126,7 +307,12 @@ async function ensureManualChat(page: Page): Promise<boolean> {
   if (initial.state !== "MANUAL_CHAT_AUTO_RESPONSE" || !initial.manual) return false;
 
   await initial.manual.check({ force: true, timeout: 5_000 }).catch(async () => {
-    await initial.manual!.evaluate((element) => (element as HTMLInputElement).click()).catch(() => {});
+    await initial.manual!.evaluate((element) => {
+      const input = element as HTMLInputElement;
+      const label = input.labels?.[0];
+      if (label) label.click();
+      else input.click();
+    }).catch(() => {});
   });
   await page.waitForTimeout(1_500);
   await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
@@ -138,6 +324,13 @@ async function ensureManualChat(page: Page): Promise<boolean> {
   await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
   const afterReload = await detectMethod(page);
   return afterReload.state === "MANUAL_CHAT";
+}
+
+function maskedManagerAccount(responseUrl: string): string {
+  const match = responseUrl.match(/\/account\/([^/]+)/i);
+  const value = match?.[1] ?? "";
+  if (value.length <= 5) return value;
+  return `${value.slice(0, 3)}...${value.slice(-3)}`;
 }
 
 async function main(): Promise<void> {
@@ -165,6 +358,7 @@ async function main(): Promise<void> {
           storeMaster: {
             select: {
               externalStoreId: true,
+              accountName: true,
               lineId: true,
               lineManagerUrl: true,
             },
@@ -241,15 +435,15 @@ async function main(): Promise<void> {
       for (const account of group) {
         const code = storeCodeOf(account);
         const storeName = account.store?.name?.trim() || account.name;
-        const responseUrl = buildResponseSettingsUrl(account);
-        if (!responseUrl) {
-          console.log(JSON.stringify({ event: "line_chat_response_method_row", storeCode: code, storeName, status: "MANAGER_URL_MISSING_OR_INVALID" }));
+        const response = await resolveResponseSettingsUrl(page, account);
+        if (!response) {
+          console.log(JSON.stringify({ event: "line_chat_response_method_row", storeCode: code, storeName, status: "MANAGER_ACCOUNT_NOT_DISCOVERED" }));
           failures.push(code);
           continue;
         }
 
         try {
-          await page.goto(responseUrl, { waitUntil: "domcontentloaded", timeout: 15_000 });
+          await page.goto(response.url, { waitUntil: "domcontentloaded", timeout: 15_000 });
           await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
           const before = await detectMethod(page);
 
@@ -266,6 +460,8 @@ async function main(): Promise<void> {
             storeCode: code,
             storeName,
             sessionKey: session.sessionKey,
+            managerAccountMasked: maskedManagerAccount(response.url),
+            responseUrlSource: response.source,
             before: before.state,
             after: finalState,
             changed,
