@@ -45,6 +45,7 @@
     "translation:glossary:smoke-test": "tsx scripts/translation-glossary-smoke-test.ts",
     "translation:quality:report": "tsx scripts/translation-quality-report.ts",
     "classification:backfill-products": "tsx --env-file=.env scripts/backfill-product-classifications.ts",
+    "customer-voice:backfill": "tsx --env-file=.env scripts/customer-voice-backfill.ts",
     "product:reanalyze": "tsx --env-file=.env scripts/reanalyze-products.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",

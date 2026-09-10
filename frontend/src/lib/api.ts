@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -442,7 +442,13 @@ export const api = {
     const qs = query.toString();
     return request<{ storeId: string; period: StoreInsightsSummary["period"] } & StoreInsightsSales>(`/store-insights/${encodeURIComponent(storeId)}/sales${qs ? `?${qs}` : ""}`);
   },
-  storeInsightsConversations: (storeId: string, params: { from?: string; to?: string; responseStatus?: "REPLIED" | "UNANSWERED"; responderId?: string; salesTagged?: boolean; page?: number; pageSize?: number } = {}) => {
+  storeInsightsCustomerVoice: (storeId: string, params: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
+    const qs = query.toString();
+    return request<StoreInsightsCustomerVoice>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice${qs ? `?${qs}` : ""}`);
+  },
+  storeInsightsConversations: (storeId: string, params: { from?: string; to?: string; responseStatus?: "REPLIED" | "UNANSWERED"; responderId?: string; salesTagged?: boolean; customerVoiceTopic?: string; page?: number; pageSize?: number } = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
     const qs = query.toString();

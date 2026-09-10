@@ -84,6 +84,27 @@ enum PurchaseIntent {
   UNKNOWN
 }
 
+enum CustomerVoiceAnalysisSource {
+  EXISTING_TOPIC
+  RULE_ENRICHED
+  AI_CLASSIFIED
+  MIXED_ENRICHED
+  UNCLASSIFIED
+}
+
+enum CustomerVoiceIntent {
+  INFORMATION
+  PRICE_CHECK
+  PRODUCT_COMPARISON
+  PURCHASE_CONSIDERATION
+  READY_TO_BUY
+  STOCK_CHECK
+  PAYMENT_INQUIRY
+  AFTER_SALES
+  COMPLAINT
+  GENERAL
+}
+
 enum MessageDirection {
   INBOUND
   OUTBOUND
@@ -565,6 +586,7 @@ model Store {
   weeklyStoreMemberships     GoogleReviewWeeklyStoreMembership[]
   googleReviewDailyKpis      GoogleReviewDailyKpi[]
   googleReviewWeeklyKpis     GoogleReviewWeeklyKpi[]
+  customerVoiceAnalyses      ConversationAnalytics[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -860,6 +882,7 @@ model Conversation {
   topics                ConversationTopic[]
   notes                 InternalNote[]
   activityHistory       ActivityHistory[]
+  customerVoiceAnalyses ConversationAnalytics[]
   purchaseRecordedBy    User?                       @relation("ConversationPurchaseRecorder", fields: [purchaseRecordedById], references: [id], onDelete: SetNull)
   salesRecordedBy       User?                       @relation("ConversationSalesRecorder", fields: [salesRecordedById], references: [id], onDelete: SetNull)
   owner                 User?                       @relation("ConversationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -1123,6 +1146,35 @@ model ConversationTopic {
 
   @@id([conversationId, topicId])
   @@index([topicId])
+}
+
+model ConversationAnalytics {
+  id                    String                      @id @default(uuid())
+  conversationId        String
+  storeId               String
+  analysisVersion       String
+  source                CustomerVoiceAnalysisSource
+  primaryTopic          String?
+  secondaryTopics       String[]                    @default([])
+  intent                CustomerVoiceIntent?
+  productMentions       String[]                    @default([])
+  rawProductMentions    String[]                    @default([])
+  confidence            Float?
+  summary               String?
+  inputMessageCount     Int                         @default(0)
+  lastAnalyzedMessageAt DateTime?
+  processedAt           DateTime                    @default(now())
+  modelProvider         String?
+  modelName             String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  conversation          Conversation                @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  store                 Store                       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([conversationId, analysisVersion])
+  @@index([storeId, analysisVersion, processedAt])
+  @@index([storeId, primaryTopic])
+  @@index([storeId, intent])
 }
 
 model InternalNote {

@@ -33,6 +33,10 @@ export class StoreInsightsQueryDto {
   responderId?: string;
 
   @IsOptional()
+  @IsString()
+  customerVoiceTopic?: string;
+
+  @IsOptional()
   @Transform(({ value }: { value: unknown }) => (value === "true" ? true : value === "false" ? false : value))
   @IsIn([true, false])
   salesTagged?: boolean;
