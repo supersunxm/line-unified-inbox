@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { StoresRoute } from "./stores-route";
+import { PublicStoresDirectory } from "./public-stores-directory";
+import { StoreManagementRedirect } from "./stores-route";
 
 export const metadata: Metadata = {
   title: {
@@ -12,7 +13,8 @@ export const metadata: Metadata = {
 export default function StoresDirectoryPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[var(--app-bg)]" />}>
-      <StoresRoute />
+      <StoreManagementRedirect />
+      <PublicStoresDirectory />
     </Suspense>
   );
 }
