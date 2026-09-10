@@ -33,6 +33,24 @@ if [ "${LINE_CHAT_FLEET_MAPPING_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_fleet_exact_mapping_bootstrap_finished\",\"exitCode\":${MAPPING_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_ENSURE_MANUAL_RESPONSE_ENABLED:-false}" = "true" ]; then
+  RESPONSE_STORES="${LINE_CHAT_ENSURE_MANUAL_RESPONSE_STORES:-25610,27627,25391,24804,27789,3791}"
+  RESPONSE_APPLY="${LINE_CHAT_ENSURE_MANUAL_RESPONSE_APPLY:-false}"
+
+  echo "{\"event\":\"line_chat_response_method_bootstrap_started\",\"stores\":\"${RESPONSE_STORES}\",\"apply\":\"${RESPONSE_APPLY}\"}"
+
+  set +e
+  if [ "$RESPONSE_APPLY" = "true" ]; then
+    npx tsx scripts/line-chat-ensure-manual-response.ts --stores="$RESPONSE_STORES" --apply
+  else
+    npx tsx scripts/line-chat-ensure-manual-response.ts --stores="$RESPONSE_STORES"
+  fi
+  RESPONSE_EXIT_CODE=$?
+  set -e
+
+  echo "{\"event\":\"line_chat_response_method_bootstrap_finished\",\"exitCode\":${RESPONSE_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_MANUAL_READINESS_DRY_RUN_ENABLED:-false}" = "true" ]; then
   STORES="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_STORES:-}"
   OUTPUT="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_OUTPUT:-/tmp/line-chat-manual-readiness.csv}"
