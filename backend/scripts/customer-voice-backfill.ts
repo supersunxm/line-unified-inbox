@@ -1,6 +1,6 @@
 import { MessageDirection, PrismaClient } from "@prisma/client";
 import type { PrismaService } from "../src/prisma.service";
-import { getOffsetBangkokDateString, toUtcDateForDb } from "../src/follower-insights/date-utils";
+import { bangkokDateRangeToUtcBounds } from "../src/follower-insights/date-utils";
 import { CustomerVoiceService } from "../src/store-insights/customer-voice.service";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "../src/store-insights/customer-voice-taxonomy";
 
@@ -34,8 +34,7 @@ async function main() {
   const storeId = requiredOption("--storeId");
   const from = isoDate(requiredOption("--from"));
   const to = isoDate(requiredOption("--to"));
-  const start = toUtcDateForDb(from);
-  const end = toUtcDateForDb(getOffsetBangkokDateString(to, 1));
+  const { startUtc: start, endExclusiveUtc: end } = bangkokDateRangeToUtcBounds(from, to);
   if (end <= start) throw new Error("--to cannot be earlier than --from");
   const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
   if (days > 90) throw new Error("Customer Voice backfill cannot exceed 90 days");

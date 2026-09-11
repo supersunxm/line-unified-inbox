@@ -87,12 +87,12 @@ test("Store 360 scopes conversations to the requested store, active STORE OA, an
     storeId: "store-1",
     isQa: false,
     lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
-    messages: { some: { direction: "INBOUND", sentAt: { gte: new Date("2026-09-05T00:00:00.000Z"), lt: new Date("2026-09-06T00:00:00.000Z") } } },
+    messages: { some: { direction: "INBOUND", sentAt: { gte: new Date("2026-09-04T17:00:00.000Z"), lt: new Date("2026-09-05T17:00:00.000Z") } } },
   });
-  assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-09-05T00:00:00.000Z"), lt: new Date("2026-09-07T00:00:00.000Z") } });
+  assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-09-04T17:00:00.000Z"), lt: new Date("2026-09-06T17:00:00.000Z") } });
   assert.deepEqual(calls.activityWhere, {
     actionType: "RETURNED_TO_FOLLOW_UP",
-    createdAt: { gte: new Date("2026-09-05T00:00:00.000Z"), lt: new Date("2026-09-06T00:00:00.000Z") },
+    createdAt: { gte: new Date("2026-09-04T17:00:00.000Z"), lt: new Date("2026-09-05T17:00:00.000Z") },
     conversation: { storeId: "store-1", isQa: false, lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null } },
   });
 });
@@ -110,7 +110,22 @@ test("a reply after the reporting boundary is included only in the bounded respo
   assert.equal(result.repliedWithin24Hours.count, 1);
   assert.equal(result.unanswered.count, 0);
   assert.equal(result.medianFirstResponseSeconds, 20 * 60);
-  assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-08-31T00:00:00.000Z"), lt: new Date("2026-09-02T00:00:00.000Z") } });
+  assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-08-30T17:00:00.000Z"), lt: new Date("2026-09-01T17:00:00.000Z") } });
+});
+
+test("uses the Bangkok end boundary and extends the SLA lookup by 24 hours", async () => {
+  const { service, calls } = buildService([
+    conversation("c-bangkok-boundary", "customer-1", "Customer", [
+      message("in-1", "INBOUND", "2026-09-04T16:59:00.000Z"),
+      message("out-1", "OUTBOUND", "2026-09-05T16:58:00.000Z", { senderUserId: "staff-1", senderDisplayName: "Staff One" }),
+    ]),
+  ]);
+
+  const result = await service.getResponsePerformance(user, "store-1", { from: "2026-09-04", to: "2026-09-04" });
+
+  assert.equal(result.repliedWithin24Hours.count, 1);
+  assert.equal(result.medianFirstResponseSeconds, 23 * 60 * 60 + 59 * 60);
+  assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-09-03T17:00:00.000Z"), lt: new Date("2026-09-05T17:00:00.000Z") } });
 });
 
 test("a human reply after 24 hours is replied but not within the 24-hour SLA", async () => {

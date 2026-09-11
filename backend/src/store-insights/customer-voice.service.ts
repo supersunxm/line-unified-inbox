@@ -4,7 +4,7 @@ import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { automaticCatalogAliasesForModel, storedProductAliasSafety } from "../classification/product-catalog";
 import { matchProducts, type MatchableModel } from "../classification/product-matcher";
-import { getOffsetBangkokDateString, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
+import { bangkokDateRangeToUtcBounds, getOffsetBangkokDateString, getTodayBangkokDateString } from "../follower-insights/date-utils";
 import { PrismaService } from "../prisma.service";
 import {
   buildCustomerVoiceAnalysis,
@@ -99,8 +99,7 @@ function parseIsoDate(value: string | undefined, fallback: string): string {
 function period(query: Pick<StoreInsightsQueryDto, "from" | "to"> = {}): PeriodBounds {
   const to = parseIsoDate(query.to, getTodayBangkokDateString());
   const from = parseIsoDate(query.from, getOffsetBangkokDateString(to, -29));
-  const start = toUtcDateForDb(from);
-  const end = toUtcDateForDb(getOffsetBangkokDateString(to, 1));
+  const { startUtc: start, endExclusiveUtc: end } = bangkokDateRangeToUtcBounds(from, to);
   const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
   if (end < start) throw new BadRequestException("to cannot be earlier than from");
   if (days > MAX_PERIOD_DAYS) throw new BadRequestException(`Store 360 date range cannot exceed ${MAX_PERIOD_DAYS} days`);

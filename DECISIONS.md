@@ -2214,3 +2214,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Treat production `20260910120000_add_customer_voice_analytics` as the only expected pending migration. Railway's existing pre-deploy `prisma migrate deploy` may apply it on a future authorized merge; this candidate does not run it against production.
 - Keep Customer Voice worker enablement opt-in and default-off. An empty `ConversationAnalytics` table is a valid initial state, and no automatic backfill or external AI provider is introduced by application startup.
 - The combined candidate was rehearsed against a disposable PostgreSQL 18.6 clone of the production schema and migration ledger. The clone reached 118 applied migrations with TikTok objects preserved; this validates the forward migration procedure without authorizing production execution.
+
+## 2026-09-11: Bangkok calendar boundaries for Store 360 reporting
+
+- Treat Store 360 `from`/`to` values as inclusive Bangkok calendar dates and convert them to a UTC half-open database range: Bangkok midnight at the start of `from`, through Bangkok midnight on the day after `to`.
+- Centralize this contract in `bangkokDateRangeToUtcBounds` and use it for Store Insights, Customer Voice aggregation, comparison periods, and the controlled Customer Voice backfill. Keep `toUtcDateForDb` unchanged because other date-only features may intentionally use UTC-calendar semantics.
+- Continue extending only the response lookup window by 24 hours after the corrected reporting end. This changes timestamp boundaries, not KPI definitions, eligibility scope, or persistence behavior.

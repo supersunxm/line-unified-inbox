@@ -56,6 +56,35 @@ export function toUtcDateForDb(input: string | Date): Date {
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
+export type BangkokDateRangeUtcBounds = {
+  startUtc: Date;
+  endExclusiveUtc: Date;
+};
+
+/**
+ * Converts Bangkok calendar dates into a half-open UTC instant range.
+ *
+ * Store 360 dates are calendar dates in Asia/Bangkok, while persisted message
+ * timestamps represent UTC instants. Bangkok has a fixed UTC+07:00 offset, so
+ * the explicit offset keeps this conversion independent of the host locale.
+ */
+export function bangkokDateRangeToUtcBounds(fromInput: string, toInput: string): BangkokDateRangeUtcBounds {
+  const from = formatToIsoDate(fromInput);
+  const to = formatToIsoDate(toInput);
+  if (to < from) {
+    throw new BadRequestException(`dateTo (${to}) cannot be earlier than dateFrom (${from})`);
+  }
+
+  const endExclusiveDate = getOffsetBangkokDateString(to, 1);
+  const startUtc = new Date(`${from}T00:00:00.000+07:00`);
+  const endExclusiveUtc = new Date(`${endExclusiveDate}T00:00:00.000+07:00`);
+  if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endExclusiveUtc.getTime())) {
+    throw new BadRequestException(`Invalid Bangkok date range: ${from} through ${to}`);
+  }
+
+  return { startUtc, endExclusiveUtc };
+}
+
 export function formatDbDateToIso(date: Date): string {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");

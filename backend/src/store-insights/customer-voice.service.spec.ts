@@ -19,14 +19,14 @@ function buildService(current: unknown[], previous: unknown[] = [], options: { s
       count: async ({ where }: { where: { messages?: { some?: { sentAt?: { gte?: Date; lt?: Date } } } } }) => {
         calls.conversationWheres.push(where);
         const start = where.messages?.some?.sentAt?.gte?.toISOString();
-        return start?.startsWith("2026-09-08") ? 2 : 1;
+        return start?.startsWith("2026-09-07T17:00:00") ? 2 : 1;
       },
     },
     conversationAnalytics: {
       findMany: async ({ where }: { where: { conversation?: { messages?: { some?: { sentAt?: { gte?: Date } } } } } }) => {
         calls.analysisWheres.push(where);
         const start = where.conversation?.messages?.some?.sentAt?.gte?.toISOString();
-        return start?.startsWith("2026-09-08") ? previous : current;
+        return start?.startsWith("2026-09-07T17:00:00") ? previous : current;
       },
     },
   };
