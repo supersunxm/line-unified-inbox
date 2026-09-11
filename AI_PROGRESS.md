@@ -4525,3 +4525,9 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added explicit version-aware eligibility checks for the worker/backfill path: a v1 checkpoint is eligible for intentional v2 processing, an unchanged v2 checkpoint is skipped, and a newer inbound message makes the current-version checkpoint eligible again.
 - The existing compound `(conversationId, analysisVersion)` uniqueness remains unchanged, so v2 reprocessing preserves v1 history and creates/updates the v2 version row. Store Insights and Customer Voice aggregation already filter the current v2 source of truth.
 - Added provenance assertions for v2 persistence, `rules-v2` model metadata, null model provider, and no AI metadata, plus focused versioning tests. No production rows, deployment, worker, AI call, or backfill was performed.
+
+# Current task: Versioned Customer Voice consumer safety gate (2026-09-11)
+
+- Made current Customer Voice aggregation explicitly select at most one `customer-voice-rules-v2` result per conversation, retaining historical rows for audit without allowing v1/v2 double-counting.
+- Added a synthetic v1/v2 dataset regression covering a conversation with both versions, a v1-only historical conversation, and a v2-only conversation. Current coverage is distinct-conversation based and current topic distributions exclude stale v1 rows.
+- Focused versioned-consumer tests pass 16/16; no production rows, deployment, worker enablement, AI call, or backfill was performed.

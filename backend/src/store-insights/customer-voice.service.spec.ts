@@ -4,12 +4,32 @@ import { ForbiddenException } from "@nestjs/common";
 import { CustomerVoiceAnalysisSource } from "@prisma/client";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "./customer-voice-taxonomy";
 import { CustomerVoiceService } from "./customer-voice.service";
+import { selectCurrentCustomerVoiceResults } from "./customer-voice-versioning";
 
 const user = { id: "user-1", email: "user@example.test", displayName: "User", role: "VIEWER", isActive: true } as never;
 
+let analysisId = 0;
+
 function analysis(source: CustomerVoiceAnalysisSource, primaryTopic: string | null, secondaryTopics: string[] = [], intent: string | null = null, productMentions: string[] = [], confidence: number | null = 0.85, modelProvider: string | null = null) {
-  return { source, primaryTopic, secondaryTopics, intent, productMentions, confidence, modelProvider };
+  analysisId++;
+  return { conversationId: `conversation-${analysisId}`, analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, source, primaryTopic, secondaryTopics, intent, productMentions, confidence, modelProvider };
 }
+
+test("current-version selection counts a versioned conversation once and excludes stale rows", () => {
+  const rows = [
+    { conversationId: "conversation-a", analysisVersion: "customer-voice-rules-v1", primaryTopic: "Price Inquiry" },
+    { conversationId: "conversation-a", analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, primaryTopic: "Installment / Payment" },
+    { conversationId: "conversation-b", analysisVersion: "customer-voice-rules-v1", primaryTopic: "Complaint" },
+    { conversationId: "conversation-c", analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, primaryTopic: "Product Information" },
+  ];
+  const current = selectCurrentCustomerVoiceResults(rows, CUSTOMER_VOICE_ANALYSIS_VERSION);
+  assert.deepEqual(current.map(({ conversationId, primaryTopic }) => ({ conversationId, primaryTopic })), [
+    { conversationId: "conversation-a", primaryTopic: "Installment / Payment" },
+    { conversationId: "conversation-c", primaryTopic: "Product Information" },
+  ]);
+  assert.equal(current.length, 2);
+  assert.equal(new Set(current.map(({ conversationId }) => conversationId)).size, 2);
+});
 
 function buildService(current: unknown[], previous: unknown[] = [], options: { storeExists?: boolean; assertAccess?: () => Promise<void> } = {}) {
   const calls: { conversationWheres: unknown[]; analysisWheres: unknown[] } = { conversationWheres: [], analysisWheres: [] };

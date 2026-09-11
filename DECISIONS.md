@@ -2241,3 +2241,8 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - `customer-voice-rules-v1` identifies the original 25-row pilot output. The refined deterministic ruleset is explicitly `customer-voice-rules-v2`; historical rows are not renamed or overwritten.
 - Version-aware worker/backfill selection considers only the deployed current version for normal idempotency. A v1-only conversation is therefore eligible for an intentional v2 reprocess, while an unchanged v2 checkpoint is skipped unless a newer inbound message exists.
 - Keep the existing `(conversationId, analysisVersion)` uniqueness model. It intentionally retains v1 and v2 provenance as separate version rows during reprocessing; no schema migration or destructive cleanup is required. Store Insights and Customer Voice aggregation consume the current v2 version.
+
+## 2026-09-11: Version-safe current Customer Voice aggregation
+
+- Current Store 360 reporting must select the deployed analysis version and deduplicate by conversation before calculating coverage or distributions. Historical v1 rows remain queryable for audit but are excluded from current aggregates once v2 exists.
+- The selector is explicit in application code and covered by a synthetic mixed-version regression test; raw `ConversationAnalytics` row counts are not treated as analyzed-conversation counts.

@@ -16,6 +16,7 @@ import {
   canonicalizeCustomerVoiceTopic,
   type CustomerVoiceTopic,
 } from "./customer-voice-taxonomy";
+import { selectCurrentCustomerVoiceResults } from "./customer-voice-versioning";
 import type { StoreInsightsQueryDto, StoreInsightsPeriod } from "./store-insights.types";
 
 const MAX_PERIOD_DAYS = 90;
@@ -24,6 +25,8 @@ const TIMEZONE = "Asia/Bangkok" as const;
 type PeriodBounds = StoreInsightsPeriod & { start: Date; end: Date };
 
 type CustomerVoiceAnalysisRow = {
+  conversationId: string;
+  analysisVersion: string;
   source: CustomerVoiceAnalysisSource;
   primaryTopic: string | null;
   secondaryTopics: string[];
@@ -212,7 +215,7 @@ function coverageFor(rows: CustomerVoiceAnalysisRow[], totalConversations: numbe
   };
 }
 
-function toRow(row: { source: CustomerVoiceAnalysisSource; primaryTopic: string | null; secondaryTopics: string[]; intent: CustomerVoiceIntent | null; productMentions: string[]; confidence: number | null; modelProvider?: string | null }): CustomerVoiceAnalysisRow {
+function toRow(row: { conversationId: string; analysisVersion: string; source: CustomerVoiceAnalysisSource; primaryTopic: string | null; secondaryTopics: string[]; intent: CustomerVoiceIntent | null; productMentions: string[]; confidence: number | null; modelProvider?: string | null }): CustomerVoiceAnalysisRow {
   return row;
 }
 
@@ -334,15 +337,15 @@ export class CustomerVoiceService {
       this.prisma.conversation.count({ where: currentWhere }),
       this.prisma.conversationAnalytics.findMany({
         where: currentAnalysisWhere,
-        select: { source: true, primaryTopic: true, secondaryTopics: true, intent: true, productMentions: true, confidence: true, modelProvider: true },
+        select: { conversationId: true, analysisVersion: true, source: true, primaryTopic: true, secondaryTopics: true, intent: true, productMentions: true, confidence: true, modelProvider: true },
       }),
       comparisonPeriod ? this.prisma.conversationAnalytics.findMany({
         where: { storeId, analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, conversation: eligibleConversationWhere(storeId, comparisonPeriod) },
-        select: { source: true, primaryTopic: true, secondaryTopics: true, intent: true, productMentions: true, confidence: true, modelProvider: true },
+        select: { conversationId: true, analysisVersion: true, source: true, primaryTopic: true, secondaryTopics: true, intent: true, productMentions: true, confidence: true, modelProvider: true },
       }) : Promise.resolve([]),
     ]);
-    const currentRows = rows.map(toRow);
-    const priorRows = comparisonPeriod ? previousRows.map(toRow) : null;
+    const currentRows = selectCurrentCustomerVoiceResults(rows, CUSTOMER_VOICE_ANALYSIS_VERSION).map(toRow);
+    const priorRows = comparisonPeriod ? selectCurrentCustomerVoiceResults(previousRows, CUSTOMER_VOICE_ANALYSIS_VERSION).map(toRow) : null;
     const ranked = aggregateCounts(currentRows, totalConversations, priorRows);
     this.logger.debug(`Customer Voice read store=${storeId} conversations=${totalConversations} analyses=${currentRows.length}`);
     return {
