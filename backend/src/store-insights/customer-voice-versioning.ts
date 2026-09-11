@@ -5,8 +5,9 @@ export type CustomerVoiceAnalysisCheckpoint = {
 
 /**
  * A checkpoint is current only when its version matches the deployed ruleset.
- * This deliberately allows v1 rows to be reprocessed into v2 while keeping
- * repeated v2 runs idempotent until a newer inbound message arrives.
+ * This deliberately allows historical rows to be reprocessed into the current
+ * ruleset while keeping repeated current-version runs idempotent until a newer
+ * inbound message arrives.
  */
 export function shouldAnalyzeCustomerVoiceConversation(
   latestInboundMessageAt: Date | null | undefined,
