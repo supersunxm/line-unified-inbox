@@ -4,7 +4,7 @@
 - Generate workbook rows from the existing Store 360 snapshot and helper methods so response, sales, follower, human responder, Bangkok-boundary, and current Customer Voice semantics remain aligned with the dashboard. Query only `CUSTOMER_VOICE_ANALYSIS_VERSION` for the export; historical v1/v2 rows are not included in the normal export.
 - Keep the export analytics-safe: do not write to `ConversationAnalytics` or any other table, do not include customer/LINE/phone identifiers, raw message text, webhook payloads, or secrets, and use a short one-way hash as the conversation reference.
 - The Store 360 UI keeps its dashboard picker single-select but opens an export dialog scoped to the already authorized store payload. The current dashboard store is selected by default, with bounded multi-select for the controlled pilot.
-- The export candidate was reconciled after fetching latest `origin/main` (`d28fa662…`): checkpoint `d64d07c` cherry-picked cleanly, and the final unpushed candidate is `1713f5f` on `feat/store-360-export`. Push only this feature branch; do not merge or deploy from this task.
+- The export candidate was reconciled after fetching latest `origin/main` (`d28fa662…`): checkpoint `d64d07c` cherry-picked cleanly, and the final feature commit is `9ba01ba` on `feat/store-360-export`, pushed only to that feature branch. Do not merge or deploy from this task.
 
 # Architecture & Design Decisions
 
