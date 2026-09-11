@@ -12,6 +12,7 @@ import { useAppLanguage } from "../language";
 import { StoreSearchCombobox } from "./store-search-combobox";
 import { CustomerVoicePanel } from "./customer-voice-panel";
 import { resolveAuthorizedStoreId, withStore360Timeout } from "./store-360-bootstrap";
+import { Store360ExportControl } from "./store-360-export-control";
 
 type Preset = "7d" | "30d" | "month" | "custom";
 type ComparisonMode = "previous" | "none";
@@ -350,7 +351,7 @@ export function Store360View() {
           <section className={`${surfaceClass()} overflow-hidden p-5 sm:p-6`}>
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div className="min-w-0"><div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--app-accent)]">Store 360</div><h1 className="mt-1 truncate text-2xl font-bold tracking-[-0.03em] text-[var(--app-text-primary)]">{summary.store.name}</h1><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-secondary)]"><span>Store ID: {summary.store.externalStoreId || summary.store.code || summary.store.id}</span>{summary.store.province && <span>{summary.store.province}</span>}<span>{summary.store.lineOas.length ? `${summary.store.lineOas.length} LINE OA${summary.store.lineOas.length === 1 ? "" : "s"}` : "No LINE OA data"}</span></div></div>
-              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto"><span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success-soft)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--app-success)]"><span className="h-1.5 w-1.5 rounded-full bg-current" />{summary.store.lineOas.some((oa) => oa.connectionStatus === "CONNECTED" || oa.connectionStatus === "READY") ? "Connected" : "No data available"}</span><StoreSearchCombobox stores={stores} selectedStoreId={activeStoreId} onSelect={selectStore} /></div>
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto"><span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success-soft)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--app-success)]"><span className="h-1.5 w-1.5 rounded-full bg-current" />{summary.store.lineOas.some((oa) => oa.connectionStatus === "CONNECTED" || oa.connectionStatus === "READY") ? "Connected" : "No data available"}</span><StoreSearchCombobox stores={stores} selectedStoreId={activeStoreId} onSelect={selectStore} /><Store360ExportControl stores={stores} selectedStoreId={activeStoreId} startDate={from} endDate={to} language={language} /></div>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--app-border-subtle)] pt-4">
               <label className="flex items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]">Date range <select value={preset} onChange={(event) => selectPreset(event.target.value as Preset)} className="h-9 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs text-[var(--app-text-primary)]"><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="month">This Month</option><option value="custom">Custom</option></select></label>

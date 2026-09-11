@@ -1,7 +1,9 @@
 import { Transform } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, Min, Matches } from "class-validator";
+import { ArrayMaxSize, ArrayNotEmpty, ArrayUnique, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, Matches } from "class-validator";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export const STORE_INSIGHTS_EXPORT_MAX_STORES = 10;
 
 export class StoreInsightsQueryDto {
   @IsOptional()
@@ -53,6 +55,28 @@ export class StoreInsightsQueryDto {
   @Min(1)
   @Max(100)
   pageSize?: number;
+}
+
+export class StoreInsightsExportDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @ArrayMaxSize(STORE_INSIGHTS_EXPORT_MAX_STORES)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  storeIds!: string[];
+
+  @IsString()
+  @Matches(ISO_DATE_PATTERN)
+  startDate!: string;
+
+  @IsString()
+  @Matches(ISO_DATE_PATTERN)
+  endDate!: string;
+
+  @IsOptional()
+  @IsIn(["Asia/Bangkok"])
+  timezone?: string;
 }
 
 export type StoreInsightsPeriod = {

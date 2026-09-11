@@ -1,12 +1,22 @@
-import { Controller, Get, Param, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, Res } from "@nestjs/common";
+import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.guard";
-import { StoreInsightsQueryDto } from "./store-insights.types";
+import { StoreInsightsExportDto, StoreInsightsQueryDto } from "./store-insights.types";
 import { CustomerVoiceService } from "./customer-voice.service";
 import { StoreInsightsService } from "./store-insights.service";
 
 @Controller("store-insights")
 export class StoreInsightsController {
   constructor(private readonly storeInsights: StoreInsightsService, private readonly customerVoice: CustomerVoiceService) {}
+
+  @Post("export")
+  async export(@Req() request: AuthRequest, @Body() dto: StoreInsightsExportDto, @Res() response: Response) {
+    const result = await this.storeInsights.export(request.user!, dto);
+    response.setHeader("Content-Type", result.contentType);
+    response.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    response.setHeader("Content-Length", result.buffer.length);
+    response.end(result.buffer);
+  }
 
   @Get(":storeId/summary")
   summary(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsQueryDto) {

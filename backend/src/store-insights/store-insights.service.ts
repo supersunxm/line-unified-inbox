@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, Prisma } from "@prisma/client";
+import ExcelJS from "exceljs";
+import { createHash } from "node:crypto";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { bangkokDateRangeToUtcBounds, getOffsetBangkokDateString, getTodayBangkokDateString } from "../follower-insights/date-utils";
 import { PrismaService } from "../prisma.service";
-import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "./customer-voice-taxonomy";
+import { isUsableCustomerVoiceAnalysis } from "./customer-voice-analyzer";
+import { CUSTOMER_VOICE_ANALYSIS_VERSION, type CustomerVoiceTopic } from "./customer-voice-taxonomy";
 import {
   StoreInsightsConversation,
+  StoreInsightsExportDto,
   StoreInsightsFollowers,
   StoreInsightsPeriod,
   StoreInsightsQueryDto,
@@ -14,11 +18,13 @@ import {
   StoreInsightsResponder,
   StoreInsightsSales,
   StoreInsightsStore,
+  STORE_INSIGHTS_EXPORT_MAX_STORES,
 } from "./store-insights.types";
 
 export const STORE_INSIGHTS_TIMEZONE = "Asia/Bangkok" as const;
 export const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 const MAX_PERIOD_DAYS = 90;
+const MAX_EXPORT_CONVERSATIONS = 100_000;
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 const RESPONSE_EVALUATION_WINDOW_MS = 24 * HOUR * 1000;
@@ -52,17 +58,32 @@ const conversationSelect = {
   salesProducts: {
     select: {
       customProductName: true,
-      productModel: { select: { id: true, name: true } },
+      productModel: { select: { id: true, name: true, productSeries: { select: { name: true } } } },
     },
   },
   products: {
     where: { source: "MANUAL" },
-    select: {
-      productModel: { select: { id: true, name: true } },
-    },
+    select: { productModel: { select: { id: true, name: true, productSeries: { select: { name: true } } } } },
   },
   topics: {
     select: { topic: { select: { name: true } } },
+  },
+  customerVoiceAnalyses: {
+    where: { analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION },
+    select: {
+      analysisVersion: true,
+      source: true,
+      primaryTopic: true,
+      secondaryTopics: true,
+      intent: true,
+      productMentions: true,
+      confidence: true,
+      inputMessageCount: true,
+      lastAnalyzedMessageAt: true,
+      processedAt: true,
+      modelProvider: true,
+      modelName: true,
+    },
   },
 } satisfies Prisma.ConversationSelect;
 
@@ -104,6 +125,10 @@ type StoreSnapshot = {
   inboundMessages: MessageRow[];
   followUpsByUserId: Map<string, number>;
 };
+
+type ExportCell = string | number | boolean | null;
+type ExportRow = Record<string, ExportCell>;
+type CurrentCustomerVoiceAnalysis = ConversationRow["customerVoiceAnalyses"][number];
 
 function effectiveSenderName(message: MessageRow): string | null {
   return message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
@@ -171,10 +196,39 @@ function conversationSalesInfo(conversation: ConversationRow): SalesInfo {
 }
 
 function formatTopics(conversation: ConversationRow): string | null {
-  const names = [...new Set(conversation.topics.map((item) => item.topic.name.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  const names = topicNames(conversation);
   if (names.length === 0) return null;
   if (names.length <= 2) return names.join(", ");
   return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+}
+
+function topicNames(conversation: ConversationRow): string[] {
+  return [...new Set(conversation.topics.map((item) => item.topic.name.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+}
+
+function safeStoreId(store: StoreInsightsStore): string {
+  return store.externalStoreId?.trim() || store.code?.trim() || store.id;
+}
+
+function conversationReference(conversationId: string): string {
+  return `conv_${createHash("sha256").update(conversationId).digest("hex").slice(0, 16)}`;
+}
+
+function safeFilenamePart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "store";
+}
+
+function worksheetColumnWidth(values: Array<string | number | boolean | null>, header: string): number {
+  const longest = values.reduce<number>((max, value) => Math.max(max, value === null ? 0 : String(value).length), header.length);
+  return Math.min(60, Math.max(12, longest + 3));
+}
+
+function isClassifiedCustomerVoiceAnalysis(analysis: { primaryTopic: string | null; intent: CurrentCustomerVoiceAnalysis["intent"]; productMentions: string[] }): boolean {
+  return isUsableCustomerVoiceAnalysis({
+    primaryTopic: analysis.primaryTopic as CustomerVoiceTopic | null,
+    intent: analysis.intent,
+    productMentions: analysis.productMentions,
+  });
 }
 
 function buildResponseCases(conversations: ConversationRow[], period: Pick<PeriodBounds, "start" | "end">): {
@@ -515,5 +569,210 @@ export class StoreInsightsService {
   async getConversations(user: AuthUser, storeId: string, query: StoreInsightsQueryDto = {}) {
     const snapshot = await this.getSnapshot(user, storeId, query);
     return { storeId, period: snapshot.period, ...this.conversations(snapshot, query) };
+  }
+
+  private currentCustomerVoiceAnalysis(conversation: ConversationRow): CurrentCustomerVoiceAnalysis | null {
+    return conversation.customerVoiceAnalyses.find(({ analysisVersion }) => analysisVersion === CUSTOMER_VOICE_ANALYSIS_VERSION) ?? null;
+  }
+
+  private customerVoiceExportCoverage(snapshot: StoreSnapshot) {
+    const analyses = snapshot.conversations.flatMap((conversation) => {
+      const analysis = this.currentCustomerVoiceAnalysis(conversation);
+      return analysis ? [analysis] : [];
+    });
+    const classified = analyses.filter(isClassifiedCustomerVoiceAnalysis).length;
+    const eligible = snapshot.conversations.length;
+    return {
+      eligible,
+      analyzed: analyses.length,
+      classified,
+      coverage: eligible > 0 ? classified / eligible : 0,
+    };
+  }
+
+  private exportSummaryRow(snapshot: StoreSnapshot): ExportRow {
+    const performance = this.responsePerformance(snapshot);
+    const sales = this.sales(snapshot);
+    const customerVoice = this.customerVoiceExportCoverage(snapshot);
+    return {
+      "Store ID": safeStoreId(snapshot.store),
+      "Store Name": snapshot.store.name,
+      "Reporting Start Date": snapshot.period.from,
+      "Reporting End Date": snapshot.period.to,
+      "Eligible Customers": sales.totalCustomers,
+      "Inbound Messages": performance.totalInboundMessages,
+      Followers: snapshot.followers.current,
+      "Follower Change": snapshot.followers.growth,
+      "Replied Within 24h": performance.repliedWithin24Hours.count,
+      "Reply Rate": performance.repliedWithin24Hours.percentage,
+      "Median First Response": performance.medianFirstResponseSeconds,
+      Unanswered: performance.unanswered.count,
+      "Sales Tagged Customers": sales.salesTaggedCustomers,
+      "Customer Voice Eligible": customerVoice.eligible,
+      "Customer Voice Analyzed": customerVoice.analyzed,
+      "Customer Voice Classified": customerVoice.classified,
+      "Customer Voice Coverage": customerVoice.coverage,
+      "Current Analysis Version": CUSTOMER_VOICE_ANALYSIS_VERSION,
+    };
+  }
+
+  private exportConversationRows(snapshot: StoreSnapshot): ExportRow[] {
+    const caseByConversation = new Map(snapshot.cases.map((responseCase) => [responseCase.conversationId, responseCase]));
+    const storeId = safeStoreId(snapshot.store);
+    return snapshot.conversations.map((conversation) => {
+      const responseCase = caseByConversation.get(conversation.id);
+      const sales = snapshot.salesByConversation.get(conversation.id)!;
+      const analysis = this.currentCustomerVoiceAnalysis(conversation);
+      const inbound = conversation.messages.filter((message) => message.direction === MessageDirection.INBOUND && message.sentAt >= snapshot.period.start && message.sentAt < snapshot.period.end);
+      const humanOutboundCount = conversation.messages.filter((message) => isHumanOutbound(message) && message.sentAt >= snapshot.period.start && message.sentAt < snapshot.period.end).length;
+      const productSalesInformation = [
+        sales.productNames.join(", ") || null,
+        sales.paymentMethod ? `Payment: ${sales.paymentMethod}` : null,
+      ].filter((value): value is string => Boolean(value)).join(" | ") || null;
+      return {
+        "Store ID": storeId,
+        "Store Name": snapshot.store.name,
+        "Conversation Reference": conversationReference(conversation.id),
+        "First Activity Date": inbound[0] ? formatDateTime(inbound[0].sentAt) : null,
+        "Last Activity Date": formatDateTime(conversation.latestMessageAt),
+        "Inbound Message Count": inbound.length,
+        "Outbound Human Message Count": humanOutboundCount,
+        Replied: responseCase?.durationSeconds !== null && responseCase?.durationSeconds !== undefined,
+        "Replied Within 24h": responseCase?.durationSeconds !== null && responseCase?.durationSeconds !== undefined
+          ? responseCase.durationSeconds <= 24 * HOUR
+          : false,
+        "First Response Seconds": responseCase?.durationSeconds ?? null,
+        Responder: responseCase?.responderName ?? null,
+        "Sales Status": conversation.customerSalesStatus,
+        "Product Sales Information": productSalesInformation,
+        "Existing Topic": topicNames(conversation).join(", ") || null,
+        "Current Customer Voice Primary Topic": analysis?.primaryTopic ?? null,
+        "Current Customer Voice Intent": analysis?.intent ?? null,
+        "Current Customer Voice Analysis Version": analysis?.analysisVersion ?? null,
+        "Customer Voice Classified / Unclassified": analysis && isClassifiedCustomerVoiceAnalysis(analysis) ? "CLASSIFIED" : "UNCLASSIFIED",
+      };
+    });
+  }
+
+  private exportCustomerVoiceRows(snapshot: StoreSnapshot): ExportRow[] {
+    const storeId = safeStoreId(snapshot.store);
+    return snapshot.conversations.flatMap((conversation) => {
+      const analysis = this.currentCustomerVoiceAnalysis(conversation);
+      if (!analysis) return [];
+      const productFamilies = [...new Set([
+        ...conversation.salesProducts.map((product) => product.productModel.productSeries.name),
+        ...conversation.products.map((product) => product.productModel.productSeries.name),
+      ].filter(Boolean))];
+      return [{
+        "Store ID": storeId,
+        "Store Name": snapshot.store.name,
+        "Conversation Reference": conversationReference(conversation.id),
+        "Analysis Version": analysis.analysisVersion,
+        "Source / Provenance": [analysis.source, analysis.modelProvider, analysis.modelName].filter(Boolean).join(" / "),
+        "Primary Topic": analysis.primaryTopic,
+        "Secondary Topics": analysis.secondaryTopics.join(", ") || null,
+        Intent: analysis.intent,
+        "Product Mentions": analysis.productMentions.join(", ") || null,
+        "Product Family": productFamilies.join(", ") || null,
+        "Exact Product Model if recognized": analysis.productMentions.join(", ") || null,
+        Confidence: analysis.confidence,
+        "Classified / Unclassified": isClassifiedCustomerVoiceAnalysis(analysis) ? "CLASSIFIED" : "UNCLASSIFIED",
+        "Message Count Used": analysis.inputMessageCount,
+        "Last Analyzed At": analysis.processedAt ? formatDateTime(analysis.processedAt) : null,
+      }];
+    });
+  }
+
+  private exportResponderRows(snapshot: StoreSnapshot): ExportRow[] {
+    const existingResponders = this.responders(snapshot);
+    const responderById = new Map(existingResponders.map((responder) => [responder.id, responder]));
+    const repliesByResponder = new Map<string, { displayName: string; replies: number }>();
+    for (const conversation of snapshot.conversations) {
+      for (const message of conversation.messages) {
+        if (!isHumanOutbound(message) || message.sentAt < snapshot.period.start || message.sentAt >= snapshot.period.end || !message.senderUserId) continue;
+        const current = repliesByResponder.get(message.senderUserId) ?? { displayName: effectiveSenderName(message) ?? "Staff", replies: 0 };
+        current.replies++;
+        if (current.displayName === "Staff" && effectiveSenderName(message)) current.displayName = effectiveSenderName(message)!;
+        repliesByResponder.set(message.senderUserId, current);
+      }
+    }
+    const responderIds = new Set([...responderById.keys(), ...repliesByResponder.keys()]);
+    const totalHumanReplies = [...repliesByResponder.values()].reduce((sum, responder) => sum + responder.replies, 0);
+    const storeId = safeStoreId(snapshot.store);
+    return [...responderIds]
+      .map((id) => {
+        const responder = responderById.get(id);
+        const replyData = repliesByResponder.get(id);
+        const replies = replyData?.replies ?? 0;
+        return {
+          "Store ID": storeId,
+          "Store Name": snapshot.store.name,
+          Responder: responder?.displayName ?? replyData?.displayName ?? "Staff",
+          "Conversations Replied": responder?.conversationsHandled ?? 0,
+          Replies: replies,
+          "Median First Response Seconds": responder?.medianResponseSeconds ?? null,
+          "Share of Human Replies": totalHumanReplies > 0 ? replies / totalHumanReplies : null,
+        };
+      })
+      .sort((left, right) => String(left.Responder).localeCompare(String(right.Responder)));
+  }
+
+  private addExportWorksheet(workbook: ExcelJS.Workbook, name: string, headers: string[], rows: ExportRow[]) {
+    const worksheet = workbook.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
+    worksheet.columns = headers.map((header) => ({
+      header,
+      key: header,
+      width: worksheetColumnWidth(rows.map((row) => row[header]), header),
+    }));
+    worksheet.getRow(1).font = { bold: true };
+    for (const row of rows) {
+      const addedRow = worksheet.addRow(row);
+      for (const header of ["Reply Rate", "Customer Voice Coverage", "Share of Human Replies"]) {
+        const columnIndex = headers.indexOf(header);
+        if (columnIndex < 0) continue;
+        const cell = addedRow.getCell(columnIndex + 1);
+        if (typeof cell.value === "number") cell.numFmt = "0.0%";
+      }
+    }
+    if (rows.length > 0) worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length + 1, column: headers.length } };
+    return worksheet;
+  }
+
+  async export(user: AuthUser, dto: StoreInsightsExportDto) {
+    const storeIds = dto.storeIds.map((storeId) => storeId.trim());
+    if (storeIds.length === 0 || storeIds.some((storeId) => !storeId)) throw new BadRequestException("At least one store ID is required");
+    if (new Set(storeIds).size !== storeIds.length) throw new BadRequestException("Duplicate store IDs are not allowed");
+    if (storeIds.length > STORE_INSIGHTS_EXPORT_MAX_STORES) throw new BadRequestException(`Store 360 export supports at most ${STORE_INSIGHTS_EXPORT_MAX_STORES} stores per request`);
+    if (dto.timezone && dto.timezone !== STORE_INSIGHTS_TIMEZONE) throw new BadRequestException(`Store 360 export only supports ${STORE_INSIGHTS_TIMEZONE}`);
+
+    // Authorize the complete requested set before reading any analytics data.
+    await Promise.all(storeIds.map((storeId) => this.storeAccess.assertStoreAccess(user, storeId)));
+    const query: StoreInsightsQueryDto = { from: dto.startDate, to: dto.endDate };
+    const snapshots = await Promise.all(storeIds.map((storeId) => this.getSnapshot(user, storeId, query)));
+    const conversationCount = snapshots.reduce((total, snapshot) => total + snapshot.conversations.length, 0);
+    if (conversationCount > MAX_EXPORT_CONVERSATIONS) {
+      throw new BadRequestException(`Store 360 export is too large (${conversationCount.toLocaleString()} conversations); narrow the date range or export fewer stores`);
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "OPPO LINE OA Monitor Store 360";
+    workbook.created = new Date();
+    const summaryHeaders = ["Store ID", "Store Name", "Reporting Start Date", "Reporting End Date", "Eligible Customers", "Inbound Messages", "Followers", "Follower Change", "Replied Within 24h", "Reply Rate", "Median First Response", "Unanswered", "Sales Tagged Customers", "Customer Voice Eligible", "Customer Voice Analyzed", "Customer Voice Classified", "Customer Voice Coverage", "Current Analysis Version"];
+    const conversationHeaders = ["Store ID", "Store Name", "Conversation Reference", "First Activity Date", "Last Activity Date", "Inbound Message Count", "Outbound Human Message Count", "Replied", "Replied Within 24h", "First Response Seconds", "Responder", "Sales Status", "Product Sales Information", "Existing Topic", "Current Customer Voice Primary Topic", "Current Customer Voice Intent", "Current Customer Voice Analysis Version", "Customer Voice Classified / Unclassified"];
+    const customerVoiceHeaders = ["Store ID", "Store Name", "Conversation Reference", "Analysis Version", "Source / Provenance", "Primary Topic", "Secondary Topics", "Intent", "Product Mentions", "Product Family", "Exact Product Model if recognized", "Confidence", "Classified / Unclassified", "Message Count Used", "Last Analyzed At"];
+    const responderHeaders = ["Store ID", "Store Name", "Responder", "Conversations Replied", "Replies", "Median First Response Seconds", "Share of Human Replies"];
+    this.addExportWorksheet(workbook, "Summary", summaryHeaders, snapshots.map((snapshot) => this.exportSummaryRow(snapshot)));
+    this.addExportWorksheet(workbook, "Conversations", conversationHeaders, snapshots.flatMap((snapshot) => this.exportConversationRows(snapshot)));
+    this.addExportWorksheet(workbook, "Customer Voice", customerVoiceHeaders, snapshots.flatMap((snapshot) => this.exportCustomerVoiceRows(snapshot)));
+    this.addExportWorksheet(workbook, "Responders", responderHeaders, snapshots.flatMap((snapshot) => this.exportResponderRows(snapshot)));
+
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+    const storePart = snapshots.length === 1 ? safeFilenamePart(safeStoreId(snapshots[0].store)) : "multi";
+    const datePart = `${snapshots[0].period.from.replaceAll("-", "")}-${snapshots[0].period.to.replaceAll("-", "")}`;
+    return {
+      buffer,
+      filename: `store-360_${storePart}_${datePart}.xlsx`,
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
   }
 }
