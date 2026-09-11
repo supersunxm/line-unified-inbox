@@ -16,6 +16,10 @@ const input = {
   },
 };
 
+const managerDeliveryNotVerifiedError = new Error(
+  "ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ",
+);
+
 test("pilot-aware transport returns manager relay result without calling Push API", async () => {
   const relayCalls: unknown[] = [];
   const relay = {
@@ -86,4 +90,43 @@ test("pilot relay failure fails closed and never falls back to Push API", async 
   } finally {
     LineMessagingService.prototype.pushText = original;
   }
+});
+
+test("Central World persists a Manager send when only post-send DOM verification is inconclusive", async () => {
+  const relay = { relayText: async () => { throw managerDeliveryNotVerifiedError; } };
+  const service = new PilotAwareLineMessagingService(relay as any);
+  const original = LineMessagingService.prototype.pushText;
+  let pushCalls = 0;
+  LineMessagingService.prototype.pushText = async () => {
+    pushCalls += 1;
+    throw new Error("Push API must not be used for the Central World recovery path");
+  };
+  try {
+    const result = await service.pushText({
+      ...input,
+      context: {
+        conversationId: "conv-central-world",
+        storeId: "central-world-store-id",
+        storeName: "OPPO Central World",
+      },
+    });
+    assert.equal(pushCalls, 0);
+    assert.equal(result.requestId, null);
+    assert.equal(result.externalMessageId, null);
+    assert.equal(result.duplicateAccepted, false);
+  } finally {
+    LineMessagingService.prototype.pushText = original;
+  }
+});
+
+test("the Manager verification recovery remains isolated to Central World", async () => {
+  const relay = { relayText: async () => { throw managerDeliveryNotVerifiedError; } };
+  const service = new PilotAwareLineMessagingService(relay as any);
+  await assert.rejects(
+    () => service.pushText({
+      ...input,
+      context: { ...input.context, storeName: "OPPO Bangkapi" },
+    }),
+    /ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้/,
+  );
 });
