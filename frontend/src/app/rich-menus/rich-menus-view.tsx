@@ -143,6 +143,13 @@ function getAreaLetter(index: number): string {
   return String.fromCharCode(65 + index); // A, B, C, D, ...
 }
 
+function getReadinessReasons(store: RichMenuStoreReadinessItem): string[] {
+  if (Array.isArray(store.readinessReasons) && store.readinessReasons.length > 0) {
+    return store.readinessReasons;
+  }
+  return store.readinessReason ? [store.readinessReason] : [];
+}
+
 export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenusViewProps) {
   const t = RICH_MENU_I18N[language] || RICH_MENU_I18N.th;
 
@@ -290,10 +297,14 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   };
 
   // Target Stores selected for bulk publish
-  const maxTargets = capabilities?.maxTargets || 5;
   const publishTargetItems = useMemo(() => {
     if (!readinessData?.items) return [];
-    return readinessData.items.filter((i) => publishSelectedOaIds.has(i.lineOfficialAccountId));
+    return readinessData.items.filter(
+      (i) =>
+        publishSelectedOaIds.has(i.lineOfficialAccountId) &&
+        i.readinessStatus === "READY" &&
+        !i.isCurrentVersionPublished,
+    );
   }, [publishSelectedOaIds, readinessData]);
 
   const isPublishEligible = Boolean(
@@ -301,8 +312,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       selectedTemplateId &&
       selectedTemplateId !== "new" &&
       formImageUrl &&
-      publishSelectedOaIds.size > 0 &&
-      publishSelectedOaIds.size <= maxTargets &&
+      publishTargetItems.length > 0 &&
       capabilities?.workerReady !== false,
   );
 
@@ -391,6 +401,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     try {
       const data = await api.getRichMenuReadiness(templateId);
       setReadinessData(data);
+      const eligibleIds = new Set(
+        data.items
+          .filter((item) => item.readinessStatus === "READY" && !item.isCurrentVersionPublished)
+          .map((item) => item.lineOfficialAccountId),
+      );
+      setPublishSelectedOaIds((previous) => new Set([...previous].filter((id) => eligibleIds.has(id))));
 
       const defaultPreview = data.items.find((i) => i.readinessStatus === "READY") || data.items[0];
       if (defaultPreview) {
@@ -538,10 +554,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       if (next.has(oaId)) {
         next.delete(oaId);
       } else {
-        if (next.size >= maxTargets) {
-          setSaveMessage({ type: "error", text: t.exceededMaxTargets(maxTargets) });
-          return prev;
-        }
         next.add(oaId);
       }
       return next;
@@ -552,7 +564,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     if (!readinessData) return;
     const readyIds = readinessData.items
       .filter((item) => item.readinessStatus === "READY" && !item.isCurrentVersionPublished)
-      .slice(0, maxTargets)
       .map((item) => item.lineOfficialAccountId);
     setPublishSelectedOaIds(new Set(readyIds));
   };
@@ -568,7 +579,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setPublishing(true);
     setPublishError(null);
     try {
-      const targetIds = Array.from(publishSelectedOaIds);
+      const targetIds = publishTargetItems.map((item) => item.lineOfficialAccountId);
+      if (targetIds.length === 0) return;
       const job = await api.publishBulkRichMenu(selectedTemplateId, targetIds);
       setActiveJob(job);
       setIsBulkPublishModalOpen(false);
@@ -724,8 +736,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 title={
                   publishSelectedOaIds.size === 0
                     ? t.selectSingleStoreToPublish
-                    : publishSelectedOaIds.size > maxTargets
-                    ? t.exceededMaxTargets(maxTargets)
                     : !formImageUrl
                     ? t.uploadImageFirst
                     : !selectedTemplateId || selectedTemplateId === "new"
@@ -1601,7 +1611,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
             <div className="flex items-center gap-3 text-xs">
               <span className="font-semibold text-gray-700 dark:text-gray-300">
-                {t.publishSelectionCount(publishSelectedOaIds.size, maxTargets)}
+                {t.publishSelectionCount(publishSelectedOaIds.size)}
               </span>
               <span className="text-gray-300">|</span>
               <button
@@ -1609,7 +1619,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 onClick={handleSelectAllReadyForPublish}
                 className="font-semibold text-[#06C755] hover:underline"
               >
-                {t.selectAllReadyMax(maxTargets)}
+                {t.selectAllReady}
               </button>
               <span className="text-gray-300">|</span>
               <button
@@ -1654,6 +1664,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                     const isPublishSelected = publishSelectedOaIds.has(store.lineOfficialAccountId);
                     const isBlocked = store.readinessStatus === "BLOCKED";
                     const isCurrentPublished = store.isCurrentVersionPublished;
+                    const readinessReasons = getReadinessReasons(store);
 
                     return (
                       <tr
@@ -1710,14 +1721,15 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                             >
                               {isBlocked ? t.statusBlocked : t.statusReady}
                             </span>
-                            {isBlocked && store.readinessReason && (
-                              <span className="text-[10px] text-rose-500 leading-tight mt-0.5">
-                                {store.readinessReason === "Missing Google Maps URL"
-                                  ? t.missingGoogleMapsReason
-                                  : store.readinessReason === "Invalid Google Maps URL"
-                                  ? t.invalidGoogleMapsReason
-                                  : store.readinessReason}
-                              </span>
+                            {isBlocked && readinessReasons.length > 0 && (
+                              <ul
+                                className="mt-0.5 list-disc pl-3 text-[10px] leading-tight text-rose-500 whitespace-pre-wrap break-words"
+                                title={readinessReasons.join("\n")}
+                              >
+                                {readinessReasons.map((reason, index) => (
+                                  <li key={`${store.lineOfficialAccountId}-readiness-${index}`}>{reason}</li>
+                                ))}
+                              </ul>
                             )}
                           </div>
                         </td>
@@ -1798,10 +1810,13 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 <span className="font-semibold text-rose-600 dark:text-rose-400">
                                   {t.statusFailed}
                                 </span>
+                                {store.lastPublishErrorStage && (
+                                  <span className="text-[10px] text-rose-500">ขั้นตอน: {store.lastPublishErrorStage}</span>
+                                )}
                                 {store.lastPublishError && (
                                   <span
-                                    className="text-[10px] text-rose-500 truncate max-w-[120px]"
-                                    title={store.lastPublishError}
+                                    className="text-[10px] text-rose-500 whitespace-pre-wrap break-words"
+                                    title={[store.lastPublishErrorStage, store.lastPublishError].filter(Boolean).join("\n")}
                                   >
                                     {store.lastPublishError}
                                   </span>
@@ -1824,10 +1839,13 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                 <span className="font-semibold text-amber-600 dark:text-amber-400">
                                   {t.statusSkipped}
                                 </span>
+                                {store.lastPublishErrorStage && (
+                                  <span className="text-[10px] text-amber-500">ขั้นตอน: {store.lastPublishErrorStage}</span>
+                                )}
                                 {store.lastPublishError && (
                                   <span
-                                    className="text-[10px] text-amber-500 truncate max-w-[120px]"
-                                    title={store.lastPublishError}
+                                    className="text-[10px] text-amber-500 whitespace-pre-wrap break-words"
+                                    title={[store.lastPublishErrorStage, store.lastPublishError].filter(Boolean).join("\n")}
                                   >
                                     {store.lastPublishError}
                                   </span>
@@ -2063,10 +2081,6 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
                 {publishTargetItems.length === 1 ? t.publishCanaryModalDesc : t.bulkPublishModalDesc}
               </p>
-
-              <div className="rounded bg-blue-50 dark:bg-blue-950/40 p-2.5 text-blue-700 dark:text-blue-300 font-medium">
-                {t.bulkPublishLimitNotice(maxTargets)}
-              </div>
 
               {/* Target Details Card */}
               <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[var(--app-surface-subtle)] p-3.5 space-y-2 font-medium">
