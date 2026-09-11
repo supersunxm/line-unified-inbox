@@ -223,6 +223,33 @@ test("RichMenusView enforces simplified single-checkbox store selection and unif
   assert.match(viewFile, /behaviorCollapsed/);
 });
 
+test("Rich Menu bulk selection is unlimited, selects the full ready dataset, and excludes blocked stores", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+
+  assert.doesNotMatch(viewFile, /maxTargets|selectAllReadyMax|exceededMaxTargets|bulkPublishLimitNotice/);
+  assert.match(viewFile, /const readyIds = readinessData\.items/);
+  assert.match(viewFile, /item\.readinessStatus === "READY" && !item\.isCurrentVersionPublished/);
+  assert.match(viewFile, /const targetIds = publishTargetItems\.map/);
+  assert.match(viewFile, /publishSelectionCount\(publishSelectedOaIds\.size\)/);
+  assert.equal(RICH_MENU_I18N.th.selectAllReady, "เลือกร้านที่พร้อมใช้งานทั้งหมด");
+  assert.equal(RICH_MENU_I18N.th.publishSelectionCount(143), "เลือกแล้ว 143 ร้าน");
+  assert.equal("bulkPublishLimitNotice" in RICH_MENU_I18N.th, false);
+});
+
+test("Rich Menu diagnostics show every readiness reason and full publish errors with stage", () => {
+  const viewFile = readFileSync(resolve(process.cwd(), "src/app/rich-menus/rich-menus-view.tsx"), "utf8");
+  const apiTypes = readFileSync(resolve(process.cwd(), "src/types/api.ts"), "utf8");
+
+  assert.match(apiTypes, /readinessReasons: string\[\];/);
+  assert.match(viewFile, /function getReadinessReasons/);
+  assert.match(viewFile, /readinessReasons\.map/);
+  assert.match(viewFile, /title=\{readinessReasons\.join\("\\n"\)\}/);
+  assert.match(viewFile, /store\.lastPublishErrorStage/);
+  assert.match(viewFile, /store\.lastPublishError/);
+  assert.match(viewFile, /whitespace-pre-wrap break-words/);
+  assert.doesNotMatch(viewFile, /lastPublishError[\s\S]{0,220}truncate/);
+});
+
 test("Rich Menu i18n dictionary supports Phase 2A/2B publishing, rollback, and status messages across th, en, and zh", () => {
   // Thai
   assert.equal(RICH_MENU_I18N.th.publishToLine, "เผยแพร่ไปยัง LINE");

@@ -1,3 +1,25 @@
+# 2026-09-11: Rich Menu Readiness & Publish Diagnostics [COMPLETED & VERIFIED]
+- **Current Task**: Make every pre-LINE-API Rich Menu readiness/publish branch report all detected reasons, preserve backward-compatible readiness fields, and keep transient LINE failures as runtime publish errors.
+- **Root Cause**:
+  - `evaluateReadiness()` kept only one global/first blocking reason and excluded archived OAs from its result set.
+  - `publishOneStore()` repeated validations with multiple early returns, so the worker could discover a different first failure after the UI had reported READY.
+  - The frontend rendered a single readiness reason and truncated FAILED/SKIPPED errors.
+- **Completed Work**:
+  - Added the shared pure preflight contract in `backend/src/rich-menu/rich-menu-validation.ts`; readiness and publish call the same validator before any LINE API request.
+  - Accumulated Thai diagnostics for template image/image-URL/layout, OA active/archived/token/store linkage, Maps, TikTok (`{{store.tiktokUrl}}` and profile alias), unresolved store variables, URI scheme, and Auto-response missing/inactive/unresolved variables.
+  - Added `readinessReasons: string[]` while retaining `readinessReason` as the first-reason compatibility field. Archived STORE OAs now remain visible as BLOCKED diagnostics.
+  - Stored all skipped preflight reasons in the attempt error message, retained publish/runtime error persistence, and normalized LINE 429/5xx/timeout messages without moving them into readiness BLOCKED.
+  - Frontend now renders all readiness reasons and full FAILED/SKIPPED errors with optional stage and tooltip; READY-only select-all/bulk targeting remains unchanged.
+- **Checks Run**:
+  - Rich Menu backend tests: **43/43 passed** (`rich-menu-validation.spec.ts`, `rich-menu.service.spec.ts`, `rich-menu.spec.ts`).
+  - Frontend tests: **564/564 passed**.
+  - Backend production build: **passed**.
+  - Frontend production build: **passed**.
+  - Runtime smoke: backend `/health` **200**, `/health/readiness` **200**, protected Rich Menu readiness **401** without auth; frontend `/`, `/rich-menus`, and `/api/health` **200**. Rich Menu routes registered successfully in Nest startup logs.
+  - Frontend `tsc --noEmit` and affected-file ESLint retain unrelated repository-baseline errors; no Rich Menu typecheck error was reported. Backend full typecheck also retains unrelated spec-fixture errors; backend production build is clean.
+- **Scope Confirmed**: No worker concurrency, durable job flow, retry semantics, idempotency, production deployment, push, merge, migration, or unrelated files were changed. Existing Rich Menu uncommitted changes were the only pre-existing dirty files in scope.
+- **Next Action**: Completed local commit `15782067fbc4e44e82c9031337279d598cb20b2e`; do not push or deploy.
+
 # 2026-09-11: Remove Rich Menu Bulk Store Selection Cap [COMPLETED & VERIFIED]
 - **Current Task**: Remove the user-facing five-store selection limit from Phase 2B Rich Menu bulk publishing while preserving durable jobs, readiness validation, progress persistence, retry scope, and bounded LINE API concurrency.
 - **Findings**:

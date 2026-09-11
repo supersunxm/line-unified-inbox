@@ -1,5 +1,12 @@
 # Architecture & Design Decisions
 
+## Rich Menu shared preflight diagnostics and runtime error boundary (2026-09-11)
+
+- Keep one pure `collectRichMenuPreflightReasons()` contract for both `evaluateReadiness()` and `publishOneStore()`. The contract returns an ordered, deduplicated list of deterministic data/configuration failures before any LINE API call; `readinessReason` remains the first item for older clients and `readinessReasons` carries the full list.
+- Treat missing/invalid Maps and TikTok URLs, unresolved store variables, invalid resolved URI schemes, invalid layouts/image references, missing images, OA state/token/store-link problems, and missing/inactive/unresolved Auto-response rules as preflight failures. Archived STORE OAs remain in the readiness dataset so the operator can see the archived diagnostic.
+- Keep LINE API rate limits, timeouts, network errors, and 5xx responses in the existing runtime publish path. Persist their actual error text/stage on `FAILED` attempts; they must not make a store preflight `BLOCKED`.
+- Keep select-all and bulk submission derived from current READY readiness items only. Removing the five-store UI cap does not alter the durable job, bounded worker concurrency, retry, or idempotency behavior.
+
 ## Rich Menu selection is unbounded; worker execution remains bounded (2026-09-11)
 
 - Remove the five-store user-facing selection and request cap from Rich Menu Phase 2B. The selected target set is the deduplicated set of currently READY, not-currently-published store LINE OA IDs returned by the full readiness dataset; UI filtering must not restrict select-all behavior.

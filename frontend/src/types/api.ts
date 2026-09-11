@@ -1510,7 +1510,6 @@ export type RichMenuTemplate = {
 
 export type PublishCapabilities = {
   bulkEnabled: boolean;
-  maxTargets: number;
   concurrency: number;
   workerReady: boolean;
   lastWorkerHeartbeatAt: string | null;
@@ -1580,6 +1579,7 @@ export type RichMenuStoreReadinessItem = {
   googleMapsUrl: string | null;
   readinessStatus: "READY" | "BLOCKED";
   readinessReason: string | null;
+  readinessReasons: string[];
   selected: boolean;
   publishStatus?: string;
   publishedRichMenuId?: string | null;
